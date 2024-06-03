@@ -333,6 +333,7 @@ public:
     using ScatterColumns = std::vector<MutablePtr>;
     using Selector = PaddedPODArray<ColumnIndex>;
     virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
+    virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const = 0;
 
     void initializeScatterColumns(ScatterColumns & columns, ColumnIndex num_columns, size_t num_rows) const
     {
@@ -509,6 +510,23 @@ protected:
     }
 
     template <typename Derived>
+    std::vector<MutablePtr> scatterImpl(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const
+    {
+        const auto selective_rows = selective->size();
+
+        RUNTIME_CHECK_MSG(selective_rows != selector.size(),
+                "Size of selector: {} doesn't match size of selective column: {}", selector.size(), selective_rows);
+
+        ScatterColumns columns;
+        initializeScatterColumns(columns, num_columns, selective_rows);
+
+        for (size_t i = 0; i < selective_rows; ++i)
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, (*selective)[i]);
+
+        return columns;
+    }
+
+    template <typename Derived>
     void scatterToImpl(ScatterColumns & columns, const Selector & selector) const
     {
         size_t num_rows = size();
@@ -526,7 +544,7 @@ protected:
         const auto selective_rows = selective->size();
 
         RUNTIME_CHECK_MSG(selective_rows == selector.size(),
-                "Size of selector: {} doesn't match size of column: {}", selector.size(), selective_rows);
+                "Size of selector: {} doesn't match size of selective column: {}", selector.size(), selective_rows);
 
         for (size_t i = 0; i < selective_rows; ++i)
             static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, (*selective)[i]);

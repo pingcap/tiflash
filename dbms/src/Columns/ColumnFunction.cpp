@@ -141,6 +141,15 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(
     return columns;
 }
 
+std::vector<MutableColumnPtr> ColumnFunction::scatter(
+    IColumn::ColumnIndex,
+    const IColumn::Selector &,
+    const BlockSelectivePtr &) const
+{
+    // todo impl
+    throw TiFlashException("ColumnFunction does not support scatter", Errors::Coprocessor::Unimplemented);
+}
+
 void ColumnFunction::scatterTo(ScatterColumns &, const Selector &) const
 {
     throw TiFlashException("ColumnFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);

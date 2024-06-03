@@ -145,6 +145,10 @@ public:
     {
         return scatterImpl<ColumnArray>(num_columns, selector);
     }
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    {
+        return scatterImpl<ColumnArray>(num_columns, selector, selective);
+    }
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         scatterToImpl<ColumnArray>(columns, selector);

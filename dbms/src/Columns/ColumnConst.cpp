@@ -85,11 +85,23 @@ ColumnPtr ColumnConst::permute(const Permutation & perm, size_t limit) const
 
 MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
-    if (s != selector.size())
-        throw Exception(
-            fmt::format("Size of selector ({}) doesn't match size of column ({})", selector.size(), s),
-            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+    RUNTIME_CHECK_MSG(s == selector.size(),
+            "Size of selector ({}) doesn't match size of column ({})", selector.size(), s);
 
+    return scatterImplForColumnConst(num_columns, selector);
+}
+
+MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const
+{
+    const auto selective_rows = selective->size();
+    RUNTIME_CHECK_MSG(selective_rows == selector.size(),
+            "Size of selector ({}) doesn't match size of selective column ({})", selector.size(), selective_rows);
+
+    return scatterImplForColumnConst(num_columns, selector);
+}
+
+MutableColumns ColumnConst::scatterImplForColumnConst(ColumnIndex num_columns, const Selector & selector) const
+{
     std::vector<size_t> counts = countColumnsSizeInSelector(num_columns, selector);
 
     MutableColumns res(num_columns);

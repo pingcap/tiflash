@@ -435,6 +435,30 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
     return columns;
 }
 
+MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector, const BlockSelectivePtr & selective)
+    const
+{
+    /// Columns with scattered values will point to this column as the owner of values.
+    MutableColumns columns(num_columns);
+    for (auto & column : columns)
+        column = createView();
+
+    const auto & selective_rows = selective->size();
+
+    {
+        size_t reserve_size = 1.1 * selective_rows / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
+
+        if (reserve_size > 1)
+            for (auto & column : columns)
+                column->reserve(reserve_size);
+    }
+
+    for (size_t i = 0; i < selective_rows; ++i)
+        static_cast<ColumnAggregateFunction &>(*columns[selector[i]]).data.push_back(data[(*selective)[i]]);
+
+    return columns;
+}
+
 void ColumnAggregateFunction::scatterTo(
     ScatterColumns &,
     const Selector &) const

@@ -141,11 +141,18 @@ public:
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
-        if (s != selector.size())
-            throw Exception(
-                "Size of selector doesn't match size of column.",
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        RUNTIME_CHECK_MSG(s == selector.size(), "Size of selector doesn't match size of column.");
+        return scatterImplForDummyColumn(num_columns, selector);
+    }
 
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    {
+        RUNTIME_CHECK_MSG(selective->size() == selector.size(), "Size of selector doesn't match size of column.");
+        return scatterImplForDummyColumn(num_columns, selector);
+    }
+
+    MutableColumns scatterImplForDummyColumn(ColumnIndex num_columns, const Selector & selector) const
+    {
         std::vector<size_t> counts(num_columns);
         for (auto idx : selector)
             ++counts[idx];

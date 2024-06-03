@@ -153,6 +153,8 @@ public:
     }
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const override;
+    MutableColumns scatterImplForColumnConst(ColumnIndex num_columns, const Selector & selector) const;
 
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
     void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override;

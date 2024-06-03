@@ -261,11 +261,27 @@ ColumnPtr ColumnTuple::replicateRange(size_t start_row, size_t end_row, const IC
 
 MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
+    return scatterImplForColumnTuple<false>(num_columns, selector, nullptr);
+}
+
+MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const
+{
+    return scatterImplForColumnTuple<true>(num_columns, selector, selective);
+}
+
+template <bool selective_block>
+MutableColumns ColumnTuple::scatterImplForColumnTuple(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const
+{
     const size_t tuple_size = columns.size();
     std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
 
     for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
-        scattered_tuple_elements[tuple_element_idx] = columns[tuple_element_idx]->scatter(num_columns, selector);
+    {
+        if constexpr (selective_block)
+            scattered_tuple_elements[tuple_element_idx] = columns[tuple_element_idx]->scatter(num_columns, selector, selective);
+        else
+            scattered_tuple_elements[tuple_element_idx] = columns[tuple_element_idx]->scatter(num_columns, selector);
+    }
 
     MutableColumns res(num_columns);
 
@@ -287,10 +303,11 @@ void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & se
 
 void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelectivePtr & selective) const
 {
+    // todo ok to use original impl?
     scatterToImplForColumnTuple<true>(scatterColumns, selector, selective);
 }
 
-template <bool use_selective>
+template <bool selective_block>
 void ColumnTuple::scatterToImplForColumnTuple(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelectivePtr & selective) const
 {
     const size_t tuple_size = columns.size();
@@ -305,7 +322,7 @@ void ColumnTuple::scatterToImplForColumnTuple(ScatterColumns & scatterColumns, c
                            ->assumeMutable();
             scattered_tuple_elements[tuple_element_idx].push_back(std::move(col));
         }
-        if constexpr (use_selective)
+        if constexpr (selective_block)
             columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector, selective);
         else
             columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
