@@ -171,6 +171,7 @@ public:
         const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const override;
 
     size_t byteSize() const override;
 

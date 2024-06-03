@@ -161,13 +161,8 @@ void ColumnAggregateFunction::updateHashWithValues(
 void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = data.size();
-    if (hash.getData().size() != data.size())
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(hash.getData().size() == data.size(),
+            "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), s);
 
     auto & hash_data = hash.getData();
 
@@ -178,6 +173,27 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::Ti
         func->serialize(data[i], wbuf);
         wbuf.finalize();
         hash_data[i] = ::updateWeakHash32(v.data(), v.size(), hash_data[i]);
+    }
+}
+
+// todo change BlockSelectivePtr as const &
+// todo add assert for all other column methods
+void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr selective_ptr) const
+{
+    const auto selective_rows = selective_ptr->size();
+    RUNTIME_CHECK_MSG(hash.getData().size() == selective_rows,
+            "Size of WeakHash32({}) does not match size of selective column({})", hash.getData().size(), selective_rows);
+
+    UInt32 * hash_data = hash.getData().data();
+
+    std::vector<UInt8> v;
+    for (const auto & row : *selective_ptr)
+    {
+        WriteBufferFromVector<std::vector<UInt8>> wbuf(v);
+        func->serialize(data[row], wbuf);
+        wbuf.finalize();
+        *hash_data = ::updateWeakHash32(v.data(), v.size(), *hash_data);
+        hash_data++;
     }
 }
 

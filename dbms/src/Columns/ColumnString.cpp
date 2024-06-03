@@ -461,6 +461,114 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
+// todo: change func name
+void updateWeakHash32BinPadding(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+{
+    auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
+    *info.hash_data
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *info.hash_data);
+    ++info.hash_data;
+}
+
+void updateWeakHash32BinNoPadding(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+{
+    auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
+    *info.hash_data
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *info.hash_data);
+    ++info.hash_data;
+}
+
+void updateWeakHash32NonBin(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+{
+    auto sort_key = info.collator->sortKey(view.data(), view.size(), info.sort_key_container);
+    *info.hash_data
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *info.hash_data);
+    ++info.hash_data;
+}
+
+void updateWeakHash32NoCollator(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+{
+    *info.hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), *info.hash_data);
+    ++info.hash_data;
+}
+
+// todo change loop_func -> iterator_column_func or not?
+template <typename LoopFunc>
+void ColumnString::updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const
+{
+    if (info.collator != nullptr)
+    {
+        switch (info.collator->getCollatorType())
+        {
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+        case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+        case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+        case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+        {
+            loop_func(chars, offsets, offsets.size(), info, updateWeakHash32BinPadding);
+            break;
+        }
+        case TiDB::ITiDBCollator::CollatorType::BINARY:
+        {
+            loop_func(chars, offsets, offsets.size(), info, updateWeakHash32BinNoPadding);
+            break;
+        }
+        default:
+        {
+            loop_func(chars, offsets, offsets.size(), info, updateWeakHash32NonBin);
+            break;
+        }
+        }
+    }
+    else
+    {
+        loop_func(chars, offsets, offsets.size(), info, updateWeakHash32NoCollator);
+    }
+}
+
+// todo move to helper file
+// Loop one column and invoke callback for each pair.
+// Remove last zero byte.
+template <typename Chars, typename Offsets, typename Func>
+FLATTEN_INLINE static inline void LoopOneColumnTmp(
+        const Chars & a_data,
+        const Offsets & a_offsets,
+        size_t size,
+        WeakHash32Info & info,
+        const Func & func)
+{
+    uint64_t a_prev_offset = 0;
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto a_size = a_offsets[i] - a_prev_offset;
+
+        // Remove last zero byte.
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
+        a_prev_offset = a_offsets[i];
+    }
+}
+
+template <typename Chars, typename Offsets, typename Func>
+FLATTEN_INLINE static inline void LoopColumnSelective(
+        const Chars & chars,
+        const Offsets & offsets,
+        size_t /*size*/,
+        WeakHash32Info & info,
+        const Func & func)
+{
+    for (auto row : *info.selective_ptr)
+    {
+        // todo better way to handle 1st row?
+        auto prev_offset = 0;
+        if likely (row > 0)
+            prev_offset = offsets[row - 1];
+
+        // todo why? Remove last zero byte.
+        func({reinterpret_cast<const char *>(&chars[prev_offset]), offsets[row] - 1}, row, info);
+    }
+}
+
 void ColumnString::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
@@ -468,6 +576,7 @@ void ColumnString::updateWeakHash32(
 {
     auto s = offsets.size();
 
+    // todo vec instead
     if (hash.getData().size() != s)
         throw Exception(
             fmt::format(
@@ -476,58 +585,32 @@ void ColumnString::updateWeakHash32(
                 hash.getData().size()),
             ErrorCodes::LOGICAL_ERROR);
 
-    UInt32 * hash_data = hash.getData().data();
+    WeakHash32Info info{
+        .hash_data = hash.getData().data(),
+        .sort_key_container = sort_key_container,
+        .collator = collator,
+    };
 
-    if (collator != nullptr)
-    {
-        switch (collator->getCollatorType())
-        {
-        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
-        case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
-        case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
-        case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
-        {
-            // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-                auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
-                *hash_data
-                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-                ++hash_data;
-            });
-            break;
-        }
-        case TiDB::ITiDBCollator::CollatorType::BINARY:
-        {
-            // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-                auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
-                *hash_data
-                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-                ++hash_data;
-            });
-            break;
-        }
-        default:
-        {
-            // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-                auto sort_key = collator->sortKey(view.data(), view.size(), sort_key_container);
-                *hash_data
-                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-                ++hash_data;
-            });
-            break;
-        }
-        }
-    }
-    else
-    {
-        // Skip last zero byte.
-        LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-            *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), *hash_data);
-            ++hash_data;
-        });
-    }
+    updateWeakHash32Impl(info, LoopOneColumnTmp<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
+}
+
+void ColumnString::updateWeakHash32(
+        WeakHash32 & hash,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container,
+        BlockSelectivePtr selective_ptr) const
+{
+    const auto selective_rows = selective_ptr->size();
+    auto & hash_data_vec = hash.getData();
+    if (hash_data_vec.size() != selective_rows)
+        throw Exception(fmt::format("Size of WeakHash32({}) doesn't match size of selective column({})", hash_data_vec.size(), selective_rows));
+
+    WeakHash32Info info{
+        .hash_data = hash_data_vec.data(),
+        .sort_key_container = sort_key_container,
+        .collator = collator,
+    };
+    updateWeakHash32Impl(info, LoopColumnSelective<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
 }
 
 void ColumnString::updateHashWithValues(

@@ -148,11 +148,8 @@ void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBColla
 {
     auto s = data.size();
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
-                + std::to_string(hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(hash.getData().size() == s,
+            "Size of WeakHash32({}) doesn't match size of column({})", hash.getData().size(), s);
 
     const T * begin = data.data();
     const T * end = begin + s;
@@ -163,6 +160,24 @@ void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBColla
         *hash_data = wideIntHashCRC32(*begin, *hash_data);
 
         ++begin;
+        ++hash_data;
+    }
+}
+
+template <typename T>
+void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr selective_ptr) const
+{
+    const auto selective_rows = selective_ptr->size();
+    RUNTIME_CHECK_MSG(hash.getData().size() == selective_rows,
+            "Size of WeakHash32({}) doesn't match size of selective column({})", hash.getData().size(), selective_rows);
+
+    const T * begin = data.data();
+    UInt32 * hash_data = hash.getData().data();
+
+    for (const auto & row : *selective_ptr)
+    {
+        *hash_data = wideIntHashCRC32(*(begin + row), *hash_data);
+
         ++hash_data;
     }
 }

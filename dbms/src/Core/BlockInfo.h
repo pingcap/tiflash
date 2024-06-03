@@ -21,6 +21,7 @@ namespace DB
 {
 class ReadBuffer;
 class WriteBuffer;
+using BlockSelectivePtr = std::shared_ptr<std::vector<UInt64>>;
 
 /** More information about the block.
   */

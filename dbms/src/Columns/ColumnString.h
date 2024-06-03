@@ -23,6 +23,17 @@
 
 namespace DB
 {
+    // todo: move to helper file
+    // Used when updating hash for column.
+    struct WeakHash32Info
+    {
+        // Current updating hash data position.
+        UInt32 * hash_data;
+        String sort_key_container;
+        TiDB::TiDBCollatorPtr collator;
+        BlockSelectivePtr selective_ptr;
+    };
+
 /** Column for String values.
   */
 class ColumnString final : public COWPtrHelper<IColumn, ColumnString>
@@ -263,12 +274,23 @@ public:
         }
     }
 
+    // todo: difference with updateWeakHash32
     void updateHashWithValues(
         IColumn::HashValues & hash_values,
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const override;
 
+    template <typename LoopFunc>
+    void updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const;
+
+    // void updateWeakHash32(
+    //         WeakHash32 & hash,
+    //         const TiDB::TiDBCollatorPtr & collator,
+    //         String & sort_key_container,
+    //         BlockSelectivePtr selective_ptr) const override;
+
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 

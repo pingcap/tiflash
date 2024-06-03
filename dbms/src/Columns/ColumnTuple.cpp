@@ -201,6 +201,21 @@ void ColumnTuple::updateWeakHash32(
         column->updateWeakHash32(hash, collator, sort_key_container);
 }
 
+void ColumnTuple::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    BlockSelectivePtr selective_ptr) const
+{
+    const auto selective_rows = selective_ptr->size();
+
+    RUNTIME_CHECK_MSG(hash.getData().size() == selective_rows,
+            "Size of WeakHash32({}) does not match size of selective column({})", hash.getData().size(), selective_rows);
+
+    for (const auto & column : columns)
+        column->updateWeakHash32(hash, collator, sort_key_container, selective_ptr);
+}
+
 void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
     const size_t tuple_size = columns.size();

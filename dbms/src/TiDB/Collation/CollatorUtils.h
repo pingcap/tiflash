@@ -49,6 +49,7 @@ FLATTEN_INLINE static inline void LoopTwoColumns(
     }
 }
 
+// todo remove, use WeakHas32Info instead
 // Loop one column and invoke callback for each pair.
 // Remove last zero byte.
 template <typename Chars, typename Offsets, typename F>

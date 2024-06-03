@@ -126,14 +126,30 @@ void ColumnConst::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    // todo check all err msg
+    RUNTIME_CHECK_MSG(hash.getData().size() != s,
+                "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), s);
+    updateWeakHash32(hash, collator, sort_key_container);
+}
 
+void ColumnConst::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    BlockSelectivePtr selective_ptr) const
+{
+    const auto selective_rows = selective_ptr->size();
+    RUNTIME_CHECK_MSG(hash.getData().size() != selective_rows,
+                "Size of WeakHash32({}) does not match size of selective column({})", hash.getData().size(), selective_rows);
+
+    updateWeakHash32Impl(hash, collator, sort_key_container);
+}
+
+void ColumnConst::updateWeakHash32Impl(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
     WeakHash32 element_hash(1);
     data->updateWeakHash32(element_hash, collator, sort_key_container);
     size_t data_hash = element_hash.getData()[0];
@@ -141,5 +157,4 @@ void ColumnConst::updateWeakHash32(
     for (auto & value : hash.getData())
         value = intHashCRC32(data_hash, value);
 }
-
 } // namespace DB

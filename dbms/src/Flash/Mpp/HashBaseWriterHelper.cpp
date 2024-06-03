@@ -92,7 +92,6 @@ void computeHash(
     if unlikely (rows == 0)
         return;
 
-    hash.getData().resize(rows);
     hash.reset(rows);
     /// compute hash values
     for (size_t i = 0; i < partition_col_ids.size(); ++i)
@@ -101,6 +100,24 @@ void computeHash(
         column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
     }
 }
+
+// void computeHashSelectiveBlock(
+//         const Block & block,
+//         const std::vector<Int64> & partition_id_cols,
+//         const TiDB::TiDBCollators & collators,
+//         std::vector<String> & partition_key_containers,
+//         WeakHash32 & hash)
+// {
+//     RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
+//     const auto selective_rows = block.info.selective->size();
+// 
+//     hash.reset(selective_rows);
+//     for (size_t i = 0; i < partition_id_cols.size(); ++i)
+//     {
+//         const auto & column = block.getByPosition(partition_id_cols[i]).column;
+//         column->updateWeakHash32(hash, collators[i], partition_key_containers[i], block.info.selective);
+//     }
+// }
 
 void computeHash(
     size_t rows,
@@ -174,19 +191,6 @@ void scatterColumnsForFineGrainedShuffle(
         const auto & column = block.getByPosition(i).column;
         column->scatterTo(scattered[i], selector);
     }
-}
-
-HashPartitionWriterHelperV1::HashPartitionWriterHelperV1(const std::vector<tipb::FieldType> & field_types)
-{
-    for (const auto & field_type : field_types)
-    {
-        expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
-    }
-}
-void HashPartitionWriterHelperV1::checkBlock(const Block & block) const
-{
-    DB::assertBlockSchema(expected_types, block, "HashPartitionWriterHelper");
-    block.checkNumberOfRows();
 }
 
 } // namespace DB::HashBaseWriterHelper

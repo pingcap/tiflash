@@ -98,6 +98,7 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;

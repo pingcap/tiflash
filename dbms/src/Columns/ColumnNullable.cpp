@@ -111,13 +111,8 @@ void ColumnNullable::updateWeakHash32(
 {
     auto s = size();
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(hash.getData().size() == s,
+                "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), s);
 
     WeakHash32 old_hash = hash;
     nested_column->updateWeakHash32(hash, collator, sort_key_container);
@@ -128,6 +123,30 @@ void ColumnNullable::updateWeakHash32(
 
     /// Use old data for nulls.
     for (size_t row = 0; row < s; ++row)
+        if (null_map_data[row])
+            hash_data[row] = old_hash_data[row];
+}
+
+void ColumnNullable::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    BlockSelectivePtr selective_ptr) const
+{
+    const auto selective_rows = selective_ptr->size();
+
+    RUNTIME_CHECK_MSG(hash.getData().size() == selective_rows,
+            "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), selective_rows);
+
+    WeakHash32 old_hash = hash;
+    nested_column->updateWeakHash32(hash, collator, sort_key_container, selective_ptr);
+
+    const auto & null_map_data = getNullMapData();
+    auto & hash_data = hash.getData();
+    auto & old_hash_data = old_hash.getData();
+
+    /// Use old data for nulls.
+    for (const auto & row : *selective_ptr)
         if (null_map_data[row])
             hash_data[row] = old_hash_data[row];
 }

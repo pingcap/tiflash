@@ -133,6 +133,8 @@ public:
     }
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const override;
+    void updateWeakHash32Impl(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const;
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;

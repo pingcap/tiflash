@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/BlockInfo.h>
 #include <Common/COWPtr.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
@@ -260,6 +261,9 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const
         = 0;
+    // todo make it pure virtual
+    virtual void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const {};
+
     void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /** Removes elements that don't match the filter.
@@ -345,6 +349,7 @@ public:
 
     /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
     virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;
+    // virtual void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective_ptr) const = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
     /// For now it is a helper to de-virtualize calls to insert*() functions inside gather loop
