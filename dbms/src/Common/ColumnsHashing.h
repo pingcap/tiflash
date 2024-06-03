@@ -40,13 +40,13 @@ namespace ColumnsHashing
 {
 /// For the case when there is one numeric key.
 /// UInt8/16/32/64 for any type with corresponding bit width.
-template <typename Value, typename Mapped, typename FieldType, bool use_cache = true>
+template <typename Value, typename Mapped, typename FieldType, bool use_cache = true, bool only_lookup = false>
 struct HashMethodOneNumber
     : public columns_hashing_impl::
-          HashMethodBase<HashMethodOneNumber<Value, Mapped, FieldType, use_cache>, Value, Mapped, use_cache>
+          HashMethodBase<HashMethodOneNumber<Value, Mapped, FieldType, use_cache>, Value, Mapped, use_cache, only_lookup>
 {
     using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
-    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 
     const FieldType * vec;
 
@@ -86,13 +86,13 @@ struct HashMethodOneNumber
 
 
 /// For the case when there is one string key.
-template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true>
+template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true, bool only_lookup = false>
 struct HashMethodString
     : public columns_hashing_impl::
-          HashMethodBase<HashMethodString<Value, Mapped, place_string_to_arena, use_cache>, Value, Mapped, use_cache>
+          HashMethodBase<HashMethodString<Value, Mapped, place_string_to_arena, use_cache>, Value, Mapped, use_cache, only_lookup>
 {
     using Self = HashMethodString<Value, Mapped, place_string_to_arena, use_cache>;
-    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -137,15 +137,15 @@ struct HashMethodString
     }
 
 protected:
-    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 };
 
-template <typename Value, typename Mapped, bool padding>
+template <typename Value, typename Mapped, bool padding, bool only_lookup = false>
 struct HashMethodStringBin
-    : public columns_hashing_impl::HashMethodBase<HashMethodStringBin<Value, Mapped, padding>, Value, Mapped, false>
+    : public columns_hashing_impl::HashMethodBase<HashMethodStringBin<Value, Mapped, padding, only_lookup>, Value, Mapped, false, only_lookup>
 {
-    using Self = HashMethodStringBin<Value, Mapped, padding>;
-    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+    using Self = HashMethodStringBin<Value, Mapped, padding, only_lookup>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false, only_lookup>;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -167,7 +167,7 @@ struct HashMethodStringBin
     }
 
 protected:
-    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false, only_lookup>;
 };
 
 /*
@@ -336,13 +336,13 @@ struct KeyDescStringBinPadding : KeyDescStringBin
 };
 
 /// For the case when there are 2 keys.
-template <typename Key1Desc, typename Key2Desc, typename Value, typename Mapped>
+template <typename Key1Desc, typename Key2Desc, typename Value, typename Mapped, bool only_lookup = false>
 struct HashMethodFastPathTwoKeysSerialized
     : public columns_hashing_impl::
-          HashMethodBase<HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped>, Value, Mapped, false>
+          HashMethodBase<HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped, only_lookup>, Value, Mapped, false, only_lookup>
 {
-    using Self = HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped>;
-    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+    using Self = HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped, only_lookup>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false, only_lookup>;
 
     Key1Desc key_1_desc;
     Key2Desc key_2_desc;
@@ -365,21 +365,22 @@ struct HashMethodFastPathTwoKeysSerialized
     }
 
 protected:
-    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false, only_lookup>;
 };
 
 
 /// For the case when there is one fixed-length string key.
-template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true>
+template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true, bool only_lookup = false>
 struct HashMethodFixedString
     : public columns_hashing_impl::HashMethodBase<
-          HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache>,
+          HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache, only_lookup>,
           Value,
           Mapped,
-          use_cache>
+          use_cache,
+          only_lookup>
 {
-    using Self = HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache>;
-    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+    using Self = HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache, only_lookup>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
@@ -421,21 +422,22 @@ struct HashMethodFixedString
     }
 
 protected:
-    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 };
 
 /// For the case when all keys are of fixed length, and they fit in N (for example, 128) bits.
-template <typename Value, typename Key, typename Mapped, bool has_nullable_keys_ = false, bool use_cache = true>
+template <typename Value, typename Key, typename Mapped, bool has_nullable_keys_ = false, bool use_cache = true, bool only_lookup = false>
 struct HashMethodKeysFixed
     : private columns_hashing_impl::BaseStateKeysFixed<Key, has_nullable_keys_>
     , public columns_hashing_impl::HashMethodBase<
-          HashMethodKeysFixed<Value, Key, Mapped, has_nullable_keys_, use_cache>,
+          HashMethodKeysFixed<Value, Key, Mapped, has_nullable_keys_, use_cache, only_lookup>,
           Value,
           Mapped,
-          use_cache>
+          use_cache,
+          only_lookup>
 {
-    using Self = HashMethodKeysFixed<Value, Key, Mapped, has_nullable_keys_, use_cache>;
-    using BaseHashed = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+    using Self = HashMethodKeysFixed<Value, Key, Mapped, has_nullable_keys_, use_cache, only_lookup>;
+    using BaseHashed = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
     using Base = columns_hashing_impl::BaseStateKeysFixed<Key, has_nullable_keys_>;
 
     static constexpr bool has_nullable_keys = has_nullable_keys_;
@@ -586,12 +588,12 @@ struct HashMethodKeysFixed
   * That is, for example, for strings, it contains first the serialized length of the string, and then the bytes.
   * Therefore, when aggregating by several strings, there is no ambiguity.
   */
-template <typename Value, typename Mapped>
+template <typename Value, typename Mapped, bool only_lookup = false>
 struct HashMethodSerialized
-    : public columns_hashing_impl::HashMethodBase<HashMethodSerialized<Value, Mapped>, Value, Mapped, false>
+    : public columns_hashing_impl::HashMethodBase<HashMethodSerialized<Value, Mapped, only_lookup>, Value, Mapped, false, only_lookup>
 {
-    using Self = HashMethodSerialized<Value, Mapped>;
-    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+    using Self = HashMethodSerialized<Value, Mapped, only_lookup>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false, only_lookup>;
 
     ColumnRawPtrs key_columns;
     size_t keys_size;
@@ -617,17 +619,17 @@ struct HashMethodSerialized
     }
 
 protected:
-    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false, only_lookup>;
 };
 
 /// For the case when there is one string key.
-template <typename Value, typename Mapped, bool use_cache = true>
+template <typename Value, typename Mapped, bool use_cache = true, bool only_lookup = false>
 struct HashMethodHashed
-    : public columns_hashing_impl::HashMethodBase<HashMethodHashed<Value, Mapped, use_cache>, Value, Mapped, use_cache>
+    : public columns_hashing_impl::HashMethodBase<HashMethodHashed<Value, Mapped, use_cache, only_lookup>, Value, Mapped, use_cache, only_lookup>
 {
     using Key = UInt128;
-    using Self = HashMethodHashed<Value, Mapped, use_cache>;
-    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+    using Self = HashMethodHashed<Value, Mapped, use_cache, only_lookup>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 
     ColumnRawPtrs key_columns;
     TiDB::TiDBCollators collators;

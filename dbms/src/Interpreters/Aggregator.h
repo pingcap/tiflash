@@ -131,6 +131,8 @@ struct AggregationMethodOneNumber
     /// To use one `Method` in different threads, use different `State`.
     using State = ColumnsHashing::
         HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
+    using LookupState = ColumnsHashing::
+        HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization, /*only_lookup*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -168,6 +170,7 @@ struct AggregationMethodString
     {}
 
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
+    using LookupState = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -201,7 +204,8 @@ struct AggregationMethodStringNoCache
     {}
 
     // Remove last zero byte.
-    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    using LookupState = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -235,6 +239,7 @@ struct AggregationMethodOneKeyStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
+    using LookupState = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -301,6 +306,8 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     using State
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
+    using LookupState
+        = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -405,6 +412,7 @@ struct AggregationMethodFixedString
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
+    using LookupState = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/true, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -438,6 +446,7 @@ struct AggregationMethodFixedStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
+    using LookupState = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -473,6 +482,8 @@ struct AggregationMethodKeysFixed
 
     using State
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
+    using LookupState
+        = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     // Because shuffle key optimization will reorder group by key internally, which is not compatible with
@@ -564,6 +575,7 @@ struct AggregationMethodSerialized
     {}
 
     using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
+    using LookupState = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -1013,6 +1025,7 @@ public:
 
     size_t getConcurrency() const { return concurrency; }
 
+    bool isTwoLevel() const { return is_two_level; }
 private:
     Block getDataForSingleLevel();
 
@@ -1160,7 +1173,7 @@ public:
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
     struct AggProcessInfo
     {
-        AggProcessInfo(Aggregator * aggregator_)
+        explicit AggProcessInfo(Aggregator * aggregator_)
             : aggregator(aggregator_)
         {
             assert(aggregator);
@@ -1175,6 +1188,13 @@ public:
         AggregateColumns aggregate_columns;
         AggregateFunctionInstructions aggregate_functions_instructions;
         Aggregator * aggregator;
+
+        // todo del this
+        bool collect_hit_rate = false;
+        bool only_lookup = false;
+        size_t hit_row_cnt = 0;
+        std::vector<char> hit_bits;
+
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
@@ -1189,11 +1209,58 @@ public:
             end_row = 0;
             materialized_columns.clear();
             prepare_for_agg_done = false;
+
+            // todo performance becase resize for each block?
+            hit_bits.clear();
+            hit_bits.resize(block.rows() / 8 + 1);
+            hit_row_cnt = 0;
+        }
+        // todo maybe optimized by using other lib
+        void setHitBit(size_t i)
+        {
+            RUNTIME_CHECK(!hit_bits.empty());
+            const size_t byte_idx = i / 8;
+            const size_t byte_off = i % 8;
+            hit_bits[byte_idx] |= 1 << byte_off;
+        }
+
+        // todo maybe just one int to indicate hit_count
+        std::vector<UInt64> getNotFoundRows() const
+        {
+            RUNTIME_CHECK(!hit_bits.empty());
+            std::vector<UInt64> hit_rows;
+            hit_rows.reserve(hit_row_cnt);
+            // todo <= end_row or < end_row? or make it correct
+            for (size_t i = 0; i < hit_bits.size() && i + start_row < end_row; ++i)
+            {
+                const auto ch = hit_bits[i];
+                for (size_t j = 0; j < 8; ++j)
+                {
+                    if (ch && static_cast<char>(1 << j))
+                    {
+                        hit_rows.push_back(start_row + i * 8 + j);
+                    }
+                }
+            }
+            RUNTIME_CHECK(hit_rows.size() == hit_row_cnt);
+            return hit_rows;
+        }
+
+        float getHitRate() const
+        {
+            // todo +1?
+            const auto total_rows = end_row - start_row;
+            return static_cast<float>(hit_row_cnt) / total_rows;
         }
     };
 
     /// Process one block. Return false if the processing should be aborted.
     bool executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+    bool executeOnBlockCollectHitRate(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+    bool executeOnBlockOnlyLookup(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+
+    template <bool collect_hit_rate, bool only_lookup>
+    bool executeOnBlockImpl(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
 
     /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
       * Return nullptr if there are no non empty data_variant.
@@ -1286,14 +1353,14 @@ protected:
 
 
     /// Process one data block, aggregate the data into a hash table.
-    template <typename Method>
+    template <typename Method, bool collect_hit_rate, bool only_lookup>
     void executeImpl(
         Method & method,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <typename Method>
+    template <typename Method, bool collect_hit_rate, bool only_loopup>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,

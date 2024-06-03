@@ -594,6 +594,7 @@ void ColumnString::updateWeakHash32(
     updateWeakHash32Impl(info, LoopOneColumnTmp<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
 }
 
+// todo selective_ptr -> selective
 void ColumnString::updateWeakHash32(
         WeakHash32 & hash,
         const TiDB::TiDBCollatorPtr & collator,
@@ -609,6 +610,7 @@ void ColumnString::updateWeakHash32(
         .hash_data = hash_data_vec.data(),
         .sort_key_container = sort_key_container,
         .collator = collator,
+        .selective_ptr = selective_ptr,
     };
     updateWeakHash32Impl(info, LoopColumnSelective<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
 }

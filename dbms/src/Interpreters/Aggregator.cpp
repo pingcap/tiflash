@@ -652,7 +652,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
   * (Probably because after the inline of this function, more internal functions no longer be inlined.)
   * Inline does not make sense, since the inner loop is entirely inside this function.
   */
-template <typename Method>
+template <typename Method, bool collect_hit_rate, bool only_lookup>
 void NO_INLINE Aggregator::executeImpl(
     Method & method,
     Arena * aggregates_pool,
@@ -661,7 +661,7 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-    executeImplBatch(method, state, aggregates_pool, agg_process_info);
+    executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(method, state, aggregates_pool, agg_process_info);
 }
 
 template <typename Method>
@@ -682,13 +682,16 @@ std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
     }
 }
 
-template <typename Method>
+template <typename Method, bool collect_hit_rate, bool only_lookup>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
+    // collect_hit_rate and only_lookup cannot be true both.
+    static_assert(!(collect_hit_rate && only_lookup));
+
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
     size_t agg_size = agg_process_info.end_row - agg_process_info.start_row;
@@ -762,19 +765,35 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
         auto & emplace_result = emplace_result_holder.value();
 
-        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-        if (emplace_result.isInserted())
+        if constexpr (only_lookup)
         {
-            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-            emplace_result.setMapped(nullptr);
-
-            aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(aggregate_data);
-
-            emplace_result.setMapped(aggregate_data);
+            if (!emplace_result.isNotFound())
+            {
+                aggregate_data = emplace_result.getMapped();
+                agg_process_info.setHitBit(i);
+            }
         }
         else
-            aggregate_data = emplace_result.getMapped();
+        {
+            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+            if (emplace_result.isInserted())
+            {
+                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                emplace_result.setMapped(nullptr);
+
+                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(aggregate_data);
+
+                emplace_result.setMapped(aggregate_data);
+            }
+            else
+            {
+                aggregate_data = emplace_result.getMapped();
+
+                if constexpr (collect_hit_rate)
+                    ++agg_process_info.hit_row_cnt;
+            }
+        }
 
         places[i - agg_process_info.start_row] = aggregate_data;
         processed_rows = i;
@@ -902,6 +921,22 @@ void Aggregator::AggProcessInfo::prepareForAgg()
 
 bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
 {
+    return executeOnBlockImpl<false, false>(agg_process_info, result, thread_num);
+}
+
+bool Aggregator::executeOnBlockCollectHitRate(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
+{
+    return executeOnBlockImpl<true, false>(agg_process_info, result, thread_num);
+}
+
+bool Aggregator::executeOnBlockOnlyLookup(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
+{
+    return executeOnBlockImpl<false, true>(agg_process_info, result, thread_num);
+}
+
+template <bool collect_hit_rate, bool only_lookup>
+bool Aggregator::executeOnBlockImpl(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
+{
     assert(!result.need_spill);
 
     if (is_cancelled())
@@ -945,8 +980,10 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
 #define M(NAME, IS_TWO_LEVEL)                                              \
     case AggregationMethodType(NAME):                                      \
     {                                                                      \
-        executeImpl(                                                       \
-            *ToAggregationMethodPtr(NAME, result.aggregation_method_impl), \
+        auto & tmp_method = *ToAggregationMethodPtr(NAME, result.aggregation_method_impl); \
+        using METHOD_TYPE = std::decay_t<decltype(tmp_method)>;                  \
+        executeImpl<METHOD_TYPE, collect_hit_rate, only_lookup>(               \
+            tmp_method, \
             result.aggregates_pool,                                        \
             agg_process_info,                                              \
             params.collators);                                             \
