@@ -47,6 +47,8 @@ void fillSelector(size_t rows, const WeakHash32 & hash, uint32_t part_num, IColu
 {
     // fill selector array with most significant bits of hash values
     const auto & hash_data = hash.getData();
+    RUNTIME_CHECK(rows == hash_data.size());
+
     selector.resize(rows);
     for (size_t i = 0; i < rows; ++i)
     {
@@ -101,23 +103,23 @@ void computeHash(
     }
 }
 
-// void computeHashSelectiveBlock(
-//         const Block & block,
-//         const std::vector<Int64> & partition_id_cols,
-//         const TiDB::TiDBCollators & collators,
-//         std::vector<String> & partition_key_containers,
-//         WeakHash32 & hash)
-// {
-//     RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
-//     const auto selective_rows = block.info.selective->size();
-// 
-//     hash.reset(selective_rows);
-//     for (size_t i = 0; i < partition_id_cols.size(); ++i)
-//     {
-//         const auto & column = block.getByPosition(partition_id_cols[i]).column;
-//         column->updateWeakHash32(hash, collators[i], partition_key_containers[i], block.info.selective);
-//     }
-// }
+void computeHashSelectiveBlock(
+        const Block & block,
+        const std::vector<Int64> & partition_id_cols,
+        const TiDB::TiDBCollators & collators,
+        std::vector<String> & partition_key_containers,
+        WeakHash32 & hash)
+{
+    RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
+    const auto selective_rows = block.info.selective->size();
+
+    hash.reset(selective_rows);
+    for (size_t i = 0; i < partition_id_cols.size(); ++i)
+    {
+        const auto & column = block.getByPosition(partition_id_cols[i]).column;
+        column->updateWeakHash32(hash, collators[i], partition_key_containers[i], block.info.selective);
+    }
+}
 
 void computeHash(
     size_t rows,
@@ -165,6 +167,36 @@ void scatterColumns(
     }
 }
 
+void scatterColumnsSelectiveBlock(
+        const Block & input_block,
+        const std::vector<Int64> & partition_col_ids,
+        const TiDB::TiDBCollators & collators,
+        std::vector<String> & partition_key_containers,
+        uint32_t bucket_num,
+        std::vector<std::vector<MutableColumnPtr>> & result_columns)
+{
+    RUNTIME_CHECK(input_block.info.selective);
+    if unlikely (input_block.info.selective->empty())
+        return;
+
+    WeakHash32 hash(0);
+    computeHashSelectiveBlock(input_block, partition_col_ids, collators, partition_key_containers, hash);
+
+    IColumn::Selector selector;
+    fillSelector(input_block.info.selective->size(), hash, bucket_num, selector);
+
+    for (size_t col_id = 0; col_id < input_block.columns(); ++col_id)
+    {
+        std::vector<MutableColumnPtr> part_columns
+            = input_block.getByPosition(col_id).column->scatter(bucket_num, selector, input_block.info.selective);
+        assert(part_columns.size() == bucket_num);
+        for (size_t bucket_idx = 0; bucket_idx < bucket_num; ++bucket_idx)
+        {
+            result_columns[bucket_idx][col_id] = std::move(part_columns[bucket_idx]);
+        }
+    }
+}
+
 void scatterColumnsForFineGrainedShuffle(
     const Block & block,
     const std::vector<Int64> & partition_col_ids,
@@ -190,6 +222,32 @@ void scatterColumnsForFineGrainedShuffle(
     {
         const auto & column = block.getByPosition(i).column;
         column->scatterTo(scattered[i], selector);
+    }
+}
+
+void scatterColumnsForFineGrainedShuffleSelectiveBlock(
+        const Block & block,
+        const std::vector<Int64> & partition_col_ids,
+        const TiDB::TiDBCollators & collators,
+        std::vector<String> & partition_key_containers,
+        uint32_t part_num,
+        uint32_t fine_grained_shuffle_stream_count,
+        WeakHash32 & hash,
+        IColumn::Selector & selector,
+        std::vector<IColumn::ScatterColumns> & scattered)
+{
+    RUNTIME_CHECK(block.info.selective);
+    if unlikely (block.info.selective->empty())
+        return;
+
+    computeHashSelectiveBlock(block, partition_col_ids, collators, partition_key_containers, hash);
+
+    fillSelectorForFineGrainedShuffle(block.info.selective->size(), hash, part_num, fine_grained_shuffle_stream_count, selector);
+
+    for (size_t i = 0; i < block.columns(); ++i)
+    {
+        const auto & column = block.getByPosition(i).column;
+        column->scatterTo(scattered[i], selector, block.info.selective);
     }
 }
 

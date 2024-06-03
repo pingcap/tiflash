@@ -41,6 +41,8 @@ struct BlockInfo
 
 #undef DECLARE_FIELD
 
+    BlockSelectivePtr selective;
+
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.
     void write(WriteBuffer & out) const;
 

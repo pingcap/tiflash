@@ -41,6 +41,13 @@ void computeHash(
     std::vector<String> & partition_key_containers,
     WeakHash32 & hash);
 
+void computeHashSelectiveBlock(
+        const Block & block,
+        const std::vector<Int64> & partition_id_cols,
+        const TiDB::TiDBCollators & collators,
+        std::vector<String> & partition_key_containers,
+        WeakHash32 & hash);
+
 void scatterColumns(
     const Block & input_block,
     const std::vector<Int64> & partition_col_ids,
@@ -48,6 +55,14 @@ void scatterColumns(
     std::vector<String> & partition_key_containers,
     uint32_t bucket_num,
     std::vector<std::vector<MutableColumnPtr>> & result_columns);
+
+void scatterColumnsSelectiveBlock(
+        const Block & input_block,
+        const std::vector<Int64> & partition_col_ids,
+        const TiDB::TiDBCollators & collators,
+        std::vector<String> & partition_key_containers,
+        uint32_t bucket_num,
+        std::vector<std::vector<MutableColumnPtr>> & result_columns);
 
 void scatterColumnsForFineGrainedShuffle(
     const Block & block,
@@ -60,4 +75,14 @@ void scatterColumnsForFineGrainedShuffle(
     IColumn::Selector & selector,
     std::vector<IColumn::ScatterColumns> & scattered);
 
+void scatterColumnsForFineGrainedShuffleSelectiveBlock(
+        const Block & block,
+        const std::vector<Int64> & partition_col_ids,
+        const TiDB::TiDBCollators & collators,
+        std::vector<String> & partition_key_containers,
+        uint32_t part_num,
+        uint32_t fine_grained_shuffle_stream_count,
+        WeakHash32 & hash,
+        IColumn::Selector & selector,
+        std::vector<IColumn::ScatterColumns> & scattered);
 } // namespace DB::HashBaseWriterHelper

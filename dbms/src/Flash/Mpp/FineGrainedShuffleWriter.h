@@ -30,7 +30,8 @@ class DAGContext;
 enum class CompressionMethod;
 enum MPPDataPacketVersion : int64_t;
 
-template <class ExchangeWriterPtr>
+// todo comment about selective_block
+template <class ExchangeWriterPtr, bool selective_block>
 class FineGrainedShuffleWriter : public DAGResponseWriter
 {
 public:

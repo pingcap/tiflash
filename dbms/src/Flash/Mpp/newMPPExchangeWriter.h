@@ -19,6 +19,7 @@
 
 namespace DB
 {
+// todo interpreter set up selective block.
 std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,
@@ -32,6 +33,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     tipb::CompressionMode compression_mode,
     Int64 batch_send_min_limit_compression,
     const String & req_id,
-    bool is_async = false);
+    bool is_async = false,
+    bool selective_block = false);
 
 } // namespace DB
