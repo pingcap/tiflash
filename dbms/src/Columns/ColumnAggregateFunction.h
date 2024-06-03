@@ -192,6 +192,7 @@ public:
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
 
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override;
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 

@@ -155,6 +155,8 @@ public:
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
 
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override;
+    void scatterToImplForColumnConst(ScatterColumns & columns, const Selector & selector) const;
     void gather(ColumnGathererStream &) override
     {
         throw Exception("Cannot gather into constant column " + getName(), ErrorCodes::NOT_IMPLEMENTED);

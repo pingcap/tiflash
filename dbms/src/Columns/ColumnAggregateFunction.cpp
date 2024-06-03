@@ -436,8 +436,16 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
 }
 
 void ColumnAggregateFunction::scatterTo(
-    ScatterColumns & columns [[maybe_unused]],
-    const Selector & selector [[maybe_unused]]) const
+    ScatterColumns &,
+    const Selector &) const
+{
+    throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
+}
+
+void ColumnAggregateFunction::scatterTo(
+    ScatterColumns &,
+    const Selector &,
+    const BlockSelectivePtr &) const
 {
     throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }

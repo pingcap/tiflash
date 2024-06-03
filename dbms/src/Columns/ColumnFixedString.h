@@ -136,6 +136,10 @@ public:
     {
         scatterToImpl<ColumnFixedString>(columns, selector);
     }
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    {
+        scatterToImpl<ColumnFixedString>(columns, selector, selective);
+    }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 

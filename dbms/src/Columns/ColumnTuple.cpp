@@ -282,6 +282,17 @@ MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & se
 
 void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const
 {
+    scatterToImplForColumnTuple<false>(scatterColumns, selector, nullptr);
+}
+
+void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelectivePtr & selective) const
+{
+    scatterToImplForColumnTuple<true>(scatterColumns, selector, selective);
+}
+
+template <bool use_selective>
+void ColumnTuple::scatterToImplForColumnTuple(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelectivePtr & selective) const
+{
     const size_t tuple_size = columns.size();
     ColumnIndex scattered_num_columns = scatterColumns.size();
     std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
@@ -294,7 +305,10 @@ void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & se
                            ->assumeMutable();
             scattered_tuple_elements[tuple_element_idx].push_back(std::move(col));
         }
-        columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
+        if constexpr (use_selective)
+            columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector, selective);
+        else
+            columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
     }
 
     for (size_t scattered_idx = 0; scattered_idx < scattered_num_columns; ++scattered_idx)

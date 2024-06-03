@@ -142,6 +142,11 @@ public:
         scatterToImpl<ColumnNullable>(columns, selector);
     }
 
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    {
+        scatterToImpl<ColumnNullable>(columns, selector, selective);
+    }
+
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     void forEachSubcolumn(ColumnCallback callback) override

@@ -105,6 +105,9 @@ public:
     ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
     void scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelectivePtr &) const override;
+    template <bool use_selective>
+    void scatterToImplForColumnTuple(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelectivePtr & selective) const;
     void gather(ColumnGathererStream & gatherer_stream) override;
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
     void getExtremes(Field & min, Field & max) const override;

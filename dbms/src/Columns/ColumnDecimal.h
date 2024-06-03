@@ -192,6 +192,10 @@ public:
     {
         return this->template scatterToImpl<Self>(columns, selector);
     }
+    void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector, const BlockSelectivePtr & selective) const override
+    {
+        return this->template scatterToImpl<Self>(columns, selector, selective);
+    }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
