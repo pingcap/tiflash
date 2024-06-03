@@ -64,10 +64,11 @@ struct ModuloImpl<A, B, false>
         }
     }
     template <typename Result = ResultType>
-    static Result apply(A a, B b, UInt8 & res_null)
+    static Result apply(A a, B b, UInt8 & res_null, const Context & context)
     {
         if (unlikely(b == 0))
         {
+            context.getDAGContext()->handleDivisionByZero();
             res_null = 1;
             return static_cast<Result>(0);
         }
@@ -98,10 +99,11 @@ struct ModuloImpl<A, B, true>
         return ModuloImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static Result apply(A a, B b, UInt8 & res_null)
+    static Result apply(A a, B b, UInt8 & res_null, const Context & context)
     {
         if (unlikely(b == 0))
         {
+            context.getDAGContext()->handleDivisionByZero();
             res_null = 1;
             return static_cast<Result>(0);
         }

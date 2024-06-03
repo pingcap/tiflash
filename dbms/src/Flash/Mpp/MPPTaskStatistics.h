@@ -57,7 +57,7 @@ public:
 
     void setExtraInfo(const String & extra_info_);
 
-    tipb::SelectResponse genExecutionSummaryResponse();
+    void fillExecuteSummaries(tipb::SelectResponse & response);
 
     tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
 

@@ -93,9 +93,9 @@ void MPPTaskStatistics::collectRuntimeStatistics()
     recordInputBytes(*dag_context);
 }
 
-tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
+void MPPTaskStatistics::fillExecuteSummaries(tipb::SelectResponse & response)
 {
-    return executor_statistics_collector.genExecutionSummaryResponse();
+    executor_statistics_collector.fillExecuteSummaries(response);
 }
 
 tipb::TiFlashExecutionInfo MPPTaskStatistics::genTiFlashExecutionInfo()

@@ -32,7 +32,7 @@ TrackedMppDataPacketPtr serializePacket(const tipb::SelectResponse & response)
 } // namespace
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::sendExecutionSummary(const tipb::SelectResponse & response)
+void MPPTunnelSetBase<Tunnel>::sendLastResponse(const tipb::SelectResponse & response)
 {
     RUNTIME_CHECK(!tunnels.empty());
     // for execution summary, only need to send to one tunnel.
