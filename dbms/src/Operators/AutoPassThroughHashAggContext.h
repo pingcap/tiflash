@@ -19,14 +19,20 @@ namespace DB
 class AutoPassThroughHashAggContext
 {
 public:
-    explicit AutoPassThroughHashAggContext(std::unique_ptr<Aggregator> aggregator_, size_t thread_num_)
-        : aggregator(std::move(aggregator_))
-        , state(State::Init)
-        , thread_num(thread_num_)
-    {}
+    explicit AutoPassThroughHashAggContext(const Aggregator::Params & params_, const String & req_id_)
+        : state(State::Init)
+        , many_data(std::vector<AggregatedDataVariantsPtr>(1, nullptr))
+    {
+        aggregator = std::make_unique<Aggregator>(params_, req_id_, 1, nullptr);
+        // todo make unique?
+        many_data[0] = std::make_shared<AggregatedDataVariants>();
+        // todo cancel hook
+        // init threshold by aggregaed data variants
+        agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
+    }
 
-    void onBlock(Aggregator::AggProcessInfo & agg_process_info, Block & block, AggregatedDataVariantsPtr data);
-    Block getData(AggregatedDataVariantsPtr data);
+    void onBlock(Block & block);
+    Block getData();
 
     bool passThroughBufferEmpty() const
     {
@@ -40,6 +46,10 @@ public:
         return res;
     }
 
+    Block getHeader()
+    {
+        return aggregator->getHeader(/*final=*/true);
+    }
 private:
     enum class State
     {
@@ -50,7 +60,7 @@ private:
         Selective,
     };
 
-    void trySwitchFromInitState(const AggregatedDataVariants & data);
+    void trySwitchFromInitState();
     void trySwitchFromAdjustState(size_t total_rows, size_t hit_rows);
     void trySwitchBackAdjustState(size_t block_rows);
 
@@ -64,9 +74,10 @@ private:
     static constexpr float PassThroughRateLimit = 0.2;
     static constexpr float PreHashAggRateLimit = 0.9;
 
-    std::unique_ptr<Aggregator> aggregator;
     State state;
-    size_t thread_num;
+    ManyAggregatedDataVariants many_data;
+    std::unique_ptr<Aggregator> aggregator;
+    std::unique_ptr<Aggregator::AggProcessInfo> agg_process_info;
 
     size_t adjust_processed_rows = 0;
     size_t adjust_hit_rows = 0;

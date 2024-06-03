@@ -17,54 +17,51 @@
 namespace DB
 {
 // todo: need data arg or not?
-void AutoPassThroughHashAggContext::onBlock(
-        Aggregator::AggProcessInfo & agg_process_info,
-        Block & block,
-        AggregatedDataVariantsPtr data)
+void AutoPassThroughHashAggContext::onBlock(Block & block)
 {
     // todo check if spilled to force passthrough?
     // todo check if two level to force passthrough?
     // todo assert getData() is not called!
     RUNTIME_CHECK_MSG(!merging_buckets, "Shouldn't insert into HashMap if start to get data");
 
-    agg_process_info.resetBlock(block);
+    agg_process_info->resetBlock(block);
     switch (state)
     {
         case State::Init:
         {
-            aggregator->executeOnBlock(agg_process_info, *data, 0);
-            trySwitchFromInitState(*data);
+            aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
+            trySwitchFromInitState();
             break;
         }
         case State::Adjust:
         {
-            aggregator->executeOnBlockCollectHitRate(agg_process_info, *data, 0);
-            trySwitchFromAdjustState(agg_process_info.block.rows(), agg_process_info.hit_row_cnt);
+            aggregator->executeOnBlockCollectHitRate(*agg_process_info, *many_data[0], 0);
+            trySwitchFromAdjustState(agg_process_info->block.rows(), agg_process_info->hit_row_cnt);
             break;
         }
         case State::PreHashAgg:
         {
-            aggregator->executeOnBlock(agg_process_info, *data, 0);
-            trySwitchBackAdjustState(agg_process_info.block.rows());
+            aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
+            trySwitchBackAdjustState(agg_process_info->block.rows());
             break;
         }
         case State::PassThrough:
         {
-            passThrough(agg_process_info);
-            trySwitchBackAdjustState(agg_process_info.block.rows());
+            passThrough(*agg_process_info);
+            trySwitchBackAdjustState(agg_process_info->block.rows());
             break;
         }
         case State::Selective:
         {
-            aggregator->executeOnBlockOnlyLookup(agg_process_info, *data, 0);
-            auto pass_through_rows = agg_process_info.getNotFoundRows();
+            aggregator->executeOnBlockOnlyLookup(*agg_process_info, *many_data[0], 0);
+            auto pass_through_rows = agg_process_info->getNotFoundRows();
             if (!pass_through_rows.empty())
             {
-                RUNTIME_CHECK(!agg_process_info.block.info.selective);
-                agg_process_info.block.info.selective = std::make_shared<std::vector<UInt64>>(std::move(pass_through_rows));
-                passThrough(agg_process_info);
+                RUNTIME_CHECK(!agg_process_info->block.info.selective);
+                agg_process_info->block.info.selective = std::make_shared<std::vector<UInt64>>(std::move(pass_through_rows));
+                passThrough(*agg_process_info);
             }
-            trySwitchBackAdjustState(agg_process_info.block.rows());
+            trySwitchBackAdjustState(agg_process_info->block.rows());
             break;
         }
         default:
@@ -72,22 +69,22 @@ void AutoPassThroughHashAggContext::onBlock(
             __builtin_unreachable();
         }
     };
-    RUNTIME_CHECK(agg_process_info.allBlockDataHandled());
+    // todo: maybe not true??
+    RUNTIME_CHECK(agg_process_info->allBlockDataHandled());
 }
 
-Block AutoPassThroughHashAggContext::getData(AggregatedDataVariantsPtr data)
+Block AutoPassThroughHashAggContext::getData()
 {
     if (!merging_buckets)
     {
-        ManyAggregatedDataVariants datas = {data};
-        merging_buckets = aggregator->mergeAndConvertToBlocks(datas, /*final=*/true, /*max_threads=*/1);
+        merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, /*final=*/true, /*max_threads=*/1);
         // todo: how and why force one level?
         RUNTIME_CHECK(!merging_buckets->isTwoLevel());
     }
     return merging_buckets->getData(/*concurrency_index=*/0);
 }
 
-void AutoPassThroughHashAggContext::trySwitchFromInitState(const AggregatedDataVariants &)
+void AutoPassThroughHashAggContext::trySwitchFromInitState()
 {
     // todo check data.size?
     // todo check if expand happened?
