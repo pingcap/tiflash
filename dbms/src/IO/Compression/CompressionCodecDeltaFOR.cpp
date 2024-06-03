@@ -57,7 +57,7 @@ template <std::integral T>
 UInt32 compressData(const char * source, UInt32 source_size, char * dest)
 {
     const auto count = source_size / sizeof(T);
-    DB::Compression::DeltaEncoding<T>(reinterpret_cast<const T *>(source), count, reinterpret_cast<T *>(dest));
+    DB::Compression::deltaEncoding<T>(reinterpret_cast<const T *>(source), count, reinterpret_cast<T *>(dest));
     // Cast deltas to signed type to better compress negative values.
     // For example, if we have a sequence of UInt8 values [3, 2, 1, 0], the deltas will be [3, -1, -1, -1]
     // If we compress them as UInt8, we will get [3, 255, 255, 255], which is not optimal.
@@ -114,16 +114,16 @@ void CompressionCodecDeltaFOR::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        DB::Compression::DeltaFORDecoding<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::deltaFORDecoding<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 2:
-        DB::Compression::DeltaFORDecoding<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::deltaFORDecoding<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 4:
-        DB::Compression::DeltaFORDecoding<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::deltaFORDecoding<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 8:
-        DB::Compression::DeltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::deltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
         throw Exception(
@@ -158,16 +158,16 @@ void CompressionCodecDeltaFOR::ordinaryDecompress(
     switch (bytes_size)
     {
     case 1:
-        DB::Compression::OrdinaryDeltaFORDecoding<UInt8>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::ordinaryDeltaFORDecoding<UInt8>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 2:
-        DB::Compression::OrdinaryDeltaFORDecoding<UInt16>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::ordinaryDeltaFORDecoding<UInt16>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 4:
-        DB::Compression::OrdinaryDeltaFORDecoding<UInt32>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::ordinaryDeltaFORDecoding<UInt32>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 8:
-        DB::Compression::OrdinaryDeltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::ordinaryDeltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, dest_size);
         break;
     default:
         throw Exception(

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "EncodingUtil.h"
+#include <IO/Compression/EncodingUtil.h>
 
 #if defined(__AVX2__)
 #include <immintrin.h>
@@ -22,7 +22,7 @@ namespace DB::Compression
 {
 
 template <std::integral T>
-void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
+void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
 {
     if (frame_of_reference == 0)
         return;
@@ -61,17 +61,17 @@ void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
     }
 }
 
-template void ApplyFrameOfReference<UInt8>(UInt8 *, UInt8, UInt32);
-template void ApplyFrameOfReference<UInt16>(UInt16 *, UInt16, UInt32);
-template void ApplyFrameOfReference<UInt32>(UInt32 *, UInt32, UInt32);
-template void ApplyFrameOfReference<UInt64>(UInt64 *, UInt64, UInt32);
-template void ApplyFrameOfReference<Int8>(Int8 *, Int8, UInt32);
-template void ApplyFrameOfReference<Int16>(Int16 *, Int16, UInt32);
-template void ApplyFrameOfReference<Int32>(Int32 *, Int32, UInt32);
-template void ApplyFrameOfReference<Int64>(Int64 *, Int64, UInt32);
+template void applyFrameOfReference<UInt8>(UInt8 *, UInt8, UInt32);
+template void applyFrameOfReference<UInt16>(UInt16 *, UInt16, UInt32);
+template void applyFrameOfReference<UInt32>(UInt32 *, UInt32, UInt32);
+template void applyFrameOfReference<UInt64>(UInt64 *, UInt64, UInt32);
+template void applyFrameOfReference<Int8>(Int8 *, Int8, UInt32);
+template void applyFrameOfReference<Int16>(Int16 *, Int16, UInt32);
+template void applyFrameOfReference<Int32>(Int32 *, Int32, UInt32);
+template void applyFrameOfReference<Int64>(Int64 *, Int64, UInt32);
 
 template <std::integral T>
-void SubtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
+void subtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
 {
     if (frame_of_reference == 0)
         return;
@@ -110,14 +110,14 @@ void SubtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
     }
 }
 
-template void SubtractFrameOfReference<Int8>(Int8 *, Int8, UInt32);
-template void SubtractFrameOfReference<Int16>(Int16 *, Int16, UInt32);
-template void SubtractFrameOfReference<Int32>(Int32 *, Int32, UInt32);
-template void SubtractFrameOfReference<Int64>(Int64 *, Int64, UInt32);
-template void SubtractFrameOfReference<UInt8>(UInt8 *, UInt8, UInt32);
-template void SubtractFrameOfReference<UInt16>(UInt16 *, UInt16, UInt32);
-template void SubtractFrameOfReference<UInt32>(UInt32 *, UInt32, UInt32);
-template void SubtractFrameOfReference<UInt64>(UInt64 *, UInt64, UInt32);
+template void subtractFrameOfReference<Int8>(Int8 *, Int8, UInt32);
+template void subtractFrameOfReference<Int16>(Int16 *, Int16, UInt32);
+template void subtractFrameOfReference<Int32>(Int32 *, Int32, UInt32);
+template void subtractFrameOfReference<Int64>(Int64 *, Int64, UInt32);
+template void subtractFrameOfReference<UInt8>(UInt8 *, UInt8, UInt32);
+template void subtractFrameOfReference<UInt16>(UInt16 *, UInt16, UInt32);
+template void subtractFrameOfReference<UInt32>(UInt32 *, UInt32, UInt32);
+template void subtractFrameOfReference<UInt64>(UInt64 *, UInt64, UInt32);
 
 template <std::integral T>
 UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference)
@@ -128,7 +128,7 @@ UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference)
         // For example, we have a sequence of Int8 values [-128, 1, 127], after subtracting frame of reference -128, the values are [0, -127, -1].
         // The minimum bit width required to store the values is 8 rather than the width of `max_value - min_value = -1`.
         // So we need to calculate the minimum bit width of the values after subtracting frame of reference.
-        SubtractFrameOfReference<T>(values.data(), frame_of_reference, values.size());
+        subtractFrameOfReference<T>(values.data(), frame_of_reference, values.size());
         T max_value = *std::max_element(values.cbegin(), values.cend());
         T min_value = *std::min_element(values.cbegin(), values.cend());
         return BitpackingPrimitives::minimumBitWidth<T>(min_value, max_value);
@@ -150,7 +150,7 @@ template UInt8 FOREncodingWidth<UInt32>(std::vector<UInt32> &, UInt32);
 template UInt8 FOREncodingWidth<UInt64>(std::vector<UInt64> &, UInt64);
 
 template <std::integral T>
-void DeltaDecoding(const char * source, UInt32 source_size, char * dest)
+void deltaDecoding(const char * source, UInt32 source_size, char * dest)
 {
     ordinaryDeltaDecoding<T>(source, source_size, dest);
 }
@@ -159,7 +159,7 @@ void DeltaDecoding(const char * source, UInt32 source_size, char * dest)
 // Note: using SIMD to rewrite compress does not improve performance.
 
 template <>
-void DeltaDecoding<UInt32>(const char * __restrict__ raw_source, UInt32 raw_source_size, char * __restrict__ raw_dest)
+void deltaDecoding<UInt32>(const char * __restrict__ raw_source, UInt32 raw_source_size, char * __restrict__ raw_dest)
 {
     const auto * source = reinterpret_cast<const UInt32 *>(raw_source);
     auto source_size = raw_source_size / sizeof(UInt32);
@@ -183,7 +183,7 @@ void DeltaDecoding<UInt32>(const char * __restrict__ raw_source, UInt32 raw_sour
 }
 
 template <>
-void DeltaDecoding<UInt64>(const char * __restrict__ raw_source, UInt32 raw_source_size, char * __restrict__ raw_dest)
+void deltaDecoding<UInt64>(const char * __restrict__ raw_source, UInt32 raw_source_size, char * __restrict__ raw_dest)
 {
     const auto * source = reinterpret_cast<const UInt64 *>(raw_source);
     auto source_size = raw_source_size / sizeof(UInt64);
@@ -219,14 +219,14 @@ void DeltaDecoding<UInt64>(const char * __restrict__ raw_source, UInt32 raw_sour
 #endif
 
 template <std::integral T>
-void DeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void deltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
-    OrdinaryDeltaFORDecoding<T>(src, source_size, dest, dest_size);
+    ordinaryDeltaFORDecoding<T>(src, source_size, dest, dest_size);
 }
 
 template <>
-void DeltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void deltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     const auto count = dest_size / sizeof(UInt32);
     auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
@@ -235,11 +235,11 @@ void DeltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest,
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
     FORDecoding<Int32>(src, source_size, tmp_buffer, required_size);
-    DeltaDecoding<UInt32>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
+    deltaDecoding<UInt32>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
 template <>
-void DeltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     const auto count = dest_size / sizeof(UInt64);
     const auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
@@ -248,10 +248,10 @@ void DeltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
     FORDecoding<Int64>(src, source_size, tmp_buffer, required_size);
-    DeltaDecoding<UInt64>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
+    deltaDecoding<UInt64>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
-template void DeltaFORDecoding<UInt8>(const char *, UInt32, char *, UInt32);
-template void DeltaFORDecoding<UInt16>(const char *, UInt32, char *, UInt32);
+template void deltaFORDecoding<UInt8>(const char *, UInt32, char *, UInt32);
+template void deltaFORDecoding<UInt16>(const char *, UInt32, char *, UInt32);
 
 } // namespace DB::Compression

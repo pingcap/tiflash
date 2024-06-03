@@ -35,16 +35,16 @@ namespace DB::Compression
 /// Constant encoding
 
 template <std::integral T>
-size_t ConstantEncoding(T constant, char * dest)
+size_t constantEncoding(T constant, char * dest)
 {
     unalignedStore<T>(dest, constant);
     return sizeof(T);
 }
 
 template <std::integral T>
-void ConstantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void constantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    if (source_size < sizeof(T))
+    if (unlikely(source_size < sizeof(T)))
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot use Constant decoding, data size {} is too small",
@@ -61,7 +61,7 @@ void ConstantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 
 /// Constant delta encoding
 
 template <std::integral T>
-size_t ConstantDeltaEncoding(T first_value, T constant_delta, char * dest)
+size_t constantDeltaEncoding(T first_value, T constant_delta, char * dest)
 {
     unalignedStore<T>(dest, first_value);
     dest += sizeof(T);
@@ -70,9 +70,9 @@ size_t ConstantDeltaEncoding(T first_value, T constant_delta, char * dest)
 }
 
 template <std::integral T>
-void ConstantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    if (source_size < sizeof(T) + sizeof(T))
+    if (unlikely(source_size < sizeof(T) + sizeof(T)))
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot use ConstantDelta decoding, data size {} is too small",
@@ -98,13 +98,13 @@ template <std::integral T>
 static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
 
 template <std::integral T>
-size_t RunLengthPairsSize(const RunLengthPairs<T> & rle)
+size_t runLengthPairsSize(const RunLengthPairs<T> & rle)
 {
     return rle.size() * RunLengthPairLength<T>;
 }
 
 template <std::integral T>
-size_t RunLengthEncoding(const RunLengthPairs<T> & rle, char * dest)
+size_t runLengthEncoding(const RunLengthPairs<T> & rle, char * dest)
 {
     for (const auto & [value, count] : rle)
     {
@@ -117,9 +117,9 @@ size_t RunLengthEncoding(const RunLengthPairs<T> & rle, char * dest)
 }
 
 template <std::integral T>
-void RunLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    if unlikely (source_size % RunLengthPairLength<T> != 0)
+    if (unlikely(source_size % RunLengthPairLength<T> != 0))
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot use RunLength decoding, data size {} is not aligned to {}",
@@ -138,6 +138,7 @@ void RunLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
         if constexpr (std::is_same_v<T, UInt8> || std::is_same_v<T, Int8>)
         {
             memset(dest, value, count);
+            dest += count * sizeof(T);
         }
         else
         {
@@ -153,7 +154,7 @@ void RunLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
 /// Frame of Reference encoding
 
 template <std::integral T>
-void SubtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
+void subtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 
 template <std::integral T>
 UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference);
@@ -163,7 +164,7 @@ size_t FOREncoding(std::vector<T> & values, T frame_of_reference, UInt8 width, c
 {
     assert(!values.empty());
     if constexpr (!skip_subtract_frame_of_reference)
-        SubtractFrameOfReference(values.data(), frame_of_reference, values.size());
+        subtractFrameOfReference(values.data(), frame_of_reference, values.size());
     // store frame of reference
     unalignedStore<T>(dest, frame_of_reference);
     dest += sizeof(T);
@@ -180,7 +181,7 @@ size_t FOREncoding(std::vector<T> & values, T frame_of_reference, UInt8 width, c
 }
 
 template <std::integral T>
-void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
+void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 
 template <std::integral T>
 void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
@@ -198,7 +199,7 @@ void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_
         // Reserve enough space for the temporary buffer.
         unsigned char tmp_buffer[round_size * sizeof(T)];
         BitpackingPrimitives::unPackBuffer<T>(tmp_buffer, reinterpret_cast<const unsigned char *>(src), count, width);
-        ApplyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
+        applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
         memcpy(dest, tmp_buffer, dest_size);
         return;
     }
@@ -207,13 +208,13 @@ void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_
         reinterpret_cast<const unsigned char *>(src),
         count,
         width);
-    ApplyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
+    applyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
 }
 
 /// Delta encoding
 
 template <std::integral T>
-void DeltaEncoding(const T * source, UInt32 count, T * dest)
+void deltaEncoding(const T * source, UInt32 count, T * dest)
 {
     T prev = 0;
     for (UInt32 i = 0; i < count; ++i)
@@ -240,12 +241,12 @@ void ordinaryDeltaDecoding(const char * source, UInt32 source_size, char * dest)
 }
 
 template <std::integral T>
-void DeltaDecoding(const char * source, UInt32 source_size, char * dest);
+void deltaDecoding(const char * source, UInt32 source_size, char * dest);
 
 /// Delta + Frame of Reference encoding
 
 template <std::integral T>
-void OrdinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void ordinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     using TS = typename std::make_signed_t<T>;
     FORDecoding<TS>(src, source_size, dest, dest_size);
@@ -253,6 +254,6 @@ void OrdinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest,
 }
 
 template <std::integral T>
-void DeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size);
+void deltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size);
 
 } // namespace DB::Compression
