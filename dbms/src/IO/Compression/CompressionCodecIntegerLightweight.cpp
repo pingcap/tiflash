@@ -78,17 +78,17 @@ size_t CompressionCodecIntegerLightweight::compressDataForType(const char * sour
     {
     case Mode::CONSTANT:
     {
-        compressed_size += Compression::ConstantEncoding(std::get<0>(state), dest);
+        compressed_size += Compression::constantEncoding(std::get<0>(state), dest);
         break;
     }
     case Mode::CONSTANT_DELTA:
     {
-        compressed_size += Compression::ConstantDeltaEncoding(values[0], std::get<0>(state), dest);
+        compressed_size += Compression::constantDeltaEncoding(values[0], std::get<0>(state), dest);
         break;
     }
     case Mode::RunLength:
     {
-        compressed_size += Compression::RunLengthEncoding<T>(std::get<1>(state), dest);
+        compressed_size += Compression::runLengthEncoding<T>(std::get<1>(state), dest);
         break;
     }
     case Mode::FOR:
@@ -146,19 +146,19 @@ void CompressionCodecIntegerLightweight::decompressDataForType(
     switch (mode)
     {
     case Mode::CONSTANT:
-        Compression::ConstantDecoding<T>(source, source_size, dest, output_size);
+        Compression::constantDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::CONSTANT_DELTA:
-        Compression::ConstantDeltaDecoding<T>(source, source_size, dest, output_size);
+        Compression::constantDeltaDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::RunLength:
-        Compression::RunLengthDecoding<T>(source, source_size, dest, output_size);
+        Compression::runLengthDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::FOR:
         Compression::FORDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::DELTA_FOR:
-        Compression::DeltaFORDecoding<T>(source, source_size, dest, output_size);
+        Compression::deltaFORDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::LZ4:
         if (unlikely(LZ4_decompress_safe(source, dest, source_size, output_size) < 0))
@@ -305,7 +305,7 @@ void CompressionCodecIntegerLightweight::CompressContext::analyze(std::span<cons
     // Assume that the compression ratio of LZ4 is 3.0
     // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
     size_t estimate_lz_size = values.size() * sizeof(T) / 3;
-    size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::RunLengthPairsSize(rle);
+    size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::runLengthPairsSize(rle);
     if (needAnalyzeRunLength() && rle_size < delta_for_size && rle_size < for_size && rle_size < estimate_lz_size)
     {
         state = std::move(rle);

@@ -65,7 +65,7 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
             ++rle_vec.back().second;
     }
 
-    if (DB::Compression::RunLengthPairsSize<T>(rle_vec) > source_size)
+    if (DB::Compression::runLengthPairsSize<T>(rle_vec) >= source_size)
     {
         dest[0] = JUST_COPY_CODE;
         memcpy(&dest[1], source, source_size);
@@ -74,7 +74,7 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 
     dest[0] = sizeof(T);
     dest += 1;
-    return 1 + DB::Compression::RunLengthEncoding<T>(rle_vec, dest);
+    return 1 + DB::Compression::runLengthEncoding<T>(rle_vec, dest);
 }
 
 } // namespace
@@ -134,16 +134,16 @@ void CompressionCodecRunLength::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        DB::Compression::RunLengthDecoding<UInt8>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::runLengthDecoding<UInt8>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 2:
-        DB::Compression::RunLengthDecoding<UInt16>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::runLengthDecoding<UInt16>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 4:
-        DB::Compression::RunLengthDecoding<UInt32>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::runLengthDecoding<UInt32>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 8:
-        DB::Compression::RunLengthDecoding<UInt64>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::runLengthDecoding<UInt64>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     default:
         throw Exception(
