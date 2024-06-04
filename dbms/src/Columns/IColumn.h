@@ -514,7 +514,7 @@ protected:
     {
         const auto selective_rows = selective->size();
 
-        RUNTIME_CHECK_MSG(selective_rows != selector.size(),
+        RUNTIME_CHECK_MSG(selective_rows == selector.size(),
                 "Size of selector: {} doesn't match size of selective column: {}", selector.size(), selective_rows);
 
         ScatterColumns columns;
