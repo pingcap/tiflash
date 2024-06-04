@@ -98,15 +98,18 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     {
     case tipb::ExecType::TypeLimit:
         GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalLimit::build(executor_id, log, executor->limit(), popBack()));
         break;
     case tipb::ExecType::TypeTopN:
         GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalTopN::build(context, executor_id, log, executor->topn(), popBack()));
         break;
     case tipb::ExecType::TypeSelection:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         auto child = popBack();
         if (pushDownSelection(context, child, executor_id, executor->selection()))
             pushBack(child);
@@ -118,12 +121,14 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         RUNTIME_CHECK_MSG(executor->aggregation().group_by_size() == 0, "Group by key is not supported in StreamAgg");
     case tipb::ExecType::TypeAggregation:
         GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalAggregation::build(
             context,
             executor_id,
             log,
             executor->aggregation(),
             FineGrainedShuffle(executor),
+            auto_pass_through_agg_flag,
             popBack()));
         break;
     case tipb::ExecType::TypeExchangeSender:
@@ -141,6 +146,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
                 log,
                 executor->exchange_sender(),
                 FineGrainedShuffle(executor),
+                auto_pass_through_agg_flag,
                 popBack()));
         }
         break;
@@ -148,6 +154,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     case tipb::ExecType::TypeExchangeReceiver:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
         {
             pushBack(PhysicalMockExchangeReceiver::build(
@@ -167,10 +174,12 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     }
     case tipb::ExecType::TypeProjection:
         GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
         break;
     case tipb::ExecType::TypeWindow:
         GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalWindow::build(
             context,
             executor_id,
@@ -181,6 +190,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         break;
     case tipb::ExecType::TypeSort:
         GET_METRIC(tiflash_coprocessor_executor_count, type_window_sort).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalWindowSort::build(
             context,
             executor_id,
@@ -191,15 +201,18 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         break;
     case tipb::ExecType::TypeTableScan:
         GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         buildTableScan(executor_id, executor);
         break;
     case tipb::ExecType::TypePartitionTableScan:
         GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         buildTableScan(executor_id, executor);
         break;
     case tipb::ExecType::TypeJoin:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_join).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         /// Both sides of the join need to have non-root-final-projection to ensure that
         /// there are no duplicate columns in the blocks on the build and probe sides.
         buildFinalProjection(fmt::format("{}_r_", executor_id), false);
@@ -221,12 +234,14 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     case tipb::ExecType::TypeExpand:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
         break;
     }
     case tipb::ExecType::TypeExpand2:
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+        RUNTIME_CHECK(!auto_pass_through_agg_flag);
         pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
         break;
     }

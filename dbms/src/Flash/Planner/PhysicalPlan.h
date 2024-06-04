@@ -71,5 +71,7 @@ private:
     Context & context;
 
     LoggerPtr log;
+
+    bool auto_pass_through_agg_flag = false;
 };
 } // namespace DB

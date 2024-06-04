@@ -20,6 +20,8 @@
 
 namespace DB
 {
+static constexpr std::string_view autoPassThroughAggregatingExtraInfo = "auto pass through";
+
 class AutoPassThroughAggregatingBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "Aggregating";

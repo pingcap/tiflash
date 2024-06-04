@@ -39,7 +39,10 @@ protected:
         throw Exception("shouldn't handle io for AutoPassThroughAggregateTransform");
     }
 
-    void transformHeaderImpl(Block & header_) override;
+    void transformHeaderImpl(Block & header_) override
+    {
+        header_ = auto_pass_through_context->getHeader();
+    }
 
 private:
     enum class Status

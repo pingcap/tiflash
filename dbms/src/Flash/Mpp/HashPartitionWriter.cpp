@@ -133,6 +133,11 @@ void HashPartitionWriter<ExchangeWriterPtr, selective_block>::write(const Block 
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
 
+    if constexpr (selective_block)
+        RUNTIME_CHECK(block.info.selective);
+    else
+        RUNTIME_CHECK(!block.info.selective);
+
     switch (data_codec_version)
     {
     case MPPDataPacketV0:
@@ -231,13 +236,23 @@ void HashPartitionWriter<ExchangeWriterPtr, selective_block>::partitionAndWriteB
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::scatterColumns(
-                block,
-                partition_col_ids,
-                collators,
-                partition_key_containers,
-                partition_num,
-                dest_tbl_cols);
+            if constexpr (selective_block)
+                HashBaseWriterHelper::scatterColumnsSelectiveBlock(
+                    block,
+                    partition_col_ids,
+                    collators,
+                    partition_key_containers,
+                    partition_num,
+                    dest_tbl_cols);
+            else
+                HashBaseWriterHelper::scatterColumns(
+                    block,
+                    partition_col_ids,
+                    collators,
+                    partition_key_containers,
+                    partition_num,
+                    dest_tbl_cols);
+
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)

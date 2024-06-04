@@ -16,6 +16,7 @@
 #include <Common/TiFlashException.h>
 #include <Core/FineGrainedOperatorSpillContext.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
+#include <DataStreams/AutoPassThroughAggregatingBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -30,6 +31,7 @@
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Interpreters/Context.h>
 #include <Operators/LocalAggregateTransform.h>
+#include <Operators/AutoPassThroughAggregateTransform.h>
 
 namespace DB
 {
@@ -39,9 +41,12 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     const LoggerPtr & log,
     const tipb::Aggregation & aggregation,
     const FineGrainedShuffle & fine_grained_shuffle,
+    bool & auto_pass_through_agg_flag,
     const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
+
+    auto_pass_through_agg_flag = aggregation.auto_pass_through();
 
     if (unlikely(aggregation.group_by_size() == 0 && aggregation.agg_func_size() == 0))
     {
@@ -100,6 +105,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         agg_func_ref_key,
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
+        auto_pass_through_agg_flag,
         aggregate_descriptions,
         expr_after_agg_actions);
     return physical_agg;
@@ -137,6 +143,9 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 
     if (fine_grained_shuffle.enable())
     {
+        // Agg cannot be both auto pass through and fine grained shuffle at ;he same time.
+        // Fine grained shuffle is for 2nd agg, auto pass through is for 1st agg.
+        RUNTIME_CHECK(!auto_pass_through);
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
             && pipeline.hasMoreThanOneStream())
@@ -158,6 +167,13 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         });
         if (fine_grained_spill_context != nullptr)
             context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
+    }
+    else if(auto_pass_through)
+    {
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<AutoPassThroughAggregatingBlockInputStream>(stream, params, log->identifier());
+            stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
+        });
     }
     else if (pipeline.streams.size() > 1)
     {
@@ -252,15 +268,29 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         aggregate_descriptions,
         is_final_agg,
         spill_config);
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(
-            exec_context,
-            log->identifier(),
-            params,
-            fine_grained_spill_context));
-    });
-    if (fine_grained_spill_context != nullptr)
-        context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
+    if (fine_grained_shuffle.enable())
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(
+                exec_context,
+                log->identifier(),
+                params,
+                fine_grained_spill_context));
+        });
+        if (fine_grained_spill_context != nullptr)
+            context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
+    }
+    else if (auto_pass_through)
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AutoPassThroughAggregateTransform>(exec_context, log->identifier(), params));
+        });
+    }
+    else
+    {
+        throw Exception(fmt::format("fine grained shuffle({}) or auto pass through({}) should be true",
+                    fine_grained_shuffle.enable(), auto_pass_through));
+    }
 
     executeExpression(exec_context, group_builder, expr_after_agg, log);
 }
@@ -271,7 +301,9 @@ void PhysicalAggregation::buildPipeline(
     PipelineExecutorContext & exec_context)
 {
     auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
-    if (fine_grained_shuffle.enable())
+    // fine_grained_shuffle and auto_pass_through cannot be ture at the same time.
+    RUNTIME_CHECK(!(fine_grained_shuffle.enable() && auto_pass_through));
+    if (fine_grained_shuffle.enable() || auto_pass_through)
     {
         // For fine grained shuffle, Aggregate wouldn't be broken.
         child->buildPipeline(builder, context, exec_context);

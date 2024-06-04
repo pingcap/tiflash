@@ -30,6 +30,7 @@ public:
         const LoggerPtr & log,
         const tipb::Aggregation & aggregation,
         const FineGrainedShuffle & fine_grained_shuffle,
+        bool & auto_pass_through_agg_flag,
         const PhysicalPlanNodePtr & child);
 
     PhysicalAggregation(
@@ -44,6 +45,7 @@ public:
         const std::unordered_map<String, String> & agg_func_ref_key_,
         const std::unordered_map<String, TiDB::TiDBCollatorPtr> & aggregation_collators_,
         bool is_final_agg_,
+        bool auto_pass_through_,
         const AggregateDescriptions & aggregate_descriptions_,
         const ExpressionActionsPtr & expr_after_agg_)
         : PhysicalUnary(executor_id_, PlanType::Aggregation, schema_, fine_grained_shuffle_, req_id, child_)
@@ -53,6 +55,7 @@ public:
         , agg_func_ref_key(agg_func_ref_key_)
         , aggregation_collators(aggregation_collators_)
         , is_final_agg(is_final_agg_)
+        , auto_pass_through(auto_pass_through_)
         , aggregate_descriptions(aggregate_descriptions_)
         , expr_after_agg(expr_after_agg_)
     {}
@@ -79,6 +82,7 @@ private:
     std::unordered_map<String, String> agg_func_ref_key;
     std::unordered_map<String, TiDB::TiDBCollatorPtr> aggregation_collators;
     bool is_final_agg;
+    bool auto_pass_through;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;
 };
