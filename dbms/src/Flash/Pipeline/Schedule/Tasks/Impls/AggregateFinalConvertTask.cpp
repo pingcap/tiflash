@@ -12,14 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/AggregateFinalConvertTask.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
-void FineGrainedPipelineEvent::scheduleImpl()
+AggregateFinalConvertTask::AggregateFinalConvertTask(
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
+    const EventPtr & event_,
+    AggregateContextPtr agg_context_,
+    size_t index_)
+    : EventTask(exec_context_, req_id, event_)
+    , agg_context(std::move(agg_context_))
+    , index(index_)
 {
-    addTask(
-        std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
+    assert(agg_context);
 }
+
+ExecTaskStatus AggregateFinalConvertTask::executeImpl()
+{
+    agg_context->convertToTwoLevel(index);
+    agg_context.reset();
+    return ExecTaskStatus::FINISHED;
+}
+
 } // namespace DB

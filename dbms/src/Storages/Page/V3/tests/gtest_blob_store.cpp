@@ -917,7 +917,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
     // After remove `entries_del1`.
     // Remain entries index [0, 2, 5, 6, 8]
-    blob_store.remove(entries_del1);
+    blob_store.removeEntries(entries_del1);
     ASSERT_EQ(entries_del1.begin()->file_id, 10);
 
     auto stat = blob_store.blob_stats.blobIdToStat(10);
@@ -929,7 +929,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     // After remove `entries_del2`.
     // Remain entries index [0, 2, 5].
     // But file size still is 10 * 1024
-    blob_store.remove(entries_del2);
+    blob_store.removeEntries(entries_del2);
 
     ASSERT_EQ(stat->sm_valid_rate, 0.3);
     ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
@@ -949,7 +949,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
     // Check whether the stat can be totally removed
     stat->changeToReadOnly();
-    blob_store.remove(remain_entries);
+    blob_store.removeEntries(remain_entries);
     ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 0);
 }
 
@@ -997,7 +997,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     // After remove `entries_del`.
     // Remain entries index [8, 9].
-    blob_store.remove(entries_del);
+    blob_store.removeEntries(entries_del);
 
     auto stat = blob_store.blob_stats.blobIdToStat(10);
 
@@ -1059,7 +1059,7 @@ TEST_F(BlobStoreTest, testBlobStoreRaftDataGcStats)
 
     // After remove `entries_del`.
     // Remain entries index [8, 9].
-    blob_store.remove(entries_del);
+    blob_store.removeEntries(entries_del);
 
     auto stat = blob_store.blob_stats.blobIdToStat(PageTypeUtils::nextFileID(PageType::RaftData, 1));
     ASSERT_NE(stat, nullptr);
@@ -1659,7 +1659,7 @@ try
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 1);
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
-        blob_store.remove({records[0].entry});
+        blob_store.removeEntries({records[0].entry});
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 0);
     }
 }
@@ -1773,7 +1773,7 @@ try
         ASSERT_EQ(stat->sm_total_size, 700);
         ASSERT_TRUE(stat->isReadOnly());
 
-        blob_store.remove({entry_from_write1});
+        blob_store.removeEntries({entry_from_write1});
 
         // new write will create new blob file
         size_t size_100 = 100;
@@ -1789,7 +1789,7 @@ try
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 2);
 
         // remove one shot blob file
-        blob_store.remove({entry_from_write2});
+        blob_store.removeEntries({entry_from_write2});
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 1);
     }
 }
@@ -1848,12 +1848,12 @@ try
         Poco::File file1(blob_store.getBlobFile(10)->getPath());
         ASSERT_EQ(file1.getSize(), 800);
         ASSERT_TRUE(blob_store.blob_stats.blobIdToStat(10)->isNormal()); // BlobStat type doesn't change after reload
-        blob_store.remove({entry_from_write3});
+        blob_store.removeEntries({entry_from_write3});
         auto blob_need_gc = blob_store.getGCStats();
         ASSERT_EQ(blob_need_gc.size(), 0);
         ASSERT_EQ(file1.getSize(), 600);
 
-        blob_store.remove({entry_from_write1});
+        blob_store.removeEntries({entry_from_write1});
 
         const auto & blob_need_gc2 = blob_store.getGCStats();
         ASSERT_EQ(blob_need_gc2.size(), 1);

@@ -18,8 +18,8 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
-#include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
-#include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/FineGrainedPipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
