@@ -14,6 +14,7 @@
 
 #include <Common/MemoryAllocTrace.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
+#include <Common/setThreadName.h>
 
 #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
@@ -35,4 +36,36 @@ std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
     return std::make_tuple(nullptr, nullptr);
 #endif
 }
+
+ThreadStackAllocTracker::ThreadStackAllocTracker() {
+    std::tie(alloc_ptr, dealloc_ptr) = getAllocDeallocPtr();
+}
+
+void ThreadStackAllocTracker::begin() {
+    begin_alloc = 0;
+    begin_dealloc = 0;
+    if likely(alloc_ptr && dealloc_ptr) {
+        begin_alloc = *alloc_ptr;
+        begin_dealloc = *dealloc_ptr;
+    }
+}
+std::pair<uint64_t, uint64_t> ThreadStackAllocTracker::end() {
+    if likely(alloc_ptr && dealloc_ptr) {
+        uint64_t delta_alloc = *alloc_ptr - begin_alloc;
+        uint64_t delta_dealloc = *dealloc_ptr - begin_dealloc;
+        total_alloc += delta_alloc;
+        total_dealloc += delta_dealloc;
+        return std::make_pair(delta_alloc, delta_dealloc);
+    }
+    return std::make_pair(0, 0);
+}
+
+std::string ThreadStackAllocTracker::threadName() const {
+    return getThreadName();
+}
+
+void ThreadStackAllocTracker::report() {
+
+}
+
 } // namespace DB

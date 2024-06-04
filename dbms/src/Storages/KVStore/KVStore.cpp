@@ -53,6 +53,8 @@ extern const char pause_passive_flush_before_persist_region[];
 extern const char force_not_clean_fap_on_destroy[];
 } // namespace FailPoints
 
+thread_local ThreadStackAllocTracker mem_tracker_kvs_memtable_persistence;
+
 KVStore::KVStore(Context & context)
     : region_persister(
         context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr

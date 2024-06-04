@@ -202,4 +202,39 @@ void TiFlashMetrics::registerStorageThreadMemory(const std::string & k)
     }
 }
 
+static std::string genStackPrefix(TiFlashMetrics::MemoryAllocType type, const std::string & k)
+{
+    if (type == TiFlashMetrics::MemoryAllocType::Alloc)
+    {
+        return "salloc_" + k;
+    }
+    else
+    {
+        return "sdealloc_" + k;
+    }
+}
+
+void TiFlashMetrics::registerStackThreadMemory(const std::string & k)
+{
+    std::unique_lock lock(stack_thread_report_mtx);
+    {
+        auto prefix = genStackPrefix(TiFlashMetrics::MemoryAllocType::Alloc, k);
+        if unlikely (!registered_stack_thread_memory_usage_metrics.contains(prefix))
+        {
+            registered_stack_thread_memory_usage_metrics.emplace(
+                prefix,
+                &registered_stack_thread_memory_usage_family->Add({{"type", prefix}}));
+        }
+    }
+    {
+        auto prefix = genStackPrefix(TiFlashMetrics::MemoryAllocType::Dealloc, k);
+        if unlikely (!registered_stack_thread_memory_usage_metrics.contains(prefix))
+        {
+            registered_stack_thread_memory_usage_metrics.emplace(
+                prefix,
+                &registered_stack_thread_memory_usage_family->Add({{"type", prefix}}));
+        }
+    }
+}
+
 } // namespace DB
