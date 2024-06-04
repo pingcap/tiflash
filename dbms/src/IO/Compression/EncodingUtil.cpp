@@ -129,9 +129,8 @@ UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference)
         // The minimum bit width required to store the values is 8 rather than the width of `max_value - min_value = -1`.
         // So we need to calculate the minimum bit width of the values after subtracting frame of reference.
         subtractFrameOfReference<T>(values.data(), frame_of_reference, values.size());
-        T max_value = *std::max_element(values.cbegin(), values.cend());
-        T min_value = *std::min_element(values.cbegin(), values.cend());
-        return BitpackingPrimitives::minimumBitWidth<T>(min_value, max_value);
+        auto [min_value, max_value] = std::minmax_element(values.cbegin(), values.cend());
+        return BitpackingPrimitives::minimumBitWidth<T>(*min_value, *max_value);
     }
     else
     {
