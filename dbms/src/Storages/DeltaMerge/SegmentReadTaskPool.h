@@ -126,7 +126,7 @@ public:
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         auto total_rows = blk_stat.totalRows();
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
             "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
@@ -255,3 +255,15 @@ using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
 } // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTaskPoolPtr>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTaskPoolPtr & pool, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", pool->pool_id);
+    }
+};
