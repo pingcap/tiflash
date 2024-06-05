@@ -9053,7 +9053,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "storages_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"alloc_.*\"}",
+              "expr": "tiflash_storages_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"alloc_.*\"}",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -9062,7 +9062,7 @@
             },
             {
               "exemplar": true,
-              "expr": "-storages_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"dealloc_.*\"}",
+              "expr": "-tiflash_storages_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"dealloc_.*\"}",
               "format": "time_series",
               "hide": false,
               "interval": "",
