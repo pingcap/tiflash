@@ -163,6 +163,7 @@ namespace DB
     M(random_pipeline_model_cancel_failpoint)                \
     M(random_pipeline_model_execute_prefix_failpoint)        \
     M(random_pipeline_model_execute_suffix_failpoint)        \
+    M(random_ddl_fail_when_rename_partitions)               \
     M(random_spill_to_disk_failpoint)                        \
     M(random_region_persister_latency_failpoint)             \
     M(random_restore_from_disk_failpoint)                    \
