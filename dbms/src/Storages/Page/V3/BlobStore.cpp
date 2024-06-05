@@ -128,7 +128,7 @@ void BlobStore<Trait>::registerPaths() NO_THREAD_SAFETY_ANALYSIS
             }
             else
             {
-                LOG_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
+                LOG_INFO(log, "Ignore not blob file, dir={} file={} err_msg={}", path, blob_name, err_msg);
             }
         }
     }
@@ -627,8 +627,8 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "write batch have a invalid total size, or something wrong in parse write batch "
-            "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
+            "write batch have a invalid total size, or something wrong in parse write batch"
+            ", expect_offset={} actual_offset={} actually_allocated_size={}",
             all_page_data_size,
             (buffer_pos - buffer),
             actually_allocated_size);
@@ -667,7 +667,7 @@ void BlobStore<Trait>::freezeBlobFiles()
 }
 
 template <typename Trait>
-void BlobStore<Trait>::remove(const PageEntries & del_entries) NO_THREAD_SAFETY_ANALYSIS
+void BlobStore<Trait>::removeEntries(const PageEntries & del_entries) NO_THREAD_SAFETY_ANALYSIS
 {
     std::set<BlobFileId> blob_updated;
     for (const auto & entry : del_entries)
@@ -690,7 +690,7 @@ void BlobStore<Trait>::remove(const PageEntries & del_entries) NO_THREAD_SAFETY_
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format("while removing entry [entry={}]", entry));
+            e.addMessage(fmt::format("while removing entry, entry={}", entry));
             e.rethrow();
         }
     }
@@ -712,8 +712,8 @@ void BlobStore<Trait>::remove(const PageEntries & del_entries) NO_THREAD_SAFETY_
             }
             LOG_TRACE(
                 log,
-                "Blob recalculated capability [blob_id={}] [max_cap={}] "
-                "[total_size={}] [valid_size={}] [valid_rate={}]",
+                "Blob recalculated capability blob_id={} max_cap={} "
+                "total_size={} valid_size={} valid_rate={}",
                 blob_id,
                 stat->sm_max_caps,
                 stat->sm_total_size,
@@ -770,8 +770,8 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
         LOG_ERROR(Logger::get(), stat->smap->toDebugString());
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. [size={}] "
-            "[old_max_caps={}] [max_caps={}] [blob_id={}]",
+            "Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. size={} "
+            "old_max_caps={} max_caps={} blob_id={}",
             size,
             old_max_cap,
             stat->sm_max_caps,
@@ -801,7 +801,13 @@ void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset off
     // Note that we must release the lock on blob_stat before removing it
     // from all blob_stats, or deadlocks could happen.
     // As the blob_stat has been became read-only, it is safe to release the lock.
-    LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+    LOG_INFO(
+        log,
+        "Removing BlobFile, blob_id={} read_only={} offset={} size={}",
+        blob_id,
+        stat->isReadOnly(),
+        offset,
+        size);
 
     {
         // Remove the stat from memory
@@ -877,8 +883,9 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
 #ifndef NDEBUG
             // throw an exception under debug mode so we should change the upper layer logic
             throw Exception(
-                fmt::format("Reading with fields but entry size is 0, read_info=[{}]", buf.toString()),
-                ErrorCodes::LOGICAL_ERROR);
+                ErrorCodes::LOGICAL_ERROR,
+                "Reading with fields but entry size is 0, read_info=[{}]",
+                buf.toString());
 #endif
             // Log a warning under production release
             LOG_WARNING(log, "Reading with fields but entry size is 0, read_info=[{}]", buf.toString());
@@ -926,9 +933,9 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
                     throw Exception(
                         ErrorCodes::CHECKSUM_DOESNT_MATCH,
                         "Reading with fields meet checksum not match "
-                        "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                        "[field_index={}] [field_offset={}] [field_size={}] "
-                        "[entry={}] [file={}]",
+                        "page_id={} expected=0x{:X} actual=0x{:X} "
+                        "field_index={} field_offset={} field_size={} "
+                        "entry={} file={}",
                         page_id_v3,
                         expect_checksum,
                         field_checksum,
@@ -966,12 +973,11 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
             },
             ",");
         throw Exception(
-            fmt::format(
-                "unexpected read size, end_pos={} current_pos={} read_info=[{}]",
-                shared_data_buf + buf_size,
-                pos,
-                buf.toString()),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "unexpected read size, end_pos={} current_pos={} read_info=[{}]",
+            shared_data_buf + buf_size,
+            pos,
+            buf.toString());
     }
     return page_map;
 }
@@ -1032,15 +1038,14 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
                 throw Exception(
-                    fmt::format(
-                        "Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                        "[entry={}] [file={}]",
-                        page_id_v3,
-                        entry.checksum,
-                        checksum,
-                        entry,
-                        blob_file->getPath()),
-                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                    ErrorCodes::CHECKSUM_DOESNT_MATCH,
+                    "Reading with entries meet checksum not match page_id={} expected=0x{:X} actual=0x{:X} "
+                    "entry={} file={}",
+                    page_id_v3,
+                    entry.checksum,
+                    checksum,
+                    entry,
+                    blob_file->getPath());
             }
         }
 
@@ -1071,12 +1076,11 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
             },
             ",");
         throw Exception(
-            fmt::format(
-                "unexpected read size, end_pos={} current_pos={} read_info=[{}]",
-                data_buf + buf_size,
-                pos,
-                buf.toString()),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "unexpected read size, end_pos={} current_pos={} read_info=[{}]",
+            data_buf + buf_size,
+            pos,
+            buf.toString());
     }
 
     return page_map;
@@ -1211,7 +1215,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
             if (stat->isReadOnly())
             {
                 blobstore_gc_info.appendToReadOnlyBlob(stat->id, stat->sm_valid_rate);
-                LOG_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
+                LOG_TRACE(log, "Current blob is read-only, blob_id={}", stat->id);
                 continue;
             }
 
@@ -1226,7 +1230,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
                 // TODO: avoid always truncate on empty BlobFile
                 RUNTIME_CHECK_MSG(
                     stat->sm_valid_size == 0,
-                    "Current blob is empty, but valid size is not 0. [blob_id={}] [valid_size={}] [valid_rate={}]",
+                    "Current blob is empty, but valid size is not 0, blob_id={} valid_size={} valid_rate={}",
                     stat->id,
                     stat->sm_valid_size,
                     stat->sm_valid_rate);
@@ -1236,7 +1240,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
                 auto blobfile = getBlobFile(stat->id);
                 LOG_INFO(
                     log,
-                    "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]",
+                    "Current blob file is empty, truncated to zero, blob_id={} total_size={} valid_rate={}",
                     stat->id,
                     stat->sm_total_size,
                     stat->sm_valid_rate);
@@ -1254,8 +1258,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
             {
                 LOG_ERROR(
                     log,
-                    "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right boundary is {} "
-                    "[blob_id={}]",
+                    "Current blob got an invalid rate {:.2f}, total_size={} valid_size={} right_boundary={} blob_id={}",
                     stat->sm_valid_rate,
                     stat->sm_total_size,
                     stat->sm_valid_size,
@@ -1279,7 +1282,11 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
             bool do_full_gc = stat->sm_valid_rate <= heavy_gc_threhold;
             if (do_full_gc)
             {
-                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(
+                    log,
+                    "Current blob will run full GC, blob_id={} valid_rate={:.2f}",
+                    stat->id,
+                    stat->sm_valid_rate);
                 if (blob_need_gc.find(page_type) == blob_need_gc.end())
                 {
                     blob_need_gc.emplace(page_type, std::vector<BlobFileId>());
@@ -1293,7 +1300,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
             else
             {
                 blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
-                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, unchange", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current blob unchange, blob_id={} valid_rate={:.2f}", stat->id, stat->sm_valid_rate);
             }
 
             if (right_boundary != stat->sm_total_size)
@@ -1301,7 +1308,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
                 auto blobfile = getBlobFile(stat->id);
                 LOG_TRACE(
                     log,
-                    "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]",
+                    "Truncate blob file, blob_id={} origin_size={} truncated_size={}",
                     stat->id,
                     stat->sm_total_size,
                     right_boundary);
@@ -1318,7 +1325,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
     LOG_IMPL(
         log,
         blobstore_gc_info.getLoggingLevel(),
-        "BlobStore gc get status done. blob_ids details {}",
+        "BlobStore gc get status done. details {}",
         blobstore_gc_info.toString());
 
     return blob_need_gc;
@@ -1359,7 +1366,7 @@ void BlobStore<Trait>::gc(
             written_blobs.emplace_back(file_id, file_offset, data_size);
             LOG_INFO(
                 log,
-                "BlobStore gc write (partially) done [blob_id={}] [file_offset={}] [size={}] [total_size={}]",
+                "BlobStore gc write (partially) done, blob_id={} file_offset={} size={} total_size={}",
                 file_id,
                 file_offset,
                 data_size,
@@ -1370,7 +1377,7 @@ void BlobStore<Trait>::gc(
         {
             LOG_ERROR(
                 log,
-                "BlobStore gc write failed [blob_id={}] [offset={}] [size={}] [total_size={}]",
+                "BlobStore gc write failed, blob_id={} offset={} size={} total_size={}",
                 file_id,
                 file_offset,
                 data_size,
@@ -1479,6 +1486,7 @@ void BlobStore<Trait>::gc(
     {
         write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
     }
+    LOG_INFO(log, "BlobStore gc write done, blob_id={} type={}", blobfile_id, magic_enum::enum_name(page_type));
 }
 
 template <typename Trait>
