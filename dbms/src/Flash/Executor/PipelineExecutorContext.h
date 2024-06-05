@@ -186,6 +186,8 @@ public:
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
+    String getTrimmedErrMsg();
+
     // Need to be called under lock.
     bool isWaitMode();
 
