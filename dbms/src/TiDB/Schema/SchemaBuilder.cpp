@@ -62,6 +62,10 @@ namespace ErrorCodes
 extern const int DDL_ERROR;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char random_ddl_fail_when_rename_partitions[];
+} // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {
@@ -689,6 +693,8 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
                     new_table_info->id);
                 return;
             }
+
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_ddl_fail_when_rename_partitions);
             auto part_table_info = new_table_info->producePartitionTableInfo(part_def.id, name_mapper);
             applyRenamePhysicalTable(new_database_id, new_database_display_name, *part_table_info, part_storage);
         }
@@ -814,7 +820,8 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     {
         LOG_INFO(
             log,
-            "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={} action={}",
+            "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={} "
+            "action={}",
             name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
             database_id,
             table_info->id,
