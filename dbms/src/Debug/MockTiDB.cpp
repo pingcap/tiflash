@@ -340,6 +340,48 @@ TableID MockTiDB::newTable(
     return addTable(database_name, std::move(*table_info));
 }
 
+std::tuple<TableID, std::vector<TableID>> MockTiDB::newPartitionTable(
+    const String & database_name,
+    const String & table_name,
+    const ColumnsDescription & columns,
+    Timestamp tso,
+    const String & handle_pk_name,
+    const String & engine_type,
+    const Strings & part_names)
+{
+    std::lock_guard lock(tables_mutex);
+
+    String qualified_name = database_name + "." + table_name;
+    if (tables_by_name.find(qualified_name) != tables_by_name.end())
+    {
+        throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
+    }
+
+    if (databases.find(database_name) == databases.end())
+    {
+        throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
+    }
+
+    std::vector<TableID> physical_table_ids;
+    physical_table_ids.reserve(part_names.size());
+    auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
+    table_info->id = table_id_allocator++;
+    table_info->is_partition_table = true;
+    table_info->partition.enable = true;
+    for (const auto & part_name : part_names)
+    {
+        PartitionDefinition part_def;
+        part_def.id = table_id_allocator++;
+        part_def.name = part_name;
+        table_info->partition.definitions.emplace_back(part_def);
+        ++table_info->partition.num;
+        physical_table_ids.emplace_back(part_def.id);
+    }
+    table_info->update_timestamp = tso;
+    auto logical_table_id = addTable(database_name, std::move(*table_info));
+    return {logical_table_id, physical_table_ids};
+}
+
 std::vector<TableID> MockTiDB::newTables(
     const String & database_name,
     const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
@@ -678,6 +720,45 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
     diff.type = SchemaActionType::RenameTable;
     diff.schema_id = table->database_id;
     diff.old_schema_id = table->database_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
+void MockTiDB::renameTableTo(
+    const String & database_name,
+    const String & table_name,
+    const String & new_database_name,
+    const String & new_table_name)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    String qualified_name = database_name + "." + table_name;
+    String new_qualified_name = new_database_name + "." + new_table_name;
+
+    const auto old_database_id = table->database_id;
+    const auto new_database = databases.find(new_database_name);
+    RUNTIME_CHECK_MSG(
+        new_database != databases.end(),
+        "new_database is not exist in MockTiDB, new_database_name={}",
+        new_database_name);
+    table->database_id = new_database->second; // set new_database_id
+
+    TableInfo new_table_info = table->table_info;
+    new_table_info.name = new_table_name;
+    auto new_table
+        = std::make_shared<Table>(database_name, table->database_id, new_table_name, std::move(new_table_info));
+
+    tables_by_id[new_table->table_info.id] = new_table;
+    tables_by_name.erase(qualified_name);
+    tables_by_name.emplace(new_qualified_name, new_table);
+
+    version++;
+    SchemaDiff diff;
+    diff.type = SchemaActionType::RenameTable;
+    diff.schema_id = table->database_id;
+    diff.old_schema_id = old_database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
