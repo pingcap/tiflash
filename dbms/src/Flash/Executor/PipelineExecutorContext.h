@@ -52,15 +52,15 @@ public:
     PipelineExecutorContext(
         const String & query_id_,
         const String & req_id,
-        DAGContext * dag_context_,
         const MemoryTrackerPtr & mem_tracker_,
+        DAGContext * dag_context_ = nullptr,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
-        , dag_context(dag_context_)
         , mem_tracker(mem_tracker_)
+        , dag_context(dag_context_)
         , auto_spill_trigger(auto_spill_trigger_)
         , register_operator_spill_context(register_operator_spill_context_)
         , resource_group_name(resource_group_name_)
@@ -198,9 +198,9 @@ private:
 
     LoggerPtr log;
 
-    DAGContext * dag_context{nullptr};
-
     MemoryTrackerPtr mem_tracker;
+
+    DAGContext * dag_context{nullptr};
 
     std::mutex mu;
     std::condition_variable cv;

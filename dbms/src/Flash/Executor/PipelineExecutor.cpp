@@ -34,8 +34,8 @@ PipelineExecutor::PipelineExecutor(
           // But for cop/batchCop, there is no such unique identifier, so an empty value is given here, indicating that the query id of PipelineExecutor is invalid.
           /*query_id=*/context.getDAGContext()->isMPPTask() ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
-          context.getDAGContext(),
           memory_tracker_,
+          context.getDAGContext(),
           auto_spill_trigger,
           register_operator_spill_context,
           context.getDAGContext()->getResourceGroupName())
