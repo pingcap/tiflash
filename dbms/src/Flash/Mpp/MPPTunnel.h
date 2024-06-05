@@ -336,7 +336,7 @@ private:
     template <bool is_force>
     bool pushImpl(TrackedMppDataPacketPtr && data)
     {
-        if (unlikely(checkPacketErr(data)))
+        if (unlikely(is_done || checkPacketErr(data)))
             return false;
 
         // When ExchangeReceiver receives data from local and remote tiflash, number of local tunnel threads

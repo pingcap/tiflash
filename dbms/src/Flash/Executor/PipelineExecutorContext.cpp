@@ -159,7 +159,7 @@ void PipelineExecutorContext::cancel()
         {
             // Cancel the tunnel_set here to prevent pipeline tasks waiting in the WAIT_FOR_NOTIFY state from never being notified.
             if (dag_context->tunnel_set)
-                dag_context->tunnel_set->close("", false);
+                dag_context->tunnel_set->close(getExceptionMsg(), false);
         }
         cancelSharedQueues();
         if likely (TaskScheduler::instance && !query_id.empty())
