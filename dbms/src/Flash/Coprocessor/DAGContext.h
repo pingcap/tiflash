@@ -374,6 +374,8 @@ public:
     /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is used later.
     MPPTunnelSetPtr tunnel_set;
+    // `mpp_receiver_set` is always set by `MPPTask` and is used later.
+    MPPReceiverSetPtr mpp_receiver_set;
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
@@ -443,7 +445,6 @@ private:
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
 
-    MPPReceiverSetPtr mpp_receiver_set;
     std::vector<CoprocessorReaderPtr> coprocessor_readers;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.

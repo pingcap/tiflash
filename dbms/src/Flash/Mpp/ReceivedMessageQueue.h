@@ -112,7 +112,7 @@ public:
 private:
     using QueueImpl = LooseBoundedMPMCQueue<ReceivedMessagePtr>;
     // these are unbounded queues.
-    std::shared_ptr<QueueImpl> queue = std::make_shared<QueueImpl>(std::numeric_limits<size_t>::max());
+    std::unique_ptr<QueueImpl> queue = std::make_unique<QueueImpl>(std::numeric_limits<size_t>::max());
     QueueImpl & queue_ref = *queue;
 };
 
