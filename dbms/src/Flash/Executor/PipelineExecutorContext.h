@@ -34,6 +34,8 @@ using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<Op
 class SharedQueue;
 using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 
+class DAGContext;
+
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -50,12 +52,14 @@ public:
     PipelineExecutorContext(
         const String & query_id_,
         const String & req_id,
+        DAGContext * dag_context_,
         const MemoryTrackerPtr & mem_tracker_,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
+        , dag_context(dag_context_)
         , mem_tracker(mem_tracker_)
         , auto_spill_trigger(auto_spill_trigger_)
         , register_operator_spill_context(register_operator_spill_context_)
@@ -193,6 +197,8 @@ private:
     const String query_id;
 
     LoggerPtr log;
+
+    DAGContext * dag_context{nullptr};
 
     MemoryTrackerPtr mem_tracker;
 

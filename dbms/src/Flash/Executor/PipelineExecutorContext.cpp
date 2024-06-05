@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Operators/SharedQueue.h>
 
@@ -153,6 +155,12 @@ void PipelineExecutorContext::cancel()
     bool origin_value = false;
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
+        if (likely(dag_context))
+        {
+            // Cancel the tunnel_set here to prevent pipeline tasks waiting in the WAIT_FOR_NOTIFY state from never being notified.
+            if (dag_context->tunnel_set)
+                dag_context->tunnel_set->close("", false);
+        }
         cancelSharedQueues();
         if likely (TaskScheduler::instance && !query_id.empty())
             TaskScheduler::instance->cancel(query_id, resource_group_name);
