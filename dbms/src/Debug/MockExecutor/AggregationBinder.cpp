@@ -34,6 +34,7 @@ bool AggregationBinder::toTiPBExecutor(
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     auto * agg = tipb_executor->mutable_aggregation();
+    agg->set_auto_pass_through(auto_pass_through);
     buildAggExpr(agg, collator_id, context);
     buildGroupBy(agg, collator_id, context);
     auto * child_executor = agg->mutable_child();
@@ -95,7 +96,8 @@ void AggregationBinder::toMPPSubPlan(
         std::move(agg_exprs),
         std::move(gby_exprs),
         false,
-        fine_grained_shuffle_stream_count);
+        fine_grained_shuffle_stream_count,
+        auto_pass_through);
     partial_agg->children.push_back(children[0]);
     std::vector<size_t> partition_keys;
     size_t agg_func_num = partial_agg->agg_exprs.size();
@@ -235,7 +237,8 @@ ExecutorBinderPtr compileAggregation(
     size_t & executor_index,
     ASTPtr agg_funcs,
     ASTPtr group_by_exprs,
-    uint64_t fine_grained_shuffle_stream_count)
+    uint64_t fine_grained_shuffle_stream_count,
+    bool auto_pass_through)
 {
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
@@ -308,7 +311,8 @@ ExecutorBinderPtr compileAggregation(
         std::move(agg_exprs),
         std::move(gby_exprs),
         true,
-        fine_grained_shuffle_stream_count);
+        fine_grained_shuffle_stream_count,
+        auto_pass_through);
     aggregation->children.push_back(input);
     return aggregation;
 }

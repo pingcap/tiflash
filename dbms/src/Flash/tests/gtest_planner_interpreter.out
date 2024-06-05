@@ -737,3 +737,21 @@ CreatingSets
               Expression x 10: <before aggregation>
                MockExchangeReceiver
 @
+~test_suite_name: autoPassThroughAgg
+~result_index: 0
+~result:
+Union: <for test>
+ MockExchangeSender x 10
+  Expression: <final projection>
+   Expression: <expr after aggregation>
+    Aggregating: <auto pass through>
+     MockTableScan
+@
+~test_suite_name: autoPassThroughAgg
+~result_index: 1
+~result:
+MockExchangeSender
+ Expression: <final projection>
+  Expression: <expr after aggregation>
+   Aggregating: <auto pass through>
+    MockTableScan
