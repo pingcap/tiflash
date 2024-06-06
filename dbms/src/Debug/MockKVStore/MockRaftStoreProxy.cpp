@@ -167,16 +167,23 @@ void MockRaftStoreProxy::debugAddRegions(
 {
     UNUSED(tmt);
     int n = ranges.size();
-    auto _ = genLockGuard();
-    auto task_lock = kvs.genTaskLock();
-    auto lock = kvs.genRegionMgrWriteLock(task_lock);
-    for (int i = 0; i < n; ++i)
     {
-        regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));
-        auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
-        lock.regions.emplace(region_ids[i], region);
-        lock.index.add(region);
-        tmt.getRegionTable().updateRegion(*region);
+        auto _ = genLockGuard();
+        for (int i = 0; i < n; ++i)
+        {
+            regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));
+        }
+    }
+    {
+        auto task_lock = kvs.genTaskLock(); // No region events
+        auto lock = kvs.genRegionMgrWriteLock(task_lock); // Region mgr lock
+        for (int i = 0; i < n; ++i)
+        {
+            auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
+            lock.regions.emplace(region_ids[i], region);
+            lock.index.add(region);
+            tmt.getRegionTable().updateRegion(*region);
+        }
     }
 }
 

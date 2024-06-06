@@ -39,8 +39,7 @@ namespace DB
 class TMTContext;
 using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
-/// It's only intended to be used by DAGQueryBlockInterpreter.
-/// After DAGStorageInterpreter::execute some of its members will be transferred to DAGQueryBlockInterpreter.
+/// After DAGStorageInterpreter::execute some of its members will be used later.
 class DAGStorageInterpreter
 {
 public:
