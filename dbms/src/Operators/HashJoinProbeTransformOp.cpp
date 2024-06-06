@@ -232,7 +232,6 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
             }
             return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::RESTORE_PROBE:
-            return probe_transform->prepareProbeRestoredBlock() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
         case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
         case ProbeStatus::FINISHED:
             return OperatorStatus::HAS_OUTPUT;
