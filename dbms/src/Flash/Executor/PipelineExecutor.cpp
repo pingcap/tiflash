@@ -78,16 +78,7 @@ void PipelineExecutor::wait()
 void PipelineExecutor::consume(ResultHandler & result_handler)
 {
     assert(result_handler);
-    if (unlikely(context.isTest()))
-    {
-        // In test mode, a single query should take no more than 5 minutes to execute.
-        static std::chrono::minutes timeout(5);
-        exec_context.consumeFor(result_handler, timeout);
-    }
-    else
-    {
-        exec_context.consume(result_handler);
-    }
+    exec_context.consume(result_handler);
 }
 
 ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
