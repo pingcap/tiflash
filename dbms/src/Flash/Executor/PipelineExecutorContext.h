@@ -145,9 +145,10 @@ private:
     ResultQueuePtr getConsumedResultQueue();
 
     void cancelSharedQueues();
-    void cancelResultQueueIfNeed();
 
     void cancelOneTimeFutures();
+
+    void cancelResultQueueIfNeed();
 
 private:
     const String query_id;
