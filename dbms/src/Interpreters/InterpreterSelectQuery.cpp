@@ -223,13 +223,19 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     // always sync schema first and then read table
     const String qualified_name = database_name + "." + table_name;
 
+    bool need_sync_schema = true;
+    if (database_name == "system")
+        need_sync_schema = false;
+    else if (database_name.empty() && context.getCurrentDatabase() == "system")
+        need_sync_schema = false;
 
     {
         auto start_time = Clock::now();
         // Since InterpreterSelectQuery will only be trigger while using ClickHouse client,
         // and we do not support keyspace feature for ClickHouse interface,
         // we could use nullspace id here safely.
-        context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, NullspaceID);
+        if (need_sync_schema)
+            context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, NullspaceID);
         auto storage_tmp = context.getTable(database_name, table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
         if (!managed_storage
@@ -243,10 +249,11 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
             return;
         }
 
-        context.getTMTContext().getSchemaSyncerManager()->syncTableSchema(
-            context,
-            NullspaceID,
-            managed_storage->getTableInfo().id);
+        if (need_sync_schema)
+            context.getTMTContext().getSchemaSyncerManager()->syncTableSchema(
+                context,
+                NullspaceID,
+                managed_storage->getTableInfo().id);
         auto schema_sync_cost
             = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
