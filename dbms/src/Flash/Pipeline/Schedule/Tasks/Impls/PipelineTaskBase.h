@@ -133,10 +133,11 @@ protected:
         pipeline_exec_holder.reset();
     }
 
-    void runNotify()
+    ExecTaskStatus runNotify()
     {
         assert(pipeline_exec);
         pipeline_exec->notify();
+        return ExecTaskStatus::RUNNING;
     }
 
 private:

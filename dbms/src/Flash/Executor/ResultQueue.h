@@ -14,14 +14,35 @@
 
 #pragma once
 
-#include <Common/MPMCQueue.h>
-#include <Common/PtrHolder.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Core/Block.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 
-#include <mutex>
+#include <memory>
 
 namespace DB
 {
-using ResultQueue = MPMCQueue<Block>;
+class ResultQueue : public NotifyFuture
+{
+public:
+    explicit ResultQueue(size_t queue_size)
+        : queue(queue_size)
+    {}
+
+    // read
+    MPMCQueueResult pop(Block & block) { return queue.pop(block); }
+
+    // write
+    MPMCQueueResult push(Block && block) { return queue.push(block); }
+    MPMCQueueResult tryPush(Block && block) { return queue.tryPush(block); }
+    void registerTask(TaskPtr && task) override { queue.registerPipeWriteTask(std::move(task)); }
+
+    // finish/cancel
+    bool finish() { return queue.finish(); }
+    bool cancel() { return queue.cancel(); }
+
+private:
+    LooseBoundedMPMCQueue<Block> queue;
+};
 using ResultQueuePtr = std::shared_ptr<ResultQueue>;
 } // namespace DB

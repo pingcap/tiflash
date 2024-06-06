@@ -77,15 +77,7 @@ public:
         assert(task);
         task->notify();
         assert(TaskScheduler::instance);
-        if (unlikely(task->getStatus() == ExecTaskStatus::WAITING))
-        {
-            TaskScheduler::instance->submitToWaitReactor(std::move(task));
-        }
-        else
-        {
-            assert(task->getStatus() == ExecTaskStatus::RUNNING);
-            TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
-        }
+        TaskScheduler::instance->submit(std::move(task));
     }
 
 private:
