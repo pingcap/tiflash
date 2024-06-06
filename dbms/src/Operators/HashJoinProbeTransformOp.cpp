@@ -208,39 +208,6 @@ void HashJoinProbeTransformOp::onGetRestoreJoin()
     }
 }
 
-OperatorStatus HashJoinProbeTransformOp::awaitImpl()
-{
-    while (true)
-    {
-        switch (status)
-        {
-        case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->isProbeFinishedForPipeline())
-            {
-                onWaitProbeFinishDone();
-                BREAK;
-            }
-            return OperatorStatus::WAIT_FOR_NOTIFY;
-        case ProbeStatus::GET_RESTORE_JOIN:
-            onGetRestoreJoin();
-            BREAK;
-        case ProbeStatus::RESTORE_BUILD:
-            if (probe_transform->isBuildFinishedForPipeline())
-            {
-                onRestoreBuildFinish();
-                BREAK;
-            }
-            return OperatorStatus::WAIT_FOR_NOTIFY;
-        case ProbeStatus::RESTORE_PROBE:
-        case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
-        case ProbeStatus::FINISHED:
-            return OperatorStatus::HAS_OUTPUT;
-        default:
-            throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
-        }
-    }
-}
-
 OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
 {
     switch (status)
