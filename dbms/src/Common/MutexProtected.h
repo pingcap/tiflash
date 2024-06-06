@@ -33,32 +33,32 @@ private:
         DISALLOW_COPY_AND_MOVE(Locked);
 
     public:
-        Locked(U & value, std::mutex & mutex)
-            : m_value(value)
-            , m_locker(mutex)
+        Locked(U & value_, std::mutex & mutex_)
+            : value(value_)
+            , locker(mutex_)
         {}
 
-        ALWAYS_INLINE inline U const * operator->() const { return &m_value; }
-        ALWAYS_INLINE inline U const & operator*() const { return m_value; }
+        ALWAYS_INLINE inline U const * operator->() const { return &value; }
+        ALWAYS_INLINE inline U const & operator*() const { return value; }
 
-        ALWAYS_INLINE inline U * operator->() { return &m_value; }
-        ALWAYS_INLINE inline U & operator*() { return m_value; }
+        ALWAYS_INLINE inline U * operator->() { return &value; }
+        ALWAYS_INLINE inline U & operator*() { return value; }
 
-        ALWAYS_INLINE inline U const & get() const { return m_value; }
-        ALWAYS_INLINE inline U & get() { return m_value; }
+        ALWAYS_INLINE inline U const & get() const { return value; }
+        ALWAYS_INLINE inline U & get() { return value; }
 
     private:
-        U & m_value;
-        std::scoped_lock<std::mutex> m_locker;
+        U & value;
+        std::scoped_lock<std::mutex> locker;
     };
 
-    auto lockConst() const { return Locked<T const>(m_value, m_mutex); }
-    auto lockMutable() { return Locked<T>(m_value, m_mutex); }
+    auto lockConst() const { return Locked<T const>(value, mutex); }
+    auto lockMutable() { return Locked<T>(value, mutex); }
 
 public:
     template <typename... Args>
     explicit MutexProtected(Args &&... args)
-        : m_value(forward<Args>(args)...)
+        : value(forward<Args>(args)...)
     {}
 
     template <typename Callback>
@@ -94,8 +94,8 @@ public:
     }
 
 private:
-    T m_value;
-    mutable std::mutex m_mutex;
+    T value;
+    mutable std::mutex mutex;
 };
 
 } // namespace DB

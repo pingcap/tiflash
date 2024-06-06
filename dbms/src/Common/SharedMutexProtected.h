@@ -35,44 +35,44 @@ private:
         DISALLOW_COPY_AND_MOVE(Locked);
 
     public:
-        Locked(U & value, std::shared_mutex & mutex)
-            : m_value(value)
-            , m_locker(mutex)
+        Locked(U & value_, std::shared_mutex & mutex_)
+            : value(value_)
+            , locker(mutex_)
         {}
 
-        ALWAYS_INLINE inline U const * operator->() const { return &m_value; }
-        ALWAYS_INLINE inline U const & operator*() const { return m_value; }
+        ALWAYS_INLINE inline U const * operator->() const { return &value; }
+        ALWAYS_INLINE inline U const & operator*() const { return value; }
 
         ALWAYS_INLINE inline U * operator->()
             requires(!std::is_const_v<U>)
         {
-            return &m_value;
+            return &value;
         }
         ALWAYS_INLINE inline U & operator*()
             requires(!std::is_const_v<U>)
         {
-            return m_value;
+            return value;
         }
 
-        ALWAYS_INLINE inline U const & get() const { return &m_value; }
+        ALWAYS_INLINE inline U const & get() const { return &value; }
         ALWAYS_INLINE inline U & get()
             requires(!std::is_const_v<U>)
         {
-            return &m_value;
+            return &value;
         }
 
     private:
-        U & m_value;
-        Lock m_locker;
+        U & value;
+        Lock locker;
     };
 
 public:
     // Return a locked object that can be used to shared access the protected value.
     // Please destroy the object ASAP to release the lock.
-    auto lockShared() const { return Locked<T const, std::shared_lock<std::shared_mutex>>(m_value, m_mutex); }
+    auto lockShared() const { return Locked<T const, std::shared_lock<std::shared_mutex>>(value, mutex); }
     // Return a locked object that can be used to exclusive access the protected value.
     // Please destroy the object ASAP to release the lock.
-    auto lockExclusive() { return Locked<T, std::unique_lock<std::shared_mutex>>(m_value, m_mutex); }
+    auto lockExclusive() { return Locked<T, std::unique_lock<std::shared_mutex>>(value, mutex); }
 
     SharedMutexProtected() = default;
 
@@ -109,8 +109,8 @@ public:
     }
 
 private:
-    T m_value;
-    mutable std::shared_mutex m_mutex;
+    T value;
+    mutable std::shared_mutex mutex;
 };
 
 } // namespace DB
