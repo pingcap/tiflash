@@ -1246,7 +1246,6 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -1254,7 +1253,6 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -1268,7 +1266,6 @@ try
             break;
         }
         case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -1300,8 +1297,6 @@ try
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
-            std::vector<RuntimeFilterPtr>{},
-            0,
             TRACING_NAME,
             /* keep_order= */ false,
             /* is_fast_scan= */ true,
