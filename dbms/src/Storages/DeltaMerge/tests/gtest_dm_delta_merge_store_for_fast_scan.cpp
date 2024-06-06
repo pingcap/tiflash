@@ -1228,6 +1228,113 @@ try
     }
 }
 CATCH
+
+
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithLogicalSplit)
+try
+{
+    constexpr auto num_write_rows = 32;
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    //Test write multi blocks without overlap and do not compact
+    {
+        auto block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false);
+        auto block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false);
+        auto block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+        {
+            store->write(*db_context, db_context->getSettingsRef(), block1);
+            store->write(*db_context, db_context->getSettingsRef(), block2);
+            store->write(*db_context, db_context->getSettingsRef(), block3);
+            break;
+        }
+        case TestMode::V2_FileOnly:
+        {
+            auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range = range1.merge(range2).merge(range3);
+            auto file_ids = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->ingestFiles(dm_context, range, file_ids, false);
+            break;
+        }
+        case TestMode::V2_Mix:
+        {
+            auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range = range1.merge(range3);
+            auto file_ids = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->ingestFiles(dm_context, range, file_ids, false);
+            store->write(*db_context, db_context->getSettingsRef(), block2);
+
+            break;
+        }
+        }
+
+        store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    store->mergeDeltaAll(*db_context);
+
+    auto fastscan_rows = [&]() {
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ true,
+            /* expected_block_size= */ 1024)[0];
+        size_t rows = 0;
+        in->readPrefix();
+        while (true)
+        {
+            auto b = in->read();
+            if (!b)
+            {
+                break;
+            }
+            rows += b.rows();
+        }
+        return rows;
+    };
+
+    auto before_split = fastscan_rows();
+
+    ASSERT_EQ(store->segments.size(), 1);
+    auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+    auto old = store->segments.begin()->second;
+    auto [left, right] = store->segmentSplit(
+        *dm_context,
+        old,
+        DeltaMergeStore::SegmentSplitReason::ForegroundWrite,
+        std::nullopt,
+        DeltaMergeStore::SegmentSplitMode::Logical);
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+    ASSERT_EQ(store->segments.size(), 2);
+
+    auto after_split = fastscan_rows();
+
+    ASSERT_EQ(before_split, after_split);
+}
+CATCH
 } // namespace tests
 } // namespace DM
 } // namespace DB

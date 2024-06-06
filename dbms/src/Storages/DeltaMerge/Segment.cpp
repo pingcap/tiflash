@@ -737,13 +737,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
-    RowKeyRanges real_ranges;
-    for (const auto & read_range : read_ranges)
-    {
-        auto real_range = rowkey_range.shrink(read_range);
-        if (!real_range.none())
-            real_ranges.emplace_back(std::move(real_range));
-    }
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
     if (real_ranges.empty())
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
 
@@ -864,10 +858,16 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
-    const RowKeyRanges & data_ranges,
+    const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
     size_t expected_block_size)
 {
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    if (real_ranges.empty())
+    {
+        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
+    }
+
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
     // new_columns_to_read need at most columns_to_read.size() + 2, due to may extra insert into the handle column and del_mark column.
@@ -911,7 +911,7 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *new_columns_to_read,
-        data_ranges,
+        real_ranges,
         filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
@@ -922,8 +922,8 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
     // Do row key filtering based on data_ranges.
-    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
-    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
+    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, real_ranges, 0);
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, real_ranges, 0);
 
     // Filter the unneeded column and filter out the rows whose del_mark is true.
     delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read, dm_context.tracing_id);
