@@ -139,6 +139,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         trace.releaseSubtaskResources(region_id, split_id);
         CurrentMetrics::sub(CurrentMetrics::RaftNumPrehandlingSubTasks);
     });
+    Stopwatch sw;
     LOG_INFO(
         log,
         "Add prehandle task split_id={} limit={}",
@@ -200,6 +201,8 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             stream->cancel();
             res = ReadFromStreamResult{.error = abort_reason.value(), .extra_msg = "", .region = new_region};
         }
+        auto keys_per_second = (sst_stream->getProcessKeys().write_cf + sst_stream->getProcessKeys().lock_cf + sst_stream->getProcessKeys().write_cf) * 1.0 / sw.elapsedSeconds();
+        GET_METRIC(tiflash_raft_command_throughput, type_prehandle_snapshot).Observe(keys_per_second);
         return std::make_pair(
             std::move(res),
             PrehandleResult{
@@ -254,6 +257,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
+    GET_METRIC(tiflash_raft_raft_events_count, type_prehandle).Increment();
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
 
     ongoing_prehandle_task_count.fetch_add(1);
