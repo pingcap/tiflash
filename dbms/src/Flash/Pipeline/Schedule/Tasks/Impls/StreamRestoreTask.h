@@ -15,11 +15,13 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Executor/ResultQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {
+class SharedQueueSinkHolder;
+using SharedQueueSinkHolderPtr = std::shared_ptr<SharedQueueSinkHolder>;
+
 /// Used to read block from io-based block input stream like `SpilledFilesInputStream` and write block to result queue.
 ///
 /// io_stream (read in io_thread_pool) --> result_queue --> caller.
@@ -30,22 +32,25 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const BlockInputStreamPtr & stream_,
-        const ResultQueuePtr & result_queue_);
+        const SharedQueueSinkHolderPtr & sink_);
 
 protected:
     ExecTaskStatus executeImpl() override;
-
-    ExecTaskStatus awaitImpl() override;
 
     ExecTaskStatus executeIOImpl() override;
 
     void finalizeImpl() override;
 
+    ExecTaskStatus notifyImpl() override { return ExecTaskStatus::IO_IN; }
+
+private:
+    ExecTaskStatus tryFlush();
+
 private:
     BlockInputStreamPtr stream;
-    ResultQueuePtr result_queue;
+    SharedQueueSinkHolderPtr sink;
 
+    Block t_block;
     bool is_done = false;
-    Block block;
 };
 } // namespace DB
