@@ -264,6 +264,11 @@ enum class ResolveResult
     TO_NORMAL,
 };
 
+struct PageStorageMemorySummary
+{
+    static inline std::atomic_int64_t mem_sum_page_entries{0};
+};
+
 // VersionedPageEntries store multi-versions page entries for the same page id.
 template <typename Trait>
 class VersionedPageEntries
@@ -274,6 +279,30 @@ public:
 
     using GcEntries = std::vector<std::tuple<PageId, PageVersion, PageEntryV3>>;
     using GcEntriesMap = std::map<BlobFileId, GcEntries>;
+
+public:
+    static void operator delete(void * ptr, std::size_t sz)
+    {
+        PageStorageMemorySummary::mem_sum_page_entries.fetch_sub(sz);
+        ::operator delete(ptr);
+    }
+
+    static void operator delete[](void * ptr, std::size_t sz)
+    {
+        PageStorageMemorySummary::mem_sum_page_entries.fetch_sub(sz);
+        ::operator delete[](ptr);
+    }
+    static void * operator new(std::size_t sz)
+    {
+        PageStorageMemorySummary::mem_sum_page_entries.fetch_add(sz);
+        return ::operator new(sz);
+    }
+
+    static void * operator new[](std::size_t sz)
+    {
+        PageStorageMemorySummary::mem_sum_page_entries.fetch_add(sz);
+        return ::operator new[](sz);
+    }
 
 public:
     VersionedPageEntries()
