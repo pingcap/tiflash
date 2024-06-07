@@ -609,12 +609,40 @@ try
         EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
     }
 
-    //
-    FailPointHelper::enableRandomFailPoint(FailPoints::random_ddl_fail_when_rename_partitions, 0.3);
+    // mock failures happen when renaming partitions of a partitioned table
+    FailPointHelper::enableRandomFailPoint(FailPoints::random_ddl_fail_when_rename_partitions, 0.5);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::random_ddl_fail_when_rename_partitions); });
+
     // Rename the partition table across database
     const String new_tbl_name = "mock_part_tbl_renamed";
     MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
     refreshSchema();
+
+    Strings not_renamed_tbls;
+    {
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        for (const auto & tbl : Strings{
+                 fmt::format("t_{}", physical_table_ids[0]),
+                 fmt::format("t_{}", physical_table_ids[2]),
+             })
+        {
+            if (!new_db->isTableExist(global_ctx, tbl))
+                not_renamed_tbls.push_back(tbl);
+        }
+    }
+    LOG_WARNING(
+        Logger::get(),
+        "mock that these partitions are not renamed before restart, not_renamed_tables={}",
+        not_renamed_tbls);
+
+    if (!not_renamed_tbls.empty())
+    {
+        // mock that tiflash restart and run the fix logic
+        resetSchemas();
+        refreshSchema();
+    }
 
     {
         auto logical_tbl = mustGetSyncedTable(logical_table_id);

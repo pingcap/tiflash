@@ -126,6 +126,8 @@ private:
     void applyExchangeTablePartition(const SchemaDiff & diff);
 
     String tryGetDatabaseDisplayNameFromLocal(DatabaseID database_id);
+
+    void tryFixPartitionsBelongingDatabase();
 };
 
 } // namespace DB
