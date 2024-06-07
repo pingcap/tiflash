@@ -53,8 +53,7 @@ template <std::integral T>
 UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * dest)
 {
     assert(count > 0); // doCompressData ensure it
-    std::vector<T> values(count);
-    values.assign(source, source + count);
+    std::vector<T> values(source, source + count);
     T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
     UInt8 width = DB::Compression::FOREncodingWidth(values, frame_of_reference);
     return DB::Compression::FOREncoding<T, std::is_signed_v<T>>(values, frame_of_reference, width, dest);
