@@ -676,28 +676,28 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
     const ManageableStoragePtr & storage)
 {
     applyRenamePhysicalTable(new_database_id, new_database_display_name, *new_table_info, storage);
+    if (!new_table_info->isLogicalPartitionTable())
+        return;
 
-    if (new_table_info->isLogicalPartitionTable())
+    // For partitioned table, try to execute rename on each partition (physical table)
+    auto & tmt_context = context.getTMTContext();
+    for (const auto & part_def : new_table_info->partition.definitions)
     {
-        auto & tmt_context = context.getTMTContext();
-        for (const auto & part_def : new_table_info->partition.definitions)
+        auto part_storage = tmt_context.getStorages().get(keyspace_id, part_def.id);
+        if (part_storage == nullptr)
         {
-            auto part_storage = tmt_context.getStorages().get(keyspace_id, part_def.id);
-            if (part_storage == nullptr)
-            {
-                LOG_ERROR(
-                    log,
-                    "Storage instance is not exist in TiFlash, applyRenamePhysicalTable is ignored, "
-                    "physical_table_id={} logical_table_id={}",
-                    part_def.id,
-                    new_table_info->id);
-                return;
-            }
-
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_ddl_fail_when_rename_partitions);
-            auto part_table_info = new_table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            applyRenamePhysicalTable(new_database_id, new_database_display_name, *part_table_info, part_storage);
+            LOG_WARNING(
+                log,
+                "Storage instance is not exist in TiFlash, the partition is not created yet in this TiFlash instance, "
+                "applyRenamePhysicalTable is ignored, physical_table_id={} logical_table_id={}",
+                part_def.id,
+                new_table_info->id);
+            continue; // continue for nex partition
         }
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_ddl_fail_when_rename_partitions);
+        auto part_table_info = new_table_info->producePartitionTableInfo(part_def.id, name_mapper);
+        applyRenamePhysicalTable(new_database_id, new_database_display_name, *part_table_info, part_storage);
     }
 }
 
@@ -1331,6 +1331,7 @@ public:
 };
 
 /// syncAllSchema will be called when
+/// - TiFlash restart
 /// - a new keyspace is created
 /// - meet diff->regenerate_schema_map = true
 /// Thus, we should not assume all the map is empty during syncAllSchema.
@@ -1423,6 +1424,12 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     }
     sync_all_schema_wait_group->wait();
 
+    // `applyRenameLogicalTable` is not atmoic when renaming a partitioned table
+    // to new database. There could be a chance that the logical table .sql have
+    // been moved to the new database while some partitions' sql are not moved.
+    // Try to detech such situation and fix it.
+    tryFixPartitionsBelongingDatabase();
+
     // TODO:can be removed if we don't save the .sql
     /// Drop all unmapped tables.
     auto storage_map = context.getTMTContext().getStorages().getAllStorage();
@@ -1446,21 +1453,105 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 
     /// Drop all unmapped databases
     const auto & dbs = context.getDatabases();
-    for (auto it = dbs.begin(); it != dbs.end(); it++)
+    for (const auto & [db_name, db_ptr] : dbs)
     {
-        auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(it->first);
-        if (db_keyspace_id != keyspace_id)
-        {
+        std::ignore = db_ptr;
+        // ignore the database that not belongs to this keyspace
+        if (auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name); db_keyspace_id != keyspace_id)
             continue;
-        }
-        if (!latest_db_nameset.nonThreadSafeContains(it->first) && !isReservedDatabase(context, it->first))
+
+        if (!latest_db_nameset.nonThreadSafeContains(db_name) && !isReservedDatabase(context, db_name))
         {
-            applyDropDatabaseByName(it->first);
-            LOG_INFO(log, "Database {} dropped during sync all schemas", it->first);
+            applyDropDatabaseByName(db_name);
+            LOG_INFO(log, "Database {} dropped during sync all schemas", db_name);
         }
     }
 
     LOG_INFO(log, "Sync all schemas end");
+}
+
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
+{
+    size_t num_renamed = 0;
+    auto part_to_db_id = table_id_map.getAllPartitionsBelongDatabase();
+    for (const auto & [db_name, db_ptr] : context.getDatabases())
+    {
+        if (part_to_db_id.empty())
+            return;
+
+        if (db_name == "system")
+            continue;
+        // ignore the database that not belongs to this keyspace
+        if (auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name); db_keyspace_id != keyspace_id)
+            continue;
+
+        const DatabaseID database_id = SchemaNameMapper::tryGetDatabaseID(db_name).value_or(-1);
+        if (database_id == -1)
+        {
+            LOG_WARNING(
+                log,
+                "FixPartitionsDatabase: fail to parse database_id from database_name, ignore, db_name={}",
+                db_name);
+            continue;
+        }
+
+        for (auto tbl_iter = db_ptr->getIterator(context); tbl_iter->isValid(); tbl_iter->next())
+        {
+            const auto table_name = tbl_iter->table()->getTableName();
+            auto opt_tbl_id = SchemaNameMapper::tryGetTableID(table_name);
+            if (!opt_tbl_id)
+            {
+                LOG_WARNING(
+                    log,
+                    "FixPartitionsDatabase: fail to parse table_id from table_name, ignore, db_name={} table_name={}",
+                    db_name,
+                    table_name);
+                continue;
+            }
+
+            auto it = part_to_db_id.find(*opt_tbl_id);
+            if (it == part_to_db_id.end())
+            {
+                // this is not a physical_table_id of a partition, ignore sliently
+                continue;
+            }
+            auto new_database_id = it->second;
+            if (new_database_id == database_id)
+            {
+                part_to_db_id.erase(it);
+                continue;
+            }
+
+            LOG_WARNING(
+                log,
+                "FixPartitionsDatabase: try to fix the partition that is not belong to this database, "
+                "db_name={} database_id={} table_id={} new_database_id={}",
+                db_name,
+                database_id,
+                *opt_tbl_id,
+                new_database_id);
+            auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(tbl_iter->table());
+            auto new_db_display_name = tryGetDatabaseDisplayNameFromLocal(new_database_id);
+            applyRenamePhysicalTable(
+                new_database_id,
+                new_db_display_name,
+                managed_storage->getTableInfo(),
+                managed_storage);
+            part_to_db_id.erase(it);
+            LOG_INFO(
+                log,
+                "FixPartitionsDatabase: partition rename done, "
+                "db_name={} database_id={} table_id={} new_database_id={}",
+                db_name,
+                database_id,
+                *opt_tbl_id,
+                new_database_id);
+        } // iterate all tables
+    } // iterate all databases
+
+    LOG_INFO(log, "Try fix partitions belonging database during sync all schemas done, num_rename={}", num_renamed);
 }
 
 /**
