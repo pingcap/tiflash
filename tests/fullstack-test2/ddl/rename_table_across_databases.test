@@ -16,7 +16,7 @@ mysql> drop table if exists test.t;
 mysql> drop table if exists test_new.t2;
 mysql> drop database if exists test_new;
 
-# rename table across database case 1
+# (case 1) rename table across database
 ## prepare some data
 mysql> create table test.t(a int, b int)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
@@ -61,7 +61,7 @@ mysql> drop table if exists test.t;
 mysql> drop table if exists test_new.t2;
 mysql> drop database if exists test_new;
 
-# rename table across database case 2
+# (case 2) rename table across database
 mysql> create database if not exists test
 mysql> create database if not exists test_new
 ## (required) stop regular schema sync
@@ -102,3 +102,14 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t3;
 +------+------+
 
 mysql> drop table if exists test.t3;
+
+# (case 3) rename partitioned table across database
+mysql> create database if not exists test_new;
+mysql> drop table if exists test.part4;
+mysql> CREATE TABLE test.part4 (id INT NOT NULL,store_id INT NOT NULL)PARTITION BY RANGE (store_id) (PARTITION p0 VALUES LESS THAN (6),PARTITION p1 VALUES LESS THAN (11),PARTITION p2 VALUES LESS THAN (16),PARTITION p3 VALUES LESS THAN (21));
+# (1,1),(2,2),(3,3) => p0; p1 is empty;(11,11) => p2;(16,16) => p3
+mysql> insert into test.part4(id, store_id) values(1,1),(2,2),(3,3),(11,11),(16,16);
+mysql> alter table test.part4 set tiflash replica 1;
+func> wait_table test part4
+
+mysql> rename test.part4 to test_new.part4;
