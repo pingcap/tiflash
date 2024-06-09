@@ -15,6 +15,8 @@
 #include <Common/RedactHelpers.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <sstream>
+
 namespace DB::tests
 {
 
@@ -29,18 +31,53 @@ TEST(RedactLogTest, Basic)
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "10009");
+    std::stringstream ss;
+    Redact::keyToDebugString(test_key, key_sz, ss);
+    EXPECT_EQ(ss.str(), "010AFF");
 
     Redact::setRedactLog(RedactMode::Marker);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "‹010AFF›");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "‹10009›");
+    ss.str("");
+    Redact::keyToDebugString(test_key, key_sz, ss);
+    EXPECT_EQ(ss.str(), "‹010AFF›");
 
     Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "?");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF"); // Unaffected by readact-log status
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "?");
+    ss.str("");
+    Redact::keyToDebugString(test_key, key_sz, ss);
+    EXPECT_EQ(ss.str(), "?");
 
     Redact::setRedactLog(RedactMode::Disable); // restore flags
+}
+
+TEST(RedactLogTest, ToMarkerString)
+{
+    for (const auto & [input, expect] : //
+         std::vector<std::pair<String, String>>{
+             {"", "‹›"},
+             {"abcdefg", "‹abcdefg›"},
+             {"中文", "‹中文›"},
+         })
+    {
+        EXPECT_EQ(Redact::toMarkerString(input, true), expect) << input;
+    }
+
+    for (const auto & [input, expect] : //
+         std::vector<std::pair<String, String>>{
+             {"plain text", "‹plain text›"},
+             {"‹›", "‹‹‹›››"},
+             {"abc‹›de‹github›fg", "‹abc‹‹››de‹‹github››fg›"},
+             {"abc‹", "‹abc‹‹›"},
+             {"abc›def", "‹abc››def›"},
+             {"abc‹github", "‹abc‹‹github›"},
+         })
+    {
+        EXPECT_EQ(Redact::toMarkerString(input, false), expect) << input;
+    }
 }
 
 } // namespace DB::tests

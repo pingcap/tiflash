@@ -47,7 +47,8 @@ std::string Redact::toMarkerString(const std::string & raw, bool ignore_escape)
     constexpr static size_t GT_SIZE = std::string_view("›").size();
     constexpr static int LT_TYPE = 1;
     constexpr static int GT_TYPE = 2;
-    std::map<size_t, int> found_pos;
+    // must be an ordered map, <marker_position, marker_type>
+    std::map<size_t, int> found_pos; 
     std::string::size_type pos = 0;
     do
     {
@@ -56,7 +57,7 @@ std::string Redact::toMarkerString(const std::string & raw, bool ignore_escape)
             break;
         found_pos.emplace(pos, LT_TYPE);
         pos += LT_SIZE;
-    } while (pos != std::string::npos);
+    } while (pos != std::string::npos && pos < raw.size());
     pos = 0;
     do
     {
@@ -65,7 +66,7 @@ std::string Redact::toMarkerString(const std::string & raw, bool ignore_escape)
             break;
         found_pos.emplace(pos, GT_TYPE);
         pos += GT_SIZE;
-    } while (pos != std::string::npos);
+    } while (pos != std::string::npos && pos < raw.size());
     if (likely(found_pos.empty()))
     {
         // nothing to be escaped
@@ -74,22 +75,25 @@ std::string Redact::toMarkerString(const std::string & raw, bool ignore_escape)
 
     DB::FmtBuffer fmt_buf;
     fmt_buf.append("‹");
-    pos = 0;
+    pos = 0; // the copy pos from `raw`
     for (const auto & [to_escape_pos, to_escape_type] : found_pos)
     {
         if (to_escape_type == LT_TYPE)
         {
             fmt_buf.append(std::string_view(raw.c_str() + pos, to_escape_pos - pos + LT_SIZE));
-            fmt_buf.append("‹");
-            pos = to_escape_pos + LT_SIZE;
+            fmt_buf.append("‹"); // append for escape
+            pos = to_escape_pos + LT_SIZE; // move the copy begin pos from `raw`
         }
         else if (to_escape_type == GT_TYPE)
         {
             fmt_buf.append(std::string_view(raw.c_str() + pos, to_escape_pos - pos + GT_SIZE));
-            fmt_buf.append("›");
-            pos = to_escape_pos + GT_SIZE;
+            fmt_buf.append("›"); // append for escape
+            pos = to_escape_pos + GT_SIZE; // move the copy begin pos from `raw`
         }
     }
+    // handle the suffix
+    if (pos < raw.size())
+        fmt_buf.append(std::string_view(raw.c_str() + pos, raw.size() - pos));
     fmt_buf.append("›");
     return fmt_buf.toString();
 }
