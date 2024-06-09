@@ -221,57 +221,120 @@ String FieldVisitorToString::operator()(const Tuple & x_def) const
 
 String FieldVisitorToDebugString::operator()(const Null &) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return "NULL";
+    case RedactMode::Disabled:
+        return "NULL";
+    case RedactMode::Marker:
+        return Redact::toMarkerString("NULL", /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const UInt64 & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatQuoted(x);
+    case RedactMode::Disabled:
+        return formatQuoted(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const Int64 & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatQuoted(x);
+    case RedactMode::Disabled:
+        return formatQuoted(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const Float64 & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatFloat(x);
+    case RedactMode::Disabled:
+        return formatFloat(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatFloat(x), /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const String & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatQuoted(x);
+    case RedactMode::Disabled:
+        return formatQuoted(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const DecimalField<Decimal32> & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatQuoted(x);
+    case RedactMode::Disabled:
+        return formatQuoted(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const DecimalField<Decimal64> & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatQuoted(x);
+    case RedactMode::Disabled:
+        return formatQuoted(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const DecimalField<Decimal128> & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatQuoted(x);
+    case RedactMode::Disabled:
+        return formatQuoted(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+    }
 }
 String FieldVisitorToDebugString::operator()(const DecimalField<Decimal256> & x) const
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-    return formatQuoted(x);
+    case RedactMode::Disabled:
+        return formatQuoted(x);
+    case RedactMode::Marker:
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+    }
 }
 
 String FieldVisitorToDebugString::operator()(const Array & x) const

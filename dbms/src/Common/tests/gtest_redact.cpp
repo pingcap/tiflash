@@ -26,17 +26,17 @@ TEST(RedactLogTest, Basic)
 
     const /*DB::HandleID*/ Int64 test_handle = 10009;
 
-    Redact::setRedactLog(false);
+    Redact::setRedactLog(RedactMode::Disabled);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "10009");
 
-    Redact::setRedactLog(true);
+    Redact::setRedactLog(RedactMode::Enabled);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "?");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF"); // Unaffected by readact-log status
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "?");
 
-    Redact::setRedactLog(false); // restore flags
+    Redact::setRedactLog(RedactMode::Disabled); // restore flags
 }
 
 } // namespace tests

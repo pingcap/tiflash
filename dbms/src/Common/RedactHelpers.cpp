@@ -19,22 +19,97 @@
 #include <pingcap/RedactHelpers.h>
 
 #include <iomanip>
+#include <string>
 
-std::atomic<bool> Redact::REDACT_LOG = false;
+#include "Common/FmtUtils.h"
 
-void Redact::setRedactLog(bool v)
+std::atomic<RedactMode> Redact::REDACT_LOG = RedactMode::Disabled;
+
+void Redact::setRedactLog(RedactMode v)
 {
-    pingcap::Redact::setRedactLog(v); // set redact flag for client-c
+    switch (v)
+    {
+    case RedactMode::Enabled:
+        pingcap::Redact::setRedactLog(pingcap::RedactMode::Enabled);
+    case RedactMode::Disabled:
+        pingcap::Redact::setRedactLog(pingcap::RedactMode::Disabled);
+    case RedactMode::Marker:
+        pingcap::Redact::setRedactLog(pingcap::RedactMode::Marker);
+    }
     Redact::REDACT_LOG.store(v, std::memory_order_relaxed);
+}
+
+std::string Redact::toMarkerString(const std::string & raw, bool ignore_escape)
+{
+    if (likely(ignore_escape))
+        return fmt::format("‹{}›", raw);
+
+    constexpr static size_t LT_SIZE = std::string_view("‹").size();
+    constexpr static size_t GT_SIZE = std::string_view("›").size();
+    constexpr static int LT_TYPE = 1;
+    constexpr static int GT_TYPE = 2;
+    std::map<size_t, int> found_pos;
+    std::string::size_type pos = 0;
+    do
+    {
+        pos = raw.find("‹", pos);
+        if (pos == std::string::npos)
+            break;
+        found_pos.emplace(pos, LT_TYPE);
+        pos += LT_SIZE;
+    } while (pos != std::string::npos);
+    pos = 0;
+    do
+    {
+        pos = raw.find("›", pos);
+        if (pos == std::string::npos)
+            break;
+        found_pos.emplace(pos, GT_TYPE);
+        pos += GT_SIZE;
+    } while (pos != std::string::npos);
+    if (likely(found_pos.empty()))
+    {
+        // nothing to be escaped
+        return fmt::format("‹{}›", raw);
+    }
+
+    DB::FmtBuffer fmt_buf;
+    fmt_buf.append("‹");
+    pos = 0;
+    for (const auto & [to_escape_pos, to_escape_type] : found_pos)
+    {
+        if (to_escape_type == LT_TYPE)
+        {
+            fmt_buf.append(std::string_view(raw.c_str() + pos, to_escape_pos - pos + LT_SIZE));
+            fmt_buf.append("‹");
+            pos = to_escape_pos + LT_SIZE;
+        }
+        else if (to_escape_type == GT_TYPE)
+        {
+            fmt_buf.append(std::string_view(raw.c_str() + pos, to_escape_pos - pos + GT_SIZE));
+            fmt_buf.append("›");
+            pos = to_escape_pos + GT_SIZE;
+        }
+    }
+    fmt_buf.append("›");
+    return fmt_buf.toString();
 }
 
 std::string Redact::handleToDebugString(int64_t handle)
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-
-    // Encode as string
-    return DB::toString(handle);
+    case RedactMode::Disabled:
+        // Encode as string
+        return DB::toString(handle);
+    case RedactMode::Marker:
+        // Note: the `handle` must be int64 so we don't need to care
+        // about escaping here.
+        return toMarkerString(DB::toString(handle), /*ignore_escape*/ true);
+    }
 }
 
 std::string Redact::keyToHexString(const char * key, size_t size)
@@ -52,29 +127,44 @@ std::string Redact::keyToHexString(const char * key, size_t size)
 
 std::string Redact::keyToDebugString(const char * key, const size_t size)
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
         return "?";
-
-    return Redact::keyToHexString(key, size);
+    case RedactMode::Disabled:
+        // Encode as string
+        return Redact::keyToHexString(key, size);
+    case RedactMode::Marker:
+        // Note: the `s` must be hexadecimal string so we don't need to care
+        // about escaping here.
+        return toMarkerString(Redact::keyToHexString(key, size), /*ignore_escape*/ true);
+    }
 }
 
 void Redact::keyToDebugString(const char * key, const size_t size, std::ostream & oss)
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enabled:
     {
         oss << "?";
         return;
     }
-
-    // Encode as upper hex string
-    const auto flags = oss.flags();
-    oss << std::uppercase << std::setfill('0') << std::hex;
-    for (size_t i = 0; i < size; ++i)
+    case RedactMode::Disabled:
     {
-        // width need to be set for each output (https://stackoverflow.com/questions/405039/permanent-stdsetw)
-        oss << std::setw(2) << static_cast<Int32>(static_cast<UInt8>(key[i]));
+        oss << Redact::keyToHexString(key, size);
+        return;
     }
-    oss.flags(flags); // restore flags
+    case RedactMode::Marker:
+    {
+        // Note: the `s` must be hexadecimal string so we don't need to care
+        // about escaping here.
+        oss << toMarkerString(Redact::keyToHexString(key, size), /*ignore_escape*/ true);
+        return;
+    }
+    }
 }
 
 std::string Redact::hexStringToKey(const char * start, size_t len)
