@@ -29,6 +29,9 @@ TEST(HandleRangeTest, Redact)
     Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
 
+    Redact::setRedactLog(RedactMode::Marker);
+    EXPECT_EQ(range.toDebugString(), "[‹20›,‹400›)");
+
     Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 
@@ -70,6 +73,9 @@ TEST(HandleRangeTest, RedactRangeFromHandle)
     Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
 
+    Redact::setRedactLog(RedactMode::Marker);
+    EXPECT_EQ(range.toDebugString(), "[‹20›,‹400›)");
+
     Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 
@@ -83,15 +89,21 @@ TEST(HandleRangeTest, RedactRangeFromCommonHandle)
 
     // print some values
     Redact::setRedactLog(RedactMode::Disable);
-    EXPECT_NE(range.toDebugString(), "[?,?)");
-    EXPECT_NE(all_range.toDebugString(), "[?,?)");
-    EXPECT_NE(none_range.toDebugString(), "[?,?)");
+    EXPECT_EQ(range.toDebugString(), "[02066161610206616263,02066262620206616263)");
+    EXPECT_EQ(all_range.toDebugString(), "[01,FA)");
+    EXPECT_EQ(none_range.toDebugString(), "[FA,01)");
 
     // print placeholder(?) instead of values
     Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
     EXPECT_EQ(all_range.toDebugString(), "[?,?)");
     EXPECT_EQ(none_range.toDebugString(), "[?,?)");
+
+    // print values with marker
+    Redact::setRedactLog(RedactMode::Marker);
+    EXPECT_EQ(range.toDebugString(), "[‹02066161610206616263›,‹02066262620206616263›)");
+    EXPECT_EQ(all_range.toDebugString(), "[‹01›,‹FA›)");
+    EXPECT_EQ(none_range.toDebugString(), "[‹FA›,‹01›)");
 
     Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
