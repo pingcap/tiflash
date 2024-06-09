@@ -48,7 +48,7 @@ std::string Redact::toMarkerString(const std::string & raw, bool ignore_escape)
     constexpr static int LT_TYPE = 1;
     constexpr static int GT_TYPE = 2;
     // must be an ordered map, <marker_position, marker_type>
-    std::map<size_t, int> found_pos; 
+    std::map<size_t, int> found_pos;
     std::string::size_type pos = 0;
     do
     {
