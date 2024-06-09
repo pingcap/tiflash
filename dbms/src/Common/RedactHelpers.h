@@ -24,8 +24,8 @@ class FieldVisitorToDebugString;
 
 enum class RedactMode
 {
-    Disabled,
-    Enabled,
+    Disable,
+    Enable,
     Marker,
 };
 

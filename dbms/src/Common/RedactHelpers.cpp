@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Common/RedactHelpers.h>
 #include <Common/hex.h>
 #include <IO/WriteHelpers.h>
@@ -21,18 +22,16 @@
 #include <iomanip>
 #include <string>
 
-#include "Common/FmtUtils.h"
-
-std::atomic<RedactMode> Redact::REDACT_LOG = RedactMode::Disabled;
+std::atomic<RedactMode> Redact::REDACT_LOG = RedactMode::Disable;
 
 void Redact::setRedactLog(RedactMode v)
 {
     switch (v)
     {
-    case RedactMode::Enabled:
-        pingcap::Redact::setRedactLog(pingcap::RedactMode::Enabled);
-    case RedactMode::Disabled:
-        pingcap::Redact::setRedactLog(pingcap::RedactMode::Disabled);
+    case RedactMode::Enable:
+        pingcap::Redact::setRedactLog(pingcap::RedactMode::Enable);
+    case RedactMode::Disable:
+        pingcap::Redact::setRedactLog(pingcap::RedactMode::Disable);
     case RedactMode::Marker:
         pingcap::Redact::setRedactLog(pingcap::RedactMode::Marker);
     }
@@ -100,9 +99,9 @@ std::string Redact::handleToDebugString(int64_t handle)
     const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
     switch (v)
     {
-    case RedactMode::Enabled:
+    case RedactMode::Enable:
         return "?";
-    case RedactMode::Disabled:
+    case RedactMode::Disable:
         // Encode as string
         return DB::toString(handle);
     case RedactMode::Marker:
@@ -130,9 +129,9 @@ std::string Redact::keyToDebugString(const char * key, const size_t size)
     const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
     switch (v)
     {
-    case RedactMode::Enabled:
+    case RedactMode::Enable:
         return "?";
-    case RedactMode::Disabled:
+    case RedactMode::Disable:
         // Encode as string
         return Redact::keyToHexString(key, size);
     case RedactMode::Marker:
@@ -147,12 +146,12 @@ void Redact::keyToDebugString(const char * key, const size_t size, std::ostream 
     const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
     switch (v)
     {
-    case RedactMode::Enabled:
+    case RedactMode::Enable:
     {
         oss << "?";
         return;
     }
-    case RedactMode::Disabled:
+    case RedactMode::Disable:
     {
         oss << Redact::keyToHexString(key, size);
         return;

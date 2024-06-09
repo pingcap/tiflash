@@ -15,10 +15,9 @@
 #include <Common/RedactHelpers.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
+
 TEST(RedactLogTest, Basic)
 {
     const char * test_key = "\x01\x0a\xff";
@@ -26,18 +25,22 @@ TEST(RedactLogTest, Basic)
 
     const /*DB::HandleID*/ Int64 test_handle = 10009;
 
-    Redact::setRedactLog(RedactMode::Disabled);
+    Redact::setRedactLog(RedactMode::Disable);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "10009");
 
-    Redact::setRedactLog(RedactMode::Enabled);
+    Redact::setRedactLog(RedactMode::Marker);
+    EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "‹010AFF›");
+    EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF");
+    EXPECT_EQ(Redact::handleToDebugString(test_handle), "‹10009›");
+
+    Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "?");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF"); // Unaffected by readact-log status
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "?");
 
-    Redact::setRedactLog(RedactMode::Disabled); // restore flags
+    Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

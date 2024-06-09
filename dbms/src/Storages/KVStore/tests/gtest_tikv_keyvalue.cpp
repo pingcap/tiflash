@@ -15,9 +15,8 @@
 #include <Storages/KVStore/Decode/TiKVHelper.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "region_helper.h"
 
 namespace DB
 {
@@ -467,19 +466,19 @@ try
     auto raw_pk1 = RecordKVFormat::getRawTiDBPK(*raw_keys.first);
     auto raw_pk2 = RecordKVFormat::getRawTiDBPK(*raw_keys.second);
 
-    Redact::setRedactLog(RedactMode::Disabled);
+    Redact::setRedactLog(RedactMode::Disable);
     // These will print the value
     EXPECT_NE(raw_pk1.toDebugString(), "?");
     EXPECT_NE(raw_pk2.toDebugString(), "?");
     EXPECT_NE(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
 
-    Redact::setRedactLog(RedactMode::Enabled);
+    Redact::setRedactLog(RedactMode::Enable);
     // These will print '?' instead of value
     EXPECT_EQ(raw_pk1.toDebugString(), "?");
     EXPECT_EQ(raw_pk2.toDebugString(), "?");
     EXPECT_EQ(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
 
-    Redact::setRedactLog(RedactMode::Disabled); // restore flags
+    Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 CATCH
 

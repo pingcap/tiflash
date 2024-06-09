@@ -16,23 +16,20 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 TEST(HandleRangeTest, Redact)
 {
     HandleRange range(20, 400);
 
-    Redact::setRedactLog(RedactMode::Disabled);
+    Redact::setRedactLog(RedactMode::Disable);
     EXPECT_EQ(range.toDebugString(), "[20,400)");
 
-    Redact::setRedactLog(RedactMode::Enabled);
+    Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
 
-    Redact::setRedactLog(RedactMode::Disabled); // restore flags
+    Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 
 namespace
@@ -67,13 +64,13 @@ TEST(HandleRangeTest, RedactRangeFromHandle)
 {
     RowKeyRange range = RowKeyRange::fromHandleRange(HandleRange{20, 400});
 
-    Redact::setRedactLog(RedactMode::Disabled);
+    Redact::setRedactLog(RedactMode::Disable);
     EXPECT_EQ(range.toDebugString(), "[20,400)");
 
-    Redact::setRedactLog(RedactMode::Enabled);
+    Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
 
-    Redact::setRedactLog(RedactMode::Disabled); // restore flags
+    Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 
 TEST(HandleRangeTest, RedactRangeFromCommonHandle)
@@ -85,18 +82,18 @@ TEST(HandleRangeTest, RedactRangeFromCommonHandle)
     RowKeyRange none_range = RowKeyRange::newNone(true, 3);
 
     // print some values
-    Redact::setRedactLog(RedactMode::Disabled);
+    Redact::setRedactLog(RedactMode::Disable);
     EXPECT_NE(range.toDebugString(), "[?,?)");
     EXPECT_NE(all_range.toDebugString(), "[?,?)");
     EXPECT_NE(none_range.toDebugString(), "[?,?)");
 
     // print placeholder(?) instead of values
-    Redact::setRedactLog(RedactMode::Enabled);
+    Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
     EXPECT_EQ(all_range.toDebugString(), "[?,?)");
     EXPECT_EQ(none_range.toDebugString(), "[?,?)");
 
-    Redact::setRedactLog(RedactMode::Disabled); // restore flags
+    Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 
 TEST(RowKey, ToNextKeyIntHandle)
@@ -178,6 +175,4 @@ TEST(RowKey, NextIntHandleMinMax)
     EXPECT_EQ(v1, std::max(v0, v0_next));
 }
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests

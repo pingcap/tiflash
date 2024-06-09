@@ -15,10 +15,12 @@
 #pragma once
 #include <Common/Config/ConfigObject.h>
 #include <Common/FileChangesTracker.h>
+#include <Common/RedactHelpers.h>
 #include <Common/grpcpp.h>
 #include <Core/Types.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <Poco/Crypto/X509Certificate.h>
+#include <Poco/NumberParser.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
@@ -66,7 +68,7 @@ public:
         return has_tls_config;
     }
 
-    bool redactInfoLog()
+    RedactMode redactInfoLog()
     {
         std::unique_lock lock(mu);
         return redact_info_log;
@@ -114,7 +116,8 @@ public:
             // Mostly options name are combined with "_", keep this style
             if (config.has("security.redact_info_log"))
             {
-                redact_info_log = config.getBool("security.redact_info_log");
+                const String redact_str = config.getString("security.redact_info_log");
+                redact_info_log = parseRedactLog(redact_str);
             }
             return cert_file_updated;
         }
@@ -130,6 +133,34 @@ public:
             }
         }
         return false;
+    }
+
+    static RedactMode parseRedactLog(const String & config_str)
+    {
+        if (config_str == "marker")
+            return RedactMode::Marker;
+
+        int n;
+        if (Poco::NumberParser::tryParse(config_str, n))
+        {
+            return ((n == 0) ? RedactMode::Disable : RedactMode::Enable);
+        }
+        else if (
+            Poco::icompare(config_str, "true") == 0 //
+            || Poco::icompare(config_str, "yes") == 0 //
+            || Poco::icompare(config_str, "on") == 0)
+        {
+            return RedactMode::Enable;
+        }
+        else if (
+            Poco::icompare(config_str, "false") == 0 //
+            || Poco::icompare(config_str, "no") == 0 //
+            || Poco::icompare(config_str, "off") == 0)
+        {
+            return RedactMode::Disable;
+        }
+
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "invalid redact_info_log value, value={}", config_str);
     }
 
     void parseAllowedCN(String verify_cns)
@@ -322,7 +353,7 @@ private:
     String key_path;
 
     FilesChangesTracker cert_files;
-    bool redact_info_log = false;
+    RedactMode redact_info_log = RedactMode::Disable;
     std::set<String> allowed_common_names;
     bool has_tls_config = false;
     bool has_security = false;
