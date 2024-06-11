@@ -120,7 +120,7 @@ private:
         uint64_t value,
         char aggregate_delimer);
 
-    void recordClassdAlloc();
+    static void recordClassdAlloc();
 
 private:
     mutable std::shared_mutex memory_allocation_mut;
