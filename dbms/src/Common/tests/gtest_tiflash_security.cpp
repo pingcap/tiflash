@@ -30,31 +30,33 @@ class TiFlashSecurityTest : public ext::Singleton<TiFlashSecurityTest>
 
 TEST(TiFlashSecurityTest, Config)
 {
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String("[abc,efg]"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String(R"(["abc","efg"])"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String("[ abc , efg ]"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String(R"([ "abc", "efg" ])"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
     TiFlashSecurityConfig tiflash_config;
     const auto log = Logger::get();
     tiflash_config.setLog(log);
-
-    tiflash_config.parseAllowedCN(String("[abc,efg]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"(["abc","efg"])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String("[ abc , efg ]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"([ "abc", "efg" ])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
 
     String test =
         R"(

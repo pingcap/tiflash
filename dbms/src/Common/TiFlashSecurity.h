@@ -108,7 +108,7 @@ public:
             if (config.has("security.cert_allowed_cn") && has_tls_config)
             {
                 String verify_cns = config.getString("security.cert_allowed_cn");
-                parseAllowedCN(verify_cns);
+                allowed_common_names = parseAllowedCN(verify_cns);
             }
 
             // Mostly options name are combined with "_", keep this style
@@ -132,12 +132,14 @@ public:
         return false;
     }
 
-    void parseAllowedCN(String verify_cns)
+    static std::set<String> parseAllowedCN(String verify_cns)
     {
         if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
         {
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
         }
+
+        std::set<String> common_names;
         Poco::StringTokenizer string_tokens(verify_cns, ",");
         for (const auto & string_token : string_tokens)
         {
@@ -146,10 +148,13 @@ public:
             {
                 cn = cn.substr(1, cn.size() - 2);
             }
-            allowed_common_names.insert(std::move(cn));
+            common_names.insert(std::move(cn));
         }
+        return common_names;
     }
 
+    // Return whether grpc_context satisfy the `allowed_common_name` in config
+    // Mainly used for handling grpc requests
     bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
     {
         std::unique_lock lock(mu);
@@ -167,6 +172,8 @@ public:
         return false;
     }
 
+    // Return whether cert satisfy the `allowed_common_name` in config
+    // Mainly used for handling http requests
     bool checkCommonName(const Poco::Crypto::X509Certificate & cert)
     {
         std::unique_lock lock(mu);
