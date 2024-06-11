@@ -4250,10 +4250,11 @@ private:
                 if (match == end || count == 0)
                 {
                     copyDataToResult(res_data, res_offset, begin, match);
-                    break;
+                    return;
                 }
                 pos = match + delim_size;
             }
+            copyDataToResult(res_data, res_offset, begin, end);
         }
         else
         {
