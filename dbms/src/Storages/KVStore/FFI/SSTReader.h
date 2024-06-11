@@ -158,7 +158,12 @@ public:
             {
                 // We don't drop if mono is the last instance for safety,
                 // and it will be dropped as MultiSSTReader is dropped.
-                LOG_INFO(log, "Open sst file {}", buffToStrView(args[current].path));
+                LOG_INFO(
+                    log,
+                    "Open sst file {}, range={}, current={}",
+                    buffToStrView(args[current].path),
+                    range->toDebugString(),
+                    current);
                 mono = initer(proxy_helper, args[current], range, split_id);
             }
         }
