@@ -503,10 +503,11 @@ void executeParallelTransform(
         split_key_count);
     LOG_INFO(
         log,
-        "Parallel prehandling for single big region, range={}, split keys={}, region_id={}",
+        "Parallel prehandling for single big region, range={}, split keys={}, region_id={}, snaps={}",
         new_region->getRange()->toDebugString(),
         split_key_count,
-        new_region->id());
+        new_region->id(),
+        snaps.len);
     Stopwatch watch;
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
@@ -708,9 +709,10 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             {
                 LOG_INFO(
                     log,
-                    "Single threaded prehandling for single region, range={} region_id={}",
+                    "Single threaded prehandling for single region, range={} region_id={} snaps={}",
                     new_region->getRange()->toDebugString(),
-                    new_region->id());
+                    new_region->id(),
+                    snaps.len);
                 std::tie(result, prehandle_result) = executeTransform(log, prehandle_ctx, new_region, sst_stream);
             }
             else
