@@ -116,8 +116,7 @@ public:
             // Mostly options name are combined with "_", keep this style
             if (config.has("security.redact_info_log"))
             {
-                const String redact_str = config.getString("security.redact_info_log");
-                redact_info_log = parseRedactLog(redact_str);
+                redact_info_log = parseRedactLog(config.getString("security.redact_info_log"));
             }
             return cert_file_updated;
         }
@@ -137,7 +136,7 @@ public:
 
     static RedactMode parseRedactLog(const String & config_str)
     {
-        if (config_str == "marker")
+        if (Poco::icompare(config_str, "marker") == 0)
             return RedactMode::Marker;
 
         int n;
