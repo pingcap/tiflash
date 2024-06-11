@@ -281,7 +281,8 @@ String FieldVisitorToDebugString::operator()(const String & x) const
     case RedactMode::Disable:
         return formatQuoted(x);
     case RedactMode::Marker:
-        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ true);
+        // The string may contains utf-8 char that need to be escaped
+        return Redact::toMarkerString(formatQuoted(x), /*ignore_escape*/ false);
     }
 }
 String FieldVisitorToDebugString::operator()(const DecimalField<Decimal32> & x) const
