@@ -16,7 +16,6 @@
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>

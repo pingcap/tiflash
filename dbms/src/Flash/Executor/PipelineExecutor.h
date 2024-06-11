@@ -16,7 +16,7 @@
 
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Executor/QueryExecutor.h>
-#include <Flash/Executor/ResultQueue.h>
+#include <Flash/Executor/ResultQueue_fwd.h>
 
 namespace DB
 {
