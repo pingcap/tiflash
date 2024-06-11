@@ -281,37 +281,20 @@ public:
     using GcEntriesMap = std::map<BlobFileId, GcEntries>;
 
 public:
-    static void operator delete(void * ptr, std::size_t sz)
-    {
-        PageStorageMemorySummary::mem_sum_page_entries.fetch_sub(sz);
-        ::operator delete(ptr);
-    }
-
-    static void operator delete[](void * ptr, std::size_t sz)
-    {
-        PageStorageMemorySummary::mem_sum_page_entries.fetch_sub(sz);
-        ::operator delete[](ptr);
-    }
-    static void * operator new(std::size_t sz)
-    {
-        PageStorageMemorySummary::mem_sum_page_entries.fetch_add(sz);
-        return ::operator new(sz);
-    }
-
-    static void * operator new[](std::size_t sz)
-    {
-        PageStorageMemorySummary::mem_sum_page_entries.fetch_add(sz);
-        return ::operator new[](sz);
-    }
-
-public:
     VersionedPageEntries()
         : type(EditRecordType::VAR_DELETE)
         , is_deleted(false)
         , create_ver(0)
         , delete_ver(0)
         , ori_page_id{}
-    {}
+    {
+        PageStorageMemorySummary::mem_sum_page_entries.fetch_add(sizeof(VersionedPageEntries<Trait>));
+    }
+
+    ~VersionedPageEntries()
+    {
+        PageStorageMemorySummary::mem_sum_page_entries.fetch_sub(sizeof(VersionedPageEntries<Trait>));
+    }
 
     bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
 
