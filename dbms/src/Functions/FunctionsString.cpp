@@ -4498,6 +4498,7 @@ private:
         const UInt8 * pos = begin;
         const UInt8 * end = pos + data_size;
         assert(delim_size != 0);
+        assert(count != 0);
         if (count > 0)
         {
             // Fast exit when count * delim_size > data_size
