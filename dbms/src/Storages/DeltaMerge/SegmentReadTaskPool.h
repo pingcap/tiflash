@@ -23,7 +23,10 @@
 
 namespace DB::DM
 {
-
+namespace tests
+{
+class SegmentReadTasksPoolTest;
+}
 using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 class BlockStat
@@ -107,7 +110,7 @@ public:
         int extra_table_id_index_,
         const ColumnDefines & columns_to_read_,
         const PushDownFilterPtr & filter_,
-        uint64_t max_version_,
+        uint64_t start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
         SegmentReadTasks && tasks_,
@@ -117,7 +120,7 @@ public:
         Int64 num_streams_,
         const String & res_group_name_);
 
-    ~SegmentReadTaskPool()
+    ~SegmentReadTaskPool() override
     {
         auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
         auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
@@ -126,7 +129,7 @@ public:
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         auto total_rows = blk_stat.totalRows();
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
             "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
@@ -199,11 +202,7 @@ public:
 
     const LoggerPtr & getLogger() const { return log; }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentReadTaskPtr & seg);
@@ -214,7 +213,7 @@ public:
     const int extra_table_id_index;
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;
-    const uint64_t max_version;
+    const uint64_t start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;
     SegmentReadTasksWrapper tasks_wrapper;
@@ -249,9 +248,23 @@ public:
     inline static BlockStat global_blk_stat;
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
     inline static constexpr Int64 check_ru_interval_ms = 100;
+
+    friend class tests::SegmentReadTasksPoolTest;
 };
 
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
 } // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTaskPoolPtr>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTaskPoolPtr & pool, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", pool->pool_id);
+    }
+};

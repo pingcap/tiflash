@@ -14,13 +14,9 @@
 
 #include <Dictionaries/CacheDictionary.h>
 #include <Dictionaries/ComplexKeyCacheDictionary.h>
-#include <Dictionaries/ComplexKeyHashedDictionary.h>
 #include <Dictionaries/DictionaryFactory.h>
 #include <Dictionaries/DictionarySourceFactory.h>
 #include <Dictionaries/DictionaryStructure.h>
-#include <Dictionaries/FlatDictionary.h>
-#include <Dictionaries/HashedDictionary.h>
-#include <Dictionaries/RangeHashedDictionary.h>
 #include <Dictionaries/TrieDictionary.h>
 
 #include <memory>
@@ -42,7 +38,7 @@ DictionaryPtr DictionaryFactory::create(
     const std::string & name,
     const Poco::Util::AbstractConfiguration & config,
     const std::string & config_prefix,
-    Context & context) const
+    Context & context)
 {
     Poco::Util::AbstractConfiguration::Keys keys;
     const auto & layout_prefix = config_prefix + ".layout";
@@ -63,40 +59,7 @@ DictionaryPtr DictionaryFactory::create(
 
     const auto & layout_type = keys.front();
 
-    if ("range_hashed" == layout_type)
-    {
-        if (dict_struct.key)
-            throw Exception{
-                "'key' is not supported for dictionary of layout 'range_hashed'",
-                ErrorCodes::UNSUPPORTED_METHOD};
-
-        if (!dict_struct.range_min || !dict_struct.range_max)
-            throw Exception{
-                name + ": dictionary of layout 'range_hashed' requires .structure.range_min and .structure.range_max",
-                ErrorCodes::BAD_ARGUMENTS};
-
-        return std::make_unique<RangeHashedDictionary>(
-            name,
-            dict_struct,
-            std::move(source_ptr),
-            dict_lifetime,
-            require_nonempty);
-    }
-    else if ("complex_key_hashed" == layout_type)
-    {
-        if (!dict_struct.key)
-            throw Exception{
-                "'key' is required for dictionary of layout 'complex_key_hashed'",
-                ErrorCodes::BAD_ARGUMENTS};
-
-        return std::make_unique<ComplexKeyHashedDictionary>(
-            name,
-            dict_struct,
-            std::move(source_ptr),
-            dict_lifetime,
-            require_nonempty);
-    }
-    else if ("complex_key_cache" == layout_type)
+    if ("complex_key_cache" == layout_type)
     {
         if (!dict_struct.key)
             throw Exception{
@@ -148,25 +111,7 @@ DictionaryPtr DictionaryFactory::create(
                       "for a dictionary of layout 'range_hashed'",
                 ErrorCodes::BAD_ARGUMENTS};
 
-        if ("flat" == layout_type)
-        {
-            return std::make_unique<FlatDictionary>(
-                name,
-                dict_struct,
-                std::move(source_ptr),
-                dict_lifetime,
-                require_nonempty);
-        }
-        else if ("hashed" == layout_type)
-        {
-            return std::make_unique<HashedDictionary>(
-                name,
-                dict_struct,
-                std::move(source_ptr),
-                dict_lifetime,
-                require_nonempty);
-        }
-        else if ("cache" == layout_type)
+        if ("cache" == layout_type)
         {
             const auto size = config.getInt(layout_prefix + ".cache.size_in_cells");
             if (size == 0)

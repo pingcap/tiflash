@@ -935,7 +935,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             SelectQueryInfo query_info = create_query_info(physical_table_id);
             query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(
                 mvcc_query_info->resolve_locks,
-                mvcc_query_info->read_tso,
+                mvcc_query_info->start_ts,
                 mvcc_query_info->scan_context);
             ret.emplace(physical_table_id, std::move(query_info));
         }

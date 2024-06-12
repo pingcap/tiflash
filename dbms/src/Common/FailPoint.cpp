@@ -110,8 +110,11 @@ namespace DB
     M(force_agg_on_partial_block)                            \
     M(force_set_fap_candidate_store_id)                      \
     M(force_not_clean_fap_on_destroy)                        \
+    M(force_fap_worker_throw)                                \
     M(delta_tree_create_node_fail)                           \
-    M(disable_flush_cache)
+    M(disable_flush_cache)                                   \
+    M(force_agg_two_level_hash_table_before_merge)           \
+    M(force_thread_0_no_agg_spill)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \

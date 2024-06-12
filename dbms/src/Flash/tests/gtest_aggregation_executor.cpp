@@ -23,6 +23,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_agg_on_partial_block[];
+extern const char force_agg_two_level_hash_table_before_merge[];
 } // namespace FailPoints
 namespace tests
 {
@@ -355,9 +356,16 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_START
-            executeAndAssertColumnsEqual(request, expect_cols[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            for (auto force_two_level : {false, true})
+            {
+                if (force_two_level)
+                    FailPointHelper::enableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                else
+                    FailPointHelper::disableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                executeAndAssertColumnsEqual(request, expect_cols[i]);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            }
         }
     }
 
@@ -414,9 +422,16 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_START
-            executeAndAssertColumnsEqual(request, expect_cols[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            for (auto force_two_level : {false, true})
+            {
+                if (force_two_level)
+                    FailPointHelper::enableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                else
+                    FailPointHelper::disableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                executeAndAssertColumnsEqual(request, expect_cols[i]);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            }
         }
     }
 
@@ -963,6 +978,183 @@ try
         WRAP_FOR_AGG_PARTIAL_BLOCK_START
         executeAndAssertColumnsEqual(request, {toVec<UInt64>({0})});
         WRAP_FOR_AGG_PARTIAL_BLOCK_END
+    }
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, AggKeyOptimization)
+try
+{
+    const String db_name = "test_db";
+    const String tbl_name = "agg_first_row_opt_tbl";
+    const auto rows = 1024;
+    const auto row_types = 4;
+    const auto rows_per_type = rows / row_types;
+    DB::MockColumnInfoVec table_column_infos{
+        {"col_string_with_collator", TiDB::TP::TypeString, false, Poco::Dynamic::Var("utf8_general_ci")},
+        {"col_string_no_collator", TiDB::TP::TypeString, false},
+        {"col_int", TiDB::TP::TypeLong, false},
+        {"col_tinyint", TiDB::TP::TypeTiny, false}};
+
+    std::vector<String> col_data_string_with_collator(rows);
+    std::vector<String> col_data_string_no_collator(rows);
+    std::vector<TypeTraits<Int32>::FieldType> col_data_int(rows);
+    std::vector<TypeTraits<Int8>::FieldType> col_data_tinyint(rows);
+    // rows_per_type "a" 0
+    //               "a" 0
+    //               ...
+    // rows_per_type "b" 1
+    //               "b" 1
+    //               ...
+    // rows_per_type "c" 2
+    //               "c" 2
+    //               ...
+    // rows_per_type "d" 3
+    //               "d" 3
+    //               ...
+    for (size_t i = 0; i < row_types; ++i)
+    {
+        for (size_t j = 0; j < rows_per_type; ++j)
+        {
+            char ch = 'a' + i;
+            const auto idx = i * rows_per_type + j;
+            col_data_string_with_collator[idx] = std::string{ch};
+            col_data_string_no_collator[idx] = std::string{ch};
+            col_data_int[idx] = i;
+            col_data_tinyint[idx] = static_cast<Int64>(static_cast<unsigned char>(i));
+        }
+    }
+    context.addMockTable(
+        {db_name, tbl_name},
+        table_column_infos,
+        {
+            toVec<String>("col_string_with_collator", col_data_string_with_collator),
+            toVec<String>("col_string_no_collator", col_data_string_no_collator),
+            toVec<Int32>("col_int", col_data_int),
+            toVec<Int8>("col_tinyint", col_data_tinyint),
+        });
+
+    {
+        // case-1: select count(1), col_tinyint from t group by col_int, col_tinyint
+        // agg method: keys64(AggregationMethodKeysFixed)
+        // opt: agg_func_ref_key
+        std::vector<ASTPtr> agg_funcs
+            = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+               makeASTFunction("first_row", col("col_tinyint"))};
+        MockAstVec keys{col("col_int"), col("col_tinyint")};
+        auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+        auto expected
+            = {toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+               toNullableVec<Int8>("first_row(col_tinyint)", ColumnWithNullableInt8{0, 1, 2, 3}),
+               toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3}),
+               toVec<Int8>("col_tinyint", ColumnWithInt8{0, 1, 2, 3})};
+        executeAndAssertColumnsEqual(request, expected);
+    }
+
+    {
+        // case-2: select count(1), col_int from t group by col_int
+        // agg method: key32(AggregationMethodOneNumber)
+        // opt: agg_func_ref_key
+        std::vector<ASTPtr> agg_funcs
+            = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+               makeASTFunction("first_row", col("col_int"))};
+        MockAstVec keys{col("col_int")};
+        auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+        auto expected
+            = {toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+               toNullableVec<Int32>("first_row(col_int)", ColumnWithNullableInt32{0, 1, 2, 3}),
+               toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})};
+        executeAndAssertColumnsEqual(request, expected);
+    }
+
+    {
+        // case-3: select count(1), col_string_no_collator from t group by col_string_no_collator
+        // agg method: key_string(AggregationMethodStringNoCache)
+        // opt: agg_func_ref_key
+        std::vector<ASTPtr> agg_funcs
+            = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+               makeASTFunction("first_row", col("col_string_no_collator"))};
+        MockAstVec keys{col("col_string_no_collator")};
+        auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+        auto expected = {
+            toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+            toNullableVec<String>("first_row(col_string_no_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
+            toVec<String>("col_string_no_collator", ColumnWithString{"a", "b", "c", "d"}),
+        };
+        executeAndAssertColumnsEqual(request, expected);
+    }
+
+    {
+        // case-4: select count(1), col_string_with_collator from t group by col_string_with_collator
+        // agg method: key_strbin/key_strbinpadding(AggregationMethodOneKeyStringNoCache)
+        // opt: key_ref_agg_func
+        std::vector<ASTPtr> agg_funcs
+            = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+               makeASTFunction("first_row", col("col_string_with_collator"))};
+        MockAstVec keys{col("col_string_with_collator")};
+        auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+        auto expected = {
+            toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+            toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
+            toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"}),
+        };
+        executeAndAssertColumnsEqual(request, expected);
+    }
+
+    {
+        // case-4-1: select count(1) from t group by col_string_with_collator
+        // Use 'any' agg func instead of first_row
+        // agg method: key_strbin/key_strbinpadding(AggregationMethodOneKeyStringNoCache)
+        // opt: key_ref_agg_func
+        std::vector<ASTPtr> agg_funcs = {
+            makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+        };
+        MockAstVec keys{col("col_string_with_collator")};
+        auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+        auto expected = {
+            toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+            toVec<String>("first_row(col_string_with_collator)", ColumnWithString{"a", "b", "c", "d"}),
+        };
+        executeAndAssertColumnsEqual(request, expected);
+    }
+
+    // case-5: none
+    // agg method: key_fixed_string(AggregationMethodFixedStringNoCache)
+
+    {
+        // case-6: select count(1), col_string_with_collator from t group by col_string_with_collator, col_int, col_string_no_collator
+        // agg method: serialized(AggregationMethodSerialized)
+        // opt: key_ref_agg_func && agg_func_ref_key
+        std::vector<ASTPtr> agg_funcs
+            = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+               makeASTFunction("first_row", col("col_string_with_collator"))};
+        MockAstVec keys{col("col_string_with_collator"), col("col_int"), col("col_string_no_collator")};
+        auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+        auto expected = {
+            toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+            toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
+            toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"}),
+            toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3}),
+            toVec<String>("col_string_no_collator", ColumnWithString{"a", "b", "c", "d"}),
+        };
+        executeAndAssertColumnsEqual(request, expected);
+    }
+
+    {
+        // case-7: select count(1), col_string_with_collator, col_int from t group by col_string_with_collator, col_int
+        // agg method: two_keys_num64_strbin(AggregationMethodFastPathTwoKeyNoCache)
+        // opt: key_ref_agg_func && agg_func_ref_key
+        std::vector<ASTPtr> agg_funcs
+            = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+               makeASTFunction("first_row", col("col_string_with_collator"))};
+        MockAstVec keys{col("col_string_with_collator"), col("col_int")};
+        auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+        auto expected = {
+            toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+            toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
+            toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"}),
+            toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})};
+        executeAndAssertColumnsEqual(request, expected);
     }
 }
 CATCH

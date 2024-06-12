@@ -158,6 +158,7 @@ void TiFlashTestEnv::addGlobalContext(
     global_context->initializeGlobalPageIdAllocator();
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+    global_context->initializeJointThreadInfoJeallocMap();
     LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
@@ -199,6 +200,7 @@ ContextPtr TiFlashTestEnv::getContext(const DB::Settings & settings, Strings tes
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     global_contexts[0]->tryReleaseWriteNodePageStorageForTest();
     global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
+    global_contexts[0]->initializeJointThreadInfoJeallocMap();
     context.getSettingsRef() = settings;
     return std::make_shared<Context>(context);
 }

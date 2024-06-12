@@ -386,7 +386,7 @@ cd release-centos7-llvm
 # FILTER='*DMFile*:*DeltaMerge*:*Segment*' ./gen_coverage.sh
 
 # After the script finished, it will output the directory of code coverage report, you can check out the files by webbrowser
-python3 -m http --directory "${REPORT_DIR}" "${REPORT_HTTP_PORT}"
+python3 -m http.server --directory "${REPORT_DIR}" "${REPORT_HTTP_PORT}"
 ```
 
 ## Contributing

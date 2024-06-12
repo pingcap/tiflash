@@ -73,6 +73,8 @@ struct SegmentSnapshot : private boost::noncopyable
         // handle + version + flag
         return (sizeof(Int64) + sizeof(UInt64) + sizeof(UInt8)) * getRows();
     }
+
+    String detailInfo() const;
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
@@ -214,7 +216,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const PushDownFilterPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t expected_block_size);
 
     BlockInputStreamPtr getInputStreamModeNormal(
@@ -223,7 +225,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t expected_block_size,
         bool need_row_id = false);
 
@@ -232,7 +234,7 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter = {},
-        UInt64 max_version = std::numeric_limits<UInt64>::max(),
+        UInt64 start_ts = std::numeric_limits<UInt64>::max(),
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /**
@@ -252,7 +254,7 @@ public:
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & data_ranges,
+        const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
@@ -570,7 +572,13 @@ public:
     /// Returns whether this segment has been marked as abandoned.
     /// Note: Segment member functions never abandon the segment itself.
     /// The abandon state is usually triggered by the DeltaMergeStore.
-    bool hasAbandoned() const { return delta->hasAbandoned(); }
+    bool hasAbandoned() const
+    {
+        // `delta` at disagg read-node is empty
+        if (unlikely(!delta))
+            return false;
+        return delta->hasAbandoned();
+    }
 
     bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
@@ -609,7 +617,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         ReadTag read_tag,
-        UInt64 max_version = std::numeric_limits<UInt64>::max()) const;
+        UInt64 start_ts = std::numeric_limits<UInt64>::max()) const;
 
     static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
@@ -626,7 +634,7 @@ public:
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
         ReadTag read_tag,
-        UInt64 max_version = std::numeric_limits<UInt64>::max(),
+        UInt64 start_ts = std::numeric_limits<UInt64>::max(),
         bool need_row_id = false);
 
     /// Make sure that all delta packs have been placed.
@@ -637,7 +645,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const DeltaValueReaderPtr & delta_reader,
         const RowKeyRanges & read_ranges,
-        UInt64 max_version) const;
+        UInt64 start_ts) const;
 
     /// Reference the inserts/updates by delta tree.
     /// Returns fully placed or not. Some rows not match relevant_range are not placed.
@@ -670,21 +678,21 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t expected_block_size);
     BitmapFilterPtr buildBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t expected_block_size);
     BitmapFilterPtr buildBitmapFilterStableOnly(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t expected_block_size);
     BlockInputStreamPtr getBitmapFilterInputStream(
         BitmapFilterPtr && bitmap_filter,
@@ -693,7 +701,7 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t expected_block_size);
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
@@ -701,7 +709,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const PushDownFilterPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t build_bitmap_filter_block_rows,
         size_t read_data_block_rows);
 
@@ -712,7 +720,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
         const PushDownFilterPtr & filter,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t expected_block_size);
 
     // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.

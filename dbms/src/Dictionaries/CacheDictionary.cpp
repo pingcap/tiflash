@@ -24,7 +24,6 @@
 #include <Common/randomSeed.h>
 #include <Common/typeid_cast.h>
 #include <Dictionaries/CacheDictionary.h>
-#include <Dictionaries/DictionaryBlockInputStream.h>
 
 #include <ext/map.h>
 #include <ext/range.h>
@@ -994,12 +993,6 @@ PaddedPODArray<CacheDictionary::Key> CacheDictionary::getCachedIds() const
         }
     }
     return array;
-}
-
-BlockInputStreamPtr CacheDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size) const
-{
-    using BlockInputStreamType = DictionaryBlockInputStream<CacheDictionary, Key>;
-    return std::make_shared<BlockInputStreamType>(shared_from_this(), max_block_size, getCachedIds(), column_names);
 }
 
 

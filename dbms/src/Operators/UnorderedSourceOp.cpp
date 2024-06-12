@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/Tasks/RFWaitTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>
 
 namespace DB
@@ -86,7 +86,7 @@ void UnorderedSourceOp::operatePrefixImpl()
             else
             {
                 // Poll and check if the RuntimeFilters is ready in the WaitReactor.
-                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(
+                TaskScheduler::instance->submit(std::make_unique<RFWaitTask>(
                     exec_context,
                     log->identifier(),
                     task_pool,

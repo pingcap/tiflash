@@ -135,8 +135,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
 
     auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
 
-    auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead);
-    delta_snap->is_update = false;
+    auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead, false);
     delta_snap->mem_table_snap
         = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
     delta_snap->persisted_files_snap
@@ -171,7 +170,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
     {
         auto remote_key = stable_file.checkpoint_info().data_file_id();
         auto prepared = data_store->prepareDMFileByKey(remote_key);
-        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
         RUNTIME_CHECK(dmfile != nullptr, remote_key);
         dmfiles.emplace_back(std::move(dmfile));
     }
@@ -297,7 +296,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMem
                 0,
                 block_rows,
                 CompressionMethod::LZ4,
-                CompressionSettings::getDefaultLevel(CompressionMethod::LZ4));
+                CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
         }
         remote_in_memory->add_block_columns(std::move(buf));
     }
@@ -419,7 +418,7 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
     RUNTIME_CHECK(proto.has_checkpoint_info());
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, key={}", proto.checkpoint_info().data_file_id());
     auto prepared = data_store->prepareDMFileByKey(proto.checkpoint_info().data_file_id());
-    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
     auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(cf_big); // The constructor is private, so we cannot use make_shared.
 }

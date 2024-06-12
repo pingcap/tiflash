@@ -29,6 +29,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
@@ -82,31 +83,94 @@ void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
     // The method must call `buf.count()` to get the last seralized size before `buf.tryGetReadBuffer`
-    auto data_size = saveMeta(buf);
+    auto data_size = serializeMetaToBuf(buf);
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-UInt64 StableValueSpace::saveMeta(WriteBuffer & buf) const
+UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
-    writeIntBinary(valid_rows, buf);
-    writeIntBinary(valid_bytes, buf);
-    writeIntBinary(static_cast<UInt64>(files.size()), buf);
-    for (const auto & f : files)
-        writeIntBinary(f->pageId(), buf);
+    if (likely(STORAGE_FORMAT_CURRENT.stable == StableFormat::V1))
+    {
+        writeIntBinary(valid_rows, buf);
+        writeIntBinary(valid_bytes, buf);
+        writeIntBinary(static_cast<UInt64>(files.size()), buf);
+        for (const auto & f : files)
+            writeIntBinary(f->pageId(), buf);
+    }
+    else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
+    {
+        dtpb::StableLayerMeta meta;
+        meta.set_valid_rows(valid_rows);
+        meta.set_valid_bytes(valid_bytes);
+        for (const auto & f : files)
+            meta.add_files()->set_page_id(f->pageId());
 
+        auto data = meta.SerializeAsString();
+        writeStringBinary(data, buf);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected version: {}", STORAGE_FORMAT_CURRENT.stable);
+    }
     return buf.count();
 }
+
+namespace
+{
+dtpb::StableLayerMeta derializeMetaV1FromBuf(ReadBuffer & buf)
+{
+    dtpb::StableLayerMeta meta;
+    UInt64 valid_rows, valid_bytes, size;
+    readIntBinary(valid_rows, buf);
+    readIntBinary(valid_bytes, buf);
+    readIntBinary(size, buf);
+    meta.set_valid_rows(valid_rows);
+    meta.set_valid_bytes(valid_bytes);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt64 page_id;
+        readIntBinary(page_id, buf);
+        meta.add_files()->set_page_id(page_id);
+    }
+    return meta;
+}
+
+dtpb::StableLayerMeta derializeMetaV2FromBuf(ReadBuffer & buf)
+{
+    dtpb::StableLayerMeta meta;
+    String data;
+    readStringBinary(data, buf);
+    RUNTIME_CHECK_MSG(
+        meta.ParseFromString(data),
+        "Failed to parse StableLayerMeta from string: {}",
+        Redact::keyToHexString(data.data(), data.size()));
+    return meta;
+}
+
+dtpb::StableLayerMeta derializeMetaFromBuf(ReadBuffer & buf)
+{
+    UInt64 version;
+    readIntBinary(version, buf);
+    if (version == StableFormat::V1)
+        return derializeMetaV1FromBuf(buf);
+    else if (version == StableFormat::V2)
+        return derializeMetaV2FromBuf(buf);
+    else
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected version: {}", version);
+}
+} // namespace
 
 std::string StableValueSpace::serializeMeta() const
 {
     WriteBufferFromOwnString wb;
-    saveMeta(wb);
+    serializeMetaToBuf(wb);
     return wb.releaseStr();
 }
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, PageIdU64 id)
 {
+    // read meta page
     Page page = dm_context.storage_pool->metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     return StableValueSpace::restore(dm_context, buf, id);
@@ -116,20 +180,11 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 
-    UInt64 version, valid_rows, valid_bytes, size;
-    readIntBinary(version, buf);
-    if (version != StableFormat::V1)
-        throw Exception("Unexpected version: " + DB::toString(version));
-
-    readIntBinary(valid_rows, buf);
-    readIntBinary(valid_bytes, buf);
-    readIntBinary(size, buf);
-    UInt64 page_id;
+    auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < size; ++i)
+    for (int i = 0; i < metapb.files().size(); ++i)
     {
-        readIntBinary(page_id, buf);
-
+        UInt64 page_id = metapb.files(i).page_id();
         DMFilePtr dmfile;
         auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
         if (remote_data_store)
@@ -149,7 +204,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
             RUNTIME_CHECK(file_oid.keyspace_id == dm_context.keyspace_id);
             RUNTIME_CHECK(file_oid.table_id == dm_context.physical_table_id);
             auto prepared = remote_data_store->prepareDMFile(file_oid, page_id);
-            dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+            dmfile = prepared->restore(DMFileMeta::ReadMode::all());
             // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
             path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
         }
@@ -162,7 +217,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
                 file_id,
                 page_id,
                 file_parent_path,
-                DMFile::ReadMetaMode::all(),
+                DMFileMeta::ReadMode::all(),
                 dm_context.keyspace_id);
             auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
             RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
@@ -170,8 +225,8 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
         stable->files.push_back(dmfile);
     }
 
-    stable->valid_rows = valid_rows;
-    stable->valid_bytes = valid_bytes;
+    stable->valid_rows = metapb.valid_rows();
+    stable->valid_bytes = metapb.valid_bytes();
 
     return stable;
 }
@@ -192,22 +247,11 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
 
     // read stable meta info
-    UInt64 version, valid_rows, valid_bytes, size;
-    {
-        readIntBinary(version, buf);
-        if (version != StableFormat::V1)
-            throw Exception("Unexpected version: " + DB::toString(version));
-
-        readIntBinary(valid_rows, buf);
-        readIntBinary(valid_bytes, buf);
-        readIntBinary(size, buf);
-    }
-
+    auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < size; ++i)
+    for (int i = 0; i < metapb.files().size(); ++i)
     {
-        UInt64 page_id;
-        readIntBinary(page_id, buf);
+        UInt64 page_id = metapb.files(i).page_id();
         auto full_page_id = UniversalPageIdFormat::toFullPageId(
             UniversalPageIdFormat::toFullPrefix(
                 dm_context.keyspace_id,
@@ -227,15 +271,15 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
         };
         wbs.data.putRemoteExternal(new_local_page_id, loc);
         auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
-        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
         wbs.writeLogAndData();
         // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
         delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());
         stable->files.push_back(dmfile);
     }
 
-    stable->valid_rows = valid_rows;
-    stable->valid_bytes = valid_bytes;
+    stable->valid_rows = metapb.valid_rows();
+    stable->valid_bytes = metapb.valid_bytes();
 
     return stable;
 }
@@ -339,7 +383,7 @@ void StableValueSpace::calculateStableProperty(
         // `new_pack_properties` is the temporary container for the calculation result of this StableValueSpace's pack property.
         // Note that `pack_stats` stores the stat of the whole underlying DTFile,
         // and this Segment may share this DTFile with other Segment. So `pack_stats` may be larger than `new_pack_properties`.
-        DMFile::PackProperties new_pack_properties;
+        DMFileMeta::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
             LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);

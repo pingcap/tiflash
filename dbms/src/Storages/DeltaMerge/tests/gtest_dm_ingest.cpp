@@ -249,7 +249,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(is_common_handle, 1)},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,

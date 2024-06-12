@@ -364,6 +364,15 @@ try
             createColumn<Nullable<String>>({"www.pingcap.com", "www...www", "中文.测.试。。。", "www.www"}),
             createColumn<Nullable<String>>({"", "", "", ""}),
             createColumn<Nullable<Int64>>({2, 2, 2, 2})));
+
+    // Test issue 9116
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"aaabbba", "aaabbbaa", "aaabbbaaa", "aaabbbaaa", "aaabbbaaa"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"aaabbbaaa", "aaabbbaaa", "aaabbbaaa", "aaabbbaaa", "aaabbbaaa"}),
+            createColumn<Nullable<String>>({"a", "a", "a", "a", "a"}),
+            createColumn<Nullable<Int64>>({5, 6, 7, 8, 9})));
 }
 CATCH
 

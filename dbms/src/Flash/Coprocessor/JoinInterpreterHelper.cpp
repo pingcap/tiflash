@@ -389,8 +389,6 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const NamesAndTypes & source_columns,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
-    bool left,
-    bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters)
 {
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
@@ -404,8 +402,6 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
         join_key_types,
         key_names,
         original_key_names,
-        left,
-        is_right_out_join,
         filters,
         filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};

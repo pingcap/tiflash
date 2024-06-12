@@ -37,7 +37,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     const ScanContextPtr & scan_context)
 {
     RUNTIME_CHECK(
-        dmfile->getStatus() == DMFile::Status::READABLE,
+        dmfile->getStatus() == DMFileStatus::READABLE,
         dmfile->fileId(),
         magic_enum::enum_name(dmfile->getStatus()));
 

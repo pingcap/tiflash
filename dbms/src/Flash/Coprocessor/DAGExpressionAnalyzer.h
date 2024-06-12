@@ -19,7 +19,6 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
@@ -68,18 +67,7 @@ public:
 
     GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
 
-    ExpressionActionsPtr appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain);
-
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
-
-    std::vector<NameAndTypePair> appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN);
-
-    /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
-    /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg,
-        bool group_by_collation_sensitive);
 
     void appendWindowColumns(
         WindowDescription & window_description,
@@ -94,23 +82,7 @@ public:
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
-    // Generate a project action for non-root DAGQueryBlock,
-    // to keep the schema of Block and tidb-schema the same, and
-    // guarantee that left/right block of join don't have duplicated column names.
-    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const String & column_prefix) const;
-
     NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
-
-    // Generate a project action for root DAGQueryBlock,
-    // to keep the schema of Block and tidb-schema the same.
-    NamesWithAliases appendFinalProjectForRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const std::vector<tipb::FieldType> & schema,
-        const std::vector<Int32> & output_offsets,
-        const String & column_prefix,
-        bool keep_session_timezone_info);
 
     NamesWithAliases buildFinalProjection(
         const ExpressionActionsPtr & actions,
@@ -148,8 +120,6 @@ public:
         const JoinKeyTypes & join_key_types,
         Names & key_names,
         Names & original_key_names,
-        bool left,
-        bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
@@ -189,8 +159,26 @@ public:
         NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,
         std::unordered_set<String> & agg_key_set,
+        KeyRefAggFuncMap & key_ref_agg_func,
         bool group_by_collation_sensitive,
-        TiDB::TiDBCollators & collators);
+        std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators);
+
+    // Try eliminate first_row/any agg func when there is no collator for this column.
+    // The agg func value will reference to group by key, which is indicated by agg_func_ref_key.
+    // This function should be called after buildAggFuncs() and buildAggGroupBy().
+    static void tryEliminateFirstRow(
+        const Names & aggregation_keys,
+        const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
+        AggFuncRefKeyMap & agg_func_ref_key,
+        AggregateDescriptions & aggregate_descriptions);
+
+    // There may be first row optimization for HashAgg,
+    // which will not copy all required columns(specificed by tipb) from HashMap.
+    // So need to append copy column action.
+    ExpressionActionsPtr appendCopyColumnAfterAgg(
+        const NamesAndTypes & aggregated_columns,
+        const KeyRefAggFuncMap & key_ref_agg_func,
+        const AggFuncRefKeyMap & agg_func_ref_key);
 
     void appendCastAfterAgg(const ExpressionActionsPtr & actions, const tipb::Aggregation & agg);
 
@@ -283,9 +271,7 @@ private:
     std::tuple<bool, Names, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const JoinKeyTypes & join_key_types,
-        bool left,
-        bool is_right_out_join);
+        const JoinKeyTypes & join_key_types);
 
     String applyFunction(
         const String & func_name,

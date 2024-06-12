@@ -16,7 +16,8 @@
 
 namespace DB
 {
-/** Compression method */
+// `CompressionMethod` is used to indicate which compression algorithm to use by users.
+// It will be translated to `CompressionMethodByte` and stored with compressed data.
 enum class CompressionMethod
 {
     LZ4 = 1,

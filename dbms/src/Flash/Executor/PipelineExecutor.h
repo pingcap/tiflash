@@ -16,7 +16,7 @@
 
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Executor/QueryExecutor.h>
-#include <Flash/Executor/ResultQueue.h>
+#include <Flash/Executor/ResultQueue_fwd.h>
 
 namespace DB
 {
@@ -72,6 +72,8 @@ public:
     Block getSampleBlock() const override;
 
     BaseRuntimeStatistics getRuntimeStatistics() const override;
+
+    String getExtraJsonInfo() const override;
 
 protected:
     ExecutionResult execute(ResultHandler && result_handler) override;
