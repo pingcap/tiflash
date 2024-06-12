@@ -200,7 +200,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"aaabbba", "aaabbbaa", "aaabbbaaa", "aaabbbaaa", "aaabbbaaa"}),
         executeFunction(
-            func_name,
+            "substringIndex",
             createColumn<Nullable<String>>({"aaabbbaaa", "aaabbbaaa", "aaabbbaaa", "aaabbbaaa", "aaabbbaaa"}),
             createColumn<Nullable<String>>({"a", "a", "a", "a", "a"}),
             createColumn<Nullable<Int64>>({5, 6, 7, 8, 9})));
