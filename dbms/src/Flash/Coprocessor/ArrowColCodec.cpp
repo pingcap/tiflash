@@ -281,7 +281,7 @@ void flashEnumColToArrowCol(
             }
         }
         auto enum_value = (UInt64)flash_col->getElement(i);
-        if (enum_value == 0 || enum_value > enum_value_size)
+        if (enum_value > enum_value_size)
             throw TiFlashException("number of enum overflow enum boundary", Errors::Coprocessor::Internal);
         const auto & enum_name = enum_type->getNameForValue(static_cast<const DataTypeEnum16::FieldType>(enum_value));
         TiDBEnum ti_enum(enum_value, enum_name);
