@@ -32,6 +32,7 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/PageStorageMemorySummary.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <common/config_common.h>
@@ -300,6 +301,7 @@ void AsynchronousMetrics::update()
         set("LogNums", usage.total_log_file_num);
         set("LogDiskBytes", usage.total_log_disk_size);
         set("PagesInMem", usage.num_pages);
+        set("VersionedEntries", DB::PS::PageStorageMemorySummary::num_versioned_entry_or_delete.load());
     }
 
     if (context.getSharedContextDisagg()->isDisaggregatedStorageMode())

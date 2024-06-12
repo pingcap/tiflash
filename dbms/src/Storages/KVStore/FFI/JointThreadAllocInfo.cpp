@@ -273,8 +273,10 @@ void JointThreadInfoJeallocMap::accessStorageMap(std::function<void(const AllocM
 
 void JointThreadInfoJeallocMap::recordClassdAlloc()
 {
-    GET_METRIC(tiflash_memory_usage_by_class, type_versioned_page_entries)
-        .Set(PS::V3::PageStorageMemorySummary::mem_sum_page_entries.load());
+    GET_METRIC(tiflash_memory_usage_by_class, type_uni_page_ids)
+        .Set(PS::PageStorageMemorySummary::mem_sum_uni_page_ids.load());
+    GET_METRIC(tiflash_memory_usage_by_class, type_versioned_entry_or_delete)
+        .Set(PS::PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.load());
 }
 
 

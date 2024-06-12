@@ -222,31 +222,50 @@ struct EntryOrDelete
     MultiVersionRefCount being_ref_count;
     std::optional<PageEntryV3> entry;
 
-    static EntryOrDelete newDelete()
+    EntryOrDelete(const EntryOrDelete & other)
+        : being_ref_count(other.being_ref_count)
+        , entry(other.entry)
     {
-        return EntryOrDelete{
-            .entry = std::nullopt,
-        };
-    };
-    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
-    {
-        return EntryOrDelete{
-            .entry = entry,
-        };
+        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
+        if (entry)
+            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_add(sizeof(PageEntryV3));
     }
+    EntryOrDelete()
+    {
+        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
+    }
+    EntryOrDelete(std::optional<PageEntryV3> entry_)
+        : entry(std::move(entry_))
+    {
+        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
+        if (entry)
+            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_add(sizeof(PageEntryV3));
+    }
+    EntryOrDelete(MultiVersionRefCount being_ref_count_, std::optional<PageEntryV3> entry_)
+        : being_ref_count(being_ref_count_)
+        , entry(std::move(entry_))
+    {
+        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
+        if (entry)
+            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_add(sizeof(PageEntryV3));
+    }
+    ~EntryOrDelete()
+    {
+        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_sub(1);
+        if (entry)
+            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_sub(sizeof(PageEntryV3));
+    }
+
+    static EntryOrDelete newDelete() { return EntryOrDelete(std::nullopt); };
+    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry) { return EntryOrDelete(entry); }
     static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
     {
-        return EntryOrDelete{
-            .being_ref_count = ori_entry.being_ref_count,
-            .entry = entry,
-        };
+        return EntryOrDelete(ori_entry.being_ref_count, entry);
     }
 
     static EntryOrDelete newFromRestored(PageEntryV3 entry, const PageVersion & ver, Int64 being_ref_count)
     {
-        auto result = EntryOrDelete{
-            .entry = entry,
-        };
+        auto result = EntryOrDelete(std::move(entry));
         result.being_ref_count.restoreFrom(ver, being_ref_count);
         return result;
     }
@@ -262,11 +281,6 @@ enum class ResolveResult
     FAIL,
     TO_REF,
     TO_NORMAL,
-};
-
-struct PageStorageMemorySummary
-{
-    static inline std::atomic_int64_t mem_sum_page_entries{0};
 };
 
 // VersionedPageEntries store multi-versions page entries for the same page id.
@@ -287,14 +301,7 @@ public:
         , create_ver(0)
         , delete_ver(0)
         , ori_page_id{}
-    {
-        PageStorageMemorySummary::mem_sum_page_entries.fetch_add(sizeof(VersionedPageEntries<Trait>));
-    }
-
-    ~VersionedPageEntries()
-    {
-        PageStorageMemorySummary::mem_sum_page_entries.fetch_sub(sizeof(VersionedPageEntries<Trait>));
-    }
+    {}
 
     bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
 

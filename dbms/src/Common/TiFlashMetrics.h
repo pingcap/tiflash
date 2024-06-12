@@ -215,7 +215,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_memory_usage_by_class,                                                                                                \
       "TiFlash memory consumes by class",                                                                                           \
       Gauge,                                                                                                                        \
-      F(type_versioned_page_entries, {"type", "versioned_page_entries"}))                                                           \
+      F(type_uni_page_ids, {"type", "uni_page_ids"}),                                                                               \
+      F(type_versioned_entry_or_delete, {"type", "versioned_entry_or_delete"}))                                                     \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                       \
     M(tiflash_storage_command_count,                                                                                                \
       "Total number of storage's command, such as delete range / shutdown /startup",                                                \
