@@ -26,6 +26,11 @@ class UniversalPageId final
 {
 public:
     UniversalPageId() { PS::PageStorageMemorySummary::mem_sum_uni_page_ids.fetch_add(id.size()); }
+    UniversalPageId(const UniversalPageId & other)
+        : id(other.id)
+    {
+        PS::PageStorageMemorySummary::mem_sum_uni_page_ids.fetch_add(id.size());
+    }
 
     UniversalPageId(String id_) // NOLINT(google-explicit-constructor)
         : id(std::move(id_))

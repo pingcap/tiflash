@@ -230,10 +230,7 @@ struct EntryOrDelete
         if (entry)
             PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_add(sizeof(PageEntryV3));
     }
-    EntryOrDelete()
-    {
-        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
-    }
+    EntryOrDelete() { PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1); }
     EntryOrDelete(std::optional<PageEntryV3> entry_)
         : entry(std::move(entry_))
     {
