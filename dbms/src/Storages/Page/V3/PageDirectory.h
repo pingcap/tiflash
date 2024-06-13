@@ -226,31 +226,31 @@ struct EntryOrDelete
         : being_ref_count(other.being_ref_count)
         , entry(other.entry)
     {
-        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1);
         if (entry)
-            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_add(sizeof(PageEntryV3));
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_add(sizeof(PageEntryV3));
     }
-    EntryOrDelete() { PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1); }
+    EntryOrDelete() { PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1); }
     EntryOrDelete(std::optional<PageEntryV3> entry_)
         : entry(std::move(entry_))
     {
-        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1);
         if (entry)
-            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_add(sizeof(PageEntryV3));
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_add(sizeof(PageEntryV3));
     }
     EntryOrDelete(MultiVersionRefCount being_ref_count_, std::optional<PageEntryV3> entry_)
         : being_ref_count(being_ref_count_)
         , entry(std::move(entry_))
     {
-        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_add(1);
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1);
         if (entry)
-            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_add(sizeof(PageEntryV3));
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_add(sizeof(PageEntryV3));
     }
     ~EntryOrDelete()
     {
-        PageStorageMemorySummary::num_versioned_entry_or_delete.fetch_sub(1);
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_sub(1);
         if (entry)
-            PageStorageMemorySummary::mem_sum_versioned_entry_or_delete.fetch_sub(sizeof(PageEntryV3));
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_sub(sizeof(PageEntryV3));
     }
 
     static EntryOrDelete newDelete() { return EntryOrDelete(std::nullopt); };

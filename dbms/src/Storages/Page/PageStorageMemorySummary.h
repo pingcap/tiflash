@@ -20,9 +20,9 @@ namespace DB::PS
 {
 struct PageStorageMemorySummary
 {
-    static inline std::atomic_int64_t mem_sum_uni_page_ids{0};
-    static inline std::atomic_int64_t mem_sum_versioned_entry_or_delete{0};
-    static inline std::atomic_int64_t num_versioned_entry_or_delete{0};
+    static inline std::atomic_int64_t uni_page_id_bytes{0};
+    static inline std::atomic_int64_t versioned_entry_or_delete_bytes{0};
+    static inline std::atomic_int64_t versioned_entry_or_delete_count{0};
 };
 
 } // namespace DB::PS
