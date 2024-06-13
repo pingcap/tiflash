@@ -84,7 +84,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         {
             LOG_DEBUG(
                 log,
-                "Prehandle resource meet, limit={}, current={}, region_id={}",
+                "Prehandle resource meet, limit={} current={} region_id={}",
                 parallel_subtask_limit,
                 ongoing_prehandle_subtask_count.load(),
                 region_id);
@@ -398,8 +398,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
         LOG_INFO(
             log,
             "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
-            "region_range={} approx_bytes={} "
-            "region_id={}",
+            "region_range={} approx_bytes={} region_id={}",
             fmt_buf.toString(),
             total_concurrency,
             ongoing_count,
@@ -448,7 +447,7 @@ static void runInParallel(
             = executeTransform(log, prehandle_ctx, part_new_region, part_sst_stream);
         LOG_INFO(
             log,
-            "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={}, "
+            "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={} "
             "split_id={} region_id={}",
             limit_tag,
             part_prehandle_result.stats.write_cf_keys,
@@ -476,8 +475,7 @@ static void runInParallel(
         LOG_INFO(
             log,
             "Parallel prehandling error {}"
-            " write_cf_off={}"
-            " split_id={} region_id={}",
+            " write_cf_off={} split_id={} region_id={}",
             e.message(),
             processed_keys.write_cf,
             extra_id,
@@ -509,7 +507,7 @@ void executeParallelTransform(
         split_key_count);
     LOG_INFO(
         log,
-        "Parallel prehandling for single big region, range={}, split keys={}, region_id={}, snaps={}",
+        "Parallel prehandling for single big region, range={} split_keys={} region_id={} snaps={}",
         new_region->getRange()->toDebugString(),
         split_key_count,
         new_region->id(),
@@ -551,9 +549,8 @@ void executeParallelTransform(
     auto [head_result, head_prehandle_result] = executeTransform(log, prehandle_ctx, new_region, sst_stream);
     LOG_INFO(
         log,
-        "Finished extra parallel prehandle task limit={} write_cf {} lock_cf={} default_cf={} dmfiles={} "
-        "error={}, split_id={}, "
-        "region_id={}",
+        "Finished extra parallel prehandle task, limit={} write_cf={} lock_cf={} default_cf={} dmfiles={} "
+        "error={} split_id={} region_id={}",
         sst_stream->getSoftLimit()->toDebugString(),
         head_prehandle_result.stats.write_cf_keys,
         head_prehandle_result.stats.lock_cf_keys,

@@ -48,7 +48,7 @@ public:
     BaseBuffView keyView() const override;
     BaseBuffView valueView() const override;
     void next() override;
-    SSTFormatKind sst_format_kind() const { return kind; };
+    SSTFormatKind sstFormatKind() const { return kind; };
     size_t approxSize() const override;
     std::vector<std::string> findSplitKeys(uint64_t splits_count) const override;
     void seek(BaseBuffView && view) const override;
@@ -147,25 +147,27 @@ public:
     }
     size_t getSplitId() const override { return split_id; }
 
-    // Switch to next mono reader if current is drained,
+    // Switch to next mono reader if current SST is drained,
     // and we have a next sst file to read.
-    void maybeNextReader() const
+    void maybeNextReader()
     {
-        if (!mono->remained())
+        if (likely(mono->remained()))
+            return;
+
+        sst_idx++;
+        if (sst_idx < args.size())
         {
-            current++;
-            if (current < args.size())
-            {
-                // We don't drop if mono is the last instance for safety,
-                // and it will be dropped as MultiSSTReader is dropped.
-                LOG_INFO(
-                    log,
-                    "Open sst file {}, range={}, current={}",
-                    buffToStrView(args[current].path),
-                    range->toDebugString(),
-                    current);
-                mono = initer(proxy_helper, args[current], range, split_id);
-            }
+            // We don't drop if mono is the last instance for safety,
+            // and it will be dropped as MultiSSTReader is dropped.
+            LOG_INFO(
+                log,
+                "Open sst file {}, range={} sst_idx={} sst_tot={} split_id={}",
+                buffToStrView(args[sst_idx].path),
+                range->toDebugString(),
+                sst_idx,
+                args.size(),
+                split_id);
+            mono = initer(proxy_helper, args[sst_idx], range, split_id);
         }
     }
 
@@ -182,18 +184,19 @@ public:
         , type(type_)
         , initer(initer_)
         , args(args_)
-        , current(0)
+        , sst_idx(0)
         , range(range_)
         , split_id(split_id_)
     {
         assert(args.size() > 0);
         LOG_INFO(
             log,
-            "Open sst file first {} range {} split_id={}",
-            buffToStrView(args[current].path),
+            "Open sst file first {}, range={} sst_tot={} split_id={}",
+            buffToStrView(args[sst_idx].path),
             range->toDebugString(),
+            args.size(),
             split_id);
-        mono = initer(proxy_helper, args[current], range, split_id);
+        mono = initer(proxy_helper, args[sst_idx], range, split_id);
     }
 
     ~MultiSSTReader() override
@@ -207,12 +210,12 @@ private:
     /// The instance is ill-formed if the size of `args` is zero.
     mutable std::unique_ptr<R> mono;
     const TiFlashRaftProxyHelper * proxy_helper;
-    ColumnFamilyType type;
+    const ColumnFamilyType type;
     Initer initer;
     std::vector<E> args;
-    mutable size_t current;
+    size_t sst_idx;
     RegionRangeFilter range;
-    size_t split_id;
+    const size_t split_id;
 };
 
 } // namespace DB
