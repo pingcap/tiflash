@@ -14,6 +14,7 @@
 
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
