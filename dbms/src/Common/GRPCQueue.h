@@ -139,6 +139,9 @@ public:
 
     bool isWritable() const { return send_queue.isWritable(); }
 
+    void registerPipeReadTask(TaskPtr && task) { send_queue.registerPipeReadTask(std::move(task)); }
+    void registerPipeWriteTask(TaskPtr && task) { send_queue.registerPipeWriteTask(std::move(task)); }
+
 private:
     friend class tests::TestGRPCSendQueue;
 
@@ -296,6 +299,9 @@ public:
     }
 
     bool isWritable() const { return recv_queue.isWritable(); }
+
+    void registerPipeReadTask(TaskPtr && task) { recv_queue.registerPipeReadTask(std::move(task)); }
+    void registerPipeWriteTask(TaskPtr && task) { recv_queue.registerPipeWriteTask(std::move(task)); }
 
 private:
     friend class tests::TestGRPCRecvQueue;

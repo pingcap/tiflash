@@ -38,7 +38,7 @@ OperatorStatus GetResultSinkOp::tryFlush()
     switch (queue_result)
     {
     case MPMCQueueResult::FULL:
-        setNotifyFuture(result_queue);
+        setNotifyFuture(result_queue.get());
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case MPMCQueueResult::OK:
         t_block.reset();

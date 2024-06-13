@@ -37,7 +37,7 @@ public:
         Int64 batch_send_min_limit_,
         DAGContext & dag_context_);
     void write(const Block & block) override;
-    bool isWritable() const override;
+    WaitResult waitForWritable() const override;
     void flush() override;
 
 private:

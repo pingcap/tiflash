@@ -35,6 +35,7 @@ PipelineExecutor::PipelineExecutor(
           /*query_id=*/context.getDAGContext()->isMPPTask() ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
           memory_tracker_,
+          context.getDAGContext(),
           auto_spill_trigger,
           register_operator_spill_context,
           context.getDAGContext()->getResourceGroupName())
