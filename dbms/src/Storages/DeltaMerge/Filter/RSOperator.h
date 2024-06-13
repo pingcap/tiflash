@@ -15,10 +15,14 @@
 #pragma once
 
 #include <Common/FieldVisitors.h>
-#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
+
+namespace DB
+{
+struct DAGQueryInfo;
+}
 
 namespace DB::DM
 {
