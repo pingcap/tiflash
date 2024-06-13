@@ -160,10 +160,11 @@ public:
                 // and it will be dropped as MultiSSTReader is dropped.
                 LOG_INFO(
                     log,
-                    "Open sst file {}, range={}, current={}",
+                    "Open sst file {}, range={} current={} split_id={}",
                     buffToStrView(args[current].path),
                     range->toDebugString(),
-                    current);
+                    current,
+                    split_id);
                 mono = initer(proxy_helper, args[current], range, split_id);
             }
         }
