@@ -212,6 +212,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "The freshness of tiflash data with tikv data",                                                                               \
       Histogram,                                                                                                                    \
       F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.001, 2, 20}))                                       \
+    M(tiflash_memory_usage_by_class,                                                                                                \
+      "TiFlash memory consumes by class",                                                                                           \
+      Gauge,                                                                                                                        \
+      F(type_uni_page_ids, {"type", "uni_page_ids"}),                                                                               \
+      F(type_versioned_entries, {"type", "versioned_entries"}))                                                                     \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                       \
     M(tiflash_storage_command_count,                                                                                                \
       "Total number of storage's command, such as delete range / shutdown /startup",                                                \
