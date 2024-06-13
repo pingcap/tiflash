@@ -167,7 +167,9 @@ private:
 
     RSCheckParam param;
 
+    // `handle_res` is the filter results of `rowkey_ranges`.
     std::vector<RSResult> handle_res;
+    // `pack_res` is the filter results of `rowkey_ranges && filter && read_packs`.
     std::vector<RSResult> pack_res;
 
     const ScanContextPtr scan_context;
