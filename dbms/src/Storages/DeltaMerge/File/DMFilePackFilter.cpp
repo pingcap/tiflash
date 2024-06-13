@@ -130,7 +130,7 @@ std::tuple<UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() const
             ++all_count;
             break;
         default:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is invalid", magic_enum::enum_name(res));
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is invalid", static_cast<Int32>(res));
         }
     }
     return {none_count, some_count, all_count};
