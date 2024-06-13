@@ -275,7 +275,7 @@ void JointThreadInfoJeallocMap::recordClassdAlloc()
 {
     GET_METRIC(tiflash_memory_usage_by_class, type_uni_page_ids)
         .Set(PS::PageStorageMemorySummary::uni_page_id_bytes.load());
-    GET_METRIC(tiflash_memory_usage_by_class, type_versioned_entry_or_delete)
+    GET_METRIC(tiflash_memory_usage_by_class, type_versioned_entries)
         .Set(PS::PageStorageMemorySummary::versioned_entry_or_delete_bytes.load());
 }
 
