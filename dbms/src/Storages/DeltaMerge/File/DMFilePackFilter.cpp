@@ -58,7 +58,7 @@ void DMFilePackFilter::init()
     {
         for (size_t i = 0; i < pack_count; ++i)
         {
-            pack_res[i] = pack_res[i] && (read_packs->contains(i) ? RSResult::Some : RSResult::None);
+            pack_res[i] = read_packs->contains(i) ? pack_res[i] : RSResult::None;
         }
     }
     auto after_read_packs = countUsePack();
