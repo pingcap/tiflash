@@ -35,7 +35,7 @@ public:
         int max_wait_time_ms,
         RuntimeFilteList && waiting_rf_list_,
         RuntimeFilteList && ready_rf_list_)
-        : Task(exec_context_, req_id)
+        : Task(exec_context_, req_id, ExecTaskStatus::WAITING)
         , task_pool(task_pool_)
         , max_wait_time_ns(max_wait_time_ms < 0 ? 0 : 1000000UL * max_wait_time_ms)
         , waiting_rf_list(std::move(waiting_rf_list_))
@@ -75,7 +75,7 @@ public:
     }
 
 private:
-    ExecTaskStatus executeImpl() override { return ExecTaskStatus::WAITING; }
+    ExecTaskStatus executeImpl() override { throw Exception("unreachable"); }
 
     ExecTaskStatus awaitImpl() override
     {

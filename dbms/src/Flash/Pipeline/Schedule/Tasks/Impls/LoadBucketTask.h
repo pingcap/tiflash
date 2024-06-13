@@ -14,30 +14,28 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/IOEventTask.h>
 
 namespace DB
 {
-class AggregateContext;
-using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+class SpilledBucketInput;
 
-class AggregateFinalSpillTask : public OutputIOEventTask
+class LoadBucketTask : public InputIOEventTask
 {
 public:
-    AggregateFinalSpillTask(
+    LoadBucketTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
-        AggregateContextPtr agg_context_,
-        size_t index_);
-
-protected:
-    ExecTaskStatus executeIOImpl() override;
-
-    void doFinalizeImpl() override;
+        SpilledBucketInput & input_)
+        : IOEventTask(exec_context_, req_id, event_)
+        , input(input_)
+    {}
 
 private:
-    AggregateContextPtr agg_context;
-    size_t index;
+    ExecTaskStatus executeIOImpl() override;
+
+private:
+    SpilledBucketInput & input;
 };
 } // namespace DB

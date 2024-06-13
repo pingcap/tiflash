@@ -14,27 +14,28 @@
 
 #pragma once
 
-#include <Interpreters/Context_fwd.h>
-#include <Interpreters/IQuerySource.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/IOEventTask.h>
 
 namespace DB
 {
-class DAGContext;
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class PlanQuerySource : public IQuerySource
+class AggregateFinalConvertTask : public EventTask
 {
 public:
-    explicit PlanQuerySource(Context & context_);
+    AggregateFinalConvertTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        AggregateContextPtr agg_context_,
+        size_t index_);
 
-    std::tuple<std::string, ASTPtr> parse(size_t) override;
-    String str(size_t max_query_size) override;
-    std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
-
-    DAGContext & getDAGContext() const;
-    const tipb::DAGRequest & getDAGRequest() const;
+protected:
+    ExecTaskStatus executeImpl() override;
 
 private:
-    Context & context;
+    AggregateContextPtr agg_context;
+    size_t index;
 };
-
 } // namespace DB

@@ -32,7 +32,6 @@ public:
 };
 
 #define WRAP_FOR_RF_TEST_BEGIN                     \
-    enablePlanner(true);                           \
     std::vector<bool> pipeline_bools{false, true}; \
     for (auto enable_pipeline : pipeline_bools)    \
     {                                              \

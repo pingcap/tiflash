@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
+#pragma once
+
+#include <memory>
 
 namespace DB
 {
-void FineGrainedPipelineEvent::scheduleImpl()
-{
-    addTask(
-        std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
-}
+class ResultQueue;
+using ResultQueuePtr = std::shared_ptr<ResultQueue>;
 } // namespace DB

@@ -293,9 +293,6 @@ try
          toNullableVec<String>("s2", {"apple", {}, "banana"}),
          toVec<Int8>("b3", {true, false, true})});
 
-    // Do not support push down filter test for DAGQueryBlockInterpreter
-    enablePlanner(true);
-
     auto request = context.scan("test_db", "test_table1")
                        .filter(lt(col("i1"), lit(Field(static_cast<Int64>(2)))))
                        .build(context);

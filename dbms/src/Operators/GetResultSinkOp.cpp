@@ -12,51 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Executor/ResultQueue.h>
 #include <Operators/GetResultSinkOp.h>
 
 namespace DB
 {
 OperatorStatus GetResultSinkOp::writeImpl(Block && block)
 {
-    if (!block)
+    if unlikely (!block)
         return OperatorStatus::FINISHED;
 
     assert(!t_block);
-    auto ret = result_queue->tryPush(std::move(block));
-    switch (ret)
-    {
-    case MPMCQueueResult::OK:
-        return OperatorStatus::NEED_INPUT;
-    case MPMCQueueResult::FULL:
-        // If returning Full, the block was not actually moved.
-        assert(block); // NOLINT(bugprone-use-after-move)
-        t_block.emplace(std::move(block)); // NOLINT(bugprone-use-after-move)
-        return OperatorStatus::WAITING;
-    default:
-        return OperatorStatus::FINISHED;
-    }
+    t_block.emplace(std::move(block));
+    return tryFlush();
 }
 
 OperatorStatus GetResultSinkOp::prepareImpl()
 {
-    return awaitImpl();
+    return t_block ? tryFlush() : OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus GetResultSinkOp::awaitImpl()
+OperatorStatus GetResultSinkOp::tryFlush()
 {
-    if (!t_block)
-        return OperatorStatus::NEED_INPUT;
-
-    auto ret = result_queue->tryPush(std::move(*t_block));
-    switch (ret)
+    auto queue_result = result_queue->tryPush(std::move(*t_block));
+    switch (queue_result)
     {
+    case MPMCQueueResult::FULL:
+        setNotifyFuture(result_queue);
+        return OperatorStatus::WAIT_FOR_NOTIFY;
     case MPMCQueueResult::OK:
         t_block.reset();
         return OperatorStatus::NEED_INPUT;
-    case MPMCQueueResult::FULL:
-        return OperatorStatus::WAITING;
+    case MPMCQueueResult::CANCELLED:
+        return OperatorStatus::CANCELLED;
     default:
-        return OperatorStatus::FINISHED;
+        // queue result can not be finished/empty here.
+        RUNTIME_CHECK_MSG(
+            false,
+            "Unexpected queue result for GetResultSinkOp: {}",
+            magic_enum::enum_name(queue_result));
     }
 }
 } // namespace DB

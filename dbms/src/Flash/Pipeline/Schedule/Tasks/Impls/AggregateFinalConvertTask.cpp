@@ -12,24 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/LoadBucketEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/LoadBucketTask.h>
-#include <Operators/SharedAggregateRestorer.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/AggregateFinalConvertTask.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
-void LoadBucketEvent::scheduleImpl()
+AggregateFinalConvertTask::AggregateFinalConvertTask(
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
+    const EventPtr & event_,
+    AggregateContextPtr agg_context_,
+    size_t index_)
+    : EventTask(exec_context_, req_id, event_)
+    , agg_context(std::move(agg_context_))
+    , index(index_)
 {
-    assert(loader);
-    auto load_inputs = loader->getNeedLoadInputs();
-    for (const auto & input : load_inputs)
-        addTask(std::make_unique<LoadBucketTask>(exec_context, log->identifier(), shared_from_this(), *input));
+    assert(agg_context);
 }
 
-void LoadBucketEvent::finishImpl()
+ExecTaskStatus AggregateFinalConvertTask::executeImpl()
 {
-    assert(loader);
-    loader->storeBucketData();
-    loader.reset();
+    agg_context->convertToTwoLevel(index);
+    agg_context.reset();
+    return ExecTaskStatus::FINISHED;
 }
+
 } // namespace DB

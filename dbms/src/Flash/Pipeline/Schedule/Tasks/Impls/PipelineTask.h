@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipelineTaskBase.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/EventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/PipelineTaskBase.h>
 
 namespace DB
 {
@@ -41,7 +41,7 @@ protected:
 
     ExecTaskStatus awaitImpl() override { return runAwait(); }
 
-    void notifyImpl() override { runNotify(); }
+    ExecTaskStatus notifyImpl() override { return runNotify(); }
 
     void doFinalizeImpl() override
     {
