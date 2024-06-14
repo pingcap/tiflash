@@ -110,7 +110,7 @@ public:
             if (config.has("security.cert_allowed_cn") && has_tls_config)
             {
                 String verify_cns = config.getString("security.cert_allowed_cn");
-                parseAllowedCN(verify_cns);
+                allowed_common_names = parseAllowedCN(verify_cns);
             }
 
             // Mostly options name are combined with "_", keep this style
@@ -162,12 +162,14 @@ public:
         throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "invalid redact_info_log value, value={}", config_str);
     }
 
-    void parseAllowedCN(String verify_cns)
+    static std::set<String> parseAllowedCN(String verify_cns)
     {
         if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
         {
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
         }
+
+        std::set<String> common_names;
         Poco::StringTokenizer string_tokens(verify_cns, ",");
         for (const auto & string_token : string_tokens)
         {
@@ -176,10 +178,13 @@ public:
             {
                 cn = cn.substr(1, cn.size() - 2);
             }
-            allowed_common_names.insert(std::move(cn));
+            common_names.insert(std::move(cn));
         }
+        return common_names;
     }
 
+    // Return whether grpc_context satisfy the `allowed_common_name` in config
+    // Mainly used for handling grpc requests
     bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
     {
         std::unique_lock lock(mu);
@@ -197,6 +202,8 @@ public:
         return false;
     }
 
+    // Return whether cert satisfy the `allowed_common_name` in config
+    // Mainly used for handling http requests
     bool checkCommonName(const Poco::Crypto::X509Certificate & cert)
     {
         std::unique_lock lock(mu);
@@ -263,7 +270,6 @@ private:
         String new_ca_path;
         String new_cert_path;
         String new_key_path;
-        bool updated = false;
         if (config.has("security.ca_path"))
         {
             new_ca_path = config.getString("security.ca_path");
@@ -279,8 +285,10 @@ private:
             new_key_path = config.getString("security.key_path");
             miss_key_path = false;
         }
+
         if (miss_ca_path && miss_cert_path && miss_key_path)
         {
+            // all configs are not exist
             if (inited && has_tls_config)
             {
                 LOG_WARNING(log, "Can't remove tls config online");
@@ -289,60 +297,58 @@ private:
             {
                 LOG_INFO(log, "No TLS config is set.");
             }
+            return false;
         }
         else if (miss_ca_path || miss_cert_path || miss_key_path)
         {
+            // any of these configs is not exist
             throw Exception(
                 "ca_path, cert_path, key_path must be set at the same time.",
                 ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
-        else
+
+        // all configs are exist
+        assert(!miss_ca_path && !miss_cert_path && !miss_key_path);
+        if (inited && !has_tls_config)
         {
-            if (inited && !has_tls_config)
-            {
-                LOG_WARNING(log, "Can't add TLS config online");
-                return false;
-            }
-            else
-            {
-                has_tls_config = true;
-                if (new_ca_path != ca_path || new_cert_path != cert_path || new_key_path != key_path)
-                {
-                    ca_path = new_ca_path;
-                    cert_path = new_cert_path;
-                    key_path = new_key_path;
-                    cert_files.files.clear();
-                    cert_files.addIfExists(ca_path);
-                    cert_files.addIfExists(cert_path);
-                    cert_files.addIfExists(key_path);
-                    updated = true;
-                    ssl_cerd_options_cached = false;
-                    LOG_INFO(
-                        log,
-                        "Ssl certificate config path is updated: ca path is {} cert path is {} key path is {}",
-                        ca_path,
-                        cert_path,
-                        key_path);
-                }
-                else
-                {
-                    // whether the cert file content is updated
-                    updated = fileUpdated();
-                    // update cert files
-                    if (updated)
-                    {
-                        FilesChangesTracker new_files;
-                        for (const auto & file : cert_files.files)
-                        {
-                            new_files.addIfExists(file.path);
-                        }
-                        cert_files = std::move(new_files);
-                        ssl_cerd_options_cached = false;
-                    }
-                }
-            }
+            LOG_WARNING(log, "Can't add TLS config online");
+            return false;
         }
-        return updated;
+
+        has_tls_config = true; // update this->has_tls_config
+        if (new_ca_path != ca_path || new_cert_path != cert_path || new_key_path != key_path)
+        {
+            // any path is changed
+            ca_path = new_ca_path;
+            cert_path = new_cert_path;
+            key_path = new_key_path;
+            cert_files.files.clear();
+            cert_files.addIfExists(ca_path);
+            cert_files.addIfExists(cert_path);
+            cert_files.addIfExists(key_path);
+            ssl_cerd_options_cached = false;
+            LOG_INFO(
+                log,
+                "Ssl certificate config path is updated: ca path is {} cert path is {} key path is {}",
+                ca_path,
+                cert_path,
+                key_path);
+            return true;
+        }
+
+        // whether the cert file content is updated
+        if (!fileUpdated())
+            return false;
+
+        // update cert files
+        FilesChangesTracker new_files;
+        for (const auto & file : cert_files.files)
+        {
+            new_files.addIfExists(file.path);
+        }
+        cert_files = std::move(new_files);
+        ssl_cerd_options_cached = false;
+        return true;
     }
 
 private:
