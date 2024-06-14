@@ -817,18 +817,14 @@ void ExpressionActionsChain::finalize()
 
 std::string ExpressionActionsChain::dumpChain()
 {
-    std::stringstream ss;
-
+    FmtBuffer fmt_buf;
     for (size_t i = 0; i < steps.size(); ++i)
     {
-        ss << "step " << i << "\n";
-        ss << "required output:\n";
-        for (const std::string & name : steps[i].required_output)
-            ss << name << "\n";
-        ss << "\n" << steps[i].actions->dumpActions() << "\n";
+        fmt_buf.fmtAppend("step {}\nrequired output:\n", i);
+        fmt_buf.joinStr(steps[i].required_output.begin(), steps[i].required_output.end(), "\n");
+        fmt_buf.fmtAppend("\n{}\n", steps[i].actions->dumpActions());
     }
-
-    return ss.str();
+    return fmt_buf.toString();
 }
 
 template std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns);

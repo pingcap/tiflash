@@ -46,7 +46,7 @@ RSOperatorPtr createNot(const RSOperatorPtr & op)                               
 RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)            { return std::make_shared<NotEqual>(attr, value); }
 RSOperatorPtr createOr(const RSOperators & children)                            { return std::make_shared<Or>(children); }
 RSOperatorPtr createIsNull(const Attr & attr)                                   { return std::make_shared<IsNull>(attr);}
-RSOperatorPtr createUnsupported(const String & content, const String & reason)  { return std::make_shared<Unsupported>(content, reason); }
+RSOperatorPtr createUnsupported(const String & reason)                          { return std::make_shared<Unsupported>(reason); }
 // clang-format on
 
 RSOperatorPtr RSOperator::build(

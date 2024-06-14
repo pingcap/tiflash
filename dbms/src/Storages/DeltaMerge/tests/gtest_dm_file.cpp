@@ -1640,10 +1640,10 @@ try
     filters.emplace_back(one_part_filter, span_per_part); // only first part
     // <filter, num_rows_should_read>
     // (first range) And (Unsuppported) -> should filter some chunks by range
-    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test", "test")}), span_per_part);
+    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test")}), span_per_part);
     // <filter, num_rows_should_read>
     // (first range) Or (Unsupported) -> should NOT filter any chunk
-    filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test")}), num_rows_write);
+    filters.emplace_back(createOr({one_part_filter, createUnsupported("test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());

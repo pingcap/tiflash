@@ -116,8 +116,7 @@ PushDownFilterPtr PushDownFilter::build(
     }
 
     // build filter expression actions
-    auto [before_where, filter_column_name, project_after_where]
-        = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
+    auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownFilter(pushed_down_filters);
     LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
     // record current column defines
