@@ -163,6 +163,6 @@ RSOperatorPtr createLike(const Attr & attr, const Field & value);
 //
 RSOperatorPtr createIsNull(const Attr & attr);
 //
-RSOperatorPtr createUnsupported(const String & content, const String & reason);
+RSOperatorPtr createUnsupported(const String & reason);
 
 } // namespace DB::DM
