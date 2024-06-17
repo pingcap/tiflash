@@ -123,8 +123,6 @@ public:
         const DataTypePtr & type);
 
     RSResults checkIsNull(size_t start_pack, size_t pack_count);
-
-    static String toString();
 };
 
 
