@@ -395,27 +395,16 @@ try
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"and","children":[{"op":"unsupported","reason":"child of logical and is not function, expr.tp=ColumnRef"},{"op":"unsupported","reason":"child of logical and is not function, expr.tp=Uint64"}]})raw");
     }
 
-    std::cout << " do query select * from default.t_111 where col_6 or 1 " << std::endl;
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 or 1");
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"or","children":[{"op":"unsupported","reason":"child of logical operator is not function, child_type=ColumnRef"},{"op":"unsupported","reason":"child of logical operator is not function, child_type=Uint64"}]})raw");
     }
 
     {

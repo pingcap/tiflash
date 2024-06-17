@@ -2250,17 +2250,9 @@ try
     };
     const auto op
         = DB::DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, create_attr_by_column_id, Logger::get());
-    ASSERT_EQ(
+    EXPECT_EQ(
         op->toDebugString(),
-        "{\"op\":\"and\",\"children\":[{\"op\":\"in\",\"col\":\"b\",\"value\":\"[\"1\",\"2\"]},{\"op\":\"unsupported\","
-        "\"reason\":\"Multiple ColumnRef in expression is not supported\",\"content\":\"tp: ScalarFunc children { tp: "
-        "ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 0 } } children { tp: "
-        "Int64 val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" } children { tp: ColumnRef val: "
-        "\"\\200\\000\\000\\000\\000\\000\\000\\002\" field_type { tp: 1 flag: 0 } } sig: "
-        "InInt\"},{\"op\":\"unsupported\",\"reason\":\"Multiple ColumnRef in expression is not "
-        "supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: "
-        "\"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 0 } } children { tp: ColumnRef val: "
-        "\"\\200\\000\\000\\000\\000\\000\\000\\002\" field_type { tp: 1 flag: 0 } } sig: InInt\"}]}");
+        R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");
 }
 CATCH
 

@@ -146,6 +146,9 @@ public:
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
 
+    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+
     void buildAggFuncs(
         const tipb::Aggregation & aggregation,
         const ExpressionActionsPtr & actions,
