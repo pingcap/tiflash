@@ -29,7 +29,6 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 
-
 namespace DB::DM
 {
 
@@ -140,15 +139,15 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
 
     if (min_index != NONE_EXIST)
     {
-        has_null_marks->push_back(has_null);
-        has_value_marks->push_back(1);
+        has_null_marks.push_back(has_null);
+        has_value_marks.push_back(1);
         minmaxes->insertFrom(column, min_index);
         minmaxes->insertFrom(column, max_index);
     }
     else
     {
-        has_null_marks->push_back(has_null);
-        has_value_marks->push_back(0);
+        has_null_marks.push_back(has_null);
+        has_value_marks.push_back(0);
         minmaxes->insertDefault();
         minmaxes->insertDefault();
     }
@@ -156,10 +155,10 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
 
 void MinMaxIndex::write(const IDataType & type, WriteBuffer & buf)
 {
-    UInt64 size = has_null_marks->size();
+    UInt64 size = has_null_marks.size();
     DB::writeIntBinary(size, buf);
-    buf.write(reinterpret_cast<const char *>(has_null_marks->data()), sizeof(UInt8) * size);
-    buf.write(reinterpret_cast<const char *>(has_value_marks->data()), sizeof(UInt8) * size);
+    buf.write(reinterpret_cast<const char *>(has_null_marks.data()), sizeof(UInt8) * size);
+    buf.write(reinterpret_cast<const char *>(has_value_marks.data()), sizeof(UInt8) * size);
     type.serializeBinaryBulkWithMultipleStreams(
         *minmaxes, //
         [&](const IDataType::SubstreamPath &) { return &buf; },
@@ -177,11 +176,11 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
     {
         DB::readIntBinary(size, buf);
     }
-    auto has_null_marks = std::make_shared<PaddedPODArray<UInt8>>(size);
-    auto has_value_marks = std::make_shared<PaddedPODArray<UInt8>>(size);
+    PaddedPODArray<UInt8> has_null_marks(size);
+    PaddedPODArray<UInt8> has_value_marks(size);
     auto minmaxes = type.createColumn();
-    buf.read(reinterpret_cast<char *>(has_null_marks->data()), sizeof(UInt8) * size);
-    buf.read(reinterpret_cast<char *>(has_value_marks->data()), sizeof(UInt8) * size);
+    buf.read(reinterpret_cast<char *>(has_null_marks.data()), sizeof(UInt8) * size);
+    buf.read(reinterpret_cast<char *>(has_value_marks.data()), sizeof(UInt8) * size);
     type.deserializeBinaryBulkWithMultipleStreams(
         *minmaxes, //
         [&](const IDataType::SubstreamPath &) { return &buf; },
@@ -197,8 +196,7 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
                 + " vs. actual: " + std::to_string(bytes_read),
             Errors::DeltaTree::Internal);
     }
-    // NOLINTNEXTLINE (call private constructor of MinMaxIndex to build shared_ptr)
-    return MinMaxIndexPtr(new MinMaxIndex(has_null_marks, has_value_marks, std::move(minmaxes)));
+    return std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
 }
 
 std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index)
@@ -333,7 +331,7 @@ RSResults MinMaxIndex::checkInImpl(
     const auto & minmaxes_data = toColumnVectorData<T>(minmaxes);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        if (!(*has_value_marks)[i])
+        if (!has_value_marks[i])
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
@@ -373,7 +371,7 @@ RSResults MinMaxIndex::checkIn(
         const auto & offsets = string_column->getOffsets();
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
-            if (!(*has_value_marks)[i])
+            if (!has_value_marks[i])
                 continue;
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
@@ -404,7 +402,7 @@ RSResults MinMaxIndex::checkCmpImpl(size_t start_pack, size_t pack_count, const 
     const auto & minmaxes_data = toColumnVectorData<T>(minmaxes);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        if (!(*has_value_marks)[i])
+        if (!has_value_marks[i])
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
@@ -442,7 +440,7 @@ RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Fiel
         const auto & offsets = string_column->getOffsets();
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
-            if (!(*has_value_marks)[i])
+            if (!has_value_marks[i])
                 continue;
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
@@ -583,7 +581,7 @@ RSResults MinMaxIndex::checkIsNull(size_t start_pack, size_t pack_count)
     RSResults results(pack_count, RSResult::None);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        if ((*has_null_marks)[i])
+        if (has_null_marks[i])
             results[i - start_pack] = RSResult::Some;
     }
     return results;
