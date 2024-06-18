@@ -31,6 +31,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
+#include <source_location>
 
 namespace DB::DM::tests
 {
@@ -2252,6 +2253,106 @@ try
     EXPECT_EQ(
         op->toDebugString(),
         R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");
+}
+CATCH
+
+namespace
+{
+void cmpResults(const RSResults & actual, const RSResults & expected, std::source_location location)
+{
+    ASSERT_EQ(actual.size(), expected.size());
+    if (actual == expected)
+    {
+        return;
+    }
+    // Check which result is unexpected.
+    for (size_t i = 0; i < actual.size(); i++)
+    {
+        ASSERT_EQ(actual[i], expected[i]) << fmt::format(
+            "{}: i={}, actual={}, expected={}",
+            location.line(),
+            i,
+            magic_enum::enum_name(actual[i]),
+            magic_enum::enum_name(expected[i]));
+    }
+}
+
+using ColumnData = std::vector<std::optional<Int64>>;
+using DelMarkData = std::vector<UInt8>;
+using PackData = std::vector<std::pair<ColumnData, DelMarkData>>;
+
+ColumnPtr vecToColumn(const ColumnData & v, const IDataType & col_type)
+{
+    auto col = col_type.createColumn();
+    for (const auto & i : v)
+    {
+        if (i)
+        {
+            col->insert(*i);
+        }
+        else
+        {
+            col->insertDefault();
+        }
+    }
+    return col;
+}
+
+ColumnPtr vecToColumn(const DelMarkData & v)
+{
+    auto col = TAG_COLUMN_TYPE->createColumn();
+    for (const auto & i : v)
+    {
+        col->insert(static_cast<Int64>(i));
+    }
+    return col;
+}
+
+MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const PackData & packs)
+{
+    auto minmax_index = std::make_shared<MinMaxIndex>(col_type);
+    for (size_t i = 0; i < packs.size(); i++)
+    {
+        const auto & [col_data, del_mark_data] = packs[i];
+        auto column = vecToColumn(col_data, col_type);
+        auto del_mark_col = vecToColumn(del_mark_data);
+        RUNTIME_CHECK(column->size() == del_mark_col->size(), i, column->size(), del_mark_col->size());
+        minmax_index->addPack(*column, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+    return minmax_index;
+}
+
+} // namespace
+
+TEST_F(MinMaxIndexTest, CheckIsNull)
+try
+{
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    // {ColumnData, DelMarkData}
+    PackData packs = {
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 0}},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 0, 0}},
+        {{std::nullopt, std::nullopt}, {0, 0}},
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 1}},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 1, 0}},
+        {{std::nullopt, std::nullopt}, {1, 0}},
+        {{std::nullopt, std::nullopt}, {1, 1}},
+        {{1, 2, 3, 4}, {1, 1, 1, 1}},
+
+    };
+    auto minmax_index = createMinMaxIndex(*col_type, packs);
+    auto expected_results
+        = {RSResult::Some,
+           RSResult::None,
+           RSResult::All,
+           RSResult::None,
+           RSResult::None,
+           RSResult::All,
+           RSResult::None,
+           RSResult::None};
+    ASSERT_EQ(packs.size(), expected_results.size());
+    auto actual_results = minmax_index->checkIsNull(0, packs.size());
+    cmpResults(actual_results, expected_results, std::source_location::current());
 }
 CATCH
 
