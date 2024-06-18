@@ -31,7 +31,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
-#include <source_location>
 
 namespace DB::DM::tests
 {
@@ -2258,7 +2257,7 @@ CATCH
 
 namespace
 {
-void cmpResults(const RSResults & actual, const RSResults & expected, std::source_location location)
+void cmpResults(const RSResults & actual, const RSResults & expected, int line_number)
 {
     ASSERT_EQ(actual.size(), expected.size());
     if (actual == expected)
@@ -2270,7 +2269,7 @@ void cmpResults(const RSResults & actual, const RSResults & expected, std::sourc
     {
         ASSERT_EQ(actual[i], expected[i]) << fmt::format(
             "{}: i={}, actual={}, expected={}",
-            location.line(),
+            line_number,
             i,
             magic_enum::enum_name(actual[i]),
             magic_enum::enum_name(expected[i]));
@@ -2352,7 +2351,7 @@ try
            RSResult::None};
     ASSERT_EQ(packs.size(), expected_results.size());
     auto actual_results = minmax_index->checkIsNull(0, packs.size());
-    cmpResults(actual_results, expected_results, std::source_location::current());
+    cmpResults(actual_results, expected_results, __LINE__);
 }
 CATCH
 
