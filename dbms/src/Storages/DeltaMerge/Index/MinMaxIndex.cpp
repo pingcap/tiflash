@@ -90,6 +90,16 @@ inline std::pair<size_t, size_t> minmax(
 
     return {batch_min_idx, batch_max_idx};
 }
+
+// Before v6.4.0, we used null as the minimum value.
+// Since v6.4.0, we have excluded null when calculating the maximum and minimum values.
+// If the minimum value is null, this minmax index is generated before v6.4.0.
+// For compatibility, the filter result of the corresponding pack should be Some,
+// and the upper layer will read the pack data to perform the filter calculation.
+ALWAYS_INLINE bool minIsNull(const DB::ColumnUInt8 & null_map, size_t i)
+{
+    return null_map.getElement(i * 2);
+}
 } // namespace details
 
 void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark)
@@ -230,8 +240,7 @@ RSResults MinMaxIndex::checkNullableInImpl(
     const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        // if min is null, result is Some
-        if (null_map.getElement(i * 2))
+        if (details::minIsNull(null_map, i))
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
@@ -276,8 +285,7 @@ RSResults MinMaxIndex::checkNullableIn(
         const auto & offsets = string_column->getOffsets();
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
-            bool min_is_null = null_map.getElement(i * 2);
-            if (min_is_null)
+            if (details::minIsNull(null_map, i))
                 continue;
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
@@ -487,8 +495,7 @@ RSResults MinMaxIndex::checkNullableCmpImpl(
     const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        // if min is null, result is Some
-        if (null_map.getElement(i * 2))
+        if (details::minIsNull(null_map, i))
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
@@ -534,7 +541,7 @@ RSResults MinMaxIndex::checkNullableCmp(
         const auto & offsets = string_column->getOffsets();
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
-            if (null_map.getElement(i * 2))
+            if (details::minIsNull(null_map, i))
                 continue;
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
@@ -580,11 +587,6 @@ RSResults MinMaxIndex::checkIsNull(size_t start_pack, size_t pack_count)
             results[i - start_pack] = RSResult::Some;
     }
     return results;
-}
-
-String MinMaxIndex::toString()
-{
-    return "";
 }
 
 } // namespace DB::DM
