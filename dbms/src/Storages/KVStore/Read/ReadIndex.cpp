@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
+#include <Poco/Message.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/ReadIndexWorkerImpl.h>
@@ -124,7 +125,7 @@ std::tuple<WaitIndexStatus, double> Region::waitIndex(
     }
 }
 
-void WaitCheckRegionReady(
+void WaitCheckRegionReadyImpl(
     const TMTContext & tmt,
     KVStore & kvstore,
     const std::atomic_size_t & terminate_signals_counter,
@@ -132,7 +133,8 @@ void WaitCheckRegionReady(
     double max_wait_tick_time,
     double get_wait_region_ready_timeout_sec)
 {
-    constexpr double batch_read_index_time_rate = 0.2; // part of time for waiting shall be assigned to batch-read-index
+    // part of time for waiting shall be assigned to batch-read-index
+    static constexpr double BATCH_READ_INDEX_TIME_RATE = 0.2;
     auto log = Logger::get(__FUNCTION__);
 
     LOG_INFO(
@@ -151,11 +153,12 @@ void WaitCheckRegionReady(
             [&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
         total_regions_cnt = remain_regions.size();
     }
-    while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec * batch_read_index_time_rate
+    while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec * BATCH_READ_INDEX_TIME_RATE
            && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
+        // Generate the read index requests
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
-        for (auto it = remain_regions.begin(); it != remain_regions.end();)
+        for (auto it = remain_regions.begin(); it != remain_regions.end(); /**/)
         {
             auto region_id = *it;
             if (auto region = kvstore.getRegion(region_id); region)
@@ -165,9 +168,12 @@ void WaitCheckRegionReady(
             }
             else
             {
+                // Remove the region that is not exist now
                 it = remain_regions.erase(it);
             }
         }
+
+        // Record the latest commit index in TiKV
         auto read_index_res = kvstore.batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
         for (auto && [resp, region_id] : read_index_res)
         {
@@ -179,7 +185,7 @@ void WaitCheckRegionReady(
                     need_retry = false;
                 LOG_DEBUG(
                     log,
-                    "neglect error region_id={} not found {} epoch not match {}",
+                    "neglect error, region_id={} not_found={} epoch_not_match={}",
                     region_id,
                     region_error.has_region_not_found(),
                     region_error.has_epoch_not_match());
@@ -211,6 +217,7 @@ void WaitCheckRegionReady(
 
     if (!remain_regions.empty())
     {
+        // timeout for fetching latest commit index from TiKV happen
         FmtBuffer buffer;
         buffer.joinStr(
             remain_regions.begin(),
@@ -223,15 +230,18 @@ void WaitCheckRegionReady(
             remain_regions.size(),
             buffer.toString());
     }
+
+    // Wait untill all region has catch up with TiKV or timeout happen
     do
     {
-        for (auto it = regions_to_check.begin(); it != regions_to_check.end();)
+        for (auto it = regions_to_check.begin(); it != regions_to_check.end(); /**/)
         {
             auto [region_id, latest_index] = *it;
             if (auto region = kvstore.getRegion(region_id); region)
             {
                 if (region->appliedIndex() >= latest_index)
                 {
+                    // The region has already catch up
                     it = regions_to_check.erase(it);
                 }
                 else
@@ -241,6 +251,7 @@ void WaitCheckRegionReady(
             }
             else
             {
+                // The region is removed from this instance
                 it = regions_to_check.erase(it);
             }
         }
@@ -271,6 +282,7 @@ void WaitCheckRegionReady(
                 }
                 else
                 {
+                    // The region is removed from this instance during waiting latest index
                     b.fmtAppend("{},{},none", e.first, e.second);
                 }
             },
@@ -282,11 +294,9 @@ void WaitCheckRegionReady(
             buffer.toString());
     }
 
-    LOG_INFO(
-        log,
-        "finish to check {} regions, time cost {:.3f}s",
-        total_regions_cnt,
-        region_check_watch.elapsedSeconds());
+    const auto total_elapse = region_check_watch.elapsedSeconds();
+    const auto log_level = total_elapse > 60.0 ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
+    LOG_IMPL(log, log_level, "finish to check {} regions, time cost {:.3f}s", total_regions_cnt, total_elapse);
 }
 
 void WaitCheckRegionReady(
@@ -301,7 +311,7 @@ void WaitCheckRegionReady(
     double min_wait_tick_time = 0 == wait_region_ready_tick
         ? 2.5
         : static_cast<double>(wait_region_ready_tick); // default tick in TiKV is about 2s (without hibernate-region)
-    return WaitCheckRegionReady(
+    return WaitCheckRegionReadyImpl(
         tmt,
         kvstore,
         terminate_signals_counter,

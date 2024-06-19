@@ -131,9 +131,10 @@ std::string Region::getDebugString() const
 {
     const auto & meta_snap = meta.dumpRegionMetaSnapshot();
     return fmt::format(
-        "[region_id={} index={} table_id={} ver={} conf_ver={} state={} peer={} range={}]",
+        "[region_id={} index={} keyspace={} table_id={} ver={} conf_ver={} state={} peer={} range={}]",
         id(),
         meta.appliedIndex(),
+        keyspace_id,
         mapped_table_id,
         meta_snap.ver,
         meta_snap.conf_ver,
