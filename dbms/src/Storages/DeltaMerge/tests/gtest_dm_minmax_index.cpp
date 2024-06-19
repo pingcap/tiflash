@@ -35,6 +35,9 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+#include <optional>
+
+#include "DataTypes/IDataType.h"
 
 namespace DB::DM::tests
 {
@@ -1354,7 +1357,7 @@ try
                 }
                 auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
                 ASSERT_EQ(
-                    false,
+                    operater_type == Test_In,
                     checkMatch(
                         case_name,
                         *context,
@@ -2259,6 +2262,24 @@ try
 }
 CATCH
 
+namespace
+{
+// Only support Int64.
+template <typename T>
+MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const std::vector<T> & cases)
+{
+    auto minmax_index = std::make_shared<MinMaxIndex>(col_type);
+    for (const auto & c : cases)
+    {
+        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+    return minmax_index;
+}
+} // namespace
+
 TEST_F(MinMaxIndexTest, CheckIsNull)
 try
 {
@@ -2281,15 +2302,7 @@ try
     };
 
     auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
-    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
-    for (const auto & c : cases)
-    {
-        ASSERT_EQ(c.column_data.size(), c.del_mark.size());
-        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
-        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
-        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
-    }
-
+    auto minmax_index = createMinMaxIndex(*col_type, cases);
     auto actual_results = minmax_index->checkIsNull(0, cases.size());
     for (size_t i = 0; i < cases.size(); ++i)
     {
@@ -2303,4 +2316,127 @@ try
 }
 CATCH
 
+TEST_F(MinMaxIndexTest, CheckIn)
+try
+{
+    struct CheckInTestCase
+    {
+        std::vector<std::optional<Int64>> column_data;
+        std::vector<UInt64> del_mark;
+    };
+    struct ValuesAndResults
+    {
+        std::vector<Field> values;
+        RSResults results;
+    };
+    std::vector<CheckInTestCase> cases = {
+        {
+            .column_data = {1, 2, 3, 4, std::nullopt},
+            .del_mark = {0, 0, 0, 0, 0},
+        },
+        {
+            .column_data = {6, 7, 8, 9, 10},
+            .del_mark = {0, 0, 0, 0, 0},
+        },
+        {
+            .column_data = {std::nullopt, std::nullopt},
+            .del_mark = {0, 0},
+        },
+        {
+            .column_data = {1, 2, 3, 4, std::nullopt},
+            .del_mark = {0, 0, 0, 0, 1},
+        },
+        {
+            .column_data = {6, 7, 8, 9, 10},
+            .del_mark = {0, 0, 0, 1, 0},
+        },
+        {
+            .column_data = {std::nullopt, std::nullopt},
+            .del_mark = {1, 0},
+        },
+        {
+            .column_data = {std::nullopt, std::nullopt},
+            .del_mark = {1, 1},
+        },
+        {
+            .column_data = {1, 2, 3, 4},
+            .del_mark = {1, 1, 1, 1},
+        },
+        {
+            .column_data = {1, 1},
+            .del_mark = {0, 0},
+        },
+        {
+            .column_data = {1, 1, std::nullopt},
+            .del_mark = {0, 0, 0},
+        },
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .values = {1L, 2L, 3L, 4L, 5L, 6L},
+            .results = {
+                RSResult::Some,
+                RSResult::Some,
+                RSResult::None,
+                RSResult::Some,  // Should be All, but not support now
+                RSResult::Some,
+                RSResult::None,
+                RSResult::None,
+                RSResult::None,
+                RSResult::All,   // minimum value equals to maximum value
+                RSResult::Some,
+            },
+        },
+        {
+            .values = {100L},
+            .results = {
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            },
+        },
+        {
+            .values = {0L},
+            .results = {
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            RSResult::None,
+            },
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, cases);
+    for (size_t i = 0; i < params.size(); ++i)
+    {
+        const auto & [values, expected_results] = params[i];
+        ASSERT_EQ(expected_results.size(), cases.size());
+        auto actual_results = minmax_index->checkIn(0, cases.size(), values, col_type);
+        for (size_t j = 0; j < cases.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "i={} j={} actual={} expected={}",
+                i,
+                j,
+                magic_enum::enum_name(actual_results[j]),
+                magic_enum::enum_name(expected_results[j]));
+        }
+    }
+}
+CATCH
 } // namespace DB::DM::tests
