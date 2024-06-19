@@ -22,6 +22,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -131,10 +132,10 @@ std::string Region::getDebugString() const
 {
     const auto & meta_snap = meta.dumpRegionMetaSnapshot();
     return fmt::format(
-        "[region_id={} index={} keyspace={} table_id={} ver={} conf_ver={} state={} peer={} range={}]",
+        "[region_id={} index={} {}table_id={} ver={} conf_ver={} state={} peer={} range={}]",
         id(),
         meta.appliedIndex(),
-        keyspace_id,
+        ((keyspace_id == NullspaceID) ? "" : fmt::format("keyspace={} ", keyspace_id)),
         mapped_table_id,
         meta_snap.ver,
         meta_snap.conf_ver,
