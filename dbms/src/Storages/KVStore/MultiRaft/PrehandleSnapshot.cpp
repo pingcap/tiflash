@@ -39,6 +39,7 @@ namespace CurrentMetrics
 {
 extern const Metric RaftNumPrehandlingSubTasks;
 extern const Metric RaftNumParallelPrehandlingTasks;
+extern const Metric RaftNumWaitedParallelPrehandlingTasks;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -99,6 +100,8 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         ongoing_prehandle_subtask_count.load(),
         parallel,
         region_id);
+
+    CurrentMetrics::add(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
     while (true)
     {
         std::unique_lock<std::mutex> cpu_resource_lock{cpu_resource_mut};
@@ -120,6 +123,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         watch.elapsedSeconds(),
         region_id,
         parallel);
+    CurrentMetrics::sub(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
 }
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
@@ -346,7 +350,9 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     }
 
     // Get this info again, since getApproxBytes maybe take some time.
-    auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
+    // Currently, the head split has not been registered as sub task yet,
+    // so we must add 1 here.
+    auto ongoing_count = kvstore->getOngoingPrehandleSubtaskCount() + 1;
     uint64_t want_split_parts = 0;
     auto total_concurrency = kvstore->getMaxParallelPrehandleSize();
     if (total_concurrency + 1 > ongoing_count)
