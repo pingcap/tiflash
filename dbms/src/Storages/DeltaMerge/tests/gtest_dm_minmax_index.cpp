@@ -23,14 +23,18 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 #include <Storages/DeltaMerge/Index/ValueComparison.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
+#include <memory>
 
 namespace DB::DM::tests
 {
@@ -2252,6 +2256,50 @@ try
     EXPECT_EQ(
         op->toDebugString(),
         R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckIsNull)
+try
+{
+    struct IsNullTestCase
+    {
+        std::vector<std::optional<Int64>> column_data;
+        std::vector<UInt64> del_mark;
+        RSResult result;
+    };
+
+    std::vector<IsNullTestCase> cases = {
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 0}, RSResult::Some},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 0, 0}, RSResult::None},
+        {{std::nullopt, std::nullopt}, {0, 0}, RSResult::All},
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 1}, RSResult::None},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 1, 0}, RSResult::None},
+        {{std::nullopt, std::nullopt}, {1, 0}, RSResult::All},
+        {{std::nullopt, std::nullopt}, {1, 1}, RSResult::None},
+        {{1, 2, 3, 4}, {1, 1, 1, 1}, RSResult::None},
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
+    for (const auto & c : cases)
+    {
+        ASSERT_EQ(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+
+    auto actual_results = minmax_index->checkIsNull(0, cases.size());
+    for (size_t i = 0; i < cases.size(); ++i)
+    {
+        const auto & c = cases[i];
+        ASSERT_EQ(actual_results[i], c.result) << fmt::format(
+            "i={} actual={} expected={}",
+            i,
+            magic_enum::enum_name(actual_results[i]),
+            magic_enum::enum_name(c.result));
+    }
 }
 CATCH
 
