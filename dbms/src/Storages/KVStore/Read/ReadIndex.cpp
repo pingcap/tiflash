@@ -147,12 +147,10 @@ void WaitCheckRegionReadyImpl(
     std::unordered_set<RegionID> remain_regions;
     std::unordered_map<RegionID, uint64_t> regions_to_check;
     Stopwatch region_check_watch;
-    size_t total_regions_cnt = 0;
-    {
-        kvstore.traverseRegions(
-            [&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
-        total_regions_cnt = remain_regions.size();
-    }
+    kvstore.traverseRegions(
+        [&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
+    const size_t total_regions_cnt = remain_regions.size();
+
     while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec * BATCH_READ_INDEX_TIME_RATE
            && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
@@ -208,9 +206,10 @@ void WaitCheckRegionReadyImpl(
 
         LOG_INFO(
             log,
-            "{} regions need to fetch latest commit-index in next round, sleep for {:.3f}s",
+            "{} regions need to fetch latest commit-index in next round, sleep for {:.3f}s, tot_regions={}",
             remain_regions.size(),
-            wait_tick_time);
+            wait_tick_time,
+            total_regions_cnt);
         std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<Int64>(wait_tick_time * 1000)));
         wait_tick_time = std::min(max_wait_tick_time, wait_tick_time * 2);
     }
@@ -261,9 +260,10 @@ void WaitCheckRegionReadyImpl(
 
         LOG_INFO(
             log,
-            "{} regions need to apply to latest index, sleep for {:.3f}s",
+            "{} regions need to apply to latest index, sleep for {:.3f}s, tot_regions={}",
             regions_to_check.size(),
-            wait_tick_time);
+            wait_tick_time,
+            total_regions_cnt);
         std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<Int64>(wait_tick_time * 1000)));
         wait_tick_time = std::min(max_wait_tick_time, wait_tick_time * 2);
     } while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec
@@ -296,7 +296,12 @@ void WaitCheckRegionReadyImpl(
 
     const auto total_elapse = region_check_watch.elapsedSeconds();
     const auto log_level = total_elapse > 60.0 ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
-    LOG_IMPL(log, log_level, "finish to check {} regions, time cost {:.3f}s", total_regions_cnt, total_elapse);
+    LOG_IMPL(
+        log,
+        log_level,
+        "finish to check regions, time cost {:.3f}s tot_regions={}",
+        total_elapse,
+        total_regions_cnt);
 }
 
 void WaitCheckRegionReady(
