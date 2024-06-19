@@ -139,7 +139,7 @@ void WaitCheckRegionReadyImpl(
 
     LOG_INFO(
         log,
-        "start to check regions ready, min-wait-tick {}s, max-wait-tick {}s, wait-region-ready-timeout {:.3f}s",
+        "start to check regions ready, min_wait_tick={:.3f}s max_wait_tick={:.3f}s wait_region_ready_timeout={:.3f}s",
         wait_tick_time,
         max_wait_tick_time,
         get_wait_region_ready_timeout_sec);
@@ -299,7 +299,7 @@ void WaitCheckRegionReadyImpl(
     LOG_IMPL(
         log,
         log_level,
-        "finish to check regions, time cost {:.3f}s tot_regions={}",
+        "finish to check regions, time_cost={:.3f}s tot_regions={}",
         total_elapse,
         total_regions_cnt);
 }
@@ -310,6 +310,7 @@ void WaitCheckRegionReady(
     const std::atomic_size_t & terminate_signals_counter)
 {
     // wait interval to check region ready, not recommended to modify only if for tesing
+    // TODO: Move this hidden config to TMTContext
     auto wait_region_ready_tick = tmt.getContext().getConfigRef().getUInt64("flash.wait_region_ready_tick", 0);
     auto wait_region_ready_timeout_sec = static_cast<double>(tmt.waitRegionReadyTimeout());
     const double max_wait_tick_time = 0 == wait_region_ready_tick ? 20.0 : wait_region_ready_timeout_sec;
