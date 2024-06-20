@@ -52,7 +52,7 @@ public:
     {
         return aggregator->getHeader(/*final=*/true);
     }
-private:
+
     enum class State
     {
         Init,
@@ -62,31 +62,43 @@ private:
         Selective,
     };
 
+    State getCurState() const
+    {
+        return state;
+    }
+
+    // todo change name
+    size_t getNonAdjustRowLimit() const
+    {
+        return non_adjust_row_limit;
+    }
+    size_t getAdjustRowLimit() const
+    {
+        return adjust_row_limit;
+    }
+private:
     void trySwitchFromInitState();
     void trySwitchFromAdjustState(size_t total_rows, size_t hit_rows);
     void trySwitchBackAdjustState(size_t block_rows);
 
-    // todo del
-    // void execute(
-    //         Aggregator::AggProcessInfo & agg_process_info,
-    //         AggregatedDataVariants & data,
-    //         bool collect_hit_rate);
     void passThrough(Aggregator::AggProcessInfo & agg_process_info);
 
     static constexpr float PassThroughRateLimit = 0.2;
     static constexpr float PreHashAggRateLimit = 0.9;
 
     State state;
-    ManyAggregatedDataVariants many_data;
+    // Make sure data variants after aggregator because it needs aggregator in dtor.
+    // Check ~AggregatedDataVariants.
     std::unique_ptr<Aggregator> aggregator;
+    ManyAggregatedDataVariants many_data;
     std::unique_ptr<Aggregator::AggProcessInfo> agg_process_info;
 
     size_t adjust_processed_rows = 0;
     size_t adjust_hit_rows = 0;
     size_t adjust_row_limit = 20000; // todo refine limit
 
-    size_t non_adjust_processed_rows = 0;
-    size_t non_adjust_row_limit = 600000; // todo refine limit
+    size_t state_processed_rows = 0;
+    size_t non_adjust_row_limit = 70000; // todo refine limit
 
     BlocksList pass_through_block_buffer{};
     MergingBucketsPtr merging_buckets = nullptr;

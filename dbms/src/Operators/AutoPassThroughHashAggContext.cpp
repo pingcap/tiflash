@@ -88,6 +88,11 @@ void AutoPassThroughHashAggContext::trySwitchFromInitState()
 {
     // todo check data.size?
     // todo check if expand happened?
+    if (many_data[0]->bytesCount() > 1024 * 1024)
+    {
+        state = State::Adjust;
+        state_processed_rows = 0;
+    }
 }
 
 void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, size_t hit_rows)
@@ -98,10 +103,8 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
     if (adjust_processed_rows < adjust_row_limit)
         return;
 
-    adjust_processed_rows = 0;
-    adjust_hit_rows = 0;
-
     float hit_rate = static_cast<double>(adjust_hit_rows) / adjust_processed_rows;
+    RUNTIME_CHECK(std::isnormal(hit_rate) || hit_rate == 0.0);
     if (hit_rate >= PreHashAggRateLimit)
     {
         state = State::PreHashAgg;
@@ -114,36 +117,20 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
     {
         state = State::Selective;
     }
+
+    adjust_processed_rows = 0;
+    adjust_hit_rows = 0;
 }
 
 void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 {
-    non_adjust_processed_rows += block_rows;
-    if (non_adjust_processed_rows >= non_adjust_row_limit)
+    state_processed_rows += block_rows;
+    if (state_processed_rows >= non_adjust_row_limit)
     {
         state = State::Adjust;
-        non_adjust_processed_rows = 0;
+        state_processed_rows = 0;
     }
 }
-
-// todo del
-// // todo del this func
-// void AutoPassThroughHashAggContext::execute(
-//         Aggregator::AggProcessInfo & agg_process_info,
-//         AggregatedDataVariants & data,
-//         bool collect_hit_rate)
-// {
-//     // todo while loop necessary?
-//     // todo make sure agg_process_info already reseted.
-//     do
-//     {
-//         // todo cannot spill
-//         // todo thread_num 0?
-//         aggregator->executeOnBlock(agg_process_info, data, thread_num);
-//         if (data.need_spill)
-//             aggregator->spill(data, thread_num);
-//     } while (!agg_process_info.allBlockDataHandled());
-// }
 
 void AutoPassThroughHashAggContext::passThrough(Aggregator::AggProcessInfo & agg_process_info)
 {
