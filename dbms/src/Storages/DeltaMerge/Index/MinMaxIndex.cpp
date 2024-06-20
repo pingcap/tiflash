@@ -99,6 +99,23 @@ ALWAYS_INLINE bool minIsNull(const DB::ColumnUInt8 & null_map, size_t i)
 {
     return null_map.getElement(i * 2);
 }
+
+ALWAYS_INLINE bool isLegacyOrHasNull(
+    const DB::ColumnUInt8 & null_map,
+    const PaddedPODArray<UInt8> & has_nulls,
+    size_t i)
+{
+    // Null is a special value. The result of comparing null with any value and the logical
+    // operation result of null value are unknown. So, if a pack has null, always return RSResult::Some.
+
+    // Why need return RSResult::Some when a pack has null?
+    // Take `MinMaxIndex::checkIn` for example.
+    // There is pack has data [1, 2, 3, 4, null] and a query `... not in (100)`.
+    // RoughCheck::CheckIn(100) will return `RSResult::None`, because it never consider the null value.
+    // So the filter result of `not in (100)` is `not RSResult::None` and it is `RSResult::All`.
+    // If we skip the filter calculation, the null rows will not be filtered out.
+    return has_nulls[i] || minIsNull(null_map, i);
+}
 } // namespace details
 
 void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark)
@@ -238,7 +255,7 @@ RSResults MinMaxIndex::checkNullableInImpl(
     const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        if (details::minIsNull(null_map, i))
+        if (details::isLegacyOrHasNull(null_map, has_null_marks, i))
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
@@ -283,7 +300,7 @@ RSResults MinMaxIndex::checkNullableIn(
         const auto & offsets = string_column->getOffsets();
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
-            if (details::minIsNull(null_map, i))
+            if (details::isLegacyOrHasNull(null_map, has_null_marks, i))
                 continue;
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
