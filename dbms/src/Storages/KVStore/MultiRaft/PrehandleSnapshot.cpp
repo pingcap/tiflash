@@ -529,6 +529,9 @@ void executeParallelTransform(
     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
     {
         auto add_result = async_tasks.addTask(extra_id, [&, extra_id]() {
+            std::string origin_name = getThreadName();
+            SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
+            setThreadName("para-pre-snap");
             auto limit = DM::SSTScanSoftLimit(
                 extra_id,
                 std::string(split_keys[extra_id]),
