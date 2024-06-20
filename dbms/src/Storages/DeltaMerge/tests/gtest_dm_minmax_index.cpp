@@ -1354,7 +1354,7 @@ try
                 }
                 auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
                 ASSERT_EQ(
-                    operater_type == Test_In,
+                    operater_type == Test_In,  // Data contains NULL, need to read data and filter out.
                     checkMatch(
                         case_name,
                         *context,
