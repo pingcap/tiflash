@@ -12,25 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/formatAST.h>
-#include <Parsers/parseQuery.h>
+#pragma once
 
-#include <iostream>
+#include <atomic>
 
-
-int main(int, char **)
+namespace DB::PS
 {
-    using namespace DB;
+struct PageStorageMemorySummary
+{
+    static inline std::atomic_int64_t uni_page_id_bytes{0};
+    static inline std::atomic_int64_t versioned_entry_or_delete_bytes{0};
+    static inline std::atomic_int64_t versioned_entry_or_delete_count{0};
+};
 
-    std::string input
-        = "CREATE TABLE hits (URL String, UserAgentMinor2 FixedString(2), EventTime DateTime) ENGINE = Log";
-    ParserCreateQuery parser;
-    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0);
-
-    formatAST(*ast, std::cerr);
-    std::cerr << std::endl;
-
-    return 0;
-}
+} // namespace DB::PS

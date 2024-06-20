@@ -967,6 +967,30 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     return filter_column_name;
 }
 
+std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownFilter(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+{
+    assert(!conditions.empty());
+
+    ExpressionActionsChain chain;
+    initChain(chain);
+    String filter_column_name = appendWhere(chain, conditions);
+    ExpressionActionsPtr before_where = chain.getLastActions();
+    chain.addStep();
+
+    // remove useless tmp column and keep the schema of local streams and remote streams the same.
+    for (const auto & col : getCurrentInputColumns())
+    {
+        chain.getLastStep().required_output.push_back(col.name);
+    }
+    ExpressionActionsPtr project_after_where = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+
+    RUNTIME_CHECK(!project_after_where->getActions().empty());
+    return {before_where, filter_column_name, project_after_where};
+}
+
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)

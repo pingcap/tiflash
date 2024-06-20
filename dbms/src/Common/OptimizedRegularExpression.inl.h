@@ -277,13 +277,6 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
         required_substring = trivial_substrings.front().first;
         required_substring_is_prefix = trivial_substrings.front().second == 0;
     }
-
-    /*    std::cerr
-        << "regexp: " << regexp
-        << ", is_trivial: " << is_trivial
-        << ", required_substring: " << required_substring
-        << ", required_substring_is_prefix: " << required_substring_is_prefix
-        << std::endl;*/
 }
 
 

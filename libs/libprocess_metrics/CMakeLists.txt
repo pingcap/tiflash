@@ -25,7 +25,7 @@ add_custom_command(OUTPUT ${_PROCESS_METRICS_LIBRARY}
         "${_PROCESS_METRICS_HEADERS}"
                 "${_PROCESS_METRICS_SOURCE_DIR}/Cargo.lock"
                 "${_PROCESS_METRICS_SOURCE_DIR}/Cargo.toml"
-                "${TiFlash_SOURCE_DIR}/rust-toolchain")
+                "${TiFlash_SOURCE_DIR}/rust-toolchain.toml")
 
 add_custom_target(_process_metrics ALL DEPENDS ${_PROCESS_METRICS_LIBRARY} JOB_POOL rust_job_pool)
 add_library(process_metrics STATIC IMPORTED GLOBAL)

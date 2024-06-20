@@ -21,23 +21,18 @@ namespace DB::DM
 
 class Unsupported : public RSOperator
 {
-    String content;
     String reason;
 
 public:
-    Unsupported(const String & content_, const String & reason_)
-        : content(content_)
-        , reason(reason_)
+    explicit Unsupported(const String & reason_)
+        : reason(reason_)
     {}
 
     String name() override { return "unsupported"; }
 
     ColIds getColumnIDs() override { return {}; }
 
-    String toDebugString() override
-    {
-        return fmt::format(R"({{"op":"{}","reason":"{}","content":"{}"}})", name(), reason, content);
-    }
+    String toDebugString() override { return fmt::format(R"({{"op":"{}","reason":"{}"}})", name(), reason); }
 
     RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
     {

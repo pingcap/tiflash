@@ -62,7 +62,7 @@ inline void validateSSTGeneration(
                               size_t split_id) -> std::unique_ptr<MonoSSTReader> {
         auto parsed_kind = MockSSTGenerator::parseSSTViewKind(buffToStrView(snap.path));
         auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
-        assert(reader->sst_format_kind() == parsed_kind);
+        assert(reader->sstFormatKind() == parsed_kind);
         return reader;
     };
     MultiSSTReader<MonoSSTReader, SSTView> reader{
