@@ -18,26 +18,49 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/PageStorageMemorySummary.h>
 
 namespace DB
 {
 class UniversalPageId final
 {
 public:
-    UniversalPageId() = default;
+    UniversalPageId() { PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size()); }
+    UniversalPageId(const UniversalPageId & other)
+        : id(other.id)
+    {
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
+    }
 
     UniversalPageId(String id_) // NOLINT(google-explicit-constructor)
         : id(std::move(id_))
-    {}
+    {
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
+    }
     UniversalPageId(const char * id_) // NOLINT(google-explicit-constructor)
         : id(id_)
-    {}
+    {
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
+    }
     UniversalPageId(const char * id_, size_t sz_)
         : id(id_, sz_)
-    {}
+    {
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
+    }
+
+    ~UniversalPageId() { PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size()); }
 
     UniversalPageId & operator=(String && id_) noexcept
     {
+        if (id.size() == id_.size()) {}
+        else if (id.size() > id_.size())
+        {
+            PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size() - id_.size());
+        }
+        else
+        {
+            PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id_.size() - id.size());
+        }
         id.swap(id_);
         return *this;
     }

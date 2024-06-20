@@ -16,7 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -75,14 +75,18 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(*ctx);
-    auto query_block = *dag.getRootQueryBlock();
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     // Push down all filters
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters
-        = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions()
-                                                        : empty_condition;
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = empty_condition;
+    google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
+        if (executor.has_selection())
+        {
+            pushed_down_filters = executor.selection().conditions();
+            return false;
+        }
+        return true;
+    });
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
@@ -114,13 +118,8 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
 
     auto rs_operator
         = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
-        rs_operator,
-        table_info.columns,
-        pushed_down_filters,
-        columns_to_read,
-        *ctx,
-        log);
+    auto push_down_filter
+        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
     return push_down_filter;
 }
 
@@ -644,12 +643,7 @@ try
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"and","children":[{"op":"unsupported","reason":"child of logical and is not function, expr.tp=ColumnRef"},{"op":"unsupported","reason":"child of logical and is not function, expr.tp=Uint64"}]})raw");
 
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
@@ -664,7 +658,6 @@ try
         EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
-    std::cout << " do query select * from default.t_111 where col_2 or 1 " << std::endl;
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto filter = generatePushDownFilter(
@@ -675,12 +668,7 @@ try
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"or","children":[{"op":"unsupported","reason":"child of logical operator is not function, child_type=ColumnRef"},{"op":"unsupported","reason":"child of logical operator is not function, child_type=Uint64"}]})raw");
 
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),

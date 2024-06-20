@@ -68,9 +68,10 @@ public:
         return pack_filter;
     }
 
-    inline const std::vector<RSResult> & getHandleRes() const { return handle_res; }
-    inline const std::vector<UInt8> & getUsePacksConst() const { return use_packs; }
-    inline std::vector<UInt8> & getUsePacks() { return use_packs; }
+    const RSResults & getHandleRes() const { return handle_res; }
+    const RSResults & getPackResConst() const { return pack_res; }
+    RSResults & getPackRes() { return pack_res; }
+    UInt64 countUsePack() const;
 
     Handle getMinHandle(size_t pack_id)
     {
@@ -104,7 +105,7 @@ public:
         const auto & pack_stats = dmfile->getPackStats();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (use_packs[i])
+            if (isUse(pack_res[i]))
             {
                 rows += pack_stats[i].rows;
                 bytes += pack_stats[i].bytes;
@@ -133,7 +134,6 @@ private:
         , read_packs(read_packs_)
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
-        , use_packs(dmfile->getPacks())
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
@@ -151,7 +151,10 @@ private:
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context);
 
-    void tryLoadIndex(const ColId col_id);
+    void tryLoadIndex(ColId col_id);
+
+    // None, Some, All
+    std::tuple<UInt64, UInt64, UInt64> countPackRes() const;
 
 private:
     DMFilePtr dmfile;
@@ -164,8 +167,10 @@ private:
 
     RSCheckParam param;
 
+    // `handle_res` is the filter results of `rowkey_ranges`.
     std::vector<RSResult> handle_res;
-    std::vector<UInt8> use_packs;
+    // `pack_res` is the filter results of `rowkey_ranges && filter && read_packs`.
+    std::vector<RSResult> pack_res;
 
     const ScanContextPtr scan_context;
 

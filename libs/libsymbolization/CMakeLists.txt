@@ -31,7 +31,7 @@ add_custom_command(OUTPUT ${_SYMBOLIZATION_LIBRARY}
                 "${_SYMBOLIZATION_HEADERS}"
                 "${_SYMBOLIZATION_SOURCE_DIR}/Cargo.lock"
                 "${_SYMBOLIZATION_SOURCE_DIR}/Cargo.toml"
-                "${TiFlash_SOURCE_DIR}/rust-toolchain")
+                "${TiFlash_SOURCE_DIR}/rust-toolchain.toml")
 
 add_custom_target(symbolization ALL DEPENDS ${_SYMBOLIZATION_LIBRARY})
 add_library(libsymbolization STATIC IMPORTED GLOBAL)

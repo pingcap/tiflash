@@ -39,10 +39,3 @@ docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T t
 
 docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
 clean_data_log
-
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
-
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml down
-clean_data_log

@@ -168,9 +168,9 @@ public:
         ASSERT_EQ(n, s.size());
     }
 
-    static std::vector<UInt8> & getReaderUsePacks(DMFileBlockInputStreamPtr & stream)
+    static RSResults & getReaderPackRes(DMFileBlockInputStreamPtr & stream)
     {
-        return stream->reader.pack_filter.getUsePacks();
+        return stream->reader.pack_filter.getPackRes();
     }
 
 protected:
@@ -905,10 +905,10 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = getReaderUsePacks(stream);
-        use_packs[1] = false;
+        auto & pack_res = getReaderPackRes(stream);
+        pack_res[1] = RSResult::None;
         stream->skipNextBlock();
-        use_packs[1] = true;
+        pack_res[1] = RSResult::Some;
         std::vector<Array> partial_expect_arr_values;
         partial_expect_arr_values.insert(
             partial_expect_arr_values.cend(),
@@ -1117,10 +1117,10 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = getReaderUsePacks(stream);
-        use_packs[1] = false;
+        auto & pack_res = getReaderPackRes(stream);
+        pack_res[1] = RSResult::None;
         ASSERT_EQ(stream->skipNextBlock(), num_rows_write / 3);
-        use_packs[1] = true;
+        pack_res[1] = RSResult::Some;
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),
@@ -1640,10 +1640,10 @@ try
     filters.emplace_back(one_part_filter, span_per_part); // only first part
     // <filter, num_rows_should_read>
     // (first range) And (Unsuppported) -> should filter some chunks by range
-    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test", "test")}), span_per_part);
+    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test")}), span_per_part);
     // <filter, num_rows_should_read>
     // (first range) Or (Unsupported) -> should NOT filter any chunk
-    filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test")}), num_rows_write);
+    filters.emplace_back(createOr({one_part_filter, createUnsupported("test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());

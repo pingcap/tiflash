@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Executor/ResultQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Operators/SharedQueue.h>
 
@@ -154,6 +155,7 @@ void PipelineExecutorContext::cancel()
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
         cancelSharedQueues();
+        cancelResultQueueIfNeed();
         if likely (TaskScheduler::instance && !query_id.empty())
             TaskScheduler::instance->cancel(query_id, resource_group_name);
     }
@@ -163,6 +165,7 @@ ResultQueuePtr PipelineExecutorContext::toConsumeMode(size_t queue_size)
 {
     std::lock_guard lock(mu);
     RUNTIME_ASSERT(!result_queue.has_value());
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
     result_queue.emplace(std::make_shared<ResultQueue>(queue_size));
     return *result_queue;
 }
@@ -184,5 +187,18 @@ void PipelineExecutorContext::cancelSharedQueues()
     }
     for (const auto & shared_queue : tmp)
         shared_queue->cancel();
+}
+
+void PipelineExecutorContext::cancelResultQueueIfNeed()
+{
+    ResultQueue * tmp{nullptr};
+    {
+        std::lock_guard lock(mu);
+        if (isWaitMode())
+            return;
+        tmp = (*result_queue).get();
+    }
+    assert(tmp);
+    tmp->cancel();
 }
 } // namespace DB
