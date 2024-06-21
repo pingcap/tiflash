@@ -113,6 +113,8 @@ private:
         const std::vector<Field> & values,
         const DataTypePtr & type);
 
+    RSResult addNullIfHasNull(RSResult value_result, size_t i) const;
+
     PaddedPODArray<UInt8> has_null_marks;
     PaddedPODArray<UInt8> has_value_marks;
     MutableColumnPtr minmaxes;

@@ -327,14 +327,14 @@ Block DMFileReader::read()
             for (size_t i = start_pack_id; i < next_pack_id; ++i)
             {
                 // If all handle in a pack are in the given range, and del column do clean read, we do not need to read handle column.
-                if (handle_res[i] == All
+                if (handle_res[i] == RSResult::All
                     && std::find(del_column_clean_read_packs.cbegin(), del_column_clean_read_packs.cend(), i)
                         != del_column_clean_read_packs.cend())
                 {
                     handle_column_clean_read_packs.push_back(i);
                 }
                 // If all handle in a pack are in the given range, but disable del clean read, we do not need to read handle column.
-                else if (!enable_del_clean_read && handle_res[i] == All)
+                else if (!enable_del_clean_read && handle_res[i] == RSResult::All)
                 {
                     handle_column_clean_read_packs.push_back(i);
                 }
@@ -350,7 +350,7 @@ Block DMFileReader::read()
         {
             // If all handle in a pack are in the given range, no not_clean rows, and max version <= max_read_version,
             // we do not need to read handle column.
-            if (handle_res[i] == All && pack_stats[i].not_clean == 0
+            if (handle_res[i] == RSResult::All && pack_stats[i].not_clean == 0
                 && pack_filter.getMaxVersion(i) <= max_read_version)
             {
                 handle_column_clean_read_packs.push_back(i);
