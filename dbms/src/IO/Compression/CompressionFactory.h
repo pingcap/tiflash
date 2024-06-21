@@ -17,8 +17,8 @@
 #include <Common/config.h>
 #include <IO/Compression/CompressionCodecDeltaFOR.h>
 #include <IO/Compression/CompressionCodecFOR.h>
-#include <IO/Compression/CompressionCodecIntegerLightweight.h>
 #include <IO/Compression/CompressionCodecLZ4.h>
+#include <IO/Compression/CompressionCodecLightweight.h>
 #include <IO/Compression/CompressionCodecMultiple.h>
 #include <IO/Compression/CompressionCodecNone.h>
 #include <IO/Compression/CompressionCodecRunLength.h>
@@ -51,7 +51,7 @@ public:
         case CompressionMethod::ZSTD:
             return std::make_unique<CompressionCodecZSTD>(setting.level);
         case CompressionMethod::Lightweight:
-            return std::make_unique<CompressionCodecIntegerLightweight>(setting.type_bytes_size);
+            return std::make_unique<CompressionCodecLightweight>(setting.type_bytes_size);
 #if USE_QPL
         case CompressionMethod::QPL:
             return std::make_unique<CompressionCodecDeflateQpl>();

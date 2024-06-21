@@ -65,25 +65,12 @@ public:
                 /*flags*/ -1,
                 /*mode*/ 0666,
                 max_compress_block_size))
+            , compressed_buf(CompressedWriteBuffer<>::build(
+                  *plain_file,
+                  compression_settings,
+                  !dmfile->getConfiguration().has_value()))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
-            // TODO: better, now only for test
-            if (type->isInteger())
-            {
-                assert(compression_settings.settings.size() == 1);
-                CompressionSettings settings(CompressionMethod::Lightweight);
-                auto & setting = settings.settings[0];
-                setting.type_bytes_size = type->getSizeOfValueInMemory();
-                compressed_buf = CompressedWriteBuffer<>::build(*plain_file, settings, !dmfile->getConfiguration());
-            }
-            else
-            {
-                compressed_buf = CompressedWriteBuffer<>::build( //
-                    *plain_file,
-                    compression_settings,
-                    !dmfile->getConfiguration());
-            }
-
             if (!dmfile->useMetaV2())
             {
                 // will not used in DMFileFormat::V3, could be removed when v3 is default

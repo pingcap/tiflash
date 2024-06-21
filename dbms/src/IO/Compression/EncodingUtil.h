@@ -186,6 +186,13 @@ void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 template <std::integral T>
 void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
+    UInt8 bytes_size = sizeof(T);
+    if unlikely (dest_size % bytes_size != 0)
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "uncompressed size {} is not aligned to {}",
+            dest_size,
+            bytes_size);
     const auto count = dest_size / sizeof(T);
     T frame_of_reference = unalignedLoad<T>(src);
     src += sizeof(T);
