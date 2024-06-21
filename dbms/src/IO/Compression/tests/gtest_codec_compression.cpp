@@ -351,7 +351,7 @@ CodecTestSequence generateSeq(Generator gen, const char * gen_name, B Begin = 0,
 CompressionCodecPtr makeCodec(const CompressionMethodByte method_byte, UInt8 type_byte)
 {
     CompressionSetting setting(method_byte);
-    setting.type_bytes_size = type_byte;
+    setting.type_bytes_size = magic_enum::enum_cast<CompressionDataType>(type_byte).value();
     return CompressionFactory::create(setting);
 }
 
@@ -534,7 +534,7 @@ std::vector<CodecTestSequence> generatePyramidOfSequences(
 const auto IntegerCodecsToTest = ::testing::Values(
     CompressionMethodByte::Lightweight,
     CompressionMethodByte::DeltaFOR,
-    // CompressionMethodByte::FOR, // disable FOR codec for now, since there are too many unit tests.
+    CompressionMethodByte::FOR,
     CompressionMethodByte::RunLength
 #if USE_QPL
     ,

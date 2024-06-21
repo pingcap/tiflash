@@ -22,14 +22,20 @@
 namespace DB
 {
 
-class CompressionCodecIntegerLightweight : public ICompressionCodec
+/**
+ * @brief Lightweight compression codec
+ * For integer data, it supports constant, constant delta, run-length, frame of reference, delta frame of reference, and LZ4.
+ * For non-integer data, it supports LZ4.
+ * The codec selects the best mode for each block of data.
+ */
+class CompressionCodecLightweight : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecIntegerLightweight(UInt8 bytes_size_);
+    explicit CompressionCodecLightweight(CompressionDataType data_type_);
 
     UInt8 getMethodByte() const override;
 
-    ~CompressionCodecIntegerLightweight() override;
+    ~CompressionCodecLightweight() override;
 
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
@@ -42,7 +48,9 @@ protected:
     bool isGenericCompression() const override { return false; }
 
 private:
-    enum class Mode : UInt8
+    /// Integer data
+
+    enum class IntegerMode : UInt8
     {
         Invalid = 0,
         CONSTANT = 1, // all values are the same
@@ -79,26 +87,26 @@ private:
 
     // State is a union of different states for different modes
     template <typename T>
-    using State = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
+    using IntegerState = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
 
-    class CompressContext
+    class IntegerCompressContext
     {
     public:
-        CompressContext() = default;
+        IntegerCompressContext() = default;
 
         bool needAnalyze() const;
         bool needAnalyzeDelta() const;
         bool needAnalyzeRunLength() const;
 
         template <typename T>
-        void analyze(std::span<const T> & values, State<T> & state);
+        void analyze(std::span<const T> & values, IntegerState<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
 
         String toDebugString() const;
         bool isCompression() const { return lz4_counter > 0 || lw_counter > 0; }
 
-        Mode mode = Mode::LZ4;
+        IntegerMode mode = IntegerMode::LZ4;
 
     private:
         size_t lw_uncompressed_size = 0;
@@ -113,13 +121,19 @@ private:
     };
 
     template <typename T>
-    size_t compressDataForType(const char * source, UInt32 source_size, char * dest) const;
+    size_t compressDataForInteger(const char * source, UInt32 source_size, char * dest) const;
 
     template <typename T>
-    void decompressDataForType(const char * source, UInt32 source_size, char * dest, UInt32 output_size) const;
+    void decompressDataForInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size) const;
 
-    mutable CompressContext ctx;
-    const UInt8 bytes_size;
+    /// Non-integer data
+
+    static size_t compressDataForNonInteger(const char * source, UInt32 source_size, char * dest);
+    static void decompressDataForNonInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size);
+
+private:
+    mutable IntegerCompressContext ctx;
+    const CompressionDataType data_type;
 };
 
 } // namespace DB

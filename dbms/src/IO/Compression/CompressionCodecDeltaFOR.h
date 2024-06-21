@@ -22,11 +22,11 @@ namespace DB
 class CompressionCodecDeltaFOR : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecDeltaFOR(UInt8 bytes_size_);
+    explicit CompressionCodecDeltaFOR(CompressionDataType data_type_);
 
     UInt8 getMethodByte() const override;
 
-    static void ordinaryDecompress(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);
+    static void ordinaryDecompress(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -42,7 +42,7 @@ protected:
     bool isGenericCompression() const override { return false; }
 
 private:
-    const UInt8 bytes_size;
+    const CompressionDataType data_type;
 };
 
 } // namespace DB

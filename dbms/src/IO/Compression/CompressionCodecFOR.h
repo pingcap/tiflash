@@ -30,12 +30,12 @@ namespace DB
 class CompressionCodecFOR : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecFOR(UInt8 bytes_size_);
+    explicit CompressionCodecFOR(CompressionDataType data_type_);
 
     UInt8 getMethodByte() const override;
 
     template <std::integral T>
-    static UInt32 compressData(const T * source, UInt32 count, char * dest);
+    static UInt32 compressData(const T * source, UInt32 source_size, char * dest);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -51,7 +51,7 @@ protected:
     bool isGenericCompression() const override { return false; }
 
 private:
-    const UInt8 bytes_size;
+    const CompressionDataType data_type;
 };
 
 } // namespace DB
