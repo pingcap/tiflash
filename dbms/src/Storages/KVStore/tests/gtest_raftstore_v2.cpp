@@ -970,5 +970,82 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap7)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+    FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, static_cast<size_t>(0));
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_set_parallel_prehandle_threshold"); });
+    initStorages();
+    KVStore & kvs = getKVS();
+    {
+        region_id = 2;
+        RegionID region_id2 = 3;
+        HandleID table_limit_start = 100;
+        HandleID table_limit_end = 1900;
+        HandleID sst_limit = 2000;
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, table_limit_start);
+        auto end = RecordKVFormat::genKey(table_id, table_limit_end);
+        auto start2 = RecordKVFormat::genKey(table_id, table_limit_start + sst_limit);
+        auto end2 = RecordKVFormat::genKey(table_id, table_limit_end + 2 * sst_limit);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {region_id2},
+            {std::make_pair(start2.toString(), end2.toString())});
+
+        auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        {
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            for (HandleID h = 1; h < sst_limit; h++)
+            {
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
+                default_cf.insert_raw(k, value_default);
+            }
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            for (HandleID h = table_limit_start + 10; h < table_limit_end - 10; h++)
+            {
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
+                write_cf.insert_raw(k, value_write);
+            }
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto sp = SyncPointCtl::enableInScope("before_MockRaftStoreProxy::snapshot_prehandle");
+            std::thread t1([&]() {
+                ASSERT_NO_THROW(
+                    proxy_instance
+                        ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt));
+            });
+            sp.waitAndPause();
+            std::thread t2([&]() {
+                ASSERT_NO_THROW(
+                    proxy_instance
+                        ->snapshot(kvs, ctx.getTMTContext(), region_id2, {default_cf, write_cf}, 0, 0, std::nullopt));
+            });
+            sp.next();
+            sp.disable();
+            t1.join();
+            t2.join();
+        }
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
