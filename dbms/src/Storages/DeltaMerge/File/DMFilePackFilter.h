@@ -157,8 +157,8 @@ private:
 
     void tryLoadIndex(ColId col_id);
 
-    // None, Some, All
-    std::tuple<UInt64, UInt64, UInt64> countPackRes() const;
+    // None/NoneNull, Some/SomeNull, All, AllNull
+    std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const;
 
 private:
     DMFilePtr dmfile;

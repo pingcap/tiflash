@@ -30,7 +30,7 @@ public:
 
     RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
     {
-        return RSResults(pack_count, Some);
+        return RSResults(pack_count, RSResult::Some);
     }
 };
 
