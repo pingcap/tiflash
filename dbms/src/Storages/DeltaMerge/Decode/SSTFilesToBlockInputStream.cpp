@@ -265,6 +265,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         maybeSkipBySoftLimit(cf, *reader_ptr);
     }
 
+    Stopwatch sw;
+    auto pre = *p_process_keys_bytes;
     // Simply read to the end of SST file
     if (rowkey_to_be_included == nullptr)
     {
@@ -282,20 +284,22 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             (*p_process_keys_bytes) += (key.len + value.len);
             reader->next();
         }
+        auto sec = sw.elapsedMilliseconds();
         LOG_DEBUG(
             log,
             "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} split_id={} "
-            "snapshot_index={}",
+            "snapshot_index={} elapsed_sec={} speed={}",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),
             process_keys.write_cf,
             region->id(),
             getSplitId(),
-            snapshot_index);
+            snapshot_index,
+            sec,
+            ((*p_process_keys_bytes) - pre) * 1.0 / sec);
         return;
     }
-
 
     size_t process_keys_offset_end = process_keys.write_cf;
     while (reader && reader->remained())
@@ -304,10 +308,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
+            auto sec = sw.elapsedMilliseconds();
             LOG_DEBUG(
                 log,
                 "Done loading, CF={} offset={} processed_bytes={} write_cf_offset={} last_loaded_rowkey={} "
-                "rowkey_to_be_included={} region_id={} snapshot_index={}",
+                "rowkey_to_be_included={} region_id={} snapshot_index={} elapsed_sec={} speed={}",
                 CFToName(cf),
                 (*p_process_keys),
                 (*p_process_keys_bytes),
@@ -317,7 +322,9 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                      ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size())
                      : "<end>"),
                 region->id(),
-                snapshot_index);
+                snapshot_index,
+                sec,
+                ((*p_process_keys_bytes) - pre) * 1.0 / sec);
             break;
         }
 
