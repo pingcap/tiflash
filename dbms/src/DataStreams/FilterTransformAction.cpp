@@ -74,6 +74,14 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     if (unlikely(!block))
         return true;
 
+    if (block.getRSResult().allMatch())
+    {
+        block.insert(header.safeGetByPosition(filter_column)); // Make some checks on block structure happy.
+        if (return_filter)
+            res_filter = nullptr;
+        return true;
+    }
+
     expression->execute(block);
 
     if (constant_filter_description.always_true)
