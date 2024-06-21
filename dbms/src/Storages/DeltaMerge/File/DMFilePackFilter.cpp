@@ -82,12 +82,13 @@ void DMFilePackFilter::init()
             pack_res.begin(),
             [](RSResult a, RSResult b) { return a && b; });
     }
-    auto [none_count, some_count, all_count] = countPackRes();
-    auto after_filter = some_count + all_count;
+    auto [none_count, some_count, all_count, all_null_count] = countPackRes();
+    auto after_filter = some_count + all_count + all_null_count;
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
     scan_context->rs_pack_filter_none += none_count;
     scan_context->rs_pack_filter_some += some_count;
     scan_context->rs_pack_filter_all += all_count;
+    scan_context->rs_pack_filter_all_null += all_null_count;
 
     Float64 filter_rate = 0.0;
     if (after_read_packs != 0)
@@ -98,7 +99,7 @@ void DMFilePackFilter::init()
     LOG_DEBUG(
         log,
         "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
-        ", read_packs: {}, pack_count: {}, none_count: {}, some_count: {}, all_count: {}",
+        ", read_packs: {}, pack_count: {}, none_count: {}, some_count: {}, all_count: {}, all_null_count: {}",
         ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
         after_pk,
         after_read_packs,
@@ -108,32 +109,39 @@ void DMFilePackFilter::init()
         pack_count,
         none_count,
         some_count,
-        all_count);
+        all_count,
+        all_null_count);
 }
 
-std::tuple<UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() const
+std::tuple<UInt64, UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() const
 {
     UInt64 none_count = 0;
     UInt64 some_count = 0;
     UInt64 all_count = 0;
+    UInt64 all_null_count = 0;
     for (auto res : pack_res)
     {
         switch (res)
         {
         case RSResult::None:
+        case RSResult::NoneNull:
             ++none_count;
             break;
         case RSResult::Some:
+        case RSResult::SomeNull:
             ++some_count;
             break;
         case RSResult::All:
             ++all_count;
             break;
+        case RSResult::AllNull:
+            ++all_null_count;
+            break;
         default:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is invalid", static_cast<Int32>(res));
         }
     }
-    return {none_count, some_count, all_count};
+    return {none_count, some_count, all_count, all_null_count};
 }
 
 UInt64 DMFilePackFilter::countUsePack() const
