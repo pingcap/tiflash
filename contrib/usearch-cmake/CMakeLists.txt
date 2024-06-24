@@ -8,7 +8,7 @@ if (NOT EXISTS "${USEARCH_SOURCE_DIR}/usearch/index.hpp")
 endif ()
 
 target_include_directories(_usearch SYSTEM INTERFACE
-    ${USEARCH_PROJECT_DIR}/simsimd/include
+    # ${USEARCH_PROJECT_DIR}/simsimd/include  # Use our simsimd
     ${USEARCH_PROJECT_DIR}/fp16/include
     ${USEARCH_SOURCE_DIR})
 

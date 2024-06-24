@@ -192,16 +192,15 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
     std::atomic<size_t> discarded_nodes = 0;
     std::atomic<bool> has_exception_in_search = false;
 
-    // The non-valid rows should be discarded by this lambda
-    auto predicate = [&](typename USearchImplType::member_cref_t const & member) {
+    auto predicate = [&](const Key & key) {
         // Must catch exceptions in the predicate, because search runs on other threads.
         try
         {
             // Note: We don't increase the thread_local perf, because search runs on other threads.
             visited_nodes++;
-            if (!valid_rows[member.key])
+            if (!valid_rows[key])
                 discarded_nodes++;
-            return valid_rows[member.key];
+            return valid_rows[key];
         }
         catch (...)
         {
@@ -215,7 +214,7 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
     SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_search).Observe(w.elapsedSeconds()); });
 
     // TODO(vector-index): Support efSearch.
-    auto result = index.search( //
+    auto result = index.filtered_search( //
         reinterpret_cast<const Float32 *>(query_info->ref_vec_f32().data() + sizeof(UInt32)),
         query_info->top_k(),
         predicate);

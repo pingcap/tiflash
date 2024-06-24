@@ -209,6 +209,7 @@ target_link_libraries (dbms
     ${BTRIE_LIBRARIES}
     absl::synchronization
     tiflash_contrib::usearch
+    tiflash_contrib::simsimd
     tiflash_contrib::aws_s3
 
     etcdpb

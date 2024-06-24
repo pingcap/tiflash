@@ -203,7 +203,15 @@ TEST_F(Vector, CosineDistance)
 try
 {
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Float64>>({0.0, std::nullopt, 0.0, 1.0, 2.0, 0.0, 2.0, std::nullopt}),
+        createColumn<Nullable<Float64>>(
+            {0.004130363464355469,
+             1.0, // CosDistance to (0,0) cannot be calculated, clapped to 1.0
+             0.00572967529296875,
+             1.0,
+             1.9942703247070312,
+             0.00022123707458376884,
+             1.9997787475585938,
+             std::nullopt}),
         executeFunction(
             "vecCosineDistance",
             createColumn<Array>(
