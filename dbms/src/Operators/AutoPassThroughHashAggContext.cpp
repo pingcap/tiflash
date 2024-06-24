@@ -48,6 +48,7 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
         case State::PassThrough:
         {
             passThrough(*agg_process_info);
+            makeFullSelective(agg_process_info->block);
             trySwitchBackAdjustState(agg_process_info->block.rows());
             break;
         }
@@ -75,13 +76,26 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
 
 Block AutoPassThroughHashAggContext::getData()
 {
+    if (already_start_to_get_data && !merging_buckets)
+        return {};
+
     if (!merging_buckets)
     {
+        already_start_to_get_data = true;
         merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, /*final=*/true, /*max_threads=*/1);
+    }
+
+    already_start_to_get_data = true;
+    if (merging_buckets)
+    {
+        // todo merging_buckets is null when no data in data variants
         // todo: how and why force one level?
         RUNTIME_CHECK(!merging_buckets->isTwoLevel());
+        auto block = merging_buckets->getData(/*concurrency_index=*/0);
+        makeFullSelective(block);
+        return block;
     }
-    return merging_buckets->getData(/*concurrency_index=*/0);
+    return {};
 }
 
 void AutoPassThroughHashAggContext::trySwitchFromInitState()
@@ -134,9 +148,30 @@ void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 
 void AutoPassThroughHashAggContext::passThrough(Aggregator::AggProcessInfo & agg_process_info)
 {
-    pass_through_block_buffer.push_back(agg_process_info.block);
+    auto & block = agg_process_info.block;
+    pass_through_block_buffer.push_back(block);
     // todo is necessary?
     agg_process_info.start_row = agg_process_info.end_row;
 }
 
+void AutoPassThroughHashAggContext::makeFullSelective(Block & block)
+{
+    if (!block)
+        return;
+
+    RUNTIME_CHECK(!block.info.selective);
+    auto selective = std::make_shared<std::vector<UInt64>>(block.rows());
+    block.info.selective = selective;
+    // todo maybe better impl
+    for (size_t i = 0; i < selective->size(); ++i)
+    {
+        (*selective)[i] = i;
+    }
+}
+
+Block checkSelective(Block block)
+{
+    RUNTIME_CHECK(!block || block.info.selective);
+    return block;
+}
 } // namespace DB

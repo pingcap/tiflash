@@ -88,6 +88,7 @@ void AggregationBinder::toMPPSubPlan(
     // todo support avg
     if (has_uniq_raw_res)
         throw Exception("uniq raw res not supported in mpp query");
+    // Partial agg cannot be fine grained shuffle. So set fine_grained_shuffle_stream_count as 0.
     std::shared_ptr<AggregationBinder> partial_agg = std::make_shared<AggregationBinder>(
         executor_index,
         output_schema_for_partial_agg,
@@ -96,7 +97,7 @@ void AggregationBinder::toMPPSubPlan(
         std::move(agg_exprs),
         std::move(gby_exprs),
         false,
-        fine_grained_shuffle_stream_count,
+        /*fine_grained_shuffle_stream_count*/0,
         auto_pass_through);
     partial_agg->children.push_back(children[0]);
     std::vector<size_t> partition_keys;
@@ -138,6 +139,8 @@ void AggregationBinder::toMPPSubPlan(
         gby_exprs.push_back(std::make_shared<ASTIdentifier>(output_schema_for_partial_agg[agg_func_num + i].first));
     }
     children[0] = exchange_receiver;
+    // Because this aggregation is 2nd agg, so reset auto_pass_through flag.
+    auto_pass_through = false;
 }
 
 bool AggregationBinder::needAppendProject() const

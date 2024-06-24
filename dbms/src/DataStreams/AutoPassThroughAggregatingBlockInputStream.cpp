@@ -22,7 +22,7 @@ Block AutoPassThroughAggregatingBlockInputStream::readImpl()
     while (!build_done)
     {
         Block block = children[0]->read();
-        if (!block)
+        if (block)
         {
             auto_pass_through_context->onBlock(block);
         }
@@ -33,14 +33,14 @@ Block AutoPassThroughAggregatingBlockInputStream::readImpl()
         }
 
         if (!auto_pass_through_context->passThroughBufferEmpty())
-            return auto_pass_through_context->popPassThroughBuffer();
+            return checkSelective(auto_pass_through_context->popPassThroughBuffer());
     }
 
     assert(build_done);
     if (!auto_pass_through_context->passThroughBufferEmpty())
-        return auto_pass_through_context->popPassThroughBuffer();
+        return checkSelective(auto_pass_through_context->popPassThroughBuffer());
 
-    return auto_pass_through_context->getData();
+    return checkSelective(auto_pass_through_context->getData());
 }
 
 } // namespace DB

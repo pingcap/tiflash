@@ -36,18 +36,22 @@ OperatorStatus AutoPassThroughAggregateTransform::transformImpl(Block & block)
         case Status::building_hash_map:
         {
             if unlikely (!block)
-            {
                 status = Status::hash_map_done;
-                return OperatorStatus::HAS_OUTPUT;
-            }
-
-            auto_pass_through_context->onBlock(block);
+            else
+                auto_pass_through_context->onBlock(block);
 
             if (!auto_pass_through_context->passThroughBufferEmpty())
             {
-                block = auto_pass_through_context->popPassThroughBuffer();
+                block = checkSelective(auto_pass_through_context->popPassThroughBuffer());
                 return OperatorStatus::HAS_OUTPUT;
             }
+
+            if unlikely (!block)
+            {
+                block = checkSelective(auto_pass_through_context->getData());
+                return OperatorStatus::HAS_OUTPUT;
+            }
+
             return OperatorStatus::NEED_INPUT;
         }
         default:
@@ -61,7 +65,7 @@ OperatorStatus AutoPassThroughAggregateTransform::tryOutputImpl(Block & block)
 {
     if (!auto_pass_through_context->passThroughBufferEmpty())
     {
-        block = auto_pass_through_context->popPassThroughBuffer();
+        block = checkSelective(auto_pass_through_context->popPassThroughBuffer());
         return OperatorStatus::HAS_OUTPUT;
     }
 
@@ -73,7 +77,7 @@ OperatorStatus AutoPassThroughAggregateTransform::tryOutputImpl(Block & block)
         }
         case Status::hash_map_done:
         {
-            block = auto_pass_through_context->getData();
+            block = checkSelective(auto_pass_through_context->getData());
             return OperatorStatus::HAS_OUTPUT;
         }
         default:
@@ -82,4 +86,4 @@ OperatorStatus AutoPassThroughAggregateTransform::tryOutputImpl(Block & block)
         }
     }
 }
-}
+} // namespace DB

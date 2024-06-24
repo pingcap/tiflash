@@ -83,6 +83,8 @@ private:
 
     void passThrough(Aggregator::AggProcessInfo & agg_process_info);
 
+    static void makeFullSelective(Block & block);
+
     static constexpr float PassThroughRateLimit = 0.2;
     static constexpr float PreHashAggRateLimit = 0.9;
 
@@ -101,8 +103,11 @@ private:
     size_t non_adjust_row_limit = 70000; // todo refine limit
 
     BlocksList pass_through_block_buffer{};
+    bool already_start_to_get_data = false;
     MergingBucketsPtr merging_buckets = nullptr;
 };
 
 using AutoPassThroughHashAggContextPtr = std::shared_ptr<AutoPassThroughHashAggContext>;
+
+Block checkSelective(Block block);
 } // namespace DB

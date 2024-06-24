@@ -20,7 +20,11 @@ namespace DB
 OperatorStatus ExpressionTransformOp::transformImpl(Block & block)
 {
     if (likely(block))
+    {
+        auto ori_info = block.info;
         expression->execute(block);
+        block.info = ori_info;
+    }
     return OperatorStatus::HAS_OUTPUT;
 }
 

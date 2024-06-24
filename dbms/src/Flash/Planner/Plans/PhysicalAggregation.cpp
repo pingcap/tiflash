@@ -237,7 +237,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
 {
     // For non fine grained shuffle, PhysicalAggregation will be broken into AggregateBuild and AggregateConvergent.
     // So only fine grained shuffle is considered here.
-    RUNTIME_CHECK(fine_grained_shuffle.enable());
+    // For auto pass through, it's only true for 1st agg, and fine grained shuffle is only true for 2nd agg.
+    RUNTIME_CHECK(fine_grained_shuffle.enable() != auto_pass_through);
 
     executeExpression(exec_context, group_builder, before_agg_actions, log);
 

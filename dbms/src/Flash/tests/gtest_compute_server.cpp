@@ -1194,6 +1194,82 @@ try
 }
 CATCH
 
+TEST_F(ComputeServerRunner, runAggTasks1)
+try
+{
+    WRAP_FOR_SERVER_TEST_BEGIN
+    startServers(4);
+    {
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_4 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_3 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_4 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_3 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_4 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_3 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_4 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_3 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+ aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+ aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+ aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+ aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)"};
+        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000, 10000000}),
+            toNullableVec<String>({"apple", {}, "banana", "test"}),
+                toNullableVec<String>({"apple", {}, "banana", "test"})};
+
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context.scan("test_db", "test_table_1")
+                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")}, 0, true),
+            expected_strings,
+            expected_cols);
+    }
+
+    {
+        auto properties = getDAGPropertiesForTest(1);
+        auto tasks = context.scan("test_db", "test_table_1")
+                         .aggregation({Count(col("s1"))}, {}, 0, true)
+                         .project({"count(s1)"})
+                         .buildMPPTasks(context, properties);
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_5 | type:PassThrough, {<0, Longlong>}
+ aggregation_4 | group_by: {}, agg_func: {count(<0, Long>)}
+  table_scan_0 | {<0, Long>}
+            )",
+            R"(exchange_sender_3 | type:PassThrough, {<0, Longlong>}
+ project_2 | {<0, Longlong>}
+  aggregation_1 | group_by: {}, agg_func: {sum(<0, Longlong>)}
+   exchange_receiver_6 | type:PassThrough, {<0, Longlong>})"};
+ 
+        size_t task_size = tasks.size();
+        for (size_t i = 0; i < task_size; ++i)
+        {
+            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
+        }
+    }
+    WRAP_FOR_SERVER_TEST_END
+}
+CATCH
+
 #undef WRAP_FOR_SERVER_TEST_BEGIN
 #undef WRAP_FOR_SERVER_TEST_END
 

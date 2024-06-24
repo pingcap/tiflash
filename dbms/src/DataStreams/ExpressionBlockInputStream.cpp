@@ -39,7 +39,10 @@ Block ExpressionBlockInputStream::readImpl()
     Block res = children.back()->read();
     if (!res)
         return res;
+    // todo better?
+    auto ori_info = res.info;
     expression->execute(res);
+    res.info = ori_info;
     return res;
 }
 } // namespace DB
