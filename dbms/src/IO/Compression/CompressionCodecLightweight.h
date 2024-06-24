@@ -109,6 +109,14 @@ private:
         IntegerMode mode = IntegerMode::LZ4;
 
     private:
+        // The threshold for the number of blocks to decide whether need to analyze.
+        // For example:
+        // If lz4 is used more than COUNT_THRESHOLD times and the compression ratio is better than lightweight codec, do not analyze anymore.
+        static constexpr size_t COUNT_THRESHOLD = 5;
+        // Assume that the compression ratio of LZ4 is 3.0
+        // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
+        static constexpr size_t ESRTIMATE_LZ4_COMPRESSION_RATIO = 3;
+
         size_t lw_uncompressed_size = 0;
         size_t lw_compressed_size = 0;
         size_t lw_counter = 0;
