@@ -16,7 +16,6 @@
 #include <IO/Compression/CompressionCodecLightweight.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
-#include <fmt/format.h>
 #include <lz4.h>
 
 namespace DB
@@ -68,22 +67,23 @@ void CompressionCodecLightweight::IntegerCompressContext::update(size_t uncompre
 bool CompressionCodecLightweight::IntegerCompressContext::needAnalyze() const
 {
     // lightweight codec is never used, do not analyze anymore
-    if (lz4_counter > 5 && lw_counter == 0)
+    if (lz4_counter > COUNT_THRESHOLD && lw_counter == 0)
         return false;
-    // if lz4 is used more than 5 times and the compression ratio is better than lightweight codec, do not analyze anymore
-    if (lz4_counter > 5 && lz4_uncompressed_size / lz4_compressed_size > lw_compressed_size / lw_uncompressed_size)
+    // if lz4 is used more than COUNT_THRESHOLD times and the compression ratio is better than lightweight codec, do not analyze anymore
+    if (lz4_counter > COUNT_THRESHOLD
+        && lz4_uncompressed_size / lz4_compressed_size > lw_compressed_size / lw_uncompressed_size)
         return false;
     return true;
 }
 
 bool CompressionCodecLightweight::IntegerCompressContext::needAnalyzeDelta() const
 {
-    return lw_counter <= 5 || constant_delta_counter != 0 || delta_for_counter != 0;
+    return lw_counter <= COUNT_THRESHOLD || constant_delta_counter != 0 || delta_for_counter != 0;
 }
 
 bool CompressionCodecLightweight::IntegerCompressContext::needAnalyzeRunLength() const
 {
-    return lw_counter <= 5 || rle_counter != 0;
+    return lw_counter <= COUNT_THRESHOLD || rle_counter != 0;
 }
 
 template <typename T>
@@ -100,6 +100,9 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
         RUNTIME_CHECK(mode == IntegerMode::LZ4);
         return;
     }
+
+    // additional T bytes for min_delta, and 1 byte for width
+    static constexpr auto ADDTIONAL_BYTES = sizeof(T) + sizeof(UInt8);
 
     // Check CONSTANT
     T min_value = *std::min_element(values.begin(), values.end());
@@ -135,9 +138,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
 
         // DELTA_FOR
         delta_for_width = Compression::FOREncodingWidth(deltas, min_delta);
-        // additional T bytes for min_delta, and 1 byte for width
-        delta_for_size
-            = BitpackingPrimitives::getRequiredSize(deltas.size(), delta_for_width) + sizeof(T) + sizeof(UInt8);
+        delta_for_size = BitpackingPrimitives::getRequiredSize(deltas.size(), delta_for_width) + ADDTIONAL_BYTES;
     }
 
     // RunLength
@@ -156,11 +157,8 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     }
 
     UInt8 for_width = BitpackingPrimitives::minimumBitWidth<T>(max_value - min_value);
-    // additional T bytes for min_value, and 1 byte for width
-    size_t for_size = BitpackingPrimitives::getRequiredSize(values.size(), for_width) + sizeof(T) + sizeof(UInt8);
-    // Assume that the compression ratio of LZ4 is 3.0
-    // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
-    size_t estimate_lz_size = values.size() * sizeof(T) / 3;
+    size_t for_size = BitpackingPrimitives::getRequiredSize(values.size(), for_width) + ADDTIONAL_BYTES;
+    size_t estimate_lz_size = values.size() * sizeof(T) / ESRTIMATE_LZ4_COMPRESSION_RATIO;
     size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::runLengthPairsSize(rle);
     if (needAnalyzeRunLength() && rle_size < delta_for_size && rle_size < for_size && rle_size < estimate_lz_size)
     {
