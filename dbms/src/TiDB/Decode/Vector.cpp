@@ -17,6 +17,10 @@
 #include <IO/WriteHelpers.h>
 #include <TiDB/Decode/Vector.h>
 
+#define SIMSIMD_NATIVE_F16 0
+#define SIMSIMD_NATIVE_BF16 0
+#include <simsimd/simsimd.h>
+
 #include <compare>
 
 namespace DB
@@ -52,15 +56,8 @@ Float64 VectorFloat32Ref::l2SquaredDistance(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    Float32 distance = 0.0;
-    Float32 diff;
-
-    for (size_t i = 0, i_max = size(); i < i_max; ++i)
-    {
-        // Hope this can be vectorized.
-        diff = elements[i] - b[i];
-        distance += diff * diff;
-    }
+    simsimd_distance_t distance;
+    simsimd_l2sq_f32(elements, b.elements, elements_n, &distance);
 
     return distance;
 }
@@ -69,13 +66,8 @@ Float64 VectorFloat32Ref::innerProduct(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    Float32 distance = 0.0;
-
-    for (size_t i = 0, i_max = size(); i < i_max; ++i)
-    {
-        // Hope this can be vectorized.
-        distance += elements[i] * b[i];
-    }
+    simsimd_distance_t distance;
+    simsimd_dot_f32(elements, b.elements, elements_n, &distance);
 
     return distance;
 }
@@ -84,37 +76,10 @@ Float64 VectorFloat32Ref::cosineDistance(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    Float32 distance = 0.0;
-    Float32 norma = 0.0;
-    Float32 normb = 0.0;
+    simsimd_distance_t distance;
+    simsimd_cos_f32(elements, b.elements, elements_n, &distance);
 
-    for (size_t i = 0, i_max = size(); i < i_max; ++i)
-    {
-        // Hope this can be vectorized.
-        distance += elements[i] * b[i];
-        norma += elements[i] * elements[i];
-        normb += b[i] * b[i];
-    }
-
-    Float64 similarity
-        = static_cast<Float64>(distance) / std::sqrt(static_cast<Float64>(norma) * static_cast<Float64>(normb));
-
-    if (std::isnan(similarity))
-    {
-        // Divide by zero
-        return std::nan("");
-    }
-
-    if (similarity > 1.0)
-    {
-        similarity = 1.0;
-    }
-    else if (similarity < -1.0)
-    {
-        similarity = -1.0;
-    }
-
-    return 1.0 - similarity;
+    return distance;
 }
 
 Float64 VectorFloat32Ref::l1Distance(VectorFloat32Ref b) const

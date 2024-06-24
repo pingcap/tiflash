@@ -17,12 +17,7 @@
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 
-#if __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpass-failed"
-#include <Storages/DeltaMerge/Index/VectorIndexHNSW/usearch_index_dense.h>
-#pragma clang diagnostic pop
-#endif
+#include <usearch/index_dense.hpp>
 
 namespace DB::DM
 {
