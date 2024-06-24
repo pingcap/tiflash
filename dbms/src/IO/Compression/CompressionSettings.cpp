@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "CompressionSettings.h"
-
 #include <Common/config.h>
+#include <IO/Compression/CompressionSettings.h>
 #include <Interpreters/Settings.h>
 #include <lz4hc.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -51,6 +52,19 @@ int CompressionSetting::getDefaultLevel(CompressionMethod method)
     default:
         return -1;
     }
+}
+
+CompressionSettings CompressionSettings::create(CompressionMethod method, const IDataType & type)
+{
+    CompressionSettings settings(method);
+    if (type.isInteger())
+    {
+        auto & setting = settings.settings[0];
+        auto data_type = magic_enum::enum_cast<CompressionDataType>(type.getSizeOfValueInMemory());
+        RUNTIME_CHECK(data_type.has_value());
+        setting.data_type = data_type.value();
+    }
+    return settings;
 }
 
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <DataTypes/IDataType.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/CompressionMethod.h>
 #include <common/types.h>
@@ -100,6 +101,8 @@ struct CompressionSettings
     explicit CompressionSettings(const std::vector<CompressionSetting> & settings_)
         : settings(settings_)
     {}
+
+    static CompressionSettings create(CompressionMethod method, const IDataType & type);
 
     std::vector<CompressionSetting> settings;
 };

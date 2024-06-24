@@ -23,12 +23,10 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
-#include "magic_enum.hpp"
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 namespace detail
 {
 static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
@@ -40,6 +38,7 @@ static inline size_t getFrameSizeOrDefault(DMFile & dmfile)
     return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
 }
 } // namespace detail
+
 class DMFileWriter
 {
 public:
@@ -71,12 +70,7 @@ public:
         {
             if (type->isInteger())
             {
-                assert(compression_settings.settings.size() == 1);
-                CompressionSettings settings(CompressionMethod::Lightweight);
-                auto & setting = settings.settings[0];
-                auto data_type = magic_enum::enum_cast<CompressionDataType>(type->getSizeOfValueInMemory());
-                RUNTIME_CHECK(data_type.has_value());
-                setting.data_type = data_type.value();
+                auto settings = CompressionSettings::create(CompressionMethod::Lightweight, *type);
                 compressed_buf = CompressedWriteBuffer<>::build(*plain_file, settings, !dmfile->getConfiguration());
             }
             else
@@ -197,5 +191,4 @@ private:
     bool is_empty_file = true;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
