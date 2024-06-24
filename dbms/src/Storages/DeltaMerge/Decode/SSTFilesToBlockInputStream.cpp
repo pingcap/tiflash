@@ -379,7 +379,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
                 log,
                 "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep "
                 "uncommitted data in region."
-                "region_id={} applied_index={} version={} conf_version={} start_key={}, end_key={}",
+                "region_id={} applied_index={} version={} conf_version={} start_key={} end_key={}",
                 e.displayText(),
                 region->id(),
                 region->appliedIndex(),
