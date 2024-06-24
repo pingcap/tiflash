@@ -372,7 +372,10 @@ public:
         return this->template scatterImpl<Self>(num_columns, selector);
     }
 
-    MutableColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector, const BlockSelectivePtr & selective) const override
+    MutableColumns scatter(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector,
+        const BlockSelectivePtr & selective) const override
     {
         return this->template scatterImpl<Self>(num_columns, selector, selective);
     }
@@ -381,7 +384,10 @@ public:
     {
         this->template scatterToImpl<Self>(columns, selector);
     }
-    void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector, const BlockSelectivePtr & selective) const override
+    void scatterTo(
+        IColumn::ScatterColumns & columns,
+        const IColumn::Selector & selector,
+        const BlockSelectivePtr & selective) const override
     {
         this->template scatterToImpl<Self>(columns, selector, selective);
     }

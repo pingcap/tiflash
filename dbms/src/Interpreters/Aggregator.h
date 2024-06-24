@@ -131,8 +131,12 @@ struct AggregationMethodOneNumber
     /// To use one `Method` in different threads, use different `State`.
     using State = ColumnsHashing::
         HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
-    using LookupState = ColumnsHashing::
-        HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization, /*only_lookup*/true>;
+    using LookupState = ColumnsHashing::HashMethodOneNumber<
+        typename Data::value_type,
+        Mapped,
+        FieldType,
+        consecutive_keys_optimization,
+        /*only_lookup*/ true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -204,8 +208,14 @@ struct AggregationMethodStringNoCache
     {}
 
     // Remove last zero byte.
-    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
-    using LookupState = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false, /*only_lookup=*/true>;
+    using State = ColumnsHashing::
+        HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    using LookupState = ColumnsHashing::HashMethodString<
+        typename Data::value_type,
+        Mapped,
+        /*place_string_to_arena=*/true,
+        /*use_cache=*/false,
+        /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -239,7 +249,8 @@ struct AggregationMethodOneKeyStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
-    using LookupState = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding, /*only_lookup=*/true>;
+    using LookupState
+        = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -306,8 +317,12 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     using State
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
-    using LookupState
-        = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped, /*only_lookup=*/true>;
+    using LookupState = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<
+        Key1Desc,
+        Key2Desc,
+        typename Data::value_type,
+        Mapped,
+        /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -412,7 +427,12 @@ struct AggregationMethodFixedString
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
-    using LookupState = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/true, /*only_lookup=*/true>;
+    using LookupState = ColumnsHashing::HashMethodFixedString<
+        typename Data::value_type,
+        Mapped,
+        /*place_string_to_arena=*/true,
+        /*use_cache=*/true,
+        /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -446,7 +466,8 @@ struct AggregationMethodFixedStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
-    using LookupState = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false, /*only_lookup=*/true>;
+    using LookupState
+        = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
@@ -482,8 +503,8 @@ struct AggregationMethodKeysFixed
 
     using State
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
-    using LookupState
-        = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache, /*only_lookup=*/true>;
+    using LookupState = ColumnsHashing::
+        HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache, /*only_lookup=*/true>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     // Because shuffle key optimization will reorder group by key internally, which is not compatible with
@@ -1026,6 +1047,7 @@ public:
     size_t getConcurrency() const { return concurrency; }
 
     bool isTwoLevel() const { return is_two_level; }
+
 private:
     Block getDataForSingleLevel();
 
@@ -1256,8 +1278,14 @@ public:
 
     /// Process one block. Return false if the processing should be aborted.
     bool executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
-    bool executeOnBlockCollectHitRate(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
-    bool executeOnBlockOnlyLookup(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+    bool executeOnBlockCollectHitRate(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
+    bool executeOnBlockOnlyLookup(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
 
     template <bool collect_hit_rate, bool only_lookup>
     bool executeOnBlockImpl(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);

@@ -661,7 +661,11 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-    executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(method, state, aggregates_pool, agg_process_info);
+    executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(
+        method,
+        state,
+        aggregates_pool,
+        agg_process_info);
 }
 
 template <typename Method>
@@ -924,18 +928,27 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
     return executeOnBlockImpl<false, false>(agg_process_info, result, thread_num);
 }
 
-bool Aggregator::executeOnBlockCollectHitRate(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
+bool Aggregator::executeOnBlockCollectHitRate(
+    AggProcessInfo & agg_process_info,
+    AggregatedDataVariants & result,
+    size_t thread_num)
 {
     return executeOnBlockImpl<true, false>(agg_process_info, result, thread_num);
 }
 
-bool Aggregator::executeOnBlockOnlyLookup(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
+bool Aggregator::executeOnBlockOnlyLookup(
+    AggProcessInfo & agg_process_info,
+    AggregatedDataVariants & result,
+    size_t thread_num)
 {
     return executeOnBlockImpl<false, true>(agg_process_info, result, thread_num);
 }
 
 template <bool collect_hit_rate, bool only_lookup>
-bool Aggregator::executeOnBlockImpl(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
+bool Aggregator::executeOnBlockImpl(
+    AggProcessInfo & agg_process_info,
+    AggregatedDataVariants & result,
+    size_t thread_num)
 {
     assert(!result.need_spill);
 
@@ -977,17 +990,17 @@ bool Aggregator::executeOnBlockImpl(AggProcessInfo & agg_process_info, Aggregate
     }
     else
     {
-#define M(NAME, IS_TWO_LEVEL)                                              \
-    case AggregationMethodType(NAME):                                      \
-    {                                                                      \
+#define M(NAME, IS_TWO_LEVEL)                                                              \
+    case AggregationMethodType(NAME):                                                      \
+    {                                                                                      \
         auto & tmp_method = *ToAggregationMethodPtr(NAME, result.aggregation_method_impl); \
-        using METHOD_TYPE = std::decay_t<decltype(tmp_method)>;                  \
-        executeImpl<METHOD_TYPE, collect_hit_rate, only_lookup>(               \
-            tmp_method, \
-            result.aggregates_pool,                                        \
-            agg_process_info,                                              \
-            params.collators);                                             \
-        break;                                                             \
+        using METHOD_TYPE = std::decay_t<decltype(tmp_method)>;                            \
+        executeImpl<METHOD_TYPE, collect_hit_rate, only_lookup>(                           \
+            tmp_method,                                                                    \
+            result.aggregates_pool,                                                        \
+            agg_process_info,                                                              \
+            params.collators);                                                             \
+        break;                                                                             \
     }
 
         switch (result.type)

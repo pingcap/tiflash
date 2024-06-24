@@ -145,7 +145,8 @@ public:
         return scatterImplForDummyColumn(num_columns, selector);
     }
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         RUNTIME_CHECK_MSG(selective->size() == selector.size(), "Size of selector doesn't match size of column.");
         return scatterImplForDummyColumn(num_columns, selector);
@@ -170,7 +171,8 @@ public:
         scatterToImplForDummyColumn(columns, selector);
     }
 
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         RUNTIME_CHECK_MSG(selective->size() == selector.size(), "Size of selector doesn't match size of column.");
         scatterToImplForDummyColumn(columns, selector);

@@ -36,10 +36,7 @@ public:
     void onBlock(Block & block);
     Block getData();
 
-    bool passThroughBufferEmpty() const
-    {
-        return pass_through_block_buffer.empty();
-    }
+    bool passThroughBufferEmpty() const { return pass_through_block_buffer.empty(); }
 
     Block popPassThroughBuffer()
     {
@@ -48,10 +45,7 @@ public:
         return res;
     }
 
-    Block getHeader()
-    {
-        return aggregator->getHeader(/*final=*/true);
-    }
+    Block getHeader() { return aggregator->getHeader(/*final=*/true); }
 
     enum class State
     {
@@ -62,20 +56,12 @@ public:
         Selective,
     };
 
-    State getCurState() const
-    {
-        return state;
-    }
+    State getCurState() const { return state; }
 
     // todo change name
-    size_t getNonAdjustRowLimit() const
-    {
-        return non_adjust_row_limit;
-    }
-    size_t getAdjustRowLimit() const
-    {
-        return adjust_row_limit;
-    }
+    size_t getNonAdjustRowLimit() const { return non_adjust_row_limit; }
+    size_t getAdjustRowLimit() const { return adjust_row_limit; }
+
 private:
     void trySwitchFromInitState();
     void trySwitchFromAdjustState(size_t total_rows, size_t hit_rows);

@@ -389,7 +389,13 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(
     bool auto_pass_through)
 {
     assert(root);
-    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count, auto_pass_through);
+    root = compileAggregation(
+        root,
+        getExecutorIndex(),
+        agg_funcs,
+        group_by_exprs,
+        fine_grained_shuffle_stream_count,
+        auto_pass_through);
     return *this;
 }
 

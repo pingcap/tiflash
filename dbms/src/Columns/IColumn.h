@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include <Core/BlockInfo.h>
 #include <Common/COWPtr.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/WeakHash.h>
+#include <Core/BlockInfo.h>
 #include <Core/Field.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
@@ -333,7 +333,11 @@ public:
     using ScatterColumns = std::vector<MutablePtr>;
     using Selector = PaddedPODArray<ColumnIndex>;
     virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
-    virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const = 0;
+    virtual ScatterColumns scatter(
+        ColumnIndex num_columns,
+        const Selector & selector,
+        const BlockSelectivePtr & selective) const
+        = 0;
 
     void initializeScatterColumns(ScatterColumns & columns, ColumnIndex num_columns, size_t num_rows) const
     {
@@ -350,7 +354,9 @@ public:
 
     /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
     virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;
-    virtual void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective_ptr) const = 0;
+    virtual void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective_ptr)
+        const
+        = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
     /// For now it is a helper to de-virtualize calls to insert*() functions inside gather loop
@@ -510,12 +516,18 @@ protected:
     }
 
     template <typename Derived>
-    std::vector<MutablePtr> scatterImpl(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const
+    std::vector<MutablePtr> scatterImpl(
+        ColumnIndex num_columns,
+        const Selector & selector,
+        const BlockSelectivePtr & selective) const
     {
         const auto selective_rows = selective->size();
 
-        RUNTIME_CHECK_MSG(selective_rows == selector.size(),
-                "Size of selector: {} doesn't match size of selective column: {}", selector.size(), selective_rows);
+        RUNTIME_CHECK_MSG(
+            selective_rows == selector.size(),
+            "Size of selector: {} doesn't match size of selective column: {}",
+            selector.size(),
+            selective_rows);
 
         ScatterColumns columns;
         initializeScatterColumns(columns, num_columns, selective_rows);
@@ -531,8 +543,11 @@ protected:
     {
         size_t num_rows = size();
 
-        RUNTIME_CHECK_MSG(num_rows == selector.size(),
-                "Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows);
+        RUNTIME_CHECK_MSG(
+            num_rows == selector.size(),
+            "Size of selector: {} doesn't match size of column: {}",
+            selector.size(),
+            num_rows);
 
         for (size_t i = 0; i < num_rows; ++i)
             static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, i);
@@ -543,8 +558,11 @@ protected:
     {
         const auto selective_rows = selective->size();
 
-        RUNTIME_CHECK_MSG(selective_rows == selector.size(),
-                "Size of selector: {} doesn't match size of selective column: {}", selector.size(), selective_rows);
+        RUNTIME_CHECK_MSG(
+            selective_rows == selector.size(),
+            "Size of selector: {} doesn't match size of selective column: {}",
+            selector.size(),
+            selective_rows);
 
         for (size_t i = 0; i < selective_rows; ++i)
             static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, (*selective)[i]);

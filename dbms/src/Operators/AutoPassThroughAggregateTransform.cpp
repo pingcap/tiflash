@@ -20,9 +20,9 @@
 namespace DB
 {
 AutoPassThroughAggregateTransform::AutoPassThroughAggregateTransform(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id_,
-        const Aggregator::Params & params_)
+    PipelineExecutorContext & exec_context_,
+    const String & req_id_,
+    const Aggregator::Params & params_)
     : TransformOp(exec_context_, req_id_)
     , status(Status::building_hash_map)
 {
@@ -33,31 +33,31 @@ OperatorStatus AutoPassThroughAggregateTransform::transformImpl(Block & block)
 {
     switch (status)
     {
-        case Status::building_hash_map:
+    case Status::building_hash_map:
+    {
+        if unlikely (!block)
+            status = Status::hash_map_done;
+        else
+            auto_pass_through_context->onBlock(block);
+
+        if (!auto_pass_through_context->passThroughBufferEmpty())
         {
-            if unlikely (!block)
-                status = Status::hash_map_done;
-            else
-                auto_pass_through_context->onBlock(block);
-
-            if (!auto_pass_through_context->passThroughBufferEmpty())
-            {
-                block = checkSelective(auto_pass_through_context->popPassThroughBuffer());
-                return OperatorStatus::HAS_OUTPUT;
-            }
-
-            if unlikely (!block)
-            {
-                block = checkSelective(auto_pass_through_context->getData());
-                return OperatorStatus::HAS_OUTPUT;
-            }
-
-            return OperatorStatus::NEED_INPUT;
+            block = checkSelective(auto_pass_through_context->popPassThroughBuffer());
+            return OperatorStatus::HAS_OUTPUT;
         }
-        default:
+
+        if unlikely (!block)
         {
-            throw Exception(fmt::format("unexpected status: {}", magic_enum::enum_name(status)));
+            block = checkSelective(auto_pass_through_context->getData());
+            return OperatorStatus::HAS_OUTPUT;
         }
+
+        return OperatorStatus::NEED_INPUT;
+    }
+    default:
+    {
+        throw Exception(fmt::format("unexpected status: {}", magic_enum::enum_name(status)));
+    }
     }
 }
 
@@ -71,19 +71,19 @@ OperatorStatus AutoPassThroughAggregateTransform::tryOutputImpl(Block & block)
 
     switch (status)
     {
-        case Status::building_hash_map:
-        {
-            return OperatorStatus::NEED_INPUT;
-        }
-        case Status::hash_map_done:
-        {
-            block = checkSelective(auto_pass_through_context->getData());
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        default:
-        {
-            throw Exception(fmt::format("unexpected status: {}", magic_enum::enum_name(status)));
-        }
+    case Status::building_hash_map:
+    {
+        return OperatorStatus::NEED_INPUT;
+    }
+    case Status::hash_map_done:
+    {
+        block = checkSelective(auto_pass_through_context->getData());
+        return OperatorStatus::HAS_OUTPUT;
+    }
+    default:
+    {
+        throw Exception(fmt::format("unexpected status: {}", magic_enum::enum_name(status)));
+    }
     }
 }
 } // namespace DB

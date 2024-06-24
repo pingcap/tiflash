@@ -104,11 +104,11 @@ void computeHash(
 }
 
 void computeHashSelectiveBlock(
-        const Block & block,
-        const std::vector<Int64> & partition_id_cols,
-        const TiDB::TiDBCollators & collators,
-        std::vector<String> & partition_key_containers,
-        WeakHash32 & hash)
+    const Block & block,
+    const std::vector<Int64> & partition_id_cols,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    WeakHash32 & hash)
 {
     RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
     const auto selective_rows = block.info.selective->size();
@@ -168,12 +168,12 @@ void scatterColumns(
 }
 
 void scatterColumnsSelectiveBlock(
-        const Block & input_block,
-        const std::vector<Int64> & partition_col_ids,
-        const TiDB::TiDBCollators & collators,
-        std::vector<String> & partition_key_containers,
-        uint32_t bucket_num,
-        std::vector<std::vector<MutableColumnPtr>> & result_columns)
+    const Block & input_block,
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    uint32_t bucket_num,
+    std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
     RUNTIME_CHECK(input_block.info.selective);
     if unlikely (input_block.info.selective->empty())
@@ -226,15 +226,15 @@ void scatterColumnsForFineGrainedShuffle(
 }
 
 void scatterColumnsForFineGrainedShuffleSelectiveBlock(
-        const Block & block,
-        const std::vector<Int64> & partition_col_ids,
-        const TiDB::TiDBCollators & collators,
-        std::vector<String> & partition_key_containers,
-        uint32_t part_num,
-        uint32_t fine_grained_shuffle_stream_count,
-        WeakHash32 & hash,
-        IColumn::Selector & selector,
-        std::vector<IColumn::ScatterColumns> & scattered)
+    const Block & block,
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    uint32_t part_num,
+    uint32_t fine_grained_shuffle_stream_count,
+    WeakHash32 & hash,
+    IColumn::Selector & selector,
+    std::vector<IColumn::ScatterColumns> & scattered)
 {
     RUNTIME_CHECK(block.info.selective);
     if unlikely (block.info.selective->empty())
@@ -242,7 +242,12 @@ void scatterColumnsForFineGrainedShuffleSelectiveBlock(
 
     computeHashSelectiveBlock(block, partition_col_ids, collators, partition_key_containers, hash);
 
-    fillSelectorForFineGrainedShuffle(block.info.selective->size(), hash, part_num, fine_grained_shuffle_stream_count, selector);
+    fillSelectorForFineGrainedShuffle(
+        block.info.selective->size(),
+        hash,
+        part_num,
+        fine_grained_shuffle_stream_count,
+        selector);
 
     for (size_t i = 0; i < block.columns(); ++i)
     {

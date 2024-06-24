@@ -137,7 +137,8 @@ public:
         return scatterImpl<ColumnNullable>(num_columns, selector);
     }
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         return scatterImpl<ColumnNullable>(num_columns, selector, selective);
     }
@@ -147,7 +148,8 @@ public:
         scatterToImpl<ColumnNullable>(columns, selector);
     }
 
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         scatterToImpl<ColumnNullable>(columns, selector, selective);
     }

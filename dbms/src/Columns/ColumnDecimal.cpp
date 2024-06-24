@@ -148,8 +148,11 @@ void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBColla
 {
     auto s = data.size();
 
-    RUNTIME_CHECK_MSG(hash.getData().size() == s,
-            "Size of WeakHash32({}) doesn't match size of column({})", hash.getData().size(), s);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == s,
+        "Size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        s);
 
     const T * begin = data.data();
     const T * end = begin + s;
@@ -165,11 +168,18 @@ void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBColla
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr selective_ptr) const
+void ColumnDecimal<T>::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr &,
+    String &,
+    BlockSelectivePtr selective_ptr) const
 {
     const auto selective_rows = selective_ptr->size();
-    RUNTIME_CHECK_MSG(hash.getData().size() == selective_rows,
-            "Size of WeakHash32({}) doesn't match size of selective column({})", hash.getData().size(), selective_rows);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == selective_rows,
+        "Size of WeakHash32({}) doesn't match size of selective column({})",
+        hash.getData().size(),
+        selective_rows);
 
     const T * begin = data.data();
     UInt32 * hash_data = hash.getData().data();

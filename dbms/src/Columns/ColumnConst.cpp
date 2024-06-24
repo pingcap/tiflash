@@ -85,17 +85,26 @@ ColumnPtr ColumnConst::permute(const Permutation & perm, size_t limit) const
 
 MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
-    RUNTIME_CHECK_MSG(s == selector.size(),
-            "Size of selector ({}) doesn't match size of column ({})", selector.size(), s);
+    RUNTIME_CHECK_MSG(
+        s == selector.size(),
+        "Size of selector ({}) doesn't match size of column ({})",
+        selector.size(),
+        s);
 
     return scatterImplForColumnConst(num_columns, selector);
 }
 
-MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const
+MutableColumns ColumnConst::scatter(
+    ColumnIndex num_columns,
+    const Selector & selector,
+    const BlockSelectivePtr & selective) const
 {
     const auto selective_rows = selective->size();
-    RUNTIME_CHECK_MSG(selective_rows == selector.size(),
-            "Size of selector ({}) doesn't match size of selective column ({})", selector.size(), selective_rows);
+    RUNTIME_CHECK_MSG(
+        selective_rows == selector.size(),
+        "Size of selector ({}) doesn't match size of selective column ({})",
+        selector.size(),
+        selective_rows);
 
     return scatterImplForColumnConst(num_columns, selector);
 }
@@ -113,14 +122,23 @@ MutableColumns ColumnConst::scatterImplForColumnConst(ColumnIndex num_columns, c
 
 void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector) const
 {
-    RUNTIME_CHECK_MSG(s == selector.size(), "Size of selector ({}) doesn't match size of column ({})", selector.size(), s);
+    RUNTIME_CHECK_MSG(
+        s == selector.size(),
+        "Size of selector ({}) doesn't match size of column ({})",
+        selector.size(),
+        s);
     scatterToImplForColumnConst(columns, selector);
 }
 
-void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const
+void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+    const
 {
     const auto selective_rows = selective->size();
-    RUNTIME_CHECK_MSG(selective_rows == selector.size(), "Size of selector ({}) doesn't match size of column ({})", selector.size(), selective_rows);
+    RUNTIME_CHECK_MSG(
+        selective_rows == selector.size(),
+        "Size of selector ({}) doesn't match size of column ({})",
+        selector.size(),
+        selective_rows);
     scatterToImplForColumnConst(columns, selector);
 }
 
@@ -147,8 +165,11 @@ void ColumnConst::updateWeakHash32(
     String & sort_key_container) const
 {
     // todo check all err msg
-    RUNTIME_CHECK_MSG(hash.getData().size() != s,
-                "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), s);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() != s,
+        "Size of WeakHash32({}) does not match size of column({})",
+        hash.getData().size(),
+        s);
     updateWeakHash32(hash, collator, sort_key_container);
 }
 
@@ -159,8 +180,11 @@ void ColumnConst::updateWeakHash32(
     BlockSelectivePtr selective_ptr) const
 {
     const auto selective_rows = selective_ptr->size();
-    RUNTIME_CHECK_MSG(hash.getData().size() != selective_rows,
-                "Size of WeakHash32({}) does not match size of selective column({})", hash.getData().size(), selective_rows);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() != selective_rows,
+        "Size of WeakHash32({}) does not match size of selective column({})",
+        hash.getData().size(),
+        selective_rows);
 
     updateWeakHash32Impl(hash, collator, sort_key_container);
 }

@@ -27,9 +27,8 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
-
-#include <ctime>
 #include <cstdlib>
+#include <ctime>
 
 namespace DB
 {
@@ -155,7 +154,7 @@ struct MockExchangeWriter
     }
     bool isWritable() const { throw Exception("Unsupport async write"); }
 
-    private:
+private:
     MockExchangeWriterChecker checker;
     uint16_t part_num;
     std::vector<tipb::FieldType> result_field_types;
@@ -229,8 +228,8 @@ public:
     }
 
     static std::vector<std::vector<Block>> decodeWriteReportsV0(
-            const Block & header,
-            const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
+        const Block & header,
+        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
     {
         std::vector<std::vector<Block>> decoded_blocks;
         decoded_blocks.reserve(write_reports.size());
@@ -249,11 +248,11 @@ public:
     }
 
     static std::vector<std::vector<Block>> decodeWriteReportsV1(
-            bool is_fine_grained_shuffle,
-            const tipb::CompressionMode & mode,
-            const std::shared_ptr<MockExchangeWriter> & mock_writer,
-            const Block & header,
-            const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
+        bool is_fine_grained_shuffle,
+        const tipb::CompressionMode & mode,
+        const std::shared_ptr<MockExchangeWriter> & mock_writer,
+        const Block & header,
+        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
     {
         CHBlockChunkDecodeAndSquash decoder(header, 512);
         std::vector<std::vector<Block>> decoded_blocks;
@@ -263,7 +262,8 @@ public:
             const auto part_index = report.first;
             const TrackedMppDataPacketPtr & packet = report.second;
 
-            if unlikely (is_fine_grained_shuffle &&packet->getPacket().chunks_size() != packet->getPacket().stream_ids_size())
+            if unlikely (
+                is_fine_grained_shuffle && packet->getPacket().chunks_size() != packet->getPacket().stream_ids_size())
                 throw Exception("unexpected stream id size");
 
             if unlikely (DB::MPPDataPacketV1 != packet->getPacket().version())
@@ -328,14 +328,14 @@ public:
     }
 
     static void decodeAndCheckBlockForSelectiveBlock(
-            bool is_fine_grained_shuffle,
-            const DB::MPPDataPacketVersion & mpp_version,
-            const Block & header,
-            size_t expect_part_num,
-            size_t expect_selective_rows,
-            tipb::CompressionMode mode,
-            std::shared_ptr<MockExchangeWriter> mock_writer,
-            const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_records)
+        bool is_fine_grained_shuffle,
+        const DB::MPPDataPacketVersion & mpp_version,
+        const Block & header,
+        size_t expect_part_num,
+        size_t expect_selective_rows,
+        tipb::CompressionMode mode,
+        std::shared_ptr<MockExchangeWriter> mock_writer,
+        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_records)
     {
         std::vector<std::vector<Block>> decoded_blocks;
         ASSERT_EQ(write_records.size(), expect_part_num);
@@ -890,14 +890,14 @@ try
 
         // Check block.
         decodeAndCheckBlockForSelectiveBlock(
-                /*is_fine_grained_shuffle*/true,
-                mpp_version,
-                block,
-                part_num,
-                selective_rows,
-                mode,
-                mock_writer,
-                write_records);
+            /*is_fine_grained_shuffle*/ true,
+            mpp_version,
+            block,
+            part_num,
+            selective_rows,
+            mode,
+            mock_writer,
+            write_records);
     }
 }
 CATCH
@@ -936,7 +936,7 @@ try
             mock_writer,
             part_col_ids,
             part_col_collators,
-            /*batch_send_min_limit*/1024,
+            /*batch_send_min_limit*/ 1024,
             *dag_context_ptr,
             mpp_version,
             mode);
@@ -948,14 +948,14 @@ try
 
         // Check block.
         decodeAndCheckBlockForSelectiveBlock(
-                /*is_fine_grained_shuffle*/false,
-                mpp_version,
-                block,
-                part_num,
-                selective_rows,
-                mode,
-                mock_writer,
-                write_records);
+            /*is_fine_grained_shuffle*/ false,
+            mpp_version,
+            block,
+            part_num,
+            selective_rows,
+            mode,
+            mock_writer,
+            write_records);
     }
 }
 CATCH

@@ -111,8 +111,11 @@ void ColumnNullable::updateWeakHash32(
 {
     auto s = size();
 
-    RUNTIME_CHECK_MSG(hash.getData().size() == s,
-                "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), s);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == s,
+        "Size of WeakHash32({}) does not match size of column({})",
+        hash.getData().size(),
+        s);
 
     WeakHash32 old_hash = hash;
     nested_column->updateWeakHash32(hash, collator, sort_key_container);
@@ -135,8 +138,11 @@ void ColumnNullable::updateWeakHash32(
 {
     const auto selective_rows = selective_ptr->size();
 
-    RUNTIME_CHECK_MSG(hash.getData().size() == selective_rows,
-            "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), selective_rows);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == selective_rows,
+        "Size of WeakHash32({}) does not match size of column({})",
+        hash.getData().size(),
+        selective_rows);
 
     WeakHash32 old_hash = hash;
     nested_column->updateWeakHash32(hash, collator, sort_key_container, selective_ptr);

@@ -132,7 +132,8 @@ public:
         return scatterImpl<ColumnFixedString>(num_columns, selector);
     }
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         return scatterImpl<ColumnFixedString>(num_columns, selector, selective);
     }
@@ -141,7 +142,8 @@ public:
     {
         scatterToImpl<ColumnFixedString>(columns, selector);
     }
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         scatterToImpl<ColumnFixedString>(columns, selector, selective);
     }

@@ -30,8 +30,8 @@
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Interpreters/Context.h>
-#include <Operators/LocalAggregateTransform.h>
 #include <Operators/AutoPassThroughAggregateTransform.h>
+#include <Operators/LocalAggregateTransform.h>
 
 namespace DB
 {
@@ -168,7 +168,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         if (fine_grained_spill_context != nullptr)
             context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
     }
-    else if(auto_pass_through)
+    else if (auto_pass_through)
     {
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AutoPassThroughAggregatingBlockInputStream>(stream, params, log->identifier());
@@ -284,13 +284,16 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     else if (auto_pass_through)
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<AutoPassThroughAggregateTransform>(exec_context, log->identifier(), params));
+            builder.appendTransformOp(
+                std::make_unique<AutoPassThroughAggregateTransform>(exec_context, log->identifier(), params));
         });
     }
     else
     {
-        throw Exception(fmt::format("fine grained shuffle({}) or auto pass through({}) should be true",
-                    fine_grained_shuffle.enable(), auto_pass_through));
+        throw Exception(fmt::format(
+            "fine grained shuffle({}) or auto pass through({}) should be true",
+            fine_grained_shuffle.enable(),
+            auto_pass_through));
     }
 
     executeExpression(exec_context, group_builder, expr_after_agg, log);

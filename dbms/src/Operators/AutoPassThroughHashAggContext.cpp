@@ -27,48 +27,49 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
     agg_process_info->resetBlock(block);
     switch (state)
     {
-        case State::Init:
+    case State::Init:
+    {
+        aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
+        trySwitchFromInitState();
+        break;
+    }
+    case State::Adjust:
+    {
+        aggregator->executeOnBlockCollectHitRate(*agg_process_info, *many_data[0], 0);
+        trySwitchFromAdjustState(agg_process_info->block.rows(), agg_process_info->hit_row_cnt);
+        break;
+    }
+    case State::PreHashAgg:
+    {
+        aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
+        trySwitchBackAdjustState(agg_process_info->block.rows());
+        break;
+    }
+    case State::PassThrough:
+    {
+        passThrough(*agg_process_info);
+        makeFullSelective(agg_process_info->block);
+        trySwitchBackAdjustState(agg_process_info->block.rows());
+        break;
+    }
+    case State::Selective:
+    {
+        aggregator->executeOnBlockOnlyLookup(*agg_process_info, *many_data[0], 0);
+        auto pass_through_rows = agg_process_info->getNotFoundRows();
+        if (!pass_through_rows.empty())
         {
-            aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
-            trySwitchFromInitState();
-            break;
-        }
-        case State::Adjust:
-        {
-            aggregator->executeOnBlockCollectHitRate(*agg_process_info, *many_data[0], 0);
-            trySwitchFromAdjustState(agg_process_info->block.rows(), agg_process_info->hit_row_cnt);
-            break;
-        }
-        case State::PreHashAgg:
-        {
-            aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
-            trySwitchBackAdjustState(agg_process_info->block.rows());
-            break;
-        }
-        case State::PassThrough:
-        {
+            RUNTIME_CHECK(!agg_process_info->block.info.selective);
+            agg_process_info->block.info.selective
+                = std::make_shared<std::vector<UInt64>>(std::move(pass_through_rows));
             passThrough(*agg_process_info);
-            makeFullSelective(agg_process_info->block);
-            trySwitchBackAdjustState(agg_process_info->block.rows());
-            break;
         }
-        case State::Selective:
-        {
-            aggregator->executeOnBlockOnlyLookup(*agg_process_info, *many_data[0], 0);
-            auto pass_through_rows = agg_process_info->getNotFoundRows();
-            if (!pass_through_rows.empty())
-            {
-                RUNTIME_CHECK(!agg_process_info->block.info.selective);
-                agg_process_info->block.info.selective = std::make_shared<std::vector<UInt64>>(std::move(pass_through_rows));
-                passThrough(*agg_process_info);
-            }
-            trySwitchBackAdjustState(agg_process_info->block.rows());
-            break;
-        }
-        default:
-        {
-            __builtin_unreachable();
-        }
+        trySwitchBackAdjustState(agg_process_info->block.rows());
+        break;
+    }
+    default:
+    {
+        __builtin_unreachable();
+    }
     };
     // todo: maybe not true??
     RUNTIME_CHECK(agg_process_info->allBlockDataHandled());

@@ -23,9 +23,9 @@
 #include <Interpreters/Context.h>
 #include <Operators/AutoPassThroughHashAggContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 #include <random>
-#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -75,10 +75,10 @@ protected:
 
         auto_pass_through_context = buildAutoPassHashAggThroughContext();
 
-        low_ndv_blocks = buildBlocks(/*block_num*/20, /*distinct_num*/10);
-        high_ndv_blocks = buildBlocks(/*block_num*/20, /*distinct_num*/20 * block_size);
-        medium_ndv_blocks = buildBlocks(/*block_num*/20, /*distinct_num*/block_size / 2);
-        random_blocks = buildBlocks(/*block_num*/1, /*distinct_num*/100);
+        low_ndv_blocks = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 10);
+        high_ndv_blocks = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
+        medium_ndv_blocks = buildBlocks(/*block_num*/ 20, /*distinct_num*/ block_size / 2);
+        random_blocks = buildBlocks(/*block_num*/ 1, /*distinct_num*/ 100);
     }
 
     // select repo_name, sum(commit_num) from repo_history group by repo_name;
@@ -88,8 +88,8 @@ protected:
 
         Block before_agg_header(NamesAndTypes{{col1_name, col1_data_type}, {col2_name, col2_data_type}});
 
-        size_t agg_streams_size = 1; 
-        size_t before_agg_stream_size = 1; 
+        size_t agg_streams_size = 1;
+        size_t before_agg_stream_size = 1;
         Names key_names{col1_name};
 
         KeyRefAggFuncMap key_ref_agg_func;
@@ -103,40 +103,48 @@ protected:
         AggregateDescriptions aggregate_descriptions;
         NamesAndTypes aggregated_columns;
         appendAggDescription(
-                Names{col1_name},
-                DataTypes{col1_data_type},
-                arg_collators,
-                "first_row",
-                aggregate_descriptions,
-                aggregated_columns,
-                /*empty_input_as_null*/true,
-                *context);
+            Names{col1_name},
+            DataTypes{col1_data_type},
+            arg_collators,
+            "first_row",
+            aggregate_descriptions,
+            aggregated_columns,
+            /*empty_input_as_null*/ true,
+            *context);
         appendAggDescription(
-                Names{col2_name},
-                DataTypes{col2_data_type},
-                arg_collators,
-                "sum",
-                aggregate_descriptions,
-                aggregated_columns,
-                /*empty_input_as_null*/true, // todo?
-                *context);
+            Names{col2_name},
+            DataTypes{col2_data_type},
+            arg_collators,
+            "sum",
+            aggregate_descriptions,
+            aggregated_columns,
+            /*empty_input_as_null*/ true, // todo?
+            *context);
 
         AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
 
         SpillConfig spill_config(
-                context->getTemporaryPath(),
-                req_id,
-                context->getSettingsRef().max_cached_data_bytes_in_spiller,
-                context->getSettingsRef().max_spilled_rows_per_file,
-                context->getSettingsRef().max_spilled_bytes_per_file,
-                context->getFileProvider(),
-                context->getSettingsRef().max_threads,
-                context->getSettingsRef().max_block_size);
+            context->getTemporaryPath(),
+            req_id,
+            context->getSettingsRef().max_cached_data_bytes_in_spiller,
+            context->getSettingsRef().max_spilled_rows_per_file,
+            context->getSettingsRef().max_spilled_bytes_per_file,
+            context->getFileProvider(),
+            context->getSettingsRef().max_threads,
+            context->getSettingsRef().max_block_size);
 
         auto params = AggregationInterpreterHelper::buildParams(
-                *context, before_agg_header, before_agg_stream_size, agg_streams_size, key_names,
-                key_ref_agg_func, agg_func_ref_key, collators,
-                aggregate_descriptions, /*final=*/true, spill_config);
+            *context,
+            before_agg_header,
+            before_agg_stream_size,
+            agg_streams_size,
+            key_names,
+            key_ref_agg_func,
+            agg_func_ref_key,
+            collators,
+            aggregate_descriptions,
+            /*final=*/true,
+            spill_config);
         return std::make_unique<AutoPassThroughHashAggContext>(*params, req_id);
     }
 
@@ -159,13 +167,18 @@ protected:
                 col1->insert(Field(repo_name.data(), repo_name.size()));
                 col2->insert(Field(static_cast<Int64>(commit_num)));
             }
-            ColumnsWithTypeAndName cols{{std::move(col1), col1_data_type, col1_name}, {std::move(col2), col2_data_type, col2_name}};
+            ColumnsWithTypeAndName cols{
+                {std::move(col1), col1_data_type, col1_name},
+                {std::move(col2), col2_data_type, col2_name}};
             res.push_back(Block(cols));
         }
         return res;
     }
 
-    static std::string generateRandomString(size_t length, std::mt19937& gen, std::uniform_int_distribution<>& charDist)
+    static std::string generateRandomString(
+        size_t length,
+        std::mt19937 & gen,
+        std::uniform_int_distribution<> & charDist)
     {
         const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         std::string result;
@@ -207,7 +220,8 @@ protected:
         return result;
     }
 
-    static std::vector<Int32> generateDistinctIntegers(size_t n) {
+    static std::vector<Int32> generateDistinctIntegers(size_t n)
+    {
         std::unordered_set<int> unique_ints;
         std::vector<int> result;
 

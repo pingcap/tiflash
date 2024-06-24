@@ -531,11 +531,11 @@ void ColumnString::updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & 
 // Remove last zero byte.
 template <typename Chars, typename Offsets, typename Func>
 FLATTEN_INLINE static inline void LoopOneColumnTmp(
-        const Chars & a_data,
-        const Offsets & a_offsets,
-        size_t size,
-        WeakHash32Info & info,
-        const Func & func)
+    const Chars & a_data,
+    const Offsets & a_offsets,
+    size_t size,
+    WeakHash32Info & info,
+    const Func & func)
 {
     uint64_t a_prev_offset = 0;
 
@@ -551,11 +551,11 @@ FLATTEN_INLINE static inline void LoopOneColumnTmp(
 
 template <typename Chars, typename Offsets, typename Func>
 FLATTEN_INLINE static inline void LoopColumnSelective(
-        const Chars & chars,
-        const Offsets & offsets,
-        size_t /*size*/,
-        WeakHash32Info & info,
-        const Func & func)
+    const Chars & chars,
+    const Offsets & offsets,
+    size_t /*size*/,
+    WeakHash32Info & info,
+    const Func & func)
 {
     for (auto row : *info.selective_ptr)
     {
@@ -591,20 +591,25 @@ void ColumnString::updateWeakHash32(
         .collator = collator,
     };
 
-    updateWeakHash32Impl(info, LoopOneColumnTmp<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
+    updateWeakHash32Impl(
+        info,
+        LoopOneColumnTmp<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
 }
 
 // todo selective_ptr -> selective
 void ColumnString::updateWeakHash32(
-        WeakHash32 & hash,
-        const TiDB::TiDBCollatorPtr & collator,
-        String & sort_key_container,
-        BlockSelectivePtr selective_ptr) const
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    BlockSelectivePtr selective_ptr) const
 {
     const auto selective_rows = selective_ptr->size();
     auto & hash_data_vec = hash.getData();
     if (hash_data_vec.size() != selective_rows)
-        throw Exception(fmt::format("Size of WeakHash32({}) doesn't match size of selective column({})", hash_data_vec.size(), selective_rows));
+        throw Exception(fmt::format(
+            "Size of WeakHash32({}) doesn't match size of selective column({})",
+            hash_data_vec.size(),
+            selective_rows));
 
     WeakHash32Info info{
         .hash_data = hash_data_vec.data(),
@@ -612,7 +617,9 @@ void ColumnString::updateWeakHash32(
         .collator = collator,
         .selective_ptr = selective_ptr,
     };
-    updateWeakHash32Impl(info, LoopColumnSelective<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
+    updateWeakHash32Impl(
+        info,
+        LoopColumnSelective<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
 }
 
 void ColumnString::updateHashWithValues(

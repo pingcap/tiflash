@@ -25,12 +25,13 @@ static constexpr std::string_view autoPassThroughAggregatingExtraInfo = "auto pa
 class AutoPassThroughAggregatingBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "Aggregating";
+
 public:
     // todo register_operator_spill_context need or not?
     AutoPassThroughAggregatingBlockInputStream(
-            const BlockInputStreamPtr & input_,
-            const Aggregator::Params & params_,
-            const String & req_id)
+        const BlockInputStreamPtr & input_,
+        const Aggregator::Params & params_,
+        const String & req_id)
     {
         children.push_back(input_);
         auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(params_, req_id);
@@ -38,10 +39,7 @@ public:
 
     String getName() const override { return NAME; }
 
-    Block getHeader() const override
-    {
-        return auto_pass_through_context->getHeader();
-    }
+    Block getHeader() const override { return auto_pass_through_context->getHeader(); }
 
 protected:
     Block readImpl() override;

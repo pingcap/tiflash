@@ -23,16 +23,16 @@
 
 namespace DB
 {
-    // todo: move to helper file
-    // Used when updating hash for column.
-    struct WeakHash32Info
-    {
-        // Current updating hash data position.
-        UInt32 * hash_data;
-        String sort_key_container;
-        TiDB::TiDBCollatorPtr collator;
-        BlockSelectivePtr selective_ptr;
-    };
+// todo: move to helper file
+// Used when updating hash for column.
+struct WeakHash32Info
+{
+    // Current updating hash data position.
+    UInt32 * hash_data;
+    String sort_key_container;
+    TiDB::TiDBCollatorPtr collator;
+    BlockSelectivePtr selective_ptr;
+};
 
 /** Column for String values.
   */
@@ -351,7 +351,8 @@ public:
         return scatterImpl<ColumnString>(num_columns, selector);
     }
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         return scatterImpl<ColumnString>(num_columns, selector, selective);
     }
@@ -361,7 +362,8 @@ public:
         scatterToImpl<ColumnString>(columns, selector);
     }
 
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
     {
         scatterToImpl<ColumnString>(columns, selector, selective);
     }

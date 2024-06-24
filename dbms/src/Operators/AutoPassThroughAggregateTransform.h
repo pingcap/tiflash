@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Operators/Operator.h>
 #include <Operators/AutoPassThroughHashAggContext.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
@@ -23,11 +23,12 @@ class AutoPassThroughAggregateTransform : public TransformOp
 {
 public:
     AutoPassThroughAggregateTransform(
-            PipelineExecutorContext & exec_context_,
-            const String & req_id_,
-            const Aggregator::Params & params_);
-    
+        PipelineExecutorContext & exec_context_,
+        const String & req_id_,
+        const Aggregator::Params & params_);
+
     String getName() const override { return "AutoPassThroughAggregateTransform"; }
+
 protected:
     OperatorStatus transformImpl(Block & block) override;
 
@@ -39,10 +40,7 @@ protected:
         throw Exception("shouldn't handle io for AutoPassThroughAggregateTransform");
     }
 
-    void transformHeaderImpl(Block & header_) override
-    {
-        header_ = auto_pass_through_context->getHeader();
-    }
+    void transformHeaderImpl(Block & header_) override { header_ = auto_pass_through_context->getHeader(); }
 
 private:
     enum class Status
@@ -53,4 +51,4 @@ private:
     Status status;
     AutoPassThroughHashAggContextPtr auto_pass_through_context;
 };
-}
+} // namespace DB

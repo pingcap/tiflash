@@ -271,7 +271,8 @@ void HashPartitionWriter<ExchangeWriterPtr, selective_block>::partitionAndWriteB
 }
 
 template <class ExchangeWriterPtr, bool selective_block>
-void HashPartitionWriter<ExchangeWriterPtr, selective_block>::writePartitionBlocks(std::vector<Blocks> & partition_blocks)
+void HashPartitionWriter<ExchangeWriterPtr, selective_block>::writePartitionBlocks(
+    std::vector<Blocks> & partition_blocks)
 {
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {

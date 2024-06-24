@@ -161,8 +161,11 @@ void ColumnAggregateFunction::updateHashWithValues(
 void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = data.size();
-    RUNTIME_CHECK_MSG(hash.getData().size() == data.size(),
-            "Size of WeakHash32({}) does not match size of column({})", hash.getData().size(), s);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == data.size(),
+        "Size of WeakHash32({}) does not match size of column({})",
+        hash.getData().size(),
+        s);
 
     auto & hash_data = hash.getData();
 
@@ -178,11 +181,18 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::Ti
 
 // todo change BlockSelectivePtr as const &
 // todo add assert for all other column methods
-void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr selective_ptr) const
+void ColumnAggregateFunction::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr &,
+    String &,
+    BlockSelectivePtr selective_ptr) const
 {
     const auto selective_rows = selective_ptr->size();
-    RUNTIME_CHECK_MSG(hash.getData().size() == selective_rows,
-            "Size of WeakHash32({}) does not match size of selective column({})", hash.getData().size(), selective_rows);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == selective_rows,
+        "Size of WeakHash32({}) does not match size of selective column({})",
+        hash.getData().size(),
+        selective_rows);
 
     UInt32 * hash_data = hash.getData().data();
 
@@ -435,8 +445,10 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
     return columns;
 }
 
-MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector, const BlockSelectivePtr & selective)
-    const
+MutableColumns ColumnAggregateFunction::scatter(
+    IColumn::ColumnIndex num_columns,
+    const IColumn::Selector & selector,
+    const BlockSelectivePtr & selective) const
 {
     /// Columns with scattered values will point to this column as the owner of values.
     MutableColumns columns(num_columns);
@@ -459,17 +471,12 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
     return columns;
 }
 
-void ColumnAggregateFunction::scatterTo(
-    ScatterColumns &,
-    const Selector &) const
+void ColumnAggregateFunction::scatterTo(ScatterColumns &, const Selector &) const
 {
     throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }
 
-void ColumnAggregateFunction::scatterTo(
-    ScatterColumns &,
-    const Selector &,
-    const BlockSelectivePtr &) const
+void ColumnAggregateFunction::scatterTo(ScatterColumns &, const Selector &, const BlockSelectivePtr &) const
 {
     throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }

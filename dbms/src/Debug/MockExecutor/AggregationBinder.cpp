@@ -97,7 +97,7 @@ void AggregationBinder::toMPPSubPlan(
         std::move(agg_exprs),
         std::move(gby_exprs),
         false,
-        /*fine_grained_shuffle_stream_count*/0,
+        /*fine_grained_shuffle_stream_count*/ 0,
         auto_pass_through);
     partial_agg->children.push_back(children[0]);
     std::vector<size_t> partition_keys;

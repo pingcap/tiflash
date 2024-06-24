@@ -1233,13 +1233,13 @@ try
  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
   exchange_receiver_5 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
 )"};
-        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000, 10000000}),
-            toNullableVec<String>({"apple", {}, "banana", "test"}),
-                toNullableVec<String>({"apple", {}, "banana", "test"})};
+        auto expected_cols
+            = {toNullableVec<Int32>({1, {}, 10000000, 10000000}),
+               toNullableVec<String>({"apple", {}, "banana", "test"}),
+               toNullableVec<String>({"apple", {}, "banana", "test"})};
 
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-            context.scan("test_db", "test_table_1")
-                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")}, 0, true),
+            context.scan("test_db", "test_table_1").aggregation({Max(col("s1"))}, {col("s2"), col("s3")}, 0, true),
             expected_strings,
             expected_cols);
     }
@@ -1259,7 +1259,7 @@ try
  project_2 | {<0, Longlong>}
   aggregation_1 | group_by: {}, agg_func: {sum(<0, Longlong>)}
    exchange_receiver_6 | type:PassThrough, {<0, Longlong>})"};
- 
+
         size_t task_size = tasks.size();
         for (size_t i = 0; i < task_size; ++i)
         {
