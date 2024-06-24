@@ -465,7 +465,8 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
         {
             RUNTIME_CHECK_MSG(
                 current_truncated_ts > start_limit,
-                "current pk decreases as reader advances, skipped_times={} start_raw {} start_pk {} current_pk {}, "
+                "current pk decreases as reader advances, skipped_times={} start_raw={} start_pk={} current_pk={} "
+                "current_raw={}, "
                 "cf={}, split_id={}, "
                 "region_id={}",
                 skipped_times,
@@ -478,7 +479,8 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
                 region->id());
             LOG_INFO(
                 log,
-                "Re-Seek after skipped_times {} start_raw {} start_pk {} to {}, current_pk = {}, cf={}, split_id={}, "
+                "Re-Seek after skipped_times={} start_raw={} start_pk={} current_raw={}, current_pk={}, cf={}, "
+                "split_id={}, "
                 "region_id={}",
                 skipped_times,
                 soft_limit.value().raw_start.toDebugString(),
