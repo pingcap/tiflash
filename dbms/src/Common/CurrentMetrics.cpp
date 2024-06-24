@@ -50,6 +50,7 @@
     M(RaftNumSnapshotsPendingApply)             \
     M(RaftNumPrehandlingSubTasks)               \
     M(RaftNumParallelPrehandlingTasks)          \
+    M(RaftNumWaitedParallelPrehandlingTasks)    \
     M(RateLimiterPendingWriteRequest)           \
     M(DT_SegmentReadTasks)                      \
     M(DT_SnapshotOfRead)                        \
