@@ -23,6 +23,8 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
+#include "magic_enum.hpp"
+
 namespace DB
 {
 namespace DM
@@ -65,12 +67,26 @@ public:
                 /*flags*/ -1,
                 /*mode*/ 0666,
                 max_compress_block_size))
-            , compressed_buf(CompressedWriteBuffer<>::build(
-                  *plain_file,
-                  compression_settings,
-                  !dmfile->getConfiguration().has_value()))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
+            if (type->isInteger())
+            {
+                assert(compression_settings.settings.size() == 1);
+                CompressionSettings settings(CompressionMethod::Lightweight);
+                auto & setting = settings.settings[0];
+                auto data_type = magic_enum::enum_cast<CompressionDataType>(type->getSizeOfValueInMemory());
+                RUNTIME_CHECK(data_type.has_value());
+                setting.data_type = data_type.value();
+                compressed_buf = CompressedWriteBuffer<>::build(*plain_file, settings, !dmfile->getConfiguration());
+            }
+            else
+            {
+                compressed_buf = CompressedWriteBuffer<>::build( //
+                    *plain_file,
+                    compression_settings,
+                    !dmfile->getConfiguration());
+            }
+
             if (!dmfile->useMetaV2())
             {
                 // will not used in DMFileFormat::V3, could be removed when v3 is default

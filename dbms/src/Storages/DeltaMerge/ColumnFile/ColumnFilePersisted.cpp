@@ -74,15 +74,30 @@ void serializeColumn(
     CompressionMethod compression_method,
     Int64 compression_level)
 {
-    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
+    std::unique_ptr<CompressedWriteBuffer<>> compressed;
+    if (type->isInteger())
+    {
+        CompressionSettings compression_settings(CompressionMethod::Lightweight);
+        auto & setting = compression_settings.settings[0];
+        auto data_type = magic_enum::enum_cast<CompressionDataType>(type->getSizeOfValueInMemory());
+        RUNTIME_CHECK(data_type.has_value());
+        setting.data_type = data_type.value();
+        compressed = std::make_unique<CompressedWriteBuffer<>>(buf, compression_settings);
+    }
+    else
+    {
+        compressed = std::make_unique<CompressedWriteBuffer<>>(
+            buf,
+            CompressionSettings(compression_method, compression_level));
+    }
     type->serializeBinaryBulkWithMultipleStreams(
         column,
-        [&](const IDataType::SubstreamPath &) { return &compressed; },
+        [&](const IDataType::SubstreamPath &) { return compressed.get(); },
         offset,
         limit,
         true,
         {});
-    compressed.next();
+    compressed->next();
 }
 
 void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows)
