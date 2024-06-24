@@ -128,7 +128,7 @@ MonoSSTReader::MonoSSTReader(
         // 'z' will be added in proxy.
         LOG_INFO(
             log,
-            "Seek cf {} to {}, split_id={}",
+            "Seek cf {} to {}, split_id={} region_id={}",
             magic_enum::enum_name(type),
             Redact::keyToDebugString(start.data(), start.size()),
             split_id,
