@@ -50,7 +50,7 @@ struct CompressionSetting
     CompressionMethod method;
     CompressionMethodByte method_byte;
     int level;
-    CompressionDataType type_bytes_size = CompressionDataType::String;
+    CompressionDataType data_type = CompressionDataType::String;
 
     CompressionSetting()
         : CompressionSetting(CompressionMethod::LZ4)
