@@ -44,6 +44,8 @@ UInt8 CompressionCodecRunLength::getMethodByte() const
 
 UInt32 CompressionCodecRunLength::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
+    // If the data is not compressible as run-length encoding, we will compress it as LZ4.
+    // 1 byte for data type, and the rest for LZ4 compressed data.
     return 1 + LZ4_COMPRESSBOUND(uncompressed_size);
 }
 
@@ -55,8 +57,8 @@ UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UI
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
     const char * source_end = source + source_size;
     DB::Compression::RunLengthPairs<T> rle_vec;
-    rle_vec.reserve(source_size / sizeof(T));
-    for (const auto * src = source; src < source_end; src += sizeof(T))
+    rle_vec.reserve(source_size / bytes_size);
+    for (const auto * src = source; src < source_end; src += bytes_size)
     {
         T value = unalignedLoad<T>(src);
         if (rle_vec.empty() || rle_vec.back().first != value
