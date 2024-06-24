@@ -479,9 +479,8 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
                 region->id());
             LOG_INFO(
                 log,
-                "Re-Seek after skipped_times={} start_raw={} start_pk={} current_raw={}, current_pk={}, cf={}, "
-                "split_id={}, "
-                "region_id={}",
+                "Re-Seek after skipped_times={} start_raw={} start_pk={} current_raw={} current_pk={} cf={} "
+                "split_id={} region_id={}",
                 skipped_times,
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
