@@ -288,11 +288,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             (*p_process_keys_bytes) += (key.len + value.len);
             reader->next();
         }
-        auto sec = sw.elapsedMilliseconds();
+        const auto sec = sw.elapsedSeconds();
         LOG_DEBUG(
             log,
             "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} split_id={} "
-            "snapshot_index={} elapsed_sec={} speed={}",
+            "snapshot_index={} elapsed_sec={:.3f} speed={}",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),
@@ -312,11 +312,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
-            auto sec = sw.elapsedMilliseconds();
+            const auto sec = sw.elapsedSeconds();
             LOG_DEBUG(
                 log,
                 "Done loading, CF={} offset={} processed_bytes={} write_cf_offset={} last_loaded_rowkey={} "
-                "rowkey_to_be_included={} region_id={} snapshot_index={} elapsed_sec={} speed={}",
+                "rowkey_to_be_included={} region_id={} snapshot_index={} elapsed_sec={:.3f} speed={}",
                 CFToName(cf),
                 (*p_process_keys),
                 (*p_process_keys_bytes),
@@ -383,7 +383,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
                 log,
                 "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep "
                 "uncommitted data in region."
-                "region_id: {}, applied_index: {}, version: {}, conf_version {}, start_key: {}, end_key: {}",
+                "region_id={} applied_index={} version={} conf_version={} start_key={} end_key={}",
                 e.displayText(),
                 region->id(),
                 region->appliedIndex(),
@@ -438,7 +438,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
             // or it is already seeked.
             LOG_TRACE(
                 log,
-                "Re-Seek backward is forbidden, start_limit {} current {}, cf={}, split_id={}, region_id={}",
+                "Re-Seek backward is forbidden, start_limit={} current={} cf={} split_id={} region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 Redact::keyToDebugString(key.data, key.len),
                 magic_enum::enum_name(cf),
@@ -496,7 +496,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
     // `start_limit` is the last pk of the sst file.
     LOG_INFO(
         log,
-        "Re-Seek to the last key of write cf start_raw {} start_pk {}, cf={}, split_id={}, region_id={}",
+        "Re-Seek to the last key of write cf start_raw={} start_pk={} cf={} split_id={} region_id={}",
         soft_limit.value().raw_start.toDebugString(),
         start_limit.value().toDebugString(),
         magic_enum::enum_name(cf),
@@ -521,7 +521,7 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTRe
     {
         LOG_INFO(
             log,
-            "Reach end for split {} current {} pk {} end_limit {}, cf={} split_id={} region_id={}",
+            "Reach end for split={} current={} pk={} end_limit={} cf={} split_id={} region_id={}",
             sl.toDebugString(),
             tikv_key.toDebugString(),
             current_truncated_ts.toDebugString(),
