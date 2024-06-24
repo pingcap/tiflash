@@ -61,7 +61,8 @@ public:
         const TiFlashRaftProxyHelper * proxy_helper_,
         SSTView view,
         RegionRangeFilter range_,
-        size_t split_id_);
+        size_t split_id_,
+        size_t region_id_);
     ~MonoSSTReader() override;
 
 private:
@@ -72,6 +73,7 @@ private:
     SSTFormatKind kind;
     mutable bool tail_checked;
     size_t split_id;
+    size_t region_id;
     Poco::Logger * log;
 };
 
@@ -86,7 +88,8 @@ template <typename R, typename E>
 class MultiSSTReader : public SSTReader
 {
 public:
-    using Initer = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E, RegionRangeFilter, size_t)>;
+    using Initer
+        = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E, RegionRangeFilter, size_t, size_t)>;
 
     DISALLOW_COPY_AND_MOVE(MultiSSTReader);
 
@@ -161,13 +164,14 @@ public:
             // and it will be dropped as MultiSSTReader is dropped.
             LOG_INFO(
                 log,
-                "Open sst file {}, range={} sst_idx={} sst_tot={} split_id={}",
+                "Open sst file {}, range={} sst_idx={} sst_tot={} split_id={} region_id={}",
                 buffToStrView(args[sst_idx].path),
                 range->toDebugString(),
                 sst_idx,
                 args.size(),
-                split_id);
-            mono = initer(proxy_helper, args[sst_idx], range, split_id);
+                split_id,
+                region_id);
+            mono = initer(proxy_helper, args[sst_idx], range, split_id, region_id);
         }
     }
 
@@ -178,7 +182,8 @@ public:
         std::vector<E> args_,
         LoggerPtr log_,
         RegionRangeFilter range_,
-        size_t split_id_)
+        size_t split_id_,
+        size_t region_id_)
         : log(log_)
         , proxy_helper(proxy_helper_)
         , type(type_)
@@ -187,16 +192,18 @@ public:
         , sst_idx(0)
         , range(range_)
         , split_id(split_id_)
+        , region_id(region_id_)
     {
         assert(args.size() > 0);
         LOG_INFO(
             log,
-            "Open sst file first {}, range={} sst_tot={} split_id={}",
+            "Open sst file first {}, range={} sst_tot={} split_id={} region_id={}",
             buffToStrView(args[sst_idx].path),
             range->toDebugString(),
             args.size(),
-            split_id);
-        mono = initer(proxy_helper, args[sst_idx], range, split_id);
+            split_id,
+            region_id);
+        mono = initer(proxy_helper, args[sst_idx], range, split_id, region_id);
     }
 
     ~MultiSSTReader() override
@@ -216,6 +223,7 @@ private:
     size_t sst_idx;
     RegionRangeFilter range;
     const size_t split_id;
+    const size_t region_id;
 };
 
 } // namespace DB

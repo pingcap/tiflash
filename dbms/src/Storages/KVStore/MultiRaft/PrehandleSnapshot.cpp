@@ -207,7 +207,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             res = ReadFromStreamResult{.error = abort_reason.value(), .extra_msg = "", .region = new_region};
         }
         auto keys_per_second = (sst_stream->getProcessKeys().write_cf + sst_stream->getProcessKeys().lock_cf
-                                + sst_stream->getProcessKeys().write_cf)
+                                + sst_stream->getProcessKeys().default_cf)
             * 1.0 / sw.elapsedSeconds();
         GET_METRIC(tiflash_raft_command_throughput, type_prehandle_snapshot).Observe(keys_per_second);
         return std::make_pair(
