@@ -265,6 +265,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         maybeSkipBySoftLimit(cf, *reader_ptr);
     }
 
+    Stopwatch sw;
+    auto pre = *p_process_keys_bytes;
     // Simply read to the end of SST file
     if (rowkey_to_be_included == nullptr)
     {
@@ -282,20 +284,22 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             (*p_process_keys_bytes) += (key.len + value.len);
             reader->next();
         }
+        const auto sec = sw.elapsedSeconds();
         LOG_DEBUG(
             log,
             "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} split_id={} "
-            "snapshot_index={}",
+            "snapshot_index={} elapsed_sec={:.3f} speed={}",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),
             process_keys.write_cf,
             region->id(),
             getSplitId(),
-            snapshot_index);
+            snapshot_index,
+            sec,
+            ((*p_process_keys_bytes) - pre) * 1.0 / sec);
         return;
     }
-
 
     size_t process_keys_offset_end = process_keys.write_cf;
     while (reader && reader->remained())
@@ -304,10 +308,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
+            const auto sec = sw.elapsedSeconds();
             LOG_DEBUG(
                 log,
                 "Done loading, CF={} offset={} processed_bytes={} write_cf_offset={} last_loaded_rowkey={} "
-                "rowkey_to_be_included={} region_id={} snapshot_index={}",
+                "rowkey_to_be_included={} region_id={} snapshot_index={} elapsed_sec={:.3f} speed={}",
                 CFToName(cf),
                 (*p_process_keys),
                 (*p_process_keys_bytes),
@@ -317,7 +322,9 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                      ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size())
                      : "<end>"),
                 region->id(),
-                snapshot_index);
+                snapshot_index,
+                sec,
+                ((*p_process_keys_bytes) - pre) * 1.0 / sec);
             break;
         }
 
@@ -372,7 +379,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
                 log,
                 "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep "
                 "uncommitted data in region."
-                "region_id: {}, applied_index: {}, version: {}, conf_version {}, start_key: {}, end_key: {}",
+                "region_id={} applied_index={} version={} conf_version={} start_key={} end_key={}",
                 e.displayText(),
                 region->id(),
                 region->appliedIndex(),
@@ -427,7 +434,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
             // or it is already seeked.
             LOG_TRACE(
                 log,
-                "Re-Seek backward is forbidden, start_limit {} current {}, cf={}, split_id={}, region_id={}",
+                "Re-Seek backward is forbidden, start_limit={} current={} cf={} split_id={} region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 Redact::keyToDebugString(key.data, key.len),
                 magic_enum::enum_name(cf),
@@ -453,7 +460,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
         {
             RUNTIME_CHECK_MSG(
                 current_truncated_ts > start_limit,
-                "current pk decreases as reader advances, start_raw {} start_pk {} current {}, cf={}, split_id={}, "
+                "current pk decreases as reader advances, start_raw={} start_pk={} current={} cf={} split_id={} "
                 "region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
@@ -463,7 +470,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
                 region->id());
             LOG_INFO(
                 log,
-                "Re-Seek after start_raw {} start_pk {} to {}, current_pk = {}, cf={}, split_id={}, region_id={}",
+                "Re-Seek after start_raw={} start_pk={} to {}, current_pk={} cf={} split_id={} region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 tikv_key.toDebugString(),
@@ -478,7 +485,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
     // `start_limit` is the last pk of the sst file.
     LOG_INFO(
         log,
-        "Re-Seek to the last key of write cf start_raw {} start_pk {}, cf={}, split_id={}, region_id={}",
+        "Re-Seek to the last key of write cf start_raw={} start_pk={} cf={} split_id={} region_id={}",
         soft_limit.value().raw_start.toDebugString(),
         start_limit.value().toDebugString(),
         magic_enum::enum_name(cf),
@@ -503,7 +510,7 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTRe
     {
         LOG_INFO(
             log,
-            "Reach end for split {} current {} pk {} end_limit {}, cf={} split_id={} region_id={}",
+            "Reach end for split={} current={} pk={} end_limit={} cf={} split_id={} region_id={}",
             sl.toDebugString(),
             tikv_key.toDebugString(),
             current_truncated_ts.toDebugString(),
