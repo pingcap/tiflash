@@ -61,6 +61,9 @@ UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UI
     for (const auto * src = source; src < source_end; src += bytes_size)
     {
         T value = unalignedLoad<T>(src);
+        // If the value is different from the previous one or the counter is at the maximum value (255 + 1 = 0),
+        // we need to start a new run.
+        // Otherwise, we can just increment the counter.
         if (rle_vec.empty() || rle_vec.back().first != value
             || rle_vec.back().second == std::numeric_limits<UInt8>::max())
             rle_vec.emplace_back(value, 1);
