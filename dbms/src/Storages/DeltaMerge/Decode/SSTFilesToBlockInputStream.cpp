@@ -284,11 +284,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             (*p_process_keys_bytes) += (key.len + value.len);
             reader->next();
         }
-        auto sec = sw.elapsedMilliseconds();
+        const auto sec = sw.elapsedSeconds();
         LOG_DEBUG(
             log,
             "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} split_id={} "
-            "snapshot_index={} elapsed_sec={} speed={}",
+            "snapshot_index={} elapsed_sec={:.3f} speed={}",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),
@@ -308,11 +308,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
-            auto sec = sw.elapsedMilliseconds();
+            const auto sec = sw.elapsedSeconds();
             LOG_DEBUG(
                 log,
                 "Done loading, CF={} offset={} processed_bytes={} write_cf_offset={} last_loaded_rowkey={} "
-                "rowkey_to_be_included={} region_id={} snapshot_index={} elapsed_sec={} speed={}",
+                "rowkey_to_be_included={} region_id={} snapshot_index={} elapsed_sec={:.3f} speed={}",
                 CFToName(cf),
                 (*p_process_keys),
                 (*p_process_keys_bytes),
