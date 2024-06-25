@@ -26,12 +26,8 @@ class UniversalPageId final
 {
 public:
     UniversalPageId() { PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size()); }
-    UniversalPageId(const UniversalPageId & other)
-        : id(other.id)
-    {
-        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
-    }
-
+    UniversalPageId(const UniversalPageId & other);
+    UniversalPageId(UniversalPageId && other);
     UniversalPageId(String id_) // NOLINT(google-explicit-constructor)
         : id(std::move(id_))
     {
@@ -48,22 +44,11 @@ public:
         PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
     }
 
-    ~UniversalPageId() { PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size()); }
+    ~UniversalPageId();
 
-    UniversalPageId & operator=(String && id_) noexcept
-    {
-        if (id.size() == id_.size()) {}
-        else if (id.size() > id_.size())
-        {
-            PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size() - id_.size());
-        }
-        else
-        {
-            PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id_.size() - id.size());
-        }
-        id.swap(id_);
-        return *this;
-    }
+    UniversalPageId & operator=(UniversalPageId && id_) noexcept;
+    UniversalPageId & operator=(const UniversalPageId & id_) noexcept;
+    UniversalPageId & operator=(String && id_) noexcept;
     bool operator==(const UniversalPageId & rhs) const noexcept { return id == rhs.id; }
     bool operator!=(const UniversalPageId & rhs) const noexcept { return id != rhs.id; }
     bool operator>=(const UniversalPageId & rhs) const noexcept { return id >= rhs.id; }
