@@ -62,8 +62,9 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper,
                                SSTView snap,
                                SSTReader::RegionRangeFilter range,
-                               size_t split_id) {
-        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
+                               size_t split_id,
+                               size_t region_id) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id, region_id);
     };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
@@ -92,7 +93,8 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_default,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
+            region->id());
     }
     if (!ssts_write.empty())
     {
@@ -103,7 +105,8 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_write,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
+            region->id());
     }
     if (!ssts_lock.empty())
     {
@@ -114,7 +117,8 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_lock,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
+            region->id());
     }
     LOG_INFO(
         log,
@@ -448,6 +452,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
 
     // Skip other versions of the same PK.
     // TODO(split) use seek to optimize if failed several iterations.
+    size_t skipped_times = 0;
     while (reader && reader->remained())
     {
         // Read until find the next pk.
@@ -460,17 +465,22 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
         {
             RUNTIME_CHECK_MSG(
                 current_truncated_ts > start_limit,
-                "current pk decreases as reader advances, start_raw={} start_pk={} current={} cf={} split_id={} "
+                "current pk decreases as reader advances, skipped_times={} start_raw={} start_pk={} current_pk={} "
+                "current_raw={} cf={} split_id={}, "
                 "region_id={}",
+                skipped_times,
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 current_truncated_ts.toDebugString(),
+                tikv_key.toDebugString(),
                 magic_enum::enum_name(cf),
                 soft_limit.value().split_id,
                 region->id());
             LOG_INFO(
                 log,
-                "Re-Seek after start_raw={} start_pk={} to {}, current_pk={} cf={} split_id={} region_id={}",
+                "Re-Seek after skipped_times={} start_raw={} start_pk={} current_raw={} current_pk={} cf={} "
+                "split_id={} region_id={}",
+                skipped_times,
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 tikv_key.toDebugString(),
@@ -480,6 +490,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
                 region->id());
             return true;
         }
+        skipped_times++;
         reader->next();
     }
     // `start_limit` is the last pk of the sst file.
