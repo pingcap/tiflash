@@ -126,7 +126,6 @@ public:
     }
 
     virtual ~Connection() = default;
-    ;
 
     /// Set throttler of network traffic. One throttler could be used for multiple connections to limit total traffic.
     void setThrottler(const ThrottlerPtr & throttler_) { throttler = throttler_; }
