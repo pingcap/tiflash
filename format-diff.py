@@ -29,7 +29,7 @@ def run_cmd(cmd, show_cmd=False):
     return res
 
 def try_find_clang_format(exec_path):
-    candidates = ['clang-format-15', 'clang-format']
+    candidates = ['clang-format']
     if exec_path is not None:
         candidates.insert(0, exec_path)
     for c in candidates:
