@@ -68,7 +68,7 @@ public:
 
     ~MockPreparedDMFileToken() override = default;
 
-    DMFilePtr restore(DMFile::ReadMetaMode read_mode) override;
+    DMFilePtr restore(DMFileMeta::ReadMode read_mode) override;
 
 private:
     String path;

@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Executor/ResultQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -33,29 +34,6 @@ try
         context.incActiveRefCount();
         std::chrono::milliseconds timeout(10);
         context.waitFor(timeout);
-        GTEST_FAIL();
-    }
-    catch (DB::Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), PipelineExecutorContext::timeout_err_msg);
-        auto err_msg = context.getExceptionMsg();
-        ASSERT_EQ(err_msg, PipelineExecutorContext::timeout_err_msg);
-    }
-}
-CATCH
-
-TEST_F(PipelineExecutorContextTestRunner, popTimeout)
-try
-{
-    PipelineExecutorContext context;
-    context.toConsumeMode(1);
-    try
-    {
-        context.incActiveRefCount();
-        std::chrono::milliseconds timeout(10);
-        ResultHandler result_handler{[](const Block &) {
-        }};
-        context.consumeFor(result_handler, timeout);
         GTEST_FAIL();
     }
     catch (DB::Exception & e)

@@ -567,8 +567,6 @@ bool TCPHandler::receivePacket()
     UInt64 packet_type = 0;
     readVarUInt(packet_type, *in);
 
-    //    std::cerr << "Packet: " << packet_type << std::endl;
-
     switch (packet_type)
     {
     case Protocol::Client::Query:

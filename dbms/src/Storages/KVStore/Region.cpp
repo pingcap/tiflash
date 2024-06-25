@@ -22,6 +22,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -131,9 +132,10 @@ std::string Region::getDebugString() const
 {
     const auto & meta_snap = meta.dumpRegionMetaSnapshot();
     return fmt::format(
-        "[region_id={} index={} table_id={} ver={} conf_ver={} state={} peer={} range={}]",
+        "[region_id={} index={} {}table_id={} ver={} conf_ver={} state={} peer={} range={}]",
         id(),
         meta.appliedIndex(),
+        ((keyspace_id == NullspaceID) ? "" : fmt::format("keyspace={} ", keyspace_id)),
         mapped_table_id,
         meta_snap.ver,
         meta_snap.conf_ver,
@@ -396,4 +398,20 @@ void Region::mergeDataFrom(const Region & other)
     this->data.mergeFrom(other.data);
     this->data.orphan_keys_info.mergeFrom(other.data.orphan_keys_info);
 }
+
+void Region::observeLearnerReadEvent(Timestamp read_tso) const
+{
+    auto ori = last_observed_read_tso.load();
+    if (read_tso > ori)
+    {
+        // Do not retry if failed, though may lost some update here, however the total read_tso can advance.
+        last_observed_read_tso.compare_exchange_strong(ori, read_tso);
+    }
+}
+
+Timestamp Region::getLastObservedReadTso() const
+{
+    return last_observed_read_tso.load();
+}
+
 } // namespace DB

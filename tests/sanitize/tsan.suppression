@@ -5,3 +5,5 @@ race:google::protobuf::Message::DebugString
 race:google::protobuf::Message::ShortDebugString
 race:fiu_fail
 race:dbms/src/DataStreams/BlockStreamProfileInfo.h
+race:StackTrace::toString
+race:DB::SyncPointCtl::sync

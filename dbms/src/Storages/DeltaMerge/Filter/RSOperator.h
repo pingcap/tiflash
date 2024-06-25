@@ -19,6 +19,11 @@
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 
+namespace DB
+{
+struct DAGQueryInfo;
+}
+
 namespace DB::DM
 {
 
@@ -34,8 +39,7 @@ struct RSCheckParam
     ColumnIndexes indexes;
 };
 
-
-class RSOperator : public std::enable_shared_from_this<RSOperator>
+class RSOperator
 {
 protected:
     RSOperator() = default;
@@ -49,6 +53,13 @@ public:
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual ColIds getColumnIDs() = 0;
+
+    static RSOperatorPtr build(
+        const std::unique_ptr<DAGQueryInfo> & dag_query,
+        const ColumnDefines & columns_to_read,
+        const ColumnDefines & table_column_defines,
+        bool enable_rs_filter,
+        const LoggerPtr & tracing_logger);
 };
 
 class ColCmpVal : public RSOperator
@@ -111,13 +122,28 @@ public:
     }
 };
 
-#define GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res) \
-    auto it = (param).indexes.find((attr).col_id);                                  \
-    if (it == (param).indexes.end())                                                \
-        return (res);                                                               \
-    auto(rsindex) = it->second;                                                     \
-    if (!(rsindex).type->equals(*(attr).type))                                      \
-        return (res);
+inline std::optional<RSIndex> getRSIndex(const RSCheckParam & param, const Attr & attr)
+{
+    auto it = param.indexes.find(attr.col_id);
+    if (it != param.indexes.end() && it->second.type->equals(*attr.type))
+    {
+        return it->second;
+    }
+    return std::nullopt;
+}
+
+template <typename Op>
+RSResults minMaxCheckCmp(
+    size_t start_pack,
+    size_t pack_count,
+    const RSCheckParam & param,
+    const Attr & attr,
+    const Field & value)
+{
+    auto rs_index = getRSIndex(param, attr);
+    return rs_index ? rs_index->minmax->checkCmp<Op>(start_pack, pack_count, value, rs_index->type)
+                    : RSResults(pack_count, RSResult::Some);
+}
 
 // logical
 RSOperatorPtr createNot(const RSOperatorPtr & op);
@@ -137,6 +163,6 @@ RSOperatorPtr createLike(const Attr & attr, const Field & value);
 //
 RSOperatorPtr createIsNull(const Attr & attr);
 //
-RSOperatorPtr createUnsupported(const String & content, const String & reason);
+RSOperatorPtr createUnsupported(const String & reason);
 
 } // namespace DB::DM

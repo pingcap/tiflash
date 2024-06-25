@@ -38,6 +38,7 @@ struct MockColumnInfo
     String name;
     TiDB::TP type;
     bool nullable = true;
+    Poco::Dynamic::Var collate{}; // default empty means no collation.
 };
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using TableInfo = TiDB::TableInfo;

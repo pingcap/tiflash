@@ -291,7 +291,11 @@ public:
 
     static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
-    DM::WriteResult write(const Context & db_context, const DB::Settings & db_settings, Block & block);
+    DM::WriteResult write(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        Block & block,
+        const RegionAppliedStatus & applied_status = {});
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
@@ -401,7 +405,7 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
-        UInt64 max_version,
+        UInt64 start_ts,
         const PushDownFilterPtr & filter,
         const RuntimeFilteList & runtime_filter_list,
         int rf_max_wait_time_ms,
@@ -426,7 +430,7 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
-        UInt64 max_version,
+        UInt64 start_ts,
         const PushDownFilterPtr & filter,
         const RuntimeFilteList & runtime_filter_list,
         int rf_max_wait_time_ms,
@@ -559,7 +563,7 @@ private:
     /// by returning a non-empty DM::WriteResult.
     // Deferencing `Iter` can get a pointer to a Segment.
     template <typename Iter>
-    DM::WriteResult checkSegmentsUpdateForKVStore(
+    DM::WriteResult checkSegmentsUpdateForProxy(
         const DMContextPtr & context,
         Iter begin,
         Iter end,

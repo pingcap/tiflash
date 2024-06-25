@@ -77,7 +77,10 @@ std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(
 }
 
 // Print log for MPPTask which hasn't been removed for over 25 minutes.
-void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
+void checkLongLiveMPPTasks(
+    const std::unordered_map<String, Stopwatch> & monitored_tasks,
+    bool report_metrics,
+    const LoggerPtr & log)
 {
     String log_info;
     double longest_live_time = 0;
@@ -92,7 +95,8 @@ void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitor
 
     if (!log_info.empty())
         LOG_WARNING(log, log_info);
-    GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
+    if (report_metrics)
+        GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
 }
 
 void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
@@ -109,12 +113,14 @@ void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
         if (monitor->is_shutdown)
         {
             lock.unlock();
-            checkLongLiveMPPTasks(snapshot, monitor->log);
+            // When shutting down, the `TiFlashMetrics` instance maybe release, don't
+            // report metrics at this time
+            checkLongLiveMPPTasks(snapshot, /* report_metrics */ false, monitor->log);
             return;
         }
 
         lock.unlock();
-        checkLongLiveMPPTasks(snapshot, monitor->log);
+        checkLongLiveMPPTasks(snapshot, /* report_metrics */ true, monitor->log);
     }
 }
 
@@ -242,6 +248,12 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
 
 void TMTContext::shutdown()
 {
+    if (mpp_task_manager)
+    {
+        // notify end to the thread "MPPTask-Moniter"
+        mpp_task_manager->shutdown();
+    }
+
     if (s3gc_owner)
     {
         // stop the campaign loop, so the S3LockService will

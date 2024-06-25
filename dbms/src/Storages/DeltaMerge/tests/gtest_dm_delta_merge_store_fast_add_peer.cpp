@@ -252,7 +252,7 @@ protected:
             columns,
             {range},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -330,7 +330,7 @@ try
                     file_id.id,
                     file_id.id,
                     delegator.getDTFilePath(file_id.id),
-                    DMFile::ReadMetaMode::all());
+                    DMFileMeta::ReadMode::all());
                 remote_store->putDMFile(
                     dm_file,
                     S3::DMFileOID{

@@ -105,4 +105,13 @@ void SharedContextDisagg::initFastAddPeerContext(UInt64 fap_concur)
     fap_context = std::make_shared<FastAddPeerContext>(fap_concur);
 }
 
+
+SharedContextDisagg::~SharedContextDisagg()
+{
+    if (fap_context)
+    {
+        fap_context->shutdown();
+    }
+}
+
 } // namespace DB

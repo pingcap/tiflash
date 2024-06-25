@@ -51,6 +51,7 @@ namespace DB
 
 namespace FailPoints
 {
+extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 } // namespace FailPoints
 
@@ -199,6 +200,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
     std::vector<StoreID> candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
 
+    fiu_do_on(FailPoints::force_fap_worker_throw, { throw Exception(ErrorCodes::LOGICAL_ERROR, "mocked throw"); });
+
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
@@ -325,7 +328,9 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
+
     auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_build).Observe(watch.elapsedSecondsFromLastTime());
 
     fap_ctx->insertCheckpointIngestInfo(
         tmt,
@@ -335,6 +340,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         region,
         std::move(segments),
         start_time);
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_insert).Observe(watch.elapsedSecondsFromLastTime());
 
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if (cancel_handle->isCanceled())
@@ -349,6 +355,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
+
     // Write raft log to uni ps, we do this here because we store raft log seperately.
     // Currently, FAP only handle when the peer is newly created in this store.
     // TODO(fap) However, Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
@@ -365,6 +372,7 @@ FastAddPeerRes FastAddPeerImplWrite(
                 UniversalPageIdFormat::getU64ID(page_id));
             wb.putRemotePage(page_id, 0, size, location, {});
         });
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_raft).Observe(watch.elapsedSecondsFromLastTime());
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     wn_ps->write(std::move(wb));
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
@@ -445,6 +453,8 @@ FastAddPeerRes FastAddPeerImpl(
                 new_peer_id,
                 e.message()));
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
+        // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState,
+        // since a FastAddPeerStatus::BadData result will lead to a fallback in Proxy.
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
     catch (...)
@@ -456,6 +466,8 @@ FastAddPeerRes FastAddPeerImpl(
                 region_id,
                 new_peer_id));
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
+        // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState.
+        // since a FastAddPeerStatus::BadData result will lead to a fallback in Proxy.
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
 }

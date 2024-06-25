@@ -232,6 +232,22 @@ try
 }
 CATCH
 
+TEST_F(SegmentOperationTest, CurrentV2RestoreFromStableV1)
+try
+{
+    auto current = STORAGE_FORMAT_CURRENT;
+    STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V6;
+    auto segment = Segment::restoreSegment(log, *dm_context, DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_EQ(segment->stable->getRows(), 100);
+    STORAGE_FORMAT_CURRENT = current;
+}
+CATCH
+
 TEST_F(SegmentOperationTest, WriteDuringSegmentSplit)
 try
 {

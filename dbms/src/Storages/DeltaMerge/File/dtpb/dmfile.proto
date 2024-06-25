@@ -66,3 +66,13 @@ message ColumnStat {
 message ColumnStats {
     repeated ColumnStat column_stats = 1;
 }
+
+message StableFile {
+    optional uint64 page_id = 1;
+}
+
+message StableLayerMeta {
+    optional uint64 valid_rows = 1;
+    optional uint64 valid_bytes = 2;
+    repeated StableFile files = 3;
+}

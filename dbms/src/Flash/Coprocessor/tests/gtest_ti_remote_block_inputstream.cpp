@@ -78,7 +78,7 @@ struct MockWriter
         summary.scan_context->dmfile_mvcc_skipped_rows = 15000;
         summary.scan_context->dmfile_lm_filter_scanned_rows = 8000;
         summary.scan_context->dmfile_lm_filter_skipped_rows = 15000;
-        summary.scan_context->total_dmfile_rough_set_index_check_time_ns = 10;
+        summary.scan_context->total_rs_pack_filter_check_time_ns = 10;
         summary.scan_context->total_dmfile_read_time_ns = 200;
         summary.scan_context->create_snapshot_time_ns = 5;
         summary.scan_context->total_local_region_num = 10;

@@ -28,17 +28,18 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     auto log = DB::Logger::get();
     LOG_INFO(log, "Cancel and addTask");
     // Cancel and addTask
-    // 3 -> 1 -> 4 -> 2
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
         auto m = std::make_shared<std::mutex>();
         int flag = 0;
         std::unique_lock cl(*m);
         std::atomic_bool finished_flag = false;
-        async_tasks->addTask(1, [m, &flag, &async_tasks, &finished_flag]() {
+        std::atomic_bool running_flag = false;
+        async_tasks->addTask(1, [m, &flag, &async_tasks, &finished_flag, &running_flag]() {
+            running_flag.store(true, std::memory_order_seq_cst);
             auto cancel_handle = async_tasks->getCancelHandleFromExecutor(1);
-            std::scoped_lock rl(*m); // 2
-            SCOPE_EXIT({ finished_flag.store(true); });
+            std::scoped_lock rl(*m);
+            SCOPE_EXIT({ finished_flag.store(true, std::memory_order_seq_cst); });
             // Run after `cl` is released.
             if (cancel_handle->isCanceled())
             {
@@ -46,17 +47,31 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             }
             flag = 1;
         });
+        ASSERT_TRUE(async_tasks->isScheduled(1));
+        {
+            int cnt_wait_sche = 0;
+            while (!running_flag.load(std::memory_order_seq_cst))
+            {
+                cnt_wait_sche += 1;
+                ASSERT(cnt_wait_sche < 6);
+                std::this_thread::sleep_for(200ms);
+            }
+        }
+        // Make sure we don't cancel in queue.
         async_tasks->asyncCancelTask(1);
+        // The task is not registered anymore.
         ASSERT_FALSE(async_tasks->isScheduled(1));
         async_tasks->addTask(1, [&flag]() { flag = 2; });
-        cl.unlock(); // Now can task 1 run.
-        int count = 0;
-        using namespace std::chrono_literals;
-        while (!finished_flag.load())
+        cl.unlock();
         {
-            count += 1;
-            ASSERT(count < 6);
-            std::this_thread::sleep_for(200ms);
+            int cnt_wait_finish = 0;
+            using namespace std::chrono_literals;
+            while (!finished_flag.load(std::memory_order_seq_cst))
+            {
+                cnt_wait_finish += 1;
+                ASSERT(cnt_wait_finish < 6);
+                std::this_thread::sleep_for(200ms);
+            }
         }
         ASSERT_NO_THROW(async_tasks->fetchResult(1));
         ASSERT_EQ(flag, 2);

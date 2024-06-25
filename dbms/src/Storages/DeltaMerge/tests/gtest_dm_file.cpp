@@ -35,6 +35,7 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
+#include <gtest/gtest.h>
 
 #include <algorithm>
 #include <magic_enum.hpp>
@@ -145,7 +146,7 @@ public:
         auto page_id = dm_file->pageId();
         auto parent_path = dm_file->parentPath();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFile::ReadMetaMode::all());
+        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFileMeta::ReadMode::all());
     }
 
     DMContext & dmContext() { return *dm_context; }
@@ -167,9 +168,9 @@ public:
         ASSERT_EQ(n, s.size());
     }
 
-    static std::vector<UInt8> & getReaderUsePacks(DMFileBlockInputStreamPtr & stream)
+    static RSResults & getReaderPackRes(DMFileBlockInputStreamPtr & stream)
     {
-        return stream->reader.pack_filter.getUsePacks();
+        return stream->reader.pack_filter.getPackRes();
     }
 
 protected:
@@ -192,13 +193,15 @@ void DMFileMetaV2Test::checkMergedFile(
     const std::set<String> & not_uploaded_files,
     std::set<String> & checked_fnames)
 {
-    auto merged_filename = dmfile->mergedPath(merged_number);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+    ASSERT_TRUE(dmfile_meta != nullptr);
+    auto merged_filename = dmfile_meta->mergedPath(merged_number);
     auto merged_file = PosixRandomAccessFile::create(merged_filename);
 
     for (const auto & fname : not_uploaded_files)
     {
-        auto itr = dmfile->merged_sub_file_infos.find(fname);
-        ASSERT_NE(itr, dmfile->merged_sub_file_infos.end());
+        auto itr = dmfile_meta->merged_sub_file_infos.find(fname);
+        ASSERT_NE(itr, dmfile_meta->merged_sub_file_infos.end());
         if (itr->second.number != merged_number)
         {
             continue;
@@ -549,7 +552,7 @@ try
         dmfile2->fileId(),
         dmfile2->pageId(),
         dmfile2->parentPath(),
-        DMFile::ReadMetaMode::all());
+        DMFileMeta::ReadMode::all());
     LOG_DEBUG(Logger::get(), "check dmfile1 dmfile3");
     check_meta(dmfile1, dmfile3);
 
@@ -613,7 +616,7 @@ try
             dmfile->fileId(),
             dmfile->pageId(),
             dmfile->parentPath(),
-            DMFile::ReadMetaMode::all());
+            DMFileMeta::ReadMode::all());
         FAIL(); // Should not come here.
     }
     catch (const DB::Exception & e)
@@ -902,10 +905,10 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = getReaderUsePacks(stream);
-        use_packs[1] = false;
+        auto & pack_res = getReaderPackRes(stream);
+        pack_res[1] = RSResult::None;
         stream->skipNextBlock();
-        use_packs[1] = true;
+        pack_res[1] = RSResult::Some;
         std::vector<Array> partial_expect_arr_values;
         partial_expect_arr_values.insert(
             partial_expect_arr_values.cend(),
@@ -1114,10 +1117,10 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = getReaderUsePacks(stream);
-        use_packs[1] = false;
+        auto & pack_res = getReaderPackRes(stream);
+        pack_res[1] = RSResult::None;
         ASSERT_EQ(stream->skipNextBlock(), num_rows_write / 3);
-        use_packs[1] = true;
+        pack_res[1] = RSResult::Some;
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),
@@ -1637,10 +1640,10 @@ try
     filters.emplace_back(one_part_filter, span_per_part); // only first part
     // <filter, num_rows_should_read>
     // (first range) And (Unsuppported) -> should filter some chunks by range
-    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test", "test")}), span_per_part);
+    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test")}), span_per_part);
     // <filter, num_rows_should_read>
     // (first range) Or (Unsupported) -> should NOT filter any chunk
-    filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test")}), num_rows_write);
+    filters.emplace_back(createOr({one_part_filter, createUnsupported("test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());

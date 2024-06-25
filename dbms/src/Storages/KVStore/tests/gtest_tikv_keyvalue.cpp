@@ -15,9 +15,8 @@
 #include <Storages/KVStore/Decode/TiKVHelper.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "region_helper.h"
 
 namespace DB
 {
@@ -467,19 +466,29 @@ try
     auto raw_pk1 = RecordKVFormat::getRawTiDBPK(*raw_keys.first);
     auto raw_pk2 = RecordKVFormat::getRawTiDBPK(*raw_keys.second);
 
-    Redact::setRedactLog(false);
+    Redact::setRedactLog(RedactMode::Disable);
     // These will print the value
-    EXPECT_NE(raw_pk1.toDebugString(), "?");
-    EXPECT_NE(raw_pk2.toDebugString(), "?");
-    EXPECT_NE(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+    EXPECT_EQ(raw_pk1.toDebugString(), "02066161610206616263");
+    EXPECT_EQ(raw_pk2.toDebugString(), "02066262620206616263");
+    EXPECT_EQ(
+        RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys),
+        "[02066161610206616263, 02066262620206616263)");
 
-    Redact::setRedactLog(true);
+    Redact::setRedactLog(RedactMode::Enable);
     // These will print '?' instead of value
     EXPECT_EQ(raw_pk1.toDebugString(), "?");
     EXPECT_EQ(raw_pk2.toDebugString(), "?");
     EXPECT_EQ(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
 
-    Redact::setRedactLog(false); // restore flags
+    // print values with marker
+    Redact::setRedactLog(RedactMode::Marker);
+    EXPECT_EQ(raw_pk1.toDebugString(), "‹02066161610206616263›");
+    EXPECT_EQ(raw_pk2.toDebugString(), "‹02066262620206616263›");
+    EXPECT_EQ(
+        RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys),
+        "[‹02066161610206616263›, ‹02066262620206616263›)");
+
+    Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 CATCH
 

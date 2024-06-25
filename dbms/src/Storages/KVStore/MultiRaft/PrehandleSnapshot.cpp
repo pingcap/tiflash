@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
@@ -39,6 +40,7 @@ namespace CurrentMetrics
 {
 extern const Metric RaftNumPrehandlingSubTasks;
 extern const Metric RaftNumParallelPrehandlingTasks;
+extern const Metric RaftNumWaitedParallelPrehandlingTasks;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -84,7 +86,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         {
             LOG_DEBUG(
                 log,
-                "Prehandle resource meet, limit={}, current={}, region_id={}",
+                "Prehandle resource meet, limit={} current={} region_id={}",
                 parallel_subtask_limit,
                 ongoing_prehandle_subtask_count.load(),
                 region_id);
@@ -99,6 +101,8 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         ongoing_prehandle_subtask_count.load(),
         parallel,
         region_id);
+
+    CurrentMetrics::add(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
     while (true)
     {
         std::unique_lock<std::mutex> cpu_resource_lock{cpu_resource_mut};
@@ -120,6 +124,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         watch.elapsedSeconds(),
         region_id,
         parallel);
+    CurrentMetrics::sub(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
 }
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
@@ -139,6 +144,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         trace.releaseSubtaskResources(region_id, split_id);
         CurrentMetrics::sub(CurrentMetrics::RaftNumPrehandlingSubTasks);
     });
+    Stopwatch sw;
     LOG_INFO(
         log,
         "Add prehandle task split_id={} limit={}",
@@ -200,6 +206,10 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             stream->cancel();
             res = ReadFromStreamResult{.error = abort_reason.value(), .extra_msg = "", .region = new_region};
         }
+        auto keys_per_second = (sst_stream->getProcessKeys().write_cf + sst_stream->getProcessKeys().lock_cf
+                                + sst_stream->getProcessKeys().default_cf)
+            * 1.0 / sw.elapsedSeconds();
+        GET_METRIC(tiflash_raft_command_throughput, type_prehandle_snapshot).Observe(keys_per_second);
         return std::make_pair(
             std::move(res),
             PrehandleResult{
@@ -254,6 +264,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
+    GET_METRIC(tiflash_raft_raft_events_count, type_prehandle).Increment();
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
 
     ongoing_prehandle_task_count.fetch_add(1);
@@ -323,8 +334,10 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
 
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
+#if SERVERLESS_PROXY == 0
     if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
         return std::make_pair(std::vector<std::string>{}, 0);
+#endif
     auto approx_bytes = sst_stream->getApproxBytes();
     if (approx_bytes <= parallel_prehandle_threshold)
     {
@@ -338,7 +351,9 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     }
 
     // Get this info again, since getApproxBytes maybe take some time.
-    auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
+    // Currently, the head split has not been registered as sub task yet,
+    // so we must add 1 here.
+    auto ongoing_count = kvstore->getOngoingPrehandleSubtaskCount() + 1;
     uint64_t want_split_parts = 0;
     auto total_concurrency = kvstore->getMaxParallelPrehandleSize();
     if (total_concurrency + 1 > ongoing_count)
@@ -390,8 +405,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
         LOG_INFO(
             log,
             "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
-            "region_range={} approx_bytes={} "
-            "region_id={}",
+            "region_range={} approx_bytes={} region_id={}",
             fmt_buf.toString(),
             total_concurrency,
             ongoing_count,
@@ -440,7 +454,7 @@ static void runInParallel(
             = executeTransform(log, prehandle_ctx, part_new_region, part_sst_stream);
         LOG_INFO(
             log,
-            "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={}, "
+            "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={} "
             "split_id={} region_id={}",
             limit_tag,
             part_prehandle_result.stats.write_cf_keys,
@@ -468,8 +482,7 @@ static void runInParallel(
         LOG_INFO(
             log,
             "Parallel prehandling error {}"
-            " write_cf_off={}"
-            " split_id={} region_id={}",
+            " write_cf_off={} split_id={} region_id={}",
             e.message(),
             processed_keys.write_cf,
             extra_id,
@@ -501,10 +514,11 @@ void executeParallelTransform(
         split_key_count);
     LOG_INFO(
         log,
-        "Parallel prehandling for single big region, range={}, split keys={}, region_id={}",
+        "Parallel prehandling for single big region, range={} split_keys={} region_id={} snaps={}",
         new_region->getRange()->toDebugString(),
         split_key_count,
-        new_region->id());
+        new_region->id(),
+        snaps.len);
     Stopwatch watch;
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
@@ -516,6 +530,9 @@ void executeParallelTransform(
     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
     {
         auto add_result = async_tasks.addTask(extra_id, [&, extra_id]() {
+            std::string origin_name = getThreadName();
+            SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
+            setThreadName("para-pre-snap");
             auto limit = DM::SSTScanSoftLimit(
                 extra_id,
                 std::string(split_keys[extra_id]),
@@ -542,9 +559,8 @@ void executeParallelTransform(
     auto [head_result, head_prehandle_result] = executeTransform(log, prehandle_ctx, new_region, sst_stream);
     LOG_INFO(
         log,
-        "Finished extra parallel prehandle task limit={} write_cf {} lock_cf={} default_cf={} dmfiles={} "
-        "error={}, split_id={}, "
-        "region_id={}",
+        "Finished extra parallel prehandle task, limit={} write_cf={} lock_cf={} default_cf={} dmfiles={} "
+        "error={} split_id={} region_id={}",
         sst_stream->getSoftLimit()->toDebugString(),
         head_prehandle_result.stats.write_cf_keys,
         head_prehandle_result.stats.lock_cf_keys,
@@ -706,9 +722,10 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             {
                 LOG_INFO(
                     log,
-                    "Single threaded prehandling for single region, range={} region_id={}",
+                    "Single threaded prehandling for single region, range={} region_id={} snaps={}",
                     new_region->getRange()->toDebugString(),
-                    new_region->id());
+                    new_region->id(),
+                    snaps.len);
                 std::tie(result, prehandle_result) = executeTransform(log, prehandle_ctx, new_region, sst_stream);
             }
             else

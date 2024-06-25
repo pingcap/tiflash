@@ -128,10 +128,10 @@ brew install ninja cmake openssl@1.1 ccache
 If your MacOS is higher or equal to 13.0, it should work out of the box because by default Apple clang is 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
 
 ```shell
-brew install llvm@15
+brew install llvm@17
 
 # check llvm version
-clang --version # should be 15.0.0 or higher
+clang --version # should be 17.0.0 or higher
 ```
 
 </details>
@@ -386,7 +386,7 @@ cd release-centos7-llvm
 # FILTER='*DMFile*:*DeltaMerge*:*Segment*' ./gen_coverage.sh
 
 # After the script finished, it will output the directory of code coverage report, you can check out the files by webbrowser
-python3 -m http --directory "${REPORT_DIR}" "${REPORT_HTTP_PORT}"
+python3 -m http.server --directory "${REPORT_DIR}" "${REPORT_HTTP_PORT}"
 ```
 
 ## Contributing

@@ -18,8 +18,8 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
@@ -87,12 +87,15 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(*ctx);
-    auto query_block = *dag.getRootQueryBlock();
-    google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr
-        ? query_block.children[0]->selection->selection().conditions()
-        : empty_condition;
+    google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
+        if (executor.has_selection())
+        {
+            conditions = executor.selection().conditions();
+            return false;
+        }
+        return true;
+    });
 
     DM::ColumnDefines columns_to_read;
     columns_to_read.reserve(table_info.columns.size());
@@ -392,27 +395,16 @@ try
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"and","children":[{"op":"unsupported","reason":"child of logical and is not function, expr.tp=ColumnRef"},{"op":"unsupported","reason":"child of logical and is not function, expr.tp=Uint64"}]})raw");
     }
 
-    std::cout << " do query select * from default.t_111 where col_6 or 1 " << std::endl;
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 or 1");
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"or","children":[{"op":"unsupported","reason":"child of logical operator is not function, child_type=ColumnRef"},{"op":"unsupported","reason":"child of logical operator is not function, child_type=Uint64"}]})raw");
     }
 
     {

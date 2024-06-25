@@ -14,8 +14,14 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+
+namespace DB
+{
+struct SelectQueryInfo;
+}
 
 namespace DB::DM
 {
@@ -24,7 +30,7 @@ class PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 inline static const PushDownFilterPtr EMPTY_FILTER{};
 
-class PushDownFilter : public std::enable_shared_from_this<PushDownFilter>
+class PushDownFilter
 {
 public:
     PushDownFilter(
@@ -47,6 +53,23 @@ public:
     explicit PushDownFilter(const RSOperatorPtr & rs_operator_)
         : rs_operator(rs_operator_)
     {}
+
+    // Use by StorageDisaggregated.
+    static PushDownFilterPtr build(
+        const DM::RSOperatorPtr & rs_operator,
+        const ColumnInfos & table_scan_column_info,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+        const ColumnDefines & columns_to_read,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
+
+    // Use by StorageDeltaMerge.
+    static DM::PushDownFilterPtr build(
+        const SelectQueryInfo & query_info,
+        const ColumnDefines & columns_to_read,
+        const ColumnDefines & table_column_defines,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
 
     // Rough set operator
     RSOperatorPtr rs_operator;

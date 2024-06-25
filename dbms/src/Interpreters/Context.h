@@ -100,6 +100,8 @@ using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
 class TiFlashSecurityConfig;
 using TiFlashSecurityConfigPtr = std::shared_ptr<TiFlashSecurityConfig>;
 class MockStorage;
+class JointThreadInfoJeallocMap;
+using JointThreadInfoJeallocMapPtr = std::shared_ptr<JointThreadInfoJeallocMap>;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -457,6 +459,10 @@ public:
     UniversalPageStoragePtr tryGetWriteNodePageStorage() const;
     bool tryUploadAllDataToRemoteStore() const;
     void tryReleaseWriteNodePageStorageForTest();
+
+    void initializeJointThreadInfoJeallocMap();
+    JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const;
+    JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap(std::unique_lock<std::recursive_mutex> &) const;
 
     SharedContextDisaggPtr getSharedContextDisagg() const;
 

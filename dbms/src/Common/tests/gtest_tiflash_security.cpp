@@ -13,46 +13,45 @@
 // limitations under the License.
 
 #include <Common/TiFlashSecurity.h>
+#include <Poco/File.h>
+#include <Poco/FileStream.h>
 #include <TestUtils/ConfigTestUtils.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
-class TiFlashSecurityTest : public ext::Singleton<TiFlashSecurityTest>
-{
-};
 
 TEST(TiFlashSecurityTest, Config)
 {
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String("[abc,efg]"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String(R"(["abc","efg"])"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String("[ abc , efg ]"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String(R"([ "abc", "efg" ])"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
     TiFlashSecurityConfig tiflash_config;
     const auto log = Logger::get();
     tiflash_config.setLog(log);
-
-    tiflash_config.parseAllowedCN(String("[abc,efg]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"(["abc","efg"])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String("[ abc , efg ]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"([ "abc", "efg" ])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
 
     String test =
         R"(
@@ -75,6 +74,31 @@ cert_allowed_cn="tidb"
     auto new_tiflash_config = TiFlashSecurityConfig(log);
     new_tiflash_config.init(*new_config);
     ASSERT_EQ((int)new_tiflash_config.allowedCommonNames().count("tidb"), 0);
+}
+
+TEST(TiFlashSecurityTest, RedactLogConfig)
+{
+    for (const auto & [input, expect] : std::vector<std::pair<String, RedactMode>>{
+             {"marker", RedactMode::Marker},
+             {"Marker", RedactMode::Marker},
+             {"MARKER", RedactMode::Marker},
+             {"true", RedactMode::Enable},
+             {"True", RedactMode::Enable},
+             {"TRUE", RedactMode::Enable},
+             {"yes", RedactMode::Enable},
+             {"on", RedactMode::Enable},
+             {"1", RedactMode::Enable},
+             {"2", RedactMode::Enable},
+             {"false", RedactMode::Disable},
+             {"False", RedactMode::Disable},
+             {"FALSE", RedactMode::Disable},
+             {"no", RedactMode::Disable},
+             {"off", RedactMode::Disable},
+             {"0", RedactMode::Disable},
+         })
+    {
+        EXPECT_EQ(TiFlashSecurityConfig::parseRedactLog(input), expect);
+    }
 }
 
 TEST(TiFlashSecurityTest, Update)
@@ -188,5 +212,86 @@ redact_info_log=false
     ASSERT_TRUE(tiflash_config_2.allowedCommonNames().empty());
     ASSERT_FALSE(tiflash_config_2.hasTlsConfig());
 }
-} // namespace tests
-} // namespace DB
+
+String createConfigString(String & ca_path, String & cert_path, String & key_path)
+{
+    String ret =
+        R"(
+[security]
+ca_path=")";
+    ret += ca_path;
+    ret += R"("
+cert_path=")";
+    ret += cert_path;
+    ret += R"("
+key_path=")";
+    ret += key_path;
+    ret += R"("
+)";
+    return ret;
+}
+
+TEST(TiFlashSecurityTest, readAndCacheSslCredentialOptions)
+{
+    const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
+    assert(test_info);
+    String file_name = test_info->file();
+    auto pos = file_name.find_last_of('/');
+    auto file_path = file_name.substr(0, pos);
+    // these certs are copied from https://github.com/grpc/grpc/tree/v1.64.0/src/python/grpcio_tests/tests/unit/credentials
+    auto ca_path = file_path + "/tls/ca.crt";
+    auto cert_path = file_path + "/tls/cert.crt";
+    auto key_path = file_path + "/tls/key.pem";
+    auto test = createConfigString(ca_path, cert_path, key_path);
+    auto config = loadConfigFromString(test);
+    const auto log = Logger::get();
+    TiFlashSecurityConfig tiflash_config(log);
+    tiflash_config.init(*config);
+    // first read will return a valid options
+    auto options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_TRUE(options.has_value());
+    // not return valid options if cert is not changed
+    auto new_options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_FALSE(new_options.has_value());
+    ca_path = file_path + "/tls/ca.crt.new";
+    cert_path = file_path + "/tls/cert.crt.new";
+    key_path = file_path + "/tls/key.pem.new";
+    {
+        Poco::FileOutputStream ca_fos(ca_path);
+        ca_fos << options.value().pem_root_certs;
+        Poco::FileOutputStream cert_fos(cert_path);
+        cert_fos << options.value().pem_cert_chain;
+        Poco::FileOutputStream key_fos(key_path);
+        key_fos << options.value().pem_private_key;
+    }
+    test = createConfigString(ca_path, cert_path, key_path);
+    config = loadConfigFromString(test);
+    ASSERT_TRUE(tiflash_config.update(*config));
+    // return a valid options if cert is changed
+    options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_TRUE(options.has_value());
+    new_options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_FALSE(new_options.has_value());
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(1s);
+    {
+        // change the modified time
+        Poco::FileOutputStream fos(ca_path);
+        fos << options.value().pem_root_certs;
+    }
+    new_options = tiflash_config.readAndCacheSslCredentialOptions();
+    // no aware of the change since `update` is not called
+    ASSERT_FALSE(new_options.has_value());
+    ASSERT_TRUE(tiflash_config.update(*config));
+    // aware of the change and return a new options
+    new_options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_TRUE(new_options.has_value());
+    Poco::File ca_file(ca_path);
+    ca_file.remove(false);
+    Poco::File cert_file(cert_path);
+    cert_file.remove(false);
+    Poco::File key_file(key_path);
+    key_file.remove(false);
+}
+
+} // namespace DB::tests

@@ -501,19 +501,8 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         std::vector<int>{},
         0,
         db_context.getTimezoneInfo());
-    auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
-        auto iter = std::find_if(defines->begin(), defines->end(), [column_id](const DM::ColumnDefine & d) -> bool {
-            return d.id == column_id;
-        });
-        if (iter != defines->end())
-            return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
-    auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
-    if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
-        LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
-    return rs_operator;
+
+    return DM::RSOperator::build(dag_query, *columns_to_read, *columns_to_read, enable_rs_filter, log);
 }
 
 std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(
@@ -526,7 +515,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
+    auto push_down_filter = DM::PushDownFilter::build(
         rs_operator,
         table_scan.getColumns(),
         table_scan.getPushedDownFilters(),
@@ -538,7 +527,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         push_down_filter);
-    const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
+    const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     const auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
     LOG_INFO(
         log,
@@ -558,7 +547,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             extra_table_id_index,
             *column_defines,
             push_down_filter,
-            read_tso,
+            start_ts,
             db_context.getSettingsRef().max_block_size,
             read_mode,
             std::move(read_tasks),
@@ -576,7 +565,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             {
                 .log = log->getChild(executor_id),
                 .columns_to_read = column_defines,
-                .read_tso = read_tso,
+                .start_ts = start_ts,
                 .push_down_filter = push_down_filter,
                 .read_mode = read_mode,
             },

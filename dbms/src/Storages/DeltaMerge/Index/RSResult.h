@@ -75,6 +75,10 @@ inline RSResult operator&&(RSResult v0, RSResult v1)
     return Some;
 }
 
+ALWAYS_INLINE inline bool isUse(RSResult res) noexcept
+{
+    return res != RSResult::None;
+}
 } // namespace DM
 
 } // namespace DB
