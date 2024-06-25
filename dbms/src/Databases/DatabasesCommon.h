@@ -89,12 +89,12 @@ private:
     Tables::iterator it;
 
 public:
-    DatabaseSnapshotIterator(Tables & tables_)
+    explicit DatabaseSnapshotIterator(Tables & tables_)
         : tables(tables_)
         , it(tables.begin())
     {}
 
-    DatabaseSnapshotIterator(Tables && tables_)
+    explicit DatabaseSnapshotIterator(Tables && tables_)
         : tables(tables_)
         , it(tables.begin())
     {}
@@ -127,7 +127,7 @@ public:
 
     void shutdown() override;
 
-    virtual ~DatabaseWithOwnTablesBase() override;
+    ~DatabaseWithOwnTablesBase() override;
 
 protected:
     String name;
@@ -135,7 +135,7 @@ protected:
     mutable std::mutex mutex;
     Tables tables;
 
-    DatabaseWithOwnTablesBase(String name_)
+    explicit DatabaseWithOwnTablesBase(String name_)
         : name(std::move(name_))
     {}
 };

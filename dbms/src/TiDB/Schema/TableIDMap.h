@@ -76,6 +76,8 @@ struct TableIDMap
         return tables;
     }
 
+    std::map<TableID, DatabaseID> getAllPartitionsBelongDatabase() const;
+
     bool tableIDInTwoMaps(TableID table_id) const
     {
         std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);
