@@ -118,8 +118,14 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
 
     auto rs_operator
         = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
-    auto push_down_filter
-        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
+    auto push_down_filter = DM::PushDownFilter::build(
+        rs_operator,
+        table_info.columns,
+        pushed_down_filters,
+        {},
+        columns_to_read,
+        *ctx,
+        log);
     return push_down_filter;
 }
 
@@ -148,14 +154,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -170,14 +177,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"666\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -192,14 +200,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -214,14 +223,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -236,14 +246,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"776\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 }
 CATCH
@@ -272,14 +283,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -294,14 +306,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -316,14 +329,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"667\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -338,14 +352,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -360,14 +375,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -382,14 +398,15 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"777\"}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 }
 CATCH
@@ -422,17 +439,18 @@ try
             rs_operator->toDebugString(),
             "{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -449,17 +467,18 @@ try
             R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns->size(), 2);
+        EXPECT_EQ(filter->LMColumns()->size(), 2);
     }
 
     {
@@ -478,17 +497,18 @@ try
             "{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"equal\","
             "\"col\":\"col_2\",\"value\":\"777\"}]}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 0);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     // More complicated
@@ -506,17 +526,18 @@ try
             R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns->size(), 2);
+        EXPECT_EQ(filter->LMColumns()->size(), 2);
     }
 
     {
@@ -535,17 +556,18 @@ try
             "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"not\","
             "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"}]}]}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 0);
-        EXPECT_EQ(filter->filter_columns->size(), 2);
+        EXPECT_EQ(filter->LMColumns()->size(), 2);
     }
 
     {
@@ -566,17 +588,18 @@ try
             "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"},{\"op\":\"equal\",\"col\":\"col_3\","
             "\"value\":\"678\"}]}]}");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 789, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns->size(), 2);
+        EXPECT_EQ(filter->LMColumns()->size(), 2);
     }
 
     {
@@ -593,17 +616,18 @@ try
             R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns->size(), 2);
+        EXPECT_EQ(filter->LMColumns()->size(), 2);
     }
 
     {
@@ -620,17 +644,18 @@ try
             R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 2);
+        EXPECT_EQ(filter->LMColumns()->size(), 2);
     }
 
     {
@@ -645,17 +670,18 @@ try
             rs_operator->toDebugString(),
             R"raw({"op":"and","children":[{"op":"unsupported","reason":"child of logical and is not function, expr.tp=ColumnRef"},{"op":"unsupported","reason":"child of logical and is not function, expr.tp=Uint64"}]})raw");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 6);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -670,16 +696,17 @@ try
             rs_operator->toDebugString(),
             R"raw({"op":"or","children":[{"op":"unsupported","reason":"child of logical operator is not function, child_type=ColumnRef"},{"op":"unsupported","reason":"child of logical operator is not function, child_type=Uint64"}]})raw");
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
-        filter->before_where->execute(before_where_block);
+        EXPECT_EQ(lm_filter->extra_cast, nullptr);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         EXPECT_TRUE(col->isColumnConst()); // always true, so filter column is const column
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     // TODO: add is null and is not null test case
@@ -732,6 +759,7 @@ try
             String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
                 + String("\"}"));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<UInt64>(
                  "col_timestamp",
@@ -749,14 +777,14 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
-        filter->extra_cast->execute(before_where_block);
-        filter->before_where->execute(before_where_block);
+        EXPECT_TRUE(lm_filter->extra_cast);
+        lm_filter->extra_cast->execute(before_where_block);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 3);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -781,6 +809,7 @@ try
             String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
                 + String("\"}"));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<UInt64>(
                  "col_timestamp",
@@ -805,14 +834,14 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
-        filter->extra_cast->execute(before_where_block);
-        filter->before_where->execute(before_where_block);
+        EXPECT_TRUE(lm_filter->extra_cast);
+        lm_filter->extra_cast->execute(before_where_block);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -837,6 +866,7 @@ try
             String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
                 + String("\"}"));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<UInt64>(
                  "col_timestamp",
@@ -861,14 +891,14 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
-        filter->extra_cast->execute(before_where_block);
-        filter->before_where->execute(before_where_block);
+        EXPECT_TRUE(lm_filter->extra_cast);
+        lm_filter->extra_cast->execute(before_where_block);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -886,6 +916,7 @@ try
             String("{\"op\":\"greater\",\"col\":\"col_datetime\",\"value\":\"") + toString(origin_time_stamp)
                 + String("\"}"));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<UInt64>(
                  "col_timestamp",
@@ -910,13 +941,13 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(!filter->extra_cast);
-        filter->before_where->execute(before_where_block);
+        EXPECT_TRUE(!lm_filter->extra_cast);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 4);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 
     {
@@ -934,6 +965,7 @@ try
             String("{\"op\":\"greater\",\"col\":\"col_date\",\"value\":\"") + toString(origin_time_stamp)
                 + String("\"}"));
 
+        const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<UInt64>(
                  "col_timestamp",
@@ -965,13 +997,13 @@ try
                   1849259496301477888,
                   667,
                   888439})}};
-        EXPECT_TRUE(!filter->extra_cast);
-        filter->before_where->execute(before_where_block);
+        EXPECT_TRUE(!lm_filter->extra_cast);
+        lm_filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
-        auto & col = before_where_block.getByName(filter->filter_column_name).column;
+        auto & col = before_where_block.getByName(lm_filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 3);
-        EXPECT_EQ(filter->filter_columns->size(), 1);
+        EXPECT_EQ(filter->LMColumns()->size(), 1);
     }
 }
 CATCH

@@ -26,53 +26,54 @@ struct SelectQueryInfo;
 namespace DB::DM
 {
 
-class PushDownFilter;
+struct PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 inline static const PushDownFilterPtr EMPTY_FILTER{};
 
-class PushDownFilter
+class QueryFilter;
+using QueryFilterPtr = std::shared_ptr<QueryFilter>;
+
+enum class QueryFilterType
+{
+    LM,
+    Rest,
+};
+
+class QueryFilter
 {
 public:
-    PushDownFilter(
-        const RSOperatorPtr & rs_operator_,
+    QueryFilter(
+        QueryFilterType filter_type_,
         const ExpressionActionsPtr & beofre_where_,
         const ExpressionActionsPtr & project_after_where_,
-        const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,
         const ExpressionActionsPtr & extra_cast_,
-        const ColumnDefinesPtr & columns_after_cast_)
-        : rs_operator(rs_operator_)
+        std::unordered_map<ColumnID, DataTypePtr> && casted_column_types_)
+        : filter_type(filter_type_)
         , before_where(beofre_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
-        , filter_columns(filter_columns_)
         , extra_cast(extra_cast_)
-        , columns_after_cast(columns_after_cast_)
+        , casted_column_types(std::move(casted_column_types_))
     {}
 
-    explicit PushDownFilter(const RSOperatorPtr & rs_operator_)
-        : rs_operator(rs_operator_)
-    {}
+    bool empty() const { return before_where == nullptr; }
 
-    // Use by StorageDisaggregated.
-    static PushDownFilterPtr build(
-        const DM::RSOperatorPtr & rs_operator,
+    BlockInputStreamPtr buildFilterInputStream( //
+        BlockInputStreamPtr stream,
+        bool need_project,
+        const String & tracing_id) const;
+
+    static QueryFilterPtr build(
+        QueryFilterType filter_type,
+        const ColumnDefines & filter_columns_to_read,
         const ColumnInfos & table_scan_column_info,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
-        const ColumnDefines & columns_to_read,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+        const ColumnDefines & table_scan_columns_to_read,
         const Context & context,
         const LoggerPtr & tracing_logger);
 
-    // Use by StorageDeltaMerge.
-    static DM::PushDownFilterPtr build(
-        const SelectQueryInfo & query_info,
-        const ColumnDefines & columns_to_read,
-        const ColumnDefines & table_column_defines,
-        const Context & context,
-        const LoggerPtr & tracing_logger);
-
-    // Rough set operator
-    RSOperatorPtr rs_operator;
+    const QueryFilterType filter_type;
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
     const ExpressionActionsPtr before_where;
@@ -81,12 +82,80 @@ public:
     // Note: ususally we will remove the tmp filter column in the LateMaterializationBlockInputStream, this only used for unexpected cases
     const ExpressionActionsPtr project_after_where;
     const String filter_column_name;
-    // The columns needed by the filter expression
-    const ColumnDefinesPtr filter_columns;
     // The expression actions used to cast the timestamp/datetime column
     const ExpressionActionsPtr extra_cast;
     // If the extra_cast is not null, the types of the columns may be changed
-    const ColumnDefinesPtr columns_after_cast;
+    std::unordered_map<ColumnID, DataTypePtr> casted_column_types;
+};
+
+struct PushDownFilter
+{
+public:
+    PushDownFilter(
+        const RSOperatorPtr & rs_operator_,
+        const QueryFilterPtr & lm_filter_,
+        const QueryFilterPtr & rest_filter_,
+        const ColumnDefinesPtr & lm_columns_,
+        const ColumnDefinesPtr & rest_columns_,
+        const ColumnDefinesPtr & casted_columns_)
+        : rs_operator(rs_operator_)
+        , lm_filter(lm_filter_)
+        , rest_filter(rest_filter_)
+        , lm_columns(lm_columns_)
+        , rest_columns(rest_columns_)
+        , casted_columns(casted_columns_)
+    {}
+
+    bool hasLMFilter() const { return lm_filter && !lm_filter->empty(); }
+    bool hasRestFilter() const { return rest_filter && !rest_filter->empty(); }
+    bool empty() const { return !hasLMFilter() && !hasRestFilter(); }
+    const ColumnDefinesPtr & castedColumns() const { return casted_columns; }
+    const ColumnDefinesPtr & LMColumns() const { return lm_columns; }
+    const ColumnDefinesPtr & restColumns() const { return rest_columns; }
+
+    // Use by StorageDisaggregated.
+    static PushDownFilterPtr build(
+        const RSOperatorPtr & rs_operator,
+        const ColumnInfos & table_scan_column_info,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & lm_filter_exprs,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & rest_filter_exprs,
+        const ColumnDefines & table_scan_columns_to_read,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
+
+    // Use by StorageDeltaMerge.
+    static PushDownFilterPtr build(
+        const SelectQueryInfo & query_info,
+        const ColumnDefines & columns_to_read,
+        const ColumnDefines & table_column_defines,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
+
+    static PushDownFilterPtr build(const RSOperatorPtr & rs_operator)
+    {
+        return std::make_shared<PushDownFilter>(rs_operator, nullptr, nullptr, nullptr, nullptr, nullptr);
+    }
+
+    RSOperatorPtr rs_operator;
+    QueryFilterPtr lm_filter;
+    QueryFilterPtr rest_filter;
+
+private:
+    ColumnDefinesPtr lm_columns;
+    ColumnDefinesPtr rest_columns;
+    ColumnDefinesPtr casted_columns;
 };
 
 } // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DataTypePtr>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DataTypePtr & t, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", t->getName());
+    }
+};

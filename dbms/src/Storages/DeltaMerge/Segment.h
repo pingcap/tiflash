@@ -40,7 +40,7 @@ class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
-class PushDownFilter;
+struct PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 
 enum class ReadMode;
@@ -527,7 +527,7 @@ public:
 
     PageIdU64 segmentId() const { return segment_id; }
     PageIdU64 nextSegmentId() const { return next_segment_id; }
-    UInt64 segmentEpoch() const { return epoch; };
+    UInt64 segmentEpoch() const { return epoch; }
 
     void check(DMContext & dm_context, const String & when) const;
 
@@ -697,7 +697,7 @@ public:
         BitmapFilterPtr && bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
+        const ColumnDefinesPtr & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         UInt64 start_ts,
