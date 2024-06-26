@@ -30,7 +30,6 @@ extern const int PARAMETER_OUT_OF_BOUND;
 extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 } // namespace ErrorCodes
 
-
 MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
 {
     auto res = ColumnString::create();
@@ -463,7 +462,6 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-// todo: change func name
 void updateWeakHash32BinPadding(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
@@ -494,7 +492,6 @@ void updateWeakHash32NoCollator(const std::string_view & view, size_t /*row*/, W
     ++info.hash_data;
 }
 
-// todo change loop_func -> iterator_column_func or not?
 template <typename LoopFunc>
 void ColumnString::updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const
 {
@@ -528,29 +525,6 @@ void ColumnString::updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & 
     }
 }
 
-// todo move to helper file
-// Loop one column and invoke callback for each pair.
-// Remove last zero byte.
-template <typename Chars, typename Offsets, typename Func>
-FLATTEN_INLINE static inline void LoopOneColumnTmp(
-    const Chars & a_data,
-    const Offsets & a_offsets,
-    size_t size,
-    WeakHash32Info & info,
-    const Func & func)
-{
-    uint64_t a_prev_offset = 0;
-
-    for (size_t i = 0; i < size; ++i)
-    {
-        auto a_size = a_offsets[i] - a_prev_offset;
-
-        // Remove last zero byte.
-        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
-        a_prev_offset = a_offsets[i];
-    }
-}
-
 template <typename Chars, typename Offsets, typename Func>
 FLATTEN_INLINE static inline void LoopColumnSelective(
     const Chars & chars,
@@ -561,12 +535,10 @@ FLATTEN_INLINE static inline void LoopColumnSelective(
 {
     for (auto row : *info.selective_ptr)
     {
-        // todo better way to handle 1st row?
         auto prev_offset = 0;
         if likely (row > 0)
             prev_offset = offsets[row - 1];
 
-        // todo why? Remove last zero byte.
         func({reinterpret_cast<const char *>(&chars[prev_offset]), offsets[row] - prev_offset - 1}, row, info);
     }
 }
@@ -578,7 +550,6 @@ void ColumnString::updateWeakHash32(
 {
     auto s = offsets.size();
 
-    // todo vec instead
     if (hash.getData().size() != s)
         throw Exception(
             fmt::format(
@@ -598,7 +569,6 @@ void ColumnString::updateWeakHash32(
         LoopOneColumnTmp<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
 }
 
-// todo selective_ptr -> selective
 void ColumnString::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,

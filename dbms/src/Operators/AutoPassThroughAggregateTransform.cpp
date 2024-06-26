@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/AutoPassThroughAggregateTransform.h>
 
 #include <magic_enum.hpp>
@@ -26,7 +27,10 @@ AutoPassThroughAggregateTransform::AutoPassThroughAggregateTransform(
     : TransformOp(exec_context_, req_id_)
     , status(Status::building_hash_map)
 {
-    auto_pass_through_context = std::make_shared<AutoPassThroughHashAggContext>(params_, req_id_);
+    auto_pass_through_context = std::make_shared<AutoPassThroughHashAggContext>(
+        params_,
+        [&]() { return exec_context.isCancelled(); },
+        req_id_);
 }
 
 OperatorStatus AutoPassThroughAggregateTransform::transformImpl(Block & block)

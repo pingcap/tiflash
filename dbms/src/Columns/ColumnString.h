@@ -20,20 +20,10 @@
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
 #include <common/memcpy.h>
+#include <TiDB/Collation/CollatorUtils.h>
 
 namespace DB
 {
-// todo: move to helper file
-// Used when updating hash for column.
-struct WeakHash32Info
-{
-    // Current updating hash data position.
-    UInt32 * hash_data;
-    String sort_key_container;
-    TiDB::TiDBCollatorPtr collator;
-    BlockSelectivePtr selective_ptr;
-};
-
 /** Column for String values.
   */
 class ColumnString final : public COWPtrHelper<IColumn, ColumnString>
@@ -274,7 +264,6 @@ public:
         }
     }
 
-    // todo: difference with updateWeakHash32
     void updateHashWithValues(
         IColumn::HashValues & hash_values,
         const TiDB::TiDBCollatorPtr & collator,
@@ -282,12 +271,6 @@ public:
 
     template <typename LoopFunc>
     void updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const;
-
-    // void updateWeakHash32(
-    //         WeakHash32 & hash,
-    //         const TiDB::TiDBCollatorPtr & collator,
-    //         String & sort_key_container,
-    //         BlockSelectivePtr selective_ptr) const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const override;

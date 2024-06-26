@@ -34,7 +34,10 @@ public:
         const String & req_id)
     {
         children.push_back(input_);
-        auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(params_, req_id);
+        auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(
+            params_,
+            [&]() { return this->isCancelled(); },
+            req_id);
     }
 
     String getName() const override { return NAME; }

@@ -16,14 +16,11 @@
 
 namespace DB
 {
-// todo: need data arg or not?
 void AutoPassThroughHashAggContext::onBlock(Block & block)
 {
-    // todo check if spilled to force passthrough?
-    // todo check if two level to force passthrough?
-    // todo assert getData() is not called!
-    RUNTIME_CHECK_MSG(!merging_buckets, "Shouldn't insert into HashMap if start to get data");
+    RUNTIME_CHECK_MSG(!already_start_to_get_data, "Shouldn't insert into HashMap if already start to get data");
 
+    forceSwitchToPassThroughIfSpill();
     agg_process_info->resetBlock(block);
     switch (state)
     {
@@ -79,23 +76,24 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
     RUNTIME_CHECK(agg_process_info->allBlockDataHandled());
 }
 
+void AutoPassThroughHashAggContext::forceSwitchToPassThroughIfSpill()
+{
+    if (many_data[0]->need_spill)
+        state = State::PassThrough;
+}
+
 Block AutoPassThroughHashAggContext::getData()
 {
-    if (already_start_to_get_data && !merging_buckets)
-        return {};
-
-    if (!merging_buckets)
+    if unlikely (!already_start_to_get_data)
     {
         already_start_to_get_data = true;
+        RUNTIME_CHECK(!merging_buckets);
         merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, /*final=*/true, /*max_threads=*/1);
     }
 
-    already_start_to_get_data = true;
+    // merging_buckets still can be nullptr when HashMap is empty.
     if (merging_buckets)
     {
-        // todo merging_buckets is null when no data in data variants
-        // todo: how and why force one level?
-        RUNTIME_CHECK(!merging_buckets->isTwoLevel());
         auto block = merging_buckets->getData(/*concurrency_index=*/0);
         makeFullSelective(block);
         return block;
@@ -154,8 +152,6 @@ void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 void AutoPassThroughHashAggContext::passThrough(const Block & block)
 {
     pass_through_block_buffer.push_back(block);
-    // todo is necessary?
-    // agg_process_info.start_row = agg_process_info.end_row;
 }
 
 Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)

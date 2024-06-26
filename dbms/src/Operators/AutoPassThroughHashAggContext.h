@@ -21,15 +21,17 @@ namespace DB
 class AutoPassThroughHashAggContext
 {
 public:
-    explicit AutoPassThroughHashAggContext(const Aggregator::Params & params_, const String & req_id_)
+    explicit AutoPassThroughHashAggContext(
+        const Aggregator::Params & params_,
+        Aggregator::CancellationHook && hook,
+        const String & req_id_)
         : state(State::Init)
         , many_data(std::vector<AggregatedDataVariantsPtr>(1, nullptr))
     {
         aggregator = std::make_unique<Aggregator>(params_, req_id_, 1, nullptr);
-        // todo make unique?
+        aggregator->setCancellationHook(hook);
+        aggregator->initThresholdByAggregatedDataVariantsSize(1);
         many_data[0] = std::make_shared<AggregatedDataVariants>();
-        // todo cancel hook
-        // init threshold by aggregaed data variants
         agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
     }
 
@@ -58,7 +60,6 @@ public:
 
     State getCurState() const { return state; }
 
-    // todo change name
     size_t getNonAdjustRowLimit() const { return non_adjust_row_limit; }
     size_t getAdjustRowLimit() const { return adjust_row_limit; }
 
@@ -70,6 +71,7 @@ private:
     void passThrough(const Block & block);
     Block getPassThroughBlock(const Block & block);
 
+    void forceSwitchToPassThroughIfSpill();
     static void makeFullSelective(Block & block);
 
     static constexpr float PassThroughRateLimit = 0.2;

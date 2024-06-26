@@ -165,7 +165,10 @@ protected:
             aggregate_descriptions,
             /*final=*/true,
             spill_config);
-        return std::make_unique<AutoPassThroughHashAggContext>(*params, req_id);
+        return std::make_unique<AutoPassThroughHashAggContext>(
+            *params,
+            [&]() { return false; },
+            req_id);
     }
 
     std::pair<BlocksList, Block> buildBlocks(size_t block_num, size_t distinct_num)
