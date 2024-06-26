@@ -24,6 +24,7 @@ UniversalPageId::~UniversalPageId()
 
 UniversalPageId::UniversalPageId(UniversalPageId && other)
 {
+    // PS::PageStorageMemorySummary::uni_page_id_bytes has been set when `other` created
     id = std::move(other.id);
 }
 UniversalPageId::UniversalPageId(const UniversalPageId & other)
