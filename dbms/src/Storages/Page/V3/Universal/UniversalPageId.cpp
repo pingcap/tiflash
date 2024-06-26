@@ -24,23 +24,24 @@ UniversalPageId::~UniversalPageId()
 
 UniversalPageId::UniversalPageId(UniversalPageId && other)
 {
+    // PS::PageStorageMemorySummary::uni_page_id_bytes has been set when `other` created
     id = std::move(other.id);
 }
 UniversalPageId::UniversalPageId(const UniversalPageId & other)
 {
-    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.id.size());
     id = other.id;
 }
 UniversalPageId & UniversalPageId::operator=(UniversalPageId && other) noexcept
 {
-    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
     id = std::move(other.id);
     return *this;
 }
 UniversalPageId & UniversalPageId::operator=(const UniversalPageId & other) noexcept
 {
-    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(size());
-    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.id.size());
     id = other.id;
     return *this;
 }
