@@ -36,8 +36,8 @@ And the following operating systems:
 
 The following packages are required:
 
-- CMake 3.21.0+
-- Clang 17.0.0+ under Linux or AppleClang 15.0.0+ under MacOS
+- CMake 3.23.0+
+- Clang 17.0.0+ under Linux or AppleClang 14.0.0+ under MacOS
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
