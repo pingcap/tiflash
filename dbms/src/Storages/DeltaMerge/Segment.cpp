@@ -36,8 +36,9 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-// #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
+#include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
@@ -1300,50 +1301,16 @@ SegmentPtr Segment::replaceStableMetaVersion(
     DMContext & dm_context,
     const DMFiles & new_stable_files)
 {
-    auto current_stable_files_str = [&] {
-        FmtBuffer fmt_buf;
-        fmt_buf.append('[');
-        fmt_buf.joinStr(
-            stable->getDMFiles().begin(),
-            stable->getDMFiles().end(),
-            [](const DMFilePtr & file, FmtBuffer & fb) {
-                fb.fmtAppend("dmf_{}(v{})", file->fileId(), file->metaVersion());
-            },
-            ",");
-        fmt_buf.append(']');
-        return fmt_buf.toString();
-    };
-
-    auto new_stable_files_str = [&] {
-        FmtBuffer fmt_buf;
-        fmt_buf.append('[');
-        fmt_buf.joinStr(
-            new_stable_files.begin(),
-            new_stable_files.end(),
-            [](const DMFilePtr & file, FmtBuffer & fb) {
-                fb.fmtAppend("dmf_{}(v{})", file->fileId(), file->metaVersion());
-            },
-            ",");
-        fmt_buf.append(']');
-        return fmt_buf.toString();
-    };
-
-    LOG_DEBUG(
-        log,
-        "ReplaceStableMetaVersion - Begin, current_stable={} new_stable={}",
-        current_stable_files_str(),
-        new_stable_files_str());
-
-    // Ensure new stable files have the same DMFile ID as the old stable files.
+    // Ensure new stable files have the same DMFile ID and Page ID as the old stable files.
     // We only allow changing meta version when calling this function.
 
     if (new_stable_files.size() != stable->getDMFiles().size())
     {
         LOG_WARNING(
             log,
-            "ReplaceStableMetaVersion - Fail, stable files count mismatch, current_stable={} new_stable={}",
-            current_stable_files_str(),
-            new_stable_files_str());
+            "ReplaceStableMetaVersion - Failed due to stable mismatch, current_stable={} new_stable={}",
+            DMFile::info(stable->getDMFiles()),
+            DMFile::info(new_stable_files));
         return {};
     }
     for (size_t i = 0; i < new_stable_files.size(); i++)
@@ -1352,17 +1319,45 @@ SegmentPtr Segment::replaceStableMetaVersion(
         {
             LOG_WARNING(
                 log,
-                "ReplaceStableMetaVersion - Fail, stable files mismatch, current_stable={} new_stable={}",
-                current_stable_files_str(),
-                new_stable_files_str());
+                "ReplaceStableMetaVersion - Failed due to stable mismatch, current_stable={} "
+                "new_stable={}",
+                DMFile::info(stable->getDMFiles()),
+                DMFile::info(new_stable_files));
             return {};
         }
     }
 
     WriteBatches wbs(*dm_context.storage_pool, dm_context.getWriteLimiter());
 
+    DMFiles new_dm_files;
+    new_dm_files.reserve(new_stable_files.size());
+    const auto & current_stable_files = stable->getDMFiles();
+    for (size_t file_idx = 0; file_idx < new_stable_files.size(); ++file_idx)
+    {
+        const auto & new_file = new_stable_files[file_idx];
+        const auto & current_file = current_stable_files[file_idx];
+        RUNTIME_CHECK(new_file->fileId() == current_file->fileId());
+        if (new_file->pageId() != current_file->pageId())
+        {
+            // Allow pageId being different. We will restore using a correct pageId
+            // because this function is supposed to only update meta version.
+            auto new_dmfile = DMFile::restore(
+                dm_context.db_context.getFileProvider(),
+                new_file->fileId(),
+                current_file->pageId(),
+                new_file->parentPath(),
+                DMFileMeta::ReadMode::all(),
+                new_file->metaVersion());
+            new_dm_files.push_back(new_dmfile);
+        }
+        else
+        {
+            new_dm_files.push_back(new_file);
+        }
+    }
+
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
-    new_stable->setFiles(new_stable_files, rowkey_range, &dm_context);
+    new_stable->setFiles(new_dm_files, rowkey_range, &dm_context);
     new_stable->saveMeta(wbs.meta);
 
     auto new_me = std::make_shared<Segment>( //
@@ -1377,8 +1372,11 @@ SegmentPtr Segment::replaceStableMetaVersion(
 
     wbs.writeAll();
 
-    LOG_DEBUG(log, "ReplaceStableMetaVersion - Finish, new_stable_files={}", new_stable_files_str());
-
+    LOG_DEBUG(
+        log,
+        "ReplaceStableMetaVersion - Finish, new_stable={} old_stable={}",
+        DMFile::info(new_stable_files),
+        DMFile::info(stable->getDMFiles()));
     return new_me;
 }
 
@@ -2362,9 +2360,10 @@ void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr &
 String Segment::simpleInfo() const
 {
     return fmt::format(
-        "<segment_id={} epoch={} range={}{}>",
+        "<segment_id={} epoch={} stable={} range={}{}>",
         segment_id,
         epoch,
+        stable->getDMFilesString(),
         rowkey_range.toDebugString(),
         hasAbandoned() ? " abandoned=true" : "");
 }

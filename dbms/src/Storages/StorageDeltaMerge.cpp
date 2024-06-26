@@ -47,6 +47,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/KVStore/Region.h>
@@ -62,7 +63,6 @@
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 
-#include <random>
 
 namespace DB
 {
@@ -1957,6 +1957,40 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
     return desc;
 }
 
+IndexInfosPtr extractLocalIndexInfos(const TiDB::TableInfo & table_info)
+{
+    IndexInfosPtr index_infos = std::make_shared<IndexInfos>();
+    index_infos->reserve(table_info.columns.size());
+    for (const auto & col : table_info.columns)
+    {
+        // TODO: support more index type
+        if (col.vector_index)
+        {
+            // Vector Index requires a specific storage format to work.
+            if ((STORAGE_FORMAT_CURRENT.identifier > 0 && STORAGE_FORMAT_CURRENT.identifier < 6)
+                || STORAGE_FORMAT_CURRENT.identifier == 100)
+            {
+                LOG_ERROR(
+                    Logger::get(),
+                    "The current storage format is {}, which does not support building vector index. TiFlash will "
+                    "write data without vector index.",
+                    STORAGE_FORMAT_CURRENT.identifier);
+                return {};
+            }
+
+            index_infos->emplace_back(IndexInfo{
+                .type = IndexType::Vector,
+                .column_id = col.id,
+                .column_name = col.name,
+                .index_definition = col.vector_index,
+            });
+        }
+    }
+
+    index_infos->shrink_to_fit();
+    return index_infos;
+}
+
 DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread_pool)
 {
     if (storeInited())
@@ -1966,7 +2000,8 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
     std::lock_guard lock(store_mutex);
     if (_store == nullptr)
     {
-        _store = std::make_shared<DeltaMergeStore>(
+        auto index_infos = extractLocalIndexInfos(tidb_table_info);
+        _store = DeltaMergeStore::create(
             global_context,
             data_path_contains_database_name,
             table_column_info->db_name,
@@ -1978,6 +2013,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
+            std::move(index_infos),
             DeltaMergeStore::Settings(),
             thread_pool);
         table_column_info.reset(nullptr);

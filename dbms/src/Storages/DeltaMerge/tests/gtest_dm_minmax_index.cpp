@@ -114,7 +114,7 @@ bool checkMatch(
     Block block = genBlock(header, block_tuples);
 
     // max page id is only updated at restart, so we need recreate page v3 before recreate table
-    DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
+    DeltaMergeStorePtr store = DeltaMergeStore::create(
         context,
         false,
         "test_database",
@@ -125,7 +125,8 @@ bool checkMatch(
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
         is_common_handle,
-        1);
+        1,
+        nullptr);
 
     store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);

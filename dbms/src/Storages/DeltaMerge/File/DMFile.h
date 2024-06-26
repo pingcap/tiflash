@@ -68,6 +68,8 @@ public:
         const DMFileMeta::ReadMode & read_meta_mode,
         UInt32 meta_version);
 
+    static String info(const DMFiles & dm_files);
+
     struct ListOptions
     {
         // Only return the DTFiles id list that can be GC
@@ -128,7 +130,7 @@ public:
     const std::unordered_set<ColId> & getColumnIndices() const { return meta->column_indices; }
 
     // only used in gtest
-    void clearPackProperties() { meta->pack_properties.clear_property(); }
+    void clearPackProperties() const { meta->pack_properties.clear_property(); }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
@@ -170,10 +172,12 @@ public:
     }
 
     bool useMetaV2() const { return meta->format_version == DMFileFormat::V3; }
+
     std::vector<String> listFilesForUpload() const;
-    void switchToRemote(const S3::DMFileOID & oid);
+    void switchToRemote(const S3::DMFileOID & oid) const;
 
     UInt32 metaVersion() const { return meta->metaVersion(); }
+    UInt32 bumpMetaVersion() const { return meta->bumpMetaVersion(); }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -269,10 +273,10 @@ public:
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
 
-    void addPack(const DMFileMeta::PackStat & pack_stat) { meta->pack_stats.push_back(pack_stat); }
+    void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
     DMFileStatus getStatus() const { return meta->status; }
-    void setStatus(DMFileStatus status_) { meta->status = status_; }
+    void setStatus(DMFileStatus status_) const { meta->status = status_; }
 
     void finalize();
 
@@ -286,7 +290,7 @@ public:
 
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
-    friend class DMFileWriterRemote;
+    friend class DMFileIndexWriter;
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;

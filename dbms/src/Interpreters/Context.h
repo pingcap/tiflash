@@ -26,6 +26,8 @@
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
+#include <Storages/DeltaMerge/LocalIndexerScheduler_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -456,6 +458,9 @@ public:
 
     bool initializeGlobalPageIdAllocator();
     DM::GlobalPageIdAllocatorPtr getGlobalPageIdAllocator() const;
+
+    bool initializeGlobalLocalIndexerScheduler(size_t pool_size, size_t memory_limit);
+    DM::LocalIndexerSchedulerPtr getGlobalLocalIndexerScheduler() const;
 
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;

@@ -160,7 +160,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V101 = StorageFormatVers
     .identifier = 101,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V6;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {

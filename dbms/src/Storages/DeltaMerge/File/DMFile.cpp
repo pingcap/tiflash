@@ -56,6 +56,16 @@ String DMFile::ngcPath() const
     return getNGCPath(parentPath(), fileId(), getStatus());
 }
 
+String DMFile::info(const DMFiles & files)
+{
+    String s;
+    for (const auto & file : files)
+        s += fmt::format("dmf_{}(v={}),", file->fileId(), file->metaVersion());
+    if (!s.empty())
+        s.erase(s.length() - 1);
+    return s;
+}
+
 DMFilePtr DMFile::create(
     UInt64 file_id,
     const String & parent_path,
@@ -100,7 +110,6 @@ DMFilePtr DMFile::create(
     // since the NGC file is a file under the folder.
     // FIXME : this should not use PageUtils.
     PageUtil::touchFile(new_dmfile->ngcPath());
-
     return new_dmfile;
 }
 
@@ -154,6 +163,7 @@ DMFilePtr DMFile::restore(
             STORAGE_FORMAT_CURRENT.dm_file);
         dmfile->meta->read(file_provider, read_meta_mode);
     }
+
     return dmfile;
 }
 
@@ -448,7 +458,7 @@ std::vector<String> DMFile::listFilesForUpload() const
     return fnames;
 }
 
-void DMFile::switchToRemote(const S3::DMFileOID & oid)
+void DMFile::switchToRemote(const S3::DMFileOID & oid) const
 {
     RUNTIME_CHECK(useMetaV2());
     RUNTIME_CHECK(getStatus() == DMFileStatus::READABLE);

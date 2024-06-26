@@ -61,14 +61,12 @@ DMFileWriter::DMFileWriter(
 
     for (auto & cd : write_columns)
     {
-        if (cd.vector_index)
-            RUNTIME_CHECK(VectorIndexBuilder::isSupportedType(*cd.type));
-
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
-        addStreams(cd.id, cd.type, do_index, cd.vector_index);
+
+        addStreams(cd.id, cd.type, do_index);
         dmfile->meta->getColumnStats().emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
 }
@@ -117,11 +115,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
                                           options.max_compress_block_size);
 }
 
-void DMFileWriter::addStreams(
-    ColId col_id,
-    DataTypePtr type,
-    bool do_index,
-    TiDB::VectorIndexDefinitionPtr do_vector_index)
+void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
@@ -134,8 +128,7 @@ void DMFileWriter::addStreams(
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            do_index && substream_can_index,
-            (do_vector_index && substream_can_index) ? do_vector_index : nullptr);
+            do_index && substream_can_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -224,9 +217,6 @@ void DMFileWriter::writeColumn(
                     column,
                     (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
-
-            if (stream->vector_index)
-                stream->vector_index->addBlock(column, del_mark);
 
             /// There could already be enough data to compress into the new block.
             if (stream->compressed_buf->offset() >= options.min_compress_block_size)
@@ -349,24 +339,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 buffer->next();
             }
 
-            if (stream->vector_index && !is_empty_file)
-            {
-                // Vector index files are always not written into the merged file
-                // because we want to allow to be mmaped by the usearch.
-
-                const auto index_name = dmfile->colIndexPath(stream_name);
-                stream->vector_index->save(index_name);
-                col_stat.index_bytes = Poco::File(index_name).getSize();
-
-                // Memorize what kind of vector index it is, so that we can correctly restore it when reading.
-                col_stat.vector_index.emplace();
-                col_stat.vector_index->set_index_kind(
-                    tipb::VectorIndexKind_Name(stream->vector_index->definition->kind));
-                col_stat.vector_index->set_distance_metric(
-                    tipb::VectorDistanceMetric_Name(stream->vector_index->definition->distance_metric));
-                col_stat.vector_index->set_dimensions(stream->vector_index->definition->dimension);
-            }
-
             // write mark into merged_file_writer
             if (!is_empty_file)
             {
@@ -473,11 +445,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     examine_buffer_size(*buf, *this->file_provider);
 #endif
                 }
-            }
-
-            if (stream->vector_index)
-            {
-                RUNTIME_CHECK_MSG(false, "Vector index is not compatible with V1 and V2 format");
             }
         }
     };

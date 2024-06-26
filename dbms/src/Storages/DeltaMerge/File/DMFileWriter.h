@@ -54,8 +54,7 @@ public:
             size_t max_compress_block_size,
             FileProviderPtr & file_provider,
             const WriteLimiterPtr & write_limiter_,
-            bool do_index,
-            TiDB::VectorIndexDefinitionPtr do_vector_index)
+            bool do_index)
             : plain_file(WriteBufferByFileProviderBuilder(
                              dmfile->getConfiguration().has_value(),
                              file_provider,
@@ -73,7 +72,6 @@ public:
                                              : std::unique_ptr<WriteBuffer>(
                                                  new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
-            , vector_index(do_vector_index ? VectorIndexBuilder::create(do_vector_index) : nullptr)
         {
             if (!dmfile->useMetaV2())
             {
@@ -100,7 +98,6 @@ public:
         WriteBufferPtr compressed_buf;
 
         MinMaxIndexPtr minmaxes;
-        VectorIndexBuilderPtr vector_index;
 
         MarksInCompressedFilePtr marks;
 
@@ -162,7 +159,7 @@ private:
     /// Add streams with specified column id. Since a single column may have more than one Stream,
     /// for example Nullable column has a NullMap column, we would track them with a mapping
     /// FileNameBase -> Stream.
-    void addStreams(ColId col_id, DataTypePtr type, bool do_index, TiDB::VectorIndexDefinitionPtr do_vector_index);
+    void addStreams(ColId col_id, DataTypePtr type, bool do_index);
 
     WriteBufferFromFileBasePtr createMetaFile();
     WriteBufferFromFileBasePtr createMetaV2File();

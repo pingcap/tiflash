@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
@@ -734,6 +735,41 @@ bool SegmentTestBasic::replaceSegmentStableData(PageIdU64 segment_id, const DMFi
     }
 
     operation_statistics["replaceStableData"]++;
+    return success;
+}
+
+bool SegmentTestBasic::ensureSegmentStableIndex(PageIdU64 segment_id, IndexInfosPtr local_index_infos)
+{
+    LOG_INFO(logger_op, "EnsureSegmentStableIndex, segment_id={}", segment_id);
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    bool success = false;
+    auto segment = segments[segment_id];
+    auto dm_files = segment->getStable()->getDMFiles();
+    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos, dm_files);
+
+    // Build index
+    DMFileIndexWriter iw(DMFileIndexWriter::Options{
+        .path_pool = storage_path_pool,
+        .file_provider = dm_context->db_context.getFileProvider(),
+        .write_limiter = dm_context->getWriteLimiter(),
+        .disagg_ctx = dm_context->db_context.getSharedContextDisagg(),
+        .index_infos = build_info.indexes_to_build,
+        .dm_files = dm_files,
+        .db_context = dm_context->db_context,
+        .is_common_handle = dm_context->is_common_handle,
+        .rowkey_column_size = dm_context->rowkey_column_size,
+    });
+    auto new_dmfiles = iw.build();
+    RUNTIME_CHECK(new_dmfiles.size() == 1);
+
+    LOG_INFO(logger_op, "EnsureSegmentStableIndex, build index done, segment_id={}", segment_id);
+
+    // Replace stable data
+    success = replaceSegmentStableData(segment_id, new_dmfiles[0]);
+
+    operation_statistics["ensureStableIndex"]++;
     return success;
 }
 

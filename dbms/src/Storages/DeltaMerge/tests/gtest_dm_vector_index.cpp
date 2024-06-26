@@ -18,11 +18,13 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <Storages/KVStore/KVStore.h>
@@ -35,12 +37,15 @@
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
 
+#include <cassert>
 #include <ext/scope_guard.h>
 #include <filesystem>
+
 
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfSegmentIngestIndex;
 } // namespace CurrentMetrics
 
 namespace DB::FailPoints
@@ -51,50 +56,6 @@ extern const char file_cache_fg_download_fail[];
 
 namespace DB::DM::tests
 {
-
-class VectorIndexTestUtils
-{
-public:
-    const ColumnID vec_column_id = 100;
-    const String vec_column_name = "vec";
-
-    /// Create a column with values like [1], [2], [3], ...
-    /// Each value is a VectorFloat32 with exactly one dimension.
-    static ColumnWithTypeAndName colInt64(std::string_view sequence, const String & name = "", Int64 column_id = 0)
-    {
-        auto data = genSequence<Int64>(sequence);
-        return createColumn<Int64>(data, name, column_id);
-    }
-
-    static ColumnWithTypeAndName colVecFloat32(std::string_view sequence, const String & name = "", Int64 column_id = 0)
-    {
-        auto data = genSequence<Int64>(sequence);
-        std::vector<Array> data_in_array;
-        for (auto & v : data)
-        {
-            Array vec;
-            vec.push_back(static_cast<Float64>(v));
-            data_in_array.push_back(vec);
-        }
-        return createVecFloat32Column<Array>(data_in_array, name, column_id);
-    }
-
-    static String encodeVectorFloat32(const std::vector<Float32> & vec)
-    {
-        WriteBufferFromOwnString wb;
-        Array arr;
-        for (const auto & v : vec)
-            arr.push_back(static_cast<Float64>(v));
-        EncodeVectorFloat32(arr, wb);
-        return wb.str();
-    }
-
-    ColumnDefine cdVec()
-    {
-        // When used in read, no need to assign vector_index.
-        return ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
-    }
-};
 
 class VectorIndexDMFileTest
     : public VectorIndexTestUtils
@@ -107,12 +68,14 @@ public:
         TiFlashStorageTestBasic::SetUp();
 
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
-        path_pool = std::make_shared<StoragePathPool>(
-            db_context->getPathPool().withTable("test", "VectorIndexDMFileTest", false));
+        path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*ns_id*/ 100, *path_pool, "test.t1");
+        auto delegator = path_pool->getStableDiskDelegator();
+        auto paths = delegator.listPaths();
+        RUNTIME_CHECK(paths.size() == 1);
         dm_file = DMFile::create(
             1,
-            parent_path,
+            paths[0],
             std::make_optional<DMChecksumConfig>(),
             128 * 1024,
             16 * 1024 * 1024,
@@ -146,13 +109,36 @@ public:
         auto file_id = dm_file->fileId();
         auto page_id = dm_file->pageId();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(
+        auto dmfile_parent_path = dm_file->parentPath();
+        auto dmfile = DMFile::restore(
             file_provider,
             file_id,
             page_id,
-            parent_path,
+            dmfile_parent_path,
             DMFileMeta::ReadMode::all(),
             /* meta_version= */ 0);
+        auto delegator = path_pool->getStableDiskDelegator();
+        delegator.addDTFile(1, dmfile->getBytesOnDisk(), dmfile_parent_path);
+        return dmfile;
+    }
+
+    DMFilePtr buildIndex(TiDB::VectorIndexDefinition definition)
+    {
+        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(indexInfo(definition), {dm_file});
+        DMFileIndexWriter iw(DMFileIndexWriter::Options{
+            .path_pool = path_pool,
+            .file_provider = dm_context->db_context.getFileProvider(),
+            .write_limiter = dm_context->getWriteLimiter(),
+            .disagg_ctx = dm_context->db_context.getSharedContextDisagg(),
+            .index_infos = build_info.indexes_to_build,
+            .dm_files = {dm_file},
+            .db_context = dm_context->db_context,
+            .is_common_handle = dm_context->is_common_handle,
+            .rowkey_column_size = dm_context->rowkey_column_size,
+        });
+        auto new_dmfiles = iw.build();
+        assert(new_dmfiles.size() == 1);
+        return new_dmfiles[0];
     }
 
     Context & dbContext() { return *db_context; }
@@ -175,7 +161,7 @@ protected:
     // So we test it independently.
     bool test_only_vec_column = false;
 
-    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns)
+    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns) const
     {
         if (!test_only_vec_column)
             return columns;
@@ -230,6 +216,7 @@ try
     }
 
     dm_file = restoreDMFile();
+    dm_file = buildIndex(*vec_cd.vector_index);
 
     // Read with exact match
     {
@@ -540,6 +527,7 @@ try
     }
 
     dm_file = restoreDMFile();
+    dm_file = buildIndex(*vec_cd.vector_index);
 
     {
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
@@ -606,6 +594,7 @@ try
     }
 
     dm_file = restoreDMFile();
+    dm_file = buildIndex(*vec_cd.vector_index);
 
     // Pack #0 is filtered out according to VecIndex
     {
@@ -748,6 +737,7 @@ try
     }
 
     dm_file = restoreDMFile();
+    dm_file = buildIndex(*vec_cd.vector_index);
 
     // Pack Filter using RowKeyRange
     {
@@ -900,7 +890,7 @@ protected:
     bool test_only_vec_column = false;
     int pack_size = 10;
 
-    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns)
+    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns) const
     {
         if (!test_only_vec_column)
             return columns;
@@ -1047,6 +1037,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
     assertStreamOut(stream, "[4, 5)");
@@ -1071,6 +1062,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20);
 
@@ -1101,6 +1093,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     // Delta: [12, 18), [50, 60)
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 6, /* at */ 12);
@@ -1189,6 +1182,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20);
 
@@ -1259,11 +1253,7 @@ public:
 
         auto cols = DMTestEnv::getDefaultColumns();
         auto vec_cd = cdVec();
-        vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
-            .kind = tipb::VectorIndexKind::HNSW,
-            .dimension = 1,
-            .distance_metric = tipb::VectorDistanceMetric::L2,
-        });
+        vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(index_info);
         cols->emplace_back(vec_cd);
         setColumns(cols);
 
@@ -1346,7 +1336,7 @@ public:
     {
         auto * file_cache = FileCache::instance();
         auto file_segments = file_cache->getAll();
-        for (const auto & file_seg : file_cache->getAll())
+        for (const auto & file_seg : file_segments)
             file_cache->remove(file_cache->toS3Key(file_seg->getLocalFileName()), true);
 
         RUNTIME_CHECK(file_cache->getAll().empty());
@@ -1359,9 +1349,45 @@ public:
         block.insert(colVecFloat32("[0, 100)", vec_column_name, vec_column_id));
         wn_segment->write(*dm_context, std::move(block), true);
         wn_segment = wn_segment->mergeDelta(*dm_context, tableColumns());
+        wn_segment = buildIndex(dm_context, wn_segment);
+        RUNTIME_CHECK(wn_segment != nullptr);
 
         // Let's just make sure we are later indeed reading from S3
         RUNTIME_CHECK(wn_segment->stable->getDMFiles()[0]->path().rfind("s3://") == 0);
+    }
+
+    SegmentPtr buildIndex(DMContextPtr dm_context, SegmentPtr segment)
+    {
+        auto * file_cache = FileCache::instance();
+        RUNTIME_CHECK(file_cache != nullptr);
+        RUNTIME_CHECK(file_cache->getAll().empty());
+
+        auto dm_files = segment->getStable()->getDMFiles();
+        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(indexInfo(index_info), dm_files);
+
+        // Build index
+        DMFileIndexWriter iw(DMFileIndexWriter::Options{
+            .path_pool = storage_path_pool,
+            .file_provider = dm_context->db_context.getFileProvider(),
+            .write_limiter = dm_context->getWriteLimiter(),
+            .disagg_ctx = dm_context->db_context.getSharedContextDisagg(),
+            .index_infos = build_info.indexes_to_build,
+            .dm_files = dm_files,
+            .db_context = dm_context->db_context,
+            .is_common_handle = dm_context->is_common_handle,
+            .rowkey_column_size = dm_context->rowkey_column_size,
+        });
+        auto new_dmfiles = iw.build();
+
+        RUNTIME_CHECK(file_cache->getAll().size() == 2);
+        SegmentPtr new_segment;
+        {
+            auto lock = segment->mustGetUpdateLock();
+            new_segment = segment->replaceStableMetaVersion(lock, *dm_context, new_dmfiles);
+        }
+        // remove all file cache to make sure we are reading from S3
+        removeAllFileCache();
+        return new_segment;
     }
 
     BlockInputStreamPtr computeNodeTableScan()
@@ -1426,6 +1452,12 @@ protected:
 
     // MemoryTrackerPtr memory_tracker;
     MemTrackerWrapper dummy_mem_tracker = MemTrackerWrapper(0, root_of_query_mem_trackers.get());
+
+    const TiDB::VectorIndexDefinition index_info = {
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 1,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    };
 };
 
 TEST_F(VectorIndexSegmentOnS3Test, FileCacheNotEnabled)
@@ -1909,6 +1941,5 @@ try
     }
 }
 CATCH
-
 
 } // namespace DB::DM::tests

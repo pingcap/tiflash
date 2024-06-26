@@ -24,12 +24,12 @@
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/System/StorageSystemDTSegments.h>
+#include <Storages/System/StorageSystemDTLocalIndexes.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {
-StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
+StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & name_)
     : name(name_)
 {
     setColumns(ColumnsDescription({
@@ -41,40 +41,19 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
         {"keyspace_id", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeUInt64>())},
         {"table_id", std::make_shared<DataTypeInt64>()},
         {"belonging_table_id", std::make_shared<DataTypeInt64>()},
-        {"is_tombstone", std::make_shared<DataTypeUInt64>()},
 
-        {"segment_id", std::make_shared<DataTypeUInt64>()},
-        {"range", std::make_shared<DataTypeString>()},
-        {"epoch", std::make_shared<DataTypeUInt64>()},
-        {"rows", std::make_shared<DataTypeUInt64>()},
-        {"size", std::make_shared<DataTypeUInt64>()},
+        {"column_name", std::make_shared<DataTypeString>()},
+        {"column_id", std::make_shared<DataTypeUInt64>()},
+        {"index_kind", std::make_shared<DataTypeString>()},
 
-        {"delta_rate", std::make_shared<DataTypeFloat64>()},
-        {"delta_memtable_rows", std::make_shared<DataTypeUInt64>()},
-        {"delta_memtable_size", std::make_shared<DataTypeUInt64>()},
-        {"delta_memtable_column_files", std::make_shared<DataTypeUInt64>()},
-        {"delta_memtable_delete_ranges", std::make_shared<DataTypeUInt64>()},
-        {"delta_persisted_page_id", std::make_shared<DataTypeUInt64>()},
-        {"delta_persisted_rows", std::make_shared<DataTypeUInt64>()},
-        {"delta_persisted_size", std::make_shared<DataTypeUInt64>()},
-        {"delta_persisted_column_files", std::make_shared<DataTypeUInt64>()},
-        {"delta_persisted_delete_ranges", std::make_shared<DataTypeUInt64>()},
-        {"delta_cache_size", std::make_shared<DataTypeUInt64>()},
-        {"delta_index_size", std::make_shared<DataTypeUInt64>()},
-
-        {"stable_page_id", std::make_shared<DataTypeUInt64>()},
-        {"stable_rows", std::make_shared<DataTypeUInt64>()},
-        {"stable_size", std::make_shared<DataTypeUInt64>()},
-        {"stable_dmfiles", std::make_shared<DataTypeUInt64>()},
-        {"stable_dmfiles_id_0", std::make_shared<DataTypeUInt64>()},
-        {"stable_dmfiles_rows", std::make_shared<DataTypeUInt64>()},
-        {"stable_dmfiles_size", std::make_shared<DataTypeUInt64>()},
-        {"stable_dmfiles_size_on_disk", std::make_shared<DataTypeUInt64>()},
-        {"stable_dmfiles_packs", std::make_shared<DataTypeUInt64>()},
+        {"rows_stable_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
+        {"rows_stable_not_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
+        {"rows_delta_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
+        {"rows_delta_not_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
     }));
 }
 
-BlockInputStreams StorageSystemDTSegments::read(
+BlockInputStreams StorageSystemDTLocalIndexes::read(
     const Names & column_names,
     const SelectQueryInfo &,
     const Context & context,
@@ -110,8 +89,12 @@ BlockInputStreams StorageSystemDTSegments::read(
             auto store = dm_storage->getStoreIfInited();
             if (!store)
                 continue;
-            auto segment_stats = store->getSegmentsStats();
-            for (auto & stat : segment_stats)
+
+            if (dm_storage->isTombstone())
+                continue;
+
+            auto index_stats = store->getLocalIndexStats();
+            for (auto & stat : index_stats)
             {
                 size_t j = 0;
                 res_columns[j++]->insert(database_name);
@@ -133,36 +116,15 @@ BlockInputStreams StorageSystemDTSegments::read(
                     res_columns[j++]->insert(static_cast<UInt64>(keyspace_id));
                 res_columns[j++]->insert(table_id);
                 res_columns[j++]->insert(table_info.belonging_table_id);
-                res_columns[j++]->insert(dm_storage->getTombstone());
 
-                res_columns[j++]->insert(stat.segment_id);
-                res_columns[j++]->insert(stat.range.toString());
-                res_columns[j++]->insert(stat.epoch);
-                res_columns[j++]->insert(stat.rows);
-                res_columns[j++]->insert(stat.size);
+                res_columns[j++]->insert(stat.column_name);
+                res_columns[j++]->insert(stat.column_id);
+                res_columns[j++]->insert(stat.index_kind);
 
-                res_columns[j++]->insert(stat.delta_rate);
-                res_columns[j++]->insert(stat.delta_memtable_rows);
-                res_columns[j++]->insert(stat.delta_memtable_size);
-                res_columns[j++]->insert(stat.delta_memtable_column_files);
-                res_columns[j++]->insert(stat.delta_memtable_delete_ranges);
-                res_columns[j++]->insert(stat.delta_persisted_page_id);
-                res_columns[j++]->insert(stat.delta_persisted_rows);
-                res_columns[j++]->insert(stat.delta_persisted_size);
-                res_columns[j++]->insert(stat.delta_persisted_column_files);
-                res_columns[j++]->insert(stat.delta_persisted_delete_ranges);
-                res_columns[j++]->insert(stat.delta_cache_size);
-                res_columns[j++]->insert(stat.delta_index_size);
-
-                res_columns[j++]->insert(stat.stable_page_id);
-                res_columns[j++]->insert(stat.stable_rows);
-                res_columns[j++]->insert(stat.stable_size);
-                res_columns[j++]->insert(stat.stable_dmfiles);
-                res_columns[j++]->insert(stat.stable_dmfiles_id_0);
-                res_columns[j++]->insert(stat.stable_dmfiles_rows);
-                res_columns[j++]->insert(stat.stable_dmfiles_size);
-                res_columns[j++]->insert(stat.stable_dmfiles_size_on_disk);
-                res_columns[j++]->insert(stat.stable_dmfiles_packs);
+                res_columns[j++]->insert(stat.rows_stable_indexed);
+                res_columns[j++]->insert(stat.rows_stable_not_indexed);
+                res_columns[j++]->insert(stat.rows_delta_indexed);
+                res_columns[j++]->insert(stat.rows_delta_not_indexed);
             }
         }
     }

@@ -742,7 +742,6 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else

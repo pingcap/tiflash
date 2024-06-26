@@ -117,6 +117,8 @@ void TiFlashTestEnv::addGlobalContext(
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
 
+    global_context->initializeGlobalLocalIndexerScheduler(1, 0);
+
     // initialize background & blockable background thread pool
     global_context->setSettings(settings_);
     Settings & settings = global_context->getSettingsRef();

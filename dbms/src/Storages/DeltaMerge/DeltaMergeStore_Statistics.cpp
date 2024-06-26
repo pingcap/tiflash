@@ -192,6 +192,60 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
     return stats;
 }
 
+LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
+{
+    std::shared_lock lock(read_write_mutex);
+
+    if (!local_index_infos || local_index_infos->empty())
+        return {};
+
+    LocalIndexesStats stats;
+    for (const auto & index_info : *local_index_infos)
+    {
+        LocalIndexStats index_stats;
+        index_stats.column_id = index_info.column_id;
+        index_stats.column_name = index_info.column_name;
+        index_stats.index_kind = "HNSW"; // TODO: Support more.
+
+        for (const auto & [handle, segment] : segments)
+        {
+            UNUSED(handle);
+
+            // Currently Delta is always not indexed.
+            index_stats.rows_delta_not_indexed
+                += segment->getDelta()->getRows(); // TODO: More precisely count column bytes instead.
+
+            const auto & stable = segment->getStable();
+            bool is_stable_indexed = true;
+            for (const auto & dmfile : stable->getDMFiles())
+            {
+                if (!dmfile->isColumnExist(index_info.column_id))
+                    continue; // Regard as indexed, because column does not need any index
+
+                auto column_stat = dmfile->getColumnStat(index_info.column_id);
+
+                if (column_stat.index_bytes == 0 && column_stat.data_bytes > 0)
+                {
+                    is_stable_indexed = false;
+                    break;
+                }
+            }
+
+            if (is_stable_indexed)
+            {
+                index_stats.rows_stable_indexed += stable->getRows();
+            }
+            else
+            {
+                index_stats.rows_stable_not_indexed += stable->getRows();
+            }
+        }
+
+        stats.emplace_back(index_stats);
+    }
+
+    return stats;
+}
 
 } // namespace DM
 } // namespace DB
