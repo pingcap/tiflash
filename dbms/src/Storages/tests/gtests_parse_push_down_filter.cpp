@@ -345,7 +345,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
-       
+
         const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
         EXPECT_EQ(lm_filter->extra_cast, nullptr);
@@ -859,7 +859,7 @@ try
             rs_operator->toDebugString(),
             String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
                 + String("\"}"));
-      
+
         const auto & lm_filter = filter->lm_filter;
         Block before_where_block = Block{
             {toVec<UInt64>(
