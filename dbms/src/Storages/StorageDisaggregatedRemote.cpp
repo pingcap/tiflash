@@ -519,6 +519,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         rs_operator,
         table_scan.getColumns(),
         table_scan.getPushedDownFilters(),
+        {},
         *column_defines,
         db_context,
         log);
