@@ -40,7 +40,7 @@ class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
-class PushDownFilter;
+struct PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 
 enum class ReadMode;

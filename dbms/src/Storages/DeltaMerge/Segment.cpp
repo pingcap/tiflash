@@ -3151,7 +3151,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
     // construct (stable and delta) streams by the filter column
-    const auto & filter_columns = filter->filter_columns;
+    const auto & filter_columns = filter->lm_filter->filter_columns;
     SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *filter_columns,
@@ -3184,19 +3184,24 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             segment_snap->stable->getDMFilesRows(),
             bitmap_filter,
             dm_context.tracing_id);
-        if (filter->extra_cast)
+        if (filter->lm_filter->extra_cast)
         {
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast, dm_context.tracing_id);
+            stream = std::make_shared<ExpressionBlockInputStream>(
+                stream,
+                filter->lm_filter->extra_cast,
+                dm_context.tracing_id);
             stream->setExtraInfo("cast after tableScan");
         }
         stream = std::make_shared<FilterBlockInputStream>(
             stream,
-            filter->before_where,
-            filter->filter_column_name,
+            filter->lm_filter->before_where,
+            filter->lm_filter->filter_column_name,
             dm_context.tracing_id);
         stream->setExtraInfo("push down filter");
-        stream
-            = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
+        stream = std::make_shared<ExpressionBlockInputStream>(
+            stream,
+            filter->lm_filter->project_after_where,
+            dm_context.tracing_id);
         stream->setExtraInfo("project after where");
         return stream;
     }
@@ -3209,11 +3214,11 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
 
     // construct extra cast stream if needed
-    if (filter->extra_cast)
+    if (filter->lm_filter->extra_cast)
     {
         filter_column_stream = std::make_shared<ExpressionBlockInputStream>(
             filter_column_stream,
-            filter->extra_cast,
+            filter->lm_filter->extra_cast,
             dm_context.tracing_id);
         filter_column_stream->setExtraInfo("cast after tableScan");
     }
@@ -3221,8 +3226,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(
         filter_column_stream,
-        filter->before_where,
-        filter->filter_column_name,
+        filter->lm_filter->before_where,
+        filter->lm_filter->filter_column_name,
         dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
 
@@ -3266,7 +3271,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     // construct late materialization stream
     return std::make_shared<LateMaterializationBlockInputStream>(
         columns_to_read,
-        filter->filter_column_name,
+        filter->lm_filter->filter_column_name,
         filter_column_stream,
         rest_column_stream,
         bitmap_filter,
@@ -3320,7 +3325,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         segment_snap->stable->clearColumnCaches();
     }
 
-    if (filter && filter->before_where)
+    if (filter && filter->hasLMFilter())
     {
         // if has filter conditions pushed down, use late materialization
         return getLateMaterializationStream(

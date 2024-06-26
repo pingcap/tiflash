@@ -1171,11 +1171,13 @@ ReadMode DeltaMergeStore::getReadMode(
     const PushDownFilterPtr & filter)
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
-    RUNTIME_CHECK_MSG(
-        !filter || !filter->before_where || read_mode == ReadMode::Bitmap,
-        "Push down filters needs bitmap, push down filters is empty: {}, read mode: {}",
-        filter == nullptr || filter->before_where == nullptr,
-        magic_enum::enum_name(read_mode));
+    if (filter && !filter->empty())
+    {
+        RUNTIME_CHECK_MSG(
+            read_mode == ReadMode::Bitmap,
+            "Push down filters needs bitmap, read mode: {}",
+            magic_enum::enum_name(read_mode));
+    }
     return read_mode;
 }
 
@@ -1241,11 +1243,13 @@ BlockInputStreams DeltaMergeStore::read(
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         BlockInputStreamPtr stream;
+        ColumnDefinesPtr columns_after_cast = filter ? filter->columnsAfterCast() : nullptr;
+        const auto & columns = columns_after_cast ? *columns_after_cast : columns_to_read;
         if (enable_read_thread)
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
-                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
+                columns,
                 extra_table_id_index,
                 log_tracing_id,
                 runtime_filter_list,
@@ -1257,7 +1261,7 @@ BlockInputStreams DeltaMergeStore::read(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
-                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
+                columns,
                 filter,
                 start_ts,
                 expected_block_size,
@@ -1276,7 +1280,7 @@ BlockInputStreams DeltaMergeStore::read(
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
+        filter == nullptr || filter->empty(),
         read_task_pool->pool_id,
         final_num_stream);
 
@@ -1344,7 +1348,8 @@ void DeltaMergeStore::read(
         dm_context->scan_context->resource_group_name);
     dm_context->scan_context->read_mode = read_mode;
 
-    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    ColumnDefinesPtr columns_after_cast = filter ? filter->columnsAfterCast() : nullptr;
+    const auto & columns = columns_after_cast ? *columns_after_cast : columns_to_read;
     if (enable_read_thread)
     {
         for (size_t i = 0; i < final_num_stream; ++i)
@@ -1352,7 +1357,7 @@ void DeltaMergeStore::read(
             group_builder.addConcurrency(std::make_unique<UnorderedSourceOp>(
                 exec_context,
                 read_task_pool,
-                columns_after_cast,
+                columns,
                 extra_table_id_index,
                 log_tracing_id,
                 runtime_filter_list,
@@ -1368,7 +1373,7 @@ void DeltaMergeStore::read(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
-                columns_after_cast,
+                columns,
                 filter,
                 start_ts,
                 expected_block_size,
@@ -1379,7 +1384,7 @@ void DeltaMergeStore::read(
             builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
                 exec_context,
                 log_tracing_id,
-                columns_after_cast,
+                columns,
                 extra_table_id_index,
                 physical_table_id));
         });
@@ -1393,7 +1398,7 @@ void DeltaMergeStore::read(
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
+        filter == nullptr || filter->empty(),
         read_task_pool->pool_id,
         final_num_stream);
 }

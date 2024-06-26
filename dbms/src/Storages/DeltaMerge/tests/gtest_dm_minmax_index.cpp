@@ -140,7 +140,7 @@ bool checkMatch(
         {all_range},
         1,
         std::numeric_limits<UInt64>::max(),
-        std::make_shared<PushDownFilter>(filter),
+        PushDownFilter::build(filter),
         std::vector<RuntimeFilterPtr>{},
         0,
         name,
