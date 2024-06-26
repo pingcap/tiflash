@@ -28,7 +28,7 @@ UniversalPageId::UniversalPageId(UniversalPageId && other)
 }
 UniversalPageId::UniversalPageId(const UniversalPageId & other)
 {
-    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.id.size());
     id = other.id;
 }
 UniversalPageId & UniversalPageId::operator=(UniversalPageId && other) noexcept
