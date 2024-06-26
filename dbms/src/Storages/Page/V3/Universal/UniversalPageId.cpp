@@ -34,7 +34,7 @@ UniversalPageId::UniversalPageId(const UniversalPageId & other)
 }
 UniversalPageId & UniversalPageId::operator=(UniversalPageId && other) noexcept
 {
-    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
     id = std::move(other.id);
     return *this;
 }
