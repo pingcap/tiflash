@@ -135,7 +135,7 @@ public:
         throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const override
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &) const override
     {
         throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

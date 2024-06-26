@@ -185,7 +185,7 @@ void ColumnAggregateFunction::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr &,
     String &,
-    BlockSelectivePtr selective_ptr) const
+    const BlockSelectivePtr & selective_ptr) const
 {
     const auto selective_rows = selective_ptr->size();
     RUNTIME_CHECK_MSG(

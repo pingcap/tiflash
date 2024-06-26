@@ -273,7 +273,7 @@ public:
     void updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, BlockSelectivePtr) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr & selective) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 

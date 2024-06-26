@@ -205,7 +205,7 @@ void ColumnTuple::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container,
-    BlockSelectivePtr selective_ptr) const
+    const BlockSelectivePtr & selective_ptr) const
 {
     const auto selective_rows = selective_ptr->size();
 

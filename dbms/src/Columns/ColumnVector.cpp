@@ -101,7 +101,7 @@ void ColumnVector<T>::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr &,
     String &,
-    BlockSelectivePtr selective_ptr) const
+    const BlockSelectivePtr & selective_ptr) const
 {
     RUNTIME_CHECK_MSG(
         selective_ptr->size() == hash.getData().size(),
