@@ -17,7 +17,6 @@
 
 namespace DB {
     UniversalPageId::~UniversalPageId() {
-        LOG_INFO(DB::Logger::get(), "!!!! f {}", size());
         PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
     }
 
