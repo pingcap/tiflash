@@ -46,8 +46,8 @@ public:
 
     ~UniversalPageId();
 
-    UniversalPageId & operator=(UniversalPageId && id_) noexcept;
-    UniversalPageId & operator=(const UniversalPageId & id_) noexcept;
+    UniversalPageId & operator=(UniversalPageId && other) noexcept;
+    UniversalPageId & operator=(const UniversalPageId & other) noexcept;
     UniversalPageId & operator=(String && id_) noexcept;
     bool operator==(const UniversalPageId & rhs) const noexcept { return id == rhs.id; }
     bool operator!=(const UniversalPageId & rhs) const noexcept { return id != rhs.id; }
