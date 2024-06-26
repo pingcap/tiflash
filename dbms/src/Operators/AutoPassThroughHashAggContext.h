@@ -67,7 +67,8 @@ private:
     void trySwitchFromAdjustState(size_t total_rows, size_t hit_rows);
     void trySwitchBackAdjustState(size_t block_rows);
 
-    void passThrough(Aggregator::AggProcessInfo & agg_process_info);
+    void passThrough(const Block & block);
+    Block getPassThroughBlock(const Block & block);
 
     static void makeFullSelective(Block & block);
 

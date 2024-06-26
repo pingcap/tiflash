@@ -22,7 +22,10 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Interpreters/Context.h>
 #include <Operators/AutoPassThroughHashAggContext.h>
+#include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/MPPTaskTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/mockExecutor.h>
 #include <gtest/gtest.h>
 
 #include <random>
@@ -32,6 +35,7 @@ namespace DB
 
 namespace tests
 {
+// todo using func in DAGExpressionAnalyzer
 void appendAggDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
@@ -59,27 +63,43 @@ void appendAggDescription(
     aggregate_descriptions.emplace_back(std::move(aggregate));
 }
 
-class TestAutoPassThroughAggContext : public ::testing::Test
+class TestAutoPassThroughAggContext : public MPPTaskTestUtils
 {
 protected:
-    void SetUp() override
+    void initializeContext() override
+    try
     {
-        if (context)
+        ExecutorTest::initializeContext();
+
+        if (inited)
             return;
 
-        ::DB::registerAggregateFunctions();
+        inited = true;
 
-        context = TiFlashTestEnv::getContext();
         col1_data_type = std::make_shared<DataTypeString>();
         col2_data_type = std::make_shared<DataTypeInt64>();
 
         auto_pass_through_context = buildAutoPassHashAggThroughContext();
 
-        low_ndv_blocks = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 10);
-        high_ndv_blocks = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
-        medium_ndv_blocks = buildBlocks(/*block_num*/ 20, /*distinct_num*/ block_size / 2);
-        random_blocks = buildBlocks(/*block_num*/ 1, /*distinct_num*/ 100);
+        std::tie(low_ndv_blocks, low_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 10);
+        std::tie(high_ndv_blocks, high_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
+        std::tie(medium_ndv_blocks, medium_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ block_size / 2);
+        std::tie(random_blocks, random_block) = buildBlocks(/*block_num*/ 1, /*distinct_num*/ 100);
+
+        context.addMockTable(
+            {db_name, high_ndv_tbl_name},
+            {{col1_name, TiDB::TP::TypeString, false}, {col2_name, TiDB::TP::TypeLongLong, false}},
+            high_ndv_block.getColumnsWithTypeAndName());
+        context.addMockTable(
+            {db_name, low_ndv_tbl_name},
+            {{col1_name, TiDB::TP::TypeString, false}, {col2_name, TiDB::TP::TypeLongLong, false}},
+            low_ndv_block.getColumnsWithTypeAndName());
+        context.addMockTable(
+            {db_name, medium_ndv_tbl_name},
+            {{col1_name, TiDB::TP::TypeString, false}, {col2_name, TiDB::TP::TypeLongLong, false}},
+            medium_ndv_block.getColumnsWithTypeAndName());
     }
+    CATCH
 
     // select repo_name, sum(commit_num) from repo_history group by repo_name;
     std::unique_ptr<AutoPassThroughHashAggContext> buildAutoPassHashAggThroughContext()
@@ -110,7 +130,7 @@ protected:
             aggregate_descriptions,
             aggregated_columns,
             /*empty_input_as_null*/ true,
-            *context);
+            *context.context);
         appendAggDescription(
             Names{col2_name},
             DataTypes{col2_data_type},
@@ -119,22 +139,22 @@ protected:
             aggregate_descriptions,
             aggregated_columns,
             /*empty_input_as_null*/ true, // todo?
-            *context);
+            *context.context);
 
         AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
 
         SpillConfig spill_config(
-            context->getTemporaryPath(),
+            context.context->getTemporaryPath(),
             req_id,
-            context->getSettingsRef().max_cached_data_bytes_in_spiller,
-            context->getSettingsRef().max_spilled_rows_per_file,
-            context->getSettingsRef().max_spilled_bytes_per_file,
-            context->getFileProvider(),
-            context->getSettingsRef().max_threads,
-            context->getSettingsRef().max_block_size);
+            context.context->getSettingsRef().max_cached_data_bytes_in_spiller,
+            context.context->getSettingsRef().max_spilled_rows_per_file,
+            context.context->getSettingsRef().max_spilled_bytes_per_file,
+            context.context->getFileProvider(),
+            context.context->getSettingsRef().max_threads,
+            context.context->getSettingsRef().max_block_size);
 
         auto params = AggregationInterpreterHelper::buildParams(
-            *context,
+            *context.context,
             before_agg_header,
             before_agg_stream_size,
             agg_streams_size,
@@ -148,10 +168,13 @@ protected:
         return std::make_unique<AutoPassThroughHashAggContext>(*params, req_id);
     }
 
-    BlocksList buildBlocks(size_t block_num, size_t distinct_num)
+    std::pair<BlocksList, Block> buildBlocks(size_t block_num, size_t distinct_num)
     {
         auto distinct_repo_names = generateDistinctStrings(distinct_num);
         auto distinct_commit_nums = generateDistinctIntegers(distinct_num);
+
+        auto col1_in_one = col1_data_type->createColumn();
+        auto col2_in_one = col2_data_type->createColumn();
 
         BlocksList res;
         for (size_t i = 0; i < block_num; ++i)
@@ -166,13 +189,20 @@ protected:
                 auto commit_num = distinct_commit_nums[idx];
                 col1->insert(Field(repo_name.data(), repo_name.size()));
                 col2->insert(Field(static_cast<Int64>(commit_num)));
+
+                col1_in_one->insert(Field(repo_name.data(), repo_name.size()));
+                col2_in_one->insert(Field(static_cast<Int64>(commit_num)));
             }
             ColumnsWithTypeAndName cols{
                 {std::move(col1), col1_data_type, col1_name},
                 {std::move(col2), col2_data_type, col2_name}};
             res.push_back(Block(cols));
         }
-        return res;
+        ColumnsWithTypeAndName cols{
+            {std::move(col1_in_one), col1_data_type, col1_name},
+            {std::move(col2_in_one), col2_data_type, col2_name}};
+        Block res_in_one(cols);
+        return {res, res_in_one};
     }
 
     static std::string generateRandomString(
@@ -243,21 +273,31 @@ protected:
     }
 
     const size_t block_size = 8096;
-    ContextPtr context;
     std::unique_ptr<AutoPassThroughHashAggContext> auto_pass_through_context;
     const String col1_name = "repo_name";
     const String col2_name = "commit_num";
+    const String db_name = "test_db";
+    const String high_ndv_tbl_name = "test_tbl_high_ndv";
+    const String low_ndv_tbl_name = "test_tbl_low_ndv";
+    const String medium_ndv_tbl_name = "test_tbl_medium_ndv";
+
     DataTypePtr col1_data_type;
     DataTypePtr col2_data_type;
 
-    // todo BlocksList
     BlocksList high_ndv_blocks;
     BlocksList low_ndv_blocks;
     BlocksList medium_ndv_blocks;
     BlocksList random_blocks;
+
+    Block high_ndv_block;
+    Block low_ndv_block;
+    Block medium_ndv_block;
+    Block random_block;
+
+    bool inited = false;
 };
 
-TEST_F(TestAutoPassThroughAggContext, BasicStateSwitch)
+TEST_F(TestAutoPassThroughAggContext, stateSwitch)
 try
 {
     size_t state_processed_rows = 0;
@@ -345,6 +385,71 @@ try
         EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
     }
     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::PassThrough);
+}
+CATCH
+
+// Using different workload(low/high/medium ndv) to run auto_pass_through hashagg,
+// which cover logic of interpretion, execution and exchange.
+TEST_F(TestAutoPassThroughAggContext, integration)
+try
+{
+    auto workloads = std::vector{high_ndv_tbl_name, low_ndv_tbl_name, medium_ndv_tbl_name};
+    for (const auto & tbl_name : workloads)
+    {
+        LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, tbl_name: {}", tbl_name);
+        auto req_auto_pass_through
+            = context.scan(db_name, tbl_name)
+                  .aggregation(
+                      {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
+                      {col(col1_name)},
+                      0,
+                      true)
+                  .build(context);
+
+        auto req_no_pass_through
+            = context.scan(db_name, tbl_name)
+                  .aggregation(
+                      {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
+                      {col(col1_name)},
+                      0,
+                      false)
+                  .build(context);
+
+        const size_t concurrency = 1;
+        auto res_no_pass_through = executeStreams(req_no_pass_through, concurrency);
+
+        // Only run 1-st hashagg for auto_pass_through hashagg, so the result is not same with non-auto_pass_through.
+        // But the result size should be same.
+        enablePipeline(false);
+        auto res_auto_pass_through = executeStreams(req_auto_pass_through, concurrency);
+        ASSERT_EQ(res_no_pass_through.size(), res_auto_pass_through.size());
+
+        enablePipeline(true);
+        res_auto_pass_through = executeStreams(req_auto_pass_through, concurrency);
+        ASSERT_EQ(res_no_pass_through.size(), res_auto_pass_through.size());
+
+        // 2-staged Aggregation to test. Expect auto_pass_through hashagg result equal to non-auto_pass_through hashagg.
+        {
+            startServers(4);
+            auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+            auto req_auto_pass_through
+                = context.scan(db_name, tbl_name)
+                      .aggregation(
+                          {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
+                          {col(col1_name)},
+                          0,
+                          true)
+                      .buildMPPTasks(context, properties);
+
+            enablePipeline(false);
+            auto res_auto_pass_through = executeMPPTasks(req_auto_pass_through, properties);
+            ASSERT_COLUMNS_EQ_UR(res_no_pass_through, res_auto_pass_through);
+
+            enablePipeline(true);
+            res_auto_pass_through = executeMPPTasks(req_auto_pass_through, properties);
+            ASSERT_COLUMNS_EQ_UR(res_no_pass_through, res_auto_pass_through);
+        }
+    }
 }
 CATCH
 

@@ -1326,6 +1326,8 @@ public:
     Block getHeader(bool final) const;
     Block getSourceHeader() const;
 
+    const Params & getParams() const { return params; }
+
 protected:
     friend struct AggregatedDataVariants;
     friend class MergingBuckets;

@@ -47,23 +47,27 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
     }
     case State::PassThrough:
     {
-        passThrough(*agg_process_info);
-        makeFullSelective(agg_process_info->block);
-        trySwitchBackAdjustState(agg_process_info->block.rows());
+        const auto total_rows = agg_process_info->block.rows();
+        auto new_block = getPassThroughBlock(agg_process_info->block);
+        makeFullSelective(new_block);
+        passThrough(new_block);
+        trySwitchBackAdjustState(total_rows);
         break;
     }
     case State::Selective:
     {
         aggregator->executeOnBlockOnlyLookup(*agg_process_info, *many_data[0], 0);
         auto pass_through_rows = agg_process_info->getNotFoundRows();
+        // todo assert allBLockDataHandled?
+        const auto total_rows = agg_process_info->block.rows();
         if (!pass_through_rows.empty())
         {
             RUNTIME_CHECK(!agg_process_info->block.info.selective);
-            agg_process_info->block.info.selective
-                = std::make_shared<std::vector<UInt64>>(std::move(pass_through_rows));
-            passThrough(*agg_process_info);
+            auto new_block = getPassThroughBlock(agg_process_info->block);
+            new_block.info.selective = std::make_shared<std::vector<UInt64>>(std::move(pass_through_rows));
+            passThrough(new_block);
         }
-        trySwitchBackAdjustState(agg_process_info->block.rows());
+        trySwitchBackAdjustState(total_rows);
         break;
     }
     default:
@@ -147,12 +151,52 @@ void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
     }
 }
 
-void AutoPassThroughHashAggContext::passThrough(Aggregator::AggProcessInfo & agg_process_info)
+void AutoPassThroughHashAggContext::passThrough(const Block & block)
 {
-    auto & block = agg_process_info.block;
     pass_through_block_buffer.push_back(block);
     // todo is necessary?
-    agg_process_info.start_row = agg_process_info.end_row;
+    // agg_process_info.start_row = agg_process_info.end_row;
+}
+
+Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
+{
+    auto header = aggregator->getHeader(/*final*/ true);
+    Block new_block;
+    const auto & aggregate_descriptions = aggregator->getParams().aggregates;
+    for (size_t i = 0; i < block.columns(); ++i)
+    {
+        auto col_name = header.getByPosition(i).name;
+        if (block.has(col_name))
+        {
+            new_block.insert(i, block.getByName(col_name));
+            continue;
+        }
+
+        bool agg_func_col_found = false;
+        for (const auto & desc : aggregate_descriptions)
+        {
+            if (desc.column_name == col_name)
+            {
+                auto new_col = desc.function->getReturnType()->createColumn();
+                new_col->reserve(block.rows());
+                auto * place = new char[desc.function->sizeOfData()];
+                desc.function->create(place);
+                for (size_t i = 0; i < block.rows(); ++i)
+                {
+                    // todo arena nullptr ok?
+                    desc.function->insertResultInto(place, *new_col, /*arena*/ nullptr);
+                }
+                delete[] place;
+                new_block.insert(
+                    i,
+                    ColumnWithTypeAndName{std::move(new_col), desc.function->getReturnType(), desc.column_name});
+                agg_func_col_found = true;
+                break;
+            }
+        }
+        RUNTIME_CHECK_MSG(agg_func_col_found, "cannot find agg func column({}) from aggregate descriptions", col_name);
+    }
+    return new_block;
 }
 
 void AutoPassThroughHashAggContext::makeFullSelective(Block & block)

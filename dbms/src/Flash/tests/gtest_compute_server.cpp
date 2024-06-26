@@ -1199,6 +1199,7 @@ try
 {
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
+    // Basic simple test.
     {
         std::vector<String> expected_strings = {
             R"(exchange_sender_4 | type:Hash, {<0, Long>, <1, String>, <2, String>}
@@ -1242,6 +1243,85 @@ try
             context.scan("test_db", "test_table_1").aggregation({Max(col("s1"))}, {col("s2"), col("s3")}, 0, true),
             expected_strings,
             expected_cols);
+    }
+
+    // Big dataset test.
+    {
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_4 | type:Hash, {<0, Longlong>, <1, Longlong>}
+ aggregation_3 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  table_scan_0 | {<0, Longlong>, <1, Longlong>}
+)",
+            R"(exchange_sender_4 | type:Hash, {<0, Longlong>, <1, Longlong>}
+ aggregation_3 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  table_scan_0 | {<0, Longlong>, <1, Longlong>}
+)",
+            R"(exchange_sender_4 | type:Hash, {<0, Longlong>, <1, Longlong>}
+ aggregation_3 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  table_scan_0 | {<0, Longlong>, <1, Longlong>}
+)",
+            R"(exchange_sender_4 | type:Hash, {<0, Longlong>, <1, Longlong>}
+ aggregation_3 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  table_scan_0 | {<0, Longlong>, <1, Longlong>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+ aggregation_1 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+ aggregation_1 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+ aggregation_1 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+)",
+            R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+ aggregation_1 | group_by: {<1, Longlong>}, agg_func: {sum(<0, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Longlong>, <1, Longlong>}
+)"};
+        const size_t distinct_num = 10240;
+        const size_t row_num_per_type = 4;
+        const size_t row_num = distinct_num * row_num_per_type;
+
+        std::vector<std::optional<Int64>> col1_data;
+        col1_data.reserve(row_num);
+        std::vector<std::optional<Int64>> col2_data;
+        col2_data.reserve(row_num);
+
+        for (size_t i = 0; i < row_num_per_type; ++i)
+        {
+            for (size_t j = 0; j < distinct_num; ++j)
+            {
+                col1_data.push_back(j);
+                col2_data.push_back(j);
+            }
+        }
+
+        context.addMockTable(
+            {"test_db", "test_auto_pass_through_tbl"},
+            {{"col1", TiDB::TP::TypeLongLong}, {"col2", TiDB::TP::TypeLongLong}},
+            {toNullableVec<Int64>("col1", col1_data), toNullableVec<Int64>("col2", col2_data)});
+
+        std::vector<std::optional<Int64>> expected_group_by_col_data;
+        expected_group_by_col_data.reserve(distinct_num);
+        std::vector<std::optional<Int64>> expected_agg_func_col_data;
+        expected_agg_func_col_data.reserve(distinct_num);
+
+        for (size_t i = 0; i < distinct_num; ++i)
+        {
+            expected_group_by_col_data.push_back(i);
+            expected_agg_func_col_data.push_back(i * row_num_per_type);
+        }
+
+        auto expected_col_datas
+            = {toNullableVec<Int64>(expected_agg_func_col_data), toNullableVec<Int64>(expected_group_by_col_data)};
+
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context.scan("test_db", "test_auto_pass_through_tbl")
+                .aggregation({Sum(col("col1"))}, {col("col2")}, 0, true),
+            expected_strings,
+            expected_col_datas);
     }
 
     {
