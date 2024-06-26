@@ -28,7 +28,6 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB::DM
 {
@@ -554,6 +553,8 @@ public:
 
     String logId() const;
     String simpleInfo() const;
+    // Detail information of segment.
+    // Do not use it in read path since the segment may not in local.
     String info() const;
 
     static String simpleInfo(const std::vector<SegmentPtr> & segments);
@@ -750,7 +751,6 @@ public:
         size_t expected_block_rows,
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
-
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

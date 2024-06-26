@@ -342,45 +342,6 @@ try
 }
 CATCH
 
-TEST_P(SegmentReplaceStableData, UpdateMetaAfterLogicalSplit)
-try
-{
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, /* write_rows= */ 100, /* start_at= */ 0);
-    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
-    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-
-    auto right_segment_id = splitSegmentAt( //
-        DELTA_MERGE_FIRST_SEGMENT_ID,
-        /* split_at= */ 50,
-        Segment::SplitMode::Logical);
-    ASSERT_TRUE(right_segment_id.has_value());
-
-    // The left and right segment shares the same stable.
-    // However we should be able to update their meta independently,
-    // as long as meta versions are different.
-
-    ASSERT_EQ(0, getSegmentStableMetaVersion(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_STREQ("", getSegmentStableMetaValue(DELTA_MERGE_FIRST_SEGMENT_ID).c_str());
-    ASSERT_EQ(0, getSegmentStableMetaVersion(*right_segment_id));
-    ASSERT_STREQ("", getSegmentStableMetaValue(*right_segment_id).c_str());
-
-    // Update left meta does not change right meta
-    replaceSegmentStableWithNewMetaValue(DELTA_MERGE_FIRST_SEGMENT_ID, "bar");
-    ASSERT_EQ(1, getSegmentStableMetaVersion(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_STREQ("bar", getSegmentStableMetaValue(DELTA_MERGE_FIRST_SEGMENT_ID).c_str());
-    ASSERT_EQ(0, getSegmentStableMetaVersion(*right_segment_id));
-    ASSERT_STREQ("", getSegmentStableMetaValue(*right_segment_id).c_str());
-
-    // Update right meta should fail, because right meta is still holding meta version 0
-    // and will overwrite meta version 1.
-    ASSERT_THROW({ replaceSegmentStableWithNewMetaValue(*right_segment_id, "foo"); }, DB::Exception);
-    ASSERT_EQ(1, getSegmentStableMetaVersion(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_STREQ("bar", getSegmentStableMetaValue(DELTA_MERGE_FIRST_SEGMENT_ID).c_str());
-    ASSERT_EQ(0, getSegmentStableMetaVersion(*right_segment_id));
-    ASSERT_STREQ("", getSegmentStableMetaValue(*right_segment_id).c_str());
-}
-CATCH
-
 TEST_P(SegmentReplaceStableData, RestoreSegment)
 try
 {

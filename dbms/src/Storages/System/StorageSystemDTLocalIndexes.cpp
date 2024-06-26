@@ -29,6 +29,7 @@
 
 namespace DB
 {
+
 StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & name_)
     : name(name_)
 {
@@ -40,6 +41,7 @@ StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & nam
         {"tidb_table", std::make_shared<DataTypeString>()},
         {"keyspace_id", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeUInt64>())},
         {"table_id", std::make_shared<DataTypeInt64>()},
+        {"belonging_table_id", std::make_shared<DataTypeInt64>()},
 
         {"column_name", std::make_shared<DataTypeString>()},
         {"column_id", std::make_shared<DataTypeUInt64>()},
@@ -114,6 +116,7 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
                 else
                     res_columns[j++]->insert(static_cast<UInt64>(keyspace_id));
                 res_columns[j++]->insert(table_id);
+                res_columns[j++]->insert(table_info.belonging_table_id);
 
                 res_columns[j++]->insert(stat.column_name);
                 res_columns[j++]->insert(stat.column_id);

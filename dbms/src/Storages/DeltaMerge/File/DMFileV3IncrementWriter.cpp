@@ -15,13 +15,11 @@
 #include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
-#include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
+
 
 namespace DB::DM
 {
@@ -147,15 +145,6 @@ void DMFileV3IncrementWriter::writeAndIncludeMetaFile()
     // We first write to a temporary file, then rename it to the final name
     // to ensure file's integrity.
     auto meta_file_path_for_write = meta_file_path + ".tmp";
-
-    // Just a protection. We don't allow overwriting meta file.
-    {
-        auto existing_file = Poco::File(meta_file_path);
-        RUNTIME_CHECK_MSG( //
-            !existing_file.exists(),
-            "Meta file already exists, file={}",
-            meta_file_path);
-    }
 
     auto meta_file = WriteBufferFromWritableFileBuilder::buildPtr(
         options.file_provider,

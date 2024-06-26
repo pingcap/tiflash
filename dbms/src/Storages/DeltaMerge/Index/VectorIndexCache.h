@@ -50,7 +50,7 @@ private:
     std::mutex shutdown_mu;
 
 private:
-    friend class ::DB::DM::tests::VectorIndexTestUtils;
+    friend class tests::VectorIndexTestUtils;
 
     // Drop the in-memory Vector Index if the on-disk file is deleted.
     // mmaped file could be unmmaped so that disk space can be reclaimed.

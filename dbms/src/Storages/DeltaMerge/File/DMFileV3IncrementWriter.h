@@ -17,7 +17,6 @@
 #include <Common/Logger.h>
 #include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
-#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter_fwd.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <common/types.h>
@@ -35,10 +34,8 @@ using StoragePathPoolPtr = std::shared_ptr<StoragePathPool>;
 
 namespace DB::DM
 {
-
 class DMFile;
 using DMFilePtr = std::shared_ptr<DMFile>;
-
 } // namespace DB::DM
 
 namespace DB::DM

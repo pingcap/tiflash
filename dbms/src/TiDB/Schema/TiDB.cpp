@@ -226,6 +226,8 @@ Field ColumnInfo::defaultValueToField() const
         return getYearValue(value.convert<String>());
     case TypeSet:
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getSetValue(value.convert<String>()); });
+    case TypeTiDBVectorFloat32:
+        return genVectorFloat32Empty();
     default:
         throw Exception("Have not processed type: " + std::to_string(tp));
     }
@@ -1284,6 +1286,12 @@ String genJsonNull()
     const static String null(
         {static_cast<char>(DB::JsonBinary::TYPE_CODE_LITERAL), static_cast<char>(DB::JsonBinary::LITERAL_NIL)});
     return null;
+}
+
+String genVectorFloat32Empty()
+{
+    String v(4, '\0'); // Length=0 vector
+    return v;
 }
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)

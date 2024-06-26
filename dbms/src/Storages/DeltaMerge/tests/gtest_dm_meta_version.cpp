@@ -283,7 +283,9 @@ try
     });
     dm_file_2->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test_overwrite";
     ASSERT_EQ(1, dm_file_2->meta->bumpMetaVersion());
-    ASSERT_THROW({ iw->finalize(); }, DB::Exception);
+    ASSERT_NO_THROW({
+        iw->finalize();
+    }); // No exception should be thrown because it may be a broken file left behind by previous failed writes.
 
     // Read out meta v1 again.
     auto dm_file_for_read = DMFile::restore(
@@ -294,7 +296,7 @@ try
         DMFileMeta::ReadMode::all(),
         /* meta_version= */ 1);
     ASSERT_STREQ(
-        "test",
+        "test_overwrite",
         dm_file_for_read->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
 }
 CATCH

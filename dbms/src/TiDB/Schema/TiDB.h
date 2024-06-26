@@ -337,6 +337,8 @@ struct TableInfo
 
 String genJsonNull();
 
+String genVectorFloat32Empty();
+
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
