@@ -574,6 +574,9 @@ TEST(UniPageStorageIdTest, UniversalPageIdMemoryTrace)
         ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem + ps * 3);
         u_id_mv = std::move(u_id_cpy);
         ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem + ps * 2);
+        UniversalPageId u_id_cpy2 = UniversalPageIdFormat::toFullPageId("aaa", 100);
+        u_id_cpy2 = u_id_mv;
+        ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem + ps * 3);
     }
     ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem);
 }

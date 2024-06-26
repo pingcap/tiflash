@@ -33,6 +33,7 @@ namespace DB {
         return *this;
     }
     UniversalPageId & UniversalPageId::operator=(const UniversalPageId & other) noexcept {
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(size());
         PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.size());
         id = other.id;
         return *this;
