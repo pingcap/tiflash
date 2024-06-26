@@ -75,6 +75,11 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+
+    void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override;
+
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     void insert(const Field & x) override;

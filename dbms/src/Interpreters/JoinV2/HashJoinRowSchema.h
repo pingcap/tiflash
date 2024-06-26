@@ -14,14 +14,28 @@
 
 #pragma once
 
+#include <vector>
 
 namespace DB
 {
 
-class HashJoinRowSchema
+constexpr size_t ROW_ALIGN = 4;
+
+inline size_t alignRowSize(size_t size)
 {
+    return (size + ROW_ALIGN - 1) / ROW_ALIGN * ROW_ALIGN;
+}
 
+struct HashJoinRowSchema
+{
+    std::vector<size_t> key_column_indexes;
+    /// The raw join key are the same as the original data.
+    /// raw_key_column_index + is_nullable
+    std::vector<std::pair<size_t, bool>> raw_key_column_indexes;
+    /// other_column_index + is_fixed_size
+    std::vector<std::pair<size_t, bool>> other_column_indexes;
+    size_t key_column_fixed_size = 0;
+    size_t other_column_fixed_size = 0;
 };
-
 
 } // namespace DB

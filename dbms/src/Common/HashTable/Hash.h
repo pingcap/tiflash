@@ -65,7 +65,7 @@ inline DB::UInt64 intHash64(DB::UInt64 x)
 #include <arm_neon.h>
 #endif
 
-inline DB::UInt64 intHashCRC32(DB::UInt64 x)
+inline DB::UInt32 intHashCRC32(DB::UInt64 x)
 {
 #ifdef __SSE4_2__
     return _mm_crc32_u64(-1ULL, x);
@@ -77,7 +77,7 @@ inline DB::UInt64 intHashCRC32(DB::UInt64 x)
 #endif
 }
 
-inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
+inline DB::UInt32 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
 {
 #ifdef __SSE4_2__
     return _mm_crc32_u64(updated_value, x);
@@ -90,7 +90,7 @@ inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
 }
 
 template <typename T>
-inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
+inline DB::UInt32 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
 {
     if constexpr (DB::IsDecimal<T>)
     {
@@ -130,13 +130,13 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
         return updated_value;
     }
     static_assert(
-        DB::IsDecimal<
-            T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        DB::IsDecimal<T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
 template <typename T>
-inline DB::UInt64 wideIntHashCRC32(const T & x)
+inline DB::UInt32 wideIntHashCRC32(const T & x)
 {
     return wideIntHashCRC32(x, -1);
 }
@@ -244,8 +244,8 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
         return boost::multiprecision::hash_value(key);
     }
     static_assert(
-        is_boost_number_v<
-            T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -276,7 +276,7 @@ struct DefaultHash<StringRef> : public StringRefHash
 };
 
 template <typename T>
-inline size_t hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
+inline UInt32 hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
 {
     union
     {
@@ -289,7 +289,7 @@ inline size_t hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
 }
 
 template <typename T>
-inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
+inline UInt32 hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 {
     return wideIntHashCRC32(key);
 }
@@ -297,20 +297,26 @@ inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 template <typename T>
 struct HashCRC32;
 
-#define DEFINE_HASH(T)                                               \
-    template <>                                                      \
-    struct HashCRC32<T>                                              \
-    {                                                                \
-        static_assert(is_fit_register<T>);                           \
-        size_t operator()(T key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH(T)                     \
+    template <>                            \
+    struct HashCRC32<T>                    \
+    {                                      \
+        static_assert(is_fit_register<T>); \
+        UInt32 operator()(T key) const     \
+        {                                  \
+            return hashCRC32<T>(key);      \
+        }                                  \
     };
 
-#define DEFINE_HASH_WIDE(T)                                                  \
-    template <>                                                              \
-    struct HashCRC32<T>                                                      \
-    {                                                                        \
-        static_assert(!is_fit_register<T>);                                  \
-        size_t operator()(const T & key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH_WIDE(T)                    \
+    template <>                                \
+    struct HashCRC32<T>                        \
+    {                                          \
+        static_assert(!is_fit_register<T>);    \
+        UInt32 operator()(const T & key) const \
+        {                                      \
+            return hashCRC32<T>(key);          \
+        }                                      \
     };
 
 DEFINE_HASH(DB::UInt8)

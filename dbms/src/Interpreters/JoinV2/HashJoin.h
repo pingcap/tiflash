@@ -19,20 +19,16 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/Logger.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Core/Block.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/JoinV2/HashJoinBuild.h>
+#include <Interpreters/JoinV2/HashJoinKey.h>
+#include <Interpreters/JoinV2/HashJoinRowSchema.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
-
-enum class HashJoinKeyMethod
-{
-    OneFixed,
-    AllFixed,
-    Serialized,
-};
 
 class HashJoin
 {
@@ -46,32 +42,46 @@ class HashJoin
         const JoinNonEqualConditions & non_equal_conditions_,
         size_t max_block_size);
 
-	void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
+    void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
 
     void initProbe(const Block & sample_block, size_t probe_concurrency_ = 1);
 
-	void insertFromBlock(const Block & block, size_t stream_index);
+    void insertFromBlock(const Block & block, size_t stream_index);
 
-	void checkTypes(const Block & block) const;
+    void checkTypes(const Block & block) const;
 
     void finalize(const Names & parent_require);
 
 private:
-    ASTTableJoin::Kind kind;
-	bool has_other_condition;
-    String join_req_id;
+    void initRowSchemaAndHashJoinMethod();
 
-	Sizes key_sizes;
+private:
+    const ASTTableJoin::Kind kind;
+    const String join_req_id;
 
-	/// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
-    const Names key_names_left;
+    /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
+    Names key_names_left;
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
-    const Names key_names_right;
+    Names key_names_right;
 
-    /// Block with columns from the right-side table.
+    /// collators for the join key
+    const TiDB::TiDBCollators collators;
+
+    const JoinNonEqualConditions non_equal_conditions;
+
+    const size_t max_block_size;
+
+    const LoggerPtr log;
+
+    bool has_other_condition;
+
+    bool initialized = false;
+
+    HashJoinRowSchema row_schema;
+    HashJoinKeyMethod method = HashJoinKeyMethod::Empty;
+
+    /// Block with columns from the right-side table after finalized.
     Block right_sample_block;
-    /// Block with key columns in the same order they appear in the right-side table.
-    Block right_sample_block_only_keys;
 
     NamesAndTypes output_columns;
     Block output_block;
@@ -82,8 +92,11 @@ private:
     Names required_columns;
     bool finalized = false;
 
-	const LoggerPtr log;
-};
+    std::vector<std::unique_ptr<ColumnRowsWithLock>> partition_column_rows_with_lock;
 
+    /// Build phase
+    size_t build_concurrency;
+    std::vector<std::unique_ptr<BuildWorkerData>> build_workers_data;
+};
 
 } // namespace DB

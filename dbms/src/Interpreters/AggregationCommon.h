@@ -429,7 +429,6 @@ void fillFixedBatch(
             /// It should be ok as log as we do not reffer to any value from `out` before filling.
             const char * source = static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<sizeof(T)>();
             T * dest = reinterpret_cast<T *>(reinterpret_cast<char *>(out.data()) + offset);
-            static_assert(sizeof(Key) % sizeof(T) == 0);
             fillFixedBatch<T, sizeof(Key) / sizeof(T)>(num_rows, reinterpret_cast<const T *>(source), dest);
             offset += sizeof(T);
         }

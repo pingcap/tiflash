@@ -227,6 +227,20 @@ public:
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
 
+    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const
+    {
+        RUNTIME_ASSERT(false, "not implemented");
+    }
+
+    virtual void serializeToPos(
+        PaddedPODArray<UInt8 *> & /* pos */,
+        size_t /* start */,
+        size_t /* end */,
+        bool /* has_null */) const
+    {
+        RUNTIME_ASSERT(false, "not implemented");
+    }
+
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
