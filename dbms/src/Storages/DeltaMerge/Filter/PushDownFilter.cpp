@@ -216,11 +216,11 @@ PushDownFilterPtr PushDownFilter::build(
     }
     auto lm_filter
         = QueryFilter::build(columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
-/*
+    /*
     auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan
         ? QueryFilter::build(columns_to_read_info, dag_query->filters, columns_to_read, context, tracing_logger)
         : nullptr;
 */
-    return std::make_shared<PushDownFilter>(rs_operator, lm_filter, /*rest_filter*/nullptr);
+    return std::make_shared<PushDownFilter>(rs_operator, lm_filter, /*rest_filter*/ nullptr);
 }
 } // namespace DB::DM
