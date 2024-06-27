@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <TiDB/Collation/CollatorCompare.h>
-#include <TiDB/Collation/Collator.h>
 #include <Core/BlockInfo.h>
+#include <TiDB/Collation/Collator.h>
+#include <TiDB/Collation/CollatorCompare.h>
 
 namespace DB
 {

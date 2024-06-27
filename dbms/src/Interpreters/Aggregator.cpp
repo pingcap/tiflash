@@ -661,11 +661,7 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-    executeImplBatch<collect_hit_rate, only_lookup>(
-            method,
-            state,
-            aggregates_pool,
-            agg_process_info);
+    executeImplBatch<collect_hit_rate, only_lookup>(method, state, aggregates_pool, agg_process_info);
 }
 
 template <bool only_lookup, typename Method>
@@ -714,8 +710,12 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         AggregateDataPtr place = aggregates_pool->alloc(0);
         for (size_t i = 0; i < agg_size; ++i)
         {
-            auto emplace_result_hold
-                = emplaceOrFindKey<only_lookup>(method, state, agg_process_info.start_row, *aggregates_pool, sort_key_containers);
+            auto emplace_result_hold = emplaceOrFindKey<only_lookup>(
+                method,
+                state,
+                agg_process_info.start_row,
+                *aggregates_pool,
+                sort_key_containers);
             if constexpr (!only_lookup)
             {
                 if likely (emplace_result_hold.has_value())
@@ -771,7 +771,8 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        auto emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
+        auto emplace_result_holder
+            = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
         if unlikely (!emplace_result_holder.has_value())
         {
             LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
@@ -1001,15 +1002,15 @@ bool Aggregator::executeOnBlockImpl(
     }
     else
     {
-#define M(NAME, IS_TWO_LEVEL)                                                              \
-    case AggregationMethodType(NAME):                                                      \
-    {                                                                                      \
-        executeImpl<collect_hit_rate, only_lookup>(                                        \
-            *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),                 \
-            result.aggregates_pool,                                                        \
-            agg_process_info,                                                              \
-            params.collators);                                                             \
-        break;                                                                             \
+#define M(NAME, IS_TWO_LEVEL)                                              \
+    case AggregationMethodType(NAME):                                      \
+    {                                                                      \
+        executeImpl<collect_hit_rate, only_lookup>(                        \
+            *ToAggregationMethodPtr(NAME, result.aggregation_method_impl), \
+            result.aggregates_pool,                                        \
+            agg_process_info,                                              \
+            params.collators);                                             \
+        break;                                                             \
     }
 
         switch (result.type)

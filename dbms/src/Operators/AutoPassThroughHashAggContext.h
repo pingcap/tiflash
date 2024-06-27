@@ -70,14 +70,8 @@ public:
     size_t getAdjustRowLimit() const { return adjust_row_limit; }
     size_t getOtherStateRowLimit() const { return other_state_row_limit; }
 
-    void updateOtherStateRowLimitUnitNum(UInt64 u)
-    {
-        other_state_row_limit = row_limit_unit * u;
-    }
-    void updateAdjustStateRowLimitUnitNum(UInt64 u)
-    {
-        adjust_row_limit = row_limit_unit * u;
-    }
+    void updateOtherStateRowLimitUnitNum(UInt64 u) { other_state_row_limit = row_limit_unit * u; }
+    void updateAdjustStateRowLimitUnitNum(UInt64 u) { adjust_row_limit = row_limit_unit * u; }
 
 private:
     void trySwitchFromInitState();

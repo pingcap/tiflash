@@ -128,14 +128,13 @@ struct AggregationMethodOneNumber
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodOneNumber<
-        typename Data::value_type,
-        Mapped,
-        FieldType,
-        consecutive_keys_optimization>;
+    using State = ColumnsHashing::
+        HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
 
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<true>
@@ -185,7 +184,9 @@ struct AggregationMethodString
 
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -232,7 +233,9 @@ struct AggregationMethodStringNoCache
     using State = ColumnsHashing::
         HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -278,7 +281,9 @@ struct AggregationMethodOneKeyStringNoCache
 
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -357,7 +362,9 @@ struct AggregationMethodFastPathTwoKeysNoCache
     using State
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -474,7 +481,9 @@ struct AggregationMethodFixedString
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -520,7 +529,9 @@ struct AggregationMethodFixedStringNoCache
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -568,7 +579,9 @@ struct AggregationMethodKeysFixed
     using State
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -672,7 +685,9 @@ struct AggregationMethodSerialized
 
     using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
     template <bool only_lookup>
-    struct EmplaceOrFindKeyResult {};
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
     template <>
     struct EmplaceOrFindKeyResult<false>
@@ -1485,7 +1500,7 @@ protected:
         typename Method::State & state,
         size_t index,
         Arena & aggregates_pool,
-        std::vector<std::string> & sort_key_containers) const; 
+        std::vector<std::string> & sort_key_containers) const;
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena);

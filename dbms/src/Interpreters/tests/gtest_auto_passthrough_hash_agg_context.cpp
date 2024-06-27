@@ -89,10 +89,10 @@ protected:
         auto_pass_through_context->updateAdjustStateRowLimitUnitNum(3);
         auto_pass_through_context->updateOtherStateRowLimitUnitNum(3);
 
-        std::tie(low_ndv_blocks, low_ndv_block) = buildBlocks(/*block_num*/20, /*distinct_num*/10);
-        std::tie(high_ndv_blocks, high_ndv_block) = buildBlocks(/*block_num*/20, /*distinct_num*/20 * block_size);
-        std::tie(medium_ndv_blocks, medium_ndv_block) = buildBlocksForMediumNDV(/*block_num*/40);
-        std::tie(random_blocks, random_block) = buildBlocks(/*block_num*/1, /*distinct_num*/100);
+        std::tie(low_ndv_blocks, low_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 10);
+        std::tie(high_ndv_blocks, high_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
+        std::tie(medium_ndv_blocks, medium_ndv_block) = buildBlocksForMediumNDV(/*block_num*/ 40);
+        std::tie(random_blocks, random_block) = buildBlocks(/*block_num*/ 1, /*distinct_num*/ 100);
 
         context.addMockTable(
             {db_name, high_ndv_tbl_name},
@@ -137,7 +137,7 @@ protected:
             "first_row",
             aggregate_descriptions,
             aggregated_columns,
-            /*empty_input_as_null*/true,
+            /*empty_input_as_null*/ true,
             *context.context);
         appendAggDescription(
             Names{col2_name},
@@ -381,8 +381,12 @@ try
             medium_ndv_blocks.pop_front();
             auto_pass_through_context->onBlock(block);
             state_processed_rows += block.rows();
-            LOG_DEBUG(Logger::get(), "stateSwitchMediumNDV execute one block, state: {}, cur state processed rows: {}, state rows limit: {}",
-                    magic_enum::enum_name(auto_pass_through_context->getCurState()), state_processed_rows, adjust_state_rows_limit);
+            LOG_DEBUG(
+                Logger::get(),
+                "stateSwitchMediumNDV execute one block, state: {}, cur state processed rows: {}, state rows limit: {}",
+                magic_enum::enum_name(auto_pass_through_context->getCurState()),
+                state_processed_rows,
+                adjust_state_rows_limit);
             if (state_processed_rows < adjust_state_rows_limit)
             {
                 ASSERT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
@@ -401,8 +405,12 @@ try
             medium_ndv_blocks.pop_front();
             auto_pass_through_context->onBlock(block);
             state_processed_rows += block.rows();
-            LOG_DEBUG(Logger::get(), "stateSwitchMediumNDV execute one block, state: {}, cur state processed rows: {}, state rows limit: {}",
-                    magic_enum::enum_name(auto_pass_through_context->getCurState()), state_processed_rows, state_processed_row_limit);
+            LOG_DEBUG(
+                Logger::get(),
+                "stateSwitchMediumNDV execute one block, state: {}, cur state processed rows: {}, state rows limit: {}",
+                magic_enum::enum_name(auto_pass_through_context->getCurState()),
+                state_processed_rows,
+                state_processed_row_limit);
             if (state_processed_rows < state_processed_row_limit)
             {
                 ASSERT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Selective);
@@ -425,15 +433,15 @@ CATCH
 //     size_t state_processed_rows = 0;
 //     const auto state_processed_row_limit = auto_pass_through_context->getOtherStateRowLimit();
 //     const auto adjust_state_rows_limit = auto_pass_through_context->getAdjustRowLimit();
-// 
+//
 //     // Expect InitState
 //     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Init);
-// 
+//
 //     // Expect switch to AdjustState
 //     auto_pass_through_context->onBlock(high_ndv_blocks.front());
 //     high_ndv_blocks.pop_front();
 //     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
-// 
+//
 //     // Expect switch to SelectiveState
 //     while (true)
 //     {
@@ -443,25 +451,25 @@ CATCH
 //         medium_ndv_blocks.pop_front();
 //         if (state_processed_rows >= adjust_state_rows_limit)
 //             break;
-// 
+//
 //         EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
 //     }
 //     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Selective);
-// 
+//
 //     // Expect switch to AdjustState
 //     state_processed_rows = 0;
 //     while (true)
 //     {
 //         auto_pass_through_context->onBlock(random_blocks.front());
 //         state_processed_rows += random_blocks.front().rows();
-// 
+//
 //         if (state_processed_rows >= state_processed_row_limit)
 //             break;
-// 
+//
 //         EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Selective);
 //     }
 //     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
-// 
+//
 //     // Expect switch to PreAggState
 //     state_processed_rows = 0;
 //     while (true)
@@ -470,28 +478,28 @@ CATCH
 //         auto_pass_through_context->onBlock(block);
 //         state_processed_rows += block.rows();
 //         low_ndv_blocks.pop_front();
-// 
+//
 //         if (state_processed_rows >= adjust_state_rows_limit)
 //             break;
-// 
+//
 //         EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
 //     }
 //     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::PreHashAgg);
-// 
+//
 //     // Expect switch to AdjustState
 //     state_processed_rows = 0;
 //     while (true)
 //     {
 //         auto_pass_through_context->onBlock(random_blocks.front());
 //         state_processed_rows += random_blocks.front().rows();
-// 
+//
 //         if (state_processed_rows >= state_processed_row_limit)
 //             break;
-// 
+//
 //         EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::PreHashAgg);
 //     }
 //     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
-// 
+//
 //     // Expect switch to PassThroughState
 //     state_processed_rows = 0;
 //     while (true)
@@ -500,10 +508,10 @@ CATCH
 //         auto_pass_through_context->onBlock(block);
 //         state_processed_rows += block.rows();
 //         high_ndv_blocks.pop_front();
-// 
+//
 //         if (state_processed_rows >= adjust_state_rows_limit)
 //             break;
-// 
+//
 //         EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
 //     }
 //     EXPECT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::PassThrough);

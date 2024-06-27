@@ -19,8 +19,8 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
-#include <common/memcpy.h>
 #include <TiDB/Collation/CollatorUtils.h>
+#include <common/memcpy.h>
 
 namespace DB
 {
@@ -273,7 +273,11 @@ public:
     void updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr & selective) const override;
+    void updateWeakHash32(
+        WeakHash32 & hash,
+        const TiDB::TiDBCollatorPtr &,
+        String &,
+        const BlockSelectivePtr & selective) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
