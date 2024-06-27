@@ -14,6 +14,8 @@
 
 #include <Common/config.h>
 #include <Common/config_version.h>
+#include <Storages/DeltaMerge/Index/VectorIndexHNSW/SIMDFeatures.h>
+#include <TiDB/Decode/Vector.h>
 #include <common/config_common.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -128,6 +130,17 @@ std::string getEnabledFeatures()
             "fdo",
 #endif
     };
+    {
+        auto f = DB::DM::VectorIndexHNSWSIMDFeatures::get();
+        for (const auto & feature : f)
+            features.push_back(feature);
+    }
+    {
+        auto f = DB::VectorDistanceSIMDFeatures::get();
+        for (const auto & feature : f)
+            features.push_back(feature);
+    }
+
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
 // clang-format on

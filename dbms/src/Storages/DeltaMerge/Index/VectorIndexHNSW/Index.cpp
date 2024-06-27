@@ -25,8 +25,6 @@
 
 #include <algorithm>
 #include <ext/scope_guard.h>
-#include <usearch/index.hpp>
-#include <usearch/index_plugins.hpp>
 
 namespace DB::ErrorCodes
 {
