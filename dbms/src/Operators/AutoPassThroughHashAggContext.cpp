@@ -141,7 +141,7 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
 void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 {
     state_processed_rows += block_rows;
-    if (state_processed_rows >= non_adjust_row_limit)
+    if (state_processed_rows >= other_state_row_limit)
     {
         state = State::Adjust;
         state_processed_rows = 0;

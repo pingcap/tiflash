@@ -31,13 +31,15 @@ public:
     AutoPassThroughAggregatingBlockInputStream(
         const BlockInputStreamPtr & input_,
         const Aggregator::Params & params_,
-        const String & req_id)
+        const String & req_id,
+        UInt64 row_limit_unit)
     {
         children.push_back(input_);
         auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(
             params_,
             [&]() { return this->isCancelled(); },
-            req_id);
+            req_id,
+            row_limit_unit);
     }
 
     String getName() const override { return NAME; }

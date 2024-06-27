@@ -71,6 +71,7 @@ protected:
     try
     {
         ExecutorTest::initializeContext();
+        context.context->getSettingsRef().max_block_size = block_size;
 
         if (inited)
             return;
@@ -81,6 +82,9 @@ protected:
         col2_data_type = std::make_shared<DataTypeInt64>();
 
         auto_pass_through_context = buildAutoPassHashAggThroughContext();
+        // 1 block for adjust state, 3 blocks for other state
+        auto_pass_through_context->updateAdjustStateRowLimitUnitNum(3);
+        auto_pass_through_context->updateOtherStateRowLimitUnitNum(3);
 
         std::tie(low_ndv_blocks, low_ndv_block) = buildBlocks(/*block_num*/20, /*distinct_num*/10);
         std::tie(high_ndv_blocks, high_ndv_block) = buildBlocks(/*block_num*/20, /*distinct_num*/20 * block_size);
@@ -131,7 +135,7 @@ protected:
             "first_row",
             aggregate_descriptions,
             aggregated_columns,
-            /*empty_input_as_null*/ true,
+            /*empty_input_as_null*/true,
             *context.context);
         appendAggDescription(
             Names{col2_name},
@@ -170,7 +174,8 @@ protected:
         return std::make_unique<AutoPassThroughHashAggContext>(
             *params,
             [&]() { return false; },
-            req_id);
+            req_id,
+            context.context->getSettings().max_block_size);
     }
 
     // Each block has 50% NDV.
@@ -362,7 +367,7 @@ try
     auto_pass_through_context->onBlock(block);
     ASSERT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
 
-    const auto state_processed_row_limit = auto_pass_through_context->getNonAdjustRowLimit();
+    const auto state_processed_row_limit = auto_pass_through_context->getOtherStateRowLimit();
     const auto adjust_state_rows_limit = auto_pass_through_context->getAdjustRowLimit();
 
     size_t state_processed_rows = 0;
@@ -416,7 +421,7 @@ CATCH
 // try
 // {
 //     size_t state_processed_rows = 0;
-//     const auto state_processed_row_limit = auto_pass_through_context->getNonAdjustRowLimit();
+//     const auto state_processed_row_limit = auto_pass_through_context->getOtherStateRowLimit();
 //     const auto adjust_state_rows_limit = auto_pass_through_context->getAdjustRowLimit();
 // 
 //     // Expect InitState
@@ -508,7 +513,6 @@ CATCH
 TEST_F(TestAutoPassThroughAggContext, integration)
 try
 {
-    context.context->getSettingsRef().max_block_size = block_size;
     // auto workloads = std::vector{low_ndv_tbl_name, high_ndv_tbl_name, medium_ndv_tbl_name};
     auto workloads = std::vector{medium_ndv_tbl_name};
     for (const auto & tbl_name : workloads)

@@ -22,15 +22,17 @@ namespace DB
 {
 AutoPassThroughAggregateTransform::AutoPassThroughAggregateTransform(
     PipelineExecutorContext & exec_context_,
+    const Aggregator::Params & params_,
     const String & req_id_,
-    const Aggregator::Params & params_)
+    UInt64 row_limit_unit)
     : TransformOp(exec_context_, req_id_)
     , status(Status::building_hash_map)
 {
     auto_pass_through_context = std::make_shared<AutoPassThroughHashAggContext>(
         params_,
         [&]() { return exec_context.isCancelled(); },
-        req_id_);
+        req_id_,
+        row_limit_unit);
 }
 
 OperatorStatus AutoPassThroughAggregateTransform::transformImpl(Block & block)

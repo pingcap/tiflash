@@ -171,7 +171,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     else if (auto_pass_through)
     {
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<AutoPassThroughAggregatingBlockInputStream>(stream, params, log->identifier());
+            stream = std::make_shared<AutoPassThroughAggregatingBlockInputStream>(stream, params, log->identifier(), context.getSettings().max_block_size);
             stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
         });
     }
@@ -285,7 +285,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(
-                std::make_unique<AutoPassThroughAggregateTransform>(exec_context, log->identifier(), params));
+                std::make_unique<AutoPassThroughAggregateTransform>(exec_context, params, log->identifier(), context.getSettings().max_block_size));
         });
     }
     else
