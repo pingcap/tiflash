@@ -561,5 +561,25 @@ TEST(UniPageStorageIdTest, UniversalPageId)
     }
 }
 
+TEST(UniPageStorageIdTest, UniversalPageIdMemoryTrace)
+{
+    auto prim_mem = PS::PageStorageMemorySummary::uni_page_id_bytes.load();
+    {
+        auto u_id = UniversalPageIdFormat::toFullPageId("aaa", 100);
+        auto page1_mem = PS::PageStorageMemorySummary::uni_page_id_bytes.load();
+        auto ps = page1_mem - prim_mem;
+        auto u_id_cpy = u_id;
+        ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem + ps * 2);
+        UniversalPageId u_id_mv = UniversalPageIdFormat::toFullPageId("aaa", 100);
+        ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem + ps * 3);
+        u_id_mv = std::move(u_id_cpy);
+        ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem + ps * 2);
+        UniversalPageId u_id_cpy2 = UniversalPageIdFormat::toFullPageId("aaa", 100);
+        u_id_cpy2 = u_id_mv;
+        ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem + ps * 3);
+    }
+    ASSERT_EQ(PS::PageStorageMemorySummary::uni_page_id_bytes.load(), prim_mem);
+}
+
 } // namespace PS::universal::tests
 } // namespace DB
