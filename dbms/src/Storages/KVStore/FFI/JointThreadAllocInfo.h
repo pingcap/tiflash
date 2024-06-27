@@ -67,6 +67,26 @@ struct ThreadInfoJealloc
     }
 };
 
+struct StackThreadInfoJealloc {
+    explicit StackThreadInfoJealloc(char aggregate_delimer_)
+        : aggregate_delimer(aggregate_delimer_)
+    {}
+    char aggregate_delimer = '-';
+    uint64_t allocated{0};
+    uint64_t deallocated{0};
+    int64_t remaining() const
+    {
+        if (allocated > deallocated)
+        {
+            return static_cast<int64_t>(allocated - deallocated);
+        }
+        else
+        {
+            return -static_cast<int64_t>(deallocated - allocated);
+        }
+    }
+};
+
 /// Works in two different ways:
 /// NOTE in both ways, call reportThreadAllocInfo to register by `Reset` for every thread to be monitored.
 /// And call reportThreadAllocInfo to deregister by `Remove` for every thread that is guaranteed to no longer be monitored.
@@ -79,6 +99,7 @@ class JointThreadInfoJeallocMap
 {
 public:
     using AllocMap = std::unordered_map<std::string, ThreadInfoJealloc>;
+    using StackAllocMap = std::unordered_map<std::string, StackThreadInfoJealloc>;
     JointThreadInfoJeallocMap();
     ~JointThreadInfoJeallocMap();
     void recordThreadAllocInfo();
@@ -106,11 +127,18 @@ public: // Storage
         uint64_t value,
         char aggregate_delimer);
 
+public: // StackThread
+    void reportStackThreadAllocInfo(
+        const std::string &,
+        StackThreadInfoJealloc,
+        char aggregate_delimer);
+
 private:
     /// Be called periodicly to submit the alloc info to TiFlashMetrics
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
     void recordThreadAllocInfoForProxy();
     void recordThreadAllocInfoForStorage();
+    void recordStackThreadAllocInfo();
 
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
     void reportThreadAllocInfoImpl(
@@ -124,8 +152,10 @@ private:
 
 private:
     mutable std::shared_mutex memory_allocation_mut;
+    mutable std::shared_mutex stack_memory_allocation_mut;
     AllocMap proxy_map;
     AllocMap storage_map;
+    StackAllocMap stack_map;
 
     bool is_terminated{false};
     mutable std::mutex monitoring_mut;

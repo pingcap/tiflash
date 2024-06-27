@@ -39,6 +39,9 @@ void KVStore::persistRegion(
         "try access to region_persister without initialization, stack={}",
         StackTrace().toString());
 
+    mem_tracker_kvs_memtable_persistence.begin();
+    SCOPE_EXIT({ mem_tracker_kvs_memtable_persistence.end(); });
+
     auto reason_id = magic_enum::enum_underlying(reason);
     std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
     LOG_INFO(
