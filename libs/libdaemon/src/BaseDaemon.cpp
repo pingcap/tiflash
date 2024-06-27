@@ -1175,7 +1175,10 @@ void BaseDaemon::logVersion() const
     LOG_INFO(log, "Welcome to TiFlash");
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
-    LOG_INFO(log, "TiFlash build info: {}", ss.str());
+
+    std::string line;
+    while (std::getline(ss, line, '\n'))
+        LOG_INFO(log, "{}", line);
 }
 
 /// Used for exitOnTaskError()

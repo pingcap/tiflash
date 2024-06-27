@@ -37,7 +37,8 @@ if (ARCH_AARCH64)
     option (TIFLASH_ENABLE_ASIMD_SUPPORT "Enable Advanced SIMD support." ON)
     option (TIFLASH_ENABLE_SVE_SUPPORT "Enable Scalable Vector Extension support." OFF)
     # TODO: default ON, to be changed after CI is updated
-    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." ON)
+    # Note: explicitly set to OFF for cse-branch
+    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." OFF)
 
     if (NO_ARMV81_OR_HIGHER)
         # crc32 is optional in v8.0 and mandatory in v8.1. Enable it as __crc32()* is used in lot's of places and even very old ARM CPUs
@@ -95,7 +96,7 @@ elseif (ARCH_AMD64)
     # so we do not set the flags to avoid core dump in old machines
     option (TIFLASH_ENABLE_AVX_SUPPORT "Use AVX/AVX2 instructions on x86_64" ON)
     option (TIFLASH_ENABLE_AVX512_SUPPORT "Use AVX512 instructions on x86_64" ON)
-    
+
     # `haswell` was released since 2013 with cpu feature avx2, bmi2. It's a practical arch for optimizer
     option (TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT "Use instructions based on architecture `haswell` on x86_64" ON)
 
