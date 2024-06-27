@@ -37,6 +37,9 @@ namespace tests
 {
 // todo using func in DAGExpressionAnalyzer
 // todo add test for params.aggregates_size == 0
+// todo add case for different agg func/different group by key of different type
+// todo for medium workload, same data in different block instead in one block
+// todo add case to cover two level hashmap; spill
 void appendAggDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
@@ -88,7 +91,6 @@ protected:
 
         std::tie(low_ndv_blocks, low_ndv_block) = buildBlocks(/*block_num*/20, /*distinct_num*/10);
         std::tie(high_ndv_blocks, high_ndv_block) = buildBlocks(/*block_num*/20, /*distinct_num*/20 * block_size);
-        // todo another workload, same data in different block instead in one block
         std::tie(medium_ndv_blocks, medium_ndv_block) = buildBlocksForMediumNDV(/*block_num*/40);
         std::tie(random_blocks, random_block) = buildBlocks(/*block_num*/1, /*distinct_num*/100);
 

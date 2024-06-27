@@ -51,7 +51,6 @@ FLATTEN_INLINE static inline void LoopTwoColumns(
     }
 }
 
-// todo remove, use WeakHash32Info instead
 // Loop one column and invoke callback for each pair.
 // Remove last zero byte.
 template <typename Chars, typename Offsets, typename F>
@@ -83,7 +82,7 @@ struct WeakHash32Info
 // Loop one column and invoke callback for each pair.
 // Remove last zero byte.
 template <typename Chars, typename Offsets, typename Func>
-FLATTEN_INLINE static inline void LoopOneColumnTmp(
+FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
     const Chars & a_data,
     const Offsets & a_offsets,
     size_t size,

@@ -19,7 +19,6 @@
 
 namespace DB
 {
-// todo interpreter set up selective block.
 std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,

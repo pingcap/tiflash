@@ -2251,7 +2251,6 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     sort_key_containers.resize(params.keys_size, "");
 
     /// in merge stage, don't need to care about the collator because the key is already the sort_key of original string
-    // todo assert cannot be only_lookup
     typename Method::State state(key_columns, key_sizes, {});
 
     /// For all rows.
@@ -2464,7 +2463,6 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
     const Block & source,
     Blocks & destinations) const
 {
-    // todo add test for two level
     typename Method::State state(key_columns, key_sizes, params.collators);
 
     std::vector<std::string> sort_key_containers;

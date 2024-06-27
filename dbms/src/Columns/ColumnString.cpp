@@ -566,7 +566,7 @@ void ColumnString::updateWeakHash32(
 
     updateWeakHash32Impl(
         info,
-        LoopOneColumnTmp<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
+        LoopOneColumnWithHashInfo<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
 }
 
 void ColumnString::updateWeakHash32(

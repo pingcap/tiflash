@@ -1317,14 +1317,10 @@ public:
             materialized_columns.clear();
             prepare_for_agg_done = false;
 
-            // todo performance becase resize for each block?
             hit_row_cnt = 0;
-            hit_bits.resize(block.rows() / 8 + 1);
-            // todo necessary?
             for (auto & ch : hit_bits)
                 ch = 0;
         }
-        // todo maybe optimized by using other lib
         void setHitBit(size_t i)
         {
             RUNTIME_CHECK(!hit_bits.empty());
@@ -1333,41 +1329,32 @@ public:
             hit_bits[byte_idx] |= 1 << byte_off;
         }
 
-        // todo maybe just one int to indicate hit_count
         std::vector<UInt64> getNotFoundRows() const
         {
             RUNTIME_CHECK(!hit_bits.empty());
+            RUNTIME_CHECK(start_row == end_row);
+
             std::vector<UInt64> hit_rows;
             hit_rows.reserve(hit_row_cnt);
-            // todo assume start_row is 0.
             bool done = false;
             for (size_t i = 0; i < hit_bits.size() && !done; ++i)
             {
                 const auto ch = hit_bits[i];
                 for (size_t j = 0; j < 8; ++j)
                 {
-                    if (i * 8 + j >= end_row)
+                    const auto idx = i * 8 + j;
+                    if unlikely (idx >= end_row)
                     {
-                        // todo done? maybe better impl
                         done = true;
                         break;
                     }
                     if ((ch && static_cast<char>(1 << j)) == 0)
-                    // if (ch && static_cast<char>(1 << j) == 0)
                     {
-                        hit_rows.push_back(i * 8 + j);
+                        hit_rows.push_back(idx);
                     }
                 }
             }
-            // RUNTIME_CHECK(hit_rows.size() == hit_row_cnt); // todo not same
             return hit_rows;
-        }
-
-        float getHitRate() const
-        {
-            // todo +1?
-            const auto total_rows = end_row - start_row;
-            return static_cast<float>(hit_row_cnt) / total_rows;
         }
     };
 

@@ -57,7 +57,6 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
     {
         aggregator->executeOnBlockOnlyLookup(*agg_process_info, *many_data[0], 0);
         auto pass_through_rows = agg_process_info->getNotFoundRows();
-        // todo assert allBLockDataHandled?
         const auto total_rows = agg_process_info->block.rows();
         if (!pass_through_rows.empty())
         {
@@ -74,7 +73,6 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
         __builtin_unreachable();
     }
     };
-    // todo: maybe not true??
     RUNTIME_CHECK(agg_process_info->allBlockDataHandled());
 }
 

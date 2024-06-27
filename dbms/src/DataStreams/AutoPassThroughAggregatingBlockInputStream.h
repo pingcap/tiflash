@@ -27,7 +27,6 @@ class AutoPassThroughAggregatingBlockInputStream : public IProfilingBlockInputSt
     static constexpr auto NAME = "Aggregating";
 
 public:
-    // todo register_operator_spill_context need or not?
     AutoPassThroughAggregatingBlockInputStream(
         const BlockInputStreamPtr & input_,
         const Aggregator::Params & params_,
