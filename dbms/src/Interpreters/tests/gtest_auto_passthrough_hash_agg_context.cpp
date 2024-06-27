@@ -36,6 +36,7 @@ namespace DB
 namespace tests
 {
 // todo using func in DAGExpressionAnalyzer
+// todo add test for params.aggregates_size == 0
 void appendAggDescription(
     const Names & arg_names,
     const DataTypes & arg_types,

@@ -128,16 +128,26 @@ struct AggregationMethodOneNumber
         : data(other.data)
     {}
 
-    /// To use one `Method` in different threads, use different `State`.
-    using State = ColumnsHashing::
-        HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
-    using LookupState = ColumnsHashing::HashMethodOneNumber<
+    using State = ColumnsHashing::HashMethodOneNumber<
         typename Data::value_type,
         Mapped,
         FieldType,
-        consecutive_keys_optimization,
-        /*only_lookup*/ true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+        consecutive_keys_optimization>;
+
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     /// Shuffle key columns before `insertKeyIntoColumns` call if needed.
@@ -174,8 +184,20 @@ struct AggregationMethodString
     {}
 
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
-    using LookupState = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -207,16 +229,22 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
-    // Remove last zero byte.
     using State = ColumnsHashing::
         HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
-    using LookupState = ColumnsHashing::HashMethodString<
-        typename Data::value_type,
-        Mapped,
-        /*place_string_to_arena=*/true,
-        /*use_cache=*/false,
-        /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -249,9 +277,20 @@ struct AggregationMethodOneKeyStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
-    using LookupState
-        = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding, /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -317,13 +356,20 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     using State
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
-    using LookupState = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<
-        Key1Desc,
-        Key2Desc,
-        typename Data::value_type,
-        Mapped,
-        /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -427,13 +473,20 @@ struct AggregationMethodFixedString
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
-    using LookupState = ColumnsHashing::HashMethodFixedString<
-        typename Data::value_type,
-        Mapped,
-        /*place_string_to_arena=*/true,
-        /*use_cache=*/true,
-        /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -466,9 +519,20 @@ struct AggregationMethodFixedStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
-    using LookupState
-        = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false, /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -503,9 +567,20 @@ struct AggregationMethodKeysFixed
 
     using State
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
-    using LookupState = ColumnsHashing::
-        HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache, /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     // Because shuffle key optimization will reorder group by key internally, which is not compatible with
     // key_ref_agg_func optimization. Because the latter optimization also needs to reorder group by key
@@ -596,8 +671,20 @@ struct AggregationMethodSerialized
     {}
 
     using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
-    using LookupState = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped, /*only_lookup=*/true>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult {};
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -1391,27 +1478,27 @@ protected:
 
 
     /// Process one data block, aggregate the data into a hash table.
-    template <typename Method, bool collect_hit_rate, bool only_lookup>
+    template <bool collect_hit_rate, bool only_lookup, typename Method>
     void executeImpl(
         Method & method,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <typename Method, bool collect_hit_rate, bool only_loopup, typename MethodState>
+    template <bool collect_hit_rate, bool only_loopup, typename Method>
     void executeImplBatch(
         Method & method,
-        MethodState & state,
+        typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <typename Method, typename MethodState>
-    std::optional<typename Method::EmplaceResult> emplaceKey(
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
         Method & method,
-        MethodState & state,
+        typename Method::State & state,
         size_t index,
         Arena & aggregates_pool,
-        std::vector<std::string> & sort_key_containers) const;
+        std::vector<std::string> & sort_key_containers) const; 
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena);

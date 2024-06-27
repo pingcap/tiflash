@@ -652,46 +652,36 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
   * (Probably because after the inline of this function, more internal functions no longer be inlined.)
   * Inline does not make sense, since the inner loop is entirely inside this function.
   */
-template <typename Method, bool collect_hit_rate, bool only_lookup>
+template <bool collect_hit_rate, bool only_lookup, typename Method>
 void NO_INLINE Aggregator::executeImpl(
     Method & method,
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info,
     TiDB::TiDBCollators & collators) const
 {
-    if constexpr (only_lookup)
-    {
-        typename Method::LookupState state(agg_process_info.key_columns, key_sizes, collators);
+    typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-        executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(
-                method,
-                state,
-                aggregates_pool,
-                agg_process_info);
-    }
-    else
-    {
-        typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
-
-        executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(
-                method,
-                state,
-                aggregates_pool,
-                agg_process_info);
-    }
+    executeImplBatch<collect_hit_rate, only_lookup>(
+            method,
+            state,
+            aggregates_pool,
+            agg_process_info);
 }
 
-template <typename Method, typename MethodState>
-std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
+template <bool only_lookup, typename Method>
+std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
     Method & method,
-    MethodState & state,
+    typename Method::State & state,
     size_t index,
     Arena & aggregates_pool,
     std::vector<std::string> & sort_key_containers) const
 {
     try
     {
-        return state.emplaceKey(method.data, index, aggregates_pool, sort_key_containers);
+        if constexpr (only_lookup)
+            return state.findKey(method.data, index, aggregates_pool, sort_key_containers);
+        else
+            return state.emplaceKey(method.data, index, aggregates_pool, sort_key_containers);
     }
     catch (ResizeException &)
     {
@@ -699,10 +689,10 @@ std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
     }
 }
 
-template <typename Method, bool collect_hit_rate, bool only_lookup, typename MethodState>
+template <bool collect_hit_rate, bool only_lookup, typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
-    MethodState & state,
+    typename Method::State & state,
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
@@ -725,16 +715,24 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         for (size_t i = 0; i < agg_size; ++i)
         {
             auto emplace_result_hold
-                = emplaceKey(method, state, agg_process_info.start_row, *aggregates_pool, sort_key_containers);
-            if likely (emplace_result_hold.has_value())
+                = emplaceOrFindKey<only_lookup>(method, state, agg_process_info.start_row, *aggregates_pool, sort_key_containers);
+            if constexpr (!only_lookup)
             {
-                emplace_result_hold.value().setMapped(place);
-                ++agg_process_info.start_row;
+                if likely (emplace_result_hold.has_value())
+                {
+                    emplace_result_hold.value().setMapped(place);
+                    ++agg_process_info.start_row;
+                }
+                else
+                {
+                    LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                    break;
+                }
             }
             else
             {
-                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
-                break;
+                // todo
+                RUNTIME_CHECK_MSG(false, "doesn't support only lookup when the number of agg func is zero");
             }
         }
         return;
@@ -773,7 +771,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        auto emplace_result_holder = emplaceKey(method, state, i, *aggregates_pool, sort_key_containers);
+        auto emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
         if unlikely (!emplace_result_holder.has_value())
         {
             LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
@@ -784,7 +782,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
         if constexpr (only_lookup)
         {
-            if (!emplace_result.isNotFound())
+            if (emplace_result.isFound())
             {
                 aggregate_data = emplace_result.getMapped();
                 agg_process_info.setHitBit(i);
@@ -1006,10 +1004,8 @@ bool Aggregator::executeOnBlockImpl(
 #define M(NAME, IS_TWO_LEVEL)                                                              \
     case AggregationMethodType(NAME):                                                      \
     {                                                                                      \
-        auto & tmp_method = *ToAggregationMethodPtr(NAME, result.aggregation_method_impl); \
-        using METHOD_TYPE = std::decay_t<decltype(tmp_method)>;                            \
-        executeImpl<METHOD_TYPE, collect_hit_rate, only_lookup>(                           \
-            tmp_method,                                                                    \
+        executeImpl<collect_hit_rate, only_lookup>(                                        \
+            *ToAggregationMethodPtr(NAME, result.aggregation_method_impl),                 \
             result.aggregates_pool,                                                        \
             agg_process_info,                                                              \
             params.collators);                                                             \
@@ -2255,6 +2251,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     sort_key_containers.resize(params.keys_size, "");
 
     /// in merge stage, don't need to care about the collator because the key is already the sort_key of original string
+    // todo assert cannot be only_lookup
     typename Method::State state(key_columns, key_sizes, {});
 
     /// For all rows.
@@ -2467,6 +2464,7 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
     const Block & source,
     Blocks & destinations) const
 {
+    // todo add test for two level
     typename Method::State state(key_columns, key_sizes, params.collators);
 
     std::vector<std::string> sort_key_containers;
