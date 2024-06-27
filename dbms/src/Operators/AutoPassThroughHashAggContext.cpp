@@ -14,6 +14,8 @@
 
 #include <Operators/AutoPassThroughHashAggContext.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 void AutoPassThroughHashAggContext::onBlock(Block & block)
@@ -106,10 +108,7 @@ void AutoPassThroughHashAggContext::trySwitchFromInitState()
     // todo check data.size?
     // todo check if expand happened?
     if (many_data[0]->bytesCount() > 1024 * 1024)
-    {
         state = State::Adjust;
-        state_processed_rows = 0;
-    }
 }
 
 void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, size_t hit_rows)
@@ -159,32 +158,37 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
     auto header = aggregator->getHeader(/*final*/ true);
     Block new_block;
     const auto & aggregate_descriptions = aggregator->getParams().aggregates;
-    for (size_t i = 0; i < block.columns(); ++i)
+    // todo or put inside for loop?
+    Arena arena;
+    for (size_t col_idx = 0; col_idx < block.columns(); ++col_idx)
     {
-        auto col_name = header.getByPosition(i).name;
+        auto col_name = header.getByPosition(col_idx).name;
         if (block.has(col_name))
         {
-            new_block.insert(i, block.getByName(col_name));
+            new_block.insert(col_idx, block.getByName(col_name));
             continue;
         }
 
         bool agg_func_col_found = false;
-        for (const auto & desc : aggregate_descriptions)
+        for (size_t agg_idx = 0; agg_idx < aggregate_descriptions.size(); ++agg_idx)
         {
+            const auto & desc = aggregate_descriptions[agg_idx];
+            // todo check if same with desc
+            const auto & inst = agg_process_info->aggregate_functions_instructions[agg_idx];
             if (desc.column_name == col_name)
             {
                 auto new_col = desc.function->getReturnType()->createColumn();
                 new_col->reserve(block.rows());
                 auto * place = new char[desc.function->sizeOfData()];
-                desc.function->create(place);
-                for (size_t i = 0; i < block.rows(); ++i)
+                for (size_t row_idx = 0; row_idx < block.rows(); ++row_idx)
                 {
-                    // todo arena nullptr ok?
-                    desc.function->insertResultInto(place, *new_col, /*arena*/ nullptr);
+                    desc.function->create(place);
+                    inst.that->add(place, inst.batch_arguments, row_idx, &arena);
+                    desc.function->insertResultInto(place, *new_col, &arena);
                 }
                 delete[] place;
                 new_block.insert(
-                    i,
+                    col_idx,
                     ColumnWithTypeAndName{std::move(new_col), desc.function->getReturnType(), desc.column_name});
                 agg_func_col_found = true;
                 break;

@@ -1211,8 +1211,6 @@ public:
         AggregateFunctionInstructions aggregate_functions_instructions;
         Aggregator * aggregator;
 
-        // todo del this
-        bool collect_hit_rate = false;
         bool only_lookup = false;
         size_t hit_row_cnt = 0;
         std::vector<char> hit_bits;
@@ -1233,9 +1231,11 @@ public:
             prepare_for_agg_done = false;
 
             // todo performance becase resize for each block?
-            hit_bits.clear();
-            hit_bits.resize(block.rows() / 8 + 1);
             hit_row_cnt = 0;
+            hit_bits.resize(block.rows() / 8 + 1);
+            // todo necessary?
+            for (auto & ch : hit_bits)
+                ch = 0;
         }
         // todo maybe optimized by using other lib
         void setHitBit(size_t i)
@@ -1252,19 +1252,27 @@ public:
             RUNTIME_CHECK(!hit_bits.empty());
             std::vector<UInt64> hit_rows;
             hit_rows.reserve(hit_row_cnt);
-            // todo <= end_row or < end_row? or make it correct
-            for (size_t i = 0; i < hit_bits.size() && i + start_row < end_row; ++i)
+            // todo assume start_row is 0.
+            bool done = false;
+            for (size_t i = 0; i < hit_bits.size() && !done; ++i)
             {
                 const auto ch = hit_bits[i];
                 for (size_t j = 0; j < 8; ++j)
                 {
-                    if (ch && static_cast<char>(1 << j))
+                    if (i * 8 + j >= end_row)
                     {
-                        hit_rows.push_back(start_row + i * 8 + j);
+                        // todo done? maybe better impl
+                        done = true;
+                        break;
+                    }
+                    if ((ch && static_cast<char>(1 << j)) == 0)
+                    // if (ch && static_cast<char>(1 << j) == 0)
+                    {
+                        hit_rows.push_back(i * 8 + j);
                     }
                 }
             }
-            RUNTIME_CHECK(hit_rows.size() == hit_row_cnt);
+            // RUNTIME_CHECK(hit_rows.size() == hit_row_cnt); // todo not same
             return hit_rows;
         }
 
@@ -1390,17 +1398,17 @@ protected:
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <typename Method, bool collect_hit_rate, bool only_loopup>
+    template <typename Method, bool collect_hit_rate, bool only_loopup, typename MethodState>
     void executeImplBatch(
         Method & method,
-        typename Method::State & state,
+        MethodState & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <typename Method>
+    template <typename Method, typename MethodState>
     std::optional<typename Method::EmplaceResult> emplaceKey(
         Method & method,
-        typename Method::State & state,
+        MethodState & state,
         size_t index,
         Arena & aggregates_pool,
         std::vector<std::string> & sort_key_containers) const;

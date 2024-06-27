@@ -76,8 +76,9 @@ public:
 
     void setMapped(const Mapped & mapped)
     {
-        *cached_value = mapped;
         *value = mapped;
+        // todo fix this
+        // *cached_value = mapped;
     }
 };
 
@@ -129,7 +130,8 @@ public:
     static constexpr bool has_mapped = !std::is_same<Mapped, VoidMapped>::value;
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
 
-    // todo maybe change better name because no insert will happen if only_lookup is true.
+    // If only_lookup is true, will not insert key into HashMap.
+    // Instead, 
     template <typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
         Data & data,
@@ -138,8 +140,9 @@ public:
         std::vector<String> & sort_key_containers)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        // todo use lookupImpl!!!
         if constexpr (only_lookup)
-            return emplaceImplOnlyLookup(key_holder, data);
+            return lookupImpl(key_holder, data);
         else
             return emplaceImpl(key_holder, data);
     }
@@ -190,9 +193,10 @@ protected:
         // todo static_assert consecutive key cache
         auto it = data.find(keyHolderGetKey(key_holder));
         if (it == nullptr)
-            return EmplaceResult(nullptr, /*not_found=*/true);
+            // todo cache nullptr ok?
+            return EmplaceResult(nullptr, nullptr, /*not_found=*/true);
         else
-            return EmplaceResult(&it->getMapped(), /*not_found=*/false);
+            return EmplaceResult(&it->getMapped(), nullptr, /*not_found=*/false);
     }
 
     template <typename Data, typename KeyHolder>
@@ -245,6 +249,7 @@ protected:
         if constexpr (has_mapped)
             return EmplaceResult(&it->getMapped(), cached, inserted);
         else
+            // todo where is its ctor?
             return EmplaceResult(inserted);
     }
 

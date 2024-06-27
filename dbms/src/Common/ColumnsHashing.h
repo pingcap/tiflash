@@ -43,13 +43,13 @@ namespace ColumnsHashing
 template <typename Value, typename Mapped, typename FieldType, bool use_cache = true, bool only_lookup = false>
 struct HashMethodOneNumber
     : public columns_hashing_impl::HashMethodBase<
-          HashMethodOneNumber<Value, Mapped, FieldType, use_cache>,
+          HashMethodOneNumber<Value, Mapped, FieldType, use_cache, only_lookup>,
           Value,
           Mapped,
           use_cache,
           only_lookup>
 {
-    using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
+    using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache, only_lookup>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 
     const FieldType * vec;
@@ -98,13 +98,13 @@ template <
     bool only_lookup = false>
 struct HashMethodString
     : public columns_hashing_impl::HashMethodBase<
-          HashMethodString<Value, Mapped, place_string_to_arena, use_cache>,
+          HashMethodString<Value, Mapped, place_string_to_arena, use_cache, only_lookup>,
           Value,
           Mapped,
           use_cache,
           only_lookup>
 {
-    using Self = HashMethodString<Value, Mapped, place_string_to_arena, use_cache>;
+    using Self = HashMethodString<Value, Mapped, place_string_to_arena, use_cache, only_lookup>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, only_lookup>;
 
     const IColumn::Offset * offsets;

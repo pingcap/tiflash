@@ -179,7 +179,6 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::Ti
     }
 }
 
-// todo change BlockSelectivePtr as const &
 // todo add assert for all other column methods
 void ColumnAggregateFunction::updateWeakHash32(
     WeakHash32 & hash,

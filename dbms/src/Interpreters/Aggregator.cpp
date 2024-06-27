@@ -659,19 +659,32 @@ void NO_INLINE Aggregator::executeImpl(
     AggProcessInfo & agg_process_info,
     TiDB::TiDBCollators & collators) const
 {
-    typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
+    if constexpr (only_lookup)
+    {
+        typename Method::LookupState state(agg_process_info.key_columns, key_sizes, collators);
 
-    executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(
-        method,
-        state,
-        aggregates_pool,
-        agg_process_info);
+        executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(
+                method,
+                state,
+                aggregates_pool,
+                agg_process_info);
+    }
+    else
+    {
+        typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
+
+        executeImplBatch<std::decay_t<decltype(method)>, collect_hit_rate, only_lookup>(
+                method,
+                state,
+                aggregates_pool,
+                agg_process_info);
+    }
 }
 
-template <typename Method>
+template <typename Method, typename MethodState>
 std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
     Method & method,
-    typename Method::State & state,
+    MethodState & state,
     size_t index,
     Arena & aggregates_pool,
     std::vector<std::string> & sort_key_containers) const
@@ -686,10 +699,10 @@ std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
     }
 }
 
-template <typename Method, bool collect_hit_rate, bool only_lookup>
+template <typename Method, bool collect_hit_rate, bool only_lookup, typename MethodState>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
-    typename Method::State & state,
+    MethodState & state,
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {

@@ -164,7 +164,6 @@ void ColumnConst::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    // todo check all err msg
     RUNTIME_CHECK_MSG(
         hash.getData().size() != s,
         "Size of WeakHash32({}) does not match size of column({})",

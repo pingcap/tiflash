@@ -86,10 +86,12 @@ private:
 
     size_t adjust_processed_rows = 0;
     size_t adjust_hit_rows = 0;
-    size_t adjust_row_limit = 20000; // todo refine limit
+    size_t adjust_row_limit = 8192; // todo refine limit
 
     size_t state_processed_rows = 0;
-    size_t non_adjust_row_limit = 70000; // todo refine limit
+    // todo user can set 3 as other
+    // todo use max_block_size instead of 8192
+    size_t non_adjust_row_limit = 8192 * 3;
 
     BlocksList pass_through_block_buffer{};
     bool already_start_to_get_data = false;
