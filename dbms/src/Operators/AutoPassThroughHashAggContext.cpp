@@ -56,7 +56,7 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
     case State::Selective:
     {
         aggregator->executeOnBlockOnlyLookup(*agg_process_info, *many_data[0], 0);
-        auto pass_through_rows = agg_process_info->getNotFoundRows();
+        auto pass_through_rows = agg_process_info->not_found_rows;
         const auto total_rows = agg_process_info->block.rows();
         if (!pass_through_rows.empty())
         {

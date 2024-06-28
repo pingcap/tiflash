@@ -1315,7 +1315,7 @@ public:
 
         bool only_lookup = false;
         size_t hit_row_cnt = 0;
-        std::vector<char> hit_bits;
+        std::vector<size_t> not_found_rows;
 
         void prepareForAgg();
         bool allBlockDataHandled() const
@@ -1333,43 +1333,8 @@ public:
             prepare_for_agg_done = false;
 
             hit_row_cnt = 0;
-            for (auto & ch : hit_bits)
-                ch = 0;
-        }
-        void setHitBit(size_t i)
-        {
-            RUNTIME_CHECK(!hit_bits.empty());
-            const size_t byte_idx = i / 8;
-            const size_t byte_off = i % 8;
-            hit_bits[byte_idx] |= 1 << byte_off;
-        }
-
-        std::vector<UInt64> getNotFoundRows() const
-        {
-            RUNTIME_CHECK(!hit_bits.empty());
-            RUNTIME_CHECK(start_row == end_row);
-
-            std::vector<UInt64> hit_rows;
-            hit_rows.reserve(hit_row_cnt);
-            bool done = false;
-            for (size_t i = 0; i < hit_bits.size() && !done; ++i)
-            {
-                const auto ch = hit_bits[i];
-                for (size_t j = 0; j < 8; ++j)
-                {
-                    const auto idx = i * 8 + j;
-                    if unlikely (idx >= end_row)
-                    {
-                        done = true;
-                        break;
-                    }
-                    if ((ch && static_cast<char>(1 << j)) == 0)
-                    {
-                        hit_rows.push_back(idx);
-                    }
-                }
-            }
-            return hit_rows;
+            not_found_rows.clear();
+            not_found_rows.reserve(block_.rows() / 2);
         }
     };
 

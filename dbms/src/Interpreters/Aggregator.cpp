@@ -786,7 +786,10 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
             if (emplace_result.isFound())
             {
                 aggregate_data = emplace_result.getMapped();
-                agg_process_info.setHitBit(i);
+            }
+            else
+            {
+                agg_process_info.not_found_rows.push_back(i);
             }
         }
         else
