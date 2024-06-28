@@ -26,6 +26,7 @@ public:
 
     UInt8 getMethodByte() const override;
 
+    // ordinaryDecompress is only used for benchmark comparison.
     static void ordinaryDecompress(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size);
 
 #ifndef DBMS_PUBLIC_GTEST
