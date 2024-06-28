@@ -532,7 +532,7 @@ uint8_t ApplyFapSnapshotImpl(
     // `region_to_ingest` is not the region in kvstore.
     auto region_to_ingest = checkpoint_ingest_info->getRegion();
     RUNTIME_CHECK(region_to_ingest != nullptr);
-    if (!(region_to_ingest->appliedIndex() == index && region_to_ingest->appliedIndexTerm() == term))
+    if (region_to_ingest->appliedIndex() != index || region_to_ingest->appliedIndexTerm() != term)
     {
         if (assert_exist)
         {
