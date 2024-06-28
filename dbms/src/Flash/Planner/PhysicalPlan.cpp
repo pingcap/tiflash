@@ -322,9 +322,12 @@ PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_context, Con
 {
     RUNTIME_CHECK(root_node);
     PipelineBuilder builder{log->identifier()};
+    LOG_DEBUG(log, "Before buildPipeline");
     root_node->buildPipeline(builder, context, exec_context);
+    LOG_DEBUG(log, "After buildPipeline");
     root_node.reset();
     auto pipeline = builder.build();
+    LOG_DEBUG(log, "Before dump pipeline dag");
     LOG_DEBUG(log, "build pipeline dag: \n{}", pipeline->toTreeString());
     return pipeline;
 }
