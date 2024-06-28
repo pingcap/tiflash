@@ -24,6 +24,7 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
 
     forceSwitchToPassThroughIfSpill();
     agg_process_info->resetBlock(block);
+    statistics.update(state, block.rows());
     switch (state)
     {
     case State::Init:
