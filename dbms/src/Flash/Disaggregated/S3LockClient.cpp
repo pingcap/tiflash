@@ -115,7 +115,7 @@ std::pair<bool, String> S3LockClient::makeCall(
         {
             if (Clock::now() > deadline)
             {
-                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "deadline exceed, " + tracing_log->identifier());
+                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "deadline exceed, {}, address={}, request={}", tracing_log->identifier(), address, req.ShortDebugString());
             }
             // retry
             LOG_ERROR(
@@ -141,7 +141,7 @@ std::pair<bool, String> S3LockClient::makeCall(
         {
             if (Clock::now() > deadline)
             {
-                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "deadline exceed, " + tracing_log->identifier());
+                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "deadline exceed, {}, address={}, request={}", tracing_log->identifier(), address, req.ShortDebugString());
             }
             // retry
             auto not_owner = resp.result().not_owner();

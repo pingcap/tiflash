@@ -329,7 +329,18 @@ FastAddPeerRes FastAddPeerImplWrite(
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
 
-    auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+    DM::Segments segments;
+    try {
+        segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+    }
+    catch (...) {
+        // It will call `createTargetSegmentsFromCheckpoint`, which will build delta and stable space for all segments.
+        // For every remote pages refered, `createS3LockForWriteBatch` will lock them on S3 to prevent them from being GC-ed.
+        // Failure in creating lock results in an Exception, causing FAP fallback with BadData error.
+        // A typical failure is that this TiFlash node fails to communicate with other TiFlash nodes.
+        GET_METRIC(tiflash_fap_task_result, type_failed_build_chkpt).Increment();
+        throw;
+    }
     GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_build).Observe(watch.elapsedSecondsFromLastTime());
 
     fap_ctx->insertCheckpointIngestInfo(
