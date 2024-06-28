@@ -43,10 +43,7 @@ public:
         RUNTIME_CHECK(adjust_row_limit > 1024 && other_state_row_limit > 1024);
     }
 
-    ~AutoPassThroughHashAggContext()
-    {
-        statistics.log(log);
-    }
+    ~AutoPassThroughHashAggContext() { statistics.log(log); }
 
     void onBlock(Block & block);
     Block getData();
@@ -115,31 +112,39 @@ private:
         {
             switch (state)
             {
-                case State::Init:
-                    init_rows += rows;
-                    break;
-                case State::Adjust:
-                    adjust_rows += rows;
-                    break;
-                case State::PreHashAgg:
-                    pre_hashagg_rows += rows;
-                    break;
-                case State::PassThrough:
-                    pass_through_rows += rows;
-                    break;
-                case State::Selective:
-                    selective_rows += rows;
-                    break;
-                default:
-                    __builtin_unreachable();
+            case State::Init:
+                init_rows += rows;
+                break;
+            case State::Adjust:
+                adjust_rows += rows;
+                break;
+            case State::PreHashAgg:
+                pre_hashagg_rows += rows;
+                break;
+            case State::PassThrough:
+                pass_through_rows += rows;
+                break;
+            case State::Selective:
+                selective_rows += rows;
+                break;
+            default:
+                __builtin_unreachable();
             };
             total_handled_rows += rows;
         }
 
         void log(LoggerPtr log)
         {
-            LOG_DEBUG(log, "auto pass through hash agg info: total: {}, init: {}, adjust: {}, pre hashagg: {}, pass through: {}, selective: {}",
-                    total_handled_rows, init_rows, adjust_rows, pre_hashagg_rows, pass_through_rows, selective_rows);
+            LOG_DEBUG(
+                log,
+                "auto pass through hash agg info: total: {}, init: {}, adjust: {}, pre hashagg: {}, pass through: {}, "
+                "selective: {}",
+                total_handled_rows,
+                init_rows,
+                adjust_rows,
+                pre_hashagg_rows,
+                pass_through_rows,
+                selective_rows);
         }
 
         size_t init_rows = 0;
