@@ -330,10 +330,12 @@ FastAddPeerRes FastAddPeerImplWrite(
     }
 
     DM::Segments segments;
-    try {
+    try
+    {
         segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
     }
-    catch (...) {
+    catch (...)
+    {
         // It will call `createTargetSegmentsFromCheckpoint`, which will build delta and stable space for all segments.
         // For every remote pages refered, `createS3LockForWriteBatch` will lock them on S3 to prevent them from being GC-ed.
         // Failure in creating lock results in an Exception, causing FAP fallback with BadData error.
