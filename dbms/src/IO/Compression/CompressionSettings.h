@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <DataTypes/IDataType.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/CompressionMethod.h>
 #include <common/types.h>
@@ -31,6 +32,7 @@ constexpr CompressionMethodByte method_byte_map[] = {
     CompressionMethodByte::ZSTD, // ZSTD
     CompressionMethodByte::QPL, // QPL
     CompressionMethodByte::NONE, // NONE
+    CompressionMethodByte::Lightweight, // Lightweight
 };
 
 const std::unordered_map<CompressionMethodByte, CompressionMethod> method_map = {
@@ -39,8 +41,9 @@ const std::unordered_map<CompressionMethodByte, CompressionMethod> method_map = 
     {CompressionMethodByte::QPL, CompressionMethod::QPL},
     {CompressionMethodByte::NONE, CompressionMethod::NONE},
     {CompressionMethodByte::DeltaFOR, CompressionMethod::NONE},
-    {CompressionMethodByte::RLE, CompressionMethod::NONE},
+    {CompressionMethodByte::RunLength, CompressionMethod::NONE},
     {CompressionMethodByte::FOR, CompressionMethod::NONE},
+    {CompressionMethodByte::Lightweight, CompressionMethod::Lightweight},
 };
 
 struct CompressionSetting
@@ -48,7 +51,7 @@ struct CompressionSetting
     CompressionMethod method;
     CompressionMethodByte method_byte;
     int level;
-    UInt8 type_bytes_size = 1;
+    CompressionDataType data_type = CompressionDataType::String;
 
     CompressionSetting()
         : CompressionSetting(CompressionMethod::LZ4)
@@ -98,6 +101,8 @@ struct CompressionSettings
     explicit CompressionSettings(const std::vector<CompressionSetting> & settings_)
         : settings(settings_)
     {}
+
+    static CompressionSettings create(CompressionMethod method, const IDataType & type);
 
     std::vector<CompressionSetting> settings;
 };

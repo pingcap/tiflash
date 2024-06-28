@@ -18,9 +18,10 @@
 #include <IO/Compression/CompressionCodecDeltaFOR.h>
 #include <IO/Compression/CompressionCodecFOR.h>
 #include <IO/Compression/CompressionCodecLZ4.h>
+#include <IO/Compression/CompressionCodecLightweight.h>
 #include <IO/Compression/CompressionCodecMultiple.h>
 #include <IO/Compression/CompressionCodecNone.h>
-#include <IO/Compression/CompressionCodecRLE.h>
+#include <IO/Compression/CompressionCodecRunLength.h>
 #include <IO/Compression/CompressionCodecZSTD.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/ICompressionCodec.h>
@@ -41,29 +42,29 @@ class CompressionFactory
 public:
     static CompressionCodecPtr create(const CompressionSetting & setting)
     {
-        switch (setting.method)
-        {
-        case CompressionMethod::LZ4:
-            return std::make_unique<CompressionCodecLZ4>(setting.level);
-        case CompressionMethod::LZ4HC:
+        // LZ4 and LZ4HC have the same format, the difference is only in compression.
+        // So they have the same method byte.
+        if (setting.method == CompressionMethod::LZ4HC)
             return std::make_unique<CompressionCodecLZ4HC>(setting.level);
-        case CompressionMethod::ZSTD:
-            return std::make_unique<CompressionCodecZSTD>(setting.level);
-#if USE_QPL
-        case CompressionMethod::QPL:
-            return std::make_unique<CompressionCodecDeflateQpl>();
-#endif
-        default:
-            break;
-        }
+
         switch (setting.method_byte)
         {
+        case CompressionMethodByte::LZ4:
+            return std::make_unique<CompressionCodecLZ4>(setting.level);
+        case CompressionMethodByte::ZSTD:
+            return std::make_unique<CompressionCodecZSTD>(setting.level);
+#if USE_QPL
+        case CompressionMethodByte::QPL:
+            return std::make_unique<CompressionCodecDeflateQpl>();
+#endif
+        case CompressionMethodByte::Lightweight:
+            return std::make_unique<CompressionCodecLightweight>(setting.data_type);
         case CompressionMethodByte::DeltaFOR:
-            return std::make_unique<CompressionCodecDeltaFOR>(setting.type_bytes_size);
-        case CompressionMethodByte::RLE:
-            return std::make_unique<CompressionCodecRLE>(setting.type_bytes_size);
+            return std::make_unique<CompressionCodecDeltaFOR>(setting.data_type);
+        case CompressionMethodByte::RunLength:
+            return std::make_unique<CompressionCodecRunLength>(setting.data_type);
         case CompressionMethodByte::FOR:
-            return std::make_unique<CompressionCodecFOR>(setting.type_bytes_size);
+            return std::make_unique<CompressionCodecFOR>(setting.data_type);
         case CompressionMethodByte::NONE:
             return std::make_unique<CompressionCodecNone>();
         default:
@@ -93,7 +94,6 @@ public:
 private:
     static Codecs createCodecs(const CompressionSettings & settings)
     {
-        RUNTIME_CHECK(settings.settings.size() > 1);
         Codecs codecs;
         codecs.reserve(settings.settings.size());
         for (const auto & setting : settings.settings)
