@@ -479,7 +479,7 @@ static void runInParallel(
         // Exceptions other than PrehandleTransformStatus.
         // The exception can be wrapped in the future, however, we abort here.
         const auto & processed_keys = part_sst_stream->getProcessKeys();
-        LOG_INFO(
+        LOG_WARNING(
             log,
             "Parallel prehandling error {}"
             " write_cf_off={} split_id={} region_id={}",
