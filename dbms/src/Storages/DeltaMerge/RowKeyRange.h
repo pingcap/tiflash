@@ -14,6 +14,7 @@
 
 #pragma once
 #include <Columns/ColumnString.h>
+#include <Common/SharedMutexProtected.h>
 #include <Core/Types.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -447,8 +448,9 @@ struct RowKeyRange
     };
 
     /// maybe use a LRU cache in case there are massive tables
-    static std::unordered_map<KeyspaceTableID, TableRangeMinMax, boost::hash<KeyspaceTableID>> table_min_max_data;
-    static std::shared_mutex table_mutex;
+    static SharedMutexProtected<
+        std::unordered_map<KeyspaceTableID, RowKeyRange::TableRangeMinMax, boost::hash<KeyspaceTableID>>>
+        table_min_max_data;
     static const TableRangeMinMax & getTableMinMaxData(KeyspaceID keyspace_id, TableID table_id, bool is_common_handle);
 
     RowKeyRange(

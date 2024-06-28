@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/RedactHelpers.h>
+#include <Common/SharedMutexProtected.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
 namespace DB::DM
@@ -59,9 +60,8 @@ RowKeyValue RowKeyValueRef::toRowKeyValue() const
     }
 }
 
-std::unordered_map<KeyspaceTableID, RowKeyRange::TableRangeMinMax, boost::hash<KeyspaceTableID>>
+SharedMutexProtected<std::unordered_map<KeyspaceTableID, RowKeyRange::TableRangeMinMax, boost::hash<KeyspaceTableID>>>
     RowKeyRange::table_min_max_data;
-std::shared_mutex RowKeyRange::table_mutex;
 
 const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(
     KeyspaceID keyspace_id,
@@ -70,12 +70,12 @@ const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(
 {
     auto keyspace_table_id = KeyspaceTableID{keyspace_id, table_id};
     {
-        std::shared_lock lock(table_mutex);
-        if (auto it = table_min_max_data.find(keyspace_table_id); it != table_min_max_data.end())
+        auto lock = table_min_max_data.lockShared();
+        if (auto it = lock->find(keyspace_table_id); it != lock->end())
             return it->second;
     }
-    std::unique_lock lock(table_mutex);
-    return table_min_max_data.try_emplace(keyspace_table_id, keyspace_id, table_id, is_common_handle).first->second;
+    auto lock = table_min_max_data.lockExclusive();
+    return lock->try_emplace(keyspace_table_id, keyspace_id, table_id, is_common_handle).first->second;
 }
 
 template <bool enable_redact, bool right_open = true>
