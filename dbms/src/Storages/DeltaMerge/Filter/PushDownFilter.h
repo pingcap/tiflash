@@ -60,12 +60,6 @@ public:
         const Context & context,
         const LoggerPtr & tracing_logger);
 
-    static QueryFilterPtr build(
-        const SelectQueryInfo & query_info,
-        const ColumnDefines & columns_to_read,
-        const Context & context,
-        const LoggerPtr & tracing_logger);
-
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
     const ExpressionActionsPtr before_where;

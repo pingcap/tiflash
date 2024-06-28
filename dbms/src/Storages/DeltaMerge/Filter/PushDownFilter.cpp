@@ -151,31 +151,6 @@ QueryFilterPtr QueryFilter::build(
         columns_after_cast);
 }
 
-QueryFilterPtr QueryFilter::build(
-    const SelectQueryInfo & query_info,
-    const ColumnDefines & columns_to_read,
-    const Context & context,
-    const LoggerPtr & tracing_logger)
-{
-    const auto & dag_query = query_info.dag_query;
-    if (unlikely(dag_query == nullptr))
-        return nullptr;
-
-    // build push down filter
-    const auto & columns_to_read_info = dag_query->source_columns;
-    const auto & pushed_down_filters = dag_query->pushed_down_filters;
-    if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && !dag_query->filters.empty())
-    {
-        google::protobuf::RepeatedPtrField<tipb::Expr> merged_filters{
-            pushed_down_filters.begin(),
-            pushed_down_filters.end()};
-        merged_filters.MergeFrom(dag_query->filters);
-        return QueryFilter::build(columns_to_read_info, merged_filters, columns_to_read, context, tracing_logger);
-    }
-    return QueryFilter::build(columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
-}
-
-
 PushDownFilterPtr PushDownFilter::build(
     const RSOperatorPtr & rs_operator,
     const ColumnInfos & table_scan_column_info,
