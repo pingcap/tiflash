@@ -99,7 +99,7 @@ UInt32 CompressionCodecFOR::doCompressData(const char * source, UInt32 source_si
             source_size,
             LZ4_COMPRESSBOUND(source_size),
             CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-        if (!success)
+        if (unlikely(!success))
             throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
         return 1 + success;
     }
@@ -114,7 +114,7 @@ void CompressionCodecFOR::doDecompressData(
     if unlikely (source_size < 2)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress For-encoded data. File has wrong header");
 
-    if (uncompressed_size == 0)
+    if (unlikely(uncompressed_size == 0))
         return;
 
     UInt8 bytes_size = source[0];

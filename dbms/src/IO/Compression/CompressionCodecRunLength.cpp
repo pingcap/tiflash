@@ -82,7 +82,7 @@ UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UI
             source_size,
             LZ4_COMPRESSBOUND(source_size),
             CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-        if (!success)
+        if (unlikely(!success))
             throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
         return 1 + success;
     }
@@ -111,7 +111,7 @@ UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 sou
             source_size,
             LZ4_COMPRESSBOUND(source_size),
             CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-        if (!success)
+        if (unlikely(!success))
             throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
         return 1 + success;
     }
@@ -128,7 +128,7 @@ void CompressionCodecRunLength::doDecompressData(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot decompress RunLength-encoded data. File has wrong header");
 
-    if (uncompressed_size == 0)
+    if (unlikely(uncompressed_size == 0))
         return;
 
     UInt8 bytes_size = source[0];

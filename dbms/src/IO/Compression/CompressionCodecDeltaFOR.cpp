@@ -121,7 +121,7 @@ void CompressionCodecDeltaFOR::doDecompressData(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot decompress DeltaFor-encoded data. File has wrong header");
 
-    if (uncompressed_size == 0)
+    if (unlikely(uncompressed_size == 0))
         return;
 
     UInt8 bytes_size = source[0];

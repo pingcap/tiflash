@@ -34,7 +34,7 @@ size_t CompressionCodecLightweight::compressDataForNonInteger(const char * sourc
         source_size,
         LZ4_COMPRESSBOUND(source_size),
         CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-    if (!success)
+    if (unlikely(!success))
         throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
     return success;
 }
