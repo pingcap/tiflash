@@ -44,6 +44,9 @@ protected:
     OperatorStatus awaitImpl() override;
 
 private:
+    OperatorStatus waitForWriter() const;
+
+private:
     std::unique_ptr<DAGResponseWriter> writer;
     size_t total_rows = 0;
 };
