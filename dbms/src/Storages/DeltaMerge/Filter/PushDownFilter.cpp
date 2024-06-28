@@ -27,6 +27,7 @@
 namespace DB::DM
 {
 QueryFilterPtr QueryFilter::build(
+    String && filter_name,
     const ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
@@ -146,6 +147,7 @@ QueryFilterPtr QueryFilter::build(
     }
 
     return std::make_shared<QueryFilter>(
+        std::move(filter_name),
         before_where,
         project_after_where,
         filter_columns,
@@ -162,8 +164,13 @@ PushDownFilterPtr PushDownFilter::build(
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
-    auto lm_filter
-        = QueryFilter::build(table_scan_column_info, pushed_down_filters, columns_to_read, context, tracing_logger);
+    auto lm_filter = QueryFilter::build(
+        "LM",
+        table_scan_column_info,
+        pushed_down_filters,
+        columns_to_read,
+        context,
+        tracing_logger);
     return std::make_shared<PushDownFilter>(rs_operator, lm_filter, nullptr);
 }
 
@@ -193,7 +200,7 @@ PushDownFilterPtr PushDownFilter::build(
         pushed_down_filters.MergeFrom(dag_query->filters);
     }
     auto lm_filter
-        = QueryFilter::build(columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
+        = QueryFilter::build("LM", columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
     /*
     auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan
         ? QueryFilter::build(columns_to_read_info, dag_query->filters, columns_to_read, context, tracing_logger)

@@ -3100,7 +3100,7 @@ BlockInputStreamPtr getFilterInputStream(
     if (query_filter->extra_cast)
     {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, query_filter->extra_cast, tracing_id);
-        stream->setExtraInfo("cast after tableScan");
+        stream->setExtraInfo(fmt::format("{}: cast after tablescanning", query_filter->name()));
     }
 
     stream = std::make_shared<FilterBlockInputStream>(
@@ -3108,12 +3108,12 @@ BlockInputStreamPtr getFilterInputStream(
         query_filter->before_where,
         query_filter->filter_column_name,
         tracing_id);
-    stream->setExtraInfo("push down filter");
+    stream->setExtraInfo(fmt::format("{}: push down filter", query_filter->name()));
 
     if (need_project)
     {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, query_filter->project_after_where, tracing_id);
-        stream->setExtraInfo("project after where");
+        stream->setExtraInfo(fmt::format("{}: project after where", query_filter->name()));
     }
     return stream;
 }

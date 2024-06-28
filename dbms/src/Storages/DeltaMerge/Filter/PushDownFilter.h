@@ -37,13 +37,15 @@ class QueryFilter
 {
 public:
     QueryFilter(
+        String && filter_name_,
         const ExpressionActionsPtr & beofre_where_,
         const ExpressionActionsPtr & project_after_where_,
         const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,
         const ExpressionActionsPtr & extra_cast_,
         const ColumnDefinesPtr & columns_after_cast_)
-        : before_where(beofre_where_)
+        : filter_name(std::move(filter_name_))
+        , before_where(beofre_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
         , filter_columns(filter_columns_)
@@ -51,15 +53,18 @@ public:
         , columns_after_cast(columns_after_cast_)
     {}
 
+    const String & name() const { return filter_name; }
     bool empty() const { return before_where == nullptr; }
 
     static QueryFilterPtr build(
+        String && filter_name,
         const ColumnInfos & table_scan_column_info,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
         const ColumnDefines & columns_to_read,
         const Context & context,
         const LoggerPtr & tracing_logger);
 
+    String filter_name;
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
     const ExpressionActionsPtr before_where;
