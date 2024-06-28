@@ -86,12 +86,15 @@ QueryFilterPtr QueryFilter::build(
 
     // Build the extra cast
     ExpressionActionsPtr extra_cast = nullptr;
-    // need_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
+
+    // may_need_add_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
+    // Only cast filter_columns
     std::vector<UInt8> may_need_add_cast_column;
     may_need_add_cast_column.reserve(table_scan_column_info.size());
     for (const auto & col : table_scan_column_info)
         may_need_add_cast_column.push_back(
             !col.hasGeneratedColumnFlag() && filter_col_id_set.contains(col.id) && col.id != -1);
+
     ExpressionActionsChain chain;
     auto & step = analyzer->initAndGetLastStep(chain);
     auto & actions = step.actions;
