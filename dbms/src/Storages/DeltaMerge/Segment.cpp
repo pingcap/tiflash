@@ -3091,6 +3091,25 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     return bitmap_filter;
 }
 
+BlockInputStreamPtr getFilterInputStream(
+    BlockInputStreamPtr & stream,
+    QueryFilterPtr & query_filter,
+    const String & tracing_id)
+{
+    if (query_filter->extra_cast)
+    {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, query_filter->extra_cast, tracing_id);
+        stream->setExtraInfo("cast after tableScan");
+    }
+    stream = std::make_shared<FilterBlockInputStream>(
+        stream,
+        query_filter->before_where,
+        query_filter->filter_column_name,
+        tracing_id);
+    stream->setExtraInfo("push down filter");
+    return stream;
+}
+
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     BitmapFilterPtr && bitmap_filter,
     const SegmentSnapshotPtr & segment_snap,
@@ -3184,20 +3203,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             segment_snap->stable->getDMFilesRows(),
             bitmap_filter,
             dm_context.tracing_id);
-        if (filter->lm_filter->extra_cast)
-        {
-            stream = std::make_shared<ExpressionBlockInputStream>(
-                stream,
-                filter->lm_filter->extra_cast,
-                dm_context.tracing_id);
-            stream->setExtraInfo("cast after tableScan");
-        }
-        stream = std::make_shared<FilterBlockInputStream>(
-            stream,
-            filter->lm_filter->before_where,
-            filter->lm_filter->filter_column_name,
-            dm_context.tracing_id);
-        stream->setExtraInfo("push down filter");
+        stream = getFilterInputStream(stream, filter->lm_filter, dm_context.tracing_id);
         stream = std::make_shared<ExpressionBlockInputStream>(
             stream,
             filter->lm_filter->project_after_where,
@@ -3213,23 +3219,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
-    // construct extra cast stream if needed
-    if (filter->lm_filter->extra_cast)
-    {
-        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(
-            filter_column_stream,
-            filter->lm_filter->extra_cast,
-            dm_context.tracing_id);
-        filter_column_stream->setExtraInfo("cast after tableScan");
-    }
-
-    // construct filter stream
-    filter_column_stream = std::make_shared<FilterBlockInputStream>(
-        filter_column_stream,
-        filter->lm_filter->before_where,
-        filter->lm_filter->filter_column_name,
-        dm_context.tracing_id);
-    filter_column_stream->setExtraInfo("push down filter");
+    filter_column_stream = getFilterInputStream(filter_column_stream, filter->lm_filter, dm_context.tracing_id);
 
     auto rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
     // remove columns of pushed down filter
