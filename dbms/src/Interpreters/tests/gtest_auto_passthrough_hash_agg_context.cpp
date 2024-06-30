@@ -562,7 +562,7 @@ try
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
         {
-            startServers(4);
+            startServers(2);
             auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
             auto req_auto_pass_through
                 = context.scan(db_name, tbl_name)
@@ -573,10 +573,12 @@ try
                           true)
                       .buildMPPTasks(context, properties);
 
+            LOG_DEBUG(Logger::get(), "test with compute server without pipeline");
             enablePipeline(false);
             auto res_auto_pass_through = executeMPPTasks(req_auto_pass_through, properties);
             ASSERT_COLUMNS_EQ_UR(res_no_pass_through, res_auto_pass_through);
 
+            LOG_DEBUG(Logger::get(), "test with compute server with pipeline");
             enablePipeline(true);
             res_auto_pass_through = executeMPPTasks(req_auto_pass_through, properties);
             ASSERT_COLUMNS_EQ_UR(res_no_pass_through, res_auto_pass_through);

@@ -18,6 +18,7 @@
 
 namespace DB
 {
+// todo how about multiple threads?
 class AutoPassThroughHashAggContext
 {
 public:

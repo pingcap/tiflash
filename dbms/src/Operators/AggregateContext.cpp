@@ -160,7 +160,6 @@ void AggregateContext::initConvergentPrefix()
 
     if (total_src_rows == 0 && keys_size == 0 && !empty_result_for_aggregation_by_empty_set)
     {
-        // todo meaning???
         auto & agg_process_info = threads_data[0]->agg_process_info;
         agg_process_info.resetBlock(this->getSourceHeader());
         aggregator->executeOnBlock(agg_process_info, *many_data[0], 0);

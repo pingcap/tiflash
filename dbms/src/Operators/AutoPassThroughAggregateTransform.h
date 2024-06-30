@@ -37,7 +37,6 @@ protected:
 
     OperatorStatus executeIOImpl() override
     {
-        // todo: when call here
         throw Exception("shouldn't handle io for AutoPassThroughAggregateTransform");
     }
 

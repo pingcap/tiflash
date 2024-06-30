@@ -716,23 +716,29 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
                 agg_process_info.start_row,
                 *aggregates_pool,
                 sort_key_containers);
-            if constexpr (!only_lookup)
+            if likely (emplace_result_hold.has_value())
             {
-                if likely (emplace_result_hold.has_value())
+                if constexpr (collect_hit_rate)
                 {
-                    emplace_result_hold.value().setMapped(place);
-                    ++agg_process_info.start_row;
+                    ++agg_process_info.hit_row_cnt;
+                }
+
+                if constexpr (only_lookup)
+                {
+                    auto & emplace_result = emplace_result_hold.value();
+                    if (!emplace_result.isFound())
+                        agg_process_info.not_found_rows.push_back(i);
                 }
                 else
                 {
-                    LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
-                    break;
+                    emplace_result_hold.value().setMapped(place);
                 }
+                ++agg_process_info.start_row;
             }
             else
             {
-                // todo
-                RUNTIME_CHECK_MSG(false, "doesn't support only lookup when the number of agg func is zero");
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                break;
             }
         }
         return;
@@ -759,6 +765,13 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
                 aggregates_pool);
         }
         agg_process_info.start_row += agg_size;
+
+        // For key8, assume all rows are hit. No need to do state switch for auto pass through hashagg.
+        // Because HashMap of key8 is small.
+        if constexpr (collect_hit_rate)
+            agg_process_info.hit_row_cnt = agg_size;
+        if constexpr (only_lookup)
+            RUNTIME_CHECK_MSG(false, "Aggregator only_lookup should be false for AggregationMethod_key8");
         return;
     }
 

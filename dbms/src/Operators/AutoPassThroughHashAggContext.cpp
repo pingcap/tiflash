@@ -99,6 +99,7 @@ Block AutoPassThroughHashAggContext::getData()
         makeFullSelective(block);
         return block;
     }
+    // todo handle no data, no keys, must return single row
     return {};
 }
 
