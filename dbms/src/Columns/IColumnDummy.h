@@ -62,7 +62,7 @@ public:
     void get(size_t, Field &) const override
     {
         throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    };
+    }
     void insert(const Field &) override
     {
         throw Exception("Cannot insert element into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
