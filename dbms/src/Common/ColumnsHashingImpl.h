@@ -229,7 +229,6 @@ protected:
         if constexpr (has_mapped)
             return EmplaceResult(&it->getMapped(), cached, inserted);
         else
-            // todo where is its ctor?
             return EmplaceResult(inserted);
     }
 

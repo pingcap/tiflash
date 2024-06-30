@@ -549,8 +549,8 @@ try
         const size_t concurrency = 1;
         auto res_no_pass_through = executeStreams(req_no_pass_through, concurrency);
 
-        // Only run 1-st hashagg for auto_pass_through hashagg, so the result is not same with non-auto_pass_through.
-        // But the result size should be same.
+        // Only run 1-st hashagg.
+        // Only check row num is same with non-auto_pass_through hashagg.
         enablePipeline(false);
         auto res_auto_pass_through = executeStreams(req_auto_pass_through, concurrency);
         ASSERT_EQ(res_no_pass_through.size(), res_auto_pass_through.size());
@@ -559,7 +559,8 @@ try
         res_auto_pass_through = executeStreams(req_auto_pass_through, concurrency);
         ASSERT_EQ(res_no_pass_through.size(), res_auto_pass_through.size());
 
-        // 2-staged Aggregation to test. Expect auto_pass_through hashagg result equal to non-auto_pass_through hashagg.
+        // 2-staged Aggregation.
+        // Expect the columns result is same with non-auto_pass_through hashagg.
         {
             startServers(4);
             auto properties = DB::tests::getDAGPropertiesForTest(serverNum());

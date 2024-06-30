@@ -316,7 +316,6 @@ void ColumnTuple::scatterTo(
     const Selector & selector,
     const BlockSelectivePtr & selective) const
 {
-    // todo ok to use original impl?
     scatterToImplForColumnTuple<true>(scatterColumns, selector, selective);
 }
 

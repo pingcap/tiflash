@@ -692,7 +692,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
-    // collect_hit_rate and only_lookup cannot be true both.
+    // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
 
     std::vector<std::string> sort_key_containers;
