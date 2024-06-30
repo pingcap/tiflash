@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
@@ -39,6 +40,7 @@ namespace CurrentMetrics
 {
 extern const Metric RaftNumPrehandlingSubTasks;
 extern const Metric RaftNumParallelPrehandlingTasks;
+extern const Metric RaftNumWaitedParallelPrehandlingTasks;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -99,6 +101,8 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         ongoing_prehandle_subtask_count.load(),
         parallel,
         region_id);
+
+    CurrentMetrics::add(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
     while (true)
     {
         std::unique_lock<std::mutex> cpu_resource_lock{cpu_resource_mut};
@@ -120,6 +124,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         watch.elapsedSeconds(),
         region_id,
         parallel);
+    CurrentMetrics::sub(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
 }
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
@@ -202,7 +207,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             res = ReadFromStreamResult{.error = abort_reason.value(), .extra_msg = "", .region = new_region};
         }
         auto keys_per_second = (sst_stream->getProcessKeys().write_cf + sst_stream->getProcessKeys().lock_cf
-                                + sst_stream->getProcessKeys().write_cf)
+                                + sst_stream->getProcessKeys().default_cf)
             * 1.0 / sw.elapsedSeconds();
         GET_METRIC(tiflash_raft_command_throughput, type_prehandle_snapshot).Observe(keys_per_second);
         return std::make_pair(
@@ -346,7 +351,9 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     }
 
     // Get this info again, since getApproxBytes maybe take some time.
-    auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
+    // Currently, the head split has not been registered as sub task yet,
+    // so we must add 1 here.
+    auto ongoing_count = kvstore->getOngoingPrehandleSubtaskCount() + 1;
     uint64_t want_split_parts = 0;
     auto total_concurrency = kvstore->getMaxParallelPrehandleSize();
     if (total_concurrency + 1 > ongoing_count)
@@ -472,7 +479,7 @@ static void runInParallel(
         // Exceptions other than PrehandleTransformStatus.
         // The exception can be wrapped in the future, however, we abort here.
         const auto & processed_keys = part_sst_stream->getProcessKeys();
-        LOG_INFO(
+        LOG_WARNING(
             log,
             "Parallel prehandling error {}"
             " write_cf_off={} split_id={} region_id={}",
@@ -523,6 +530,9 @@ void executeParallelTransform(
     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
     {
         auto add_result = async_tasks.addTask(extra_id, [&, extra_id]() {
+            std::string origin_name = getThreadName();
+            SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
+            setThreadName("para-pre-snap");
             auto limit = DM::SSTScanSoftLimit(
                 extra_id,
                 std::string(split_keys[extra_id]),

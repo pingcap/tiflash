@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required (VERSION 3.21)
+cmake_minimum_required (VERSION 3.23)
 
 project (TiFlash LANGUAGES C CXX ASM)
 
@@ -168,7 +168,7 @@ endif ()
 
 include (cmake/cpu_features.cmake)
 
-set (CMAKE_CXX_STANDARD 20)
+set (CMAKE_CXX_STANDARD 23)
 set (CMAKE_CXX_EXTENSIONS 1) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
