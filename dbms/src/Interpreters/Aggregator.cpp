@@ -2009,21 +2009,21 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
 BlocksList Aggregator::prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = data_variants.size();
-#define M(NAME, skip_convert_key)                                                                    \
-    case AggregationMethodType(NAME):                                                                \
-    {                                                                                                \
-        auto & tmp_method = *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl);    \
-        auto & tmp_data = ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl)->data; \
-        convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_convert_key>(             \
-            tmp_method,                                                                              \
-            tmp_data,                                                                                \
-            key_sizes,                                                                               \
-            key_columns_vec,                                                                         \
-            aggregate_columns_vec,                                                                   \
-            final_aggregate_columns_vec,                                                             \
-            data_variants.aggregates_pool,                                                           \
-            final_);                                                                                 \
-        break;                                                                                       \
+#define M(NAME, skip_convert_key)                                                                      \
+    case AggregationMethodType(NAME):                                                                  \
+    {                                                                                                  \
+        auto & tmp_method = *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl);      \
+        auto & tmp_data = ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl) -> data; \
+        convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_convert_key>(               \
+            tmp_method,                                                                                \
+            tmp_data,                                                                                  \
+            key_sizes,                                                                                 \
+            key_columns_vec,                                                                           \
+            aggregate_columns_vec,                                                                     \
+            final_aggregate_columns_vec,                                                               \
+            data_variants.aggregates_pool,                                                             \
+            final_);                                                                                   \
+        break;                                                                                         \
     }
 
 #define M_skip_convert_key(NAME) M(NAME, true)
