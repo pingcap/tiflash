@@ -216,20 +216,20 @@ PushDownFilterPtr PushDownFilter::build(
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
 
-    const auto push_down_all_filters = context.getSettingsRef().force_push_down_all_filters_to_scan;
     const auto & columns_to_read_info = dag_query->source_columns;
-    auto pushed_down_filters = dag_query->pushed_down_filters;
-    if (push_down_all_filters)
-    {
-        pushed_down_filters.MergeFrom(dag_query->filters);
-    }
-    auto lm_filter
-        = QueryFilter::build("LM", columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
-    /*
+    auto lm_filter = QueryFilter::build(
+        "LM",
+        columns_to_read_info,
+        dag_query->pushed_down_filters,
+        columns_to_read,
+        context,
+        tracing_logger);
+
+    // TODO: fix columns_after_cast when force_push_down_all_filters_to_scan is true.
     auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan
-        ? QueryFilter::build(columns_to_read_info, dag_query->filters, columns_to_read, context, tracing_logger)
+        ? QueryFilter::build("REST", columns_to_read_info, dag_query->filters, columns_to_read, context, tracing_logger)
         : nullptr;
-*/
-    return std::make_shared<PushDownFilter>(rs_operator, lm_filter, /*rest_filter*/ nullptr);
+
+    return std::make_shared<PushDownFilter>(rs_operator, lm_filter, rest_filter);
 }
 } // namespace DB::DM

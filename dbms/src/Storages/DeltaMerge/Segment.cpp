@@ -3296,10 +3296,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         segment_snap->stable->clearColumnCaches();
     }
 
-    if (filter && filter->hasLMFilter())
-    {
-        // if has filter conditions pushed down, use late materialization
-        return getLateMaterializationStream(
+    auto stream = filter && filter->hasLMFilter() //
+        ? getLateMaterializationStream(
             std::move(bitmap_filter),
             dm_context,
             columns_to_read,
@@ -3307,18 +3305,20 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             real_ranges,
             filter,
             start_ts,
+            read_data_block_rows)
+        : getBitmapFilterInputStream(
+            std::move(bitmap_filter),
+            segment_snap,
+            dm_context,
+            columns_to_read,
+            real_ranges,
+            filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+            start_ts,
             read_data_block_rows);
-    }
 
-    return getBitmapFilterInputStream(
-        std::move(bitmap_filter),
-        segment_snap,
-        dm_context,
-        columns_to_read,
-        real_ranges,
-        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-        start_ts,
-        read_data_block_rows);
+    return filter && filter->hasRestFilter()
+        ? filter->rest_filter->buildFilterInputStream(stream, /*need_project*/ true, dm_context.tracing_id)
+        : stream;
 }
 
 // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
