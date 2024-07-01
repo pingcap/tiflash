@@ -94,10 +94,6 @@ private:
     public:
         IntegerCompressContext() = default;
 
-        bool needAnalyze() const;
-        bool needAnalyzeDelta() const;
-        bool needAnalyzeRunLength() const;
-
         template <typename T>
         void analyze(std::span<const T> & values, IntegerState<T> & state);
 
@@ -107,6 +103,11 @@ private:
         bool isCompression() const { return lz4_counter > 0 || lw_counter > 0; }
 
         IntegerMode mode = IntegerMode::LZ4;
+
+    private:
+        bool needAnalyze() const;
+        bool needAnalyzeDelta() const;
+        bool needAnalyzeRunLength() const;
 
     private:
         // The threshold for the number of blocks to decide whether need to analyze.
