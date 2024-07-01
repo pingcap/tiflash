@@ -20,15 +20,60 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/SelectQueryInfo.h>
 #include <TiDB/Decode/TypeMapping.h>
 
 #include <magic_enum.hpp>
 #include <memory>
-
 namespace DB::DM
 {
+namespace
+{
+const ColumnDefine * getColumnDefineNoExcept(const ColumnDefines & cds, ColumnID id) noexcept
+{
+    for (const auto & cd : cds)
+    {
+        if (cd.id == id)
+        {
+            return &cd;
+        }
+    }
+    return nullptr;
+}
+
+const ColumnDefine & getColumnDefine(const ColumnDefines & cds, ColumnID id)
+{
+    const auto * cd = getColumnDefineNoExcept(cds, id);
+    RUNTIME_CHECK_MSG(cd != nullptr, "ColumnID({}) not found", id);
+    return *cd;
+}
+
+// getLMColumnsToRead
+ColumnDefinesPtr getFilterColumns(
+    const ColumnInfos & table_scan_column_info,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    const ColumnDefines & columns_to_read)
+{
+    // Get the columns of the filter, is a subset of columns_to_read
+    std::unordered_set<ColumnID> filter_col_ids;
+    for (const auto & expr : filters)
+    {
+        getColumnIDsFromExpr(expr, table_scan_column_info, filter_col_ids);
+    }
+    auto filter_columns = std::make_shared<DM::ColumnDefines>();
+    filter_columns->reserve(filter_col_ids.size());
+    for (const auto & id : filter_col_ids)
+    {
+        const auto & cd = getColumnDefine(columns_to_read, id);
+        filter_columns->emplace_back(cd);
+    }
+    return filter_columns;
+}
+
+} // namespace
+
 QueryFilterPtr QueryFilter::build(
     QueryFilterType filter_type,
     const ColumnInfos & table_scan_column_info,
@@ -47,26 +92,8 @@ QueryFilterPtr QueryFilter::build(
         LOG_DEBUG(log, "Push down filter is empty");
         return nullptr;
     }
-    std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
-    for (const auto & column : columns_to_read)
-        columns_to_read_map.emplace(column.id, column);
 
-    // Get the columns of the filter, is a subset of columns_to_read
-    std::unordered_set<ColumnID> filter_col_id_set;
-    for (const auto & expr : filters)
-    {
-        getColumnIDsFromExpr(expr, table_scan_column_info, filter_col_id_set);
-    }
-    auto filter_columns = std::make_shared<DM::ColumnDefines>();
-    filter_columns->reserve(filter_col_id_set.size());
-    for (const auto & cid : filter_col_id_set)
-    {
-        RUNTIME_CHECK_MSG(
-            columns_to_read_map.contains(cid),
-            "Filter ColumnID({}) not found in columns_to_read_map",
-            cid);
-        filter_columns->emplace_back(columns_to_read_map.at(cid));
-    }
+    auto filter_columns = getFilterColumns(table_scan_column_info, filters, columns_to_read);
 
     // The source_columns_of_analyzer should be the same as the size of table_scan_column_info
     // The columns_to_read is a subset of table_scan_column_info, when there are generated columns and extra table id column.
@@ -88,8 +115,8 @@ QueryFilterPtr QueryFilter::build(
             source_columns_of_analyzer.emplace_back(EXTRA_TABLE_ID_COLUMN_NAME, EXTRA_TABLE_ID_COLUMN_TYPE);
             continue;
         }
-        RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
-        source_columns_of_analyzer.emplace_back(columns_to_read_map.at(cid).name, columns_to_read_map.at(cid).type);
+        const auto & cd = getColumnDefine(columns_to_read, cid);
+        source_columns_of_analyzer.emplace_back(cd.name, cd.type);
     }
     auto analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
 
@@ -104,7 +131,7 @@ QueryFilterPtr QueryFilter::build(
     {
         for (const auto & col : table_scan_column_info)
             may_need_add_cast_column.push_back(
-                !col.hasGeneratedColumnFlag() && filter_col_id_set.contains(col.id) && col.id != -1);
+                !col.hasGeneratedColumnFlag() && getColumnDefineNoExcept(*filter_columns, col.id) && col.id != -1);
     }
     else
     {
@@ -124,7 +151,7 @@ QueryFilterPtr QueryFilter::build(
         for (size_t i = 0; i < columns_to_read.size(); ++i)
         {
             if (rest_columns_to_read.contains(columns_to_read[i].id)
-                || filter_col_id_set.contains(columns_to_read[i].id))
+                || getColumnDefineNoExcept(*filter_columns, columns_to_read[i].id))
                 project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
         }
         actions->add(ExpressionAction::project(project_cols));
@@ -151,13 +178,13 @@ QueryFilterPtr QueryFilter::build(
             if (table_scan_column_info[i].hasGeneratedColumnFlag()
                 || table_scan_column_info[i].id == EXTRA_TABLE_ID_COLUMN_ID)
                 continue;
-            auto col = columns_to_read_map.at(table_scan_column_info[i].id);
+            const auto & cd = getColumnDefine(columns_to_read, table_scan_column_info[i].id);
             RUNTIME_CHECK_MSG(
-                col.name == current_names_and_types[i].name,
+                cd.name == current_names_and_types[i].name,
                 "Column name mismatch, expect: {}, actual: {}",
-                col.name,
+                cd.name,
                 current_names_and_types[i].name);
-            columns_after_cast->push_back(col);
+            columns_after_cast->push_back(cd);
             columns_after_cast->back().type = current_names_and_types[i].type;
         }
     }
@@ -274,7 +301,7 @@ PushDownFilterPtr PushDownFilter::build(
             rest_columns_to_read.insert(cd.id);
         }
     }
-    auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan \\
+    auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan //
         ? QueryFilter::build(
             QueryFilterType::Rest,
             columns_to_read_info,
