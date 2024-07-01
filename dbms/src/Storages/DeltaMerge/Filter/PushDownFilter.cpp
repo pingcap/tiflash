@@ -27,6 +27,7 @@
 
 #include <magic_enum.hpp>
 #include <memory>
+
 namespace DB::DM
 {
 namespace
@@ -50,7 +51,6 @@ const ColumnDefine & getColumnDefine(const ColumnDefines & cds, ColumnID id)
     return *cd;
 }
 
-// getLMColumnsToRead
 ColumnDefinesPtr getFilterColumns(
     const ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
@@ -72,29 +72,10 @@ ColumnDefinesPtr getFilterColumns(
     return filter_columns;
 }
 
-} // namespace
-
-QueryFilterPtr QueryFilter::build(
-    QueryFilterType filter_type,
+NamesAndTypes buildSourceColumnsOfAnalyzer(
     const ColumnInfos & table_scan_column_info,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    const ColumnDefines & columns_to_read,
-    const Context & context,
-    const LoggerPtr & tracing_logger,
-    const std::unordered_set<ColumnID> & rest_columns_to_read)
+    const ColumnDefines & columns_to_read)
 {
-    RUNTIME_CHECK(
-        filter_type == QueryFilterType::LM && rest_columns_to_read.empty()
-        || filter_type == QueryFilterType::Rest && !rest_columns_to_read.empty());
-    auto log = tracing_logger->getChild(magic_enum::enum_name(filter_type));
-    if (filters.empty())
-    {
-        LOG_DEBUG(log, "Push down filter is empty");
-        return nullptr;
-    }
-
-    auto filter_columns = getFilterColumns(table_scan_column_info, filters, columns_to_read);
-
     // The source_columns_of_analyzer should be the same as the size of table_scan_column_info
     // The columns_to_read is a subset of table_scan_column_info, when there are generated columns and extra table id column.
     NamesAndTypes source_columns_of_analyzer;
@@ -118,51 +99,112 @@ QueryFilterPtr QueryFilter::build(
         const auto & cd = getColumnDefine(columns_to_read, cid);
         source_columns_of_analyzer.emplace_back(cd.name, cd.type);
     }
-    auto analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
+    return source_columns_of_analyzer;
+}
 
-    // Build the extra cast
-    ExpressionActionsPtr extra_cast = nullptr;
-
+std::vector<UInt8> buildMayNeedCastColumnBitmap(
+    const ColumnInfos & table_scan_column_info,
+    const ColumnDefines & may_need_cast_columns)
+{
     // may_need_add_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
-    // Only cast filter_columns
-    std::vector<UInt8> may_need_add_cast_column;
-    may_need_add_cast_column.reserve(table_scan_column_info.size());
-    if (filter_type == QueryFilterType::LM)
-    {
-        for (const auto & col : table_scan_column_info)
-            may_need_add_cast_column.push_back(
-                !col.hasGeneratedColumnFlag() && getColumnDefineNoExcept(*filter_columns, col.id) && col.id != -1);
-    }
-    else
-    {
-        for (const auto & col : table_scan_column_info)
-            may_need_add_cast_column.push_back(
-                !col.hasGeneratedColumnFlag() && rest_columns_to_read.contains(col.id) && col.id != -1);
-    }
+    std::vector<UInt8> may_need_cast_column_bitmap;
+    may_need_cast_column_bitmap.reserve(table_scan_column_info.size());
+    for (const auto & col : table_scan_column_info)
+        may_need_cast_column_bitmap.push_back(
+            !col.hasGeneratedColumnFlag() && getColumnDefineNoExcept(may_need_cast_columns, col.id) && col.id != -1);
+    return may_need_cast_column_bitmap;
+}
 
+std::vector<UInt8> buildMayNeedCastColumnBitmap(
+    const ColumnInfos & table_scan_column_info,
+    const std::unordered_set<ColumnID> & may_need_cast_columns)
+{
+    // may_need_add_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
+    std::vector<UInt8> may_need_cast_column_bitmap;
+    may_need_cast_column_bitmap.reserve(table_scan_column_info.size());
+    for (const auto & col : table_scan_column_info)
+        may_need_cast_column_bitmap.push_back(
+            !col.hasGeneratedColumnFlag() && may_need_cast_columns.contains(col.id) && col.id != -1);
+    return may_need_cast_column_bitmap;
+}
+
+NamesWithAliases buildProjectColumns(
+    const ColumnDefines & columns_to_read,
+    const Strings & casted_columns,
+    const ColumnDefines & need_project_cols)
+{
+    NamesWithAliases project_cols;
+    for (size_t i = 0; i < columns_to_read.size(); ++i)
+    {
+        if (getColumnDefineNoExcept(need_project_cols, columns_to_read[i].id))
+        {
+            project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
+        }
+    }
+    return project_cols;
+}
+
+ExpressionActionsPtr buildExtraCast(
+    const ColumnInfos & table_scan_column_info,
+    const ColumnDefines & columns_to_read,
+    DAGExpressionAnalyzer & analyzer,
+    const std::vector<UInt8> & may_need_add_cast_column,
+    const ColumnDefines & source_columns)
+{
     ExpressionActionsChain chain;
-    auto & step = analyzer->initAndGetLastStep(chain);
+    auto & step = analyzer.initAndGetLastStep(chain);
     auto & actions = step.actions;
     if (auto [has_cast, casted_columns]
-        = analyzer->buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan_column_info);
+        = analyzer.buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan_column_info);
         has_cast)
     {
-        NamesWithAliases project_cols;
-        for (size_t i = 0; i < columns_to_read.size(); ++i)
-        {
-            if (rest_columns_to_read.contains(columns_to_read[i].id)
-                || getColumnDefineNoExcept(*filter_columns, columns_to_read[i].id))
-                project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
-        }
+        auto project_cols = buildProjectColumns(columns_to_read, casted_columns, source_columns);
         actions->add(ExpressionAction::project(project_cols));
 
-        for (const auto & col : *filter_columns)
+        for (const auto & col : source_columns)
             step.required_output.push_back(col.name);
 
-        extra_cast = chain.getLastActions();
+        auto extra_cast = chain.getLastActions();
         chain.finalize();
         chain.clear();
+        return extra_cast;
     }
+    return nullptr;
+}
+} // namespace
+
+QueryFilterPtr QueryFilter::build(
+    QueryFilterType filter_type,
+    const ColumnInfos & table_scan_column_info,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    const ColumnDefines & columns_to_read,
+    const Context & context,
+    const LoggerPtr & tracing_logger,
+    const std::unordered_set<ColumnID> & rest_columns_to_read)
+{
+    RUNTIME_CHECK(
+        filter_type == QueryFilterType::LM && rest_columns_to_read.empty()
+        || filter_type == QueryFilterType::Rest && !rest_columns_to_read.empty());
+    auto log = tracing_logger->getChild(magic_enum::enum_name(filter_type));
+    if (filters.empty())
+    {
+        LOG_DEBUG(log, "Push down filter is empty");
+        return nullptr;
+    }
+
+    auto filter_columns = getFilterColumns(table_scan_column_info, filters, columns_to_read);
+
+    auto source_columns_of_analyzer = buildSourceColumnsOfAnalyzer(table_scan_column_info, columns_to_read);
+    auto analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
+    auto may_need_add_cast_column = filter_type == QueryFilterType::LM
+        ? buildMayNeedCastColumnBitmap(table_scan_column_info, *filter_columns)
+        : buildMayNeedCastColumnBitmap(table_scan_column_info, rest_columns_to_read);
+    auto extra_cast = buildExtraCast(
+        table_scan_column_info,
+        columns_to_read,
+        *analyzer,
+        may_need_add_cast_column,
+        filter_type == QueryFilterType::LM ? *filter_columns : columns_to_read);
 
     // build filter expression actions
     auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownFilter(filters);
