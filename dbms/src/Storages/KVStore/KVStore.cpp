@@ -133,7 +133,9 @@ void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
             auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
             auto raftstore = ptr->getObject("raftstore");
             proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
-            LOG_INFO(log, "Parsed proxy config snap_handle_pool_size {}", proxy_config_summary.snap_handle_pool_size);
+            auto server = ptr->getObject("server");
+            proxy_config_summary.engine_addr = server->getValue<std::string>("engine-addr");
+            LOG_INFO(log, "Parsed proxy config: snap_handle_pool_size={} engine_addr={}", proxy_config_summary.snap_handle_pool_size, proxy_config_summary.engine_addr);
             proxy_config_summary.valid = true;
         }
         catch (...)
@@ -447,10 +449,6 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 size_t KVStore::getOngoingPrehandleTaskCount() const
 {
     return std::max(0, ongoing_prehandle_task_count.load());
-}
-size_t KVStore::getOngoingPrehandleSubtaskCount() const
-{
-    return std::max(0, prehandling_trace.ongoing_prehandle_subtask_count.load());
 }
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
