@@ -451,6 +451,11 @@ size_t KVStore::getOngoingPrehandleTaskCount() const
     return std::max(0, ongoing_prehandle_task_count.load());
 }
 
+size_t KVStore::getOngoingPrehandleSubtaskCount() const
+{
+    return std::max(0, prehandling_trace.ongoing_prehandle_subtask_count.load());
+}
+
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
 {
     for (const auto & peer : region.peers())
