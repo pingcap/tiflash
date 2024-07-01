@@ -49,10 +49,10 @@ struct TableIDMap
         doEmplaceTableID(table_id, database_id, "", lock);
     }
 
-    void emplacePartitionTableID(TableID partition_id, TableID table_id)
+    DatabaseID emplacePartitionTableID(TableID partition_id, TableID table_id)
     {
         std::unique_lock lock(mtx_id_mapping);
-        doEmplacePartitionTableID(partition_id, table_id, "", lock);
+        return doEmplacePartitionTableID(partition_id, table_id, "", lock);
     }
 
     void exchangeTablePartition(
@@ -120,7 +120,7 @@ private:
         DatabaseID database_id,
         std::string_view log_prefix,
         const std::unique_lock<std::shared_mutex> &);
-    void doEmplacePartitionTableID(
+    DatabaseID doEmplacePartitionTableID(
         TableID partition_id,
         TableID table_id,
         std::string_view log_prefix,

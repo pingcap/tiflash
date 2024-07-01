@@ -558,44 +558,49 @@ std::tuple<bool, String> compareColumns(
     const TiDBTableScan & table_scan,
     const DM::ColumnDefines & cur_columns,
     const DAGContext & dag_context,
+    const TableID physical_table_id,
     const LoggerPtr & log)
 {
-    const auto & columns = table_scan.getColumns();
+    const auto & columns_query = table_scan.getColumns();
     std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
     for (const auto & column : cur_columns)
     {
         column_id_map[column.id] = column;
     }
 
-    for (const auto & column : columns)
+    for (const auto & column_query : columns_query)
     {
         // Exclude virtual columns, including EXTRA_HANDLE_COLUMN_ID, VERSION_COLUMN_ID,TAG_COLUMN_ID,EXTRA_TABLE_ID_COLUMN_ID
-        if (column.id < 0)
+        if (column_query.id < 0)
         {
             continue;
         }
-        auto iter = column_id_map.find(column.id);
+        auto iter = column_id_map.find(column_query.id);
         if (iter == column_id_map.end())
         {
             String error_message = fmt::format(
-                "the column in the query is not found in current columns, keyspace={} table_id={} column_id={}",
+                "the column in the query is not found in current columns, keyspace={} logical_table_id={} "
+                "physical_table_id={} column_id={}",
                 dag_context.getKeyspaceID(),
                 table_scan.getLogicalTableID(),
-                column.id);
+                physical_table_id,
+                column_query.id);
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
         }
 
-        if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
+        if (getDataTypeByColumnInfo(column_query)->getName() != iter->second.type->getName())
         {
             String error_message = fmt::format(
-                "the column data type in the query is not the same as the current column, keyspace={} table_id={} "
+                "the column data type in the query is not the same as the current column, "
+                "keyspace={} logical_table_id={} physical_table_id={}"
                 "column_id={} column_type={} query_column_type={}",
                 dag_context.getKeyspaceID(),
                 table_scan.getLogicalTableID(),
-                column.id,
+                physical_table_id,
+                column_query.id,
                 iter->second.type->getName(),
-                getDataTypeByColumnInfo(column)->getName());
+                getDataTypeByColumnInfo(column_query)->getName());
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
         }
@@ -1370,7 +1375,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         // check the columns in table_scan and table_store, to check whether we need to sync table schema.
         auto [are_columns_matched, error_message]
-            = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
+            = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), table_id, log);
 
         if (are_columns_matched)
         {
@@ -1446,7 +1451,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(
             log,
-            "Table schema sync done, keyspace={} table_id={} cost={} ms",
+            "Table schema sync done, keyspace={} table_id={} cost={}ms",
             keyspace_id,
             logical_table_id,
             schema_sync_cost);
@@ -1459,9 +1464,9 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         LOG_DEBUG(log, "OK, no syncing required.");
     }
     else
-    /// If first try failed, sync schema and try again.
     {
-        LOG_INFO(log, "not OK, syncing schemas.");
+        /// If first try failed, sync schema and try again.
+        LOG_INFO(log, "not OK, syncing schemas, keyspace={} table_ids={}", keyspace_id, need_sync_table_ids);
 
         auto start_time = Clock::now();
         for (auto & table_id : need_sync_table_ids)
@@ -1471,7 +1476,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto schema_sync_cost
             = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
-        LOG_INFO(log, "syncing schemas done, time cost = {} ms.", schema_sync_cost);
+        LOG_INFO(log, "syncing schemas done, keyspace={} table_ids={} cost={}ms.", keyspace_id, need_sync_table_ids, schema_sync_cost);
 
 
         std::tie(storages, locks, need_sync_table_ids) = get_and_lock_storages(true);
@@ -1480,7 +1485,11 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             LOG_DEBUG(log, "OK after syncing.");
         }
         else
-            throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
+            throw TiFlashException(
+                Errors::Coprocessor::Internal,
+                "Shouldn't reach here, keyspace={} need_sync_table_ids={}",
+                keyspace_id,
+                need_sync_table_ids);
     }
     for (size_t i = 0; i < storages.size(); ++i)
     {

@@ -387,7 +387,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndex)
+TEST_F(SegmentTest, ReadWithMoreAdvancedDeltaIndex)
 try
 {
     // Test the case that reading rows with an advance DeltaIndex
@@ -422,6 +422,8 @@ try
         segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         200);
 
+    ASSERT_EQ(snap->delta->getSharedDeltaIndex()->getDeltaTree()->maxDupTupleID(), -1);
+
     // Thread A
     {
         auto in = segment->getInputStreamModeNormal(
@@ -437,7 +439,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndex2)
+TEST_F(SegmentTest, ReadWithMoreAdvancedDeltaIndex2)
 try
 {
     auto write_rows = [&](size_t offset, size_t rows) {
@@ -451,7 +453,7 @@ try
     ASSERT_INPUTSTREAM_NROWS(
         segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
-    auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    auto snap_a = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     {
         // check segment
@@ -464,12 +466,22 @@ try
         segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
 
+    {
+        ASSERT_NE(snap_a->delta->getSharedDeltaIndex()->getDeltaTree()->maxDupTupleID(), -1);
+        // tryClone will return an empty delta-index because `rows <= this->delta_tree->maxDupTupleID()`
+        auto my_delta_index
+            = snap_a->delta->getSharedDeltaIndex()->tryClone(snap_a->delta->getRows(), snap_a->delta->getDeletes());
+        auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
+        ASSERT_EQ(my_placed_rows, 0);
+        ASSERT_EQ(my_placed_deletes, 0);
+    }
+
     // Thread A
     {
         auto in = segment->getInputStreamModeNormal(
             dmContext(),
             *tableColumns(),
-            snap,
+            snap_a,
             {RowKeyRange::newAll(false, 1)},
             {},
             std::numeric_limits<UInt64>::max(),
@@ -479,7 +491,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndexWithDeleteRange01)
+TEST_F(SegmentTest, ReadWithMoreAdvancedDeltaIndexWithDeleteRange01)
 try
 {
     auto write_rows = [&](size_t offset, size_t rows) {
@@ -532,7 +544,7 @@ try
 CATCH
 
 
-TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndexWithDeleteRange02)
+TEST_F(SegmentTest, ReadWithMoreAdvancedDeltaIndexWithDeleteRange02)
 try
 {
     auto write_rows = [&](size_t offset, size_t rows) {
@@ -575,7 +587,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndexComplicated)
+TEST_F(SegmentTest, ReadWithMoreAdvancedDeltaIndexComplicated)
 try
 {
     // Test the case that reading rows with an advance DeltaIndex

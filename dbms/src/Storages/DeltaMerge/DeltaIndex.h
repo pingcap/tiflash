@@ -208,8 +208,10 @@ public:
 
     /**
      * Try to get a clone of current instance.
-     * Return an empty DeltaIndex if `deletes < this->placed_deletes` because the advanced delta-index will break
-     * the MVCC view.
+     * Return an empty DeltaIndex if
+     * - `deletes < this->placed_deletes`
+     * - `rows <= this->delta_tree->maxDupTupleID()`
+     * because the advanced delta-index will break the MVCC view.
      */
     DeltaIndexPtr tryClone(size_t rows, size_t deletes) { return tryCloneInner(rows, deletes); }
 

@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <TiDB/Schema/TableIDMap.h>
+#include <common/likely.h>
 #include <common/logger_useful.h>
+#include "Storages/KVStore/Types.h"
 
 namespace DB
 {
@@ -44,7 +46,7 @@ void TableIDMap::doEmplaceTableID(
         table_id_to_database_id.emplace(table_id, database_id);
 }
 
-void TableIDMap::doEmplacePartitionTableID(
+DatabaseID TableIDMap::doEmplacePartitionTableID(
     TableID partition_id,
     TableID table_id,
     std::string_view log_prefix,
@@ -68,6 +70,22 @@ void TableIDMap::doEmplacePartitionTableID(
     }
     else
         partition_id_to_logical_id.emplace(partition_id, table_id);
+
+    if (auto iter = table_id_to_database_id.find(partition_id); unlikely(iter != table_id_to_database_id.end()))
+    {
+            const DatabaseID old_database_id = iter->second;
+        LOG_WARNING(
+            log,
+            "{}partition_id to table_id overwrite existing table_id to database_id, "
+            "physical_table_id={} logical_table_id={} old_database_id={}",
+            log_prefix,
+            partition_id,
+            table_id,
+            old_database_id);
+        table_id_to_database_id.erase(iter);
+        return old_database_id;
+    }
+    return -1;
 }
 
 void TableIDMap::exchangeTablePartition(
@@ -109,6 +127,11 @@ void TableIDMap::exchangeTablePartition(
     doEmplacePartitionTableID(non_partition_table_id, partition_logical_table_id, "ExchangeTablePartition: ", lock);
 }
 
+/*
+ * - If `physical_table_id` is a non-partition table, then return <true, database_id, physical_table_id>
+ * - If `physical_table_id` is a partition of a partition table, then return <true, database_id_of_logical_table, logical_table_id>
+ * Otherwise return <false, 0, 0>
+ */
 std::tuple<bool, DatabaseID, TableID> TableIDMap::findDatabaseIDAndLogicalTableID(TableID physical_table_id) const
 {
     std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);

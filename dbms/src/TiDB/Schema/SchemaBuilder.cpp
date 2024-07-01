@@ -54,6 +54,8 @@
 #include <tuple>
 #include <unordered_set>
 
+#include "Storages/KVStore/Types.h"
+
 namespace DB
 {
 using namespace TiDB;
@@ -1323,6 +1325,23 @@ public:
     bool nonThreadSafeContains(const String & name) const { return nameset.contains(name); }
 };
 
+class SyncedTableIDSet
+{
+public:
+    // Thread-safe emplace
+    void emplace(const DatabaseID old_database_id, const TableID table_id)
+    {
+        std::unique_lock lock(mtx);
+        db_to_table_ids.emplace(old_database_id, table_id);
+    }
+
+    const auto & unsafeGet() const { return db_to_table_ids; }
+
+private:
+    std::mutex mtx;
+    std::unordered_map<DatabaseID, TableID> db_to_table_ids;
+};
+
 /// syncAllSchema will be called when
 /// - a new keyspace is created
 /// - meet diff->regenerate_schema_map = true
@@ -1342,9 +1361,10 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     auto sync_all_schema_wait_group = sync_all_schema_thread_pool.waitGroup();
 
     SyncedDatabaseSet latest_db_nameset;
+    SyncedTableIDSet table_ids_may_need_fix_db;
     for (const auto & db_info : all_db_info)
     {
-        auto task = [this, db_info, &latest_db_nameset] {
+        auto task = [this, db_info, &latest_db_nameset, &table_ids_may_need_fix_db] {
             // Insert into nameset no matter it already present in local or not.
             // Otherwise "drop all unmapped databases" result in unexpected data dropped.
             latest_db_nameset.emplace(name_mapper.mapDatabaseName(*db_info));
@@ -1397,17 +1417,25 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 // sent to TiFlash, TiFlash can create the instance by `applyTable` with force==true in the
                 // related process.
                 applyCreateStorageInstance(db_info->id, table_info, false, "SyncAllSchema");
-                if (table_info->isLogicalPartitionTable())
+                if (!table_info->isLogicalPartitionTable())
                 {
-                    for (const auto & part_def : table_info->partition.definitions)
+                    continue;
+                }
+
+                // register the physical_tables belong to the logical table
+                for (const auto & part_def : table_info->partition.definitions)
+                {
+                    LOG_DEBUG(
+                        log,
+                        "register table to table_id_map for partition table, logical_table_id={} "
+                        "physical_table_id={}",
+                        table_info->id,
+                        part_def.id);
+                    if (DatabaseID overwrite_old_db_id
+                        = table_id_map.emplacePartitionTableID(part_def.id, table_info->id);
+                        overwrite_old_db_id != -1)
                     {
-                        LOG_DEBUG(
-                            log,
-                            "register table to table_id_map for partition table, logical_table_id={} "
-                            "physical_table_id={}",
-                            table_info->id,
-                            part_def.id);
-                        table_id_map.emplacePartitionTableID(part_def.id, table_info->id);
+                        table_ids_may_need_fix_db.emplace(overwrite_old_db_id, part_def.id);
                     }
                 }
             }
@@ -1415,6 +1443,35 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         sync_all_schema_wait_group->schedule(task);
     }
     sync_all_schema_wait_group->wait();
+
+    auto & tmt_context = context.getTMTContext();
+    for (const auto [old_db_id, physical_table_id] : table_ids_may_need_fix_db.unsafeGet())
+    {
+        auto [ok, database_id, logical_table_id] = table_id_map.findDatabaseIDAndLogicalTableID(physical_table_id);
+        if (!ok)
+        {
+            LOG_WARNING(
+                log,
+                "Can not find related database_id and logical_table_id from table_id_map, syncAllSchema-FixDatabase is "
+                "skipped, physical_table_id={}",
+                physical_table_id);
+        }
+        if (database_id == old_db_id)
+            continue;
+        auto storage = tmt_context.getStorages().get(keyspace_id, physical_table_id);
+        if (storage == nullptr)
+            continue;
+
+        LOG_INFO(
+            log,
+            "syncAllSchema-FixDatabase renaming table, old_database_id={} database_id={} physical_table_id={}",
+            old_db_id,
+            database_id,
+            logical_table_id);
+        auto local_table_info = storage->getTableInfo();
+        String new_db_display_name = tryGetDatabaseDisplayNameFromLocal(database_id);
+        applyRenamePhysicalTable(database_id, new_db_display_name, local_table_info, storage);
+    }
 
     // TODO:can be removed if we don't save the .sql
     /// Drop all unmapped tables.
