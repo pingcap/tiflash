@@ -1726,8 +1726,9 @@ try
 
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
+        LOG_DEBUG(Logger::get(), "gjt debug beg ComputeServerRunner");
         {
-            // WRAP_FOR_SERVER_TEST_BEGIN
+            WRAP_FOR_SERVER_TEST_BEGIN
             std::vector<String> expected_strings = {
                 R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
  aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
@@ -1755,7 +1756,7 @@ try
                         true),
                 expected_strings,
                 res_no_pass_through);
-            // WRAP_FOR_SERVER_TEST_END
+            WRAP_FOR_SERVER_TEST_END
         }
     }
 }

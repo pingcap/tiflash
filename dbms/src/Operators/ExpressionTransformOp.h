@@ -22,6 +22,7 @@ namespace DB
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
+template <bool check_block_selective = false>
 class ExpressionTransformOp : public TransformOp
 {
 public:

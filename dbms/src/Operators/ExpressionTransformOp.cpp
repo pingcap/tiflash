@@ -17,19 +17,32 @@
 
 namespace DB
 {
-OperatorStatus ExpressionTransformOp::transformImpl(Block & block)
+template <bool check_block_selective>
+OperatorStatus ExpressionTransformOp<check_block_selective>::transformImpl(Block & block)
 {
     if (likely(block))
     {
-        auto ori_info = block.info;
-        expression->execute(block);
-        block.info = ori_info;
+        if constexpr (check_block_selective)
+        {
+            RUNTIME_CHECK(block.info.selective);
+            auto ori_info = block.info;
+            expression->execute(block);
+            block.info = ori_info;
+        }
+        else
+        {
+            expression->execute(block);
+        }
     }
     return OperatorStatus::HAS_OUTPUT;
 }
 
-void ExpressionTransformOp::transformHeaderImpl(Block & header_)
+template <bool check_block_selective>
+void ExpressionTransformOp<check_block_selective>::transformHeaderImpl(Block & header_)
 {
     expression->execute(header_);
 }
+
+template class ExpressionTransformOp<true>;
+template class ExpressionTransformOp<false>;
 } // namespace DB

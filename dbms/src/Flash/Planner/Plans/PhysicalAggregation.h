@@ -81,8 +81,8 @@ private:
     std::unordered_map<String, String> key_ref_agg_func;
     std::unordered_map<String, String> agg_func_ref_key;
     std::unordered_map<String, TiDB::TiDBCollatorPtr> aggregation_collators;
-    bool is_final_agg;
-    bool auto_pass_through;
+    const bool is_final_agg;
+    const bool auto_pass_through;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;
 };

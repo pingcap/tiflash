@@ -52,7 +52,7 @@ private:
 
     void build(const tipb::Executor * executor);
 
-    void buildFinalProjection(const String & column_prefix, bool is_root);
+    void buildFinalProjection(const String & column_prefix, bool is_root, bool after_auto_pass_through_hashagg);
 
     PhysicalPlanNodePtr popBack();
 
@@ -72,8 +72,6 @@ private:
 
     LoggerPtr log;
 
-    // True when auto pass through is enabled for 1st agg in this plan.
-    // Used to make sure there is no other operator after auto pass through agg except ExchagneSender.
-    bool auto_pass_through_agg_flag = false;
+    bool after_auto_pass_through_hashagg = false;
 };
 } // namespace DB
