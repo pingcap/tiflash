@@ -430,6 +430,12 @@ class KVStoreTaskLock : private boost::noncopyable
 };
 
 void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
-void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t &, double, double, double);
+void WaitCheckRegionReadyImpl(
+    const TMTContext &,
+    KVStore & kvstore,
+    const std::atomic_size_t &,
+    double,
+    double,
+    double);
 
 } // namespace DB
