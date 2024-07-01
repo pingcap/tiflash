@@ -128,9 +128,10 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
         for (size_t i = 0; i < res.columns(); ++i)
         {
             /// Data
+            CompressedCHBlockChunkReadBuffer compressed_buffer(istr);
             res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
                 *mutable_columns[i],
-                [&](const IDataType::SubstreamPath &) { return &istr; },
+                [&](const IDataType::SubstreamPath &) { return &compressed_buffer; },
                 sz,
                 0,
                 {},
@@ -292,7 +293,7 @@ struct CHBlockChunkCodecV1Impl
     }
 
     template <typename ColumnsHolder>
-    void encodeColumnImpl(ColumnsHolder && columns_holder, WriteBuffer * ostr_ptr)
+    void encodeColumnImpl(ColumnsHolder && columns_holder, WriteBuffer * ostr_ptr, CompressionMethod compression_method)
     {
         size_t rows = getRows(std::forward<ColumnsHolder>(columns_holder));
         if (!rows)
@@ -306,57 +307,84 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0);
+
+            CompressedCHBlockChunkWriteBuffer compressed_buffer(*ostr_ptr, CompressionSettings(compression_method));
+            WriteColumnData(*col_type_name.type, column_ptr, compressed_buffer, 0, 0);
+            compressed_buffer.next();
+
+            if (compression_method != CompressionMethod::NONE)
+            {
+                inner.original_size += compressed_buffer.getUncompressedBytes();
+                inner.compressed_size += compressed_buffer.getCompressedBytes();
+            }
         }
 
         inner.encoded_rows += rows;
     }
-    void encodeColumn(const MutableColumns & columns, WriteBuffer * ostr_ptr)
+    void encodeColumn(const MutableColumns & columns, WriteBuffer * ostr_ptr, CompressionMethod compression_method)
     {
-        return encodeColumnImpl(columns, ostr_ptr);
+        return encodeColumnImpl(columns, ostr_ptr, compression_method);
     }
-    void encodeColumn(const Columns & columns, WriteBuffer * ostr_ptr) { return encodeColumnImpl(columns, ostr_ptr); }
-    void encodeColumn(const std::vector<MutableColumns> & batch_columns, WriteBuffer * ostr_ptr)
+    void encodeColumn(const Columns & columns, WriteBuffer * ostr_ptr, CompressionMethod compression_method)
     {
-        for (auto && batch : batch_columns)
-        {
-            encodeColumnImpl(batch, ostr_ptr);
-        }
+        return encodeColumnImpl(columns, ostr_ptr, compression_method);
     }
-    void encodeColumn(std::vector<MutableColumns> && batch_columns, WriteBuffer * ostr_ptr)
-    {
-        for (auto && batch : batch_columns)
-        {
-            encodeColumnImpl(std::move(batch), ostr_ptr);
-        }
-    }
-    void encodeColumn(const std::vector<Columns> & batch_columns, WriteBuffer * ostr_ptr)
+    void encodeColumn(
+        const std::vector<MutableColumns> & batch_columns,
+        WriteBuffer * ostr_ptr,
+        CompressionMethod compression_method)
     {
         for (auto && batch : batch_columns)
         {
-            encodeColumnImpl(batch, ostr_ptr);
+            encodeColumnImpl(batch, ostr_ptr, compression_method);
         }
     }
-    void encodeColumn(std::vector<Columns> && batch_columns, WriteBuffer * ostr_ptr)
+    void encodeColumn(
+        std::vector<MutableColumns> && batch_columns,
+        WriteBuffer * ostr_ptr,
+        CompressionMethod compression_method)
     {
         for (auto && batch : batch_columns)
         {
-            encodeColumnImpl(std::move(batch), ostr_ptr);
+            encodeColumnImpl(std::move(batch), ostr_ptr, compression_method);
         }
     }
-    void encodeColumn(const Block & block, WriteBuffer * ostr_ptr) { return encodeColumnImpl(block, ostr_ptr); }
-    void encodeColumn(const std::vector<Block> & blocks, WriteBuffer * ostr_ptr)
+    void encodeColumn(
+        const std::vector<Columns> & batch_columns,
+        WriteBuffer * ostr_ptr,
+        CompressionMethod compression_method)
+    {
+        for (auto && batch : batch_columns)
+        {
+            encodeColumnImpl(batch, ostr_ptr, compression_method);
+        }
+    }
+    void encodeColumn(
+        std::vector<Columns> && batch_columns,
+        WriteBuffer * ostr_ptr,
+        CompressionMethod compression_method)
+    {
+        for (auto && batch : batch_columns)
+        {
+            encodeColumnImpl(std::move(batch), ostr_ptr, compression_method);
+        }
+    }
+    void encodeColumn(const Block & block, WriteBuffer * ostr_ptr, CompressionMethod compression_method)
+    {
+        return encodeColumnImpl(block, ostr_ptr, compression_method);
+    }
+    void encodeColumn(const std::vector<Block> & blocks, WriteBuffer * ostr_ptr, CompressionMethod compression_method)
     {
         for (auto && block : blocks)
         {
-            encodeColumnImpl(block, ostr_ptr);
+            encodeColumnImpl(block, ostr_ptr, compression_method);
         }
     }
-    void encodeColumn(std::vector<Block> && blocks, WriteBuffer * ostr_ptr)
+    void encodeColumn(std::vector<Block> && blocks, WriteBuffer * ostr_ptr, CompressionMethod compression_method)
     {
         for (auto && block : blocks)
         {
-            encodeColumnImpl(std::move(block), ostr_ptr);
+            encodeColumnImpl(std::move(block), ostr_ptr, compression_method);
         }
     }
     template <typename VecColumns>
@@ -390,36 +418,19 @@ struct CHBlockChunkCodecV1Impl
 
         size_t init_size = column_encode_bytes + inner.header_size + 1 /*compression method*/;
         auto output_buffer = std::make_unique<WriteBufferFromOwnString>(init_size);
-        std::unique_ptr<CompressedCHBlockChunkWriteBuffer> compress_codec{};
-        WriteBuffer * ostr_ptr = output_buffer.get();
-
-        // Init compression writer
-        if (compression_method != CompressionMethod::NONE)
-        {
-            // CompressedWriteBuffer will encode compression method flag as first byte
-            compress_codec = std::make_unique<CompressedCHBlockChunkWriteBuffer>(
-                *output_buffer,
-                CompressionSettings(compression_method),
-                init_size);
-            ostr_ptr = compress_codec.get();
-        }
-        else
-        {
-            // Write compression method flag
-            output_buffer->write(static_cast<char>(CompressionMethodByte::NONE));
-        }
 
         // Encode header
-        EncodeHeader(*ostr_ptr, inner.header, rows);
+        EncodeHeader(*output_buffer, inner.header, rows);
         // Encode column data
-        encodeColumn(std::forward<VecColumns>(batch_columns), ostr_ptr);
+        encodeColumn(std::forward<VecColumns>(batch_columns), output_buffer.get(), compression_method);
 
         // Flush rest buffer
-        if (compress_codec)
+        output_buffer->next();
+        if (compression_method != CompressionMethod::NONE)
         {
-            compress_codec->next();
-            inner.original_size += compress_codec->getUncompressedBytes();
-            inner.compressed_size += compress_codec->getCompressedBytes();
+            size_t extra_size = output_buffer->count() - inner.compressed_size;
+            inner.original_size += extra_size;
+            inner.compressed_size += extra_size;
         }
         else
         {
@@ -567,16 +578,8 @@ Block CHBlockChunkCodecV1::decode(const Block & header, std::string_view str)
 {
     assert(!str.empty());
 
-    // read first byte of compression method flag which defined in `CompressionMethodByte`
-    if (static_cast<CompressionMethodByte>(str[0]) == CompressionMethodByte::NONE)
-    {
-        str = str.substr(1, str.size() - 1);
-        ReadBufferFromString buff_str(str);
-        return decodeCompression(header, buff_str);
-    }
     ReadBufferFromString buff_str(str);
-    auto && istr = CompressedCHBlockChunkReadBuffer(buff_str);
-    return decodeCompression(header, istr);
+    return decodeCompression(header, buff_str);
 }
 
 } // namespace DB
