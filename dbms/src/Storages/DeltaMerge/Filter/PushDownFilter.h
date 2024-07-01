@@ -55,6 +55,8 @@ public:
 
     const String & name() const { return filter_name; }
     bool empty() const { return before_where == nullptr; }
+    BlockInputStreamPtr buildFilterInputStream(BlockInputStreamPtr stream, bool need_project, const String & tracing_id)
+        const;
 
     static QueryFilterPtr build(
         String && filter_name,

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -154,6 +156,28 @@ QueryFilterPtr QueryFilter::build(
         filter_column_name,
         extra_cast,
         columns_after_cast);
+}
+
+BlockInputStreamPtr QueryFilter::buildFilterInputStream(
+    BlockInputStreamPtr stream,
+    bool need_project,
+    const String & tracing_id) const
+{
+    if (extra_cast)
+    {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, tracing_id);
+        stream->setExtraInfo(fmt::format("{}: cast after tablescanning", name()));
+    }
+
+    stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, tracing_id);
+    stream->setExtraInfo(fmt::format("{}: push down filter", name()));
+
+    if (need_project)
+    {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, tracing_id);
+        stream->setExtraInfo(fmt::format("{}: project after where", name()));
+    }
+    return stream;
 }
 
 PushDownFilterPtr PushDownFilter::build(
