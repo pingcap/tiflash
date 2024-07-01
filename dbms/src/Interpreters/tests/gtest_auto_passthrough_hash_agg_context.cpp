@@ -518,6 +518,14 @@ CATCH
 // }
 // CATCH
 
+#define WRAP_FOR_SERVER_TEST_BEGIN                 \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_SERVER_TEST_END }
+
 // Using different workload(low/high/medium ndv) to run auto_pass_through hashagg,
 // which cover logic of interpretion, execution and exchange.
 TEST_F(TestAutoPassThroughAggContext, integration)
@@ -562,30 +570,42 @@ try
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
         {
+            WRAP_FOR_SERVER_TEST_BEGIN
+            std::vector<String> expected_strings = {
+                R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+  table_scan_0 | {<0, String>, <1, Longlong>}
+)",
+                R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+  table_scan_0 | {<0, String>, <1, Longlong>}
+)",
+                R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+ aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+)",
+                R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+ aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+)"};
             startServers(2);
-            auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-            auto req_auto_pass_through
-                = context.scan(db_name, tbl_name)
-                      .aggregation(
-                          {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
-                          {col(col1_name)},
-                          0,
-                          true)
-                      .buildMPPTasks(context, properties);
-
-            LOG_DEBUG(Logger::get(), "test with compute server without pipeline");
-            enablePipeline(false);
-            auto res_auto_pass_through = executeMPPTasks(req_auto_pass_through, properties);
-            ASSERT_COLUMNS_EQ_UR(res_no_pass_through, res_auto_pass_through);
-
-            LOG_DEBUG(Logger::get(), "test with compute server with pipeline");
-            enablePipeline(true);
-            res_auto_pass_through = executeMPPTasks(req_auto_pass_through, properties);
-            ASSERT_COLUMNS_EQ_UR(res_no_pass_through, res_auto_pass_through);
+            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+                context.scan(db_name, tbl_name)
+                    .aggregation(
+                        {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
+                        {col(col1_name)},
+                        0,
+                        true),
+                expected_strings,
+                res_no_pass_through);
+            WRAP_FOR_SERVER_TEST_END
         }
     }
 }
 CATCH
 
+
+#undef WRAP_FOR_SERVER_TEST_BEGIN
+#undef WRAP_FOR_SERVER_TEST_END
 } // namespace tests
 } // namespace DB
