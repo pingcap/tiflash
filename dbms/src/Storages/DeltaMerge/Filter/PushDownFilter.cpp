@@ -24,21 +24,27 @@
 #include <Storages/SelectQueryInfo.h>
 #include <TiDB/Decode/TypeMapping.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace DB::DM
 {
 QueryFilterPtr QueryFilter::build(
-    String && filter_name,
+    QueryFilterType filter_type,
     const ColumnInfos & table_scan_column_info,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     const ColumnDefines & columns_to_read,
     const Context & context,
-    const LoggerPtr & tracing_logger)
+    const LoggerPtr & tracing_logger,
+    const std::unordered_set<ColumnID> & rest_columns_to_read)
 {
-    if (pushed_down_filters.empty())
+    RUNTIME_CHECK(
+        filter_type == QueryFilterType::LM && rest_columns_to_read.empty()
+        || filter_type == QueryFilterType::Rest && !rest_columns_to_read.empty());
+    auto log = tracing_logger->getChild(magic_enum::enum_name(filter_type));
+    if (filters.empty())
     {
-        LOG_DEBUG(tracing_logger, "Push down filter is empty");
+        LOG_DEBUG(log, "Push down filter is empty");
         return nullptr;
     }
     std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
@@ -47,7 +53,7 @@ QueryFilterPtr QueryFilter::build(
 
     // Get the columns of the filter, is a subset of columns_to_read
     std::unordered_set<ColumnID> filter_col_id_set;
-    for (const auto & expr : pushed_down_filters)
+    for (const auto & expr : filters)
     {
         getColumnIDsFromExpr(expr, table_scan_column_info, filter_col_id_set);
     }
@@ -94,9 +100,18 @@ QueryFilterPtr QueryFilter::build(
     // Only cast filter_columns
     std::vector<UInt8> may_need_add_cast_column;
     may_need_add_cast_column.reserve(table_scan_column_info.size());
-    for (const auto & col : table_scan_column_info)
-        may_need_add_cast_column.push_back(
-            !col.hasGeneratedColumnFlag() && filter_col_id_set.contains(col.id) && col.id != -1);
+    if (filter_type == QueryFilterType::LM)
+    {
+        for (const auto & col : table_scan_column_info)
+            may_need_add_cast_column.push_back(
+                !col.hasGeneratedColumnFlag() && filter_col_id_set.contains(col.id) && col.id != -1);
+    }
+    else
+    {
+        for (const auto & col : table_scan_column_info)
+            may_need_add_cast_column.push_back(
+                !col.hasGeneratedColumnFlag() && rest_columns_to_read.contains(col.id) && col.id != -1);
+    }
 
     ExpressionActionsChain chain;
     auto & step = analyzer->initAndGetLastStep(chain);
@@ -108,7 +123,8 @@ QueryFilterPtr QueryFilter::build(
         NamesWithAliases project_cols;
         for (size_t i = 0; i < columns_to_read.size(); ++i)
         {
-            if (filter_col_id_set.contains(columns_to_read[i].id))
+            if (rest_columns_to_read.contains(columns_to_read[i].id)
+                || filter_col_id_set.contains(columns_to_read[i].id))
                 project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
         }
         actions->add(ExpressionAction::project(project_cols));
@@ -119,12 +135,10 @@ QueryFilterPtr QueryFilter::build(
         extra_cast = chain.getLastActions();
         chain.finalize();
         chain.clear();
-        LOG_DEBUG(tracing_logger, "Extra cast for filter columns: {}", extra_cast->dumpActions());
     }
 
     // build filter expression actions
-    auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownFilter(pushed_down_filters);
-    LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
+    auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownFilter(filters);
 
     // record current column defines
     auto columns_after_cast = std::make_shared<ColumnDefines>();
@@ -147,9 +161,17 @@ QueryFilterPtr QueryFilter::build(
             columns_after_cast->back().type = current_names_and_types[i].type;
         }
     }
+    LOG_DEBUG(
+        log,
+        "extra_cast={}, before_where={}, columns_to_read={} => {}, project={}, ",
+        extra_cast->dumpActions(),
+        before_where->dumpActions(),
+        columns_to_read,
+        *columns_after_cast,
+        project_after_where->dumpActions());
 
     return std::make_shared<QueryFilter>(
-        std::move(filter_name),
+        filter_type,
         before_where,
         project_after_where,
         filter_columns,
@@ -163,19 +185,25 @@ BlockInputStreamPtr QueryFilter::buildFilterInputStream(
     bool need_project,
     const String & tracing_id) const
 {
+    auto filter_name = magic_enum::enum_name(filter_type);
+    auto log = Logger::get(fmt::format("{} {}", tracing_id, filter_name));
+    LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
     if (extra_cast)
     {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, tracing_id);
-        stream->setExtraInfo(fmt::format("{}: cast after tablescanning", name()));
+        stream->setExtraInfo(fmt::format("{}: cast after tablescanning", filter_name));
+        LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
     }
 
     stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, tracing_id);
-    stream->setExtraInfo(fmt::format("{}: push down filter", name()));
+    stream->setExtraInfo(fmt::format("{}: push down filter", filter_name));
+    LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
 
     if (need_project)
     {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, tracing_id);
-        stream->setExtraInfo(fmt::format("{}: project after where", name()));
+        stream->setExtraInfo(fmt::format("{}: project after where", filter_name));
+        LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
     }
     return stream;
 }
@@ -189,12 +217,13 @@ PushDownFilterPtr PushDownFilter::build(
     const LoggerPtr & tracing_logger)
 {
     auto lm_filter = QueryFilter::build(
-        "LM",
+        QueryFilterType::LM,
         table_scan_column_info,
         pushed_down_filters,
         columns_to_read,
         context,
-        tracing_logger);
+        tracing_logger,
+        {});
     return std::make_shared<PushDownFilter>(rs_operator, lm_filter, nullptr);
 }
 
@@ -218,16 +247,42 @@ PushDownFilterPtr PushDownFilter::build(
 
     const auto & columns_to_read_info = dag_query->source_columns;
     auto lm_filter = QueryFilter::build(
-        "LM",
+        QueryFilterType::LM,
         columns_to_read_info,
         dag_query->pushed_down_filters,
         columns_to_read,
         context,
-        tracing_logger);
+        tracing_logger,
+        {});
 
     // TODO: fix columns_after_cast when force_push_down_all_filters_to_scan is true.
-    auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan
-        ? QueryFilter::build("REST", columns_to_read_info, dag_query->filters, columns_to_read, context, tracing_logger)
+    std::unordered_set<ColumnID> rest_columns_to_read;
+    for (const auto & cd : columns_to_read)
+    {
+        if (!lm_filter)
+        {
+            rest_columns_to_read.insert(cd.id);
+            continue;
+        }
+
+        auto it = std::find_if(
+            lm_filter->filter_columns->cbegin(),
+            lm_filter->filter_columns->cend(),
+            [&cd](const auto & filter_cd) { return cd.id == filter_cd.id; });
+        if (it == lm_filter->filter_columns->cend())
+        {
+            rest_columns_to_read.insert(cd.id);
+        }
+    }
+    auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan \\
+        ? QueryFilter::build(
+            QueryFilterType::Rest,
+            columns_to_read_info,
+            dag_query->filters,
+            columns_to_read,
+            context,
+            tracing_logger,
+            rest_columns_to_read)
         : nullptr;
 
     return std::make_shared<PushDownFilter>(rs_operator, lm_filter, rest_filter);

@@ -33,18 +33,24 @@ inline static const PushDownFilterPtr EMPTY_FILTER{};
 class QueryFilter;
 using QueryFilterPtr = std::shared_ptr<QueryFilter>;
 
+enum class QueryFilterType
+{
+    LM,
+    Rest,
+};
+
 class QueryFilter
 {
 public:
     QueryFilter(
-        String && filter_name_,
+        QueryFilterType filter_type_,
         const ExpressionActionsPtr & beofre_where_,
         const ExpressionActionsPtr & project_after_where_,
         const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,
         const ExpressionActionsPtr & extra_cast_,
         const ColumnDefinesPtr & columns_after_cast_)
-        : filter_name(std::move(filter_name_))
+        : filter_type(filter_type_)
         , before_where(beofre_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
@@ -53,20 +59,20 @@ public:
         , columns_after_cast(columns_after_cast_)
     {}
 
-    const String & name() const { return filter_name; }
     bool empty() const { return before_where == nullptr; }
     BlockInputStreamPtr buildFilterInputStream(BlockInputStreamPtr stream, bool need_project, const String & tracing_id)
         const;
 
     static QueryFilterPtr build(
-        String && filter_name,
+        QueryFilterType filter_type,
         const ColumnInfos & table_scan_column_info,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
         const ColumnDefines & columns_to_read,
         const Context & context,
-        const LoggerPtr & tracing_logger);
+        const LoggerPtr & tracing_logger,
+        const std::unordered_set<ColumnID> & rest_columns_to_read);
 
-    String filter_name;
+    const QueryFilterType filter_type;
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
     const ExpressionActionsPtr before_where;
