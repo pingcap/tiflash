@@ -135,7 +135,11 @@ void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
             proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
             auto server = ptr->getObject("server");
             proxy_config_summary.engine_addr = server->getValue<std::string>("engine-addr");
-            LOG_INFO(log, "Parsed proxy config: snap_handle_pool_size={} engine_addr={}", proxy_config_summary.snap_handle_pool_size, proxy_config_summary.engine_addr);
+            LOG_INFO(
+                log,
+                "Parsed proxy config: snap_handle_pool_size={} engine_addr={}",
+                proxy_config_summary.snap_handle_pool_size,
+                proxy_config_summary.engine_addr);
             proxy_config_summary.valid = true;
         }
         catch (...)

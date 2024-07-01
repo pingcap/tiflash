@@ -170,7 +170,25 @@ TMTContext::TMTContext(
     if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
         && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
+        if (kvstore->getProxyConfigSummay().valid)
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from proxy's conf engine_addr={}",
+                kvstore->getProxyConfigSummay().engine_addr);
+            s3gc_owner = OwnerManager::createS3GCOwner(
+                context,
+                /*id*/ rkvstore->getProxyConfigSummay().engine_addr,
+                etcd_client);
+        }
+        else
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from tiflash's conf engine_addr={}",
+                raft_config.advertise_engine_addr);
+            s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
+        }
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
