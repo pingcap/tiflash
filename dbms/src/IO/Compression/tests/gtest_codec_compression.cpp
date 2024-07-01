@@ -351,7 +351,7 @@ CodecTestSequence generateSeq(Generator gen, const char * gen_name, B Begin = 0,
 CompressionCodecPtr makeCodec(const CompressionMethodByte method_byte, UInt8 type_byte)
 {
     CompressionSetting setting(method_byte);
-    setting.type_bytes_size = type_byte;
+    setting.data_type = magic_enum::enum_cast<CompressionDataType>(type_byte).value();
     return CompressionFactory::create(setting);
 }
 
@@ -362,18 +362,21 @@ void testTranscoding(ICompressionCodec & codec, const CodecTestSequence & test_s
     const UInt32 encoded_max_size = codec.getCompressedReserveSize(static_cast<UInt32>(source_data.size()));
     PODArray<char> encoded(encoded_max_size);
 
-    assert(source_data.data() != nullptr); // Codec assumes that source buffer is not null.
-    const UInt32 encoded_size
-        = codec.compress(source_data.data(), static_cast<UInt32>(source_data.size()), encoded.data());
-
+    ASSERT_TRUE(source_data.data() != nullptr); // Codec assumes that source buffer is not null.
+    const UInt32 encoded_size = codec.compress( //
+        source_data.data(),
+        static_cast<UInt32>(source_data.size()),
+        encoded.data());
     encoded.resize(encoded_size);
 
+    auto method_byte = ICompressionCodec::readMethod(encoded.data());
+    ASSERT_EQ(method_byte, codec.getMethodByte());
+
     PODArray<char> decoded(source_data.size());
+    const auto decode_codec = CompressionFactory::createForDecompress(method_byte);
 
-    const auto decoded_size = codec.readDecompressedBlockSize(encoded.data());
-
-    codec.decompress(encoded.data(), static_cast<UInt32>(encoded.size()), decoded.data(), decoded_size);
-
+    const auto decoded_size = decode_codec->readDecompressedBlockSize(encoded.data());
+    decode_codec->decompress(encoded.data(), static_cast<UInt32>(encoded.size()), decoded.data(), decoded_size);
     decoded.resize(decoded_size);
 
     ASSERT_TRUE(EqualByteContainers(test_sequence.data_type->getSizeOfValueInMemory(), source_data, decoded));
@@ -532,9 +535,10 @@ std::vector<CodecTestSequence> generatePyramidOfSequences(
 #define G(generator) generator, #generator
 
 const auto IntegerCodecsToTest = ::testing::Values(
+    CompressionMethodByte::Lightweight,
     CompressionMethodByte::DeltaFOR,
     CompressionMethodByte::FOR,
-    CompressionMethodByte::RLE
+    CompressionMethodByte::RunLength
 #if USE_QPL
     ,
     CompressionMethodByte::QPL
@@ -544,38 +548,6 @@ const auto IntegerCodecsToTest = ::testing::Values(
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // test cases
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-// INSTANTIATE_TEST_CASE_P(
-//     Simple,
-//     CodecTest,
-//     ::testing::Combine(
-//         IntegerCodecsToTest,
-//         ::testing::Values(makeSeq<Float64>(
-//             1,
-//             2,
-//             3,
-//             5,
-//             7,
-//             11,
-//             13,
-//             17,
-//             23,
-//             29,
-//             31,
-//             37,
-//             41,
-//             43,
-//             47,
-//             53,
-//             59,
-//             61,
-//             67,
-//             71,
-//             73,
-//             79,
-//             83,
-//             89,
-//             97))));
 
 INSTANTIATE_TEST_CASE_P(
     SmallSequences,

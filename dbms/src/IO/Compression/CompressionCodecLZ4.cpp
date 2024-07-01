@@ -62,7 +62,7 @@ UInt32 CompressionCodecLZ4HC::doCompressData(const char * source, UInt32 source_
 {
     auto success = LZ4_compress_HC(source, dest, source_size, LZ4_COMPRESSBOUND(source_size), level);
 
-    if (!success)
+    if (unlikely(!success))
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress with LZ4 codec");
 
     return success;

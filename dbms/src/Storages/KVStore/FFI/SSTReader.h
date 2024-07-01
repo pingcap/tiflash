@@ -48,7 +48,7 @@ public:
     BaseBuffView keyView() const override;
     BaseBuffView valueView() const override;
     void next() override;
-    SSTFormatKind sstFormatKind() const { return kind; };
+    SSTFormatKind sstFormatKind() const { return kind; }
     size_t approxSize() const override;
     std::vector<std::string> findSplitKeys(uint64_t splits_count) const override;
     void seek(BaseBuffView && view) const override;
