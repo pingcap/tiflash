@@ -159,7 +159,7 @@ void AutoPassThroughHashAggContext::passThrough(const Block & block)
 
 Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
 {
-    auto header = aggregator->getHeader(/*final*/ true);
+    auto header = aggregator->getHeader(/*final=*/true);
     Block new_block;
     const auto & aggregate_descriptions = aggregator->getParams().aggregates;
     Arena arena;
@@ -173,22 +173,23 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
         }
 
         bool agg_func_col_found = false;
-        for (size_t agg_idx = 0; agg_idx < aggregate_descriptions.size(); ++agg_idx)
+        for (const auto & desc : aggregate_descriptions)
         {
-            const auto & desc = aggregate_descriptions[agg_idx];
             if (desc.column_name == col_name)
             {
-                // Assume agg descriptions and agg instructions are corresponding to one by one.
-                // This is assured when generating agg instructions.
-                const auto & inst = agg_process_info->aggregate_functions_instructions[agg_idx];
-                RUNTIME_CHECK(desc.function->getName() == inst.that->getName());
                 auto new_col = desc.function->getReturnType()->createColumn();
                 new_col->reserve(block.rows());
                 auto * place = arena.alignedAlloc(desc.function->sizeOfData(), desc.function->alignOfData());
+
+                ColumnRawPtrs argument_columns;
+                argument_columns.reserve(block.columns());
+                for (auto arg_col_idx : desc.arguments)
+                    argument_columns.push_back(block.getByPosition(arg_col_idx).column.get());
+
                 for (size_t row_idx = 0; row_idx < block.rows(); ++row_idx)
                 {
                     desc.function->create(place);
-                    inst.that->add(place, inst.batch_arguments, row_idx, &arena);
+                    desc.function->add(place, argument_columns.data(), row_idx, &arena);
                     desc.function->insertResultInto(place, *new_col, &arena);
                 }
                 new_block.insert(
