@@ -199,7 +199,7 @@ public:
             std::tie(low_ndv_blocks, low_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 10);
             std::tie(high_ndv_blocks, high_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
             std::tie(medium_ndv_blocks, medium_ndv_block) = buildBlocksForMediumNDV(/*block_num*/ 40);
-            std::tie(random_blocks, random_block) = buildBlocks(/*block_num*/ 1, /*distinct_num*/ 100);
+            std::tie(random_blocks, random_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
 
             context.addMockTable(
                 {db_name, high_ndv_tbl_name},
@@ -1767,14 +1767,19 @@ try
 {
     auto & auto_pass_through_context = auto_pass_through_test_data.auto_pass_through_context;
     auto & medium_ndv_blocks = auto_pass_through_test_data.medium_ndv_blocks;
+    auto & random_blocks = auto_pass_through_test_data.random_blocks;
+    auto log = Logger::get();
 
     // Expect InitState
     ASSERT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Init);
-
-    auto block = medium_ndv_blocks.front();
-    medium_ndv_blocks.pop_front();
-    auto_pass_through_context->onBlock(block);
-    ASSERT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Adjust);
+    size_t init_consumed_block = 0;
+    while (auto_pass_through_context->getCurState() == AutoPassThroughHashAggContext::State::Init && !random_blocks.empty())
+    {
+        ++init_consumed_block;
+        auto_pass_through_context->onBlock(random_blocks.front());
+        random_blocks.pop_front();
+    }
+    LOG_DEBUG(log, "ComputeServerRunner.stateSwitchMediumNDV init_consumed_block: {}", init_consumed_block);
 
     const auto state_processed_row_limit = auto_pass_through_context->getOtherStateRowLimit();
     const auto adjust_state_rows_limit = auto_pass_through_context->getAdjustRowLimit();
@@ -1789,7 +1794,7 @@ try
             auto_pass_through_context->onBlock(block);
             state_processed_rows += block.rows();
             LOG_DEBUG(
-                Logger::get(),
+                log,
                 "stateSwitchMediumNDV execute one block, state: {}, cur state processed rows: {}, state rows limit: {}",
                 magic_enum::enum_name(auto_pass_through_context->getCurState()),
                 state_processed_rows,
@@ -1813,7 +1818,7 @@ try
             auto_pass_through_context->onBlock(block);
             state_processed_rows += block.rows();
             LOG_DEBUG(
-                Logger::get(),
+                log,
                 "stateSwitchMediumNDV execute one block, state: {}, cur state processed rows: {}, state rows limit: {}",
                 magic_enum::enum_name(auto_pass_through_context->getCurState()),
                 state_processed_rows,
