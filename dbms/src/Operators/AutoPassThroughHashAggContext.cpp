@@ -105,9 +105,7 @@ Block AutoPassThroughHashAggContext::getData()
 
 void AutoPassThroughHashAggContext::trySwitchFromInitState()
 {
-    // todo check data.size?
-    // todo check if expand happened?
-    if (many_data[0]->bytesCount() > 1024 * 1024)
+    if (many_data[0]->bytesCount() > 2 * 1024 * 1024)
         state = State::Adjust;
 }
 
@@ -158,7 +156,6 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
     auto header = aggregator->getHeader(/*final*/ true);
     Block new_block;
     const auto & aggregate_descriptions = aggregator->getParams().aggregates;
-    // todo or put inside for loop?
     Arena arena;
     for (size_t col_idx = 0; col_idx < block.columns(); ++col_idx)
     {
@@ -173,20 +170,21 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
         for (size_t agg_idx = 0; agg_idx < aggregate_descriptions.size(); ++agg_idx)
         {
             const auto & desc = aggregate_descriptions[agg_idx];
-            // todo check if same with desc
-            const auto & inst = agg_process_info->aggregate_functions_instructions[agg_idx];
             if (desc.column_name == col_name)
             {
+                // Assume agg descriptions and agg instructions are corresponding to one by one.
+                // This is assured when generating agg instructions.
+                const auto & inst = agg_process_info->aggregate_functions_instructions[agg_idx];
+                RUNTIME_CHECK(desc.function->getName() == inst.that->getName());
                 auto new_col = desc.function->getReturnType()->createColumn();
                 new_col->reserve(block.rows());
-                auto * place = new char[desc.function->sizeOfData()];
+                auto * place = arena.alignedAlloc(desc.function->sizeOfData(), desc.function->alignOfData());
                 for (size_t row_idx = 0; row_idx < block.rows(); ++row_idx)
                 {
                     desc.function->create(place);
                     inst.that->add(place, inst.batch_arguments, row_idx, &arena);
                     desc.function->insertResultInto(place, *new_col, &arena);
                 }
-                delete[] place;
                 new_block.insert(
                     col_idx,
                     ColumnWithTypeAndName{std::move(new_col), desc.function->getReturnType(), desc.column_name});
@@ -206,12 +204,8 @@ void AutoPassThroughHashAggContext::makeFullSelective(Block & block)
 
     RUNTIME_CHECK(!block.info.selective);
     auto selective = std::make_shared<std::vector<UInt64>>(block.rows());
+    std::iota(selective->begin(), selective->end(), 0);
     block.info.selective = selective;
-    // todo maybe better impl
-    for (size_t i = 0; i < selective->size(); ++i)
-    {
-        (*selective)[i] = i;
-    }
 }
 
 Block checkSelective(Block block)
