@@ -87,13 +87,8 @@ Block AutoPassThroughHashAggContext::getData()
 {
     if unlikely (!already_start_to_get_data)
     {
-        const auto & params = aggregator->getParams();
-        if (statistics.total_handled_rows == 0 && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        {
-            agg_process_info->resetBlock(params.src_header);
-            aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
-        }
-
+        // No need to handle situation when agg keys_size is zero.
+        // Shouldn't use auto pass through hashagg in that case.
         already_start_to_get_data = true;
         RUNTIME_CHECK(!merging_buckets);
         merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, /*final=*/true, /*max_threads=*/1);
@@ -215,7 +210,7 @@ void AutoPassThroughHashAggContext::makeFullSelective(Block & block)
     block.info.selective = selective;
 }
 
-Block checkSelective(Block block)
+Block checkSelective(const Block & block)
 {
     RUNTIME_CHECK(!block || block.info.selective);
     return block;

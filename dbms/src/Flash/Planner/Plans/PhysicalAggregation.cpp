@@ -46,7 +46,9 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
 {
     RUNTIME_CHECK(child);
 
-    auto_pass_through_agg_flag = aggregation.auto_pass_through();
+    // When agg key size is zero, no need to use auto pass through.
+    // Because all input rows will be aggregated into one row.
+    auto_pass_through_agg_flag = aggregation.auto_pass_through() && aggregation.group_by_size() != 0;
 
     if (unlikely(aggregation.group_by_size() == 0 && aggregation.agg_func_size() == 0))
     {

@@ -136,9 +136,9 @@ public:
              toNullableVec<String>("s3", join_r_s3)});
 
         context.addMockTable(
-                {"test_db", "auto_pass_through_empty_tbl"},
-                {{"col1", TiDB::TP::TypeLong}},
-                {toNullableVec<Int32>("col1", {})});
+            {"test_db", "auto_pass_through_empty_tbl"},
+            {{"col1", TiDB::TP::TypeLong}},
+            {toNullableVec<Int32>("col1", {})});
     }
 
     void addOneGather(
@@ -186,6 +186,7 @@ public:
     {
         void init(MockDAGRequestContext & context)
         {
+            // todo check if works
             context.context->getSettingsRef().max_block_size = block_size;
 
             if (inited)
@@ -1682,30 +1683,26 @@ CATCH
 TEST_F(ComputeServerRunner, autoPassThroughEmptyTable)
 try
 {
-            std::vector<String> expected_strings = {
-                R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
+    std::vector<String> expected_strings = {
+        R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
  aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
   table_scan_0 | {<0, Long>}
 )",
-                R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
+        R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
  aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
   table_scan_0 | {<0, Long>}
 )",
-                R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>}
+        R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>}
  aggregation_1 | group_by: {}, agg_func: {sum(<0, Longlong>)}
   exchange_receiver_5 | type:PassThrough, {<0, Longlong>}
 )"};
-            startServers(2);
-            auto expected_cols = {toVec<Int64>("count", {0})};
+    startServers(2);
+    auto expected_cols = {toVec<UInt64>("count", {0})};
     ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-            context.scan("test_db", "auto_pass_through_empty_tbl")
-                .aggregation(
-                    {makeASTFunction("count", col("col1"))},
-                    {},
-                    0,
-                    true),
-                expected_strings,
-                expected_cols);
+        context.scan("test_db", "auto_pass_through_empty_tbl")
+            .aggregation({makeASTFunction("count", col("col1"))}, {}, 0, true),
+        expected_strings,
+        expected_cols);
 }
 CATCH
 
@@ -1719,9 +1716,10 @@ CATCH
 TEST_F(ComputeServerRunner, autoPassThroughIntegrationTest)
 try
 {
-    auto workloads = std::vector{auto_pass_through_test_data.low_ndv_tbl_name,
-            auto_pass_through_test_data.high_ndv_tbl_name,
-            auto_pass_through_test_data.medium_ndv_tbl_name};
+    auto workloads = std::vector{
+        auto_pass_through_test_data.low_ndv_tbl_name,
+        auto_pass_through_test_data.high_ndv_tbl_name,
+        auto_pass_through_test_data.medium_ndv_tbl_name};
     for (const auto & tbl_name : workloads)
     {
         const String db_name = auto_pass_through_test_data.db_name;

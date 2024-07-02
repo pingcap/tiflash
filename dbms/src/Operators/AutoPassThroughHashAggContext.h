@@ -42,6 +42,7 @@ public:
         many_data[0] = std::make_shared<AggregatedDataVariants>();
         agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
         RUNTIME_CHECK(adjust_row_limit > 1024 && other_state_row_limit > 1024);
+        RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
     }
 
     ~AutoPassThroughHashAggContext() { statistics.log(log); }
@@ -166,5 +167,5 @@ private:
 
 using AutoPassThroughHashAggContextPtr = std::shared_ptr<AutoPassThroughHashAggContext>;
 
-Block checkSelective(Block block);
+Block checkSelective(const Block & block);
 } // namespace DB
