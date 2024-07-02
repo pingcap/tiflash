@@ -1773,7 +1773,8 @@ try
     // Expect InitState
     ASSERT_EQ(auto_pass_through_context->getCurState(), AutoPassThroughHashAggContext::State::Init);
     size_t init_consumed_block = 0;
-    while (auto_pass_through_context->getCurState() == AutoPassThroughHashAggContext::State::Init && !random_blocks.empty())
+    while (auto_pass_through_context->getCurState() == AutoPassThroughHashAggContext::State::Init
+           && !random_blocks.empty())
     {
         ++init_consumed_block;
         auto_pass_through_context->onBlock(random_blocks.front());

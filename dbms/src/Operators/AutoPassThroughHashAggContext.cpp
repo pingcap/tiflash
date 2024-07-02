@@ -90,6 +90,13 @@ Block AutoPassThroughHashAggContext::getData()
         already_start_to_get_data = true;
         RUNTIME_CHECK(!merging_buckets);
         merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, /*final=*/true, /*max_threads=*/1);
+
+        const auto & params = aggregator->getParams();
+        if (many_data[0]->empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
+        {
+            agg_process_info->resetBlock(params.src_header);
+            aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
+        }
     }
 
     // merging_buckets still can be nullptr when HashMap is empty.
@@ -99,7 +106,6 @@ Block AutoPassThroughHashAggContext::getData()
         makeFullSelective(block);
         return block;
     }
-    // todo handle no data, no keys, must return single row
     return {};
 }
 
