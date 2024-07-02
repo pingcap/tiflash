@@ -114,10 +114,15 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
                 LOG_INFO(log, "{}", str);
         }
     }
+
+    fetchProxyConfig(proxy_helper);
 }
 
 void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
 {
+    if (proxy_config_summary.valid) {
+        LOG_INFO(log, "Skip duplicated parsing proxy config");
+    }
     // Try fetch proxy's config as a json string
     if (proxy_helper && proxy_helper->fn_get_config_json)
     {
