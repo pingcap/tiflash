@@ -134,6 +134,11 @@ public:
             {toNullableVec<Int32>("s1", join_r_s1),
              toNullableVec<String>("s2", join_r_s2),
              toNullableVec<String>("s3", join_r_s3)});
+
+        context.addMockTable(
+                {"test_db", "auto_pass_through_empty_tbl"},
+                {{"col1", TiDB::TP::TypeLong}},
+                {toNullableVec<Int32>("col1", {})});
     }
 
     void addOneGather(
@@ -1674,6 +1679,36 @@ try
 }
 CATCH
 
+TEST_F(ComputeServerRunner, autoPassThroughEmptyTable)
+try
+{
+            std::vector<String> expected_strings = {
+                R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
+ aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
+  table_scan_0 | {<0, Long>}
+)",
+                R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
+ aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
+  table_scan_0 | {<0, Long>}
+)",
+                R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>}
+ aggregation_1 | group_by: {}, agg_func: {sum(<0, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Longlong>}
+)"};
+            startServers(2);
+            auto expected_cols = {toVec<Int64>("count", {0})};
+    ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context.scan("test_db", "auto_pass_through_empty_tbl")
+                .aggregation(
+                    {makeASTFunction("count", col("col1"))},
+                    {},
+                    0,
+                    true),
+                expected_strings,
+                expected_cols);
+}
+CATCH
+
 // todo using func in DAGExpressionAnalyzer
 // todo add test for params.aggregates_size == 0
 // todo add case for different agg func/different group by key of different type
@@ -1684,8 +1719,9 @@ CATCH
 TEST_F(ComputeServerRunner, autoPassThroughIntegrationTest)
 try
 {
-    // auto workloads = std::vector{low_ndv_tbl_name, high_ndv_tbl_name, medium_ndv_tbl_name};
-    auto workloads = std::vector{auto_pass_through_test_data.medium_ndv_tbl_name};
+    auto workloads = std::vector{auto_pass_through_test_data.low_ndv_tbl_name,
+            auto_pass_through_test_data.high_ndv_tbl_name,
+            auto_pass_through_test_data.medium_ndv_tbl_name};
     for (const auto & tbl_name : workloads)
     {
         const String db_name = auto_pass_through_test_data.db_name;
@@ -1726,7 +1762,6 @@ try
 
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
-        LOG_DEBUG(Logger::get(), "gjt debug beg ComputeServerRunner");
         {
             WRAP_FOR_SERVER_TEST_BEGIN
             std::vector<String> expected_strings = {
