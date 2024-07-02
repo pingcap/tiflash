@@ -3296,6 +3296,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         segment_snap->stable->clearColumnCaches();
     }
 
+    LOG_DEBUG(log, "columns_to_read={}", columns_to_read);
+
     auto stream = filter && filter->hasLMFilter() //
         ? getLateMaterializationStream(
             std::move(bitmap_filter),

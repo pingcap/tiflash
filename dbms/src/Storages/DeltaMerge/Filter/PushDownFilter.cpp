@@ -232,7 +232,8 @@ QueryFilterPtr QueryFilter::build(
     }
     LOG_DEBUG(
         log,
-        "extra_cast={}, before_where={}, columns_to_read={} => {}, project={}, ",
+        "filter_columns={}, extra_cast={}, before_where={}, columns_to_read={} => {}, project={}",
+        *filter_columns,
         extra_cast ? extra_cast->dumpActions() : "null",
         before_where->dumpActions(),
         columns_to_read,
