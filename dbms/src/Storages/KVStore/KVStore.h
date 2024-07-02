@@ -152,6 +152,7 @@ public:
     void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
+    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
@@ -281,7 +282,6 @@ private:
     };
     StoreMeta & getStore();
     const StoreMeta & getStore() const;
-    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
     //  ---- Raft Snapshot ----  //
 
