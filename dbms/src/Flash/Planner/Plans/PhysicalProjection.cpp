@@ -45,7 +45,6 @@ PhysicalPlanNodePtr PhysicalProjection::build(
         const auto & col = project_actions->getSampleBlock().getByName(expr_name);
         schema.emplace_back(col.name, col.type);
     }
-
     auto physical_projection = std::make_shared<PhysicalProjection>(
         executor_id,
         schema,
@@ -53,7 +52,8 @@ PhysicalPlanNodePtr PhysicalProjection::build(
         log->identifier(),
         child,
         "projection",
-        project_actions);
+        project_actions,
+        /*after_auto_pass_through_hashagg*/ false);
     return physical_projection;
 }
 
@@ -61,6 +61,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     const Context & context,
     const LoggerPtr & log,
     const String & column_prefix,
+    bool after_auto_pass_through_hashagg,
     const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
@@ -86,7 +87,8 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
         log->identifier(),
         child,
         "final projection",
-        project_actions);
+        project_actions,
+        after_auto_pass_through_hashagg);
     // Final Projection is not a tidb operator, so no need to record profile streams.
     physical_projection->notTiDBOperator();
     return physical_projection;
@@ -99,6 +101,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
     bool keep_session_timezone_info,
+    bool after_auto_pass_through_hashagg,
     const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
@@ -132,7 +135,8 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         log->identifier(),
         child,
         "final projection",
-        project_actions);
+        project_actions,
+        after_auto_pass_through_hashagg);
     // Final Projection is not a tidb operator, so no need to record profile streams.
     physical_projection->notTiDBOperator();
     return physical_projection;
@@ -142,7 +146,7 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
 {
     child->buildBlockInputStream(pipeline, context, max_streams);
 
-    executeExpression(pipeline, project_actions, log, extra_info);
+    executeExpression(pipeline, project_actions, log, extra_info, after_auto_pass_through_hashagg);
 }
 
 void PhysicalProjection::buildPipelineExecGroupImpl(
@@ -151,7 +155,7 @@ void PhysicalProjection::buildPipelineExecGroupImpl(
     Context & /*context*/,
     size_t /*concurrency*/)
 {
-    executeExpression(exec_context, group_builder, project_actions, log);
+    executeExpression(exec_context, group_builder, project_actions, log, after_auto_pass_through_hashagg);
 }
 
 void PhysicalProjection::finalizeImpl(const Names & parent_require)

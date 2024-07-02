@@ -170,11 +170,13 @@ public:
     DAGRequestBuilder & aggregation(
         ASTPtr agg_func,
         ASTPtr group_by_expr,
-        uint64_t fine_grained_shuffle_stream_count = 0);
+        uint64_t fine_grained_shuffle_stream_count = 0,
+        bool auto_pass_through = false);
     DAGRequestBuilder & aggregation(
         MockAstVec agg_funcs,
         MockAstVec group_by_exprs,
-        uint64_t fine_grained_shuffle_stream_count = 0);
+        uint64_t fine_grained_shuffle_stream_count = 0,
+        bool auto_pass_through = false);
 
     // window
     DAGRequestBuilder & window(
@@ -222,7 +224,8 @@ private:
     DAGRequestBuilder & buildAggregation(
         ASTPtr agg_funcs,
         ASTPtr group_by_exprs,
-        uint64_t fine_grained_shuffle_stream_count = 0);
+        uint64_t fine_grained_shuffle_stream_count = 0,
+        bool auto_pass_through = false);
     DAGRequestBuilder & buildExchangeReceiver(
         const String & exchange_name,
         const MockColumnInfoVec & columns,

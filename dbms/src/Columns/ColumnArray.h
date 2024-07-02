@@ -85,6 +85,8 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+        const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src_, size_t n) override;
@@ -144,9 +146,19 @@ public:
     {
         return scatterImpl<ColumnArray>(num_columns, selector);
     }
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
+    {
+        return scatterImpl<ColumnArray>(num_columns, selector, selective);
+    }
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         scatterToImpl<ColumnArray>(columns, selector);
+    }
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
+    {
+        scatterToImpl<ColumnArray>(columns, selector, selective);
     }
     void gather(ColumnGathererStream & gatherer_stream) override;
 

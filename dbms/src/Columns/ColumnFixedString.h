@@ -109,6 +109,8 @@ public:
         const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+        const override;
 
     int compareAt(size_t p1, size_t p2, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
@@ -131,14 +133,25 @@ public:
         return scatterImpl<ColumnFixedString>(num_columns, selector);
     }
 
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
+    {
+        return scatterImpl<ColumnFixedString>(num_columns, selector, selective);
+    }
+
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         scatterToImpl<ColumnFixedString>(columns, selector);
     }
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override
+    {
+        scatterToImpl<ColumnFixedString>(columns, selector, selective);
+    }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    void reserve(size_t size) override { chars.reserve(n * size); };
+    void reserve(size_t size) override { chars.reserve(n * size); }
 
     void getExtremes(Field & min, Field & max) const override;
 

@@ -98,12 +98,31 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+        const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
+
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override;
+    template <bool selective_block>
+    MutableColumns scatterImplForColumnTuple(
+        ColumnIndex num_columns,
+        const Selector & selector,
+        const BlockSelectivePtr & selective) const;
+
     void scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelectivePtr &)
+        const override;
+    template <bool selective_block>
+    void scatterToImplForColumnTuple(
+        ScatterColumns & scatterColumns,
+        const Selector & selector,
+        const BlockSelectivePtr & selective) const;
+
     void gather(ColumnGathererStream & gatherer_stream) override;
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
     void getExtremes(Field & min, Field & max) const override;

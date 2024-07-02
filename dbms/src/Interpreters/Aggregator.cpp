@@ -652,7 +652,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
   * (Probably because after the inline of this function, more internal functions no longer be inlined.)
   * Inline does not make sense, since the inner loop is entirely inside this function.
   */
-template <typename Method>
+template <bool collect_hit_rate, bool only_lookup, typename Method>
 void NO_INLINE Aggregator::executeImpl(
     Method & method,
     Arena * aggregates_pool,
@@ -661,11 +661,11 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-    executeImplBatch(method, state, aggregates_pool, agg_process_info);
+    executeImplBatch<collect_hit_rate, only_lookup>(method, state, aggregates_pool, agg_process_info);
 }
 
-template <typename Method>
-std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
+template <bool only_lookup, typename Method>
+std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
     Method & method,
     typename Method::State & state,
     size_t index,
@@ -674,7 +674,10 @@ std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
 {
     try
     {
-        return state.emplaceKey(method.data, index, aggregates_pool, sort_key_containers);
+        if constexpr (only_lookup)
+            return state.findKey(method.data, index, aggregates_pool, sort_key_containers);
+        else
+            return state.emplaceKey(method.data, index, aggregates_pool, sort_key_containers);
     }
     catch (ResizeException &)
     {
@@ -682,13 +685,16 @@ std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
     }
 }
 
-template <typename Method>
+template <bool collect_hit_rate, bool only_lookup, typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
+    // collect_hit_rate and only_lookup cannot be true at the same time.
+    static_assert(!(collect_hit_rate && only_lookup));
+
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
     size_t agg_size = agg_process_info.end_row - agg_process_info.start_row;
@@ -704,11 +710,29 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         AggregateDataPtr place = aggregates_pool->alloc(0);
         for (size_t i = 0; i < agg_size; ++i)
         {
-            auto emplace_result_hold
-                = emplaceKey(method, state, agg_process_info.start_row, *aggregates_pool, sort_key_containers);
+            auto emplace_result_hold = emplaceOrFindKey<only_lookup>(
+                method,
+                state,
+                agg_process_info.start_row,
+                *aggregates_pool,
+                sort_key_containers);
             if likely (emplace_result_hold.has_value())
             {
-                emplace_result_hold.value().setMapped(place);
+                if constexpr (collect_hit_rate)
+                {
+                    ++agg_process_info.hit_row_cnt;
+                }
+
+                if constexpr (only_lookup)
+                {
+                    auto & emplace_result = emplace_result_hold.value();
+                    if (!emplace_result.isFound())
+                        agg_process_info.not_found_rows.push_back(i);
+                }
+                else
+                {
+                    emplace_result_hold.value().setMapped(place);
+                }
                 ++agg_process_info.start_row;
             }
             else
@@ -741,6 +765,13 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
                 aggregates_pool);
         }
         agg_process_info.start_row += agg_size;
+
+        // For key8, assume all rows are hit. No need to do state switch for auto pass through hashagg.
+        // Because HashMap of key8 is small.
+        if constexpr (collect_hit_rate)
+            agg_process_info.hit_row_cnt = agg_size;
+        if constexpr (only_lookup)
+            RUNTIME_CHECK_MSG(false, "Aggregator only_lookup should be false for AggregationMethod_key8");
         return;
     }
 
@@ -753,7 +784,8 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        auto emplace_result_holder = emplaceKey(method, state, i, *aggregates_pool, sort_key_containers);
+        auto emplace_result_holder
+            = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
         if unlikely (!emplace_result_holder.has_value())
         {
             LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
@@ -762,19 +794,38 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
         auto & emplace_result = emplace_result_holder.value();
 
-        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-        if (emplace_result.isInserted())
+        if constexpr (only_lookup)
         {
-            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-            emplace_result.setMapped(nullptr);
-
-            aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(aggregate_data);
-
-            emplace_result.setMapped(aggregate_data);
+            if (emplace_result.isFound())
+            {
+                aggregate_data = emplace_result.getMapped();
+            }
+            else
+            {
+                agg_process_info.not_found_rows.push_back(i);
+            }
         }
         else
-            aggregate_data = emplace_result.getMapped();
+        {
+            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+            if (emplace_result.isInserted())
+            {
+                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                emplace_result.setMapped(nullptr);
+
+                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(aggregate_data);
+
+                emplace_result.setMapped(aggregate_data);
+            }
+            else
+            {
+                aggregate_data = emplace_result.getMapped();
+
+                if constexpr (collect_hit_rate)
+                    ++agg_process_info.hit_row_cnt;
+            }
+        }
 
         places[i - agg_process_info.start_row] = aggregate_data;
         processed_rows = i;
@@ -902,6 +953,31 @@ void Aggregator::AggProcessInfo::prepareForAgg()
 
 bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
 {
+    return executeOnBlockImpl<false, false>(agg_process_info, result, thread_num);
+}
+
+bool Aggregator::executeOnBlockCollectHitRate(
+    AggProcessInfo & agg_process_info,
+    AggregatedDataVariants & result,
+    size_t thread_num)
+{
+    return executeOnBlockImpl<true, false>(agg_process_info, result, thread_num);
+}
+
+bool Aggregator::executeOnBlockOnlyLookup(
+    AggProcessInfo & agg_process_info,
+    AggregatedDataVariants & result,
+    size_t thread_num)
+{
+    return executeOnBlockImpl<false, true>(agg_process_info, result, thread_num);
+}
+
+template <bool collect_hit_rate, bool only_lookup>
+bool Aggregator::executeOnBlockImpl(
+    AggProcessInfo & agg_process_info,
+    AggregatedDataVariants & result,
+    size_t thread_num)
+{
     assert(!result.need_spill);
 
     if (is_cancelled())
@@ -945,7 +1021,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
 #define M(NAME, IS_TWO_LEVEL)                                              \
     case AggregationMethodType(NAME):                                      \
     {                                                                      \
-        executeImpl(                                                       \
+        executeImpl<collect_hit_rate, only_lookup>(                        \
             *ToAggregationMethodPtr(NAME, result.aggregation_method_impl), \
             result.aggregates_pool,                                        \
             agg_process_info,                                              \
@@ -1946,21 +2022,21 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
 BlocksList Aggregator::prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = data_variants.size();
-#define M(NAME, skip_convert_key)                                                                    \
-    case AggregationMethodType(NAME):                                                                \
-    {                                                                                                \
-        auto & tmp_method = *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl);    \
-        auto & tmp_data = ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl)->data; \
-        convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_convert_key>(             \
-            tmp_method,                                                                              \
-            tmp_data,                                                                                \
-            key_sizes,                                                                               \
-            key_columns_vec,                                                                         \
-            aggregate_columns_vec,                                                                   \
-            final_aggregate_columns_vec,                                                             \
-            data_variants.aggregates_pool,                                                           \
-            final_);                                                                                 \
-        break;                                                                                       \
+#define M(NAME, skip_convert_key)                                                                      \
+    case AggregationMethodType(NAME):                                                                  \
+    {                                                                                                  \
+        auto & tmp_method = *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl);      \
+        auto & tmp_data = ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl) -> data; \
+        convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_convert_key>(               \
+            tmp_method,                                                                                \
+            tmp_data,                                                                                  \
+            key_sizes,                                                                                 \
+            key_columns_vec,                                                                           \
+            aggregate_columns_vec,                                                                     \
+            final_aggregate_columns_vec,                                                               \
+            data_variants.aggregates_pool,                                                             \
+            final_);                                                                                   \
+        break;                                                                                         \
     }
 
 #define M_skip_convert_key(NAME) M(NAME, true)

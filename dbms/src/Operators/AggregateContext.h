@@ -94,7 +94,7 @@ public:
 
 private:
     std::unique_ptr<Aggregator> aggregator;
-    bool keys_size = false;
+    size_t keys_size = 0;
     bool empty_result_for_aggregation_by_empty_set = false;
 
     /**

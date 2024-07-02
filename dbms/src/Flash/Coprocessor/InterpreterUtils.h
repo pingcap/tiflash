@@ -56,17 +56,23 @@ ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
     const NamesWithAliases & project_cols);
 
+// When after_auto_pass_through_hashagg is true, need to check block.info.selective and copy block.info.
+// There are only two situations that after_auto_pass_through_hashagg will be true:
+// 1. The expressions in the final Projection generated under the ExchangeSender.
+// 2. The expressions following Aggregation(actions_after_aggregation).
 void executeExpression(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log,
-    const String & extra_info = "");
+    const String & extra_info = "",
+    bool after_auto_pass_through_hashagg = false);
 
 void executeExpression(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const ExpressionActionsPtr & expr_actions,
-    const LoggerPtr & log);
+    const LoggerPtr & log,
+    bool after_auto_pass_through_hashagg = false);
 
 void orderStreams(
     DAGPipeline & pipeline,

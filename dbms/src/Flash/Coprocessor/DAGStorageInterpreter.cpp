@@ -658,7 +658,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         {
             auto & builder = group_builder.getCurBuilder(i);
             builder.appendTransformOp(
-                std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
+                std::make_unique<ExpressionTransformOp<false>>(exec_context, log->identifier(), extra_cast));
         }
     }
 }
@@ -671,7 +671,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(DAGPipeline & pipeline, DA
     {
         for (auto & stream : pipeline.streams)
         {
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+            stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
         }
     }

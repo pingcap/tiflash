@@ -74,13 +74,11 @@ void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollat
 {
     auto s = data.size();
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == s,
+        "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+        s,
+        hash.getData().size());
 
     const T * begin = data.data();
     const T * end = begin + s;
@@ -94,6 +92,33 @@ void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollat
             *hash_data = wideIntHashCRC32(*begin, *hash_data);
 
         ++begin;
+        ++hash_data;
+    }
+}
+
+template <typename T>
+void ColumnVector<T>::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr &,
+    String &,
+    const BlockSelectivePtr & selective_ptr) const
+{
+    RUNTIME_CHECK_MSG(
+        selective_ptr->size() == hash.getData().size(),
+        "Size of WeakHash32({}) doesn't match size of selective column({})",
+        selective_ptr->size(),
+        hash.getData().size());
+
+    const T * begin = data.data();
+    UInt32 * hash_data = hash.getData().data();
+
+    for (auto row : *selective_ptr)
+    {
+        if constexpr (is_fit_register<T>)
+            *hash_data = intHashCRC32(*(begin + row), *hash_data);
+        else
+            *hash_data = wideIntHashCRC32(*(begin + row), *hash_data);
+
         ++hash_data;
     }
 }

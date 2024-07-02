@@ -220,7 +220,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         BlockInputStreamPtr in = ins[0];
         in = std::make_shared<FilterBlockInputStream>(in, before_where, filter_column_name, "test");
         in->setExtraInfo("push down filter");
-        in = std::make_shared<ExpressionBlockInputStream>(in, project_after_where, "test");
+        in = std::make_shared<ExpressionBlockInputStream<false>>(in, project_after_where, "test");
         in->setExtraInfo("projection after push down filter");
         return in;
     }

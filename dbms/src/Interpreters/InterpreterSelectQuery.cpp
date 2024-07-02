@@ -449,8 +449,10 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             if (expressions.has_join)
             {
                 for (auto & stream : pipeline.streams)
-                    stream
-                        = std::make_shared<ExpressionBlockInputStream>(stream, expressions.before_join, /*req_id=*/"");
+                    stream = std::make_shared<ExpressionBlockInputStream<false>>(
+                        stream,
+                        expressions.before_join,
+                        /*req_id=*/"");
             }
 
             if (expressions.has_where)
@@ -858,7 +860,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
     if (from_stage == QueryProcessingStage::FetchColumns && alias_actions)
     {
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, alias_actions, /*req_id=*/"");
+            stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, alias_actions, /*req_id=*/"");
         });
     }
 
@@ -884,7 +886,7 @@ void InterpreterSelectQuery::executeAggregation(
     bool final)
 {
     pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, /*req_id=*/"");
+        stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, expression, /*req_id=*/"");
     });
 
     Names key_names;
@@ -1045,7 +1047,7 @@ void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const Expression
 void InterpreterSelectQuery::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression) // NOLINT
 {
     pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, /*req_id=*/"");
+        stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, expression, /*req_id=*/"");
     });
 }
 
@@ -1142,7 +1144,7 @@ void InterpreterSelectQuery::executeMergeSorted(Pipeline & pipeline)
 void InterpreterSelectQuery::executeProjection(Pipeline & pipeline, const ExpressionActionsPtr & expression) // NOLINT
 {
     pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, expression, /*req_id=*/"");
+        stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, expression, /*req_id=*/"");
     });
 }
 

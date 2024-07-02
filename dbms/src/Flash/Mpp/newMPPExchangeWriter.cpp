@@ -24,7 +24,7 @@ namespace DB
 {
 namespace
 {
-template <typename ExchangeWriterPtr>
+template <typename ExchangeWriterPtr, bool selective_block>
 std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
     const ExchangeWriterPtr & writer,
     const std::vector<Int64> & partition_col_ids,
@@ -46,6 +46,8 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
 
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
+        // selective_block is only used for 1st HashAgg, so only for hash partition or fine grained shuffle.
+        RUNTIME_CHECK(!selective_block);
         return std::make_unique<StreamingDAGResponseWriter<ExchangeWriterPtr>>(
             writer,
             records_per_chunk,
@@ -63,7 +65,7 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
         {
             if (enable_fine_grained_shuffle)
             {
-                return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
+                return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
@@ -75,7 +77,7 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
             }
             else
             {
-                return std::make_unique<HashPartitionWriter<ExchangeWriterPtr>>(
+                return std::make_unique<HashPartitionWriter<ExchangeWriterPtr, selective_block>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
@@ -88,6 +90,8 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
         else
         {
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
+            // selective_block is only used for 1st HashAgg, so only for hash partition or fine grained shuffle.
+            RUNTIME_CHECK(!selective_block);
             return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
                 chosen_batch_send_min_limit,
@@ -113,44 +117,75 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     tipb::CompressionMode compression_mode,
     Int64 batch_send_min_limit_compression,
     const String & req_id,
-    bool is_async)
+    bool is_async,
+    bool selective_block)
 {
     RUNTIME_CHECK_MSG(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, "exchange writer only run in MPP");
     if (is_async)
     {
         auto writer
             = std::make_shared<AsyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
-        return buildMPPExchangeWriter(
-            writer,
-            partition_col_ids,
-            partition_col_collators,
-            exchange_type,
-            records_per_chunk,
-            batch_send_min_limit,
-            dag_context,
-            enable_fine_grained_shuffle,
-            fine_grained_shuffle_stream_count,
-            fine_grained_shuffle_batch_size,
-            compression_mode,
-            batch_send_min_limit_compression);
+        if (selective_block)
+            return buildMPPExchangeWriter<decltype(writer), true>(
+                writer,
+                partition_col_ids,
+                partition_col_collators,
+                exchange_type,
+                records_per_chunk,
+                batch_send_min_limit,
+                dag_context,
+                enable_fine_grained_shuffle,
+                fine_grained_shuffle_stream_count,
+                fine_grained_shuffle_batch_size,
+                compression_mode,
+                batch_send_min_limit_compression);
+        else
+            return buildMPPExchangeWriter<decltype(writer), false>(
+                writer,
+                partition_col_ids,
+                partition_col_collators,
+                exchange_type,
+                records_per_chunk,
+                batch_send_min_limit,
+                dag_context,
+                enable_fine_grained_shuffle,
+                fine_grained_shuffle_stream_count,
+                fine_grained_shuffle_batch_size,
+                compression_mode,
+                batch_send_min_limit_compression);
     }
     else
     {
         auto writer
             = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
-        return buildMPPExchangeWriter(
-            writer,
-            partition_col_ids,
-            partition_col_collators,
-            exchange_type,
-            records_per_chunk,
-            batch_send_min_limit,
-            dag_context,
-            enable_fine_grained_shuffle,
-            fine_grained_shuffle_stream_count,
-            fine_grained_shuffle_batch_size,
-            compression_mode,
-            batch_send_min_limit_compression);
+        if (selective_block)
+            return buildMPPExchangeWriter<decltype(writer), true>(
+                writer,
+                partition_col_ids,
+                partition_col_collators,
+                exchange_type,
+                records_per_chunk,
+                batch_send_min_limit,
+                dag_context,
+                enable_fine_grained_shuffle,
+                fine_grained_shuffle_stream_count,
+                fine_grained_shuffle_batch_size,
+                compression_mode,
+                batch_send_min_limit_compression);
+        else
+            return buildMPPExchangeWriter<decltype(writer), false>(
+                writer,
+                partition_col_ids,
+                partition_col_collators,
+                exchange_type,
+                records_per_chunk,
+                batch_send_min_limit,
+                dag_context,
+                enable_fine_grained_shuffle,
+                fine_grained_shuffle_stream_count,
+                fine_grained_shuffle_batch_size,
+                compression_mode,
+                batch_send_min_limit_compression);
     }
 }
 } // namespace DB

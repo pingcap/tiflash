@@ -31,6 +31,7 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
     const LoggerPtr & log,
     const tipb::ExchangeSender & exchange_sender,
     const FineGrainedShuffle & fine_grained_shuffle,
+    bool auto_pass_through_agg_flag,
     const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
@@ -48,7 +49,8 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
         partition_col_ids,
         partition_col_collators,
         exchange_sender.tp(),
-        exchange_sender.compression());
+        exchange_sender.compression(),
+        auto_pass_through_agg_flag);
     // executeUnion will be call after sender.transform, so don't need to restore concurrency.
     physical_exchange_sender->disableRestoreConcurrency();
     return physical_exchange_sender;
@@ -91,7 +93,9 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             fine_grained_shuffle.batch_size,
             compression_mode,
             context.getSettingsRef().batch_send_min_limit_compression,
-            log->identifier());
+            log->identifier(),
+            /*is_async=*/false,
+            /*selective_block=*/auto_pass_through_agg);
         stream
             = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
@@ -127,7 +131,8 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
             compression_mode,
             context.getSettingsRef().batch_send_min_limit_compression,
             log->identifier(),
-            /*is_async=*/true);
+            /*is_async=*/true,
+            /*selective_block=*/auto_pass_through_agg);
         builder.setSinkOp(
             std::make_unique<ExchangeSenderSinkOp>(exec_context, log->identifier(), std::move(response_writer)));
     });

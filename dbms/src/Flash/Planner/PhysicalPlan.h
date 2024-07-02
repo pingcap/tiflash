@@ -52,7 +52,7 @@ private:
 
     void build(const tipb::Executor * executor);
 
-    void buildFinalProjection(const String & column_prefix, bool is_root);
+    void buildFinalProjection(const String & column_prefix, bool is_root, bool after_auto_pass_through_hashagg);
 
     PhysicalPlanNodePtr popBack();
 
@@ -71,5 +71,7 @@ private:
     Context & context;
 
     LoggerPtr log;
+
+    bool after_auto_pass_through_hashagg = false;
 };
 } // namespace DB
