@@ -169,17 +169,31 @@ TMTContext::TMTContext(
     etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
 }
 
-void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper) {
+void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
+{
     kvstore->fetchProxyConfig(proxy_helper);
     if (!raftproxy_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
         && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        if (kvstore->getProxyConfigSummay().valid) {
-            LOG_INFO(Logger::get(), "Build s3gc manager from proxy's conf engine_addr={}", kvstore->getProxyConfigSummay().engine_addr);
-            s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ kvstore->getProxyConfigSummay().engine_addr, etcd_client);
-        } else {
-            LOG_INFO(Logger::get(), "Build s3gc manager from tiflash's conf engine_addr={}", raftproxy_config.advertise_engine_addr);
-            s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raftproxy_config.advertise_engine_addr, etcd_client);
+        if (kvstore->getProxyConfigSummay().valid)
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from proxy's conf engine_addr={}",
+                kvstore->getProxyConfigSummay().engine_addr);
+            s3gc_owner = OwnerManager::createS3GCOwner(
+                context,
+                /*id*/ kvstore->getProxyConfigSummay().engine_addr,
+                etcd_client);
+        }
+        else
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from tiflash's conf engine_addr={}",
+                raftproxy_config.advertise_engine_addr);
+            s3gc_owner
+                = OwnerManager::createS3GCOwner(context, /*id*/ raftproxy_config.advertise_engine_addr, etcd_client);
         }
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);

@@ -16,12 +16,12 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Server/RaftConfigParser.h>
 #include <Storages/GCManager.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTStorages.h>
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
-#include <Server/RaftConfigParser.h>
 
 namespace DB
 {
