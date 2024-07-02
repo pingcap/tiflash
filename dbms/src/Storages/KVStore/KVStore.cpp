@@ -73,6 +73,7 @@ KVStore::KVStore(Context & context)
     {
         LOG_WARNING(log, "JointThreadInfoJeallocMap is not inited from context");
     }
+    fetchProxyConfig(proxy_helper);
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -113,8 +114,6 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
                 LOG_INFO(log, "{}", str);
         }
     }
-
-    fetchProxyConfig(proxy_helper);
 }
 
 void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
