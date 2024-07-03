@@ -101,21 +101,22 @@ HashJoin::HashJoin(
     const NamesAndTypes & output_columns_,
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
-    size_t max_block_size_)
+    const Settings & settings_)
     : kind(kind_)
     , join_req_id(req_id)
+    , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
-    , max_block_size(max_block_size_)
+    , settings(settings_)
     , log(Logger::get(join_req_id))
     , output_columns(output_columns_)
 {
     RUNTIME_ASSERT(key_names_left.size() == key_names_right.size());
 }
 
-void HashJoin::initRowSchemaAndHashJoinMethod()
+void HashJoin::initRowLayoutAndHashJoinMethod()
 {
     size_t keys_size = key_names_right.size();
     if (keys_size == 0)
@@ -137,9 +138,9 @@ void HashJoin::initRowSchemaAndHashJoinMethod()
             new_key_names_left.emplace_back(key_names_left[i]);
             new_key_names_right.emplace_back(key_names_right[i]);
             raw_key_flag[i] = true;
-            row_schema.key_column_indexes.push_back(key_columns[i].index);
-            row_schema.raw_key_column_indexes.push_back({key_columns[i].index, key_columns[i].is_nullable});
-            row_schema.key_column_fixed_size += key_columns[i].column_ptr->sizeOfValueIfFixed();
+            row_layout.key_column_indexes.push_back(key_columns[i].index);
+            row_layout.raw_key_column_indexes.push_back({key_columns[i].index, key_columns[i].is_nullable});
+            row_layout.key_column_fixed_size += key_columns[i].column_ptr->sizeOfValueIfFixed();
             continue;
         }
         is_all_key_fixed = false;
@@ -150,59 +151,15 @@ void HashJoin::initRowSchemaAndHashJoinMethod()
                 new_key_names_left.emplace_back(key_names_left[i]);
                 new_key_names_right.emplace_back(key_names_right[i]);
                 raw_key_flag[i] = true;
-                row_schema.key_column_indexes.push_back(key_columns[i].index);
-                row_schema.raw_key_column_indexes.push_back({key_columns[i].index, key_columns[i].is_nullable});
+                row_layout.key_column_indexes.push_back(key_columns[i].index);
+                row_layout.raw_key_column_indexes.push_back({key_columns[i].index, key_columns[i].is_nullable});
                 continue;
             }
         }
     }
     if (is_all_key_fixed)
     {
-        if (keys_size == 1)
-        {
-            switch (row_schema.key_column_fixed_size)
-            {
-            case 1:
-                method = HashJoinKeyMethod::OneKey8;
-                break;
-            case 2:
-                method = HashJoinKeyMethod::OneKey16;
-                break;
-            case 4:
-                method = HashJoinKeyMethod::OneKey32;
-                break;
-            case 8:
-                method = HashJoinKeyMethod::OneKey64;
-                break;
-            case 16:
-                method = HashJoinKeyMethod::OneKey128;
-                break;
-            default:
-                method = HashJoinKeyMethod::KeysFixedLonger;
-                break;
-            }
-        }
-        else
-        {
-            switch (row_schema.key_column_fixed_size)
-            {
-            case 4:
-                method = HashJoinKeyMethod::KeysFixed32;
-                break;
-            case 8:
-                method = HashJoinKeyMethod::KeysFixed64;
-                break;
-            case 16:
-                method = HashJoinKeyMethod::KeysFixed128;
-                break;
-            case 32:
-                method = HashJoinKeyMethod::KeysFixed256;
-                break;
-            default:
-                method = HashJoinKeyMethod::KeysFixedLonger;
-                break;
-            }
-        }
+        method = findFixedSizeJoinKeyMethod(keys_size, row_layout.key_column_fixed_size);
     }
     else if (canAsColumnString(key_columns[0].column_ptr))
     {
@@ -225,13 +182,17 @@ void HashJoin::initRowSchemaAndHashJoinMethod()
         method = HashJoinKeyMethod::KeySerialized;
     }
 
+    row_layout.next_pointer_offset = getHashValueByteSize(method);
+    row_layout.join_key_offset = row_layout.next_pointer_offset + sizeof(RowPtr);
+    row_layout.join_key_all_raw = row_layout.raw_key_column_indexes.size() == keys_size;
+
     for (size_t i = 0; i < keys_size; ++i)
     {
         if (!raw_key_flag[i])
         {
-            row_schema.key_column_indexes.push_back(key_columns[i].index);
+            row_layout.key_column_indexes.push_back(key_columns[i].index);
             /// For non-raw join key, the original join key column should be placed in `other_column_indexes`.
-            row_schema.other_column_indexes.push_back({key_columns[i].index, false});
+            row_layout.other_column_indexes.push_back({key_columns[i].index, false});
             new_key_names_left.emplace_back(key_names_left[i]);
             new_key_names_right.emplace_back(key_names_right[i]);
         }
@@ -250,12 +211,12 @@ void HashJoin::initRowSchemaAndHashJoinMethod()
         {
             if (c.column->valuesHaveFixedSize())
             {
-                row_schema.other_column_fixed_size += c.column->sizeOfValueIfFixed();
-                row_schema.other_column_indexes.push_back({i, true});
+                row_layout.other_column_fixed_size += c.column->sizeOfValueIfFixed();
+                row_layout.other_column_indexes.push_back({i, true});
             }
             else
             {
-                row_schema.other_column_indexes.push_back({i, false});
+                row_layout.other_column_indexes.push_back({i, false});
             }
         }
     }
@@ -282,19 +243,29 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(right_sample_block.getByPosition(i));
 
-    initRowSchemaAndHashJoinMethod();
+    initRowLayoutAndHashJoinMethod();
 
     build_concurrency = build_concurrency_;
+    active_build_threads = build_concurrency;
+    build_workers_data.resize(build_concurrency);
     for (size_t i = 0; i < build_concurrency; ++i)
-        build_workers_data.emplace_back(std::make_unique<BuildWorkerData>());
+        build_workers_data[i].key_getter = createHashJoinKeyGetter(method, collators);
     for (size_t i = 0; i < HJ_BUILD_PARTITION_COUNT + 1; ++i)
-        partition_column_rows_with_lock.emplace_back(std::make_unique<ColumnRowsWithLock>());
+        multi_row_containers.emplace_back(std::make_unique<MultipleRowContainer>());
 }
 
-void HashJoin::initProbe(const Block & sample_block [[maybe_unused]], size_t probe_concurrency_ [[maybe_unused]]) {}
+void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
+{
+    left_sample_block = sample_block;
+
+    probe_concurrency = probe_concurrency_;
+    probe_workers_data.resize(probe_concurrency);
+}
 
 void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
 {
+    RUNTIME_ASSERT(stream_index < build_concurrency);
+
     if unlikely (b.rows() == 0)
         return;
 
@@ -315,13 +286,7 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
             ++pos;
     }
 
-    RUNTIME_CHECK_MSG(
-        block.columns() == right_sample_block.columns(),
-        "block columns {} does not equal to sample block columns {}",
-        block.columns(),
-        right_sample_block.columns());
-
-    size_t rows = block.rows();
+    assertBlocksHaveEqualStructure(block, right_sample_block, "Join Build");
 
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
@@ -350,27 +315,173 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
     if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
     {
         for (size_t i = 0; i < columns; ++i)
-        {
             convertColumnToNullable(block.getByPosition(i));
-        }
     }
 
     if (!isCrossJoin(kind))
     {
-        convertBlockToRows(
+        insertBlockToRowContainers(
             method,
             needRecordNotInsertRows(kind),
             block,
-            rows,
             key_columns,
-            collators,
             null_map,
-            row_schema,
-            partition_column_rows_with_lock,
-            *build_workers_data[stream_index]);
+            row_layout,
+            multi_row_containers,
+            build_workers_data[stream_index]);
     }
 }
 
-void HashJoin::finalize(const Names & parent_require [[maybe_unused]]) {}
+bool HashJoin::finishOneBuild(size_t stream_index)
+{
+    LOG_INFO(log, "{} convert block to rows cost {}ms", stream_index, build_workers_data[stream_index].convert_time);
+    if (active_build_threads.fetch_sub(1) == 1)
+    {
+        workAfterBuildFinish();
+        return true;
+    }
+    return false;
+}
+
+void HashJoin::workAfterBuildFinish()
+{
+    size_t all_build_row_count = 0;
+    for (size_t i = 0; i < build_concurrency; ++i)
+        all_build_row_count += build_workers_data[i].row_count;
+
+    Stopwatch watch;
+    pointer_table.init(all_build_row_count, settings.probe_enable_prefetch_threshold);
+
+    LOG_INFO(
+        log,
+        "allocate pointer table cost {}ms, rows {}, pointer table size {}, added column num {}, enable prefetch {}",
+        watch.elapsedMilliseconds(),
+        all_build_row_count,
+        pointer_table.getPointerTableSize(),
+        right_sample_block.columns(),
+        pointer_table.enableProbePrefetch());
+}
+
+bool HashJoin::buildPointerTable(size_t stream_index)
+{
+    switch (method)
+    {
+    case HashJoinKeyMethod::Empty:
+    case HashJoinKeyMethod::Cross:
+        return true;
+
+#define M(METHOD)                                                                                         \
+    case HashJoinKeyMethod::METHOD:                                                                       \
+        using HashValueType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::HashValueType; \
+        return pointer_table.build<HashValueType##METHOD>(                                                \
+            row_layout,                                                                                   \
+            build_workers_data[stream_index],                                                             \
+            multi_row_containers,                                                                         \
+            settings.max_block_size);
+        APPLY_FOR_HASH_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
+}
+
+Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
+{
+    RUNTIME_ASSERT(stream_index < probe_concurrency);
+
+    const NameSet & probe_output_name_set = has_other_condition
+        ? output_columns_names_set_for_other_condition_after_finalize
+        : output_column_names_set_after_finalize;
+    context.prepareForHashProbe(
+        method,
+        kind,
+        key_names_left,
+        non_equal_conditions.left_filter_column,
+        probe_output_name_set,
+        collators);
+
+    std::vector<Block> result_blocks;
+    size_t result_rows = 0;
+    /// min_result_block_size is used to avoid generating too many small block, use 50% of the block size as the default value
+    size_t min_result_block_size = std::max(1, (std::min(context.block.rows(), settings.max_block_size) + 1) / 2);
+    while (true)
+    {
+        Block block = doJoinBlock(context, stream_index);
+        assert(block);
+        block = removeUselessColumn(block);
+        result_rows += block.rows();
+        result_blocks.push_back(std::move(block));
+        /// exit the while loop if
+        /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
+        /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
+        if (context.isCurrentProbeFinished()
+            || (may_probe_side_expanded_after_join && result_rows >= min_result_block_size))
+            break;
+    }
+    assert(!result_blocks.empty());
+    return vstackBlocks(std::move(result_blocks));
+};
+
+Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
+{
+    Block block = context.block;
+
+    size_t num_columns_to_add = right_sample_block.columns();
+    /// Add new columns to the block.
+    MutableColumns added_columns;
+    added_columns.reserve(num_columns_to_add);
+
+    RUNTIME_ASSERT(block.rows() >= context.start_row_idx);
+    size_t remain_rows = block.rows() - context.start_row_idx;
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+    {
+        const ColumnWithTypeAndName & src_column = right_sample_block.getByPosition(i);
+        RUNTIME_CHECK_MSG(
+            !block.has(src_column.name),
+            "block from probe side has a column with the same name: {} as a column in right_sample_block",
+            src_column.name);
+
+        added_columns.push_back(src_column.column->cloneEmpty());
+        if (src_column.type && src_column.type->haveMaximumSizeOfValue())
+        {
+            // todo figure out more accurate `rows`
+            added_columns.back()->reserve(remain_rows);
+        }
+    }
+
+    JoinProbeParameter param(
+        context,
+        probe_workers_data[stream_index],
+        method,
+        kind,
+        non_equal_conditions,
+        settings,
+        pointer_table,
+        row_layout);
+
+    joinProbeBlock(param, added_columns);
+
+    return block;
+}
+
+Block HashJoin::removeUselessColumn(Block & block) const
+{
+    Block projected_block;
+    for (const auto & name_and_type : output_columns_after_finalize)
+    {
+        auto & column = block.getByName(name_and_type.name);
+        projected_block.insert(std::move(column));
+    }
+    return projected_block;
+}
+
+void HashJoin::finalize(const Names & parent_require [[maybe_unused]])
+{
+    if unlikely (finalized)
+        return;
+
+    finalized = true;
+}
 
 } // namespace DB

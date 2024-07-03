@@ -14,14 +14,20 @@
 
 #pragma once
 
+#include <Columns/ColumnString.h>
 #include <Columns/IColumn.h>
-#include <Interpreters/JoinV2/HashJoinRowSchema.h>
+#include <Common/HashTable/Hash.h>
+#include <Common/assert_cast.h>
+#include <Interpreters/AggregationCommon.h>
+#include <Interpreters/JoinV2/HashJoinRowLayout.h>
+#include <common/mem_utils_opt.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int UNKNOWN_EXCEPTION;
+extern const int UNKNOWN_SET_DATA_VARIANT;
 } // namespace ErrorCodes
 
 #define APPLY_FOR_HASH_JOIN_VARIANTS(M) \
@@ -34,7 +40,7 @@ extern const int UNKNOWN_EXCEPTION;
     M(KeysFixed64)                      \
     M(KeysFixed128)                     \
     M(KeysFixed256)                     \
-    M(KeysFixedLonger)                  \
+    M(KeysFixedOther)                   \
     M(OneKeyStringBin)                  \
     M(OneKeyStringBinPadding)           \
     M(OneKeyString)                     \
@@ -50,39 +56,47 @@ enum class HashJoinKeyMethod
 #undef M
 };
 
-struct KeyBuffer
-{
-    String key_buffer;
-    ColumnString::MutablePtr keys_buffer = ColumnString::create();
-};
-
 template <typename T>
-struct HashJoinKeyOneNumber
+class HashJoinKeyOneNumber
 {
-    const T * vec;
-    HashJoinKeyOneNumber(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &, KeyBuffer &)
+public:
+    using KeyType = T;
+    explicit HashJoinKeyOneNumber(const TiDB::TiDBCollators &) {}
+
+    void reset(const ColumnRawPtrs & key_columns)
     {
         RUNTIME_ASSERT(key_columns.size() == 1);
         vec = reinterpret_cast<const T *>(key_columns[0]->getRawData().data);
     }
 
-    ALWAYS_INLINE inline T getJoinKeyForBuild(size_t row) { return getJoinKey(row); }
-    ALWAYS_INLINE inline T getJoinKeyForProbe(size_t row) { return getJoinKey(row); }
+    ALWAYS_INLINE T getJoinKey(size_t row) { return vec[row]; }
+    ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return vec[row]; }
 
-    ALWAYS_INLINE inline T getJoinKey(size_t row) { return vec[row]; }
+    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-    ALWAYS_INLINE inline size_t getJoinKeySize(const T &) { return sizeof(T); }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, UInt8 * pos) { memcpy(pos, &t, sizeof(T)); }
 
-    ALWAYS_INLINE inline void ALWAYS_INLINE serializeJoinKey(const T & t, UInt8 * pos) { memcpy(pos, &t, sizeof(T)); }
+    ALWAYS_INLINE T deserializeJoinKey(const UInt8 * pos)
+    {
+        T t;
+        memcpy(&t, pos, sizeof(T));
+        return t;
+    }
+
+    ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
+
+private:
+    const T * vec = nullptr;
 };
 
 template <typename T>
-struct HashJoinKeysFixed
+class HashJoinKeysFixed
 {
-    std::vector<const char *> vec;
-    std::vector<size_t> fixed_size;
+public:
+    using KeyType = T;
+    explicit HashJoinKeysFixed(const TiDB::TiDBCollators &) {}
 
-    HashJoinKeysFixed(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &, KeyBuffer &)
+    void reset(const ColumnRawPtrs & key_columns)
     {
         size_t sz = key_columns.size();
         vec.resize(sz);
@@ -98,10 +112,7 @@ struct HashJoinKeysFixed
         RUNTIME_ASSERT(fixed_size_sum <= sizeof(T));
     }
 
-    ALWAYS_INLINE inline T getJoinKeyForBuild(size_t row) { return getJoinKey(row); }
-    ALWAYS_INLINE inline T getJoinKeyForProbe(size_t row) { return getJoinKey(row); }
-
-    ALWAYS_INLINE inline T getJoinKey(size_t row)
+    ALWAYS_INLINE T getJoinKey(size_t row)
     {
         union
         {
@@ -118,21 +129,33 @@ struct HashJoinKeysFixed
         return key;
     }
 
-    ALWAYS_INLINE inline size_t getJoinKeySize(const T &) { return sizeof(T); }
+    ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE inline void ALWAYS_INLINE serializeJoinKey(const T & t, UInt8 * pos) { memcpy(pos, &t, sizeof(T)); }
-};
+    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-struct HashJoinKeysFixedLonger
-{
+    ALWAYS_INLINE void serializeJoinKey(const T & t, UInt8 * pos) { memcpy(pos, &t, sizeof(T)); }
+
+    ALWAYS_INLINE T deserializeJoinKey(const UInt8 * pos)
+    {
+        T t;
+        memcpy(&t, pos, sizeof(T));
+        return t;
+    }
+
+    ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
+
+private:
     std::vector<const char *> vec;
     std::vector<size_t> fixed_size;
-    size_t fixed_size_sum = 0;
+};
 
-    KeyBuffer & buf;
+class HashJoinKeysFixedOther
+{
+public:
+    using KeyType = const char *;
+    explicit HashJoinKeysFixedOther(const TiDB::TiDBCollators &) {}
 
-    HashJoinKeysFixedLonger(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &, KeyBuffer & key_buffer)
-        : buf(key_buffer)
+    void reset(const ColumnRawPtrs & key_columns)
     {
         size_t sz = key_columns.size();
         vec.resize(sz);
@@ -143,163 +166,173 @@ struct HashJoinKeysFixedLonger
             fixed_size[i] = key_columns[i]->sizeOfValueIfFixed();
             fixed_size_sum += fixed_size[i];
         }
-        buf.key_buffer.resize(fixed_size_sum);
+        key_buffer.resize(fixed_size_sum);
     }
 
-    ALWAYS_INLINE inline StringRef getJoinKeyForBuild(size_t row) { return getJoinKey(row); }
-    ALWAYS_INLINE inline StringRef getJoinKeyForProbe(size_t row) { return getJoinKey(row); }
-
-    ALWAYS_INLINE inline StringRef getJoinKey(size_t row)
+    ALWAYS_INLINE KeyType getJoinKey(size_t row)
     {
         size_t sz = vec.size();
         size_t offset = 0;
         for (size_t i = 0; i < sz; ++i)
         {
-            memcpy(&buf.key_buffer[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
+            memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
             offset += fixed_size[i];
         }
-        return StringRef(buf.key_buffer.data(), fixed_size_sum);
+        return key_buffer.data();
     }
 
-    ALWAYS_INLINE inline size_t getJoinKeySize(const StringRef &) { return fixed_size_sum; }
+    ALWAYS_INLINE KeyType getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE inline void ALWAYS_INLINE serializeJoinKey(const StringRef & s, UInt8 * pos)
+    ALWAYS_INLINE size_t getJoinKeySize(KeyType) { return fixed_size_sum; }
+
+    ALWAYS_INLINE void serializeJoinKey(KeyType s, UInt8 * pos) { memcpy(pos, s, fixed_size_sum); }
+
+    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos) { return reinterpret_cast<KeyType>(pos); }
+
+    ALWAYS_INLINE bool joinKeyIsEqual(KeyType key1, KeyType key2)
     {
-        memcpy(pos, s.data, fixed_size_sum);
+        return mem_utils::IsStrEqualWithSameSize(key1, key2, fixed_size_sum);
     }
+
+private:
+    std::vector<const char *> vec;
+    std::vector<size_t> fixed_size;
+    size_t fixed_size_sum = 0;
+
+    String key_buffer;
 };
 
 template <bool padding>
-struct HashJoinKeyStringBin
+class HashJoinKeyStringBin
 {
-    const ColumnString * column_string;
+public:
+    using KeyType = StringRef;
+    explicit HashJoinKeyStringBin(const TiDB::TiDBCollators &) {}
 
-    HashJoinKeyStringBin(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &, KeyBuffer &)
-    {
-        column_string = assert_cast<const ColumnString *>(key_columns[0]);
-    }
+    void reset(const ColumnRawPtrs & key_columns) { column_string = assert_cast<const ColumnString *>(key_columns[0]); }
 
-    ALWAYS_INLINE inline StringRef getJoinKeyForBuild(size_t row) { return getJoinKey(row); }
-    ALWAYS_INLINE inline StringRef getJoinKeyForProbe(size_t row) { return getJoinKey(row); }
-
-    ALWAYS_INLINE inline StringRef getJoinKey(size_t row)
+    ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
         StringRef key = column_string->getDataAt(row);
         key = BinCollatorSortKey<padding>(key.data, key.size);
         return key;
     }
 
-    ALWAYS_INLINE inline size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+    ALWAYS_INLINE StringRef getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE inline void ALWAYS_INLINE serializeJoinKey(const StringRef & s, UInt8 * pos)
+    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+
+    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, UInt8 * pos)
     {
         memcpy(pos, &s.size, sizeof(size_t));
         inline_memcpy(pos + sizeof(size_t), s.data, s.size);
     }
+
+    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos)
+    {
+        StringRef s;
+        memcpy(&s.size, pos, sizeof(size_t));
+        s.data = reinterpret_cast<const char *>(pos + sizeof(size_t));
+        return s;
+    }
+
+    ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
+
+private:
+    const ColumnString * column_string = nullptr;
 };
 
-struct HashJoinKeyString
+class HashJoinKeyString
 {
-    const ColumnString * column_string;
-    TiDB::TiDBCollatorPtr collator = nullptr;
-
-    KeyBuffer & buf;
-
-    bool init_for_build = false;
-
-    HashJoinKeyString(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators, KeyBuffer & key_buffer)
-        : buf(key_buffer)
+public:
+    using KeyType = StringRef;
+    explicit HashJoinKeyString(const TiDB::TiDBCollators & collators)
     {
-        column_string = assert_cast<const ColumnString *>(key_columns[0]);
         RUNTIME_ASSERT(!collators.empty());
         collator = collators[0];
     }
 
-    ALWAYS_INLINE inline StringRef getJoinKeyForBuild(size_t row)
+    void reset(const ColumnRawPtrs & key_columns)
     {
-        if unlikely (!init_for_build)
-        {
-            size_t sz = column_string->size();
-            size_t byte_size = column_string->byteSize();
-            buf.keys_buffer->reserveWithTotalMemoryHint(sz, byte_size);
-            buf.keys_buffer->popBack(buf.keys_buffer->size());
-            for (size_t i = 0; i < sz; ++i)
-            {
-                StringRef key = column_string->getDataAt(i);
-                key = collator->sortKey(key.data, key.size, buf.key_buffer);
-                buf.keys_buffer->insertData(key.data, key.size);
-            }
-            init_for_build = true;
-        }
-        assert(row < buf.keys_buffer->size());
-        return buf.keys_buffer->getDataAt(row);
+        column_string = assert_cast<const ColumnString *>(key_columns[0]);
+        buffer_initialized = false;
     }
 
-    ALWAYS_INLINE inline StringRef getJoinKeyForProbe(size_t row)
+    ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
         StringRef key = column_string->getDataAt(row);
-        key = collator->sortKey(key.data, key.size, buf.key_buffer);
+        key = collator->sortKey(key.data, key.size, key_buffer);
         return key;
     }
 
-    ALWAYS_INLINE inline size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+    ALWAYS_INLINE StringRef getJoinKeyWithBufferHint(size_t row)
+    {
+        if unlikely (!buffer_initialized)
+        {
+            size_t sz = column_string->size();
+            size_t byte_size = column_string->byteSize();
+            keys_buffer->reserveWithTotalMemoryHint(sz, byte_size);
+            keys_buffer->popBack(keys_buffer->size());
+            for (size_t i = 0; i < sz; ++i)
+            {
+                StringRef key = column_string->getDataAt(i);
+                key = collator->sortKey(key.data, key.size, key_buffer);
+                keys_buffer->insertData(key.data, key.size);
+            }
+            buffer_initialized = true;
+        }
+        assert(row < keys_buffer->size());
+        return keys_buffer->getDataAt(row);
+    }
 
-    ALWAYS_INLINE inline void ALWAYS_INLINE serializeJoinKey(const StringRef & s, UInt8 * pos)
+    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+
+    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, UInt8 * pos)
     {
         memcpy(pos, &s.size, sizeof(size_t));
         inline_memcpy(pos + sizeof(size_t), s.data, s.size);
     }
+
+    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos)
+    {
+        StringRef s;
+        memcpy(&s.size, pos, sizeof(size_t));
+        s.data = reinterpret_cast<const char *>(pos + sizeof(size_t));
+        return s;
+    }
+
+    ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
+
+private:
+    const ColumnString * column_string = nullptr;
+    TiDB::TiDBCollatorPtr collator = nullptr;
+
+    String key_buffer;
+    ColumnString::MutablePtr keys_buffer = ColumnString::create();
+
+    bool buffer_initialized = false;
 };
 
-struct HashJoinKeySerialized
+class HashJoinKeySerialized
 {
-    ColumnRawPtrs key_columns;
-    size_t keys_size;
-    TiDB::TiDBCollators collators;
+public:
+    using KeyType = StringRef;
+    explicit HashJoinKeySerialized(const TiDB::TiDBCollators & collators_) { collators = collators_; }
 
-    KeyBuffer & buf;
-
-    bool init_for_build = false;
-
-    std::vector<String> sort_key_containers;
-    Arena pool;
-
-    size_t last_key_size = 0;
-
-    HashJoinKeySerialized(
-        const ColumnRawPtrs & key_columns_,
-        const TiDB::TiDBCollators & collators_,
-        KeyBuffer & key_buffer)
-        : key_columns(key_columns_)
-        , keys_size(key_columns_.size())
-        , collators(collators_)
-        , buf(key_buffer)
+    void reset(const ColumnRawPtrs & key_columns_)
     {
+        key_columns = key_columns_;
+        keys_size = key_columns.size();
         RUNTIME_ASSERT(keys_size > 0);
+        RUNTIME_ASSERT(keys_size <= collators.size());
         sort_key_containers.resize(keys_size);
+
+        buffer_initialized = false;
+        pool.rollback(last_key_size);
+        last_key_size = 0;
     }
 
-    //TODO: use a more effient way instead of calling `serializeKeysToPoolContiguous` for each row.
-    ALWAYS_INLINE inline StringRef getJoinKeyForBuild(size_t row)
-    {
-        if unlikely (!init_for_build)
-        {
-            size_t sz = key_columns[0]->size();
-            buf.keys_buffer->popBack(buf.keys_buffer->size());
-            for (size_t i = 0; i < sz; ++i)
-            {
-                StringRef key
-                    = serializeKeysToPoolContiguous(i, keys_size, key_columns, collators, sort_key_containers, pool);
-                buf.keys_buffer->insertData(key.data, key.size);
-                pool.rollback(key.size);
-            }
-            init_for_build = true;
-        }
-        assert(row < buf.keys_buffer->size());
-        return buf.keys_buffer->getDataAt(row);
-    }
-
-    ALWAYS_INLINE inline StringRef getJoinKeyForProbe(size_t row)
+    ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
         pool.rollback(last_key_size);
         StringRef key
@@ -308,13 +341,57 @@ struct HashJoinKeySerialized
         return key;
     }
 
-    ALWAYS_INLINE inline size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+    //TODO: use a more effient way instead of calling `serializeKeysToPoolContiguous` for each row.
+    ALWAYS_INLINE StringRef getJoinKeyWithBufferHint(size_t row)
+    {
+        if unlikely (!buffer_initialized)
+        {
+            size_t sz = key_columns[0]->size();
+            keys_buffer->popBack(keys_buffer->size());
+            for (size_t i = 0; i < sz; ++i)
+            {
+                StringRef key
+                    = serializeKeysToPoolContiguous(i, keys_size, key_columns, collators, sort_key_containers, pool);
+                keys_buffer->insertData(key.data, key.size);
+                pool.rollback(key.size);
+            }
+            buffer_initialized = true;
+        }
+        assert(row < keys_buffer->size());
+        return keys_buffer->getDataAt(row);
+    }
 
-    ALWAYS_INLINE inline void ALWAYS_INLINE serializeJoinKey(const StringRef & s, UInt8 * pos)
+    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+
+    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, UInt8 * pos)
     {
         memcpy(pos, &s.size, sizeof(size_t));
         inline_memcpy(pos + sizeof(size_t), s.data, s.size);
     }
+
+    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos)
+    {
+        StringRef s;
+        memcpy(&s.size, pos, sizeof(size_t));
+        s.data = reinterpret_cast<const char *>(pos + sizeof(size_t));
+        return s;
+    }
+
+    ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
+
+private:
+    ColumnRawPtrs key_columns;
+    size_t keys_size = 0;
+    TiDB::TiDBCollators collators;
+
+    String key_buffer;
+    ColumnString::MutablePtr keys_buffer = ColumnString::create();
+
+    bool buffer_initialized = false;
+
+    std::vector<String> sort_key_containers;
+    Arena pool;
+    size_t last_key_size = 0;
 };
 
 template <HashJoinKeyMethod method>
@@ -393,9 +470,9 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixed256>
 };
 
 template <>
-struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixedLonger>
+struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixedOther>
 {
-    using Type = HashJoinKeysFixedLonger;
+    using Type = HashJoinKeysFixedOther;
     using Hash = StringRefHash;
     using HashValueType = size_t;
 };
@@ -431,5 +508,18 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeySerialized>
     using Hash = StringRefHash;
     using HashValueType = size_t;
 };
+
+size_t getHashValueByteSize(HashJoinKeyMethod method);
+
+HashJoinKeyMethod findFixedSizeJoinKeyMethod(size_t keys_size, size_t all_key_fixed_size);
+
+std::unique_ptr<void, std::function<void(void *)>> createHashJoinKeyGetter(
+    HashJoinKeyMethod method,
+    const TiDB::TiDBCollators & collators);
+
+void resetHashJoinKeyGetter(
+    HashJoinKeyMethod method,
+    const ColumnRawPtrs & key_columns,
+    std::unique_ptr<void, std::function<void(void *)>> & key_getter);
 
 } // namespace DB

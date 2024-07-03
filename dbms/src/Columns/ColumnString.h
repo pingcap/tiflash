@@ -277,6 +277,27 @@ public:
         }
     }
 
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos) override
+    {
+        size_t prev_size = offsets.size();
+        offsets.resize(prev_size + pos.size());
+
+        size_t size = pos.size();
+        size_t char_size = chars.size();
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t str_size;
+            std::memcpy(&str_size, pos[i], sizeof(size_t));
+            pos[i] += sizeof(size_t);
+
+            chars.resize(char_size + str_size);
+            inline_memcpy(&chars[char_size], pos[i], str_size);
+            char_size += str_size;
+            offsets[prev_size + i] = char_size;
+            pos[i] += str_size;
+        }
+    }
+
     void updateHashWithValue(
         size_t n,
         SipHash & hash,

@@ -44,3 +44,8 @@ inline size_t roundUpToPowerOfTwoOrZero(size_t n)
 
     return n;
 }
+
+inline bool isPowerOfTwo(size_t val)
+{
+    return (val & (val - 1)) == 0;
+}

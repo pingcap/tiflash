@@ -14,9 +14,6 @@
 
 #pragma once
 
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnNullable.h>
-#include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/Logger.h>
 #include <Core/Block.h>
@@ -24,14 +21,18 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinV2/HashJoinBuild.h>
 #include <Interpreters/JoinV2/HashJoinKey.h>
-#include <Interpreters/JoinV2/HashJoinRowSchema.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Interpreters/JoinV2/HashJoinPointerTable.h>
+#include <Interpreters/JoinV2/HashJoinProbe.h>
+#include <Interpreters/JoinV2/HashJoinRowLayout.h>
+#include <Interpreters/JoinV2/HashJoinSettings.h>
+
 
 namespace DB
 {
 
 class HashJoin
 {
+public:
     HashJoin(
         const Names & key_names_left_,
         const Names & key_names_right_,
@@ -40,7 +41,7 @@ class HashJoin
         const NamesAndTypes & output_columns_,
         const TiDB::TiDBCollators & collators_,
         const JoinNonEqualConditions & non_equal_conditions_,
-        size_t max_block_size);
+        const Settings & settings);
 
     void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
 
@@ -48,16 +49,28 @@ class HashJoin
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
-    void checkTypes(const Block & block) const;
+    /// Return true if it is the last build thread.
+    bool finishOneBuild(size_t stream_index);
+
+    bool buildPointerTable(size_t stream_index);
+
+    Block joinBlock(JoinProbeContext & context, size_t stream_index);
+
+    Block removeUselessColumn(Block & block) const;
 
     void finalize(const Names & parent_require);
 
 private:
-    void initRowSchemaAndHashJoinMethod();
+    void initRowLayoutAndHashJoinMethod();
+
+    Block doJoinBlock(JoinProbeContext & context, size_t stream_index);
+
+    void workAfterBuildFinish();
 
 private:
     const ASTTableJoin::Kind kind;
     const String join_req_id;
+    const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
     Names key_names_left;
@@ -69,7 +82,7 @@ private:
 
     const JoinNonEqualConditions non_equal_conditions;
 
-    const size_t max_block_size;
+    HashJoinSettings settings;
 
     const LoggerPtr log;
 
@@ -77,11 +90,13 @@ private:
 
     bool initialized = false;
 
-    HashJoinRowSchema row_schema;
+    HashJoinRowLayout row_layout;
     HashJoinKeyMethod method = HashJoinKeyMethod::Empty;
 
     /// Block with columns from the right-side table after finalized.
     Block right_sample_block;
+    /// Block with columns from the left-side table after finalized.
+    Block left_sample_block;
 
     NamesAndTypes output_columns;
     Block output_block;
@@ -92,11 +107,19 @@ private:
     Names required_columns;
     bool finalized = false;
 
-    std::vector<std::unique_ptr<ColumnRowsWithLock>> partition_column_rows_with_lock;
+    /// Row containers
+    std::vector<std::unique_ptr<MultipleRowContainer>> multi_row_containers;
 
     /// Build phase
     size_t build_concurrency;
-    std::vector<std::unique_ptr<BuildWorkerData>> build_workers_data;
+    std::vector<JoinBuildWorkerData> build_workers_data;
+    std::atomic<size_t> active_build_threads = 0;
+
+    /// Probe phase
+    size_t probe_concurrency;
+    std::vector<JoinProbeWorkerData> probe_workers_data;
+
+    HashJoinPointerTable pointer_table;
 };
 
 } // namespace DB

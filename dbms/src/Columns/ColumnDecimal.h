@@ -183,6 +183,19 @@ public:
         }
     }
 
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos) override
+    {
+        size_t prev_size = data.size();
+        data.resize(prev_size + pos.size());
+
+        size_t size = pos.size();
+        for (size_t i = 0; i < size; ++i)
+        {
+            std::memcpy(&data[prev_size + i], pos[i], sizeof(T));
+            pos[i] += sizeof(T);
+        }
+    }
+
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;

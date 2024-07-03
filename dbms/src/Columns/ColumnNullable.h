@@ -80,6 +80,8 @@ public:
 
     void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override;
 
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos) override;
+
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     void insert(const Field & x) override;

@@ -14,28 +14,23 @@
 
 #pragma once
 
-#include <vector>
+#include <Interpreters/Settings.h>
 
 namespace DB
 {
 
-constexpr size_t ROW_ALIGN = 4;
-
-inline size_t alignRowSize(size_t size)
+struct HashJoinSettings
 {
-    return (size + ROW_ALIGN - 1) / ROW_ALIGN * ROW_ALIGN;
-}
-
-struct HashJoinRowSchema
-{
-    std::vector<size_t> key_column_indexes;
-    /// The raw join key are the same as the original data.
-    /// raw_key_column_index + is_nullable
-    std::vector<std::pair<size_t, bool>> raw_key_column_indexes;
-    /// other_column_index + is_fixed_size
-    std::vector<std::pair<size_t, bool>> other_column_indexes;
-    size_t key_column_fixed_size = 0;
-    size_t other_column_fixed_size = 0;
+    explicit HashJoinSettings(const Settings & settings)
+        : max_block_size(settings.max_block_size)
+        , probe_enable_prefetch_threshold(settings.join_v2_probe_enable_prefetch_threshold)
+        , probe_prefetch_step(settings.join_v2_probe_prefetch_step)
+        , probe_insert_batch_size(settings.join_v2_probe_insert_batch_size)
+    {}
+    const size_t max_block_size;
+    const size_t probe_enable_prefetch_threshold;
+    const size_t probe_prefetch_step;
+    const size_t probe_insert_batch_size;
 };
 
 } // namespace DB

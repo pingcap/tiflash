@@ -229,7 +229,7 @@ public:
 
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const
     {
-        RUNTIME_ASSERT(false, "not implemented");
+        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     virtual void serializeToPos(
@@ -238,7 +238,14 @@ public:
         size_t /* end */,
         bool /* has_null */) const
     {
-        RUNTIME_ASSERT(false, "not implemented");
+        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & /* pos */)
+    {
+        throw Exception(
+            "Method deserializeAndInsertFromPos is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /// Update state of hash function with value of n-th element.
