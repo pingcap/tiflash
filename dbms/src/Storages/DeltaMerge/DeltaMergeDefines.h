@@ -164,3 +164,16 @@ static constexpr bool DM_RUN_CHECK = true;
 
 } // namespace DM
 } // namespace DB
+<<<<<<< HEAD
+=======
+
+template <>
+struct fmt::formatter<DB::DM::ColumnDefine>
+{
+    template <typename FormatContext>
+    auto format(const DB::DM::ColumnDefine & cd, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "{}/{}", cd.id, cd.type->getName());
+    }
+};
+>>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))

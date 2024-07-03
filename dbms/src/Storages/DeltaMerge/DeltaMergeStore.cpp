@@ -1075,10 +1075,16 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
+    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+<<<<<<< HEAD
         physical_table_id,
         dm_context,
         columns_to_read,
+=======
+        extra_table_id_index,
+        final_columns_to_read,
+>>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
         filter,
         max_version,
         expected_block_size,
@@ -1098,7 +1104,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
-                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
+                final_columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id);
@@ -1109,7 +1115,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 dm_context,
                 read_task_pool,
                 after_segment_read,
+<<<<<<< HEAD
                 columns_to_read,
+=======
+                final_columns_to_read,
+>>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
                 filter,
                 max_version,
                 expected_block_size,
@@ -1122,9 +1132,24 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     }
     LOG_INFO(
         tracing_logger,
+<<<<<<< HEAD
         "Read create stream done, pool_id={} num_streams={}",
         read_task_pool->poolId(),
         final_num_stream);
+=======
+        "Read create stream done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
+        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={} columns_to_read={} "
+        "final_columns_to_read={}",
+        keep_order,
+        db_context.getSettingsRef().dt_enable_read_thread,
+        enable_read_thread,
+        is_fast_scan,
+        filter == nullptr || filter->before_where == nullptr,
+        read_task_pool->pool_id,
+        final_num_stream,
+        columns_to_read,
+        final_columns_to_read);
+>>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
 
     return res;
 }
@@ -1169,11 +1194,21 @@ SourceOps DeltaMergeStore::readSourceOps(
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
+<<<<<<< HEAD
     size_t final_num_stream = std::max(1, num_streams);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
         columns_to_read,
+=======
+    size_t final_num_stream
+        = enable_read_thread ? std::max(1, num_streams) : std::max(1, std::min(num_streams, tasks.size()));
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
+    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        extra_table_id_index,
+        final_columns_to_read,
+>>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
         filter,
         max_version,
         expected_block_size,
@@ -1182,6 +1217,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
+<<<<<<< HEAD
         final_num_stream);
     dm_context->scan_context->read_mode = ReadMode::Normal;
 
@@ -1201,6 +1237,66 @@ SourceOps DeltaMergeStore::readSourceOps(
     LOG_INFO(tracing_logger, "Read create SourceOp done, pool_id={} num_streams={}", read_task_pool->poolId(), final_num_stream);
 
     return res;
+=======
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
+    dm_context->scan_context->read_mode = read_mode;
+
+    if (enable_read_thread)
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(std::make_unique<UnorderedSourceOp>(
+                exec_context,
+                read_task_pool,
+                final_columns_to_read,
+                extra_table_id_index,
+                log_tracing_id,
+                runtime_filter_list,
+                rf_max_wait_time_ms));
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
+                exec_context,
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                final_columns_to_read,
+                filter,
+                start_ts,
+                expected_block_size,
+                read_mode,
+                log_tracing_id));
+        }
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_context,
+                log_tracing_id,
+                final_columns_to_read,
+                extra_table_id_index,
+                physical_table_id));
+        });
+    }
+
+    LOG_INFO(
+        tracing_logger,
+        "Read create PipelineExec done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
+        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={} columns_to_read={} "
+        "final_columns_to_read={}",
+        keep_order,
+        db_context.getSettingsRef().dt_enable_read_thread,
+        enable_read_thread,
+        is_fast_scan,
+        filter == nullptr || filter->before_where == nullptr,
+        read_task_pool->pool_id,
+        final_num_stream,
+        columns_to_read,
+        final_columns_to_read);
+>>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr
