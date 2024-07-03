@@ -53,7 +53,8 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-        auto_pass_through_test_data.init(context);
+        switcher = std::make_shared<AutoPassThroughSwitcher>(true, ::tipb::TiFlashPreAggMode::Auto);
+        auto_pass_through_test_data.init(context, switcher);
 
         /// for agg
         context.addMockTable(
@@ -184,7 +185,7 @@ public:
     // To test auto pass through hashagg.
     struct AutoPassThroughTestData
     {
-        void init(MockDAGRequestContext & context)
+        void init(MockDAGRequestContext & context, std::shared_ptr<AutoPassThroughSwitcher> switcher)
         {
             // todo check if works
             context.context->getSettingsRef().max_block_size = block_size;
@@ -197,7 +198,7 @@ public:
             col1_data_type = std::make_shared<DataTypeString>();
             col2_data_type = std::make_shared<DataTypeInt64>();
 
-            auto_pass_through_context = buildAutoPassHashAggThroughContext(context);
+            auto_pass_through_context = buildAutoPassHashAggThroughContext(context, switcher);
             // 1 block for adjust state, 3 blocks for other state
             auto_pass_through_context->updateAdjustStateRowLimitUnitNum(3);
             auto_pass_through_context->updateOtherStateRowLimitUnitNum(3);
@@ -250,7 +251,8 @@ public:
 
         // select repo_name, sum(commit_num) from repo_history group by repo_name;
         std::unique_ptr<AutoPassThroughHashAggContext> buildAutoPassHashAggThroughContext(
-            MockDAGRequestContext & context)
+            MockDAGRequestContext & context,
+            std::shared_ptr<AutoPassThroughSwitcher> switcher)
         {
             const String req_id("TestAutoPassThroughAggContext");
 
@@ -315,6 +317,7 @@ public:
                 spill_config);
             return std::make_unique<AutoPassThroughHashAggContext>(
                 *params,
+                *switcher,
                 [&]() { return false; },
                 req_id,
                 context.context->getSettings().max_block_size);
@@ -498,6 +501,7 @@ public:
     };
 
     AutoPassThroughTestData auto_pass_through_test_data;
+    std::shared_ptr<AutoPassThroughSwitcher> switcher;
 };
 
 
@@ -1570,7 +1574,7 @@ try
                toNullableVec<String>({"apple", {}, "banana", "test"})};
 
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-            context.scan("test_db", "test_table_1").aggregation({Max(col("s1"))}, {col("s2"), col("s3")}, 0, true),
+            context.scan("test_db", "test_table_1").aggregation({Max(col("s1"))}, {col("s2"), col("s3")}, 0, switcher),
             expected_strings,
             expected_cols);
     }
@@ -1649,7 +1653,7 @@ try
 
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
             context.scan("test_db", "test_auto_pass_through_tbl")
-                .aggregation({Sum(col("col1"))}, {col("col2")}, 0, true),
+                .aggregation({Sum(col("col1"))}, {col("col2")}, 0, switcher),
             expected_strings,
             expected_col_datas);
     }
@@ -1657,7 +1661,7 @@ try
     {
         auto properties = getDAGPropertiesForTest(1);
         auto tasks = context.scan("test_db", "test_table_1")
-                         .aggregation({Count(col("s1"))}, {}, 0, true)
+                         .aggregation({Count(col("s1"))}, {}, 0, switcher)
                          .project({"count(s1)"})
                          .buildMPPTasks(context, properties);
         std::vector<String> expected_strings = {
@@ -1677,32 +1681,6 @@ try
         }
     }
     WRAP_FOR_SERVER_TEST_END
-}
-CATCH
-
-TEST_F(ComputeServerRunner, autoPassThroughEmptyTable)
-try
-{
-    std::vector<String> expected_strings = {
-        R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
- aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
-  table_scan_0 | {<0, Long>}
-)",
-        R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
- aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
-  table_scan_0 | {<0, Long>}
-)",
-        R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>}
- aggregation_1 | group_by: {}, agg_func: {sum(<0, Longlong>)}
-  exchange_receiver_5 | type:PassThrough, {<0, Longlong>}
-)"};
-    startServers(2);
-    auto expected_cols = {toVec<UInt64>("count", {0})};
-    ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-        context.scan("test_db", "auto_pass_through_empty_tbl")
-            .aggregation({makeASTFunction("count", col("col1"))}, {}, 0, true),
-        expected_strings,
-        expected_cols);
 }
 CATCH
 
@@ -1733,7 +1711,7 @@ try
                       {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
                       {col(col1_name)},
                       0,
-                      true)
+                      switcher)
                   .build(context);
 
         auto req_no_pass_through
@@ -1742,7 +1720,7 @@ try
                       {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
                       {col(col1_name)},
                       0,
-                      false)
+                      nullptr)
                   .build(context);
 
         const size_t concurrency = 1;
@@ -1786,7 +1764,7 @@ try
                         {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
                         {col(col1_name)},
                         0,
-                        true),
+                        switcher),
                 expected_strings,
                 res_no_pass_through);
             WRAP_FOR_SERVER_TEST_END

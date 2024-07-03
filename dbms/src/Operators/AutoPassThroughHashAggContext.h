@@ -15,15 +15,46 @@
 #pragma once
 
 #include <Interpreters/Aggregator.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
+Block checkSelective(const Block & block);
+
+struct AutoPassThroughSwitcher
+{
+    explicit AutoPassThroughSwitcher(const ::tipb::Aggregation & aggregation)
+    {
+        if (aggregation.has_pre_agg_mode())
+        {
+            enabled = true;
+            mode = aggregation.pre_agg_mode();
+        }
+    }
+    AutoPassThroughSwitcher(bool enabled_, ::tipb::TiFlashPreAggMode mode_)
+        : enabled(enabled_)
+        , mode(mode_)
+    {}
+
+    bool enable() const { return enabled; }
+
+    bool forcePreAgg() const { return mode == ::tipb::TiFlashPreAggMode::ForcePreAgg; }
+
+    bool forceStreaming() const { return mode == ::tipb::TiFlashPreAggMode::ForceStreaming; }
+
+    bool isAuto() const { return mode == ::tipb::TiFlashPreAggMode::Auto; }
+
+    bool enabled = false;
+    ::tipb::TiFlashPreAggMode mode;
+};
+
 // todo how about multiple threads?
 class AutoPassThroughHashAggContext
 {
 public:
     AutoPassThroughHashAggContext(
         const Aggregator::Params & params_,
+        AutoPassThroughSwitcher switcher_,
         Aggregator::CancellationHook && hook,
         const String & req_id_,
         UInt64 row_limit_unit_,
@@ -35,6 +66,7 @@ public:
         , other_state_row_limit(row_limit_unit_ * other_state_unit_num)
         , row_limit_unit(row_limit_unit_)
         , log(Logger::get(req_id_))
+        , switcher(switcher_)
     {
         aggregator = std::make_unique<Aggregator>(params_, req_id_, 1, nullptr);
         aggregator->setCancellationHook(hook);
@@ -43,6 +75,7 @@ public:
         agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
         RUNTIME_CHECK(adjust_row_limit > 1024 && other_state_row_limit > 1024);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
+        RUNTIME_CHECK(switcher.enable());
     }
 
     ~AutoPassThroughHashAggContext() { statistics.log(log); }
@@ -86,7 +119,7 @@ private:
     void passThrough(const Block & block);
     Block getPassThroughBlock(const Block & block);
 
-    void forceSwitchToPassThroughIfSpill();
+    void forceState();
     static void makeFullSelective(Block & block);
 
     static constexpr float PassThroughRateLimit = 0.2;
@@ -163,9 +196,9 @@ private:
     size_t row_limit_unit;
 
     LoggerPtr log;
+
+    AutoPassThroughSwitcher switcher;
 };
 
 using AutoPassThroughHashAggContextPtr = std::shared_ptr<AutoPassThroughHashAggContext>;
-
-Block checkSelective(const Block & block);
 } // namespace DB

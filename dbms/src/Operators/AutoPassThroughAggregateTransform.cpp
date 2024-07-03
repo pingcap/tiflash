@@ -23,6 +23,7 @@ namespace DB
 AutoPassThroughAggregateTransform::AutoPassThroughAggregateTransform(
     PipelineExecutorContext & exec_context_,
     const Aggregator::Params & params_,
+    const AutoPassThroughSwitcher & switcher,
     const String & req_id_,
     UInt64 row_limit_unit)
     : TransformOp(exec_context_, req_id_)
@@ -30,6 +31,7 @@ AutoPassThroughAggregateTransform::AutoPassThroughAggregateTransform(
 {
     auto_pass_through_context = std::make_shared<AutoPassThroughHashAggContext>(
         params_,
+        switcher,
         [&]() { return exec_context.isCancelled(); },
         req_id_,
         row_limit_unit);

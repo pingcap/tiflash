@@ -25,6 +25,7 @@ public:
     AutoPassThroughAggregateTransform(
         PipelineExecutorContext & exec_context_,
         const Aggregator::Params & params_,
+        const AutoPassThroughSwitcher & switcher,
         const String & req_id_,
         UInt64 row_limit_unit);
 
