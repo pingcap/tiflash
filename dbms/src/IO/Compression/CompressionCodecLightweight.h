@@ -44,9 +44,6 @@ protected:
 
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
-    bool isCompression() const override { return true; } // light compression
-    bool isGenericCompression() const override { return false; }
-
 private:
     /// Integer data
 

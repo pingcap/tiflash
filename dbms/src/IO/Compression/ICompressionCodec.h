@@ -58,12 +58,6 @@ public:
     /// Read method byte from compressed source
     static UInt8 readMethod(const char * source);
 
-    /// Return true if this codec actually compressing something. Otherwise it can be just transformation that helps compression (e.g. Delta).
-    virtual bool isCompression() const = 0;
-
-    /// Is it a generic compression algorithm like lz4, zstd. Usually it does not make sense to apply generic compression more than single time.
-    virtual bool isGenericCompression() const = 0;
-
 protected:
     /// Return size of compressed data without header
     virtual UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const { return uncompressed_size; }

@@ -39,9 +39,6 @@ protected:
 
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
-    bool isCompression() const override { return true; }
-    bool isGenericCompression() const override { return false; }
-
 private:
     const CompressionDataType data_type;
 };

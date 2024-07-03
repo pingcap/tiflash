@@ -227,26 +227,48 @@ void deltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 
 template <>
 void deltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    const auto count = dest_size / sizeof(UInt32);
-    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
+    const auto deltas_count = dest_size / sizeof(UInt32) - 1;
+    if (unlikely(deltas_count == 0))
+    {
+        memcpy(dest, src, sizeof(UInt32));
+        return;
+    }
+    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(deltas_count);
     // Reserve enough space for the temporary buffer.
-    const auto required_size = round_size * sizeof(UInt32);
+    const auto required_size = round_size * sizeof(UInt32) + sizeof(UInt32);
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
-    FORDecoding<Int32>(src, source_size, tmp_buffer, required_size);
+    // copy the first value to the temporary buffer
+    memcpy(tmp_buffer, src, sizeof(UInt32));
+    FORDecoding<Int32>(
+        src + sizeof(UInt32),
+        source_size - sizeof(UInt32),
+        tmp_buffer + sizeof(UInt32),
+        required_size - sizeof(UInt32));
     deltaDecoding<UInt32>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
 template <>
 void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    const auto count = dest_size / sizeof(UInt64);
-    const auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
+    const auto deltas_count = dest_size / sizeof(UInt64) - 1;
+    if (unlikely(deltas_count == 0))
+    {
+        memcpy(dest, src, sizeof(UInt64));
+        return;
+    }
+    const auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(deltas_count);
     // Reserve enough space for the temporary buffer.
-    const auto required_size = round_size * sizeof(UInt64);
+    const auto required_size = round_size * sizeof(UInt64) + sizeof(UInt64);
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
-    FORDecoding<Int64>(src, source_size, tmp_buffer, required_size);
+    // copy the first value to the temporary buffer
+    memcpy(tmp_buffer, src, sizeof(UInt64));
+    FORDecoding<Int64>(
+        src + sizeof(UInt64),
+        source_size - sizeof(UInt64),
+        tmp_buffer + sizeof(UInt64),
+        required_size - sizeof(UInt64));
     deltaDecoding<UInt64>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 

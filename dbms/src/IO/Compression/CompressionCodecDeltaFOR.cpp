@@ -52,11 +52,11 @@ UInt32 CompressionCodecDeltaFOR::getMaxCompressedDataSize(UInt32 uncompressed_si
     case CompressionDataType::Int32:
     case CompressionDataType::Int64:
     {
-        // |bytes_of_original_type|frame_of_reference|width(bits)  |bitpacked data|
-        // |1 bytes               |bytes_size        |sizeof(UInt8)|required size |
+        // |bytes_of_original_type|first_value|frame_of_reference|width(bits)  |bitpacked data|
+        // |1 bytes               |bytes_size |bytes_size        |sizeof(UInt8)|required size |
         auto bytes_size = magic_enum::enum_integer(data_type);
-        const size_t count = uncompressed_size / bytes_size;
-        return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
+        const size_t deltas_count = uncompressed_size / bytes_size - 1;
+        return 1 + bytes_size * 2 + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(deltas_count, bytes_size * 8);
     }
     default:
         return 1 + LZ4_COMPRESSBOUND(uncompressed_size);
@@ -72,13 +72,19 @@ UInt32 compressData(const char * source, UInt32 source_size, char * dest)
     constexpr auto bytes_size = sizeof(T);
     if unlikely (source_size % bytes_size != 0)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
-    const auto count = source_size / sizeof(T);
+    const auto count = source_size / bytes_size;
     DB::Compression::deltaEncoding<T>(reinterpret_cast<const T *>(source), count, reinterpret_cast<T *>(dest));
+    if (unlikely(count == 1))
+        return bytes_size;
     // Cast deltas to signed type to better compress negative values.
     // For example, if we have a sequence of UInt8 values [3, 2, 1, 0], the deltas will be [3, -1, -1, -1]
     // If we compress them as UInt8, we will get [3, 255, 255, 255], which is not optimal.
     using TS = typename std::make_signed<T>::type;
-    return DB::CompressionCodecFOR::compressData<TS>(reinterpret_cast<TS *>(dest), source_size, dest);
+    auto for_size = DB::CompressionCodecFOR::compressData<TS>(
+        reinterpret_cast<TS *>(dest + bytes_size),
+        source_size - bytes_size,
+        dest + bytes_size);
+    return bytes_size + for_size;
 }
 
 } // namespace

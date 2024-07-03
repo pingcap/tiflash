@@ -33,9 +33,6 @@ protected:
 
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
-    bool isCompression() const override { return false; }
-    bool isGenericCompression() const override { return false; }
-
 private:
     template <typename T>
     UInt32 compressDataForInteger(const char * source, UInt32 source_size, char * dest) const;

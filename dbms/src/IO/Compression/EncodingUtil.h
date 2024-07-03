@@ -256,7 +256,12 @@ template <std::integral T>
 void ordinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     using TS = typename std::make_signed_t<T>;
-    FORDecoding<TS>(src, source_size, dest, dest_size);
+    // copy first value to dest
+    memcpy(dest, src, sizeof(T));
+    if (unlikely(source_size <= sizeof(T)))
+        return;
+    // decode deltas
+    FORDecoding<TS>(src + sizeof(T), source_size - sizeof(T), dest + sizeof(T), dest_size - sizeof(T));
     ordinaryDeltaDecoding<T>(dest, dest_size, dest);
 }
 

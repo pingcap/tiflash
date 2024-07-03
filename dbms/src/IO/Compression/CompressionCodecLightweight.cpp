@@ -120,6 +120,11 @@ void CompressionCodecLightweight::doDecompressData(
     case CompressionDataType::String:
         decompressDataForNonInteger(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
+    default:
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot decompress lightweight codec data. Invalid data type {}",
+            static_cast<int>(data_type.value()));
     }
 }
 

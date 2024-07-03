@@ -101,12 +101,10 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
         return;
     }
 
-    // additional T bytes for min_delta, and 1 byte for width
-    static constexpr auto ADDTIONAL_BYTES = sizeof(T) + sizeof(UInt8);
-
     // Check CONSTANT
-    T min_value = *std::min_element(values.begin(), values.end());
-    T max_value = *std::max_element(values.begin(), values.end());
+    auto minmax_value = std::minmax_element(values.begin(), values.end());
+    T min_value = *minmax_value.first;
+    T max_value = *minmax_value.second;
     if (min_value == max_value)
     {
         state = min_value;
@@ -122,14 +120,17 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     if (needAnalyzeDelta())
     {
         // Check CONSTANT_DELTA
-        deltas.reserve(values.size());
-        deltas.push_back(values[0]);
+
+        // If values.size() == 1, mode will be CONSTANT_DELTA
+        // so values.size() must be greater than 1 here.
+        deltas.reserve(values.size() - 1);
         for (size_t i = 1; i < values.size(); ++i)
         {
             deltas.push_back(values[i] - values[i - 1]);
         }
-        min_delta = *std::min_element(deltas.cbegin(), deltas.cend());
-        if (min_delta == *std::max_element(deltas.cbegin(), deltas.cend()))
+        auto minmax_delta = std::minmax_element(deltas.cbegin(), deltas.cend());
+        min_delta = *minmax_delta.first;
+        if (min_delta == *minmax_delta.second)
         {
             state = static_cast<T>(min_delta);
             mode = IntegerMode::CONSTANT_DELTA;
@@ -138,6 +139,8 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
 
         // DELTA_FOR
         delta_for_width = Compression::FOREncodingWidth(deltas, min_delta);
+        // values[0], min_delta, 1 byte for width, and the rest for compressed data
+        static constexpr auto ADDTIONAL_BYTES = sizeof(T) + sizeof(UInt8) + sizeof(T);
         delta_for_size = BitpackingPrimitives::getRequiredSize(deltas.size(), delta_for_width) + ADDTIONAL_BYTES;
     }
 
@@ -157,6 +160,8 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     }
 
     UInt8 for_width = BitpackingPrimitives::minimumBitWidth<T>(max_value - min_value);
+    // additional T bytes for min_delta, and 1 byte for width
+    static constexpr auto ADDTIONAL_BYTES = sizeof(T) + sizeof(UInt8);
     size_t for_size = BitpackingPrimitives::getRequiredSize(values.size(), for_width) + ADDTIONAL_BYTES;
     size_t estimate_lz_size = values.size() * sizeof(T) / ESRTIMATE_LZ4_COMPRESSION_RATIO;
     size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::runLengthPairsSize(rle);
@@ -232,6 +237,9 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     case IntegerMode::DELTA_FOR:
     {
         DeltaFORState delta_for_state = std::get<3>(state);
+        unalignedStore<T>(dest, values[0]);
+        dest += sizeof(T);
+        compressed_size += sizeof(T);
         compressed_size += Compression::FOREncoding<typename std::make_signed_t<T>, true>(
             delta_for_state.deltas,
             delta_for_state.min_delta_value,
