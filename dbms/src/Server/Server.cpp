@@ -1503,7 +1503,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             S3::ClientFactory::instance().setKVCluster(tmt.getKVCluster());
         }
     }
-
+    LOG_INFO(log, "Init S3 GC Manager");
+    global_context->getTMTContext().initS3GCManager(tiflash_instance_wrap.proxy_helper);
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
