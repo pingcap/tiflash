@@ -114,3 +114,4 @@ template bool HashJoinPointerTable::build<UInt64>(
     size_t max_build_size);
 
 } // namespace DB
+
