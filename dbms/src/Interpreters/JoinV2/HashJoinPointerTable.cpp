@@ -18,7 +18,7 @@
 namespace DB
 {
 
-void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshold)
+void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshold [[maybe_unused]])
 {
     pointer_table_size = pointerTableCapacity(row_count);
     if (pointer_table_size > (1ULL << 32))
@@ -29,7 +29,8 @@ void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshol
     RUNTIME_ASSERT(1ULL << pointer_table_size_degree == pointer_table_size);
     RUNTIME_ASSERT(pointer_table_size_degree <= 32);
 
-    enable_probe_prefetch = pointer_table_size >= probe_prefetch_threshold;
+    //enable_probe_prefetch = pointer_table_size >= probe_prefetch_threshold;
+    enable_probe_prefetch = false;
 
     pointer_table_size_mask = (pointer_table_size - 1) << (32 - pointer_table_size_degree);
 
@@ -99,19 +100,28 @@ bool HashJoinPointerTable::build(
     }
     worker_data.build_pointer_table_size += build_size;
     worker_data.build_pointer_table_time += watch.elapsedMilliseconds();
-    return is_end;
+    return !is_end;
 }
 
+template bool HashJoinPointerTable::build<UInt8>(
+    const HashJoinRowLayout & row_layout,
+    JoinBuildWorkerData & worker_data,
+    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
+    size_t max_build_size);
+template bool HashJoinPointerTable::build<UInt16>(
+    const HashJoinRowLayout & row_layout,
+    JoinBuildWorkerData & worker_data,
+    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
+    size_t max_build_size);
 template bool HashJoinPointerTable::build<UInt32>(
     const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
-template bool HashJoinPointerTable::build<UInt64>(
+template bool HashJoinPointerTable::build<size_t>(
     const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
 
 } // namespace DB
-

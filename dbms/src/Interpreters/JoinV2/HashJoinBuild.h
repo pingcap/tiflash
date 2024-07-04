@@ -52,7 +52,6 @@ struct alignas(ABSL_CACHELINE_SIZE) JoinBuildWorkerData
     PaddedPODArray<size_t> partition_row_count;
 
     size_t build_time = 0;
-    size_t convert_time = 0;
 
     size_t build_pointer_table_time = 0;
     size_t build_pointer_table_size = 0;

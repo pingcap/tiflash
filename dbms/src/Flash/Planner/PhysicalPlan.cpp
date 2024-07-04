@@ -27,6 +27,7 @@
 #include <Flash/Planner/Plans/PhysicalExpand2.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
+#include <Flash/Planner/Plans/PhysicalJoinV2.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
 #include <Flash/Planner/Plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalMockExchangeSender.h>
@@ -208,14 +209,19 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         buildFinalProjection(fmt::format("{}_l_", executor_id), false);
         auto left = popBack();
 
-        pushBack(PhysicalJoin::build(
-            context,
-            executor_id,
-            log,
-            executor->join(),
-            FineGrainedShuffle(executor),
-            left,
-            right));
+        auto fine_grained_shuffle = FineGrainedShuffle(executor);
+        if (context.getSettingsRef().enable_resource_control && !fine_grained_shuffle.enable()
+            && PhysicalJoinV2::isSupported(executor->join()))
+        {
+            pushBack(
+                PhysicalJoinV2::build(context, executor_id, log, executor->join(), fine_grained_shuffle, left, right));
+        }
+        else
+        {
+            pushBack(
+                PhysicalJoin::build(context, executor_id, log, executor->join(), fine_grained_shuffle, left, right));
+        }
+
         break;
     }
     case tipb::ExecType::TypeExpand:

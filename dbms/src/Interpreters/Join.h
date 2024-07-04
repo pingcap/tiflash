@@ -22,6 +22,7 @@
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RuntimeFilter.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/AggregationCommon.h>
@@ -37,14 +38,6 @@
 
 namespace DB
 {
-struct JoinProfileInfo
-{
-    UInt64 peak_build_bytes_usage = 0;
-    bool is_spill_enabled = false;
-    bool is_spilled = false;
-};
-using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
-
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 

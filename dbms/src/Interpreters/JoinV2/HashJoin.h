@@ -17,6 +17,7 @@
 #include <Common/Arena.h>
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinV2/HashJoinBuild.h>
@@ -41,7 +42,9 @@ public:
         const NamesAndTypes & output_columns_,
         const TiDB::TiDBCollators & collators_,
         const JoinNonEqualConditions & non_equal_conditions_,
-        const Settings & settings);
+        const Settings & settings,
+        const String & match_helper_name_,
+        const String & flag_mapped_entry_helper_name_);
 
     void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
 
@@ -49,16 +52,26 @@ public:
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
-    /// Return true if it is the last build thread.
+    /// Return true if it is the last build worker.
     bool finishOneBuild(size_t stream_index);
+    /// Return true if it is the last probe worker.
+    bool finishOneProbe(size_t stream_index);
 
     bool buildPointerTable(size_t stream_index);
 
     Block joinBlock(JoinProbeContext & context, size_t stream_index);
 
-    Block removeUselessColumn(Block & block) const;
+    void removeUselessColumn(Block & block) const;
+    void removeUselessColumnForOutput(Block & block) const;
 
+    const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
+    const Names & getRequiredColumns() const { return required_columns; }
     void finalize(const Names & parent_require);
+
+    size_t getBuildConcurrency() const { return build_concurrency; }
+    size_t getProbeConcurrency() const { return probe_concurrency; }
+
+    const JoinProfileInfoPtr & getProfileInfo() const { return profile_info; }
 
 private:
     void initRowLayoutAndHashJoinMethod();
@@ -82,11 +95,17 @@ private:
 
     const JoinNonEqualConditions non_equal_conditions;
 
-    HashJoinSettings settings;
+    const HashJoinSettings settings;
+
+    // only use for left outer semi joins.
+    const String match_helper_name;
+    // only use for right semi, right anti joins with other conditions,
+    // used to name the column that records matched map entry before other conditions filter
+    const String flag_mapped_entry_helper_name;
 
     const LoggerPtr log;
 
-    bool has_other_condition;
+    const bool has_other_condition;
 
     bool initialized = false;
 
@@ -113,13 +132,18 @@ private:
     /// Build phase
     size_t build_concurrency;
     std::vector<JoinBuildWorkerData> build_workers_data;
-    std::atomic<size_t> active_build_threads = 0;
+    std::atomic<size_t> active_build_worker = 0;
 
     /// Probe phase
     size_t probe_concurrency;
     std::vector<JoinProbeWorkerData> probe_workers_data;
+    std::atomic<size_t> active_probe_worker = 0;
 
     HashJoinPointerTable pointer_table;
+
+    const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 };
+
+using HashJoinPtr = std::shared_ptr<HashJoin>;
 
 } // namespace DB

@@ -318,7 +318,7 @@ void ColumnDecimal<T>::insertManyFrom(const IColumn & src, size_t position, size
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnDecimal<T>::insertDisjunctFrom(const IColumn & src, const IColumn::Offsets & position_vec)
 {
     const auto & src_data = static_cast<const ColumnDecimal &>(src).data;
     size_t old_size = data.size();

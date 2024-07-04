@@ -72,7 +72,7 @@ public:
             insertFrom(src_, n);
     }
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    void insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec) override
     {
         for (auto position : position_vec)
             insertFrom(src_, position);

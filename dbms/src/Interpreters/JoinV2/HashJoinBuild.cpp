@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Stopwatch.h>
 #include <Interpreters/JoinV2/HashJoinBuild.h>
 
 namespace DB
@@ -31,7 +30,6 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     JoinBuildWorkerData & wd)
 {
-    Stopwatch watch;
     using Type = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
@@ -154,8 +152,6 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         if (wd.partition_row_count[i] > 0)
             multi_row_containers[i]->insert(std::move(partition_column_row[i]), wd.partition_row_count[i]);
     }
-
-    wd.convert_time += watch.elapsedMilliseconds();
 }
 
 template <typename KeyGetter>

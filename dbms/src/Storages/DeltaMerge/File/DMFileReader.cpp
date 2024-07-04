@@ -232,7 +232,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
             if (size_t passed_count = countBytesInFilter(filter, offset, rows); passed_count != rows)
             {
-                std::vector<size_t> positions;
+                IColumn::Offsets positions;
                 positions.reserve(passed_count);
                 for (size_t p = offset; p < offset + rows; ++p)
                 {

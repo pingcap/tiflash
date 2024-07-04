@@ -101,7 +101,7 @@ public:
         size_t sz = key_columns.size();
         vec.resize(sz);
         fixed_size.resize(sz);
-        size_t fixed_size_sum = 0;
+        fixed_size_sum = 0;
         for (size_t i = 0; i < sz; ++i)
         {
             vec[i] = key_columns[i]->getRawData().data;
@@ -131,15 +131,28 @@ public:
 
     ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
+    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return fixed_size_sum; }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, UInt8 * pos) { memcpy(pos, &t, sizeof(T)); }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, UInt8 * pos)
+    {
+        union
+        {
+            T key;
+            char data[sizeof(T)];
+        };
+        key = t;
+        memcpy(pos, data, fixed_size_sum);
+    }
 
     ALWAYS_INLINE T deserializeJoinKey(const UInt8 * pos)
     {
-        T t;
-        memcpy(&t, pos, sizeof(T));
-        return t;
+        union
+        {
+            T key;
+            char data[sizeof(T)];
+        };
+        memcpy(data, pos, fixed_size_sum);
+        return key;
     }
 
     ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
@@ -147,6 +160,7 @@ public:
 private:
     std::vector<const char *> vec;
     std::vector<size_t> fixed_size;
+    size_t fixed_size_sum;
 };
 
 class HashJoinKeysFixedOther

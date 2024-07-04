@@ -32,9 +32,9 @@ bool JoinProbeContext::isCurrentProbeFinished() const
     return start_row_idx >= block.rows();
 }
 
-void JoinProbeContext::resetBlock(Block && block_)
+void JoinProbeContext::resetBlock(Block & block_)
 {
-    block = std::move(block_);
+    block = block_;
     start_row_idx = 0;
     current_row_probe_head = nullptr;
 
@@ -51,19 +51,19 @@ void JoinProbeContext::prepareForHashProbe(
     ASTTableJoin::Kind kind,
     const Names & key_names,
     const String & filter_column,
-    const NameSet & probe_output_name_set,
+    const NameSet & probe_output_name_set [[maybe_unused]],
     const TiDB::TiDBCollators & collators)
 {
     if (is_prepared)
         return;
 
-    for (size_t pos = 0; pos < block.columns();)
+    /*for (size_t pos = 0; pos < block.columns();)
     {
         if (!probe_output_name_set.contains(block.getByPosition(pos).name))
             block.erase(pos);
         else
             ++pos;
-    }
+    }*/
 
     key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names);
     /// Keys with NULL value in any column won't join to anything.
@@ -101,39 +101,145 @@ void JoinProbeContext::prepareForHashProbe(
 }
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockInner(JoinProbeParameter & param, MutableColumns & added_columns)
+class JoinProbeBlockHelper
 {
-    using Type = typename KeyGetter::Type;
+public:
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
 
-    Type & key_getter = *static_cast<Type *>(param.context.key_getter.get());
-
-    size_t rows = param.context.block.rows();
-    size_t limit_count = rows - param.context.start_row_idx;
-    if (limit_count < 1024)
-        limit_count = 1024;
-
-    auto & insert_batch = param.wd.insert_batch;
-    insert_batch.clear();
-    insert_batch.reserve(param.settings.probe_insert_batch_size);
-    auto & insert_batch_other = param.wd.insert_batch_other;
-    if constexpr (!key_all_raw)
+    JoinProbeBlockHelper(
+        JoinProbeContext & context,
+        JoinProbeWorkerData & wd,
+        HashJoinKeyMethod method,
+        ASTTableJoin::Kind kind,
+        const JoinNonEqualConditions & non_equal_conditions,
+        const HashJoinSettings & settings,
+        const HashJoinPointerTable & pointer_table,
+        const HashJoinRowLayout & row_layout,
+        MutableColumns & added_columns)
+        : context(context)
+        , wd(wd)
+        , method(method)
+        , kind(kind)
+        , non_equal_conditions(non_equal_conditions)
+        , settings(settings)
+        , pointer_table(pointer_table)
+        , row_layout(row_layout)
+        , added_columns(added_columns)
     {
-        insert_batch_other.clear();
-        insert_batch_other.reserve(param.settings.probe_insert_batch_size);
+        wd.insert_batch.clear();
+        wd.insert_batch.reserve(settings.probe_insert_batch_size);
+        if constexpr (!key_all_raw)
+        {
+            wd.insert_batch_other.clear();
+            wd.insert_batch_other.reserve(settings.probe_insert_batch_size);
+        }
+
+        if (pointer_table.enableProbePrefetch())
+            wd.selective_offsets.resize(context.block.rows());
+        else
+            wd.offsets_to_replicate.resize(context.block.rows());
     }
 
+    void joinProbeBlockImpl();
+
+    void NO_INLINE joinProbeBlockInner();
+    void NO_INLINE joinProbeBlockInnerPrefetch();
+
+    void NO_INLINE joinProbeBlockLeftOuter();
+    void NO_INLINE joinProbeBlockLeftOuterPrefetch();
+
+    void NO_INLINE joinProbeBlockSemi();
+    void NO_INLINE joinProbeBlockSemiPrefetch();
+
+    void NO_INLINE joinProbeBlockAnti();
+    void NO_INLINE joinProbeBlockAntiPrefetch();
+
+    template <bool has_other_condition>
+    void NO_INLINE joinProbeBlockRightOuter();
+    template <bool has_other_condition>
+    void NO_INLINE joinProbeBlockRightOuterPrefetch();
+
+    template <bool has_other_condition>
+    void NO_INLINE joinProbeBlockRightSemi();
+    template <bool has_other_condition>
+    void NO_INLINE joinProbeBlockRightSemiPrefetch();
+
+    template <bool has_other_condition>
+    void NO_INLINE joinProbeBlockRightAnti();
+    template <bool has_other_condition>
+    void NO_INLINE joinProbeBlockRightAntiPrefetch();
+
+private:
+    inline void insertRowToBatch(RowPtr head, size_t key_size);
+    template <bool force>
+    inline void FlushBatchIfNecessary();
+
+private:
+    JoinProbeContext & context;
+    JoinProbeWorkerData & wd;
+    const HashJoinKeyMethod method;
+    const ASTTableJoin::Kind kind;
+    const JoinNonEqualConditions & non_equal_conditions;
+    const HashJoinSettings & settings;
+    const HashJoinPointerTable & pointer_table;
+    const HashJoinRowLayout & row_layout;
+    MutableColumns & added_columns;
+};
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::insertRowToBatch(RowPtr row_ptr, size_t key_size)
+{
+    wd.insert_batch.push_back(row_ptr);
+    if constexpr (!key_all_raw)
+    {
+        wd.insert_batch_other.push_back(row_ptr + key_size);
+    }
+    FlushBatchIfNecessary<false>();
+}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <bool force>
+void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::FlushBatchIfNecessary()
+{
+    if constexpr (!force)
+    {
+        if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
+            return;
+    }
+    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+    {
+        IColumn * column = added_columns[column_index].get();
+        if (has_null_map && is_nullable)
+            column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+        column->deserializeAndInsertFromPos(wd.insert_batch);
+    }
+    for (auto [column_index, _] : row_layout.other_column_indexes)
+    {
+        if constexpr (key_all_raw)
+            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch);
+        else
+            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch_other);
+    }
+
+    wd.insert_batch.clear();
+    if constexpr (!key_all_raw)
+        wd.insert_batch_other.clear();
+}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockInner()
+{
+    auto & key_getter = *static_cast<typename KeyGetter::Type *>(context.key_getter.get());
+
+    size_t rows = context.block.rows();
     size_t current_offset = 0;
-    auto & offsets_to_replicate = param.wd.offsets_to_replicate;
-    size_t & idx = param.context.start_row_idx;
-    RowPtr & head = param.context.current_row_probe_head;
-    const auto & pointer_table = param.pointer_table;
-    const auto & row_layout = param.row_layout;
-    const auto & settings = param.settings;
+    auto & offsets_to_replicate = wd.offsets_to_replicate;
+    size_t & idx = context.start_row_idx;
+    RowPtr & head = context.current_row_probe_head;
     for (; idx < rows; ++idx)
     {
-        if (has_null_map && (*param.context.null_map)[idx])
+        if (has_null_map && (*context.null_map)[idx])
         {
             offsets_to_replicate[idx] = current_offset;
             continue;
@@ -149,31 +255,9 @@ void NO_INLINE joinProbeBlockInner(JoinProbeParameter & param, MutableColumns & 
             const auto & key2 = key_getter.deserializeJoinKey(head + row_layout.join_key_offset);
             if (key_getter.joinKeyIsEqual(key, key2))
             {
-                insert_batch.push_back(head + row_layout.join_key_offset);
-                if constexpr (!key_all_raw)
-                {
-                    size_t key_size = key_getter.getJoinKeySize(key2);
-                    insert_batch_other.push_back(head + row_layout.join_key_offset + key_size);
-                }
                 ++current_offset;
-                if unlikely (insert_batch.size() >= settings.probe_insert_batch_size)
-                {
-                    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-                    {
-                        IColumn * column = added_columns[column_index].get();
-                        if (has_null_map && is_nullable)
-                            column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-                        column->deserializeAndInsertFromPos(insert_batch);
-                    }
-                    for (auto [column_index, _] : row_layout.other_column_indexes)
-                    {
-                        if constexpr (key_all_raw)
-                            added_columns[column_index]->deserializeAndInsertFromPos(insert_batch);
-                        else
-                            added_columns[column_index]->deserializeAndInsertFromPos(insert_batch_other);
-                    }
-                }
-                if unlikely (current_offset >= param.settings.max_block_size)
+                insertRowToBatch(head + row_layout.join_key_offset, key_getter.getJoinKeySize(key2));
+                if unlikely (current_offset >= settings.max_block_size)
                     break;
             }
             head = row_layout.getNextRowPtr<Inner>(head);
@@ -187,23 +271,7 @@ void NO_INLINE joinProbeBlockInner(JoinProbeParameter & param, MutableColumns & 
             break;
         }
     }
-    if (!insert_batch.empty())
-    {
-        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-        {
-            IColumn * column = added_columns[column_index].get();
-            if (has_null_map && is_nullable)
-                column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-            column->deserializeAndInsertFromPos(insert_batch);
-        }
-        for (auto [column_index, _] : row_layout.other_column_indexes)
-        {
-            if constexpr (key_all_raw)
-                added_columns[column_index]->deserializeAndInsertFromPos(insert_batch);
-            else
-                added_columns[column_index]->deserializeAndInsertFromPos(insert_batch_other);
-        }
-    }
+    FlushBatchIfNecessary<true>();
     if constexpr (has_null_map)
     {
         for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
@@ -219,76 +287,79 @@ void NO_INLINE joinProbeBlockInner(JoinProbeParameter & param, MutableColumns & 
 }
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockInnerPrefetch(JoinProbeParameter & param, MutableColumns & added_columns)
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockInnerPrefetch()
 {}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockLeftOuter(JoinProbeParameter & param, MutableColumns & added_columns)
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockLeftOuter()
 {}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockLeftOuterPrefetch(JoinProbeParameter & param, MutableColumns & added_columns)
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockLeftOuterPrefetch()
 {}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockSemi(JoinProbeParameter & param, MutableColumns & added_columns)
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockSemi()
 {}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockSemiPrefetch(JoinProbeParameter & param, MutableColumns & added_columns)
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockSemiPrefetch()
 {}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockAnti(JoinProbeParameter & param, MutableColumns & added_columns)
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockAnti()
 {}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE joinProbeBlockAntiPrefetch(JoinProbeParameter & param, MutableColumns & added_columns)
-{}
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool has_other_condition>
-void NO_INLINE joinProbeBlockRightOuter(JoinProbeParameter & param, MutableColumns & added_columns)
-{}
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool has_other_condition>
-void NO_INLINE joinProbeBlockRightOuterPrefetch(JoinProbeParameter & param, MutableColumns & added_columns)
-{}
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool has_other_condition>
-void NO_INLINE joinProbeBlockRightSemi(JoinProbeParameter & param, MutableColumns & added_columns)
-{}
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool has_other_condition>
-void NO_INLINE joinProbeBlockRightSemiPrefetch(JoinProbeParameter & param, MutableColumns & added_columns)
-{}
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool has_other_condition>
-void NO_INLINE joinProbeBlockRightAnti(JoinProbeParameter & param, MutableColumns & added_columns)
-{}
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool has_other_condition>
-void NO_INLINE joinProbeBlockRightAntiPrefetch(JoinProbeParameter & param, MutableColumns & added_columns)
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockAntiPrefetch()
 {}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void joinProbeBlockImpl(JoinProbeParameter & param, MutableColumns & added_columns)
+template <bool has_other_condition>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightOuter()
+{}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <bool has_other_condition>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightOuterPrefetch()
+{}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <bool has_other_condition>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightSemi()
+{}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <bool has_other_condition>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightSemiPrefetch()
+{}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <bool has_other_condition>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightAnti()
+{}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <bool has_other_condition>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightAntiPrefetch()
+{}
+
+template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockImpl()
 {
-#define CALL(JoinType)                                                                                  \
-    if (param.pointer_table.enableProbePrefetch())                                                      \
-        joinProbeBlock##JoinType##Prefetch<KeyGetter, has_null_map, key_all_raw>(param, added_columns); \
-    else                                                                                                \
-        joinProbeBlock##JoinType<KeyGetter, has_null_map, key_all_raw>(param, added_columns);
+#define CALL(JoinType)                        \
+    if (pointer_table.enableProbePrefetch())  \
+        joinProbeBlock##JoinType##Prefetch(); \
+    else                                      \
+        joinProbeBlock##JoinType();
 
-#define CALL2(JoinType, has_other_condition)                                                           \
-    if (param.pointer_table.enableProbePrefetch())                                                     \
-        joinProbeBlock##JoinType##Prefetch<KeyGetter, has_null_map, key_all_raw, has_other_condition>( \
-            param,                                                                                     \
-            added_columns);                                                                            \
-    else                                                                                               \
-        joinProbeBlock##JoinType<KeyGetter, has_null_map, key_all_raw, has_other_condition>(param, added_columns);
+#define CALL2(JoinType, has_other_condition)                       \
+    if (pointer_table.enableProbePrefetch())                       \
+        joinProbeBlock##JoinType##Prefetch<has_other_condition>(); \
+    else                                                           \
+        joinProbeBlock##JoinType<has_other_condition>();
 
-    auto kind = param.kind;
-    bool has_other_condition = param.non_equal_conditions.other_cond_expr != nullptr;
+    bool has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
     if (kind == Inner)
         CALL(Inner)
     else if (kind == LeftOuter)
@@ -316,32 +387,69 @@ void joinProbeBlockImpl(JoinProbeParameter & param, MutableColumns & added_colum
 #undef CALL
 }
 
-void joinProbeBlock(JoinProbeParameter & param, MutableColumns & added_columns)
+void joinProbeBlock(
+    JoinProbeContext & context,
+    JoinProbeWorkerData & wd,
+    HashJoinKeyMethod method,
+    ASTTableJoin::Kind kind,
+    const JoinNonEqualConditions & non_equal_conditions,
+    const HashJoinSettings & settings,
+    const HashJoinPointerTable & pointer_table,
+    const HashJoinRowLayout & row_layout,
+    MutableColumns & added_columns)
 {
-    if (param.context.block.rows() == 0)
+    if (context.block.rows() == 0)
         return;
 
-    switch (param.method)
+    switch (method)
     {
     case HashJoinKeyMethod::Empty:
     case HashJoinKeyMethod::Cross:
         break;
 
-#define M(METHOD)                                                                             \
-    case HashJoinKeyMethod::METHOD:                                                           \
-        using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>;    \
-        if (param.context.null_map)                                                           \
-            if (param.row_layout.join_key_all_raw)                                            \
-                joinProbeBlockImpl<KeyGetterType##METHOD, true, true>(param, added_columns);  \
-            else                                                                              \
-                joinProbeBlockImpl<KeyGetterType##METHOD, true, false>(param, added_columns); \
-        else if (param.row_layout.join_key_all_raw)                                           \
-            joinProbeBlockImpl<KeyGetterType##METHOD, false, true>(param, added_columns);     \
-        else                                                                                  \
-            joinProbeBlockImpl<KeyGetterType##METHOD, false, false>(param, added_columns);    \
+#define CALL(KeyGetter, has_null_map, key_all_row)              \
+    JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_row>( \
+        context,                                                \
+        wd,                                                     \
+        method,                                                 \
+        kind,                                                   \
+        non_equal_conditions,                                   \
+        settings,                                               \
+        pointer_table,                                          \
+        row_layout,                                             \
+        added_columns)                                          \
+        .joinProbeBlockImpl();
+
+#define M(METHOD)                                                                          \
+    case HashJoinKeyMethod::METHOD:                                                        \
+        using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
+        if (context.null_map)                                                              \
+        {                                                                                  \
+            if (row_layout.join_key_all_raw)                                               \
+            {                                                                              \
+                CALL(KeyGetterType##METHOD, true, true);                                   \
+            }                                                                              \
+            else                                                                           \
+            {                                                                              \
+                CALL(KeyGetterType##METHOD, true, false);                                  \
+            }                                                                              \
+        }                                                                                  \
+        else                                                                               \
+        {                                                                                  \
+            if (row_layout.join_key_all_raw)                                               \
+            {                                                                              \
+                CALL(KeyGetterType##METHOD, false, true);                                  \
+            }                                                                              \
+            else                                                                           \
+            {                                                                              \
+                CALL(KeyGetterType##METHOD, false, false);                                 \
+            }                                                                              \
+        }                                                                                  \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M
+
+#undef CALL
 
     default:
         throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);

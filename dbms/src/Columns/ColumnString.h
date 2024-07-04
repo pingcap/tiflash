@@ -155,7 +155,7 @@ public:
             insertFromImpl(src, position);
     }
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    void insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec) override
     {
         const auto & src = static_cast<const ColumnString &>(src_);
         offsets.reserve(offsets.size() + position_vec.size());

@@ -43,7 +43,7 @@ struct JoinProbeContext
     bool current_row_is_matched = false;
 
     bool isCurrentProbeFinished() const;
-    void resetBlock(Block && block_);
+    void resetBlock(Block & block_);
 
     void prepareForHashProbe(
         HashJoinKeyMethod method,
@@ -69,38 +69,16 @@ struct alignas(ABSL_CACHELINE_SIZE) JoinProbeWorkerData
     size_t row_count = 0;
 };
 
-struct JoinProbeParameter
-{
-    JoinProbeParameter(
-        JoinProbeContext & context,
-        JoinProbeWorkerData & wd,
-        HashJoinKeyMethod method,
-        ASTTableJoin::Kind kind,
-        const JoinNonEqualConditions & non_equal_conditions,
-        const HashJoinSettings & settings,
-        const HashJoinPointerTable & pointer_table,
-        const HashJoinRowLayout & row_layout)
-        : context(context)
-        , wd(wd)
-        , method(method)
-        , kind(kind)
-        , non_equal_conditions(non_equal_conditions)
-        , settings(settings)
-        , pointer_table(pointer_table)
-        , row_layout(row_layout)
-    {}
-
-    JoinProbeContext & context;
-    JoinProbeWorkerData & wd;
-    const HashJoinKeyMethod method;
-    const ASTTableJoin::Kind kind;
-    const JoinNonEqualConditions & non_equal_conditions;
-    const HashJoinSettings & settings;
-    const HashJoinPointerTable & pointer_table;
-    const HashJoinRowLayout & row_layout;
-};
-
-void joinProbeBlock(JoinProbeParameter & param, MutableColumns & added_columns);
+void joinProbeBlock(
+    JoinProbeContext & context,
+    JoinProbeWorkerData & wd,
+    HashJoinKeyMethod method,
+    ASTTableJoin::Kind kind,
+    const JoinNonEqualConditions & non_equal_conditions,
+    const HashJoinSettings & settings,
+    const HashJoinPointerTable & pointer_table,
+    const HashJoinRowLayout & row_layout,
+    MutableColumns & added_columns);
 
 
 } // namespace DB

@@ -275,7 +275,7 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnNullable::insertDisjunctFrom(const IColumn & src, const Offsets & position_vec)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
     getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);

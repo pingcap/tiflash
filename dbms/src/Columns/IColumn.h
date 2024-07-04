@@ -144,7 +144,9 @@ public:
 
     /// Appends disjunctive elements from other column with the same type.
     /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertDisjunctFrom(ConstColumnXXX, ...)
-    virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+    using Offset = UInt64;
+    using Offsets = PaddedPODArray<Offset>;
+    virtual void insertDisjunctFrom(const IColumn & src, const Offsets & position_vec) = 0;
 
     /// Appends one field multiple times. Can be optimized in inherited classes.
     virtual void insertMany(const Field & field, size_t length)
@@ -335,9 +337,6 @@ public:
     /** Copies each element according offsets parameter.
       * (i-th element should be copied offsets[i] - offsets[i - 1] times.)
       */
-    using Offset = UInt64;
-    using Offsets = PaddedPODArray<Offset>;
-
     virtual Ptr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const = 0;
 
     Ptr replicate(const Offsets & offsets) const { return replicateRange(0, offsets.size(), offsets); }

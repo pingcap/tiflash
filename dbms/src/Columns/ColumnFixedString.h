@@ -85,7 +85,7 @@ public:
 
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+    void insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec) override;
 
     void insertData(const char * pos, size_t length) override;
 

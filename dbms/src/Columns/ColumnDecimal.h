@@ -127,7 +127,7 @@ public:
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+    void insertDisjunctFrom(const IColumn & src_, const IColumn::Offsets & position_vec) override;
     void popBack(size_t n) override { data.resize_assume_reserved(data.size() - n); }
 
     StringRef getRawData() const override

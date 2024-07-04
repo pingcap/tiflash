@@ -219,7 +219,7 @@ public:
         data.resize_fill(data.size() + length, value);
     }
 
-    void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) override
+    void insertDisjunctFrom(const IColumn & src, const IColumn::Offsets & position_vec) override
     {
         const auto & src_container = static_cast<const Self &>(src).getData();
         size_t old_size = data.size();
