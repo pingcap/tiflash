@@ -14,20 +14,30 @@
 
 #pragma once
 
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/AutoPassThroughHashAggContext.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
+template <bool force_streaming>
 class AutoPassThroughAggregateTransform : public TransformOp
 {
 public:
     AutoPassThroughAggregateTransform(
         PipelineExecutorContext & exec_context_,
         const Aggregator::Params & params_,
-        const AutoPassThroughSwitcher & switcher,
         const String & req_id_,
-        UInt64 row_limit_unit);
+        UInt64 row_limit_unit)
+        : TransformOp(exec_context_, req_id_)
+        , status(Status::building_hash_map)
+    {
+        auto_pass_through_context = std::make_shared<AutoPassThroughHashAggContext>(
+            params_,
+            [&]() { return exec_context.isCancelled(); },
+            req_id_,
+            row_limit_unit);
+    }
 
     String getName() const override { return "AutoPassThroughAggregateTransform"; }
 
@@ -52,4 +62,7 @@ private:
     Status status;
     AutoPassThroughHashAggContextPtr auto_pass_through_context;
 };
+
+template class AutoPassThroughAggregateTransform<true>;
+template class AutoPassThroughAggregateTransform<false>;
 } // namespace DB

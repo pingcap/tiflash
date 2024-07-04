@@ -17,14 +17,15 @@
 namespace DB
 {
 
-Block AutoPassThroughAggregatingBlockInputStream::readImpl()
+template <bool force_streaming>
+Block AutoPassThroughAggregatingBlockInputStream<force_streaming>::readImpl()
 {
     while (!build_done)
     {
         Block block = children[0]->read();
         if (block)
         {
-            auto_pass_through_context->onBlock(block);
+            auto_pass_through_context->onBlock<force_streaming>(block);
         }
         else
         {

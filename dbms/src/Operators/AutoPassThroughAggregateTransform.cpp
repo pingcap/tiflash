@@ -13,31 +13,15 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/AutoPassThroughAggregateTransform.h>
 
 #include <magic_enum.hpp>
 
 namespace DB
 {
-AutoPassThroughAggregateTransform::AutoPassThroughAggregateTransform(
-    PipelineExecutorContext & exec_context_,
-    const Aggregator::Params & params_,
-    const AutoPassThroughSwitcher & switcher,
-    const String & req_id_,
-    UInt64 row_limit_unit)
-    : TransformOp(exec_context_, req_id_)
-    , status(Status::building_hash_map)
-{
-    auto_pass_through_context = std::make_shared<AutoPassThroughHashAggContext>(
-        params_,
-        switcher,
-        [&]() { return exec_context.isCancelled(); },
-        req_id_,
-        row_limit_unit);
-}
 
-OperatorStatus AutoPassThroughAggregateTransform::transformImpl(Block & block)
+template <bool force_streaming>
+OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::transformImpl(Block & block)
 {
     switch (status)
     {
@@ -46,7 +30,7 @@ OperatorStatus AutoPassThroughAggregateTransform::transformImpl(Block & block)
         if unlikely (!block)
             status = Status::hash_map_done;
         else
-            auto_pass_through_context->onBlock(block);
+            auto_pass_through_context->onBlock<force_streaming>(block);
 
         if (!auto_pass_through_context->passThroughBufferEmpty())
         {
@@ -69,7 +53,8 @@ OperatorStatus AutoPassThroughAggregateTransform::transformImpl(Block & block)
     }
 }
 
-OperatorStatus AutoPassThroughAggregateTransform::tryOutputImpl(Block & block)
+template <bool force_streaming>
+OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::tryOutputImpl(Block & block)
 {
     if (!auto_pass_through_context->passThroughBufferEmpty())
     {

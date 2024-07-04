@@ -27,16 +27,16 @@ struct AutoPassThroughSwitcher
     {
         if (aggregation.has_pre_agg_mode())
         {
-            enabled = true;
+            has_set = true;
             mode = aggregation.pre_agg_mode();
         }
     }
-    AutoPassThroughSwitcher(bool enabled_, ::tipb::TiFlashPreAggMode mode_)
-        : enabled(enabled_)
+    AutoPassThroughSwitcher(bool has_set_, ::tipb::TiFlashPreAggMode mode_)
+        : has_set(has_set_)
         , mode(mode_)
     {}
 
-    bool enable() const { return enabled; }
+    bool enable() const { return has_set && !forcePreAgg(); }
 
     bool forcePreAgg() const { return mode == ::tipb::TiFlashPreAggMode::ForcePreAgg; }
 
@@ -44,7 +44,7 @@ struct AutoPassThroughSwitcher
 
     bool isAuto() const { return mode == ::tipb::TiFlashPreAggMode::Auto; }
 
-    bool enabled = false;
+    bool has_set = false;
     ::tipb::TiFlashPreAggMode mode;
 };
 
@@ -54,7 +54,6 @@ class AutoPassThroughHashAggContext
 public:
     AutoPassThroughHashAggContext(
         const Aggregator::Params & params_,
-        AutoPassThroughSwitcher switcher_,
         Aggregator::CancellationHook && hook,
         const String & req_id_,
         UInt64 row_limit_unit_,
@@ -66,7 +65,6 @@ public:
         , other_state_row_limit(row_limit_unit_ * other_state_unit_num)
         , row_limit_unit(row_limit_unit_)
         , log(Logger::get(req_id_))
-        , switcher(switcher_)
     {
         aggregator = std::make_unique<Aggregator>(params_, req_id_, 1, nullptr);
         aggregator->setCancellationHook(hook);
@@ -75,12 +73,20 @@ public:
         agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
         RUNTIME_CHECK(adjust_row_limit > 1024 && other_state_row_limit > 1024);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
-        RUNTIME_CHECK(switcher.enable());
     }
 
     ~AutoPassThroughHashAggContext() { statistics.log(log); }
 
-    void onBlock(Block & block);
+    template <bool force_streaming>
+    void onBlock(Block & block)
+    {
+        statistics.update(state, block.rows());
+        if constexpr (force_streaming)
+            onBlockForceStreaming(block);
+        else
+            onBlockAuto(block);
+    }
+
     Block getData();
 
     bool passThroughBufferEmpty() const { return pass_through_block_buffer.empty(); }
@@ -112,11 +118,14 @@ public:
     void updateAdjustStateRowLimitUnitNum(UInt64 u) { adjust_row_limit = row_limit_unit * u; }
 
 private:
+    void onBlockAuto(Block & block);
+    void onBlockForceStreaming(Block & block);
+
     void trySwitchFromInitState();
     void trySwitchFromAdjustState(size_t total_rows, size_t hit_rows);
     void trySwitchBackAdjustState(size_t block_rows);
 
-    void passThrough(const Block & block);
+    void pushPassThroughBuffer(const Block & block);
     Block getPassThroughBlock(const Block & block);
 
     void forceState();
@@ -196,8 +205,6 @@ private:
     size_t row_limit_unit;
 
     LoggerPtr log;
-
-    AutoPassThroughSwitcher switcher;
 };
 
 using AutoPassThroughHashAggContextPtr = std::shared_ptr<AutoPassThroughHashAggContext>;

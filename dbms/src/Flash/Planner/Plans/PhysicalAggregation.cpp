@@ -46,9 +46,6 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
 {
     RUNTIME_CHECK(child);
 
-    AutoPassThroughSwitcher auto_pass_through_switcher(aggregation);
-    auto_pass_through_agg_flag = auto_pass_through_switcher.enable();
-
     if (unlikely(aggregation.group_by_size() == 0 && aggregation.agg_func_size() == 0))
     {
         //should not reach here
@@ -93,6 +90,14 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
     auto schema = PhysicalPlanHelper::addSchemaProjectAction(expr_after_agg_actions, analyzer.getCurrentInputColumns());
+
+    AutoPassThroughSwitcher auto_pass_through_switcher(aggregation);
+    if (aggregation_keys.empty())
+    {
+        LOG_DEBUG(log, "switch off auto pass through because agg keys_size is zero");
+        auto_pass_through_switcher.mode = ::tipb::TiFlashPreAggMode::ForcePreAgg;
+    }
+    auto_pass_through_agg_flag = auto_pass_through_switcher.enable();
 
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,
@@ -148,10 +153,6 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         // Fine grained shuffle is for 2nd agg, auto pass through is for 1st agg.
         RUNTIME_CHECK(!auto_pass_through_switcher.enable());
 
-        // When group by key size is zero, the following ExchangeSender will PassThrough all rows to one tiflash.
-        // So shouldn't use fine grained or auto pass through.
-        RUNTIME_CHECK(!aggregation_keys.empty());
-
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
             && pipeline.hasMoreThanOneStream())
@@ -176,15 +177,32 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     }
     else if (auto_pass_through_switcher.enable())
     {
-        pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<AutoPassThroughAggregatingBlockInputStream>(
-                stream,
-                params,
-                auto_pass_through_switcher,
-                log->identifier(),
-                context.getSettings().max_block_size);
-            stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
-        });
+        if (auto_pass_through_switcher.forceStreaming())
+        {
+            pipeline.transform([&](auto & stream) {
+                stream = std::make_shared<AutoPassThroughAggregatingBlockInputStream<true>>(
+                    stream,
+                    params,
+                    log->identifier(),
+                    context.getSettings().max_block_size);
+                stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
+            });
+        }
+        else if (auto_pass_through_switcher.isAuto())
+        {
+            pipeline.transform([&](auto & stream) {
+                stream = std::make_shared<AutoPassThroughAggregatingBlockInputStream<false>>(
+                    stream,
+                    params,
+                    log->identifier(),
+                    context.getSettings().max_block_size);
+                stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
+            });
+        }
+        else
+        {
+            throw Exception("unexpected auto_pass_through_switcher");
+        }
     }
     else if (pipeline.streams.size() > 1)
     {
@@ -251,9 +269,9 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     // For auto pass through, it's only true for 1st agg, and fine grained shuffle is only true for 2nd agg.
     RUNTIME_CHECK(fine_grained_shuffle.enable() != auto_pass_through_switcher.enable());
 
-    // When group by key size is zero, the following ExchangeSender will PassThrough all rows to one tiflash.
-    // So shouldn't use fine grained or auto pass through.
-    RUNTIME_CHECK(!aggregation_keys.empty());
+    // auto pass through hashagg doesn't handle empty_result_for_aggregation_by_empty_set.
+    // Also tidb shouldn't generate this kind plan because all data is aggregated into one row if keys_size == 0.
+    RUNTIME_CHECK(auto_pass_through_switcher.enable() && !aggregation_keys.empty());
 
     executeExpression(exec_context, group_builder, before_agg_actions, log);
 
@@ -298,14 +316,30 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     }
     else if (auto_pass_through_switcher.enable())
     {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<AutoPassThroughAggregateTransform>(
-                exec_context,
-                params,
-                auto_pass_through_switcher,
-                log->identifier(),
-                context.getSettings().max_block_size));
-        });
+        if (auto_pass_through_switcher.forceStreaming())
+        {
+            group_builder.transform([&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<AutoPassThroughAggregateTransform<true>>(
+                    exec_context,
+                    params,
+                    log->identifier(),
+                    context.getSettings().max_block_size));
+            });
+        }
+        else if (auto_pass_through_switcher.isAuto())
+        {
+            group_builder.transform([&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<AutoPassThroughAggregateTransform<false>>(
+                    exec_context,
+                    params,
+                    log->identifier(),
+                    context.getSettings().max_block_size));
+            });
+        }
+        else
+        {
+            throw Exception("unexpected auto_pass_through_switcher");
+        }
     }
     else
     {

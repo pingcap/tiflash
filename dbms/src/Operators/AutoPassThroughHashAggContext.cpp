@@ -18,25 +18,22 @@
 
 namespace DB
 {
-void AutoPassThroughHashAggContext::onBlock(Block & block)
+void AutoPassThroughHashAggContext::onBlockAuto(Block & block)
 {
     RUNTIME_CHECK_MSG(!already_start_to_get_data, "Shouldn't insert into HashMap if already start to get data");
 
     forceState();
     agg_process_info->resetBlock(block);
-    statistics.update(state, block.rows());
     switch (state)
     {
     case State::Init:
     {
-        RUNTIME_CHECK(switcher.isAuto());
         aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
         trySwitchFromInitState();
         break;
     }
     case State::Adjust:
     {
-        RUNTIME_CHECK(switcher.isAuto());
         aggregator->executeOnBlockCollectHitRate(*agg_process_info, *many_data[0], 0);
         trySwitchFromAdjustState(agg_process_info->block.rows(), agg_process_info->hit_row_cnt);
         break;
@@ -44,23 +41,18 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
     case State::PreHashAgg:
     {
         aggregator->executeOnBlock(*agg_process_info, *many_data[0], 0);
-        if (switcher.isAuto())
-            trySwitchBackAdjustState(agg_process_info->block.rows());
+        trySwitchBackAdjustState(agg_process_info->block.rows());
         break;
     }
     case State::PassThrough:
     {
         const auto total_rows = agg_process_info->block.rows();
-        auto new_block = getPassThroughBlock(agg_process_info->block);
-        makeFullSelective(new_block);
-        passThrough(new_block);
-        if (switcher.isAuto())
-            trySwitchBackAdjustState(total_rows);
+        onBlockForceStreaming(agg_process_info->block);
+        trySwitchBackAdjustState(total_rows);
         break;
     }
     case State::Selective:
     {
-        RUNTIME_CHECK(switcher.isAuto());
         aggregator->executeOnBlockOnlyLookup(*agg_process_info, *many_data[0], 0);
         auto pass_through_rows = agg_process_info->not_found_rows;
         const auto total_rows = agg_process_info->block.rows();
@@ -69,7 +61,7 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
             RUNTIME_CHECK(!agg_process_info->block.info.selective);
             auto new_block = getPassThroughBlock(agg_process_info->block);
             new_block.info.selective = std::make_shared<std::vector<UInt64>>(std::move(pass_through_rows));
-            passThrough(new_block);
+            pushPassThroughBuffer(new_block);
         }
         trySwitchBackAdjustState(total_rows);
         break;
@@ -82,13 +74,16 @@ void AutoPassThroughHashAggContext::onBlock(Block & block)
     RUNTIME_CHECK(agg_process_info->allBlockDataHandled());
 }
 
+void AutoPassThroughHashAggContext::onBlockForceStreaming(Block & block)
+{
+    auto new_block = getPassThroughBlock(block);
+    makeFullSelective(new_block);
+    pushPassThroughBuffer(new_block);
+}
+
 void AutoPassThroughHashAggContext::forceState()
 {
-    if (switcher.isAuto() && many_data[0]->need_spill)
-        state = State::PassThrough;
-    else if (switcher.forcePreAgg())
-        state = State::PreHashAgg;
-    else if (switcher.forceStreaming())
+    if (many_data[0]->need_spill)
         state = State::PassThrough;
 }
 
@@ -156,7 +151,7 @@ void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
     }
 }
 
-void AutoPassThroughHashAggContext::passThrough(const Block & block)
+void AutoPassThroughHashAggContext::pushPassThroughBuffer(const Block & block)
 {
     pass_through_block_buffer.push_back(block);
 }

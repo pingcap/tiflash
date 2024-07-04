@@ -54,7 +54,7 @@ public:
     {
         ExecutorTest::initializeContext();
         switcher = std::make_shared<AutoPassThroughSwitcher>(true, ::tipb::TiFlashPreAggMode::Auto);
-        auto_pass_through_test_data.init(context, switcher);
+        auto_pass_through_test_data.init(context);
 
         /// for agg
         context.addMockTable(
@@ -185,7 +185,7 @@ public:
     // To test auto pass through hashagg.
     struct AutoPassThroughTestData
     {
-        void init(MockDAGRequestContext & context, std::shared_ptr<AutoPassThroughSwitcher> switcher)
+        void init(MockDAGRequestContext & context)
         {
             // todo check if works
             context.context->getSettingsRef().max_block_size = block_size;
@@ -198,7 +198,7 @@ public:
             col1_data_type = std::make_shared<DataTypeString>();
             col2_data_type = std::make_shared<DataTypeInt64>();
 
-            auto_pass_through_context = buildAutoPassHashAggThroughContext(context, switcher);
+            auto_pass_through_context = buildAutoPassHashAggThroughContext(context);
             // 1 block for adjust state, 3 blocks for other state
             auto_pass_through_context->updateAdjustStateRowLimitUnitNum(3);
             auto_pass_through_context->updateOtherStateRowLimitUnitNum(3);
@@ -251,8 +251,7 @@ public:
 
         // select repo_name, sum(commit_num) from repo_history group by repo_name;
         std::unique_ptr<AutoPassThroughHashAggContext> buildAutoPassHashAggThroughContext(
-            MockDAGRequestContext & context,
-            std::shared_ptr<AutoPassThroughSwitcher> switcher)
+            MockDAGRequestContext & context)
         {
             const String req_id("TestAutoPassThroughAggContext");
 
@@ -317,7 +316,6 @@ public:
                 spill_config);
             return std::make_unique<AutoPassThroughHashAggContext>(
                 *params,
-                *switcher,
                 [&]() { return false; },
                 req_id,
                 context.context->getSettings().max_block_size);
@@ -1788,7 +1786,7 @@ try
            && !random_blocks.empty())
     {
         ++init_consumed_block;
-        auto_pass_through_context->onBlock(random_blocks.front());
+        auto_pass_through_context->onBlock<false>(random_blocks.front());
         random_blocks.pop_front();
     }
     LOG_DEBUG(log, "ComputeServerRunner.stateSwitchMediumNDV init_consumed_block: {}", init_consumed_block);
@@ -1803,7 +1801,7 @@ try
         {
             auto block = medium_ndv_blocks.front();
             medium_ndv_blocks.pop_front();
-            auto_pass_through_context->onBlock(block);
+            auto_pass_through_context->onBlock<false>(block);
             state_processed_rows += block.rows();
             LOG_DEBUG(
                 log,
@@ -1827,7 +1825,7 @@ try
         {
             auto block = medium_ndv_blocks.front();
             medium_ndv_blocks.pop_front();
-            auto_pass_through_context->onBlock(block);
+            auto_pass_through_context->onBlock<false>(block);
             state_processed_rows += block.rows();
             LOG_DEBUG(
                 log,
@@ -1847,6 +1845,32 @@ try
             }
         }
     }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, autoPassThroughEmptyTable)
+try
+{
+    std::vector<String> expected_strings = {
+        R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
+ aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
+  table_scan_0 | {<0, Long>}
+ )",
+        R"(exchange_sender_4 | type:PassThrough, {<0, Longlong>}
+ aggregation_3 | group_by: {}, agg_func: {count(<0, Long>)}
+  table_scan_0 | {<0, Long>}
+ )",
+        R"(exchange_sender_2 | type:PassThrough, {<0, Longlong>}
+ aggregation_1 | group_by: {}, agg_func: {sum(<0, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, Longlong>}
+ )"};
+    startServers(2);
+    auto expected_cols = {toVec<UInt64>("count", {0})};
+    ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+        context.scan("test_db", "auto_pass_through_empty_tbl")
+            .aggregation({makeASTFunction("count", col("col1"))}, {}, 0, switcher),
+        expected_strings,
+        expected_cols);
 }
 CATCH
 

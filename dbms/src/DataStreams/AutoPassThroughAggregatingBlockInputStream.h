@@ -22,6 +22,7 @@ namespace DB
 {
 static constexpr std::string_view autoPassThroughAggregatingExtraInfo = "auto pass through";
 
+template <bool force_streaming>
 class AutoPassThroughAggregatingBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "Aggregating";
@@ -30,14 +31,12 @@ public:
     AutoPassThroughAggregatingBlockInputStream(
         const BlockInputStreamPtr & input_,
         const Aggregator::Params & params_,
-        const AutoPassThroughSwitcher & switcher,
         const String & req_id,
         UInt64 row_limit_unit)
     {
         children.push_back(input_);
         auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(
             params_,
-            switcher,
             [&]() { return this->isCancelled(); },
             req_id,
             row_limit_unit);
@@ -54,4 +53,7 @@ private:
     AutoPassThroughHashAggContextPtr auto_pass_through_context;
     bool build_done = false;
 };
+
+template class AutoPassThroughAggregatingBlockInputStream<true>;
+template class AutoPassThroughAggregatingBlockInputStream<false>;
 } // namespace DB
