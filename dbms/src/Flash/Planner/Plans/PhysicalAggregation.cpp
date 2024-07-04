@@ -269,9 +269,9 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     // For auto pass through, it's only true for 1st agg, and fine grained shuffle is only true for 2nd agg.
     RUNTIME_CHECK(fine_grained_shuffle.enable() != auto_pass_through_switcher.enable());
 
-    // auto pass through hashagg doesn't handle empty_result_for_aggregation_by_empty_set.
+    // Auto pass through hashagg doesn't handle empty_result_for_aggregation_by_empty_set.
     // Also tidb shouldn't generate this kind plan because all data is aggregated into one row if keys_size == 0.
-    RUNTIME_CHECK(auto_pass_through_switcher.enable() && !aggregation_keys.empty());
+    RUNTIME_CHECK(fine_grained_shuffle.enable() || (auto_pass_through_switcher.enable() && !aggregation_keys.empty()));
 
     executeExpression(exec_context, group_builder, before_agg_actions, log);
 
