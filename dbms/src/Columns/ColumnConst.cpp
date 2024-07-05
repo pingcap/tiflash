@@ -169,7 +169,7 @@ void ColumnConst::updateWeakHash32(
         "Size of WeakHash32({}) does not match size of column({})",
         hash.getData().size(),
         s);
-    updateWeakHash32(hash, collator, sort_key_container);
+    updateWeakHash32Impl(hash, collator, sort_key_container);
 }
 
 void ColumnConst::updateWeakHash32(
