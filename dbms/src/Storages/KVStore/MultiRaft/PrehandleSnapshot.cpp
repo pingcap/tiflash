@@ -532,7 +532,7 @@ std::tuple<ReadFromStreamResult, PrehandleResult> executeParallelTransform(
 
     ParallelPrehandleCtxPtr parallel_ctx = std::make_shared<ParallelPrehandleCtx>();
 
-    for (size_t split_id = 0; split_id < split_key_count; split_id++)
+    for (size_t split_id = 0; split_id < split_key_count; ++split_id)
     {
         auto add_result = async_tasks.addTask(split_id, [&, split_id]() {
             std::string origin_name = getThreadName();
@@ -569,7 +569,7 @@ std::tuple<ReadFromStreamResult, PrehandleResult> executeParallelTransform(
 
     // Wait all threads to join. May throw.
     // If one thread throws, then all result is useless, so `async_tasks` is released directly.
-    for (size_t split_id = 0; split_id < split_key_count; split_id++)
+    for (size_t split_id = 0; split_id < split_key_count; ++split_id)
     {
         // May get exception.
         LOG_DEBUG(log, "Try fetch prehandle task split_id={}, region_id={}", split_id, new_region->id());
@@ -589,7 +589,7 @@ std::tuple<ReadFromStreamResult, PrehandleResult> executeParallelTransform(
     assert(head_result.error == PrehandleTransformStatus::Ok);
     prehandle_result = std::move(head_prehandle_result);
     // Aggregate results.
-    for (size_t split_id = 0; split_id < split_key_count; split_id++)
+    for (size_t split_id = 0; split_id < split_key_count; ++split_id)
     {
         std::scoped_lock l(parallel_ctx->mut);
         if (parallel_ctx->gather_res[split_id].error == PrehandleTransformStatus::Ok)
