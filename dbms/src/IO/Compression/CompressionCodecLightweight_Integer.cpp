@@ -71,7 +71,7 @@ bool CompressionCodecLightweight::IntegerCompressContext::needAnalyze() const
         return false;
     // if lz4 is used more than COUNT_THRESHOLD times and the compression ratio is better than lightweight codec, do not analyze anymore
     if (lz4_counter > COUNT_THRESHOLD
-        && lz4_uncompressed_size / lz4_compressed_size > lw_compressed_size / lw_uncompressed_size)
+        && lz4_uncompressed_size / lz4_compressed_size > lw_uncompressed_size / lw_compressed_size)
         return false;
     return true;
 }
