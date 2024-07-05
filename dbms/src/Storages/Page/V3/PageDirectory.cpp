@@ -338,12 +338,12 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
         RUNTIME_CHECK_MSG(last_iter != entries.end() && last_iter->second.isEntry(), "{}", toDebugString());
+        RUNTIME_CHECK_MSG(last_iter->second.getEntry().checkpoint_info.has_value(), "{}", toDebugString());
+        if (!last_iter->second.getEntry().checkpoint_info.is_local_data_reclaimed)
+        {
+            return false;
+        }
         last_iter->second.accessEntry([&](PageEntryV3 & ori_entry){
-            RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
-            if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
-            {
-                return false;
-            }
             ori_entry.file_id = entry.file_id;
             ori_entry.size = entry.size;
             ori_entry.offset = entry.offset;
@@ -575,7 +575,7 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
 
     RUNTIME_CHECK(edit.type == EditRecordType::VAR_ENTRY);
     // The checkpoint_info from `edit` could be empty when we upload the manifest without any page data
-    if (!edit.getEntry().checkpoint_info.has_value())
+    if (!edit.entry.checkpoint_info.has_value())
         return;
 
     auto page_lock = acquireLock();
