@@ -94,9 +94,7 @@ bool HashJoinPointerTable::build(
         }
 
         if (build_size >= max_build_size)
-        {
             break;
-        }
     }
     worker_data.build_pointer_table_size += build_size;
     worker_data.build_pointer_table_time += watch.elapsedMilliseconds();

@@ -141,9 +141,9 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         for (const auto & [index, _] : row_layout.other_column_indexes)
         {
             if constexpr (has_null_map && !need_record_null_rows)
-                block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, false);
-            else
                 block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, true);
+            else
+                block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, false);
         }
     }
 

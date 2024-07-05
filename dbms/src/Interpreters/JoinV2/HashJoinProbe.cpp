@@ -253,6 +253,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
         while (head)
         {
             const auto & key2 = key_getter.deserializeJoinKey(head + row_layout.join_key_offset);
+            ///TODO: string compare needs hash value.
             if (key_getter.joinKeyIsEqual(key, key2))
             {
                 ++current_offset;
