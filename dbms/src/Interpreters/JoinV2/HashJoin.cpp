@@ -25,7 +25,6 @@ namespace
 {
 struct KeyColumns
 {
-    size_t index;
     const IColumn * column_ptr;
     bool is_nullable;
 };
@@ -36,8 +35,7 @@ std::vector<KeyColumns> getKeyColumns(const Names & key_names, const Block & blo
 
     for (size_t i = 0; i < keys_size; ++i)
     {
-        key_columns[i].index = block.getPositionByName(key_names[i]);
-        key_columns[i].column_ptr = block.getByPosition(key_columns[i].index).column.get();
+        key_columns[i].column_ptr = block.getByName(key_names[i]).column.get();
 
         /// We will join only keys, where all components are not NULL.
         if (key_columns[i].column_ptr->isColumnNullable())
@@ -135,39 +133,44 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
     RUNTIME_ASSERT(key_columns.size() == keys_size);
     /// Move all raw join key column to the front of the join key.
     Names new_key_names_left, new_key_names_right;
-    BoolVec raw_key_flag(keys_size);
+    BoolVec raw_required_key_flag(keys_size);
+    std::unordered_set<size_t> raw_required_key_index_set;
+
     bool is_all_key_fixed = true;
     for (size_t i = 0; i < keys_size; ++i)
     {
+        bool is_raw_required = false;
         if (key_columns[i].column_ptr->valuesHaveFixedSize())
+        {
+            row_layout.key_column_fixed_size += key_columns[i].column_ptr->sizeOfValueIfFixed();
+            if (right_sample_block_pruned.has(key_names_right[i]))
+                is_raw_required = true;
+        }
+        else
+        {
+            is_all_key_fixed = false;
+            if (canAsColumnString(key_columns[i].column_ptr)
+                && getStringCollatorKind(collators) == StringCollatorKind::StringBinary
+                && right_sample_block_pruned.has(key_names_right[i]))
+            {
+                is_raw_required = true;
+            }
+        }
+        if (is_raw_required)
         {
             new_key_names_left.emplace_back(key_names_left[i]);
             new_key_names_right.emplace_back(key_names_right[i]);
-            raw_key_flag[i] = true;
-            row_layout.key_column_indexes.push_back(key_columns[i].index);
-            row_layout.raw_key_column_indexes.push_back({key_columns[i].index, key_columns[i].is_nullable});
-            row_layout.key_column_fixed_size += key_columns[i].column_ptr->sizeOfValueIfFixed();
-            continue;
-        }
-        is_all_key_fixed = false;
-        if (canAsColumnString(key_columns[i].column_ptr))
-        {
-            if (getStringCollatorKind(collators) == StringCollatorKind::StringBinary)
-            {
-                new_key_names_left.emplace_back(key_names_left[i]);
-                new_key_names_right.emplace_back(key_names_right[i]);
-                raw_key_flag[i] = true;
-                row_layout.key_column_indexes.push_back(key_columns[i].index);
-                row_layout.raw_key_column_indexes.push_back({key_columns[i].index, key_columns[i].is_nullable});
-                continue;
-            }
+            raw_required_key_flag[i] = true;
+            size_t index = right_sample_block_pruned.getPositionByName(key_names_right[i]);
+            raw_required_key_index_set.insert(index);
+            row_layout.raw_required_key_column_indexes.push_back({index, key_columns[i].is_nullable});
         }
     }
     if (is_all_key_fixed)
     {
         method = findFixedSizeJoinKeyMethod(keys_size, row_layout.key_column_fixed_size);
     }
-    else if (canAsColumnString(key_columns[0].column_ptr))
+    else if (keys_size == 1 && canAsColumnString(key_columns[0].column_ptr))
     {
         switch (getStringCollatorKind(collators))
         {
@@ -184,21 +187,17 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
     }
     else
     {
-        // E.g. Decimal256
         method = HashJoinKeyMethod::KeySerialized;
     }
 
     row_layout.next_pointer_offset = getHashValueByteSize(method);
-    row_layout.join_key_offset = row_layout.next_pointer_offset + sizeof(RowPtr);
-    row_layout.join_key_all_raw = row_layout.raw_key_column_indexes.size() == keys_size;
+    row_layout.key_offset = row_layout.next_pointer_offset + sizeof(RowPtr);
+    row_layout.key_all_raw_required = row_layout.raw_required_key_column_indexes.size() == keys_size;
 
     for (size_t i = 0; i < keys_size; ++i)
     {
-        if (!raw_key_flag[i])
+        if (!raw_required_key_flag[i])
         {
-            row_layout.key_column_indexes.push_back(key_columns[i].index);
-            /// For non-raw join key, the original join key column should be placed in `other_column_indexes`.
-            row_layout.other_column_indexes.push_back({key_columns[i].index, false});
             new_key_names_left.emplace_back(key_names_left[i]);
             new_key_names_right.emplace_back(key_names_right[i]);
         }
@@ -206,24 +205,20 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
     key_names_left.swap(new_key_names_left);
     key_names_right.swap(new_key_names_right);
 
-    std::unordered_set<std::string> key_names_right_set;
-    for (auto & name : key_names_right)
-        key_names_right_set.insert(name);
-
-    for (size_t i = 0; i < right_sample_block.columns(); ++i)
+    size_t columns = right_sample_block_pruned.columns();
+    for (size_t i = 0; i < columns; ++i)
     {
-        auto & c = right_sample_block.getByPosition(i);
-        if (!key_names_right_set.contains(c.name))
+        if (raw_required_key_index_set.contains(i))
+            continue;
+        auto & c = right_sample_block_pruned.getByPosition(i);
+        if (c.column->valuesHaveFixedSize())
         {
-            if (c.column->valuesHaveFixedSize())
-            {
-                row_layout.other_column_fixed_size += c.column->sizeOfValueIfFixed();
-                row_layout.other_column_indexes.push_back({i, true});
-            }
-            else
-            {
-                row_layout.other_column_indexes.push_back({i, false});
-            }
+            row_layout.other_column_fixed_size += c.column->sizeOfValueIfFixed();
+            row_layout.other_required_column_indexes.push_back({i, true});
+        }
+        else
+        {
+            row_layout.other_required_column_indexes.push_back({i, false});
         }
     }
 }
@@ -235,7 +230,6 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
     initialized = true;
 
     right_sample_block = materializeBlock(sample_block);
-    //removeUselessColumn(right_sample_block);
 
     size_t num_columns_to_add = right_sample_block.columns();
 
@@ -251,6 +245,9 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(right_sample_block.getByPosition(i));
 
+    right_sample_block_pruned = right_sample_block;
+    removeUselessColumn(right_sample_block_pruned);
+
     initRowLayoutAndHashJoinMethod();
 
     build_concurrency = build_concurrency_;
@@ -265,7 +262,6 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
 void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
 {
     left_sample_block = sample_block;
-    //removeUselessColumn(left_sample_block);
 
     probe_concurrency = probe_concurrency_;
     active_probe_worker = probe_concurrency;
@@ -285,7 +281,6 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
     Stopwatch watch;
 
     Block block = b;
-    //removeUselessColumn(block);
 
     assertBlocksHaveEqualStructure(block, right_sample_block, "Join Build");
 
@@ -293,6 +288,8 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
     ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_right);
+    /// Some useless columns maybe key columns so they must be removed after extracting key columns.
+    removeUselessColumn(block);
 
     /// We will insert to the map only keys, where all components are not NULL.
     ColumnPtr null_map_holder;
@@ -371,7 +368,7 @@ void HashJoin::workAfterBuildFinish()
         watch.elapsedMilliseconds(),
         all_build_row_count,
         pointer_table.getPointerTableSize(),
-        right_sample_block.columns(),
+        right_sample_block_pruned.columns(),
         pointer_table.enableProbePrefetch());
 }
 
@@ -444,7 +441,7 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
     Block block = context.block;
     size_t existing_columns = block.columns();
 
-    size_t num_columns_to_add = right_sample_block.columns();
+    size_t num_columns_to_add = right_sample_block_pruned.columns();
     /// Add new columns to the block.
     MutableColumns added_columns;
     added_columns.reserve(num_columns_to_add);
@@ -454,7 +451,7 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
     size_t remain_rows = block.rows() - context.start_row_idx;
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
-        const ColumnWithTypeAndName & src_column = right_sample_block.getByPosition(i);
+        const ColumnWithTypeAndName & src_column = right_sample_block_pruned.getByPosition(i);
         RUNTIME_CHECK_MSG(
             !block.has(src_column.name),
             "block from probe side has a column with the same name: {} as a column in right_sample_block",
@@ -473,7 +470,7 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
 
     for (size_t index = 0; index < num_columns_to_add; ++index)
     {
-        const ColumnWithTypeAndName & sample_col = right_sample_block.getByPosition(index);
+        const ColumnWithTypeAndName & sample_col = right_sample_block_pruned.getByPosition(index);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[index]), sample_col.type, sample_col.name));
     }
 

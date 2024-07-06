@@ -57,15 +57,16 @@ void JoinProbeContext::prepareForHashProbe(
     if (is_prepared)
         return;
 
-    /*for (size_t pos = 0; pos < block.columns();)
+    key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names);
+    /// Some useless columns maybe key columns so they must be removed after extracting key columns.
+    for (size_t pos = 0; pos < block.columns();)
     {
         if (!probe_output_name_set.contains(block.getByPosition(pos).name))
             block.erase(pos);
         else
             ++pos;
-    }*/
+    }
 
-    key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names);
     /// Keys with NULL value in any column won't join to anything.
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
@@ -171,7 +172,7 @@ public:
     void NO_INLINE joinProbeBlockRightAntiPrefetch();
 
 private:
-    inline void insertRowToBatch(RowPtr head, size_t key_size);
+    inline void insertRowToBatch(RowPtr row_ptr, size_t key_size);
     template <bool force>
     inline void FlushBatchIfNecessary();
 
@@ -207,14 +208,14 @@ void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::FlushBatchIfNec
         if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
             return;
     }
-    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+    for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
     {
         IColumn * column = added_columns[column_index].get();
         if (has_null_map && is_nullable)
             column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
         column->deserializeAndInsertFromPos(wd.insert_batch);
     }
-    for (auto [column_index, _] : row_layout.other_column_indexes)
+    for (auto [column_index, _] : row_layout.other_required_column_indexes)
     {
         if constexpr (key_all_raw)
             added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch);
@@ -252,12 +253,12 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
         }
         while (head)
         {
-            const auto & key2 = key_getter.deserializeJoinKey(head + row_layout.join_key_offset);
+            const auto & key2 = key_getter.deserializeJoinKey(head + row_layout.key_offset);
             ///TODO: string compare needs hash value.
             if (key_getter.joinKeyIsEqual(key, key2))
             {
                 ++current_offset;
-                insertRowToBatch(head + row_layout.join_key_offset, key_getter.getJoinKeySize(key2));
+                insertRowToBatch(head + row_layout.key_offset, key_getter.getJoinKeySize(key2));
                 if unlikely (current_offset >= settings.max_block_size)
                     break;
             }
@@ -275,7 +276,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
     FlushBatchIfNecessary<true>();
     if constexpr (has_null_map)
     {
-        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+        for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
         {
             if (is_nullable)
             {
@@ -426,7 +427,7 @@ void joinProbeBlock(
         using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
         if (context.null_map)                                                              \
         {                                                                                  \
-            if (row_layout.join_key_all_raw)                                               \
+            if (row_layout.key_all_raw_required)                                           \
             {                                                                              \
                 CALL(KeyGetterType##METHOD, true, true);                                   \
             }                                                                              \
@@ -437,7 +438,7 @@ void joinProbeBlock(
         }                                                                                  \
         else                                                                               \
         {                                                                                  \
-            if (row_layout.join_key_all_raw)                                               \
+            if (row_layout.key_all_raw_required)                                           \
             {                                                                              \
                 CALL(KeyGetterType##METHOD, false, true);                                  \
             }                                                                              \

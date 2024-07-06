@@ -112,9 +112,10 @@ private:
     HashJoinRowLayout row_layout;
     HashJoinKeyMethod method = HashJoinKeyMethod::Empty;
 
-    /// Block with columns from the right-side table after finalized.
+    /// Block with columns from the right-side table.
     Block right_sample_block;
-    /// Block with columns from the left-side table after finalized.
+    Block right_sample_block_pruned;
+    /// Block with columns from the left-side table.
     Block left_sample_block;
 
     NamesAndTypes output_columns;

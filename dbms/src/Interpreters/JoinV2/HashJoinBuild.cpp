@@ -45,7 +45,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     wd.row_ptrs.clear();
     wd.row_ptrs.resize_fill(rows, nullptr);
 
-    for (const auto & [index, is_fixed_size] : row_layout.other_column_indexes)
+    for (const auto & [index, is_fixed_size] : row_layout.other_required_column_indexes)
     {
         if (!is_fixed_size)
             block.getByPosition(index).column->countSerializeByteSize(wd.row_sizes);
@@ -86,8 +86,12 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             partition_column_row[i].data.resize(wd.partition_row_sizes[i], ROW_ALIGN);
             partition_column_row[i].offsets.reserve(wd.partition_row_count[i]);
             wd.partition_row_sizes[i] = 0;
+            wd.row_count += wd.partition_row_count[i];
         }
     }
+
+    RowPtrs tmp_row_ptrs;
+    tmp_row_ptrs.resize(rows);
 
     for (size_t i = 0; i < rows; ++i)
     {
@@ -119,6 +123,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         size_t part_num = getHJBuildPartitionNum(wd.hashes[i]);
         wd.row_ptrs[i] = partition_column_row[part_num].data.data() + wd.partition_row_sizes[part_num];
         assert((reinterpret_cast<uintptr_t>(wd.row_ptrs[i]) & (ROW_ALIGN - 1)) == 0);
+        tmp_row_ptrs[i] = wd.row_ptrs[i];
 
         wd.partition_row_sizes[part_num] += wd.row_sizes[i];
         partition_column_row[part_num].offsets.push_back(wd.partition_row_sizes[part_num]);
@@ -138,13 +143,18 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     {
         size_t start = i;
         size_t end = i + step > rows ? rows : i + step;
-        for (const auto & [index, _] : row_layout.other_column_indexes)
+        for (const auto & [index, _] : row_layout.other_required_column_indexes)
         {
             if constexpr (has_null_map && !need_record_null_rows)
                 block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, true);
             else
                 block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, false);
         }
+    }
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        assert(wd.row_ptrs[i] <= tmp_row_ptrs[i] + wd.row_sizes[i]);
     }
 
     for (size_t i = 0; i < part_count; ++i)

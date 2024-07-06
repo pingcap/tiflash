@@ -77,21 +77,20 @@ struct alignas(ABSL_CACHELINE_SIZE) MultipleRowContainer
 };
 
 /// Row Layout
-/// 1. No-null join key row: <Hash Value> <Next Pointer> <Raw Join Keys> <Other Join Keys> <Other Columns>
-/// 1. Null join key row(For right anti/outer join): <All columns>
+/// 1. No-null join key row: <Hash Value> <Next Pointer> <Raw Required Join Keys> <Other Join Keys> <Other Required Columns>
+/// 1. Null join key row(For right anti/outer join): <All Required Columns>
 struct HashJoinRowLayout
 {
     size_t next_pointer_offset;
-    size_t join_key_offset;
-    std::vector<size_t> key_column_indexes;
+    size_t key_offset;
     /// The raw join key are the same as the original data.
-    /// raw_key_column_index + is_nullable
-    std::vector<std::pair<size_t, bool>> raw_key_column_indexes;
-    /// other_column_index + is_fixed_size
-    std::vector<std::pair<size_t, bool>> other_column_indexes;
+    /// raw_required_key_column_index + is_nullable
+    std::vector<std::pair<size_t, bool>> raw_required_key_column_indexes;
+    /// other_required_column_index + is_fixed_size
+    std::vector<std::pair<size_t, bool>> other_required_column_indexes;
     size_t key_column_fixed_size = 0;
     size_t other_column_fixed_size = 0;
-    bool join_key_all_raw;
+    bool key_all_raw_required;
 
     template <ASTTableJoin::Kind KIND>
     ALWAYS_INLINE inline RowPtr getNextRowPtr(const RowPtr ptr) const
