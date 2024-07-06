@@ -44,6 +44,12 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     wd.hashes.resize(rows);
     wd.row_ptrs.clear();
     wd.row_ptrs.resize_fill(rows, nullptr);
+    wd.partition_row_sizes.clear();
+    /// The last partition is used to hold rows with null join key.
+    constexpr size_t part_count = HJ_BUILD_PARTITION_COUNT + 1;
+    wd.partition_row_sizes.resize_fill(part_count, 0);
+    wd.partition_row_count.clear();
+    wd.partition_row_count.resize_fill(part_count, 0);
 
     for (const auto & [index, is_fixed_size] : row_layout.other_required_column_indexes)
     {
@@ -51,10 +57,6 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             block.getByPosition(index).column->countSerializeByteSize(wd.row_sizes);
     }
 
-    /// The last partition is used to hold rows with null join key.
-    constexpr size_t part_count = HJ_BUILD_PARTITION_COUNT + 1;
-    wd.partition_row_sizes.resize_fill(part_count, 0);
-    wd.partition_row_count.resize_fill(part_count, 0);
     for (size_t i = 0; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
