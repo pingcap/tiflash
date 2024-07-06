@@ -98,7 +98,7 @@ bool HashJoinPointerTable::build(
     }
     wd.build_pointer_table_size += build_size;
     wd.build_pointer_table_time += watch.elapsedMilliseconds();
-    return !is_end;
+    return is_end;
 }
 
 template bool HashJoinPointerTable::build<UInt8>(

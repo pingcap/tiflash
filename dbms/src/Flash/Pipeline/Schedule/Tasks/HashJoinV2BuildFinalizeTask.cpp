@@ -18,7 +18,7 @@ namespace DB
 {
 ExecTaskStatus HashJoinV2BuildFinalizeTask::executeImpl()
 {
-    if (join_ptr->buildPointerTable(index))
+    if (!join_ptr->buildPointerTable(index))
         return ExecTaskStatus::RUNNING;
     return ExecTaskStatus::FINISHED;
 }
