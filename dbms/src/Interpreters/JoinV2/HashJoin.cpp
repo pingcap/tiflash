@@ -374,6 +374,7 @@ void HashJoin::workAfterBuildFinish()
 
 bool HashJoin::buildPointerTable(size_t stream_index)
 {
+    bool is_end;
     switch (method)
     {
     case HashJoinKeyMethod::Empty:
@@ -383,17 +384,30 @@ bool HashJoin::buildPointerTable(size_t stream_index)
 #define M(METHOD)                                                                                         \
     case HashJoinKeyMethod::METHOD:                                                                       \
         using HashValueType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::HashValueType; \
-        return pointer_table.build<HashValueType##METHOD>(                                                \
+        is_end = pointer_table.build<HashValueType##METHOD>(                                              \
             row_layout,                                                                                   \
             build_workers_data[stream_index],                                                             \
             multi_row_containers,                                                                         \
-            settings.max_block_size);
+            settings.max_block_size);                                                                     \
+        break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M
 
     default:
         throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
+
+    if (is_end)
+    {
+        auto & wd = build_workers_data[stream_index];
+        LOG_INFO(
+            log,
+            "{} build pointer table finish cost {}ms, build rows {}",
+            stream_index,
+            wd.build_pointer_table_time,
+            wd.build_pointer_table_size);
+    }
+    return is_end;
 }
 
 Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)

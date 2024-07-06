@@ -210,10 +210,8 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         auto left = popBack();
 
         auto fine_grained_shuffle = FineGrainedShuffle(executor);
-        if (context.getSettingsRef().enable_hash_join_v2
-            && context.getSettingsRef().enable_resource_control
-            && !fine_grained_shuffle.enable()
-            && PhysicalJoinV2::isSupported(executor->join()))
+        if (context.getSettingsRef().enable_hash_join_v2 && context.getSettingsRef().enable_resource_control
+            && !fine_grained_shuffle.enable() && PhysicalJoinV2::isSupported(executor->join()))
         {
             pushBack(
                 PhysicalJoinV2::build(context, executor_id, log, executor->join(), fine_grained_shuffle, left, right));

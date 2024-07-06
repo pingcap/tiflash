@@ -41,7 +41,7 @@ void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshol
 template <typename HashValueType>
 bool HashJoinPointerTable::build(
     const HashJoinRowLayout & row_layout,
-    JoinBuildWorkerData & worker_data,
+    JoinBuildWorkerData & wd,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size)
 {
@@ -51,8 +51,8 @@ bool HashJoinPointerTable::build(
     while (true)
     {
         RowContainer * container = nullptr;
-        if (worker_data.build_pointer_table_iter != -1)
-            container = multi_row_containers[worker_data.build_pointer_table_iter]->getNext();
+        if (wd.build_pointer_table_iter != -1)
+            container = multi_row_containers[wd.build_pointer_table_iter]->getNext();
         if (container == nullptr)
         {
             {
@@ -63,7 +63,7 @@ bool HashJoinPointerTable::build(
                     container = multi_row_containers[build_table_index]->getNext();
                     if (container != nullptr)
                     {
-                        worker_data.build_pointer_table_iter = build_table_index;
+                        wd.build_pointer_table_iter = build_table_index;
                         build_table_index = (build_table_index + 1) % HJ_BUILD_PARTITION_COUNT;
                         break;
                     }
@@ -96,8 +96,8 @@ bool HashJoinPointerTable::build(
         if (build_size >= max_build_size)
             break;
     }
-    worker_data.build_pointer_table_size += build_size;
-    worker_data.build_pointer_table_time += watch.elapsedMilliseconds();
+    wd.build_pointer_table_size += build_size;
+    wd.build_pointer_table_time += watch.elapsedMilliseconds();
     return !is_end;
 }
 
