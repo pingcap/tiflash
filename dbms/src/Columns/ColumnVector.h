@@ -321,6 +321,8 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+        const override;
 
     size_t byteSize() const override { return data.size() * sizeof(data[0]); }
 
@@ -371,9 +373,24 @@ public:
         return this->template scatterImpl<Self>(num_columns, selector);
     }
 
+    MutableColumns scatter(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector,
+        const BlockSelectivePtr & selective) const override
+    {
+        return this->template scatterImpl<Self>(num_columns, selector, selective);
+    }
+
     void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector) const override
     {
         this->template scatterToImpl<Self>(columns, selector);
+    }
+    void scatterTo(
+        IColumn::ScatterColumns & columns,
+        const IColumn::Selector & selector,
+        const BlockSelectivePtr & selective) const override
+    {
+        this->template scatterToImpl<Self>(columns, selector, selective);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;

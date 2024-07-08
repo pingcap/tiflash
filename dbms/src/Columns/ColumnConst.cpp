@@ -85,11 +85,32 @@ ColumnPtr ColumnConst::permute(const Permutation & perm, size_t limit) const
 
 MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
-    if (s != selector.size())
-        throw Exception(
-            fmt::format("Size of selector ({}) doesn't match size of column ({})", selector.size(), s),
-            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+    RUNTIME_CHECK_MSG(
+        s == selector.size(),
+        "Size of selector ({}) doesn't match size of column ({})",
+        selector.size(),
+        s);
 
+    return scatterImplForColumnConst(num_columns, selector);
+}
+
+MutableColumns ColumnConst::scatter(
+    ColumnIndex num_columns,
+    const Selector & selector,
+    const BlockSelectivePtr & selective) const
+{
+    const auto selective_rows = selective->size();
+    RUNTIME_CHECK_MSG(
+        selective_rows == selector.size(),
+        "Size of selector ({}) doesn't match size of selective column ({})",
+        selector.size(),
+        selective_rows);
+
+    return scatterImplForColumnConst(num_columns, selector);
+}
+
+MutableColumns ColumnConst::scatterImplForColumnConst(ColumnIndex num_columns, const Selector & selector) const
+{
     std::vector<size_t> counts = countColumnsSizeInSelector(num_columns, selector);
 
     MutableColumns res(num_columns);
@@ -101,11 +122,28 @@ MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & se
 
 void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector) const
 {
-    if (s != selector.size())
-        throw Exception(
-            fmt::format("Size of selector ({}) doesn't match size of column ({})", selector.size(), s),
-            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+    RUNTIME_CHECK_MSG(
+        s == selector.size(),
+        "Size of selector ({}) doesn't match size of column ({})",
+        selector.size(),
+        s);
+    scatterToImplForColumnConst(columns, selector);
+}
 
+void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+    const
+{
+    const auto selective_rows = selective->size();
+    RUNTIME_CHECK_MSG(
+        selective_rows == selector.size(),
+        "Size of selector ({}) doesn't match size of column ({})",
+        selector.size(),
+        selective_rows);
+    scatterToImplForColumnConst(columns, selector);
+}
+
+void ColumnConst::scatterToImplForColumnConst(ScatterColumns & columns, const Selector & selector) const
+{
     ColumnIndex num_columns = columns.size();
     std::vector<size_t> counts = countColumnsSizeInSelector(num_columns, selector);
 
@@ -126,14 +164,35 @@ void ColumnConst::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() != s,
+        "Size of WeakHash32({}) does not match size of column({})",
+        hash.getData().size(),
+        s);
+    updateWeakHash32Impl(hash, collator, sort_key_container);
+}
 
+void ColumnConst::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelectivePtr & selective_ptr) const
+{
+    const auto selective_rows = selective_ptr->size();
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() != selective_rows,
+        "Size of WeakHash32({}) does not match size of selective column({})",
+        hash.getData().size(),
+        selective_rows);
+
+    updateWeakHash32Impl(hash, collator, sort_key_container);
+}
+
+void ColumnConst::updateWeakHash32Impl(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
     WeakHash32 element_hash(1);
     data->updateWeakHash32(element_hash, collator, sort_key_container);
     size_t data_hash = element_hash.getData()[0];
@@ -141,5 +200,4 @@ void ColumnConst::updateWeakHash32(
     for (auto & value : hash.getData())
         value = intHashCRC32(data_hash, value);
 }
-
 } // namespace DB

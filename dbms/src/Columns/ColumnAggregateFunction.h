@@ -171,6 +171,8 @@ public:
         const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+        const override;
 
     size_t byteSize() const override;
 
@@ -189,8 +191,12 @@ public:
     ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override;
 
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+        const override;
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
