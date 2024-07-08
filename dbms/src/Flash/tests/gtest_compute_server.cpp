@@ -511,6 +511,12 @@ public:
 
 #define WRAP_FOR_SERVER_TEST_END }
 
+#ifdef SANITIZER
+#define ADAPTIVE_SLEEP(X, Y) std::this_thread::sleep_for(Y)
+#else
+#define ADAPTIVE_SLEEP(X, Y) std::this_thread::sleep_for(X)
+#endif // SANITIZER
+
 TEST_F(ComputeServerRunner, simpleExchange)
 try
 {
@@ -1327,7 +1333,7 @@ try
             addOneQuery(i + 10, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
-        std::this_thread::sleep_for(4s);
+        ADAPTIVE_SLEEP(4s, 8s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1339,7 +1345,7 @@ try
                 .Value()
             == 0);
         addOneQuery(1, running_queries, gather_ids);
-        std::this_thread::sleep_for(4s);
+        ADAPTIVE_SLEEP(4s, 8s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1362,7 +1368,7 @@ try
             addOneQuery((i + 1) * 20, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
-        std::this_thread::sleep_for(4s);
+        ADAPTIVE_SLEEP(4s, 8s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1374,7 +1380,7 @@ try
                 .Value()
             == 0);
         addOneQuery(30, running_queries, gather_ids);
-        std::this_thread::sleep_for(4s);
+        ADAPTIVE_SLEEP(4s, 8s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1388,7 +1394,7 @@ try
         /// cancel 1 running query
         MockComputeServerManager::instance().cancelGather(gather_ids[0]);
         running_queries[0].join();
-        std::this_thread::sleep_for(4s);
+        ADAPTIVE_SLEEP(4s, 8s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1445,7 +1451,7 @@ try
         single_gather_properties.gather_id = 1;
         addOneGather(running_queries, gather_ids, single_gather_properties);
         using namespace std::literals::chrono_literals;
-        std::this_thread::sleep_for(4s);
+        ADAPTIVE_SLEEP(4s, 8s);
         /// 6 gathers, but two query
         ASSERT_TRUE(
             TiFlashMetrics::instance()

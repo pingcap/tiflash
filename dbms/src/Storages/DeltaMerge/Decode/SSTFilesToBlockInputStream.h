@@ -23,11 +23,6 @@
 #include <memory>
 #include <string_view>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 class TMTContext;
@@ -58,8 +53,8 @@ struct SSTScanSoftLimit
     std::optional<RawTiDBPK> start_limit;
     std::optional<RawTiDBPK> end_limit;
 
-    SSTScanSoftLimit(size_t extra_id, TiKVKey && raw_start_, TiKVKey && raw_end_)
-        : split_id(extra_id)
+    SSTScanSoftLimit(size_t split_id_, TiKVKey && raw_start_, TiKVKey && raw_end_)
+        : split_id(split_id_)
         , raw_start(std::move(raw_start_))
         , raw_end(std::move(raw_end_))
     {
@@ -71,19 +66,21 @@ struct SSTScanSoftLimit
         {
             decoded_end = RecordKVFormat::decodeTiKVKey(raw_end);
         }
-        if (decoded_start.size())
+        if (!decoded_start.empty())
         {
             start_limit = RecordKVFormat::getRawTiDBPK(decoded_start);
         }
-        if (decoded_end.size())
+        if (!decoded_end.empty())
         {
             end_limit = RecordKVFormat::getRawTiDBPK(decoded_end);
         }
     }
 
-    const std::optional<RawTiDBPK> & getStartLimit() { return start_limit; }
+    SSTScanSoftLimit clone() const { return SSTScanSoftLimit(split_id, raw_start.toString(), raw_end.toString()); }
 
-    const std::optional<RawTiDBPK> & getEndLimit() { return end_limit; }
+    const std::optional<RawTiDBPK> & getStartLimit() const { return start_limit; }
+
+    const std::optional<RawTiDBPK> & getEndLimit() const { return end_limit; }
 
     std::string toDebugString() const
     {
