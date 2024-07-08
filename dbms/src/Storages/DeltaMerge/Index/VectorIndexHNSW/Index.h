@@ -27,11 +27,13 @@ using USearchImplType = unum::usearch::
 class VectorIndexHNSWBuilder : public VectorIndexBuilder
 {
 public:
+    static tipb::VectorIndexKind kind();
+
     explicit VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_);
 
     ~VectorIndexHNSWBuilder() override;
 
-    void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark) override;
+    void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed) override;
 
     void save(std::string_view path) const override;
 
@@ -48,6 +50,8 @@ class VectorIndexHNSWViewer : public VectorIndexViewer
 public:
     static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & props, std::string_view path);
 
+    static tipb::VectorIndexKind kind();
+
     explicit VectorIndexHNSWViewer(const dtpb::VectorIndexFileProps & props);
 
     ~VectorIndexHNSWViewer() override;
@@ -55,6 +59,8 @@ public:
     std::vector<Key> search( //
         const ANNQueryInfoPtr & queryInfo,
         const RowFilter & valid_rows) const override;
+
+    size_t size() const override;
 
     void get(Key key, std::vector<Float32> & out) const override;
 

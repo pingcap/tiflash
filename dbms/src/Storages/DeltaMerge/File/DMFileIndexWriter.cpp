@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -20,6 +21,11 @@
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/PathPool.h>
+
+namespace DB::ErrorCodes
+{
+extern const int ABORTED;
+}
 
 namespace DB::DM
 {
@@ -64,7 +70,7 @@ DMFileIndexWriter::LocalIndexBuildInfo DMFileIndexWriter::getLocalIndexBuildInfo
     return build;
 }
 
-void DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable) const
+void DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, ProceedCheckFn should_proceed) const
 {
     const auto column_defines = dm_file_mutable->getColumnDefines();
     const auto del_cd_iter = std::find_if(column_defines.cbegin(), column_defines.cend(), [](const ColumnDefine & cd) {
@@ -132,6 +138,9 @@ void DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable) con
     // Read all blocks and build index
     while (true)
     {
+        if (!should_proceed())
+            throw Exception(ErrorCodes::ABORTED, "Index build is interrupted");
+
         auto block = read_stream->read();
         if (!block)
             break;
@@ -150,7 +159,7 @@ void DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable) con
             const auto & col_with_type_and_name = block.safeGetByPosition(col_idx + 1);
             RUNTIME_CHECK(col_with_type_and_name.column_id == read_columns[col_idx + 1].id);
             const auto & col = col_with_type_and_name.column;
-            index_builder->addBlock(*col, del_mark);
+            index_builder->addBlock(*col, del_mark, should_proceed);
         }
     }
 
@@ -188,7 +197,7 @@ void DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable) con
     iw->finalize(); // Note: There may be S3 uploads here.
 }
 
-DMFiles DMFileIndexWriter::build() const
+DMFiles DMFileIndexWriter::build(ProceedCheckFn should_proceed) const
 {
     // Create a clone of existing DMFile instances by using DMFile::restore,
     // because later we will mutate some fields and persist these mutations.
@@ -215,7 +224,7 @@ DMFiles DMFileIndexWriter::build() const
 
     for (const auto & cloned_dmfile : cloned_dm_files)
     {
-        buildIndexForFile(cloned_dmfile);
+        buildIndexForFile(cloned_dmfile, should_proceed);
         // TODO: including the new index bytes in the file size.
         // auto res = dm_context.path_pool->getStableDiskDelegator().updateDTFileSize(
         //     new_dmfile->fileId(),

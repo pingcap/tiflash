@@ -228,7 +228,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -253,7 +253,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -278,7 +278,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -331,7 +331,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -356,7 +356,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -381,7 +381,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -415,7 +415,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -440,7 +440,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -475,7 +475,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -538,7 +538,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(5, true), 0, 5))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(5, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -606,7 +606,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(6, true), 0, 6))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -631,7 +631,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(6, true), 0, 6))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
                           .build2(
                               dm_file,
                               read_cols,
@@ -656,7 +656,7 @@ try
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
-                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(6, true), 0, 6))
+                          .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
                           .build2(
                               dm_file,
                               read_cols,

@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <TiDB/Schema/VectorIndex.h>
+
 namespace DB::DM
 {
 
@@ -32,6 +33,8 @@ class VectorIndexBuilder
 public:
     /// The key is the row's offset in the DMFile.
     using Key = UInt32;
+
+    using ProceedCheckFn = std::function<bool()>;
 
 public:
     static VectorIndexBuilderPtr create(const TiDB::VectorIndexDefinitionPtr & definition);
@@ -45,7 +48,11 @@ public:
 
     virtual ~VectorIndexBuilder() = default;
 
-    virtual void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark) = 0;
+    virtual void addBlock( //
+        const IColumn & column,
+        const ColumnVector<UInt8> * del_mark,
+        ProceedCheckFn should_proceed)
+        = 0;
 
     virtual void save(std::string_view path) const = 0;
 
@@ -79,6 +86,8 @@ public:
         const ANNQueryInfoPtr & queryInfo,
         const RowFilter & valid_rows) const
         = 0;
+
+    virtual size_t size() const = 0;
 
     // Get the value (i.e. vector content) of a Key.
     virtual void get(Key key, std::vector<Float32> & out) const = 0;

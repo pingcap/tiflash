@@ -41,6 +41,11 @@ extern const Metric DT_SnapshotOfSegmentIngest;
 extern const Metric DT_SnapshotOfSegmentIngestIndex;
 } // namespace CurrentMetrics
 
+namespace DB::ErrorCodes
+{
+extern const int ABORTED;
+}
+
 namespace DB
 {
 namespace DM
@@ -680,18 +685,20 @@ void DeltaMergeStore::segmentEnsureStableIndex(
     RUNTIME_CHECK(dm_files.size() == 1); // size > 1 is currently not supported.
     const auto & dm_file = dm_files[0];
 
-    // 2. Check whether the DMFile has been referenced by any valid segment.
-    {
+    auto is_file_valid = [this, dm_file] {
         std::shared_lock lock(read_write_mutex);
         auto segment_ids = dmfile_id_to_segment_ids.get(dm_file->fileId());
-        if (segment_ids.empty())
-        {
-            LOG_DEBUG(
-                log,
-                "EnsureStableIndex - Give up because no segment to update, source_segment={}",
-                source_segment_info);
-            return;
-        }
+        return !segment_ids.empty();
+    };
+
+    // 2. Check whether the DMFile has been referenced by any valid segment.
+    if (!is_file_valid())
+    {
+        LOG_DEBUG(
+            log,
+            "EnsureStableIndex - Give up because no segment to update, source_segment={}",
+            source_segment_info);
+        return;
     }
 
     LOG_INFO(
@@ -712,7 +719,29 @@ void DeltaMergeStore::segmentEnsureStableIndex(
         .is_common_handle = dm_context.is_common_handle,
         .rowkey_column_size = dm_context.rowkey_column_size,
     });
-    auto new_dmfiles = iw.build();
+
+    DMFiles new_dmfiles{};
+
+    try
+    {
+        // When file is not valid we need to abort the index build.
+        new_dmfiles = iw.build(is_file_valid);
+    }
+    catch (const Exception & e)
+    {
+        if (e.code() == ErrorCodes::ABORTED)
+        {
+            LOG_INFO(
+                log,
+                "EnsureStableIndex - Build index aborted because DMFile is no longer valid, dm_files={} "
+                "source_segment={}",
+                DMFile::info(dm_files),
+                source_segment_info);
+            return;
+        }
+        throw;
+    }
+
     RUNTIME_CHECK(!new_dmfiles.empty());
 
     LOG_INFO(

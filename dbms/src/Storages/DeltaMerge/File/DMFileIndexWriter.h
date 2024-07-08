@@ -64,6 +64,8 @@ public:
         const size_t rowkey_column_size;
     };
 
+    using ProceedCheckFn = std::function<bool()>;
+
     explicit DMFileIndexWriter(const Options & options)
         : logger(Logger::get())
         , options(options)
@@ -71,10 +73,15 @@ public:
 
     // Note: You cannot call build() multiple times, as duplicate meta version will result in exceptions.
     // TODO: Add a better guard.
-    DMFiles build() const;
+    DMFiles build(ProceedCheckFn should_proceed) const;
+
+    DMFiles build() const
+    {
+        return build([]() { return true; });
+    }
 
 private:
-    void buildIndexForFile(const DMFilePtr & dm_file_mutable) const;
+    void buildIndexForFile(const DMFilePtr & dm_file_mutable, ProceedCheckFn should_proceed) const;
 
 private:
     const LoggerPtr logger;

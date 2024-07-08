@@ -37,6 +37,15 @@ public:
         RUNTIME_CHECK(filter_offset + filter_size <= filter->size(), filter_offset, filter_size, filter->size());
     }
 
+    /**
+     * @brief Create a BitmapFilter and construct a BitmapFilterView with it.
+     * Should be only used in tests.
+     */
+    static BitmapFilterView createWithFilter(UInt32 size, bool default_value)
+    {
+        return BitmapFilterView(std::make_shared<BitmapFilter>(size, default_value), 0, size);
+    }
+
     inline bool get(UInt32 n) const
     {
         RUNTIME_CHECK(n < filter_size);
