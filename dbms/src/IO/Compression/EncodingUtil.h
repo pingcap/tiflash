@@ -147,7 +147,7 @@ void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
         }
         else
         {
-            for (UInt8 j = 0; j < count; ++j)
+            for (UInt32 j = 0; j < count; ++j)
             {
                 unalignedStore<T>(dest, value);
                 dest += sizeof(T);
