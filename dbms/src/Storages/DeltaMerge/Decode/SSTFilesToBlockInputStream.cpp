@@ -37,7 +37,7 @@ namespace DB::DM
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     RegionPtr region_,
     UInt64 snapshot_index_,
-    const SnapshotSSTReaderPtr & snap_reader_,
+    SnapshotSSTReader && snap_reader_,
     TMTContext & tmt_,
     std::shared_ptr<PreHandlingTrace::Item> prehandle_task_,
     SSTFilesToBlockInputStreamOpts && opts_)
@@ -46,7 +46,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , tmt(tmt_)
     , prehandle_task(prehandle_task_)
     , opts(std::move(opts_))
-    , snap_reader(snap_reader_)
+    , snap_reader(std::move(snap_reader_))
 {
     const size_t split_id
         = soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
@@ -70,21 +70,21 @@ void SSTFilesToBlockInputStream::readSuffix()
     // For aborted task, we don't need to check the finish state
     if (!prehandle_task->isAbort())
     {
-        snap_reader->checkFinishedState();
+        snap_reader.checkFinishedState();
     }
 
     // reset all SSTReaders and return without writting blocks any more.
-    snap_reader->reset();
+    snap_reader.reset();
 }
 
 Block SSTFilesToBlockInputStream::read()
 {
     std::string loaded_write_cf_key;
 
-    while (snap_reader->write_cf_reader && snap_reader->write_cf_reader->remained())
+    while (snap_reader.write_cf_reader && snap_reader.write_cf_reader->remained())
     {
         bool should_stop_advancing
-            = snap_reader->maybeStopBySoftLimit(ColumnFamilyType::Write, snap_reader->write_cf_reader.get());
+            = snap_reader.maybeStopBySoftLimit(ColumnFamilyType::Write, snap_reader.write_cf_reader.get());
         if (should_stop_advancing)
         {
             // Load the last batch
@@ -99,8 +99,8 @@ Block SSTFilesToBlockInputStream::read()
         // the lock column family, we will load all key-values which rowkeys are equal
         // or less that the last rowkey from the write column family.
         {
-            BaseBuffView key = snap_reader->write_cf_reader->keyView();
-            BaseBuffView value = snap_reader->write_cf_reader->valueView();
+            BaseBuffView key = snap_reader.write_cf_reader->keyView();
+            BaseBuffView value = snap_reader.write_cf_reader->valueView();
             auto tikv_key = TiKVKey(key.data, key.len);
             region->insert(ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
             ++process_keys.write_cf;
@@ -110,7 +110,7 @@ Block SSTFilesToBlockInputStream::read()
                 loaded_write_cf_key.assign(key.data, key.len);
             }
         } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
-        snap_reader->write_cf_reader->next();
+        snap_reader.write_cf_reader->next();
 
         // If there is enough data to form a Block, we will load all keys before `loaded_write_cf_key` in other cf.
         if (process_keys.write_cf % opts.expected_size == 0)
@@ -151,14 +151,14 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
-        reader = snap_reader->default_cf_reader.get();
+        reader = snap_reader.default_cf_reader.get();
         p_process_keys = &process_keys.default_cf;
         p_process_keys_bytes = &process_keys.default_cf_bytes;
         last_loaded_rowkey = &default_last_loaded_rowkey;
     }
     else if (cf == ColumnFamilyType::Lock)
     {
-        reader = snap_reader->lock_cf_reader.get();
+        reader = snap_reader.lock_cf_reader.get();
         p_process_keys = &process_keys.lock_cf;
         p_process_keys_bytes = &process_keys.lock_cf_bytes;
         last_loaded_rowkey = &lock_last_loaded_rowkey;
@@ -168,7 +168,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
 
     if (reader && reader->remained())
     {
-        snap_reader->maybeSkipBySoftLimit(cf, reader);
+        snap_reader.maybeSkipBySoftLimit(cf, reader);
     }
 
     Stopwatch sw;
@@ -178,7 +178,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     {
         while (reader && reader->remained())
         {
-            if (snap_reader->maybeStopBySoftLimit(cf, reader))
+            if (snap_reader.maybeStopBySoftLimit(cf, reader))
             {
                 break;
             }
@@ -237,7 +237,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // Let's try to load keys until process_keys_offset_end
         while (reader && reader->remained() && *p_process_keys < process_keys_offset_end)
         {
-            if (snap_reader->maybeStopBySoftLimit(cf, reader))
+            if (snap_reader.maybeStopBySoftLimit(cf, reader))
             {
                 break;
             }

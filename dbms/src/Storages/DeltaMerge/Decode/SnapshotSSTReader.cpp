@@ -10,14 +10,12 @@ SnapshotSSTReader::SnapshotSSTReader(
     UInt64 snapshot_index,
     const SSTReader::RegionRangeFilter & region_range,
     std::optional<SSTScanSoftLimit> && soft_limit_,
-    const String & log_prefix)
+    const LoggerPtr & log_)
     : soft_limit(std::move(soft_limit_))
+    , log(log_)
 {
     assert(region_range != nullptr);
-
-    const size_t split_id
-        = soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
-    log = Logger::get(log_prefix, fmt::format("region_id={} split_id={}", region_id, split_id));
+    assert(log != nullptr);
 
     // We have to initialize sst readers at an earlier stage,
     // due to prehandle snapshot of single region feature in raftstore v2.
