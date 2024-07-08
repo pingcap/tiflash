@@ -165,7 +165,7 @@ void ColumnConst::updateWeakHash32(
     String & sort_key_container) const
 {
     RUNTIME_CHECK_MSG(
-        hash.getData().size() != s,
+        hash.getData().size() == s,
         "Size of WeakHash32({}) does not match size of column({})",
         hash.getData().size(),
         s);
@@ -180,7 +180,7 @@ void ColumnConst::updateWeakHash32(
 {
     const auto selective_rows = selective_ptr->size();
     RUNTIME_CHECK_MSG(
-        hash.getData().size() != selective_rows,
+        hash.getData().size() == selective_rows,
         "Size of WeakHash32({}) does not match size of selective column({})",
         hash.getData().size(),
         selective_rows);

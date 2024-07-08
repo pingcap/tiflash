@@ -152,9 +152,12 @@ void ColumnNullable::updateWeakHash32(
     auto & old_hash_data = old_hash.getData();
 
     /// Use old data for nulls.
-    for (const auto & row : *selective_ptr)
+    for (size_t i = 0; i < selective_ptr->size(); ++i)
+    {
+        auto row = (*selective_ptr)[i];
         if (null_map_data[row])
-            hash_data[row] = old_hash_data[row];
+            hash_data[i] = old_hash_data[i];
+    }
 }
 
 MutableColumnPtr ColumnNullable::cloneResized(size_t new_size) const

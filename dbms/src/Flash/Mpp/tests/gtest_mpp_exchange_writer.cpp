@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
@@ -22,13 +24,17 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/TiDB.h>
-#include <gtest/gtest.h>
+#include <Columns/ColumnTuple.h>
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
 
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
 #include <cstdlib>
 #include <ctime>
+
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -957,6 +963,107 @@ try
             mock_writer,
             write_records);
     }
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, testSelectiveBlockUpdateWeakHash32)
+try
+{
+    String sort_key_container;
+    const size_t rows = 65535;
+    const size_t selective_rows = 128;
+    auto collators = std::vector<TiDB::TiDBCollatorPtr>{
+        TiDB::ITiDBCollator::getCollator("utf8mb4_bin"),
+        TiDB::ITiDBCollator::getCollator("binary"),
+        TiDB::ITiDBCollator::getCollator("utf8mb4_general_ci"),
+    };
+
+    auto checker = [&](ColumnWithTypeAndName & column) {
+        LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockUpdateWeakHash32 checking {}", column.name);
+        for (auto & collator : collators)
+        {
+            WeakHash32 hash_no_selective(rows);
+            column.column->updateWeakHash32(hash_no_selective, collator, sort_key_container);
+
+            auto selective = std::make_shared<std::vector<UInt64>>(generateRandomSelective(rows, selective_rows));
+            WeakHash32 hash_selective_block(selective->size());
+            column.column->updateWeakHash32(hash_selective_block, collator, sort_key_container, selective);
+
+            ASSERT_EQ(hash_selective_block.getData().size(), selective->size());
+            for (size_t i = 0; i < selective->size(); ++i)
+                ASSERT_EQ(hash_no_selective.getData()[(*selective)[i]], hash_selective_block.getData()[i]);
+        }
+    };
+
+    // ColumnInt64
+    auto data_type_int64 = std::make_shared<DataTypeInt64>();
+    auto col_int64 = ColumnGenerator::instance().generate({rows, data_type_int64->getName(), RANDOM, "col_int64"});
+    checker(col_int64);
+
+    // ColumnString
+    auto data_type_str = std::make_shared<DataTypeString>();
+    auto col_string = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM, "col_string"});
+    checker(col_string);
+
+    // ColumnFixedString
+    size_t fixed_length = 128;
+    auto data_type_fixed_str = std::make_shared<DataTypeFixedString>(fixed_length);
+    auto col_fixed_string = ColumnGenerator::instance().generate({
+            .size = rows,
+            .type_name = data_type_fixed_str->getName(),
+            .distribution = DataDistribution::RANDOM,
+            .name = "col_fixed_string",
+            .string_max_size = fixed_length});
+    checker(col_fixed_string);
+
+    // ColumnConst
+    auto col_nested_str = data_type_str->createColumn();
+    String const_str = "abc";
+    col_nested_str->insert(Field(const_str.data(), const_str.size()));
+    auto col_const = ColumnConst::create(std::move(col_nested_str), rows);
+    ColumnWithTypeAndName col_const_with_name{std::move(col_const), data_type_str, std::string("col_const")};
+    checker(col_const_with_name);
+    
+    // ColumnDecimal
+    auto data_type_decimal = std::make_shared<DataTypeDecimal64>();
+    auto col_decimal = ColumnGenerator::instance().generate({rows, data_type_decimal->getName(), RANDOM, "col_decimal"});
+    checker(col_decimal);
+
+    // ColumnNullable
+    auto col_string_1 = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM});
+    auto col_null_map = ColumnVector<UInt8>::create();
+    srand(time(nullptr));
+    for (size_t i = 0; i < rows; ++i)
+    {
+        auto v = random() % 2;
+        col_null_map->insert(Field(static_cast<UInt64>(v)));
+    }
+    auto col_nullable = ColumnNullable::create(col_string_1.column, std::move(col_null_map));
+    ColumnWithTypeAndName col_nullable_with_name{col_nullable, std::make_shared<DataTypeNullable>(data_type_str), "col_nullable<col_string>"};
+    checker(col_nullable_with_name);
+
+    // ColumnFunction
+    
+    // ColumnAggregateFunction
+
+    // ColumnTuple
+    auto col_string_2 = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM});
+    auto col_int64_2 = ColumnGenerator::instance().generate({rows, data_type_int64->getName(), RANDOM});
+    auto col_float_2 = ColumnGenerator::instance().generate({rows, DataTypeFloat64().getName(), RANDOM});
+    Columns tuple_cols{col_string_2.column, col_int64_2.column, col_float_2.column};
+    auto col_tuple = ColumnTuple::create(tuple_cols);
+    ColumnWithTypeAndName col_tuple_with_name{
+        std::move(col_tuple),
+        std::make_shared<DataTypeTuple>(DataTypes{
+                std::make_shared<DataTypeString>(),
+                std::make_shared<DataTypeInt64>(),
+                std::make_shared<DataTypeFloat64>()}),
+        "col_nullable<col_string, col_int64, col_float64>"};
+    checker(col_tuple_with_name);
+
+    // ColumnArray
+
+    // ColumnNothing
 }
 CATCH
 
