@@ -95,7 +95,7 @@ public:
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
     bool maybeSkipBySoftLimit()
     {
-        return snap_reader->maybeSkipBySoftLimit(ColumnFamilyType::Write, snap_reader->write_cf_reader);
+        return snap_reader->maybeSkipBySoftLimit(ColumnFamilyType::Write, snap_reader->write_cf_reader.get());
     }
 
 private:
@@ -103,14 +103,11 @@ private:
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
-    void checkFinishedState(SSTReaderPtr & reader, ColumnFamilyType cf);
 
 private:
     RegionPtr region;
     UInt64 snapshot_index;
     TMTContext & tmt;
-    // TODO: merge `soft_limit` into `snap_reader`
-    // std::optional<SSTScanSoftLimit> soft_limit;
     std::shared_ptr<PreHandlingTrace::Item> prehandle_task;
     const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
