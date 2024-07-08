@@ -19,10 +19,10 @@
 namespace DB
 {
 
-class CompressionCodecRLE : public ICompressionCodec
+class CompressionCodecRunLength : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecRLE(UInt8 bytes_size_);
+    explicit CompressionCodecRunLength(CompressionDataType data_type_);
 
     UInt8 getMethodByte() const override;
 
@@ -33,11 +33,12 @@ protected:
 
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
-    bool isCompression() const override { return false; }
-    bool isGenericCompression() const override { return false; }
+private:
+    template <typename T>
+    UInt32 compressDataForInteger(const char * source, UInt32 source_size, char * dest) const;
 
 private:
-    const UInt8 bytes_size;
+    const CompressionDataType data_type;
 };
 
 } // namespace DB
