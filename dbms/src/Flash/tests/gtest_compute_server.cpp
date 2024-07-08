@@ -58,7 +58,7 @@ public:
 
         /// agg table with 200 rows
         std::vector<std::optional<TypeTraits<int>::FieldType>> agg_s1(200);
-gg        std::vector<std::optional<String>> agg_s2(200);
+        std::vector<std::optional<String>> agg_s2(200);
         std::vector<std::optional<String>> agg_s3(200);
         for (size_t i = 0; i < 200; ++i)
         {
