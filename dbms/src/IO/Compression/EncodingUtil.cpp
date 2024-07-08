@@ -155,7 +155,11 @@ void deltaDecoding(const char * source, UInt32 source_size, char * dest)
 }
 
 #if defined(__AVX2__)
-// Note: using SIMD to rewrite compress does not improve performance.
+
+/**
+ * 1. According to microbenchmark, the performance of SIMD encoding is not better than the ordinary implementation.
+ * 2. The SIMD implementation of UInt16 and UInt8 is too complex, and the performance is not better than the ordinary implementation.
+ */
 
 template <>
 void deltaDecoding<UInt32>(const char * __restrict__ raw_source, UInt32 raw_source_size, char * __restrict__ raw_dest)
