@@ -152,3 +152,6 @@
 [submodule "contrib/simsimd"]
 	path = contrib/simsimd
 	url = https://github.com/ashvardanian/SimSIMD
+[submodule "contrib/highfive"]
+	path = contrib/highfive
+	url = https://github.com/BlueBrain/HighFive

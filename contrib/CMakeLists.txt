@@ -202,3 +202,7 @@ add_subdirectory(fastpforlib)
 add_subdirectory(usearch-cmake)
 
 add_subdirectory(simsimd-cmake)
+
+add_subdirectory(hdf5-cmake)
+
+add_subdirectory(highfive-cmake)
