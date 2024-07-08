@@ -27,6 +27,9 @@ namespace DB
  * For integer data, it supports constant, constant delta, run-length, frame of reference, delta frame of reference, and LZ4.
  * For non-integer data, it supports LZ4.
  * The codec selects the best mode for each block of data.
+ *
+ * Note that this codec instance contains `ctx` for choosing the best compression
+ * mode for each block. Do NOT reuse the same instance for encoding data among multi-threads.
  */
 class CompressionCodecLightweight : public ICompressionCodec
 {

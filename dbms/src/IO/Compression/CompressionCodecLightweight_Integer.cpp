@@ -121,8 +121,9 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     {
         // Check CONSTANT_DELTA
 
-        // If values.size() == 1, mode will be CONSTANT_DELTA
-        // so values.size() must be greater than 1 here.
+        // If values.size() == 1, mode will be CONSTANT
+        // so values.size() must be greater than 1 here and deltas must be non empty.
+        assert(values.size() > 1);
         deltas.reserve(values.size() - 1);
         for (size_t i = 1; i < values.size(); ++i)
         {
