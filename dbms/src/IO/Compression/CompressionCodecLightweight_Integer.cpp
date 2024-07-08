@@ -164,7 +164,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     static constexpr auto ADDTIONAL_BYTES = sizeof(T) + sizeof(UInt8);
     size_t for_size = BitpackingPrimitives::getRequiredSize(values.size(), for_width) + ADDTIONAL_BYTES;
     size_t estimate_lz_size = values.size() * sizeof(T) / ESRTIMATE_LZ4_COMPRESSION_RATIO;
-    size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::runLengthPairsSize(rle);
+    size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::runLengthPairsByteSize(rle);
     if (needAnalyzeRunLength() && rle_size < delta_for_size && rle_size < for_size && rle_size < estimate_lz_size)
     {
         state = std::move(rle);

@@ -122,6 +122,8 @@ template void subtractFrameOfReference<UInt64>(UInt64 *, UInt64, UInt32);
 template <std::integral T>
 UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference)
 {
+    assert(!values.empty()); // caller must ensure input is not empty
+
     if constexpr (std::is_signed_v<T>)
     {
         // For signed types, after subtracting frame of reference, the range of values is not always [0, max_value - min_value].
@@ -228,55 +230,65 @@ void deltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 
     ordinaryDeltaFORDecoding<T>(src, source_size, dest, dest_size);
 }
 
+// For UInt8/UInt16, the default implement has better performance
+template void deltaFORDecoding<UInt8>(const char *, UInt32, char *, UInt32);
+template void deltaFORDecoding<UInt16>(const char *, UInt32, char *, UInt32);
+
 template <>
 void deltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    const auto deltas_count = dest_size / sizeof(UInt32) - 1;
+    static constexpr auto TYPE_BYTE_SIZE = sizeof(UInt32);
+    assert(source_size >= TYPE_BYTE_SIZE);
+    assert(dest_size >= TYPE_BYTE_SIZE);
+
+    const auto deltas_count = dest_size / TYPE_BYTE_SIZE - 1;
     if (unlikely(deltas_count == 0))
     {
-        memcpy(dest, src, sizeof(UInt32));
+        memcpy(dest, src, TYPE_BYTE_SIZE);
         return;
     }
     auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(deltas_count);
     // Reserve enough space for the temporary buffer.
-    const auto required_size = round_size * sizeof(UInt32) + sizeof(UInt32);
+    const auto required_size = round_size * TYPE_BYTE_SIZE + TYPE_BYTE_SIZE;
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
     // copy the first value to the temporary buffer
-    memcpy(tmp_buffer, src, sizeof(UInt32));
+    memcpy(tmp_buffer, src, TYPE_BYTE_SIZE);
     FORDecoding<Int32>(
-        src + sizeof(UInt32),
-        source_size - sizeof(UInt32),
-        tmp_buffer + sizeof(UInt32),
-        required_size - sizeof(UInt32));
+        src + TYPE_BYTE_SIZE,
+        source_size - TYPE_BYTE_SIZE,
+        tmp_buffer + TYPE_BYTE_SIZE,
+        required_size - TYPE_BYTE_SIZE);
     deltaDecoding<UInt32>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
 template <>
 void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    const auto deltas_count = dest_size / sizeof(UInt64) - 1;
+    static constexpr auto TYPE_BYTE_SIZE = sizeof(UInt64);
+    assert(source_size >= TYPE_BYTE_SIZE);
+    assert(dest_size >= TYPE_BYTE_SIZE);
+
+    const auto deltas_count = dest_size / TYPE_BYTE_SIZE - 1;
     if (unlikely(deltas_count == 0))
     {
-        memcpy(dest, src, sizeof(UInt64));
+        memcpy(dest, src, TYPE_BYTE_SIZE);
         return;
     }
     const auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(deltas_count);
     // Reserve enough space for the temporary buffer.
-    const auto required_size = round_size * sizeof(UInt64) + sizeof(UInt64);
+    const auto required_size = round_size * TYPE_BYTE_SIZE + TYPE_BYTE_SIZE;
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
     // copy the first value to the temporary buffer
-    memcpy(tmp_buffer, src, sizeof(UInt64));
+    memcpy(tmp_buffer, src, TYPE_BYTE_SIZE);
     FORDecoding<Int64>(
-        src + sizeof(UInt64),
-        source_size - sizeof(UInt64),
-        tmp_buffer + sizeof(UInt64),
-        required_size - sizeof(UInt64));
+        src + TYPE_BYTE_SIZE,
+        source_size - TYPE_BYTE_SIZE,
+        tmp_buffer + TYPE_BYTE_SIZE,
+        required_size - TYPE_BYTE_SIZE);
     deltaDecoding<UInt64>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
-template void deltaFORDecoding<UInt8>(const char *, UInt32, char *, UInt32);
-template void deltaFORDecoding<UInt16>(const char *, UInt32, char *, UInt32);
 
 } // namespace DB::Compression

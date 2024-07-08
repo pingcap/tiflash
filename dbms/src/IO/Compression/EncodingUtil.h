@@ -90,6 +90,7 @@ void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UI
 
 /// Run-length encoding
 
+// <value, num_of_value>
 template <std::integral T>
 using RunLengthPair = std::pair<T, UInt8>;
 template <std::integral T>
@@ -98,7 +99,7 @@ template <std::integral T>
 static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
 
 template <std::integral T>
-size_t runLengthPairsSize(const RunLengthPairs<T> & rle)
+size_t runLengthPairsByteSize(const RunLengthPairs<T> & rle)
 {
     return rle.size() * RunLengthPairLength<T>;
 }
@@ -134,7 +135,11 @@ void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
         auto count = unalignedLoad<UInt8>(src);
         src += sizeof(UInt8);
         if (unlikely(dest + count * sizeof(T) > dest_end))
-            throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot use RunLength decoding, data is too large");
+            throw Exception(
+                ErrorCodes::CANNOT_DECOMPRESS,
+                "Cannot use RunLength decoding, data is too large, count={} elem_byte={}",
+                count,
+                sizeof(T));
         if constexpr (std::is_same_v<T, UInt8> || std::is_same_v<T, Int8>)
         {
             memset(dest, value, count);
@@ -162,7 +167,8 @@ UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference);
 template <std::integral T, bool skip_subtract_frame_of_reference = false>
 size_t FOREncoding(std::vector<T> & values, T frame_of_reference, UInt8 width, char * dest)
 {
-    assert(!values.empty());
+    assert(!values.empty()); // caller must ensure input is not empty
+
     if constexpr (!skip_subtract_frame_of_reference)
         subtractFrameOfReference(values.data(), frame_of_reference, values.size());
     // store frame of reference
@@ -186,25 +192,26 @@ void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 template <std::integral T>
 void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    UInt8 bytes_size = sizeof(T);
-    if unlikely (dest_size % bytes_size != 0)
+    static constexpr UInt8 BYTES_SIZE = sizeof(T);
+    if unlikely (dest_size % BYTES_SIZE != 0)
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "uncompressed size {} is not aligned to {}",
             dest_size,
-            bytes_size);
-    const auto count = dest_size / sizeof(T);
+            BYTES_SIZE);
+
+    const auto count = dest_size / BYTES_SIZE;
     T frame_of_reference = unalignedLoad<T>(src);
-    src += sizeof(T);
+    src += BYTES_SIZE;
     auto width = unalignedLoad<UInt8>(src);
     src += sizeof(UInt8);
-    const auto required_size = source_size - sizeof(T) - sizeof(UInt8);
+    const auto required_size = source_size - BYTES_SIZE - sizeof(UInt8);
     RUNTIME_CHECK(BitpackingPrimitives::getRequiredSize(count, width) == required_size);
     auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
     if (round_size != count)
     {
         // Reserve enough space for the temporary buffer.
-        unsigned char tmp_buffer[round_size * sizeof(T)];
+        unsigned char tmp_buffer[round_size * BYTES_SIZE];
         BitpackingPrimitives::unPackBuffer<T>(tmp_buffer, reinterpret_cast<const unsigned char *>(src), count, width);
         applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
         memcpy(dest, tmp_buffer, dest_size);
@@ -255,6 +262,10 @@ void deltaDecoding(const char * source, UInt32 source_size, char * dest);
 template <std::integral T>
 void ordinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
+    // caller should ensure these size
+    assert(source_size >= sizeof(T));
+    assert(dest_size >= sizeof(T));
+
     using TS = typename std::make_signed_t<T>;
     // copy first value to dest
     memcpy(dest, src, sizeof(T));

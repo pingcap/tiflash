@@ -71,7 +71,7 @@ UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UI
             ++rle_vec.back().second;
     }
 
-    if (DB::Compression::runLengthPairsSize<T>(rle_vec) >= source_size)
+    if (DB::Compression::runLengthPairsByteSize<T>(rle_vec) >= source_size)
     {
         // treat as string
         dest[0] = magic_enum::enum_integer(CompressionDataType::String);
