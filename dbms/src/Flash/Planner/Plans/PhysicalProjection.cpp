@@ -53,7 +53,7 @@ PhysicalPlanNodePtr PhysicalProjection::build(
         child,
         "projection",
         project_actions,
-        /*after_auto_pass_through_hashagg*/ false);
+        /*after_auto_pass_through_hashagg=*/false);
     return physical_projection;
 }
 
