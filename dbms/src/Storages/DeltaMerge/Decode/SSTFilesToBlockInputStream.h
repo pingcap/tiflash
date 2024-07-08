@@ -61,7 +61,7 @@ public:
     SSTFilesToBlockInputStream( //
         RegionPtr region_,
         UInt64 snapshot_index_,
-        const SnapshotSSTReaderPtr & snap_reader_,
+        SnapshotSSTReader && snap_reader_,
         TMTContext & tmt_,
         std::shared_ptr<PreHandlingTrace::Item> prehandle_task_,
         SSTFilesToBlockInputStreamOpts && opts_);
@@ -90,12 +90,12 @@ public:
     };
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
-    size_t getSplitId() const { return snap_reader->getSplitId(); }
+    size_t getSplitId() const { return snap_reader.getSplitId(); }
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
     bool maybeSkipBySoftLimit()
     {
-        return snap_reader->maybeSkipBySoftLimit(ColumnFamilyType::Write, snap_reader->write_cf_reader.get());
+        return snap_reader.maybeSkipBySoftLimit(ColumnFamilyType::Write, snap_reader.write_cf_reader.get());
     }
 
 private:
@@ -112,7 +112,7 @@ private:
     const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
 
-    SnapshotSSTReaderPtr snap_reader;
+    SnapshotSSTReader snap_reader;
 
     DecodedTiKVKey default_last_loaded_rowkey;
     DecodedTiKVKey lock_last_loaded_rowkey;
