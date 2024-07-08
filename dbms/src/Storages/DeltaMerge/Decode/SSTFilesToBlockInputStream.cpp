@@ -149,8 +149,6 @@ void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, Colum
         return;
     if (!reader->remained())
         return;
-    if (prehandle_task->isAbort())
-        return;
 
     // now the stream must be stopped by `soft_limit`, let's check the keys in reader
     RUNTIME_CHECK_MSG(soft_limit.has_value(), "soft_limit.has_value(), cf={}", magic_enum::enum_name(cf));
@@ -163,9 +161,13 @@ void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, Colum
 
 void SSTFilesToBlockInputStream::readSuffix()
 {
-    checkFinishedState(write_cf_reader, ColumnFamilyType::Write);
-    checkFinishedState(default_cf_reader, ColumnFamilyType::Default);
-    checkFinishedState(lock_cf_reader, ColumnFamilyType::Lock);
+    // For aborted task, we don't need to check the finish state
+    if (!prehandle_task->isAbort())
+    {
+        checkFinishedState(write_cf_reader, ColumnFamilyType::Write);
+        checkFinishedState(default_cf_reader, ColumnFamilyType::Default);
+        checkFinishedState(lock_cf_reader, ColumnFamilyType::Lock);
+    }
 
     // reset all SSTReaders and return without writting blocks any more.
     write_cf_reader.reset();
@@ -179,7 +181,7 @@ Block SSTFilesToBlockInputStream::read()
 
     while (write_cf_reader && write_cf_reader->remained())
     {
-        bool should_stop_advancing = maybeStopBySoftLimit(ColumnFamilyType::Write, write_cf_reader);
+        bool should_stop_advancing = maybeStopBySoftLimit(ColumnFamilyType::Write, write_cf_reader.get());
         if (should_stop_advancing)
         {
             // Load the last batch
@@ -241,14 +243,12 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     const DecodedTiKVKey * const rowkey_to_be_included)
 {
     SSTReader * reader;
-    SSTReaderPtr * reader_ptr;
     size_t * p_process_keys;
     size_t * p_process_keys_bytes;
     DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
         reader = default_cf_reader.get();
-        reader_ptr = &default_cf_reader;
         p_process_keys = &process_keys.default_cf;
         p_process_keys_bytes = &process_keys.default_cf_bytes;
         last_loaded_rowkey = &default_last_loaded_rowkey;
@@ -256,7 +256,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     else if (cf == ColumnFamilyType::Lock)
     {
         reader = lock_cf_reader.get();
-        reader_ptr = &lock_cf_reader;
         p_process_keys = &process_keys.lock_cf;
         p_process_keys_bytes = &process_keys.lock_cf_bytes;
         last_loaded_rowkey = &lock_last_loaded_rowkey;
@@ -266,7 +265,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
 
     if (reader && reader->remained())
     {
-        maybeSkipBySoftLimit(cf, *reader_ptr);
+        maybeSkipBySoftLimit(cf, reader);
     }
 
     Stopwatch sw;
@@ -276,7 +275,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     {
         while (reader && reader->remained())
         {
-            if (maybeStopBySoftLimit(cf, *reader_ptr))
+            if (maybeStopBySoftLimit(cf, reader))
             {
                 break;
             }
@@ -335,7 +334,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // Let's try to load keys until process_keys_offset_end
         while (reader && reader->remained() && *p_process_keys < process_keys_offset_end)
         {
-            if (maybeStopBySoftLimit(cf, *reader_ptr))
+            if (maybeStopBySoftLimit(cf, reader))
             {
                 break;
             }
@@ -420,8 +419,9 @@ std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits
 
 // Returning false means no skip is performed, the reader is intact.
 // Returning true means skip is performed, must read from current value.
-bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
+    assert(reader != nullptr);
     if (!soft_limit.has_value())
         return false;
     const auto & start_limit = soft_limit.value().getStartLimit();
@@ -504,8 +504,9 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
     return false;
 }
 
-bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
+    assert(reader != nullptr);
     if (!soft_limit.has_value())
         return false;
     const SSTScanSoftLimit & sl = soft_limit.value();

@@ -218,7 +218,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                 .ingest_ids = stream->outputFiles(),
                 .stats = PrehandleResult::Stats{
                     .parallels = 1,
-                    .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
+                    .raft_snapshot_bytes = sst_stream->getProcessKeys().totalBytes(),
                     .approx_raft_snapshot_size = 0,
                     .dt_disk_bytes = stream->getTotalBytesOnDisk(),
                     .dt_total_bytes = stream->getTotalCommittedBytes(),

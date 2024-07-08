@@ -139,7 +139,7 @@ public:
         size_t lock_cf_bytes = 0;
 
         inline size_t total() const { return default_cf + write_cf + lock_cf; }
-        inline size_t total_bytes() const { return default_cf_bytes + write_cf_bytes + lock_cf_bytes; }
+        inline size_t totalBytes() const { return default_cf_bytes + write_cf_bytes + lock_cf_bytes; }
     };
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
@@ -149,15 +149,15 @@ public:
     }
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
-    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
-    bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader); }
+    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
+    bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader.get()); }
 
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
-    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
+    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
     void checkFinishedState(SSTReaderPtr & reader, ColumnFamilyType cf);
 
 private:
@@ -219,7 +219,7 @@ private:
 
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`
-    const SSTFilesToBlockInputStreamPtr _raw_child;
+    const SSTFilesToBlockInputStreamPtr _raw_child; // NOLINT(readability-identifier-naming)
     std::unique_ptr<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>> mvcc_compact_stream;
 };
 
