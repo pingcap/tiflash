@@ -258,7 +258,7 @@ void ordinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest,
     using TS = typename std::make_signed_t<T>;
     // copy first value to dest
     memcpy(dest, src, sizeof(T));
-    if (unlikely(source_size <= sizeof(T)))
+    if (unlikely(source_size == sizeof(T)))
         return;
     // decode deltas
     FORDecoding<TS>(src + sizeof(T), source_size - sizeof(T), dest + sizeof(T), dest_size - sizeof(T));
