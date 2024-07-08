@@ -138,20 +138,17 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
     const auto & opts = prehandle_ctx.opts;
     auto & tmt = prehandle_ctx.tmt;
     auto & trace = prehandle_ctx.trace;
+    const auto split_id = sst_stream->getSplitId();
+    const String limit_tag = sst_stream->getSoftLimit() ? sst_stream->getSoftLimit()->toDebugString() : "";
+    const auto region_id = new_region->id();
 
-    auto region_id = new_region->id();
-    auto split_id = sst_stream->getSplitId();
     CurrentMetrics::add(CurrentMetrics::RaftNumPrehandlingSubTasks);
     SCOPE_EXIT({
         trace.releaseSubtaskResources(region_id, split_id);
         CurrentMetrics::sub(CurrentMetrics::RaftNumPrehandlingSubTasks);
     });
     Stopwatch sw;
-    LOG_INFO(
-        log,
-        "Add prehandle task split_id={} limit={}",
-        split_id,
-        sst_stream->getSoftLimit().has_value() ? sst_stream->getSoftLimit()->toDebugString() : "");
+    LOG_INFO(log, "Add prehandle task split_id={} limit={}", split_id, limit_tag);
     std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
     // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
     // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
@@ -520,6 +517,7 @@ std::tuple<ReadFromStreamResult, PrehandleResult> executeParallelTransform(
         split_key_count,
         new_region->id(),
         snaps.len);
+
     Stopwatch watch;
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);

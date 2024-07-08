@@ -51,7 +51,9 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , prehandle_task(prehandle_task_)
     , opts(std::move(opts_))
 {
-    log = Logger::get(opts.log_prefix);
+    const size_t split_id
+        = soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
+    log = Logger::get(opts.log_prefix, fmt::format("region_id={} split_id={}", region->id(), split_id));
 
     // We have to initialize sst readers at an earlier stage,
     // due to prehandle snapshot of single region feature in raftstore v2.
@@ -62,9 +64,8 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper,
                                SSTView snap,
                                SSTReader::RegionRangeFilter range,
-                               size_t split_id,
-                               size_t region_id) {
-        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id, region_id);
+                               const LoggerPtr & log_) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, log_);
     };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
@@ -92,9 +93,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_default,
             log,
-            region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
-            region->id());
+            region->getRange());
     }
     if (!ssts_write.empty())
     {
@@ -104,9 +103,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_write,
             log,
-            region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
-            region->id());
+            region->getRange());
     }
     if (!ssts_lock.empty())
     {
@@ -116,9 +113,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_lock,
             log,
-            region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
-            region->id());
+            region->getRange());
     }
     LOG_INFO(
         log,
