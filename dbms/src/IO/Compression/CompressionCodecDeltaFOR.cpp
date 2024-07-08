@@ -122,7 +122,7 @@ void CompressionCodecDeltaFOR::doDecompressData(
     char * dest,
     UInt32 uncompressed_size) const
 {
-    if unlikely (source_size < 2)
+    if (unlikely(source_size < 2))
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot decompress DeltaFor-encoded data. File has wrong header");
@@ -132,7 +132,7 @@ void CompressionCodecDeltaFOR::doDecompressData(
 
     UInt8 bytes_size = source[0];
     auto data_type = magic_enum::enum_cast<CompressionDataType>(bytes_size);
-    RUNTIME_CHECK(data_type.has_value());
+    RUNTIME_CHECK(data_type.has_value(), bytes_size);
 
     UInt32 source_size_no_header = source_size - 1;
     switch (data_type.value())
@@ -162,7 +162,7 @@ void CompressionCodecDeltaFOR::ordinaryDecompress(
     char * dest,
     UInt32 uncompressed_size)
 {
-    if unlikely (source_size < 2)
+    if (unlikely(source_size < 2))
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot decompress DeltaFor-encoded data. File has wrong header");
@@ -172,9 +172,9 @@ void CompressionCodecDeltaFOR::ordinaryDecompress(
 
     UInt8 bytes_size = source[0];
     auto data_type = magic_enum::enum_cast<CompressionDataType>(bytes_size);
-    RUNTIME_CHECK(data_type.has_value());
+    RUNTIME_CHECK(data_type.has_value(), bytes_size);
 
-    UInt32 source_size_no_header = source_size - 1;
+    const UInt32 source_size_no_header = source_size - 1;
     switch (data_type.value())
     {
     case CompressionDataType::Int8:

@@ -68,10 +68,12 @@ enum class CompressionMethodByte : UInt8
 
 enum class CompressionDataType : UInt8
 {
+    // These enum values are used to represent the number of bytes of the type
     Int8 = 1, // Int8/UInt8
     Int16 = 2, // Int16/UInt16
     Int32 = 4, // Int32/UInt32
     Int64 = 8, // Int64/UInt64
+    // These enum values are not related to the number of bytes of the type
     Float32 = 9,
     Float64 = 10,
     String = 11,

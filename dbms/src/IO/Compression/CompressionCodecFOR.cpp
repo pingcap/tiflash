@@ -111,7 +111,7 @@ void CompressionCodecFOR::doDecompressData(
     char * dest,
     UInt32 uncompressed_size) const
 {
-    if unlikely (source_size < 2)
+    if (unlikely(source_size < 2))
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress For-encoded data. File has wrong header");
 
     if (unlikely(uncompressed_size == 0))
