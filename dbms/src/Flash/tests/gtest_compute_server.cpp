@@ -180,10 +180,10 @@ public:
 #define WRAP_FOR_SERVER_TEST_END }
 
 #ifdef SANITIZER
-    #define ADAPTIVE_SLEEP(X, Y) std::this_thread::sleep_for(Y)
+#define ADAPTIVE_SLEEP(X, Y) std::this_thread::sleep_for(Y)
 #else
-    #define ADAPTIVE_SLEEP(X, Y) std::this_thread::sleep_for(X)
-#endif
+#define ADAPTIVE_SLEEP(X, Y) std::this_thread::sleep_for(X)
+#endif // SANITIZER
 
 TEST_F(ComputeServerRunner, simpleExchange)
 try
