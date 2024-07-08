@@ -78,8 +78,23 @@ struct SnapshotSSTReader
     }
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
-    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
-    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
+    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
+    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
+
+    void checkFinishedState() const
+    {
+        checkCFFinishedState(ColumnFamilyType::Write, write_cf_reader.get());
+        checkCFFinishedState(ColumnFamilyType::Default, default_cf_reader.get());
+        checkCFFinishedState(ColumnFamilyType::Lock, lock_cf_reader.get());
+    }
+    void checkCFFinishedState(ColumnFamilyType cf, SSTReader * reader) const;
+
+    void reset()
+    {
+        write_cf_reader.reset();
+        default_cf_reader.reset();
+        lock_cf_reader.reset();
+    }
 
     std::optional<SSTScanSoftLimit> soft_limit;
     LoggerPtr log;

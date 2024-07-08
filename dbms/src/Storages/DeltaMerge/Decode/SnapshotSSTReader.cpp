@@ -28,9 +28,8 @@ SnapshotSSTReader::SnapshotSSTReader(
     auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper,
                                SSTView snap,
                                SSTReader::RegionRangeFilter range,
-                               size_t split_id,
-                               size_t region_id) {
-        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id, region_id);
+                               const LoggerPtr & log_) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, log_);
     };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
@@ -58,9 +57,7 @@ SnapshotSSTReader::SnapshotSSTReader(
             make_inner_func,
             ssts_default,
             log,
-            region_range,
-            split_id,
-            region_id);
+            region_range);
     }
     if (!ssts_write.empty())
     {
@@ -70,9 +67,7 @@ SnapshotSSTReader::SnapshotSSTReader(
             make_inner_func,
             ssts_write,
             log,
-            region_range,
-            split_id,
-            region_id);
+            region_range);
     }
     if (!ssts_lock.empty())
     {
@@ -82,9 +77,7 @@ SnapshotSSTReader::SnapshotSSTReader(
             make_inner_func,
             ssts_lock,
             log,
-            region_range,
-            split_id,
-            region_id);
+            region_range);
     }
 
     LOG_INFO(
@@ -118,8 +111,9 @@ std::vector<String> SnapshotSSTReader::findSplitKeys(size_t splits_count) const
 
 // Returning false means no skip is performed, the reader is intact.
 // Returning true means skip is performed, must read from current value.
-bool SnapshotSSTReader::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+bool SnapshotSSTReader::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
+    assert(reader != nullptr);
     if (!soft_limit.has_value())
         return false;
 
@@ -195,8 +189,9 @@ bool SnapshotSSTReader::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr &
     return false;
 }
 
-bool SnapshotSSTReader::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+bool SnapshotSSTReader::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
+    assert(reader != nullptr);
     if (!soft_limit.has_value())
         return false;
 
@@ -223,6 +218,28 @@ bool SnapshotSSTReader::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr &
         return true;
     }
     return false;
+}
+
+void SnapshotSSTReader::checkCFFinishedState(ColumnFamilyType cf, SSTReader * reader) const
+{
+    if (reader == nullptr)
+        return;
+    // There must be no data left when we write suffix
+    if (!reader->remained())
+        return;
+
+    // now the stream must be stopped by `soft_limit`, let's check the keys in reader
+    RUNTIME_CHECK_MSG(
+        soft_limit.has_value(),
+        "soft_limit.has_value(), cf={} log_ident={}",
+        magic_enum::enum_name(cf),
+        log->identifier());
+    BaseBuffView cur = reader->keyView();
+    RUNTIME_CHECK_MSG(
+        buffToStrView(cur) > soft_limit.value().raw_end,
+        "cur > raw_end, cf={} log_ident={}",
+        magic_enum::enum_name(cf),
+        log->identifier());
 }
 
 } // namespace DB::DM

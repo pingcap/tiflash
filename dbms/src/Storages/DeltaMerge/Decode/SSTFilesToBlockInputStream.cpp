@@ -44,7 +44,6 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     : region(std::move(region_))
     , snapshot_index(snapshot_index_)
     , tmt(tmt_)
-    // , soft_limit(std::move(soft_limit_))
     , prehandle_task(prehandle_task_)
     , opts(std::move(opts_))
     , snap_reader(snap_reader_)
@@ -66,34 +65,16 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix() {}
 
-void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, ColumnFamilyType cf)
-{
-    // There must be no data left when we write suffix
-    if (!reader)
-        return;
-    if (!reader->remained())
-        return;
-
-    // now the stream must be stopped by `soft_limit`, let's check the keys in reader
-    RUNTIME_CHECK_MSG(snap_reader->soft_limit.has_value(), "soft_limit.has_value(), cf={}", magic_enum::enum_name(cf));
-    BaseBuffView cur = reader->keyView();
-    RUNTIME_CHECK_MSG(
-        buffToStrView(cur) > snap_reader->soft_limit.value().raw_end,
-        "cur > raw_end, cf={}",
-        magic_enum::enum_name(cf));
-}
-
 void SSTFilesToBlockInputStream::readSuffix()
 {
     // For aborted task, we don't need to check the finish state
-    checkFinishedState(snap_reader->write_cf_reader, ColumnFamilyType::Write);
-    checkFinishedState(snap_reader->default_cf_reader, ColumnFamilyType::Default);
-    checkFinishedState(snap_reader->lock_cf_reader, ColumnFamilyType::Lock);
+    if (!prehandle_task->isAbort())
+    {
+        snap_reader->checkFinishedState();
+    }
 
     // reset all SSTReaders and return without writting blocks any more.
-    snap_reader->write_cf_reader.reset();
-    snap_reader->default_cf_reader.reset();
-    snap_reader->lock_cf_reader.reset();
+    snap_reader->reset();
 }
 
 Block SSTFilesToBlockInputStream::read()
@@ -103,7 +84,7 @@ Block SSTFilesToBlockInputStream::read()
     while (snap_reader->write_cf_reader && snap_reader->write_cf_reader->remained())
     {
         bool should_stop_advancing
-            = snap_reader->maybeStopBySoftLimit(ColumnFamilyType::Write, snap_reader->write_cf_reader);
+            = snap_reader->maybeStopBySoftLimit(ColumnFamilyType::Write, snap_reader->write_cf_reader.get());
         if (should_stop_advancing)
         {
             // Load the last batch
