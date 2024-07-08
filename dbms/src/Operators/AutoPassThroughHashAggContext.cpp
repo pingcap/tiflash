@@ -110,7 +110,7 @@ Block AutoPassThroughHashAggContext::getData()
 
 void AutoPassThroughHashAggContext::trySwitchFromInitState()
 {
-    if (many_data[0]->bytesCount() > 2 * 1024 * 1024)
+    if (many_data[0]->bytesCount() > INIT_STATE_HASHMAP_THRESHOLD)
         state = State::Adjust;
 }
 

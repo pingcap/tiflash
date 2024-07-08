@@ -205,6 +205,8 @@ private:
     size_t row_limit_unit;
 
     LoggerPtr log;
+
+    static constexpr size_t INIT_STATE_HASHMAP_THRESHOLD = 2 * 1024 * 1024;
 };
 
 using AutoPassThroughHashAggContextPtr = std::shared_ptr<AutoPassThroughHashAggContext>;
