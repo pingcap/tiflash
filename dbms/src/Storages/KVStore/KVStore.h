@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Decode/SnapshotSSTReader_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
@@ -285,9 +286,11 @@ private:
 
     //  ---- Raft Snapshot ----  //
 
+    std::pair<Strings, size_t> getSplitKey(const RegionPtr & new_region, const DM::SnapshotSSTReader & snap_reader);
+
     PrehandleResult preHandleSSTsToDTFiles(
         RegionPtr new_region,
-        const SSTViewVec,
+        SSTViewVec,
         uint64_t index,
         uint64_t term,
         DM::FileConvertJobType,
@@ -300,7 +303,7 @@ private:
 
     RegionPtr handleIngestSSTByDTFile(
         const RegionPtr & region,
-        const SSTViewVec,
+        SSTViewVec,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);

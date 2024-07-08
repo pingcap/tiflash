@@ -55,10 +55,9 @@ struct SSTScanSoftLimit
     }
 };
 
-struct SnapshotSSTReader;
-using SnapshotSSTReaderPtr = std::shared_ptr<SnapshotSSTReader>;
-struct SnapshotSSTReader
+class SnapshotSSTReader
 {
+public:
     SnapshotSSTReader(
         const SSTViewVec & snaps,
         const TiFlashRaftProxyHelper * proxy_helper,
@@ -66,7 +65,7 @@ struct SnapshotSSTReader
         UInt64 snapshot_index,
         const ImutRegionRangePtr & region_range,
         std::optional<SSTScanSoftLimit> && soft_limit_,
-        const String & log_prefix);
+        const LoggerPtr & log_);
 
     // Currently it only takes effect if using tablet sst reader which is usually a raftstore v2 case.
     // Otherwise will return zero.
