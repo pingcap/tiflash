@@ -290,5 +290,4 @@ void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
     deltaDecoding<UInt64>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
-
 } // namespace DB::Compression

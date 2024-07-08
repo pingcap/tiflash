@@ -19,6 +19,8 @@
 namespace DB
 {
 
+class CompressionCodecFactory;
+
 class CompressionCodecLZ4 : public ICompressionCodec
 {
 public:
@@ -37,6 +39,7 @@ private:
 
 protected:
     const int level;
+    friend class CompressionCodecFactory;
 };
 
 

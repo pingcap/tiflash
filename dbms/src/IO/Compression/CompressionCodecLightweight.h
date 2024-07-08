@@ -55,20 +55,16 @@ private:
         Invalid = 0,
         CONSTANT = 1, // all values are the same
         CONSTANT_DELTA = 2, // the difference between two adjacent values is the same
-        RunLength = 3, // run-length encoding
-        FOR = 4, // Frame of Reference encoding
-        DELTA_FOR = 5, // delta encoding and then FOR encoding
-        LZ4 = 6, // the above modes are not suitable, use LZ4 instead
+        FOR = 3, // Frame of Reference encoding
+        DELTA_FOR = 4, // delta encoding and then FOR encoding
+        LZ4 = 5, // the above modes are not suitable, use LZ4 instead
     };
 
     // Constant or ConstantDelta
-    template <typename T>
+    template <std::integral T>
     using ConstantState = T;
 
-    template <typename T>
-    using RunLengthState = std::vector<std::pair<T, UInt8>>;
-
-    template <typename T>
+    template <std::integral T>
     struct FORState
     {
         std::vector<T> values;
@@ -76,7 +72,7 @@ private:
         UInt8 bit_width;
     };
 
-    template <typename T>
+    template <std::integral T>
     struct DeltaFORState
     {
         using TS = typename std::make_signed_t<T>;
@@ -86,15 +82,15 @@ private:
     };
 
     // State is a union of different states for different modes
-    template <typename T>
-    using IntegerState = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
+    template <std::integral T>
+    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
 
     class IntegerCompressContext
     {
     public:
         IntegerCompressContext() = default;
 
-        template <typename T>
+        template <std::integral T>
         void analyze(std::span<const T> & values, IntegerState<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
@@ -106,8 +102,12 @@ private:
 
     private:
         bool needAnalyze() const;
+
+        template <std::integral T>
         bool needAnalyzeDelta() const;
-        bool needAnalyzeRunLength() const;
+
+        template <std::integral T>
+        static constexpr bool needAnalyzeFOR();
 
     private:
         // The threshold for the number of blocks to decide whether need to analyze.
@@ -117,6 +117,8 @@ private:
         // Assume that the compression ratio of LZ4 is 3.0
         // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
         static constexpr size_t ESRTIMATE_LZ4_COMPRESSION_RATIO = 3;
+        // When for_width * FOR_WIDTH_FACTOR < sizeof(T) * 8, there is no need to analyze DELTA.
+        static constexpr UInt8 FOR_WIDTH_FACTOR = 4;
 
         size_t lw_uncompressed_size = 0;
         size_t lw_compressed_size = 0;
@@ -126,13 +128,12 @@ private:
         size_t lz4_counter = 0;
         size_t constant_delta_counter = 0;
         size_t delta_for_counter = 0;
-        size_t rle_counter = 0;
     };
 
-    template <typename T>
+    template <std::integral T>
     size_t compressDataForInteger(const char * source, UInt32 source_size, char * dest) const;
 
-    template <typename T>
+    template <std::integral T>
     void decompressDataForInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size) const;
 
     /// Non-integer data

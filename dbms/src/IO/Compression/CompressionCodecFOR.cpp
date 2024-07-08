@@ -16,11 +16,9 @@
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecFOR.h>
 #include <IO/Compression/CompressionInfo.h>
-#include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
 #include <common/likely.h>
 #include <common/unaligned.h>
-#include <lz4.h>
 
 #include <magic_enum.hpp>
 
@@ -45,22 +43,11 @@ UInt8 CompressionCodecFOR::getMethodByte() const
 
 UInt32 CompressionCodecFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
-    switch (data_type)
-    {
-    case CompressionDataType::Int8:
-    case CompressionDataType::Int16:
-    case CompressionDataType::Int32:
-    case CompressionDataType::Int64:
-    {
-        // |bytes_of_original_type|frame_of_reference|width(bits)  |bitpacked data|
-        // |1 bytes               |bytes_size        |sizeof(UInt8)|required size |
-        auto bytes_size = magic_enum::enum_integer(data_type);
-        const size_t count = uncompressed_size / bytes_size;
-        return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
-    }
-    default:
-        return 1 + LZ4_COMPRESSBOUND(uncompressed_size);
-    }
+    // |bytes_of_original_type|frame_of_reference|width(bits)  |bitpacked data|
+    // |1 bytes               |bytes_size        |sizeof(UInt8)|required size |
+    auto bytes_size = magic_enum::enum_integer(data_type);
+    const size_t count = uncompressed_size / bytes_size;
+    return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
 }
 
 template <std::integral T>
@@ -93,15 +80,7 @@ UInt32 CompressionCodecFOR::doCompressData(const char * source, UInt32 source_si
     case CompressionDataType::Int64:
         return 1 + compressData<UInt64>(reinterpret_cast<const UInt64 *>(source), source_size, dest);
     default:
-        auto success = LZ4_compress_fast(
-            source,
-            dest,
-            source_size,
-            LZ4_COMPRESSBOUND(source_size),
-            CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-        if (unlikely(!success))
-            throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
-        return 1 + success;
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Unsupported data type: {}", magic_enum::enum_name(data_type));
     }
 }
 
@@ -137,9 +116,10 @@ void CompressionCodecFOR::doDecompressData(
         DB::Compression::FORDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
-        if (unlikely(LZ4_decompress_safe(&source[1], dest, source_size_no_header, uncompressed_size) < 0))
-            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
-        break;
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Unsupported data type: {}",
+            magic_enum::enum_name(data_type.value()));
     }
 }
 

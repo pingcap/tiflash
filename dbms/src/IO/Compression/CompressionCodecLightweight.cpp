@@ -49,7 +49,7 @@ UInt32 CompressionCodecLightweight::getMaxCompressedDataSize(UInt32 uncompressed
 CompressionCodecLightweight::~CompressionCodecLightweight()
 {
     if (ctx.isCompression())
-        LOG_INFO(Logger::get(), "lightweight codec: {}", ctx.toDebugString());
+        LOG_DEBUG(Logger::get(), "lightweight codec: {}", ctx.toDebugString());
 }
 
 UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 source_size, char * dest) const
@@ -69,6 +69,7 @@ UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 s
     case CompressionDataType::Float32:
     case CompressionDataType::Float64:
     case CompressionDataType::String:
+    case CompressionDataType::Unknown:
         return 1 + compressDataForNonInteger(source, source_size, dest);
     default:
         throw Exception(
@@ -118,6 +119,7 @@ void CompressionCodecLightweight::doDecompressData(
     case CompressionDataType::Float32:
     case CompressionDataType::Float64:
     case CompressionDataType::String:
+    case CompressionDataType::Unknown:
         decompressDataForNonInteger(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:

@@ -214,7 +214,7 @@ struct Settings
     /* Checksum and compressions */ \
     M(SettingUInt64, dt_checksum_frame_size, DBMS_DEFAULT_BUFFER_SIZE, "Frame size for delta tree stable storage")                                                                                                                      \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
-    M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
+    M(SettingCompressionMethod, dt_compression_method, CompressionMethod::Lightweight, "The method of data compression when writing.")                                                                                                  \
     M(SettingInt64, dt_compression_level, 1, "The compression level.")                                                                                                                                                                  \
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value "                       \
                                                                                "and no less than the volume of data for one mark.")                                                                                                     \

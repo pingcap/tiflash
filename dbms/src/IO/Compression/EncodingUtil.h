@@ -19,9 +19,6 @@
 #include <common/types.h>
 #include <common/unaligned.h>
 
-#if defined(__AVX2__)
-#include <immintrin.h>
-#endif
 
 namespace DB::ErrorCodes
 {

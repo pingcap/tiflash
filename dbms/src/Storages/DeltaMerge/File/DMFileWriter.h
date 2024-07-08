@@ -23,10 +23,10 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
-namespace DB
+
+namespace DB::DM
 {
-namespace DM
-{
+
 namespace detail
 {
 static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
@@ -38,6 +38,7 @@ static inline size_t getFrameSizeOrDefault(DMFile & dmfile)
     return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
 }
 } // namespace detail
+
 class DMFileWriter
 {
 public:
@@ -47,6 +48,7 @@ public:
         Stream(
             const DMFilePtr & dmfile,
             const String & file_base_name,
+            ColId col_id,
             const DataTypePtr & type,
             CompressionSettings compression_settings,
             size_t max_compress_block_size,
@@ -65,12 +67,40 @@ public:
                 /*flags*/ -1,
                 /*mode*/ 0666,
                 max_compress_block_size))
-            , compressed_buf(CompressedWriteBuffer<>::build(
-                  *plain_file,
-                  compression_settings,
-                  !dmfile->getConfiguration().has_value()))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
+            assert(compression_settings.settings.size() == 1);
+            if (col_id == TiDBPkColumnID || col_id == VersionColumnID)
+            {
+                // pk and version column are always compressed with DeltaFOR
+                auto setting = CompressionSetting::create<>(CompressionMethodByte::DeltaFOR, 1, *type);
+                compressed_buf = CompressedWriteBuffer<>::build(
+                    *plain_file,
+                    CompressionSettings(setting),
+                    !dmfile->getConfiguration());
+            }
+            else if (col_id == DelMarkColumnID)
+            {
+                // del mark column is always compressed with RunLength
+                auto setting = CompressionSetting::create<>(CompressionMethodByte::RunLength, 1, *type);
+                compressed_buf = CompressedWriteBuffer<>::build(
+                    *plain_file,
+                    CompressionSettings(setting),
+                    !dmfile->getConfiguration());
+            }
+            else
+            {
+                // other columns are compressed with the specified method
+                auto setting = CompressionSetting::create<>(
+                    compression_settings.settings[0].method,
+                    compression_settings.settings[0].level,
+                    *type);
+                compressed_buf = CompressedWriteBuffer<>::build(
+                    *plain_file,
+                    CompressionSettings(setting),
+                    !dmfile->getConfiguration());
+            }
+
             if (!dmfile->useMetaV2())
             {
                 // will not used in DMFileFormat::V3, could be removed when v3 is default
@@ -156,7 +186,7 @@ private:
     /// Add streams with specified column id. Since a single column may have more than one Stream,
     /// for example Nullable column has a NullMap column, we would track them with a mapping
     /// FileNameBase -> Stream.
-    void addStreams(ColId col_id, DataTypePtr type, bool do_index);
+    void addStreams(const ColumnDefine & cd, bool do_index);
 
     WriteBufferFromFileBasePtr createMetaFile();
     void finalizeMeta();
@@ -181,5 +211,4 @@ private:
     bool is_empty_file = true;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

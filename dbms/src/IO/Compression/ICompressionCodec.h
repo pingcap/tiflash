@@ -70,7 +70,7 @@ protected:
         = 0;
 };
 
-using CompressionCodecPtr = std::unique_ptr<ICompressionCodec>;
+using CompressionCodecPtr = std::shared_ptr<ICompressionCodec>;
 using Codecs = std::vector<CompressionCodecPtr>;
 
 } // namespace DB

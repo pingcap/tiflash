@@ -74,7 +74,8 @@ void serializeColumn(
     CompressionMethod compression_method,
     Int64 compression_level)
 {
-    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
+    auto compression_setting = CompressionSetting::create<>(compression_method, compression_level, *type);
+    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_setting));
     type->serializeBinaryBulkWithMultipleStreams(
         column,
         [&](const IDataType::SubstreamPath &) { return &compressed; },
