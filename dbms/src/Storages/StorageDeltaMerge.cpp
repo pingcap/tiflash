@@ -728,11 +728,19 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
     return ranges;
 }
 
+<<<<<<< HEAD
 DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(
     const std::unique_ptr<DAGQueryInfo> & dag_query,
     const ColumnDefines & columns_to_read,
     const Context & context,
     const LoggerPtr & tracing_logger)
+=======
+RuntimeFilteList parseRuntimeFilterList(
+    const SelectQueryInfo & query_info,
+    const DM::ColumnDefines & table_column_defines,
+    const Context & db_context,
+    const LoggerPtr & log)
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 {
     RUNTIME_CHECK(dag_query != nullptr);
     // build rough set operator
@@ -756,8 +764,21 @@ DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(
         if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
             LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
     }
+<<<<<<< HEAD
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
+=======
+    auto runtime_filter_list = db_context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(
+        query_info.dag_query->runtime_filter_ids);
+    LOG_DEBUG(log, "build runtime filter in local stream, list size:{}", runtime_filter_list.size());
+    for (auto & rf : runtime_filter_list)
+    {
+        rf->setTargetAttr(query_info.dag_query->source_columns, table_column_defines);
+    }
+    return runtime_filter_list;
+}
+} // namespace
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 
     return rs_operator;
 }
@@ -967,9 +988,13 @@ BlockInputStreams StorageDeltaMerge::read(
 
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
 
+<<<<<<< HEAD
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
+=======
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
@@ -1056,9 +1081,13 @@ void StorageDeltaMerge::read(
 
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
 
+<<<<<<< HEAD
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
+=======
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 
     const auto & scan_context = mvcc_query_info.scan_context;
 

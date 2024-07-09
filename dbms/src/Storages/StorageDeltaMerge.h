@@ -40,6 +40,8 @@ struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+class MockStorage;
+
 namespace DM
 {
 struct RowKeyRange;
@@ -330,6 +332,8 @@ private:
     Context & global_context;
 
     LoggerPtr log;
+
+    friend class MockStorage;
 };
 
 

@@ -49,6 +49,16 @@ public:
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual ColIds getColumnIDs() = 0;
+<<<<<<< HEAD
+=======
+
+    static RSOperatorPtr build(
+        const std::unique_ptr<DAGQueryInfo> & dag_query,
+        const ColumnInfos & scan_column_infos,
+        const ColumnDefines & table_column_defines,
+        bool enable_rs_filter,
+        const LoggerPtr & tracing_logger);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 };
 
 class ColCmpVal : public RSOperator
