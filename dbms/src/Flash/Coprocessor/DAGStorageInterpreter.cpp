@@ -167,7 +167,7 @@ std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus> Ma
                         throw TiFlashException(
                             Errors::Coprocessor::BadRequest,
                             "Income key ranges is illegal, region_id={} version={} conf_version={} request_range=[{}, "
-                            "{}) region_range=[{}, {}}",
+                            "{}) region_range=[{}, {}]",
                             r.region_id,
                             r.region_version,
                             r.region_conf_version,
