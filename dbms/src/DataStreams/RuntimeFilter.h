@@ -47,7 +47,7 @@ public:
         }
         source_expr = rf_pb.source_expr_list().Get(0);
         target_expr = rf_pb.target_expr_list().Get(0);
-    };
+    }
 
     std::string getSourceColumnName() const;
 
@@ -77,7 +77,7 @@ public:
 
     bool await(int64_t ms_remaining);
 
-    DM::RSOperatorPtr parseToRSOperator(DM::ColumnDefines & columns_to_read);
+    DM::RSOperatorPtr parseToRSOperator(DM::ColumnDefines & columns_to_read) const;
 
     const int id;
 

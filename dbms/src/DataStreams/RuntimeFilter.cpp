@@ -206,7 +206,7 @@ bool RuntimeFilter::updateStatus(RuntimeFilterStatus status_, const std::string 
     return true;
 }
 
-DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_to_read)
+DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_to_read) const
 {
     switch (rf_type)
     {
