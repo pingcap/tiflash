@@ -77,7 +77,8 @@ public:
 
     bool await(int64_t ms_remaining);
 
-    DM::RSOperatorPtr parseToRSOperator(DM::ColumnDefines & columns_to_read) const;
+    void setTargetAttr(const DM::ColumnInfos & scan_column_infos, const DM::ColumnDefines & table_column_defines);
+    DM::RSOperatorPtr parseToRSOperator() const;
 
     const int id;
 
@@ -86,6 +87,7 @@ private:
 
     tipb::Expr source_expr;
     tipb::Expr target_expr;
+    std::optional<DM::Attr> target_attr;
     const tipb::RuntimeFilterType rf_type;
     TimezoneInfo timezone_info;
     // thread safe

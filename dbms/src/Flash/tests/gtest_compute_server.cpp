@@ -1119,7 +1119,7 @@ try
         single_gather_properties.gather_id = 1;
         addOneGather(running_queries, gather_ids, single_gather_properties);
         using namespace std::literals::chrono_literals;
-        ADAPTIVE_SLEEP(4s, 8s);
+        ADAPTIVE_SLEEP(4s, 16s);
         /// 6 gathers, but two query
         ASSERT_TRUE(
             TiFlashMetrics::instance()
