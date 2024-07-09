@@ -418,6 +418,7 @@ std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits
 // Returning true means skip is performed, must read from current value.
 bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
 {
+    assert(reader != nullptr);
     if (!soft_limit.has_value())
         return false;
     const auto & start_limit = soft_limit.value().getStartLimit();
