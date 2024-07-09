@@ -231,6 +231,21 @@ ColumnDefinesPtr buildCastedColumns(
     return casted_columns;
 }
 
+std::vector<std::tuple<UInt64, String, DataTypePtr>> getGeneratedColumnInfos(const ColumnInfos & column_infos)
+{
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
+    for (size_t i = 0; i < column_infos.size(); ++i)
+    {
+        const auto & ci = column_infos[i];
+        if (ci.hasGeneratedColumnFlag())
+        {
+            const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
+            const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+            generated_column_infos.emplace_back(i, col_name, data_type);
+        }
+    }
+    return generated_column_infos;
+}
 } // namespace
 
 QueryFilterPtr QueryFilter::build(
@@ -248,6 +263,10 @@ QueryFilterPtr QueryFilter::build(
         LOG_DEBUG(log, "Push down filter is empty");
         return nullptr;
     }
+
+    auto generated_column_infos = filter_type == QueryFilterType::Rest
+        ? getGeneratedColumnInfos(table_scan_column_info)
+        : std::vector<std::tuple<UInt64, String, DataTypePtr>>{};
 
     // Build analyzer with all the columns of table scanning
     auto analyzer = buildAnalyzer(table_scan_column_info, table_scan_columns_to_read, context);
@@ -270,13 +289,14 @@ QueryFilterPtr QueryFilter::build(
     LOG_DEBUG(
         log,
         "filter_columns_to_read={}, extra_cast={}, before_where={}, table_scan_columns_to_read={} => {}, "
-        "project={}",
+        "project={} generated_column_infos={}",
         filter_columns_to_read,
         extra_cast ? extra_cast->dumpActions() : "null",
         before_where->dumpActions(),
         table_scan_columns_to_read,
         casted_column_types,
-        project_after_where->dumpActions());
+        project_after_where->dumpActions(),
+        generated_column_infos);
 
     return std::make_shared<QueryFilter>(
         filter_type,
@@ -284,7 +304,8 @@ QueryFilterPtr QueryFilter::build(
         project_after_where,
         filter_column_name,
         extra_cast,
-        std::move(casted_column_types));
+        std::move(casted_column_types),
+        std::move(generated_column_infos));
 }
 
 BlockInputStreamPtr QueryFilter::buildFilterInputStream(
@@ -294,12 +315,21 @@ BlockInputStreamPtr QueryFilter::buildFilterInputStream(
 {
     auto filter_name = magic_enum::enum_name(filter_type);
     auto log = Logger::get(fmt::format("{} {}", tracing_id, filter_name));
-    LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
+    LOG_DEBUG(log, "buildFilterInputStream start: {}", stream->getHeader().dumpNames());
+
+    if (!generated_column_infos.empty())
+    {
+        stream
+            = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, tracing_id);
+        stream->setExtraInfo(fmt::format("{}: generated column placeholder above table scan", filter_name));
+        LOG_DEBUG(log, "buildFilterInputStream generated_column_infos: {}", stream->getHeader().dumpNames());
+    }
+
     if (extra_cast)
     {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, tracing_id);
         stream->setExtraInfo(fmt::format("{}: cast after tablescanning", filter_name));
-        LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
+        LOG_DEBUG(log, "buildFilterInputStream extra_cast: {}", stream->getHeader().dumpNames());
     }
 
     stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, tracing_id);
