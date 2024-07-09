@@ -1254,18 +1254,7 @@ BlockInputStreams DeltaMergeStore::read(
     }
     LOG_INFO(
         tracing_logger,
-<<<<<<< HEAD
-        "Read create stream done, pool_id={} num_streams={}",
-=======
-        "Read create stream done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={} columns_to_read={} "
-        "final_columns_to_read={}",
-        keep_order,
-        db_context.getSettingsRef().dt_enable_read_thread,
-        enable_read_thread,
-        is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
+        "Read create stream done, pool_id={} num_streams={} columns_to_read={} final_columns_to_read={}",
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,
@@ -1387,18 +1376,7 @@ void DeltaMergeStore::read(
 
     LOG_INFO(
         tracing_logger,
-<<<<<<< HEAD
-        "Read create PipelineExec done, pool_id={} num_streams={}",
-=======
-        "Read create PipelineExec done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={} columns_to_read={} "
-        "final_columns_to_read={}",
-        keep_order,
-        db_context.getSettingsRef().dt_enable_read_thread,
-        enable_read_thread,
-        is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
+        "Read create PipelineExec done, pool_id={} num_streams={} columns_to_read={} final_columns_to_read={}",
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,
