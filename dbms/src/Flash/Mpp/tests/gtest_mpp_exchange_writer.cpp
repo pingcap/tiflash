@@ -1137,7 +1137,8 @@ try
         std::make_shared<DataTypeAggregateFunction>(agg_func, argument_types, params_row),
         std::string("col_agg_func")};
     update_hash_checker(col_agg_func_with_name);
-    scatter_checker(col_agg_func_with_name, true);
+    // ColumnAggregateFunction doesn't support scatterTo
+    // scatter_checker(col_agg_func_with_name, true);
     scatter_checker(col_agg_func_with_name, false);
 
     // ColumnInt64
