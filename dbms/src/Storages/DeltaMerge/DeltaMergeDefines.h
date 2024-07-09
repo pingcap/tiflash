@@ -183,7 +183,6 @@ struct fmt::formatter<DB::DM::ColumnDefine>
     template <typename FormatContext>
     auto format(const DB::DM::ColumnDefine & cd, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        // Use '/' as separators because column names often have '_'.
-        return format_to(ctx.out(), "{}/{}/{}", cd.id, cd.name, cd.type->getName());
+        return fmt::format_to(ctx.out(), "{}/{}", cd.id, cd.type->getName());
     }
 };
