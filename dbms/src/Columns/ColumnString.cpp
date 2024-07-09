@@ -525,24 +525,6 @@ void ColumnString::updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & 
     }
 }
 
-template <typename Chars, typename Offsets, typename Func>
-FLATTEN_INLINE static inline void LoopColumnSelective(
-    const Chars & chars,
-    const Offsets & offsets,
-    size_t /*size*/,
-    WeakHash32Info & info,
-    const Func & func)
-{
-    for (auto row : *info.selective_ptr)
-    {
-        auto prev_offset = 0;
-        if likely (row > 0)
-            prev_offset = offsets[row - 1];
-
-        func({reinterpret_cast<const char *>(&chars[prev_offset]), offsets[row] - prev_offset - 1}, row, info);
-    }
-}
-
 void ColumnString::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
@@ -550,13 +532,11 @@ void ColumnString::updateWeakHash32(
 {
     auto s = offsets.size();
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == s,
+        "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+        s,
+        hash.getData().size());
 
     WeakHash32Info info{
         .hash_data = hash.getData().data(),
@@ -577,11 +557,11 @@ void ColumnString::updateWeakHash32(
 {
     const auto selective_rows = selective_ptr->size();
     auto & hash_data_vec = hash.getData();
-    if (hash_data_vec.size() != selective_rows)
-        throw Exception(fmt::format(
-            "Size of WeakHash32({}) doesn't match size of selective column({})",
-            hash_data_vec.size(),
-            selective_rows));
+    RUNTIME_CHECK_MSG(
+        hash_data_vec.size() == selective_rows,
+        "Size of WeakHash32({}) doesn't match size of selective column({})",
+        hash_data_vec.size(),
+        selective_rows);
 
     WeakHash32Info info{
         .hash_data = hash_data_vec.data(),

@@ -1015,7 +1015,7 @@ try
 
     auto scatter_func_data_checker = [&](const ColumnWithTypeAndName & column,
                                          const std::vector<UInt64> & selective,
-                                         const IColumn::Selector & selector,
+                                         const IColumn::Selector & selector_selective,
                                          const MutableColumns & scatter_columns_selective_block,
                                          const MutableColumns & scatter_columns_no_selective_block) {
         size_t rows_after_scatter = 0;
@@ -1031,8 +1031,8 @@ try
         for (size_t i = 0; i < scatter_columns_selective_block.size(); ++i)
         {
             size_t selector_rows = 0;
-            for (auto j : selective)
-                if (selector[j] == i)
+            for (auto col_idx : selector_selective)
+                if (col_idx == i)
                     ++selector_rows;
 
             ASSERT_EQ(selector_rows, scatter_columns_selective_block[i]->size());
@@ -1062,6 +1062,14 @@ try
             column.name);
     };
 
+    auto init_scatter_columns = [&](IColumn::ScatterColumns & scatters, const ColumnWithTypeAndName & ori_column) {
+        scatters.clear();
+        for (size_t i = 0; i < num_columns; ++i)
+        {
+            scatters.push_back(ori_column.column->cloneEmpty());
+        }
+    };
+
     auto scatter_checker = [&](const ColumnWithTypeAndName & column, bool test_scatter_to) {
         LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockScatter checking {}", column.name);
         IColumn::Selector selector;
@@ -1072,9 +1080,11 @@ try
         }
 
         IColumn::ScatterColumns scatter_columns_no_selective_block;
-        column.column->scatterTo(scatter_columns_no_selective_block, selector);
         if (test_scatter_to)
+        {
+            init_scatter_columns(scatter_columns_no_selective_block, column);
             column.column->scatterTo(scatter_columns_no_selective_block, selector);
+        }
         else
             scatter_columns_no_selective_block = column.column->scatter(num_columns, selector);
 
@@ -1088,10 +1098,13 @@ try
 
         IColumn::ScatterColumns scatter_columns_selective_block;
         if (test_scatter_to)
+        {
+            init_scatter_columns(scatter_columns_selective_block, column);
             column.column->scatterTo(
                 scatter_columns_selective_block,
                 selector_selective,
                 std::make_shared<std::vector<UInt64>>(selective));
+        }
         else
             scatter_columns_selective_block = column.column->scatter(
                 num_columns,
@@ -1101,7 +1114,7 @@ try
         scatter_func_data_checker(
             column,
             selective,
-            selector,
+            selector_selective,
             scatter_columns_selective_block,
             scatter_columns_no_selective_block);
     };

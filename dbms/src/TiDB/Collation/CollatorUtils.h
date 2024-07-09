@@ -100,4 +100,22 @@ FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
         a_prev_offset = a_offsets[i];
     }
 }
+
+template <typename Chars, typename Offsets, typename Func>
+FLATTEN_INLINE static inline void LoopColumnSelective(
+    const Chars & chars,
+    const Offsets & offsets,
+    size_t /*size*/,
+    WeakHash32Info & info,
+    const Func & func)
+{
+    for (auto row : *info.selective_ptr)
+    {
+        auto prev_offset = 0;
+        if likely (row > 0)
+            prev_offset = offsets[row - 1];
+
+        func({reinterpret_cast<const char *>(&chars[prev_offset]), offsets[row] - prev_offset - 1}, row, info);
+    }
+}
 } // namespace DB

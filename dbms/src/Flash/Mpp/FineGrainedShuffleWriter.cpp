@@ -112,7 +112,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::write(const B
     size_t rows = 0;
     if constexpr (selective_block)
     {
-        RUNTIME_CHECK(block.info.selective);
+        RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
         rows = block.info.selective->size();
     }
     else

@@ -112,7 +112,7 @@ void ColumnVector<T>::updateWeakHash32(
     const T * begin = data.data();
     UInt32 * hash_data = hash.getData().data();
 
-    for (auto row : *selective_ptr)
+    for (const auto & row : *selective_ptr)
     {
         if constexpr (is_fit_register<T>)
             *hash_data = intHashCRC32(*(begin + row), *hash_data);

@@ -134,7 +134,7 @@ void HashPartitionWriter<ExchangeWriterPtr, selective_block>::write(const Block 
         "Output column size mismatch with field type size");
 
     if constexpr (selective_block)
-        RUNTIME_CHECK(block.info.selective);
+        RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
     else
         RUNTIME_CHECK(!block.info.selective);
 
