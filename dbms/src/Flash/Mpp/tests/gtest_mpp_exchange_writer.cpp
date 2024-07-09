@@ -331,7 +331,7 @@ public:
                 }
                 else
                 {
-                    ++rand_row;
+                    rand_row = (rand_row + 1) % block_total_rows;
                 }
             }
             if unlikely (selective_dup.find(rand_row) != selective_dup.end())
@@ -993,10 +993,13 @@ try
     // One column will be scattered to N columns.
     const IColumn::ColumnIndex num_columns = 4;
 
-    auto update_hash_checker = [&](ColumnWithTypeAndName & column) {
-        LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockUpdateWeakHash32 checking {}", column.name);
+    auto update_hash_checker = [&](const ColumnWithTypeAndName & column) {
         for (auto & collator : collators)
         {
+            LOG_DEBUG(
+                Logger::get(),
+                "TestMPPExchangeWriter.testSelectiveBlockUpdateWeakHash32 checking {}",
+                column.name);
             WeakHash32 hash_no_selective(rows);
             column.column->updateWeakHash32(hash_no_selective, collator, sort_key_container);
 
@@ -1010,7 +1013,7 @@ try
         }
     };
 
-    auto scatter_checker = [&](ColumnWithTypeAndName & column) {
+    auto scatter_checker = [&](const ColumnWithTypeAndName & column) {
         LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockScatter checking {}", column.name);
         IColumn::Selector selector;
         selector.reserve(rows);
@@ -1181,7 +1184,7 @@ try
         std::make_shared<DataTypeArray>(data_type_str),
         "col_array"};
     update_hash_checker(col_array_with_name);
-    scatter_checker(col_string);
+    scatter_checker(col_array_with_name);
 
     // ColumnNothing
     auto col_nothing = ColumnNothing::create(0);

@@ -300,7 +300,6 @@ void ColumnArray::updateWeakHash32(
     WeakHash32 internal_hash(data->size());
     data->updateWeakHash32(internal_hash, collator, sort_key_container);
 
-    Offset prev_offset = 0;
     const auto & offsets_data = getOffsets();
     UInt32 * hash_data = hash.getData().data();
     auto & internal_hash_data = internal_hash.getData();
@@ -310,6 +309,7 @@ void ColumnArray::updateWeakHash32(
         /// This row improves hash a little bit according to integration tests.
         /// It is the same as to use previous hash value as the first element of array.
         *hash_data = intHashCRC32(*hash_data);
+        Offset prev_offset = 0;
         if likely (array_row > 0)
             prev_offset = offsets_data[array_row - 1];
 
