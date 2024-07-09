@@ -56,7 +56,7 @@ public:
 
     static RSOperatorPtr build(
         const std::unique_ptr<DAGQueryInfo> & dag_query,
-        const ColumnDefines & columns_to_read,
+        const ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines,
         bool enable_rs_filter,
         const LoggerPtr & tracing_logger);
