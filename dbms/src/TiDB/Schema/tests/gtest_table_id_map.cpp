@@ -81,6 +81,12 @@ TEST_F(TableIDMapTest, Basic)
     // broken state, physical_table_id -> logical_table_id, but no logical_table_id -> database_id
     mapping.emplacePartitionTableID(901, 900);
     ASSERT_MAPPING_EQ(std::make_tuple(false, 0, 0), mapping.findDatabaseIDAndLogicalTableID(901));
+
+    const auto p_to_db = mapping.getAllPartitionsBelongDatabase();
+    EXPECT_EQ(p_to_db.size(), 3);
+    EXPECT_EQ(p_to_db.at(101), 2);
+    EXPECT_EQ(p_to_db.at(102), 2);
+    EXPECT_EQ(p_to_db.at(103), 2);
 }
 
 TEST_F(TableIDMapTest, ExchangePartition)
@@ -108,6 +114,15 @@ TEST_F(TableIDMapTest, ExchangePartition)
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(103));
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 200), mapping.findDatabaseIDAndLogicalTableID(200));
 
+    {
+        // the mapping of partition_id to database before exchange
+        const auto p_to_db = mapping.getAllPartitionsBelongDatabase();
+        EXPECT_EQ(p_to_db.size(), 3);
+        EXPECT_EQ(p_to_db.at(101), 2);
+        EXPECT_EQ(p_to_db.at(102), 2);
+        EXPECT_EQ(p_to_db.at(103), 2);
+    }
+
     // exchange
     mapping.exchangeTablePartition(2, non_partition_table_id, 2, partition_logical_table_id, 101);
 
@@ -121,6 +136,15 @@ TEST_F(TableIDMapTest, ExchangePartition)
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(102));
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(103));
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(200)); // changed
+
+    {
+        // the mapping of partition_id to database before exchange
+        const auto p_to_db = mapping.getAllPartitionsBelongDatabase();
+        EXPECT_EQ(p_to_db.size(), 3);
+        EXPECT_EQ(p_to_db.at(non_partition_table_id), 2);
+        EXPECT_EQ(p_to_db.at(102), 2);
+        EXPECT_EQ(p_to_db.at(103), 2);
+    }
 }
 
 TEST_F(TableIDMapTest, ExchangePartitionCrossDatabase)
@@ -148,6 +172,15 @@ TEST_F(TableIDMapTest, ExchangePartitionCrossDatabase)
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(103));
     ASSERT_MAPPING_EQ(std::make_tuple(true, 7, 200), mapping.findDatabaseIDAndLogicalTableID(200));
 
+    {
+        // the mapping of partition_id to database before exchange
+        const auto p_to_db = mapping.getAllPartitionsBelongDatabase();
+        EXPECT_EQ(p_to_db.size(), 3);
+        EXPECT_EQ(p_to_db.at(101), 2);
+        EXPECT_EQ(p_to_db.at(102), 2);
+        EXPECT_EQ(p_to_db.at(103), 2);
+    }
+
     // exchange
     mapping.exchangeTablePartition(7, non_partition_table_id, 2, partition_logical_table_id, 101);
 
@@ -161,6 +194,15 @@ TEST_F(TableIDMapTest, ExchangePartitionCrossDatabase)
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(102));
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(103));
     ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(200)); // changed
+
+    {
+        // the mapping of partition_id to database before exchange
+        const auto p_to_db = mapping.getAllPartitionsBelongDatabase();
+        EXPECT_EQ(p_to_db.size(), 3);
+        EXPECT_EQ(p_to_db.at(non_partition_table_id), 2);
+        EXPECT_EQ(p_to_db.at(102), 2);
+        EXPECT_EQ(p_to_db.at(103), 2);
+    }
 }
 
 } // namespace DB::tests

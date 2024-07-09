@@ -76,6 +76,8 @@ struct TableIDMap
         return tables;
     }
 
+    // Return all partition_ids' belonging to the database.
+    // Note that the normal table or the logical table of partitioned table is excluded.
     std::map<TableID, DatabaseID> getAllPartitionsBelongDatabase() const;
 
     bool tableIDInTwoMaps(TableID table_id) const
