@@ -48,7 +48,6 @@ public:
         Stream(
             const DMFilePtr & dmfile,
             const String & file_base_name,
-            ColId col_id,
             const DataTypePtr & type,
             CompressionSettings compression_settings,
             size_t max_compress_block_size,
@@ -70,36 +69,14 @@ public:
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
             assert(compression_settings.settings.size() == 1);
-            if (col_id == TiDBPkColumnID || col_id == VersionColumnID)
-            {
-                // pk and version column are always compressed with DeltaFOR
-                auto setting = CompressionSetting::create<>(CompressionMethodByte::DeltaFOR, 1, *type);
-                compressed_buf = CompressedWriteBuffer<>::build(
-                    *plain_file,
-                    CompressionSettings(setting),
-                    !dmfile->getConfiguration());
-            }
-            else if (col_id == DelMarkColumnID)
-            {
-                // del mark column is always compressed with RunLength
-                auto setting = CompressionSetting::create<>(CompressionMethodByte::RunLength, 1, *type);
-                compressed_buf = CompressedWriteBuffer<>::build(
-                    *plain_file,
-                    CompressionSettings(setting),
-                    !dmfile->getConfiguration());
-            }
-            else
-            {
-                // other columns are compressed with the specified method
-                auto setting = CompressionSetting::create<>(
-                    compression_settings.settings[0].method,
-                    compression_settings.settings[0].level,
-                    *type);
-                compressed_buf = CompressedWriteBuffer<>::build(
-                    *plain_file,
-                    CompressionSettings(setting),
-                    !dmfile->getConfiguration());
-            }
+            auto setting = CompressionSetting::create<>(
+                compression_settings.settings[0].method,
+                compression_settings.settings[0].level,
+                *type);
+            compressed_buf = CompressedWriteBuffer<>::build(
+                *plain_file,
+                CompressionSettings(setting),
+                !dmfile->getConfiguration());
 
             if (!dmfile->useMetaV2())
             {
@@ -186,7 +163,7 @@ private:
     /// Add streams with specified column id. Since a single column may have more than one Stream,
     /// for example Nullable column has a NullMap column, we would track them with a mapping
     /// FileNameBase -> Stream.
-    void addStreams(const ColumnDefine & cd, bool do_index);
+    void addStreams(ColId col_id, DataTypePtr type, bool do_index);
 
     WriteBufferFromFileBasePtr createMetaFile();
     void finalizeMeta();

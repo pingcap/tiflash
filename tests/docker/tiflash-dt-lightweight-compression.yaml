@@ -1,0 +1,43 @@
+# Copyright 2024 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: '2.3'
+
+services:
+  # for tests under fullstack-test directory
+  # (engine DeltaTree)
+  tiflash0:
+    image: hub.pingcap.net/tiflash/tiflash-ci-base
+    volumes:
+      - ./config/tiflash_dt_lightweight_compression.toml:/config.toml:ro
+      - ./data/tiflash:/tmp/tiflash/data
+      - ./log/tiflash:/tmp/tiflash/log
+      - ..:/tests
+      - ../docker/_env.sh:/tests/_env.sh
+      - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
+      - ./config/proxy.toml:/proxy.toml:ro
+      - ./config/cipher-file-256:/cipher-file-256:ro
+      - ./data/proxy:/data
+      - ./log/proxy:/log
+      - ../.build/tiflash:/tiflash
+    entrypoint:
+      - /tiflash/tiflash
+      - server
+      - --config-file
+      - /config.toml
+    restart: on-failure
+    depends_on:
+      - "pd0"
+      - "tikv0"
+

@@ -118,44 +118,44 @@ static void singleRead(benchmark::State & state, Args &&... args)
     BENCH_SINGLE_READ_GENERATOR_TYPE(name##UInt32, generator, UInt32); \
     BENCH_SINGLE_READ_GENERATOR_TYPE(name##UInt64, generator, UInt64);
 
-#define BENCH_SINGLE_WRITE(name)                                                                                  \
-    BENCH_SINGLE_WRITE_GENERATOR(name##SameValue, tests::SameValueGenerator(128))                                 \
-    BENCH_SINGLE_WRITE_GENERATOR(name##Sequential, tests::SequentialGenerator(2))                                 \
-    BENCH_SINGLE_WRITE_GENERATOR(name##SequentialReverse, tests::SequentialGenerator(-2))                         \
-    BENCH_SINGLE_WRITE_GENERATOR(name##Monotonic, tests::MonotonicGenerator())                                    \
-    BENCH_SINGLE_WRITE_GENERATOR(name##MonotonicReverse, tests::MonotonicGenerator(-1))                           \
-    BENCH_SINGLE_WRITE_GENERATOR(name##MinMax, tests::MinMaxGenerator())                                          \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt8, tests::RandomGenerator<UInt8>(0), UInt8)                 \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt16, tests::RandomGenerator<UInt16>(0), UInt16)              \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt32, tests::RandomGenerator<UInt32>(0), UInt32)              \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt64, tests::RandomGenerator<UInt64>(0), UInt64)              \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt8, tests::RandomGenerator<UInt8>(0, 0, 100), UInt8)    \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt16, tests::RandomGenerator<UInt16>(0, 0, 100), UInt16) \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt32, tests::RandomGenerator<UInt32>(0, 0, 100), UInt32) \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt64, tests::RandomGenerator<UInt64>(0, 0, 100), UInt64) \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RepeatUInt8, tests::RepeatGenerator<UInt8>(0), UInt8)                 \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RepeatUInt16, tests::RepeatGenerator<UInt16>(0), UInt16)              \
-    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RepeatUInt32, tests::RepeatGenerator<UInt32>(0), UInt32)              \
+#define BENCH_SINGLE_WRITE(name)                                                                                 \
+    BENCH_SINGLE_WRITE_GENERATOR(name##SameValue, tests::SameValueGenerator(128))                                \
+    BENCH_SINGLE_WRITE_GENERATOR(name##Sequential, tests::SequentialGenerator(2))                                \
+    BENCH_SINGLE_WRITE_GENERATOR(name##SequentialReverse, tests::SequentialGenerator(-2))                        \
+    BENCH_SINGLE_WRITE_GENERATOR(name##Monotonic, tests::MonotonicGenerator())                                   \
+    BENCH_SINGLE_WRITE_GENERATOR(name##MonotonicReverse, tests::MonotonicGenerator(-1))                          \
+    BENCH_SINGLE_WRITE_GENERATOR(name##MinMax, tests::MinMaxGenerator())                                         \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt8, tests::RandomGenerator<UInt8>(0), UInt8)                \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt16, tests::RandomGenerator<UInt16>(0), UInt16)             \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt32, tests::RandomGenerator<UInt32>(0), UInt32)             \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RandomUInt64, tests::RandomGenerator<UInt64>(0), UInt64)             \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt8, tests::RandomGenerator<UInt8>(0, 0, 16), UInt8)    \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt16, tests::RandomGenerator<UInt16>(0, 0, 16), UInt16) \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt32, tests::RandomGenerator<UInt32>(0, 0, 16), UInt32) \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##SmallRandomUInt64, tests::RandomGenerator<UInt64>(0, 0, 16), UInt64) \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RepeatUInt8, tests::RepeatGenerator<UInt8>(0), UInt8)                \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RepeatUInt16, tests::RepeatGenerator<UInt16>(0), UInt16)             \
+    BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RepeatUInt32, tests::RepeatGenerator<UInt32>(0), UInt32)             \
     BENCH_SINGLE_WRITE_GENERATOR_TYPE(name##RepeatUInt64, tests::RepeatGenerator<UInt64>(0), UInt64)
 
-#define BENCH_SINGLE_READ(name)                                                                                  \
-    BENCH_SINGLE_READ_GENERATOR(name##SameValue, tests::SameValueGenerator(128))                                 \
-    BENCH_SINGLE_READ_GENERATOR(name##Sequential, tests::SequentialGenerator(2))                                 \
-    BENCH_SINGLE_READ_GENERATOR(name##SequentialReverse, tests::SequentialGenerator(-2))                         \
-    BENCH_SINGLE_READ_GENERATOR(name##Monotonic, tests::MonotonicGenerator())                                    \
-    BENCH_SINGLE_READ_GENERATOR(name##MonotonicReverse, tests::MonotonicGenerator(-1))                           \
-    BENCH_SINGLE_READ_GENERATOR(name##MinMax, tests::MinMaxGenerator())                                          \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt8, tests::RandomGenerator<UInt8>(0), UInt8)                 \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt16, tests::RandomGenerator<UInt16>(0), UInt16)              \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt32, tests::RandomGenerator<UInt32>(0), UInt32)              \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt64, tests::RandomGenerator<UInt64>(0), UInt64)              \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt8, tests::RandomGenerator<UInt8>(0, 0, 100), UInt8)    \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt16, tests::RandomGenerator<UInt16>(0, 0, 100), UInt16) \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt32, tests::RandomGenerator<UInt32>(0, 0, 100), UInt32) \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt64, tests::RandomGenerator<UInt64>(0, 0, 100), UInt64) \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RepeatUInt8, tests::RepeatGenerator<UInt8>(0), UInt8)                 \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RepeatUInt16, tests::RepeatGenerator<UInt16>(0), UInt16)              \
-    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RepeatUInt32, tests::RepeatGenerator<UInt32>(0), UInt32)              \
+#define BENCH_SINGLE_READ(name)                                                                                 \
+    BENCH_SINGLE_READ_GENERATOR(name##SameValue, tests::SameValueGenerator(128))                                \
+    BENCH_SINGLE_READ_GENERATOR(name##Sequential, tests::SequentialGenerator(2))                                \
+    BENCH_SINGLE_READ_GENERATOR(name##SequentialReverse, tests::SequentialGenerator(-2))                        \
+    BENCH_SINGLE_READ_GENERATOR(name##Monotonic, tests::MonotonicGenerator())                                   \
+    BENCH_SINGLE_READ_GENERATOR(name##MonotonicReverse, tests::MonotonicGenerator(-1))                          \
+    BENCH_SINGLE_READ_GENERATOR(name##MinMax, tests::MinMaxGenerator())                                         \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt8, tests::RandomGenerator<UInt8>(0), UInt8)                \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt16, tests::RandomGenerator<UInt16>(0), UInt16)             \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt32, tests::RandomGenerator<UInt32>(0), UInt32)             \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RandomUInt64, tests::RandomGenerator<UInt64>(0), UInt64)             \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt8, tests::RandomGenerator<UInt8>(0, 0, 16), UInt8)    \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt16, tests::RandomGenerator<UInt16>(0, 0, 16), UInt16) \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt32, tests::RandomGenerator<UInt32>(0, 0, 16), UInt32) \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##SmallRandomUInt64, tests::RandomGenerator<UInt64>(0, 0, 16), UInt64) \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RepeatUInt8, tests::RepeatGenerator<UInt8>(0), UInt8)                \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RepeatUInt16, tests::RepeatGenerator<UInt16>(0), UInt16)             \
+    BENCH_SINGLE_READ_GENERATOR_TYPE(name##RepeatUInt32, tests::RepeatGenerator<UInt32>(0), UInt32)             \
     BENCH_SINGLE_READ_GENERATOR_TYPE(name##RepeatUInt64, tests::RepeatGenerator<UInt64>(0), UInt64)
 
 BENCH_SINGLE_WRITE(CodecSingleWrite)

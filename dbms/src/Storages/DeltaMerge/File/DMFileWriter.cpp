@@ -63,7 +63,7 @@ DMFileWriter::DMFileWriter(
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
-        addStreams(cd, do_index);
+        addStreams(cd.id, cd.type, do_index);
         dmfile->meta->getColumnStats().emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
 }
@@ -97,17 +97,16 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
     }
 }
 
-void DMFileWriter::addStreams(const ColumnDefine & cd, bool do_index)
+void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
-        const auto stream_name = DMFile::getFileNameBase(cd.id, substream_path);
+        const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
         bool substream_do_index
             = do_index && !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
         auto stream = std::make_unique<Stream>(
             dmfile,
             stream_name,
-            cd.id,
-            cd.type,
+            type,
             options.compression_settings,
             options.max_compress_block_size,
             file_provider,
@@ -116,7 +115,7 @@ void DMFileWriter::addStreams(const ColumnDefine & cd, bool do_index)
         column_streams.emplace(stream_name, std::move(stream));
     };
 
-    cd.type->enumerateStreams(callback, {});
+    type->enumerateStreams(callback, {});
 }
 
 

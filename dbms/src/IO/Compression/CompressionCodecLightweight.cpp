@@ -46,12 +46,6 @@ UInt32 CompressionCodecLightweight::getMaxCompressedDataSize(UInt32 uncompressed
     return 1 + 1 + LZ4_COMPRESSBOUND(uncompressed_size);
 }
 
-CompressionCodecLightweight::~CompressionCodecLightweight()
-{
-    if (ctx.isCompression())
-        LOG_DEBUG(Logger::get(), "lightweight codec: {}", ctx.toDebugString());
-}
-
 UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
     dest[0] = magic_enum::enum_integer(data_type);

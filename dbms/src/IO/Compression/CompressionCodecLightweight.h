@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <IO/Compression/EncodingUtil.h>
 #include <IO/Compression/ICompressionCodec.h>
 
 #include <span>
@@ -38,7 +39,7 @@ public:
 
     UInt8 getMethodByte() const override;
 
-    ~CompressionCodecLightweight() override;
+    ~CompressionCodecLightweight() override = default;
 
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
@@ -55,14 +56,18 @@ private:
         Invalid = 0,
         CONSTANT = 1, // all values are the same
         CONSTANT_DELTA = 2, // the difference between two adjacent values is the same
-        FOR = 3, // Frame of Reference encoding
-        DELTA_FOR = 4, // delta encoding and then FOR encoding
-        LZ4 = 5, // the above modes are not suitable, use LZ4 instead
+        RunLength = 3, // the same value appears multiple times
+        FOR = 4, // Frame of Reference encoding
+        DELTA_FOR = 5, // delta encoding and then FOR encoding
+        LZ4 = 6, // the above modes are not suitable, use LZ4 instead
     };
 
     // Constant or ConstantDelta
     template <std::integral T>
     using ConstantState = T;
+
+    template <std::integral T>
+    using RunLengthState = Compression::RunLengthPairs<T>;
 
     template <std::integral T>
     struct FORState
@@ -83,7 +88,7 @@ private:
 
     // State is a union of different states for different modes
     template <std::integral T>
-    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
+    using IntegerState = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
 
     class IntegerCompressContext
     {
@@ -94,9 +99,6 @@ private:
         void analyze(std::span<const T> & values, IntegerState<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
-
-        String toDebugString() const;
-        bool isCompression() const { return lz4_counter > 0 || lw_counter > 0; }
 
         IntegerMode mode = IntegerMode::LZ4;
 
@@ -109,25 +111,22 @@ private:
         template <std::integral T>
         static constexpr bool needAnalyzeFOR();
 
-    private:
-        // The threshold for the number of blocks to decide whether need to analyze.
-        // For example:
-        // If lz4 is used more than COUNT_THRESHOLD times and the compression ratio is better than lightweight codec, do not analyze anymore.
-        static constexpr size_t COUNT_THRESHOLD = 5;
-        // Assume that the compression ratio of LZ4 is 3.0
-        // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
-        static constexpr size_t ESRTIMATE_LZ4_COMPRESSION_RATIO = 3;
-        // When for_width * FOR_WIDTH_FACTOR < sizeof(T) * 8, there is no need to analyze DELTA.
-        static constexpr UInt8 FOR_WIDTH_FACTOR = 4;
+        bool needAnalyzeRunLength() const;
 
-        size_t lw_uncompressed_size = 0;
-        size_t lw_compressed_size = 0;
-        size_t lw_counter = 0;
-        size_t lz4_uncompressed_size = 0;
-        size_t lz4_compressed_size = 0;
-        size_t lz4_counter = 0;
-        size_t constant_delta_counter = 0;
-        size_t delta_for_counter = 0;
+        void resetIfNeed();
+
+    private:
+        // Every ROUND_COUNT blocks as a round, decide whether to analyze the mode.
+        static constexpr size_t ROUND_COUNT = 5;
+        // The compression ratio of LZ4 for TPCH's integer data is about 3.5~4.0
+        // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
+        static constexpr size_t ESRTIMATE_LZ4_COMPRESSION_RATIO = 4;
+
+        size_t compress_count = 0;
+        bool used_lz4 = false;
+        bool used_constant_delta = false;
+        bool used_delta_for = false;
+        bool used_rle = false;
     };
 
     template <std::integral T>
