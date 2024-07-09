@@ -1013,27 +1013,11 @@ try
         }
     };
 
-    auto scatter_checker = [&](const ColumnWithTypeAndName & column) {
-        LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockScatter checking {}", column.name);
-        IColumn::Selector selector;
-        selector.reserve(rows);
-        for (size_t i = 0; i < rows; ++i)
-        {
-            selector.push_back(rand() % num_columns); // NOLINT
-        }
-
-        auto scatter_columns_no_selective_block = column.column->scatter(num_columns, selector);
-
-        auto selective = generateRandomSelective(rows, selective_rows);
-        IColumn::Selector selector_selective;
-        selector_selective.reserve(selective_rows);
-        for (size_t i = 0; i < selective_rows; ++i)
-        {
-            selector_selective.push_back(selector[selective[i]]);
-        }
-        auto scatter_columns_selective_block
-            = column.column->scatter(num_columns, selector_selective, std::make_shared<std::vector<UInt64>>(selective));
-
+    auto scatter_func_data_checker = [&](const ColumnWithTypeAndName & column,
+                                         const std::vector<UInt64> & selective,
+                                         const IColumn::Selector & selector,
+                                         const MutableColumns & scatter_columns_selective_block,
+                                         const MutableColumns & scatter_columns_no_selective_block) {
         size_t rows_after_scatter = 0;
         for (const auto & col : scatter_columns_selective_block)
         {
@@ -1078,6 +1062,50 @@ try
             column.name);
     };
 
+    auto scatter_checker = [&](const ColumnWithTypeAndName & column, bool test_scatter_to) {
+        LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockScatter checking {}", column.name);
+        IColumn::Selector selector;
+        selector.reserve(rows);
+        for (size_t i = 0; i < rows; ++i)
+        {
+            selector.push_back(rand() % num_columns); // NOLINT
+        }
+
+        IColumn::ScatterColumns scatter_columns_no_selective_block;
+        column.column->scatterTo(scatter_columns_no_selective_block, selector);
+        if (test_scatter_to)
+            column.column->scatterTo(scatter_columns_no_selective_block, selector);
+        else
+            scatter_columns_no_selective_block = column.column->scatter(num_columns, selector);
+
+        auto selective = generateRandomSelective(rows, selective_rows);
+        IColumn::Selector selector_selective;
+        selector_selective.reserve(selective_rows);
+        for (size_t i = 0; i < selective_rows; ++i)
+        {
+            selector_selective.push_back(selector[selective[i]]);
+        }
+
+        IColumn::ScatterColumns scatter_columns_selective_block;
+        if (test_scatter_to)
+            column.column->scatterTo(
+                scatter_columns_selective_block,
+                selector_selective,
+                std::make_shared<std::vector<UInt64>>(selective));
+        else
+            scatter_columns_selective_block = column.column->scatter(
+                num_columns,
+                selector_selective,
+                std::make_shared<std::vector<UInt64>>(selective));
+
+        scatter_func_data_checker(
+            column,
+            selective,
+            selector,
+            scatter_columns_selective_block,
+            scatter_columns_no_selective_block);
+    };
+
     // ColumnAggregateFunction
     ::DB::registerAggregateFunctions();
     auto data_type_int64 = std::make_shared<DataTypeInt64>();
@@ -1096,18 +1124,21 @@ try
         std::make_shared<DataTypeAggregateFunction>(agg_func, argument_types, params_row),
         std::string("col_agg_func")};
     update_hash_checker(col_agg_func_with_name);
-    scatter_checker(col_agg_func_with_name);
+    scatter_checker(col_agg_func_with_name, true);
+    scatter_checker(col_agg_func_with_name, false);
 
     // ColumnInt64
     auto col_int64 = ColumnGenerator::instance().generate({rows, data_type_int64->getName(), RANDOM, "col_int64"});
     update_hash_checker(col_int64);
-    scatter_checker(col_int64);
+    scatter_checker(col_int64, true);
+    scatter_checker(col_int64, false);
 
     // ColumnString
     auto data_type_str = std::make_shared<DataTypeString>();
     auto col_string = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM, "col_string"});
     update_hash_checker(col_string);
-    scatter_checker(col_string);
+    scatter_checker(col_string, true);
+    scatter_checker(col_string, false);
 
     // ColumnFixedString
     size_t fixed_length = 128;
@@ -1119,7 +1150,8 @@ try
          .name = "col_fixed_string",
          .string_max_size = fixed_length});
     update_hash_checker(col_fixed_string);
-    scatter_checker(col_fixed_string);
+    scatter_checker(col_fixed_string, true);
+    scatter_checker(col_fixed_string, false);
 
     // ColumnConst
     auto col_nested_str = data_type_str->createColumn();
@@ -1128,14 +1160,16 @@ try
     auto col_const = ColumnConst::create(std::move(col_nested_str), rows);
     ColumnWithTypeAndName col_const_with_name{std::move(col_const), data_type_str, std::string("col_const")};
     update_hash_checker(col_const_with_name);
-    scatter_checker(col_const_with_name);
+    scatter_checker(col_const_with_name, true);
+    scatter_checker(col_const_with_name, false);
 
     // ColumnDecimal
     auto data_type_decimal = std::make_shared<DataTypeDecimal64>();
     auto col_decimal
         = ColumnGenerator::instance().generate({rows, data_type_decimal->getName(), RANDOM, "col_decimal"});
     update_hash_checker(col_decimal);
-    scatter_checker(col_decimal);
+    scatter_checker(col_decimal, true);
+    scatter_checker(col_decimal, false);
 
     // ColumnNullable
     auto col_string_1 = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM});
@@ -1152,7 +1186,8 @@ try
         std::make_shared<DataTypeNullable>(data_type_str),
         "col_nullable<col_string>"};
     update_hash_checker(col_nullable_with_name);
-    scatter_checker(col_nullable_with_name);
+    scatter_checker(col_nullable_with_name, true);
+    scatter_checker(col_nullable_with_name, false);
 
     // ColumnTuple
     auto col_string_2 = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM});
@@ -1168,7 +1203,8 @@ try
             std::make_shared<DataTypeFloat64>()}),
         "col_nullable<col_string, col_int64, col_float64>"};
     update_hash_checker(col_tuple_with_name);
-    scatter_checker(col_tuple_with_name);
+    scatter_checker(col_tuple_with_name, true);
+    scatter_checker(col_tuple_with_name, false);
 
     // ColumnArray
     auto col_offset = ColumnUInt64::create();
@@ -1184,7 +1220,8 @@ try
         std::make_shared<DataTypeArray>(data_type_str),
         "col_array"};
     update_hash_checker(col_array_with_name);
-    scatter_checker(col_array_with_name);
+    scatter_checker(col_array_with_name, true);
+    scatter_checker(col_array_with_name, false);
 
     // ColumnNothing
     auto col_nothing = ColumnNothing::create(0);
@@ -1195,7 +1232,8 @@ try
         std::make_shared<DataTypeNothing>(),
         "col_nothing"};
     update_hash_checker(col_nothing_with_name);
-    scatter_checker(col_nothing_with_name);
+    scatter_checker(col_nothing_with_name, true);
+    scatter_checker(col_nothing_with_name, false);
 
     // ColumnFunction: no need to test. Function impl will throw exception.
 }
