@@ -1187,12 +1187,8 @@ BlockInputStreams DeltaMergeStore::read(
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         extra_table_id_index,
-<<<<<<< HEAD
         dm_context,
-        columns_to_read,
-=======
         final_columns_to_read,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
         filter,
         max_version,
         expected_block_size,
@@ -1225,11 +1221,7 @@ BlockInputStreams DeltaMergeStore::read(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
-<<<<<<< HEAD
-                columns_to_read,
-=======
                 final_columns_to_read,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
                 filter,
                 max_version,
                 expected_block_size,
@@ -1308,12 +1300,8 @@ void DeltaMergeStore::read(
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         extra_table_id_index,
-<<<<<<< HEAD
         dm_context,
-        columns_to_read,
-=======
         final_columns_to_read,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
         filter,
         max_version,
         expected_block_size,
@@ -1333,11 +1321,7 @@ void DeltaMergeStore::read(
             group_builder.addConcurrency(std::make_unique<UnorderedSourceOp>(
                 exec_context,
                 read_task_pool,
-<<<<<<< HEAD
-                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
-=======
                 final_columns_to_read,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
                 extra_table_id_index,
                 log_tracing_id,
                 runtime_filter_list,
@@ -1353,11 +1337,7 @@ void DeltaMergeStore::read(
                 dm_context,
                 read_task_pool,
                 after_segment_read,
-<<<<<<< HEAD
-                columns_to_read,
-=======
                 final_columns_to_read,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
                 filter,
                 max_version,
                 expected_block_size,
@@ -1368,11 +1348,7 @@ void DeltaMergeStore::read(
             builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
                 exec_context,
                 log_tracing_id,
-<<<<<<< HEAD
-                columns_to_read,
-=======
                 final_columns_to_read,
->>>>>>> 567bcb1c67 (Storages: Fix returned column types may not match in late-materialization (#9176))
                 extra_table_id_index,
                 physical_table_id));
         });
