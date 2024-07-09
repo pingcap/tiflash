@@ -416,12 +416,14 @@ std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits
 // Returning true means skip is performed, must read from current value.
 bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
-    assert(reader != nullptr);
     if (!soft_limit.has_value())
         return false;
     const auto & start_limit = soft_limit.value().getStartLimit();
     // If start is set to "", then there is no soft limit for start.
     if (!start_limit)
+        return false;
+
+    if (!reader)
         return false;
 
     if (reader && reader->remained())
@@ -501,13 +503,14 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
 
 bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
-    assert(reader != nullptr);
     if (!soft_limit.has_value())
         return false;
     const SSTScanSoftLimit & sl = soft_limit.value();
     const auto & end_limit = soft_limit.value().getEndLimit();
     if (!end_limit)
         return false;
+
+    assert(reader != nullptr);
     auto key = reader->keyView();
     // TODO the copy could be eliminated, but with many modifications.
     auto tikv_key = TiKVKey(key.data, key.len);
