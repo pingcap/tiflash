@@ -305,19 +305,20 @@ void ColumnArray::updateWeakHash32(
     UInt32 * hash_data = hash.getData().data();
     auto & internal_hash_data = internal_hash.getData();
 
-    for (const auto & i : *selective_ptr)
+    for (const auto & array_row : *selective_ptr)
     {
         /// This row improves hash a little bit according to integration tests.
         /// It is the same as to use previous hash value as the first element of array.
         *hash_data = intHashCRC32(*hash_data);
+        if likely (array_row > 0)
+            prev_offset = offsets_data[array_row - 1];
 
-        for (size_t row = prev_offset; row < offsets_data[i]; ++row)
+        for (size_t row = prev_offset; row < offsets_data[array_row]; ++row)
             /// It is probably not the best way to combine hashes.
             /// But much better then xor which lead to similar hash for arrays like [1], [1, 1, 1], [1, 1, 1, 1, 1], ...
             /// Much better implementation - to add offsets as an optional argument to updateWeakHash32.
             *hash_data = intHashCRC32(internal_hash_data[row], *hash_data);
 
-        prev_offset = offsets_data[i];
         ++hash_data;
     }
 }

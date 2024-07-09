@@ -12,29 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataTypes/DataTypeNullable.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnNothing.h>
+#include <Columns/ColumnTuple.h>
+#include <Common/Logger.h>
+#include <Common/RandomData.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/TiDB.h>
-#include <Columns/ColumnTuple.h>
-#include <Common/Logger.h>
 #include <common/logger_useful.h>
+#include <gtest/gtest.h>
 
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
 #include <cstdlib>
 #include <ctime>
-
-#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -50,6 +59,7 @@ struct MockExchangeWriter
         : checker(checker_)
         , part_num(part_num_)
         , result_field_types(dag_context.result_field_types)
+        , gen(rd())
     {}
     void partitionWrite(
         const Block & header,
@@ -164,6 +174,8 @@ private:
     MockExchangeWriterChecker checker;
     uint16_t part_num;
     std::vector<tipb::FieldType> result_field_types;
+    std::random_device rd;
+    std::mt19937_64 gen;
 };
 
 class TestMPPExchangeWriter : public testing::Test
@@ -307,10 +319,10 @@ public:
 
         std::vector<UInt64> selective(selective_rows, 0);
         std::set<UInt64> selective_dup;
-        srand(time(nullptr));
+
         for (auto & selected_row : selective)
         {
-            UInt64 rand_row = static_cast<UInt64>(rand()) % block_total_rows; // NOLINT
+            UInt64 rand_row = rand() % block_total_rows; // NOLINT
             for (size_t j = 0; j < block_total_rows; ++j)
             {
                 if (selective_dup.find(rand_row) == selective_dup.end())
@@ -971,14 +983,17 @@ try
 {
     String sort_key_container;
     const size_t rows = 65535;
-    const size_t selective_rows = 128;
+    const size_t selective_rows = 1024;
     auto collators = std::vector<TiDB::TiDBCollatorPtr>{
         TiDB::ITiDBCollator::getCollator("utf8mb4_bin"),
         TiDB::ITiDBCollator::getCollator("binary"),
         TiDB::ITiDBCollator::getCollator("utf8mb4_general_ci"),
     };
 
-    auto checker = [&](ColumnWithTypeAndName & column) {
+    // One column will be scattered to N columns.
+    const IColumn::ColumnIndex num_columns = 4;
+
+    auto update_hash_checker = [&](ColumnWithTypeAndName & column) {
         LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockUpdateWeakHash32 checking {}", column.name);
         for (auto & collator : collators)
         {
@@ -989,45 +1004,135 @@ try
             WeakHash32 hash_selective_block(selective->size());
             column.column->updateWeakHash32(hash_selective_block, collator, sort_key_container, selective);
 
-            ASSERT_EQ(hash_selective_block.getData().size(), selective->size());
+            ASSERT_EQ(selective->size(), hash_selective_block.getData().size());
             for (size_t i = 0; i < selective->size(); ++i)
                 ASSERT_EQ(hash_no_selective.getData()[(*selective)[i]], hash_selective_block.getData()[i]);
         }
     };
 
-    // ColumnInt64
+    auto scatter_checker = [&](ColumnWithTypeAndName & column) {
+        LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockScatter checking {}", column.name);
+        IColumn::Selector selector;
+        selector.reserve(rows);
+        for (size_t i = 0; i < rows; ++i)
+        {
+            selector.push_back(rand() % num_columns); // NOLINT
+        }
+
+        auto scatter_columns_no_selective_block = column.column->scatter(num_columns, selector);
+
+        auto selective = generateRandomSelective(rows, selective_rows);
+        IColumn::Selector selector_selective;
+        selector_selective.reserve(selective_rows);
+        for (size_t i = 0; i < selective_rows; ++i)
+        {
+            selector_selective.push_back(selector[selective[i]]);
+        }
+        auto scatter_columns_selective_block
+            = column.column->scatter(num_columns, selector_selective, std::make_shared<std::vector<UInt64>>(selective));
+
+        size_t rows_after_scatter = 0;
+        for (const auto & col : scatter_columns_selective_block)
+        {
+            rows_after_scatter += col->size();
+        }
+
+        LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockScatter checking {} assert beg", column.name);
+        ASSERT_EQ(selective.size(), rows_after_scatter);
+        ASSERT_EQ(scatter_columns_no_selective_block.size(), scatter_columns_selective_block.size());
+
+        for (size_t i = 0; i < scatter_columns_selective_block.size(); ++i)
+        {
+            size_t selector_rows = 0;
+            for (auto j : selective)
+                if (selector[j] == i)
+                    ++selector_rows;
+
+            ASSERT_EQ(selector_rows, scatter_columns_selective_block[i]->size());
+        }
+
+        if (column.name == "col_nothing")
+            return;
+
+        for (size_t i = 0; i < scatter_columns_selective_block.size(); ++i)
+        {
+            const auto & col_selective = scatter_columns_selective_block[i];
+            const auto & col_no_selective = scatter_columns_no_selective_block[i];
+            for (size_t x = 0; x < col_selective->size(); ++x)
+            {
+                bool found = false;
+                for (size_t y = 0; y < col_no_selective->size(); ++y)
+                {
+                    if ((*col_selective)[x] == (*col_no_selective)[y])
+                        found = true;
+                }
+                ASSERT_TRUE(found);
+            }
+        }
+        LOG_DEBUG(
+            Logger::get(),
+            "TestMPPExchangeWriter.testSelectiveBlockScatter checking {} assert done",
+            column.name);
+    };
+
+    // ColumnAggregateFunction
+    ::DB::registerAggregateFunctions();
     auto data_type_int64 = std::make_shared<DataTypeInt64>();
+    auto context = TiFlashTestEnv::getContext();
+    auto agg_func = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_int64});
+    auto col_agg_func = ColumnAggregateFunction::create(agg_func);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        String tmp = ::DB::random::randomString(sizeof(UInt64));
+        col_agg_func->insert(Field(tmp.data(), tmp.size()));
+    }
+    DataTypes argument_types{data_type_int64};
+    Array params_row;
+    ColumnWithTypeAndName col_agg_func_with_name{
+        std::move(col_agg_func),
+        std::make_shared<DataTypeAggregateFunction>(agg_func, argument_types, params_row),
+        std::string("col_agg_func")};
+    update_hash_checker(col_agg_func_with_name);
+    scatter_checker(col_agg_func_with_name);
+
+    // ColumnInt64
     auto col_int64 = ColumnGenerator::instance().generate({rows, data_type_int64->getName(), RANDOM, "col_int64"});
-    checker(col_int64);
+    update_hash_checker(col_int64);
+    scatter_checker(col_int64);
 
     // ColumnString
     auto data_type_str = std::make_shared<DataTypeString>();
     auto col_string = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM, "col_string"});
-    checker(col_string);
+    update_hash_checker(col_string);
+    scatter_checker(col_string);
 
     // ColumnFixedString
     size_t fixed_length = 128;
     auto data_type_fixed_str = std::make_shared<DataTypeFixedString>(fixed_length);
-    auto col_fixed_string = ColumnGenerator::instance().generate({
-            .size = rows,
-            .type_name = data_type_fixed_str->getName(),
-            .distribution = DataDistribution::RANDOM,
-            .name = "col_fixed_string",
-            .string_max_size = fixed_length});
-    checker(col_fixed_string);
+    auto col_fixed_string = ColumnGenerator::instance().generate(
+        {.size = rows,
+         .type_name = data_type_fixed_str->getName(),
+         .distribution = DataDistribution::RANDOM,
+         .name = "col_fixed_string",
+         .string_max_size = fixed_length});
+    update_hash_checker(col_fixed_string);
+    scatter_checker(col_fixed_string);
 
     // ColumnConst
     auto col_nested_str = data_type_str->createColumn();
-    String const_str = "abc";
+    const String const_str = "abc";
     col_nested_str->insert(Field(const_str.data(), const_str.size()));
     auto col_const = ColumnConst::create(std::move(col_nested_str), rows);
     ColumnWithTypeAndName col_const_with_name{std::move(col_const), data_type_str, std::string("col_const")};
-    checker(col_const_with_name);
-    
+    update_hash_checker(col_const_with_name);
+    scatter_checker(col_const_with_name);
+
     // ColumnDecimal
     auto data_type_decimal = std::make_shared<DataTypeDecimal64>();
-    auto col_decimal = ColumnGenerator::instance().generate({rows, data_type_decimal->getName(), RANDOM, "col_decimal"});
-    checker(col_decimal);
+    auto col_decimal
+        = ColumnGenerator::instance().generate({rows, data_type_decimal->getName(), RANDOM, "col_decimal"});
+    update_hash_checker(col_decimal);
+    scatter_checker(col_decimal);
 
     // ColumnNullable
     auto col_string_1 = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM});
@@ -1035,16 +1140,16 @@ try
     srand(time(nullptr));
     for (size_t i = 0; i < rows; ++i)
     {
-        auto v = random() % 2;
+        auto v = rand() % 2; // NOLINT
         col_null_map->insert(Field(static_cast<UInt64>(v)));
     }
     auto col_nullable = ColumnNullable::create(col_string_1.column, std::move(col_null_map));
-    ColumnWithTypeAndName col_nullable_with_name{col_nullable, std::make_shared<DataTypeNullable>(data_type_str), "col_nullable<col_string>"};
-    checker(col_nullable_with_name);
-
-    // ColumnFunction
-    
-    // ColumnAggregateFunction
+    ColumnWithTypeAndName col_nullable_with_name{
+        col_nullable,
+        std::make_shared<DataTypeNullable>(data_type_str),
+        "col_nullable<col_string>"};
+    update_hash_checker(col_nullable_with_name);
+    scatter_checker(col_nullable_with_name);
 
     // ColumnTuple
     auto col_string_2 = ColumnGenerator::instance().generate({rows, data_type_str->getName(), RANDOM});
@@ -1055,15 +1160,41 @@ try
     ColumnWithTypeAndName col_tuple_with_name{
         std::move(col_tuple),
         std::make_shared<DataTypeTuple>(DataTypes{
-                std::make_shared<DataTypeString>(),
-                std::make_shared<DataTypeInt64>(),
-                std::make_shared<DataTypeFloat64>()}),
+            std::make_shared<DataTypeString>(),
+            std::make_shared<DataTypeInt64>(),
+            std::make_shared<DataTypeFloat64>()}),
         "col_nullable<col_string, col_int64, col_float64>"};
-    checker(col_tuple_with_name);
+    update_hash_checker(col_tuple_with_name);
+    scatter_checker(col_tuple_with_name);
 
     // ColumnArray
+    auto col_offset = ColumnUInt64::create();
+    const size_t array_size = 4;
+    for (size_t i = 1; i <= rows; ++i)
+    {
+        col_offset->insert(Field(static_cast<UInt64>(i * array_size)));
+    }
+    auto col_array_nested = ColumnGenerator::instance().generate({rows * array_size, data_type_str->getName(), RANDOM});
+    auto col_array = ColumnArray::create(col_array_nested.column, std::move(col_offset));
+    ColumnWithTypeAndName col_array_with_name{
+        std::move(col_array),
+        std::make_shared<DataTypeArray>(data_type_str),
+        "col_array"};
+    update_hash_checker(col_array_with_name);
+    scatter_checker(col_string);
 
     // ColumnNothing
+    auto col_nothing = ColumnNothing::create(0);
+    for (size_t i = 0; i < rows; ++i)
+        col_nothing->insertDefault();
+    ColumnWithTypeAndName col_nothing_with_name{
+        std::move(col_nothing),
+        std::make_shared<DataTypeNothing>(),
+        "col_nothing"};
+    update_hash_checker(col_nothing_with_name);
+    scatter_checker(col_nothing_with_name);
+
+    // ColumnFunction: no need to test. Function impl will throw exception.
 }
 CATCH
 
