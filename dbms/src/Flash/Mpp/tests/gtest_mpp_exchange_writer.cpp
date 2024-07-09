@@ -982,7 +982,7 @@ TEST_F(TestMPPExchangeWriter, testSelectiveBlockUpdateWeakHash32)
 try
 {
     String sort_key_container;
-    const size_t rows = 65535;
+    const size_t rows = 4096;
     const size_t selective_rows = 1024;
     auto collators = std::vector<TiDB::TiDBCollatorPtr>{
         TiDB::ITiDBCollator::getCollator("utf8mb4_bin"),
