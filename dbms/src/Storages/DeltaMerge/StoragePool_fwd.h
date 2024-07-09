@@ -16,8 +16,14 @@
 
 #include <memory>
 
+namespace TiDB
+{
+struct ColumnInfo;
+}
+
 namespace DB::DM
 {
+<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/StoragePool_fwd.h
 
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
@@ -28,4 +34,12 @@ using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 struct StorageSnapshot;
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
+=======
+struct ColumnDefine;
+using ColumnDefines = std::vector<ColumnDefine>;
+using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
+using ColumnDefineMap = std::unordered_map<DB::ColumnID, ColumnDefine>;
+
+using ColumnInfos = std::vector<TiDB::ColumnInfo>;
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189)):dbms/src/Storages/DeltaMerge/ColumnDefine_fwd.h
 } // namespace DB::DM

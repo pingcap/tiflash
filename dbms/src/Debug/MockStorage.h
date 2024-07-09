@@ -17,7 +17,12 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Operators/Operator.h>
+<<<<<<< HEAD
 #include <Storages/Transaction/TiDB.h>
+=======
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
+#include <TiDB/Schema/TiDB.h>
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 #include <common/types.h>
 
 #include <atomic>
@@ -117,6 +122,7 @@ public:
 
     TableInfo getTableInfo(const String & name);
     TableInfo getTableInfoForDeltaMerge(const String & name);
+    DM::ColumnDefines getStoreColumnDefines(Int64 table_id);
 
     size_t getTableScanConcurrencyHint(const TiDBTableScan & table_scan);
 

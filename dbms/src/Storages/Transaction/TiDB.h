@@ -200,19 +200,10 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                      \
-    inline bool has##f##Flag() const \
-    {                                \
-        return (flag & (v)) != 0;    \
-    }                                \
-    inline void set##f##Flag()       \
-    {                                \
-        flag |= (v);                 \
-    }                                \
-    inline void clear##f##Flag()     \
-    {                                \
-        flag &= (~(v));              \
-    }
+#define M(f, v)                                                    \
+    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
+    inline void set##f##Flag() { flag |= (v); }                    \
+    inline void clear##f##Flag() { flag &= (~(v)); }
     COLUMN_FLAGS(M)
 #undef M
 
@@ -439,3 +430,13 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
 std::vector<ColumnInfo> toTiDBColumnInfos(const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos);
 
 } // namespace TiDB
+
+template <>
+struct fmt::formatter<TiDB::ColumnInfo>
+{
+    template <typename FormatContext>
+    auto format(const TiDB::ColumnInfo & ci, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "{}", ci.id);
+    }
+};

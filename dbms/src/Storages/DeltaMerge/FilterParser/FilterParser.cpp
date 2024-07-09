@@ -80,17 +80,31 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     return false;
 }
 
+<<<<<<< HEAD
 ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read)
+=======
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnInfos & scan_column_infos)
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 {
     assert(isColumnExpr(expr));
     auto column_index = decodeDAGInt64(expr.val());
-    if (column_index < 0 || column_index >= static_cast<Int64>(columns_to_read.size()))
+    if (column_index < 0 || column_index >= static_cast<Int64>(scan_column_infos.size()))
     {
+<<<<<<< HEAD
         throw TiFlashException("Column index out of bound: " + DB::toString(column_index) + ", should in [0,"
                                    + DB::toString(columns_to_read.size()) + ")",
                                Errors::Coprocessor::BadRequest);
     }
     return columns_to_read[column_index].id;
+=======
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "Column index out of bound: {}, should in [0,{})",
+            column_index,
+            scan_column_infos.size());
+    }
+    return scan_column_infos[column_index].id;
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 }
 
 enum class OperandType
@@ -103,7 +117,7 @@ enum class OperandType
 inline RSOperatorPtr parseTiCompareExpr( //
     const tipb::Expr & expr,
     const FilterParser::RSFilterType filter_type,
-    const ColumnDefines & columns_to_read,
+    const ColumnInfos & scan_column_infos,
     const FilterParser::AttrCreatorByColumnID & creator,
     const TimezoneInfo & timezone_info,
     const LoggerPtr & /*log*/)
@@ -141,12 +155,17 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
                     false);
 
+<<<<<<< HEAD
             ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
             attr = creator(id);
             if (child_idx == 0)
                 left = OperandType::Column;
             else if (child_idx == 1)
                 right = OperandType::Column;
+=======
+            auto col_id = getColumnIDForColumnExpr(child, scan_column_infos);
+            attr = creator(col_id);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
         }
         else if (isLiteralExpr(child))
         {
@@ -243,11 +262,20 @@ inline RSOperatorPtr parseTiCompareExpr( //
     return op;
 }
 
+<<<<<<< HEAD
 RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
                           const ColumnDefines & columns_to_read,
                           const FilterParser::AttrCreatorByColumnID & creator,
                           const TimezoneInfo & timezone_info,
                           const LoggerPtr & log)
+=======
+RSOperatorPtr parseTiExpr(
+    const tipb::Expr & expr,
+    const ColumnInfos & scan_column_infos,
+    const FilterParser::AttrCreatorByColumnID & creator,
+    const TimezoneInfo & timezone_info,
+    const LoggerPtr & log)
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 {
     assert(isFunctionExpr(expr));
 
@@ -270,10 +298,18 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         case FilterParser::RSFilterType::Not:
         {
             if (unlikely(expr.children_size() != 1))
+<<<<<<< HEAD
                 op = createUnsupported(
                     expr.ShortDebugString(),
                     "logical not with " + DB::toString(expr.children_size()) + " children",
                     false);
+=======
+                return createUnsupported(
+                    fmt::format("logical not with {} children is not supported", expr.children_size()));
+
+            if (const auto & child = expr.children(0); likely(isFunctionExpr(child)))
+                return createNot(parseTiExpr(child, scan_column_infos, creator, timezone_info, log));
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
             else
             {
                 const auto & child = expr.children(0);
@@ -293,7 +329,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
             {
                 const auto & child = expr.children(i);
                 if (likely(isFunctionExpr(child)))
-                    children.emplace_back(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
+                    children.emplace_back(parseTiExpr(child, scan_column_infos, creator, timezone_info, log));
                 else
                     children.emplace_back(createUnsupported(child.ShortDebugString(), "child of logical operator is not function", false));
             }
@@ -310,8 +346,13 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         case FilterParser::RSFilterType::GreaterEqual:
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEqual:
+<<<<<<< HEAD
             op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
             break;
+=======
+        case FilterParser::RSFilterType::In:
+            return parseTiCompareExpr(expr, filter_type, scan_column_infos, creator, timezone_info);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 
         case FilterParser::RSFilterType::IsNull:
         {
@@ -324,10 +365,29 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
             // but in RSResult (a > 1), we will get the result RSResult::None, and then we think the result is the empty set.
             if (unlikely(expr.children_size() != 1))
             {
+<<<<<<< HEAD
                 op = createUnsupported(
                     expr.ShortDebugString(),
                     "filter IsNull with " + DB::toString(expr.children_size()) + " children",
                     false);
+=======
+                return createUnsupported(
+                    fmt::format("filter IsNull with {} children is not supported", expr.children_size()));
+            }
+
+            const auto & child = expr.children(0);
+            if (likely(isColumnExpr(child)))
+            {
+                auto field_type = child.field_type().tp();
+                if (isRoughSetFilterSupportType(field_type))
+                {
+                    auto col_id = getColumnIDForColumnExpr(child, scan_column_infos);
+                    auto attr = creator(col_id);
+                    return createIsNull(attr);
+                }
+                return createUnsupported(
+                    fmt::format("ColumnRef with field type is not supported, filed_type={}", field_type));
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
             }
             else
             {
@@ -387,6 +447,7 @@ inline RSOperatorPtr tryParse(const tipb::Expr & filter,
 } // namespace cop
 
 
+<<<<<<< HEAD
 RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
                                           const ColumnDefines & columns_to_read,
                                           FilterParser::AttrCreatorByColumnID && creator,
@@ -395,6 +456,25 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
     RSOperatorPtr op = EMPTY_RS_OPERATOR;
     if (dag_info.filters.empty() && dag_info.pushed_down_filters.empty())
         return op;
+=======
+RSOperatorPtr FilterParser::parseDAGQuery(
+    const DAGQueryInfo & dag_info,
+    const ColumnInfos & scan_column_infos,
+    FilterParser::AttrCreatorByColumnID && creator,
+    const LoggerPtr & log)
+{
+    /// By default, multiple conditions with operator "and"
+    RSOperators children;
+    children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
+    for (const auto & filter : dag_info.filters)
+    {
+        children.emplace_back(cop::parseTiExpr(filter, scan_column_infos, creator, dag_info.timezone_info, log));
+    }
+    for (const auto & filter : dag_info.pushed_down_filters)
+    {
+        children.emplace_back(cop::parseTiExpr(filter, scan_column_infos, creator, dag_info.timezone_info, log));
+    }
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 
     if (dag_info.filters.size() == 1 && dag_info.pushed_down_filters.empty())
     {
@@ -405,11 +485,33 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
         op = cop::tryParse(dag_info.pushed_down_filters[0], columns_to_read, creator, dag_info.timezone_info, log);
     }
     else
+<<<<<<< HEAD
     {
         /// By default, multiple conditions with operator "and"
         RSOperators children;
         children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
         for (const auto & filter : dag_info.filters)
+=======
+        return createAnd(children);
+}
+
+RSOperatorPtr FilterParser::parseRFInExpr(
+    const tipb::RuntimeFilterType rf_type,
+    const tipb::Expr & target_expr,
+    const std::optional<Attr> & target_attr,
+    const std::set<Field> & setElements,
+    const TimezoneInfo & timezone_info)
+{
+    switch (rf_type)
+    {
+    case tipb::IN:
+    {
+        if (!isColumnExpr(target_expr) || !target_attr)
+            return createUnsupported(
+                fmt::format("rf target expr is not column expr, expr.tp={}", tipb::ExprType_Name(target_expr.tp())));
+        const auto & attr = *target_attr;
+        if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
         {
             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
         }
@@ -419,7 +521,40 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
         }
         op = createAnd(children);
     }
+<<<<<<< HEAD
     return op;
+=======
+    case tipb::MIN_MAX:
+    case tipb::BLOOM_FILTER:
+        return createUnsupported("function params should be in predicate");
+    }
+}
+
+std::optional<Attr> FilterParser::createAttr(
+    const tipb::Expr & expr,
+    const ColumnInfos & scan_column_infos,
+    const ColumnDefines & table_column_defines)
+{
+    if (!isColumnExpr(expr))
+    {
+        return std::nullopt;
+    }
+    auto col_id = cop::getColumnIDForColumnExpr(expr, scan_column_infos);
+    auto it = std::find_if( //
+        table_column_defines.cbegin(),
+        table_column_defines.cend(),
+        [col_id](const ColumnDefine & cd) { return cd.id == col_id; });
+    if (it != table_column_defines.cend())
+    {
+        return Attr{.col_name = it->name, .col_id = it->id, .type = it->type};
+    }
+    return std::nullopt;
+}
+
+bool FilterParser::isRSFilterSupportType(const Int32 field_type)
+{
+    return cop::isRoughSetFilterSupportType(field_type);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 }
 
 std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser::scalar_func_rs_filter_map{

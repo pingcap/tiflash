@@ -1507,6 +1507,262 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
 } // namespace tests
 } // namespace DM
 } // namespace DB
+=======
+TEST_F(MinMaxIndexTest, InOrNotInNULL)
+try
+{
+    RSCheckParam param;
+
+    auto type = std::make_shared<DataTypeInt64>();
+    auto data_type = makeNullable(type);
+
+    PaddedPODArray<UInt8> has_null_marks(1);
+    PaddedPODArray<UInt8> has_value_marks(1);
+    MutableColumnPtr minmaxes = data_type->createColumn();
+
+    auto column = data_type->createColumn();
+
+    column->insert(Field(static_cast<Int64>(1))); // insert value 1
+    column->insert(Field(static_cast<Int64>(2))); // insert value 2
+    column->insertDefault(); // insert null value
+
+    auto * col = column.get();
+    minmaxes->insertFrom(*col, 0); // insert min index
+    minmaxes->insertFrom(*col, 1); // insert max index
+
+    auto minmax
+        = std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
+
+    auto index = RSIndex(data_type, minmax);
+    param.indexes.emplace(DEFAULT_COL_ID, index);
+
+    {
+        // make a in filter, check in (NULL)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field()});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+    }
+    {
+        // make a in filter, check in (NULL, 1)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a in filter, check in (3)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+    }
+    {
+        // make a not in filter, check not in (NULL)
+        auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field()}));
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+    }
+    {
+        // make a not in filter, check not in (NULL, 1)
+        auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))}));
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a not in filter, check not in (3)
+        auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))}));
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+    }
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, ParseIn)
+try
+{
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+    {
+        // a in (1, 2)
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::InInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        {
+            tipb::Expr * lit = expr.add_children();
+            lit->set_tp(tipb::ExprType::Int64);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                lit->set_val(ss.releaseStr());
+            }
+        }
+        {
+            tipb::Expr * lit = expr.add_children();
+            lit->set_tp(tipb::ExprType::Int64);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(2, ss);
+                lit->set_val(ss.releaseStr());
+            }
+        }
+        filters.Add()->CopyFrom(expr);
+    }
+    {
+        // a in (1, b)
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::InInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        {
+            tipb::Expr * lit = expr.add_children();
+            lit->set_tp(tipb::ExprType::Int64);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                lit->set_val(ss.releaseStr());
+            }
+        }
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(2, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        filters.Add()->CopyFrom(expr);
+    }
+    {
+        // a in (b), this will not really happen, and it will be optimized to a = b
+        // just for test
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::InInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(2, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        filters.Add()->CopyFrom(expr);
+    }
+
+    const ColumnDefines columns_to_read
+        = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
+           ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
+    // Only need id of ColumnInfo
+    TiDB::ColumnInfo a, b;
+    a.id = 1;
+    b.id = 2;
+    ColumnInfos column_infos = {a, b};
+    auto dag_query = std::make_unique<DAGQueryInfo>(
+        filters,
+        pushed_down_filters, // Not care now
+        column_infos,
+        std::vector<int>{},
+        0,
+        context->getTimezoneInfo());
+    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> Attr {
+        auto iter
+            = std::find_if(columns_to_read.begin(), columns_to_read.end(), [column_id](const ColumnDefine & d) -> bool {
+                  return d.id == column_id;
+              });
+        if (iter != columns_to_read.end())
+            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+    };
+    const auto op
+        = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, create_attr_by_column_id, Logger::get());
+    EXPECT_EQ(
+        op->toDebugString(),
+        R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckIsNull)
+try
+{
+    struct IsNullTestCase
+    {
+        std::vector<std::optional<Int64>> column_data;
+        std::vector<UInt64> del_mark;
+        RSResult result;
+    };
+
+    std::vector<IsNullTestCase> cases = {
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 0}, RSResult::Some},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 0, 0}, RSResult::None},
+        {{std::nullopt, std::nullopt}, {0, 0}, RSResult::All},
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 1}, RSResult::None},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 1, 0}, RSResult::None},
+        {{std::nullopt, std::nullopt}, {1, 0}, RSResult::All},
+        {{std::nullopt, std::nullopt}, {1, 1}, RSResult::None},
+        {{1, 2, 3, 4}, {1, 1, 1, 1}, RSResult::None},
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
+    for (const auto & c : cases)
+    {
+        ASSERT_EQ(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+
+    auto actual_results = minmax_index->checkIsNull(0, cases.size());
+    for (size_t i = 0; i < cases.size(); ++i)
+    {
+        const auto & c = cases[i];
+        ASSERT_EQ(actual_results[i], c.result) << fmt::format(
+            "i={} actual={} expected={}",
+            i,
+            magic_enum::enum_name(actual_results[i]),
+            magic_enum::enum_name(c.result));
+    }
+}
+CATCH
+
+} // namespace DB::DM::tests
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))

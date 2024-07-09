@@ -119,12 +119,34 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
 {
     if (context.mockStorage()->useDeltaMerge())
     {
+<<<<<<< HEAD
         auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(exec_status, context, table_id, concurrency);
         group_builder.init(source_ops.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::move(source_ops[i++]));
         });
+=======
+        context.mockStorage()->buildExecFromDeltaMerge(
+            exec_context,
+            group_builder,
+            context,
+            table_id,
+            context.getMaxStreams(),
+            keep_order,
+            &filter_conditions,
+            runtime_filter_ids,
+            rf_max_wait_time_ms);
+        for (size_t i = 0; i < group_builder.concurrency(); ++i)
+        {
+            if (auto * source_op = dynamic_cast<UnorderedSourceOp *>(group_builder.getCurBuilder(i).source_op.get()))
+            {
+                auto runtime_filter_list = getRuntimeFilterList(context);
+                // todo config max wait time
+                source_op->setRuntimeFilterInfo(runtime_filter_list, rf_max_wait_time_ms);
+            }
+        }
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
     }
     else
     {
@@ -177,6 +199,31 @@ const String & PhysicalMockTableScan::getFilterConditionsId() const
 
 Int64 PhysicalMockTableScan::getLogicalTableID() const
 {
+<<<<<<< HEAD
     return table_id;
+=======
+    for (const auto & local_stream : mock_streams)
+    {
+        if (auto * p_stream = dynamic_cast<DM::UnorderedInputStream *>(local_stream.get()))
+        {
+            auto runtime_filter_list = getRuntimeFilterList(context);
+            // todo config max wait time
+            p_stream->setRuntimeFilterInfo(runtime_filter_list, rf_max_wait_time_ms);
+        }
+    }
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
+}
+
+RuntimeFilteList PhysicalMockTableScan::getRuntimeFilterList(Context & context)
+{
+    auto mock_column_infos = context.mockStorage()->getTableSchemaForDeltaMerge(table_id);
+    auto column_infos = mockColumnInfosToTiDBColumnInfos(mock_column_infos);
+    auto column_defines = context.mockStorage()->getStoreColumnDefines(table_id);
+    auto rfs = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
+    for (auto & rf : rfs)
+    {
+        rf->setTargetAttr(column_infos, column_defines);
+    }
+    return rfs;
 }
 } // namespace DB

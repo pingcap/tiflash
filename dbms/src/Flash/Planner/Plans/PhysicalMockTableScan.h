@@ -16,6 +16,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/FilterConditions.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
@@ -70,6 +71,19 @@ public:
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
+<<<<<<< HEAD
+=======
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext &,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t) override;
+
+    void buildRuntimeFilterInLocalStream(Context & context);
+
+    RuntimeFilteList getRuntimeFilterList(Context & context);
+
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 private:
     FilterConditions filter_conditions;
     Block sample_block;
