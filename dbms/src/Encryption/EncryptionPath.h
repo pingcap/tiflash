@@ -16,6 +16,7 @@
 
 #include <string>
 
+<<<<<<< HEAD:dbms/src/Encryption/EncryptionPath.h
 namespace DB
 {
 using String = std::string;
@@ -30,3 +31,23 @@ struct EncryptionPath
     const String file_name;
 };
 } // namespace DB
+=======
+#include <memory>
+#include <unordered_map>
+#include <vector>
+
+namespace TiDB
+{
+struct ColumnInfo;
+}
+
+namespace DB::DM
+{
+struct ColumnDefine;
+using ColumnDefines = std::vector<ColumnDefine>;
+using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
+using ColumnDefineMap = std::unordered_map<DB::ColumnID, ColumnDefine>;
+
+using ColumnInfos = std::vector<TiDB::ColumnInfo>;
+} // namespace DB::DM
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189)):dbms/src/Storages/DeltaMerge/ColumnDefine_fwd.h

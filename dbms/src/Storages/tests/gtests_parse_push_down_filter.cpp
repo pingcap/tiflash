@@ -113,6 +113,7 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     };
 
     auto rs_operator
+<<<<<<< HEAD
         = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
     auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
         rs_operator,
@@ -121,6 +122,11 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
         columns_to_read,
         *ctx,
         log);
+=======
+        = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
+    auto push_down_filter
+        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
     return push_down_filter;
 }
 

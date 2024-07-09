@@ -2176,10 +2176,15 @@ try
     const ColumnDefines columns_to_read
         = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
            ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
+    // Only need id of ColumnInfo
+    TiDB::ColumnInfo a, b;
+    a.id = 1;
+    b.id = 2;
+    ColumnInfos column_infos = {a, b};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         pushed_down_filters, // Not care now
-        std::vector<TiDB::ColumnInfo>{}, // Not care now
+        column_infos,
         std::vector<int>{},
         0,
         context->getTimezoneInfo());
@@ -2193,8 +2198,59 @@ try
         return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
     const auto op
+<<<<<<< HEAD
         = DB::DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, create_attr_by_column_id, Logger::get());
     ASSERT_EQ(op->toDebugString(), "{\"op\":\"in\",\"col\":\"b\",\"value\":\"[\"1\",\"2\"]}");
+=======
+        = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, create_attr_by_column_id, Logger::get());
+    EXPECT_EQ(
+        op->toDebugString(),
+        R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckIsNull)
+try
+{
+    struct IsNullTestCase
+    {
+        std::vector<std::optional<Int64>> column_data;
+        std::vector<UInt64> del_mark;
+        RSResult result;
+    };
+
+    std::vector<IsNullTestCase> cases = {
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 0}, RSResult::Some},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 0, 0}, RSResult::None},
+        {{std::nullopt, std::nullopt}, {0, 0}, RSResult::All},
+        {{1, 2, 3, 4, std::nullopt}, {0, 0, 0, 0, 1}, RSResult::None},
+        {{6, 7, 8, 9, 10}, {0, 0, 0, 1, 0}, RSResult::None},
+        {{std::nullopt, std::nullopt}, {1, 0}, RSResult::All},
+        {{std::nullopt, std::nullopt}, {1, 1}, RSResult::None},
+        {{1, 2, 3, 4}, {1, 1, 1, 1}, RSResult::None},
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
+    for (const auto & c : cases)
+    {
+        ASSERT_EQ(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+
+    auto actual_results = minmax_index->checkIsNull(0, cases.size());
+    for (size_t i = 0; i < cases.size(); ++i)
+    {
+        const auto & c = cases[i];
+        ASSERT_EQ(actual_results[i], c.result) << fmt::format(
+            "i={} actual={} expected={}",
+            i,
+            magic_enum::enum_name(actual_results[i]),
+            magic_enum::enum_name(c.result));
+    }
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 }
 CATCH
 

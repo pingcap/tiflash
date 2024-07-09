@@ -36,6 +36,13 @@ namespace DB
 {
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+<<<<<<< HEAD
+=======
+struct CheckpointIngestInfo;
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+class MockStorage;
+
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 namespace DM
 {
 struct RowKeyRange;
@@ -319,6 +326,8 @@ private:
     Context & global_context;
 
     LoggerPtr log;
+
+    friend class MockStorage;
 };
 
 

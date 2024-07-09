@@ -477,6 +477,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         std::vector<int>{},
         0,
         db_context.getTimezoneInfo());
+<<<<<<< HEAD
     auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(defines->begin(), defines->end(), [column_id](const DM::ColumnDefine & d) -> bool {
             return d.id == column_id;
@@ -490,6 +491,10 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
     return rs_operator;
+=======
+
+    return DM::RSOperator::build(dag_query, table_scan.getColumns(), *columns_to_read, enable_rs_filter, log);
+>>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 }
 
 DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
