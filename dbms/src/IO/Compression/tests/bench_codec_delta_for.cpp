@@ -16,6 +16,7 @@
 #include <IO/Compression/CompressionCodecDeltaFOR.h>
 #include <benchmark/benchmark.h>
 
+#include <magic_enum.hpp>
 #include <vector>
 
 namespace DB::bench
@@ -27,7 +28,8 @@ static void codecDeltaForOrdinaryBM(benchmark::State & state)
     std::vector<T> v(DEFAULT_MERGE_BLOCK_SIZE);
     for (auto & i : v)
         i = random();
-    CompressionCodecDeltaFOR codec(sizeof(T));
+    auto data_type = magic_enum::enum_cast<CompressionDataType>(sizeof(T)).value();
+    CompressionCodecDeltaFOR codec(data_type);
     char dest[sizeof(T) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
@@ -52,7 +54,8 @@ static void codecDeltaForSpecializedUInt64BM(benchmark::State & state)
     std::vector<UInt64> v(DEFAULT_MERGE_BLOCK_SIZE);
     for (auto & i : v)
         i = random();
-    CompressionCodecDeltaFOR codec(sizeof(UInt64));
+    auto data_type = magic_enum::enum_cast<CompressionDataType>(sizeof(UInt64)).value();
+    CompressionCodecDeltaFOR codec(data_type);
     char dest[sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
@@ -67,7 +70,8 @@ static void codecDeltaForSpecializedUInt32BM(benchmark::State & state)
     std::vector<UInt32> v(DEFAULT_MERGE_BLOCK_SIZE);
     for (auto & i : v)
         i = random();
-    CompressionCodecDeltaFOR codec(sizeof(UInt32));
+    auto data_type = magic_enum::enum_cast<CompressionDataType>(sizeof(UInt32)).value();
+    CompressionCodecDeltaFOR codec(data_type);
     char dest[sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
