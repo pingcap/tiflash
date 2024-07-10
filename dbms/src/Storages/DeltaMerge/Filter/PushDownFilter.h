@@ -44,17 +44,15 @@ class QueryFilter
 public:
     QueryFilter(
         QueryFilterType filter_type_,
-        const ExpressionActionsPtr & beofre_where_,
+        const ExpressionActionsPtr & before_where_,
         const ExpressionActionsPtr & project_after_where_,
         const String filter_column_name_,
-        const ExpressionActionsPtr & extra_cast_,
-        std::unordered_map<ColumnID, DataTypePtr> && casted_column_types_)
+        const ExpressionActionsPtr & extra_cast_)
         : filter_type(filter_type_)
-        , before_where(beofre_where_)
+        , before_where(before_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
         , extra_cast(extra_cast_)
-        , casted_column_types(std::move(casted_column_types_))
     {}
 
     bool empty() const { return before_where == nullptr; }
@@ -64,7 +62,7 @@ public:
         bool need_project,
         const String & tracing_id) const;
 
-    static QueryFilterPtr build(
+    static std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
         QueryFilterType filter_type,
         const ColumnDefines & filter_columns_to_read,
         const ColumnInfos & table_scan_column_infos,
@@ -84,8 +82,6 @@ public:
     const String filter_column_name;
     // The expression actions used to cast the timestamp/datetime column
     const ExpressionActionsPtr extra_cast;
-    // If the extra_cast is not null, the types of the columns may be changed
-    std::unordered_map<ColumnID, DataTypePtr> casted_column_types;
 };
 
 struct PushDownFilter
