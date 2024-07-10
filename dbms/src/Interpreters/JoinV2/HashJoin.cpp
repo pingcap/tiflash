@@ -281,6 +281,7 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
     Stopwatch watch;
 
     Block block = b;
+    size_t rows = block.rows();
 
     assertBlocksHaveEqualStructure(block, right_sample_block, "Join Build");
 
@@ -322,6 +323,7 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
             method,
             needRecordNotInsertRows(kind),
             block,
+            rows,
             key_columns,
             null_map,
             row_layout,
@@ -429,7 +431,7 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
     /// min_result_block_size is used to avoid generating too many small block, use 50% of the block size as the default value
-    size_t min_result_block_size = std::max(1, (std::min(context.block.rows(), settings.max_block_size) + 1) / 2);
+    size_t min_result_block_size = std::max(1, (std::min(context.rows, settings.max_block_size) + 1) / 2);
     while (true)
     {
         Block block = doJoinBlock(context, stream_index);
@@ -453,6 +455,7 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
 Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
 {
     Block block = context.block;
+    size_t rows = context.rows;
     size_t existing_columns = block.columns();
 
     size_t num_columns_to_add = right_sample_block_pruned.columns();
@@ -460,9 +463,9 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
     MutableColumns added_columns;
     added_columns.reserve(num_columns_to_add);
 
-    RUNTIME_ASSERT(block.rows() >= context.start_row_idx);
+    RUNTIME_ASSERT(rows >= context.start_row_idx);
     size_t start = context.start_row_idx;
-    size_t remain_rows = block.rows() - context.start_row_idx;
+    size_t remain_rows = rows - context.start_row_idx;
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & src_column = right_sample_block_pruned.getByPosition(i);
@@ -488,7 +491,7 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
         block.insert(ColumnWithTypeAndName(std::move(added_columns[index]), sample_col.type, sample_col.name));
     }
 
-    if likely (block.rows() > 0)
+    if likely (rows > 0)
     {
         if (pointer_table.enableProbePrefetch())
         {

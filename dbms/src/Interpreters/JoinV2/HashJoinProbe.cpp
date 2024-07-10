@@ -29,12 +29,13 @@ using enum ASTTableJoin::Kind;
 
 bool JoinProbeContext::isCurrentProbeFinished() const
 {
-    return start_row_idx >= block.rows();
+    return start_row_idx >= rows;
 }
 
 void JoinProbeContext::resetBlock(Block & block_)
 {
     block = block_;
+    rows = block.rows();
     start_row_idx = 0;
     current_row_probe_head = nullptr;
 
@@ -137,9 +138,9 @@ public:
         }
 
         if (pointer_table.enableProbePrefetch())
-            wd.selective_offsets.resize(context.block.rows());
+            wd.selective_offsets.resize(context.rows);
         else
-            wd.offsets_to_replicate.resize(context.block.rows());
+            wd.offsets_to_replicate.resize(context.rows);
     }
 
     void joinProbeBlockImpl();
@@ -233,12 +234,11 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
 {
     auto & key_getter = *static_cast<typename KeyGetter::Type *>(context.key_getter.get());
 
-    size_t rows = context.block.rows();
     size_t current_offset = 0;
     auto & offsets_to_replicate = wd.offsets_to_replicate;
     size_t & idx = context.start_row_idx;
     RowPtr & head = context.current_row_probe_head;
-    for (; idx < rows; ++idx)
+    for (; idx < context.rows; ++idx)
     {
         if (has_null_map && (*context.null_map)[idx])
         {
@@ -400,7 +400,7 @@ void joinProbeBlock(
     const HashJoinRowLayout & row_layout,
     MutableColumns & added_columns)
 {
-    if (context.block.rows() == 0)
+    if (context.rows == 0)
         return;
 
     switch (method)

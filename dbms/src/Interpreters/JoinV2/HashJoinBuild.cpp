@@ -24,6 +24,7 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 template <typename KeyGetter, bool has_null_map, bool need_record_null_rows>
 void NO_INLINE insertBlockToRowContainersTypeImpl(
     Block & block,
+    size_t rows,
     const ColumnRawPtrs & key_columns,
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,
@@ -38,15 +39,14 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     Type & key_getter = *static_cast<Type *>(wd.key_getter.get());
     key_getter.reset(key_columns);
 
-    size_t rows = block.rows();
     wd.row_sizes.clear();
     wd.row_sizes.resize_fill(rows, row_layout.other_column_fixed_size);
     wd.hashes.resize(rows);
     wd.row_ptrs.clear();
     wd.row_ptrs.resize_fill(rows, nullptr);
-    wd.partition_row_sizes.clear();
     /// The last partition is used to hold rows with null join key.
     constexpr size_t part_count = HJ_BUILD_PARTITION_COUNT + 1;
+    wd.partition_row_sizes.clear();
     wd.partition_row_sizes.resize_fill(part_count, 0);
     wd.partition_row_count.clear();
     wd.partition_row_count.resize_fill(part_count, 0);
@@ -140,17 +140,20 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         wd.row_ptrs[i] += key_getter.getJoinKeySize(key);
     }
 
-    constexpr size_t step = 128;
-    for (size_t i = 0; i < rows; i += step)
+    if (!row_layout.other_required_column_indexes.empty())
     {
-        size_t start = i;
-        size_t end = i + step > rows ? rows : i + step;
-        for (const auto & [index, _] : row_layout.other_required_column_indexes)
+        constexpr size_t step = 128;
+        for (size_t i = 0; i < rows; i += step)
         {
-            if constexpr (has_null_map && !need_record_null_rows)
-                block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, true);
-            else
-                block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, false);
+            size_t start = i;
+            size_t end = i + step > rows ? rows : i + step;
+            for (const auto & [index, _] : row_layout.other_required_column_indexes)
+            {
+                if constexpr (has_null_map && !need_record_null_rows)
+                    block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, true);
+                else
+                    block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, false);
+            }
         }
     }
 
@@ -170,6 +173,7 @@ template <typename KeyGetter>
 void insertBlockToRowContainersType(
     bool need_record_null_rows,
     Block & block,
+    size_t rows,
     const ColumnRawPtrs & key_columns,
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,
@@ -179,6 +183,7 @@ void insertBlockToRowContainersType(
 #define CALL(has_null_map, need_record_null_rows)                                       \
     insertBlockToRowContainersTypeImpl<KeyGetter, has_null_map, need_record_null_rows>( \
         block,                                                                          \
+        rows,                                                                           \
         key_columns,                                                                    \
         null_map,                                                                       \
         row_layout,                                                                     \
@@ -207,6 +212,7 @@ void insertBlockToRowContainers(
     HashJoinKeyMethod method,
     bool need_record_null_rows,
     Block & block,
+    size_t rows,
     const ColumnRawPtrs & key_columns,
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,
@@ -225,6 +231,7 @@ void insertBlockToRowContainers(
         insertBlockToRowContainersType<KeyGetterType##METHOD>(                             \
             need_record_null_rows,                                                         \
             block,                                                                         \
+            rows,                                                                          \
             key_columns,                                                                   \
             null_map,                                                                      \
             row_layout,                                                                    \

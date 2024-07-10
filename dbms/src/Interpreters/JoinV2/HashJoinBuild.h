@@ -63,6 +63,7 @@ void insertBlockToRowContainers(
     HashJoinKeyMethod method,
     bool need_record_null_rows,
     Block & block,
+    size_t rows,
     const ColumnRawPtrs & key_columns,
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,

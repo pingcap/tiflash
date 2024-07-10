@@ -30,6 +30,7 @@ namespace DB
 struct JoinProbeContext
 {
     Block block;
+    size_t rows;
     size_t start_row_idx = 0;
     RowPtr current_row_probe_head = nullptr;
 
