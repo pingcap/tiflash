@@ -296,7 +296,7 @@ QueryFilterPtr QueryFilter::build(
     Names output_names;
     for (const auto & ci : table_scan_column_info)
     {
-        if (ci.hasGeneratedColumnFlag())
+        if (ci.hasGeneratedColumnFlag() || ci.id == EXTRA_TABLE_ID_COLUMN_ID)
         {
             continue;
         }
