@@ -111,14 +111,10 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
 
     size_t rows = 0;
     if (block.info.selective)
-    {
-        RUNTIME_CHECK(!block.info.selective->empty());
         rows = block.info.selective->size();
-    }
     else
-    {
         rows = block.rows();
-    }
+
     if (rows > 0)
     {
         rows_in_blocks += rows;

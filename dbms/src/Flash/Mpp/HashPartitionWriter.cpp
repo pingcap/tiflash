@@ -106,6 +106,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
         rows = block.info.selective->size();
     else
         rows = block.rows();
+
     if (rows > 0)
     {
         rows_in_blocks += rows;
@@ -125,6 +126,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::writeImpl(const Block & block)
         rows = block.info.selective->size();
     else
         rows = block.rows();
+
     if (rows > 0)
     {
         rows_in_blocks += rows;
