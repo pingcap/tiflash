@@ -206,25 +206,22 @@ ColumnDefinesPtr removeColumnDefines(const ColumnDefines & columns, const Column
 
 ColumnDefinesPtr buildCastedColumns(
     const ColumnDefines & columns,
-    const QueryFilterPtr & lm_filter,
-    const QueryFilterPtr & rest_filter)
+    const std::unordered_map<ColumnID, DataTypePtr> & lm_casted_columns,
+    const std::unordered_map<ColumnID, DataTypePtr> & rest_casted_columns)
 {
-    auto get_casted_type = [](ColumnID col_id, const QueryFilterPtr & filter) -> DataTypePtr {
-        if (!filter || filter->casted_column_types.empty())
-        {
-            return nullptr;
-        }
-        auto it = filter->casted_column_types.find(col_id);
-        return it != filter->casted_column_types.end() ? it->second : nullptr;
+    auto get_casted_type
+        = [](ColumnID col_id, const std::unordered_map<ColumnID, DataTypePtr> & casted_columns) -> DataTypePtr {
+        auto it = casted_columns.find(col_id);
+        return it != casted_columns.end() ? it->second : nullptr;
     };
     auto casted_columns = std::make_shared<ColumnDefines>(columns);
     for (auto & cd : *casted_columns)
     {
-        if (auto casted_type = get_casted_type(cd.id, lm_filter); casted_type)
+        if (auto casted_type = get_casted_type(cd.id, lm_casted_columns); casted_type)
         {
             cd.type = casted_type;
         }
-        else if (auto casted_type = get_casted_type(cd.id, rest_filter); casted_type)
+        else if (auto casted_type = get_casted_type(cd.id, rest_casted_columns); casted_type)
         {
             cd.type = casted_type;
         }
@@ -234,7 +231,7 @@ ColumnDefinesPtr buildCastedColumns(
 
 } // namespace
 
-QueryFilterPtr QueryFilter::build(
+std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> QueryFilter::build(
     QueryFilterType filter_type,
     const ColumnDefines & filter_columns_to_read,
     const ColumnInfos & table_scan_column_infos,
@@ -247,7 +244,7 @@ QueryFilterPtr QueryFilter::build(
     if (filters.empty())
     {
         LOG_DEBUG(log, "Push down filter is empty");
-        return nullptr;
+        return {};
     }
 
     // Build analyzer with all the columns of table scanning
@@ -296,13 +293,9 @@ QueryFilterPtr QueryFilter::build(
         casted_column_types,
         project_after_where->dumpActions());
 
-    return std::make_shared<QueryFilter>(
-        filter_type,
-        before_where,
-        project_after_where,
-        filter_column_name,
-        extra_cast,
-        std::move(casted_column_types));
+    return {
+        std::make_shared<QueryFilter>(filter_type, before_where, project_after_where, filter_column_name, extra_cast),
+        std::move(casted_column_types)};
 }
 
 BlockInputStreamPtr QueryFilter::buildFilterInputStream(
@@ -344,31 +337,36 @@ PushDownFilterPtr PushDownFilter::build(
 {
     // Must use the original `table_scan_column_infos` because exprs will get column info by index.
     auto lm_columns = getFilterColumns(table_scan_column_infos, lm_filter_exprs, table_scan_columns_to_read);
-
-    auto lm_filter = lm_columns //
-        ? QueryFilter::build(
+    QueryFilterPtr lm_filter;
+    std::unordered_map<ColumnID, DataTypePtr> lm_casted_columns;
+    if (lm_columns)
+    {
+        std::tie(lm_filter, lm_casted_columns) = QueryFilter::build(
             QueryFilterType::LM,
             *lm_columns,
             table_scan_column_infos,
             lm_filter_exprs,
             table_scan_columns_to_read,
             context,
-            tracing_logger)
-        : nullptr;
+            tracing_logger);
+    }
 
     auto rest_columns = lm_columns ? removeColumnDefines(table_scan_columns_to_read, *lm_columns)
                                    : std::make_shared<ColumnDefines>(table_scan_columns_to_read);
-    auto rest_filter = context.getSettingsRef().force_push_down_all_filters_to_scan && !rest_filter_exprs.empty()
-        ? QueryFilter::build(
+    QueryFilterPtr rest_filter;
+    std::unordered_map<ColumnID, DataTypePtr> rest_casted_columns;
+    if (context.getSettingsRef().force_push_down_all_filters_to_scan && !rest_filter_exprs.empty())
+    {
+        std::tie(rest_filter, rest_casted_columns) = QueryFilter::build(
             QueryFilterType::Rest,
             *rest_columns,
             table_scan_column_infos,
             rest_filter_exprs,
             table_scan_columns_to_read,
             context,
-            tracing_logger)
-        : nullptr;
-    auto casted_columns = buildCastedColumns(table_scan_columns_to_read, lm_filter, rest_filter);
+            tracing_logger);
+    }
+    auto casted_columns = buildCastedColumns(table_scan_columns_to_read, lm_casted_columns, rest_casted_columns);
     LOG_DEBUG(tracing_logger, "casted_columns={}", *casted_columns);
     return std::make_shared<PushDownFilter>(
         rs_operator,
