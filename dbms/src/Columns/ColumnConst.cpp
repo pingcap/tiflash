@@ -166,7 +166,7 @@ void ColumnConst::updateWeakHash32(
 {
     RUNTIME_CHECK_MSG(
         hash.getData().size() == s,
-        "Size of WeakHash32({}) does not match size of column({})",
+        "size of WeakHash32({}) doesn't match size of column({})",
         hash.getData().size(),
         s);
     updateWeakHash32Impl(hash, collator, sort_key_container);
@@ -178,12 +178,12 @@ void ColumnConst::updateWeakHash32(
     String & sort_key_container,
     const BlockSelectivePtr & selective_ptr) const
 {
-    const auto selective_rows = selective_ptr->size();
+    const size_t rows = selective_ptr->size();
     RUNTIME_CHECK_MSG(
-        hash.getData().size() == selective_rows,
-        "Size of WeakHash32({}) does not match size of selective column({})",
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
         hash.getData().size(),
-        selective_rows);
+        rows);
 
     updateWeakHash32Impl(hash, collator, sort_key_container);
 }

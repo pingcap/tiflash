@@ -168,6 +168,9 @@ public:
     const Chars_t & getChars() const { return chars; }
 
     size_t getN() const { return n; }
+
+    template <bool selective>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
 };
 
 

@@ -462,34 +462,31 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-void updateWeakHash32BinPadding(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+void updateWeakHash32BinPadding(const std::string_view & view, size_t row, WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
-    *info.hash_data
-        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *info.hash_data);
-    ++info.hash_data;
+    (*info.hash_data)[row]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[row]);
 }
 
-void updateWeakHash32BinNoPadding(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+void updateWeakHash32BinNoPadding(const std::string_view & view, size_t row, WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
-    *info.hash_data
-        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *info.hash_data);
-    ++info.hash_data;
+    (*info.hash_data)[row]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[row]);
 }
 
-void updateWeakHash32NonBin(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+void updateWeakHash32NonBin(const std::string_view & view, size_t row, WeakHash32Info & info)
 {
     auto sort_key = info.collator->sortKey(view.data(), view.size(), info.sort_key_container);
-    *info.hash_data
-        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *info.hash_data);
-    ++info.hash_data;
+    (*info.hash_data)[row]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[row]);
 }
 
-void updateWeakHash32NoCollator(const std::string_view & view, size_t /*row*/, WeakHash32Info & info)
+void updateWeakHash32NoCollator(const std::string_view & view, size_t row, WeakHash32Info & info)
 {
-    *info.hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), *info.hash_data);
-    ++info.hash_data;
+    (*info.hash_data)[row]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), (*info.hash_data)[row]);
 }
 
 template <typename LoopFunc>
@@ -504,24 +501,24 @@ void ColumnString::updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & 
         case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
         case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
         {
-            loop_func(chars, offsets, offsets.size(), info, updateWeakHash32BinPadding);
+            loop_func(chars, offsets, info, updateWeakHash32BinPadding);
             break;
         }
         case TiDB::ITiDBCollator::CollatorType::BINARY:
         {
-            loop_func(chars, offsets, offsets.size(), info, updateWeakHash32BinNoPadding);
+            loop_func(chars, offsets, info, updateWeakHash32BinNoPadding);
             break;
         }
         default:
         {
-            loop_func(chars, offsets, offsets.size(), info, updateWeakHash32NonBin);
+            loop_func(chars, offsets, info, updateWeakHash32NonBin);
             break;
         }
         }
     }
     else
     {
-        loop_func(chars, offsets, offsets.size(), info, updateWeakHash32NoCollator);
+        loop_func(chars, offsets, info, updateWeakHash32NoCollator);
     }
 }
 
@@ -530,23 +527,16 @@ void ColumnString::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    auto s = offsets.size();
-
-    RUNTIME_CHECK_MSG(
-        hash.getData().size() == s,
-        "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-        s,
-        hash.getData().size());
-
     WeakHash32Info info{
-        .hash_data = hash.getData().data(),
+        .hash_data = &hash.getData(),
         .sort_key_container = sort_key_container,
         .collator = collator,
+        .selective_ptr = nullptr,
     };
 
     updateWeakHash32Impl(
         info,
-        LoopOneColumnWithHashInfo<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
+        LoopOneColumnWithHashInfo<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator), false>);
 }
 
 void ColumnString::updateWeakHash32(
@@ -555,23 +545,15 @@ void ColumnString::updateWeakHash32(
     String & sort_key_container,
     const BlockSelectivePtr & selective_ptr) const
 {
-    const auto selective_rows = selective_ptr->size();
-    auto & hash_data_vec = hash.getData();
-    RUNTIME_CHECK_MSG(
-        hash_data_vec.size() == selective_rows,
-        "Size of WeakHash32({}) doesn't match size of selective column({})",
-        hash_data_vec.size(),
-        selective_rows);
-
     WeakHash32Info info{
-        .hash_data = hash_data_vec.data(),
+        .hash_data = &hash.getData(),
         .sort_key_container = sort_key_container,
         .collator = collator,
         .selective_ptr = selective_ptr,
     };
     updateWeakHash32Impl(
         info,
-        LoopColumnSelective<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator)>);
+        LoopOneColumnWithHashInfo<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator), true>);
 }
 
 void ColumnString::updateHashWithValues(

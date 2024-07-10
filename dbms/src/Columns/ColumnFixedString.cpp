@@ -147,24 +147,7 @@ void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, 
 
 void ColumnFixedString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    auto s = size();
-
-    RUNTIME_CHECK_MSG(
-        hash.getData().size() == s,
-        "Size of WeakHash32({}) does not match size of column({})",
-        hash.getData().size(),
-        s);
-
-    const UInt8 * pos = chars.data();
-    UInt32 * hash_data = hash.getData().data();
-
-    for (size_t row = 0; row < s; ++row)
-    {
-        *hash_data = ::updateWeakHash32(pos, n, *hash_data);
-
-        pos += n;
-        ++hash_data;
-    }
+    updateWeakHash32Impl<false>(hash, nullptr);
 }
 
 void ColumnFixedString::updateWeakHash32(
@@ -173,20 +156,35 @@ void ColumnFixedString::updateWeakHash32(
     String &,
     const BlockSelectivePtr & selective_ptr) const
 {
-    const auto selective_rows = selective_ptr->size();
-    RUNTIME_CHECK_MSG(
-        hash.getData().size() == selective_rows,
-        "Size of WeakHash32({}) does not match size of column({})",
-        hash.getData().size(),
-        selective_rows);
+    updateWeakHash32Impl<true>(hash, selective_ptr);
+}
 
-    const UInt8 * pos = chars.data();
+template <bool selective>
+void ColumnFixedString::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const
+{
+    size_t rows = size();
+    if constexpr (selective)
+    {
+        RUNTIME_CHECK(selective_ptr);
+        rows = selective_ptr->size();
+    }
+
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        rows);
+
+    const UInt8 * begin = chars.data();
     UInt32 * hash_data = hash.getData().data();
 
-    for (const auto & row : *selective_ptr)
+    for (size_t i = 0; i < rows; ++i)
     {
-        *hash_data = ::updateWeakHash32(pos + n * row, n, *hash_data);
+        size_t row = i;
+        if constexpr (selective)
+            row = (*selective_ptr)[i];
 
+        *hash_data = ::updateWeakHash32(begin + n * row, n, *hash_data);
         ++hash_data;
     }
 }

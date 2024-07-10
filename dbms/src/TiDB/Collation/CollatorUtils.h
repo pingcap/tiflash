@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/Exception.h>
+#include <Common/WeakHash.h>
 #include <Core/BlockInfo.h>
 #include <TiDB/Collation/Collator.h>
 #include <TiDB/Collation/CollatorCompare.h>
@@ -72,8 +74,7 @@ FLATTEN_INLINE static inline void LoopOneColumn(const Chars & a_data, const Offs
 // Used when updating hash for column.
 struct WeakHash32Info
 {
-    // Current updating hash data position.
-    UInt32 * hash_data;
+    WeakHash32::Container * hash_data;
     String sort_key_container;
     TiDB::TiDBCollatorPtr collator;
     BlockSelectivePtr selective_ptr;
@@ -81,41 +82,39 @@ struct WeakHash32Info
 
 // Loop one column and invoke callback for each pair.
 // Remove last zero byte.
-template <typename Chars, typename Offsets, typename Func>
+template <typename Chars, typename Offsets, typename Func, bool selective>
 FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
     const Chars & a_data,
     const Offsets & a_offsets,
-    size_t size,
     WeakHash32Info & info,
     const Func & func)
 {
-    uint64_t a_prev_offset = 0;
-
-    for (size_t i = 0; i < size; ++i)
+    size_t rows = a_offsets.size();
+    if constexpr (selective)
     {
-        auto a_size = a_offsets[i] - a_prev_offset;
-
-        // Remove last zero byte.
-        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
-        a_prev_offset = a_offsets[i];
+        RUNTIME_CHECK(info.selective_ptr);
+        rows = info.selective_ptr->size();
     }
-}
 
-template <typename Chars, typename Offsets, typename Func>
-FLATTEN_INLINE static inline void LoopColumnSelective(
-    const Chars & chars,
-    const Offsets & offsets,
-    size_t /*size*/,
-    WeakHash32Info & info,
-    const Func & func)
-{
-    for (auto row : *info.selective_ptr)
+    RUNTIME_CHECK_MSG(
+        info.hash_data->size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        info.hash_data->size(),
+        rows);
+
+    for (size_t i = 0; i < rows; ++i)
     {
-        auto prev_offset = 0;
-        if likely (row > 0)
-            prev_offset = offsets[row - 1];
+        size_t row = i;
+        if constexpr (selective)
+            row = (*info.selective_ptr)[i];
 
-        func({reinterpret_cast<const char *>(&chars[prev_offset]), offsets[row] - prev_offset - 1}, row, info);
+        size_t a_prev_offset = 0;
+        if likely (row > 0)
+            a_prev_offset = a_offsets[row - 1];
+
+        auto a_size = a_offsets[row] - a_prev_offset;
+
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
     }
 }
 } // namespace DB

@@ -253,35 +253,7 @@ void ColumnArray::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    auto s = offsets->size();
-    RUNTIME_CHECK_MSG(
-        hash.getData().size() == s,
-        "Size of WeakHash32({}) does not match size of column({})",
-        hash.getData().size(),
-        s);
-
-    WeakHash32 internal_hash(data->size());
-    data->updateWeakHash32(internal_hash, collator, sort_key_container);
-
-    Offset prev_offset = 0;
-    const auto & offsets_data = getOffsets();
-    auto & hash_data = hash.getData();
-    auto & internal_hash_data = internal_hash.getData();
-
-    for (size_t i = 0; i < s; ++i)
-    {
-        /// This row improves hash a little bit according to integration tests.
-        /// It is the same as to use previous hash value as the first element of array.
-        hash_data[i] = intHashCRC32(hash_data[i]);
-
-        for (size_t row = prev_offset; row < offsets_data[i]; ++row)
-            /// It is probably not the best way to combine hashes.
-            /// But much better then xor which lead to similar hash for arrays like [1], [1, 1, 1], [1, 1, 1, 1, 1], ...
-            /// Much better implementation - to add offsets as an optional argument to updateWeakHash32.
-            hash_data[i] = intHashCRC32(internal_hash_data[row], hash_data[i]);
-
-        prev_offset = offsets_data[i];
-    }
+    updateWeakHash32Impl<false>(hash, collator, sort_key_container, nullptr);
 }
 
 void ColumnArray::updateWeakHash32(
@@ -290,34 +262,57 @@ void ColumnArray::updateWeakHash32(
     String & sort_key_container,
     const BlockSelectivePtr & selective_ptr) const
 {
-    const auto selective_rows = selective_ptr->size();
+    updateWeakHash32Impl<true>(hash, collator, sort_key_container, selective_ptr);
+}
+
+template <bool selective>
+void ColumnArray::updateWeakHash32Impl(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelectivePtr & selective_ptr) const
+{
+    size_t rows = offsets->size();
+    if constexpr (selective)
+    {
+        RUNTIME_CHECK(selective_ptr);
+        rows = selective_ptr->size();
+    }
+
     RUNTIME_CHECK_MSG(
-        hash.getData().size() == selective_rows,
-        "Size of WeakHash32({}) does not match size of column({})",
+        rows == hash.getData().size(),
+        "size of WeakHash32({}) doesn't match size of column({})",
         hash.getData().size(),
-        selective_rows);
+        rows);
 
     WeakHash32 internal_hash(data->size());
     data->updateWeakHash32(internal_hash, collator, sort_key_container);
 
     const auto & offsets_data = getOffsets();
     UInt32 * hash_data = hash.getData().data();
-    auto & internal_hash_data = internal_hash.getData();
+    const auto & internal_hash_data = internal_hash.getData();
 
-    for (const auto & array_row : *selective_ptr)
+    for (size_t i = 0; i < rows; ++i)
     {
         /// This row improves hash a little bit according to integration tests.
         /// It is the same as to use previous hash value as the first element of array.
         *hash_data = intHashCRC32(*hash_data);
-        Offset prev_offset = 0;
-        if likely (array_row > 0)
-            prev_offset = offsets_data[array_row - 1];
 
-        for (size_t row = prev_offset; row < offsets_data[array_row]; ++row)
+        size_t row = i;
+        if constexpr (selective)
+            row = (*selective_ptr)[i];
+
+        Offset prev_offset = 0;
+        if likely (row > 0)
+            prev_offset = offsets_data[row - 1];
+
+        for (size_t sub_row = prev_offset; sub_row < offsets_data[row]; ++sub_row)
+        {
             /// It is probably not the best way to combine hashes.
             /// But much better then xor which lead to similar hash for arrays like [1], [1, 1, 1], [1, 1, 1, 1, 1], ...
             /// Much better implementation - to add offsets as an optional argument to updateWeakHash32.
-            *hash_data = intHashCRC32(internal_hash_data[row], *hash_data);
+            *hash_data = intHashCRC32(internal_hash_data[sub_row], *hash_data);
+        }
 
         ++hash_data;
     }

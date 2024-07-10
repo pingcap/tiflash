@@ -255,6 +255,9 @@ protected:
                 return data[a].value < data[b].value;
             });
     }
+
+    template <bool selective>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
 };
 
 template <typename T>

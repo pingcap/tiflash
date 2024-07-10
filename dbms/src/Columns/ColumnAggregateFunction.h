@@ -210,6 +210,9 @@ public:
     const Container & getData() const { return data; }
 
     void getExtremes(Field & min, Field & max) const override;
+
+    template <bool selective>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
 };
 
 

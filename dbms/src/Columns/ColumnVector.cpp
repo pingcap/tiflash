@@ -72,28 +72,7 @@ void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, co
 template <typename T>
 void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    auto s = data.size();
-
-    RUNTIME_CHECK_MSG(
-        hash.getData().size() == s,
-        "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-        s,
-        hash.getData().size());
-
-    const T * begin = data.data();
-    const T * end = begin + s;
-    UInt32 * hash_data = hash.getData().data();
-
-    while (begin < end)
-    {
-        if constexpr (is_fit_register<T>)
-            *hash_data = intHashCRC32(*begin, *hash_data);
-        else
-            *hash_data = wideIntHashCRC32(*begin, *hash_data);
-
-        ++begin;
-        ++hash_data;
-    }
+    updateWeakHash32Impl<false>(hash, nullptr);
 }
 
 template <typename T>
@@ -103,17 +82,35 @@ void ColumnVector<T>::updateWeakHash32(
     String &,
     const BlockSelectivePtr & selective_ptr) const
 {
+    updateWeakHash32Impl<true>(hash, selective_ptr);
+}
+
+template <typename T>
+template <bool selective>
+void ColumnVector<T>::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const
+{
+    size_t rows = data.size();
+    if constexpr (selective)
+    {
+        RUNTIME_CHECK(selective_ptr);
+        rows = selective_ptr->size();
+    }
+
     RUNTIME_CHECK_MSG(
-        selective_ptr->size() == hash.getData().size(),
-        "Size of WeakHash32({}) doesn't match size of selective column({})",
-        selective_ptr->size(),
-        hash.getData().size());
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        rows);
 
     const T * begin = data.data();
     UInt32 * hash_data = hash.getData().data();
 
-    for (const auto & row : *selective_ptr)
+    for (size_t i = 0; i < rows; ++i)
     {
+        size_t row = i;
+        if constexpr (selective)
+            row = (*selective_ptr)[i];
+
         if constexpr (is_fit_register<T>)
             *hash_data = intHashCRC32(*(begin + row), *hash_data);
         else
