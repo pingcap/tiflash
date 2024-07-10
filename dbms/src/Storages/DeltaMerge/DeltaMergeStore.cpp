@@ -1075,10 +1075,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
+    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
-        columns_to_read,
+        final_columns_to_read,
         filter,
         max_version,
         expected_block_size,
@@ -1098,7 +1099,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
-                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
+                final_columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id);
@@ -1109,7 +1110,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 dm_context,
                 read_task_pool,
                 after_segment_read,
-                columns_to_read,
+                final_columns_to_read,
                 filter,
                 max_version,
                 expected_block_size,
@@ -1122,9 +1123,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     }
     LOG_INFO(
         tracing_logger,
-        "Read create stream done, pool_id={} num_streams={}",
+        "Read create stream done, pool_id={} num_streams={} columns_to_read={} final_columns_to_read={}",
         read_task_pool->poolId(),
-        final_num_stream);
+        final_num_stream,
+        columns_to_read,
+        final_columns_to_read);
 
     return res;
 }
@@ -1170,10 +1173,11 @@ SourceOps DeltaMergeStore::readSourceOps(
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, num_streams);
+    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
-        columns_to_read,
+        final_columns_to_read,
         filter,
         max_version,
         expected_block_size,
@@ -1193,12 +1197,13 @@ SourceOps DeltaMergeStore::readSourceOps(
             std::make_unique<UnorderedSourceOp>(
                 exec_status_,
                 read_task_pool,
-                columns_to_read,
+                final_columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id));
     }
-    LOG_INFO(tracing_logger, "Read create SourceOp done, pool_id={} num_streams={}", read_task_pool->poolId(), final_num_stream);
+    LOG_INFO(tracing_logger, "Read create SourceOp done, pool_id={} num_streams={} columns_to_read={} final_columns_to_read={}",
+        read_task_pool->poolId(), final_num_stream, columns_to_read, final_columns_to_read);
 
     return res;
 }

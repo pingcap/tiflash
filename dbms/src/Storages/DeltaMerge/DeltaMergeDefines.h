@@ -164,3 +164,13 @@ static constexpr bool DM_RUN_CHECK = true;
 
 } // namespace DM
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::DM::ColumnDefine>
+{
+    template <typename FormatContext>
+    auto format(const DB::DM::ColumnDefine & cd, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "{}/{}", cd.id, cd.type->getName());
+    }
+};
