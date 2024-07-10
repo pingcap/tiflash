@@ -48,15 +48,13 @@ public:
         const ExpressionActionsPtr & project_after_where_,
         const String filter_column_name_,
         const ExpressionActionsPtr & extra_cast_,
-        std::unordered_map<ColumnID, DataTypePtr> && casted_column_types_,
-        std::vector<std::tuple<UInt64, String, DataTypePtr>> && generated_column_infos_)
+        std::unordered_map<ColumnID, DataTypePtr> && casted_column_types_)
         : filter_type(filter_type_)
         , before_where(beofre_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
         , extra_cast(extra_cast_)
         , casted_column_types(std::move(casted_column_types_))
-        , generated_column_infos(std::move(generated_column_infos_))
     {}
 
     bool empty() const { return before_where == nullptr; }
@@ -88,7 +86,6 @@ public:
     const ExpressionActionsPtr extra_cast;
     // If the extra_cast is not null, the types of the columns may be changed
     std::unordered_map<ColumnID, DataTypePtr> casted_column_types;
-    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };
 
 struct PushDownFilter
