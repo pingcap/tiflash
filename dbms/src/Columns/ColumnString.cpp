@@ -15,10 +15,8 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
-#include <Common/Logger.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <TiDB/Collation/CollatorUtils.h>
-#include <common/logger_useful.h>
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
@@ -462,31 +460,31 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-void updateWeakHash32BinPadding(const std::string_view & view, size_t row, WeakHash32Info & info)
+void updateWeakHash32BinPadding(const std::string_view & view, size_t idx, WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
-    (*info.hash_data)[row]
-        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[row]);
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
 }
 
-void updateWeakHash32BinNoPadding(const std::string_view & view, size_t row, WeakHash32Info & info)
+void updateWeakHash32BinNoPadding(const std::string_view & view, size_t idx, WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
-    (*info.hash_data)[row]
-        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[row]);
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
 }
 
-void updateWeakHash32NonBin(const std::string_view & view, size_t row, WeakHash32Info & info)
+void updateWeakHash32NonBin(const std::string_view & view, size_t idx, WeakHash32Info & info)
 {
     auto sort_key = info.collator->sortKey(view.data(), view.size(), info.sort_key_container);
-    (*info.hash_data)[row]
-        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[row]);
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
 }
 
-void updateWeakHash32NoCollator(const std::string_view & view, size_t row, WeakHash32Info & info)
+void updateWeakHash32NoCollator(const std::string_view & view, size_t idx, WeakHash32Info & info)
 {
-    (*info.hash_data)[row]
-        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), (*info.hash_data)[row]);
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), (*info.hash_data)[idx]);
 }
 
 template <typename LoopFunc>

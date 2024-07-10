@@ -211,7 +211,7 @@ void ColumnTuple::updateWeakHash32(
 
     RUNTIME_CHECK_MSG(
         hash.getData().size() == rows,
-        "Size of WeakHash32({}) does not match size of selective column({})",
+        "size of WeakHash32({}) doesn't match size of column({})",
         hash.getData().size(),
         rows);
 

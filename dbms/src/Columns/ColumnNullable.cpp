@@ -148,8 +148,8 @@ void ColumnNullable::updateWeakHash32Impl(
         nested_column->updateWeakHash32(hash, collator, sort_key_container);
 
     const auto & null_map_data = getNullMapData();
-    auto & hash_data = hash.getData();
-    auto & old_hash_data = old_hash.getData();
+    UInt32 * hash_data = hash.getData().data();
+    UInt32 * old_hash_data = old_hash.getData().data();
 
     for (size_t i = 0; i < rows; ++i)
     {
@@ -158,7 +158,10 @@ void ColumnNullable::updateWeakHash32Impl(
             row = (*selective_ptr)[i];
 
         if (null_map_data[row])
-            hash_data[i] = old_hash_data[i];
+            *hash_data = *old_hash_data;
+
+        ++hash_data;
+        ++old_hash_data;
     }
 }
 
