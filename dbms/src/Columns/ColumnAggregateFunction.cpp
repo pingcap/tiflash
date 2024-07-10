@@ -422,60 +422,55 @@ ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_r
 MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector)
     const
 {
-    RUNTIME_CHECK_MSG(
-        selector.size() == size(),
-        "Size of selector: {} doesn't match size of column: {}",
-        selector.size(),
-        size());
-    /// Columns with scattered values will point to this column as the owner of values.
-    MutableColumns columns(num_columns);
-    for (auto & column : columns)
-        column = createView();
-
-    size_t num_rows = size();
-
-    {
-        size_t reserve_size = 1.1 * num_rows / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
-
-        if (reserve_size > 1)
-            for (auto & column : columns)
-                column->reserve(reserve_size);
-    }
-
-    for (size_t i = 0; i < num_rows; ++i)
-        static_cast<ColumnAggregateFunction &>(*columns[selector[i]]).data.push_back(data[i]);
-
-    return columns;
+    return scatterImpl<false>(num_columns, selector, nullptr);
 }
 
 MutableColumns ColumnAggregateFunction::scatter(
     IColumn::ColumnIndex num_columns,
     const IColumn::Selector & selector,
-    const BlockSelectivePtr & selective) const
+    const BlockSelectivePtr & selective_ptr) const
 {
+    return scatterImpl<true>(num_columns, selector, selective_ptr);
+}
+
+template <bool selective>
+MutableColumns ColumnAggregateFunction::scatterImpl(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector,
+        const BlockSelectivePtr & selective_ptr) const
+{
+    size_t rows = size();
+    if constexpr (selective)
+    {
+        RUNTIME_CHECK(selective_ptr);
+        rows = selective_ptr->size();
+    }
+
+    RUNTIME_CHECK_MSG(selector.size() == rows,
+            "size of selector({}) doesn't match size of column({})",
+            selector.size(), rows);
+
     /// Columns with scattered values will point to this column as the owner of values.
     MutableColumns columns(num_columns);
     for (auto & column : columns)
         column = createView();
 
-    const auto & selective_rows = selective->size();
-    RUNTIME_CHECK_MSG(
-        selective_rows == selector.size(),
-        "Size of selector: {} doesn't match size of selective column: {}",
-        selector.size(),
-        selective_rows);
-
     {
-        size_t reserve_size = 1.1 * selective_rows / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
+        size_t reserve_size = 1.1 * rows / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
 
         if (reserve_size > 1)
             for (auto & column : columns)
                 column->reserve(reserve_size);
     }
 
-    for (size_t i = 0; i < selective_rows; ++i)
-        static_cast<ColumnAggregateFunction &>(*columns[selector[i]]).data.push_back(data[(*selective)[i]]);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        size_t row = i;
+        if constexpr (selective)
+            row = (*selective_ptr)[i];
 
+        static_cast<ColumnAggregateFunction &>(*columns[selector[i]]).data.push_back(data[row]);
+    }
     return columns;
 }
 

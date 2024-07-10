@@ -23,9 +23,6 @@
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
 
-#include "Common/WeakHash.h"
-
-
 template <typename T>
 bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
 
