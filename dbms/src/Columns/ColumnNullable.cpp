@@ -128,11 +128,15 @@ void ColumnNullable::updateWeakHash32Impl(
     String & sort_key_container,
     const BlockSelectivePtr & selective_ptr) const
 {
-    size_t rows = size();
+    size_t rows;
     if constexpr (selective)
     {
         RUNTIME_CHECK(selective_ptr);
         rows = selective_ptr->size();
+    }
+    else
+    {
+        rows = size();
     }
 
     RUNTIME_CHECK_MSG(

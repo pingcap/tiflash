@@ -495,11 +495,15 @@ FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
     ColumnString::WeakHash32Info & info,
     LoopColumnWithHashInfoFunc && func)
 {
-    size_t rows = a_offsets.size();
+    size_t rows;
     if constexpr (selective)
     {
         RUNTIME_CHECK(info.selective_ptr);
         rows = info.selective_ptr->size();
+    }
+    else
+    {
+        rows = a_offsets.size();
     }
 
     RUNTIME_CHECK_MSG(

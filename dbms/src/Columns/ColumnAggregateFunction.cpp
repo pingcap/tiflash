@@ -175,11 +175,15 @@ void ColumnAggregateFunction::updateWeakHash32(
 template <bool selective>
 void ColumnAggregateFunction::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const
 {
-    size_t rows = data.size();
+    size_t rows;
     if constexpr (selective)
     {
         RUNTIME_CHECK(selective_ptr);
         rows = selective_ptr->size();
+    }
+    else
+    {
+        rows = data.size();
     }
 
     RUNTIME_CHECK_MSG(
