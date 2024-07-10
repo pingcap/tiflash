@@ -100,14 +100,14 @@ OperatorStatus SourceOp::read(Block & block)
     profile_info.anchor();
     assert(!block);
     auto op_status = readImpl(block);
-#ifndef NDEBUG
+    //#ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
     }
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
-#endif
+    //#endif
     exec_context.triggerAutoSpill();
     if (op_status == OperatorStatus::HAS_OUTPUT)
         profile_info.update(block);

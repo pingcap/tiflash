@@ -228,6 +228,14 @@ ColumnDefinesPtr buildCastedColumns(
             cd.type = casted_type;
         }
     }
+
+    if (rest_filter)
+    {
+        for (const auto & [id, name, type] : rest_filter->generated_column_infos)
+        {
+            casted_columns->emplace_back(id, name, type);
+        }
+    }
     return casted_columns;
 }
 
@@ -334,13 +342,13 @@ BlockInputStreamPtr QueryFilter::buildFilterInputStream(
 
     stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, tracing_id);
     stream->setExtraInfo(fmt::format("{}: push down filter", filter_name));
-    LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
+    LOG_DEBUG(log, "buildFilterInputStream filter: {}", stream->getHeader().dumpNames());
 
     if (need_project)
     {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, tracing_id);
         stream->setExtraInfo(fmt::format("{}: project after where", filter_name));
-        LOG_DEBUG(log, "buildFilterInputStream: {}", stream->getHeader().dumpNames());
+        LOG_DEBUG(log, "buildFilterInputStream project: {}", stream->getHeader().dumpNames());
     }
     return stream;
 }
@@ -380,6 +388,7 @@ PushDownFilterPtr PushDownFilter::build(
             tracing_logger)
         : nullptr;
     auto casted_columns = buildCastedColumns(table_scan_columns_to_read, lm_filter, rest_filter);
+    LOG_DEBUG(tracing_logger, "casted_columns={}", *casted_columns);
     return std::make_shared<PushDownFilter>(
         rs_operator,
         lm_filter,
