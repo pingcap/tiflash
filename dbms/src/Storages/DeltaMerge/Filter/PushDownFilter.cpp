@@ -355,20 +355,28 @@ BlockInputStreamPtr QueryFilter::buildFilterInputStream(
 
 PushDownFilterPtr PushDownFilter::build(
     const RSOperatorPtr & rs_operator,
-    const ColumnInfos & table_scan_column_info,
+    const ColumnInfos & _table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & lm_filter_exprs,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & rest_filter_exprs,
     const ColumnDefines & table_scan_columns_to_read,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
-    auto lm_columns = getFilterColumns(table_scan_column_info, lm_filter_exprs, table_scan_columns_to_read);
+    ColumnInfos new_column_infos;
+    for (const auto & ci : _table_scan_column_info)
+    {
+        if (!ci.hasGeneratedColumnFlag())
+        {
+            new_column_infos.push_back(ci);
+        }
+    }
+    auto lm_columns = getFilterColumns(new_column_infos, lm_filter_exprs, table_scan_columns_to_read);
 
     auto lm_filter = lm_columns //
         ? QueryFilter::build(
             QueryFilterType::LM,
             *lm_columns,
-            table_scan_column_info,
+            new_column_infos,
             lm_filter_exprs,
             table_scan_columns_to_read,
             context,
@@ -381,7 +389,7 @@ PushDownFilterPtr PushDownFilter::build(
         ? QueryFilter::build(
             QueryFilterType::Rest,
             *rest_columns,
-            table_scan_column_info,
+            new_column_infos,
             rest_filter_exprs,
             table_scan_columns_to_read,
             context,
