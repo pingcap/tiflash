@@ -39,10 +39,13 @@ NamesWithAliases buildTableScanProjectionCols(
     if (unlikely(schema.size() != storage_header.columns()))
         throw TiFlashException(
             fmt::format(
-                "The tidb table scan schema size {} is different from the tiflash storage schema size {}, table id is "
+                "The tidb table scan schema size {} => {} is different from the tiflash storage schema size {} => {}, "
+                "table id is "
                 "{}",
                 schema.size(),
+                toNames(schema),
                 storage_header.columns(),
+                storage_header.dumpNames(),
                 logical_table_id),
             Errors::Planner::BadRequest);
     NamesWithAliases schema_project_cols;

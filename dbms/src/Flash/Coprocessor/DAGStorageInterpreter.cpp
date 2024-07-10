@@ -346,7 +346,9 @@ void DAGStorageInterpreter::executeImpl(
                 /*is_append=*/true);
 
             /// handle generated column if necessary.
+            LOG_DEBUG(log, "Header before: {}", group_builder.getCurrentHeader().dumpNames());
             executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
+            LOG_DEBUG(log, "Header after: {}", group_builder.getCurrentHeader().dumpNames());
 
             DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
 
@@ -464,7 +466,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
             pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
 
             /// handle generated column if necessary.
+            LOG_DEBUG(log, "Header before: {}", pipeline.firstStream()->getHeader().dumpNames());
             executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
+            LOG_DEBUG(log, "Header after: {}", pipeline.firstStream()->getHeader().dumpNames());
 
             DAGExpressionAnalyzer analyzer{pipeline.firstStream()->getHeader(), context};
 
