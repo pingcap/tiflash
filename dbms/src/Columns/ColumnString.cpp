@@ -460,31 +460,68 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-void updateWeakHash32BinPadding(const std::string_view & view, size_t idx, WeakHash32Info & info)
+void updateWeakHash32BinPadding(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
     (*info.hash_data)[idx]
         = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
 }
 
-void updateWeakHash32BinNoPadding(const std::string_view & view, size_t idx, WeakHash32Info & info)
+void updateWeakHash32BinNoPadding(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
     (*info.hash_data)[idx]
         = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
 }
 
-void updateWeakHash32NonBin(const std::string_view & view, size_t idx, WeakHash32Info & info)
+void updateWeakHash32NonBin(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
 {
     auto sort_key = info.collator->sortKey(view.data(), view.size(), info.sort_key_container);
     (*info.hash_data)[idx]
         = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
 }
 
-void updateWeakHash32NoCollator(const std::string_view & view, size_t idx, WeakHash32Info & info)
+void updateWeakHash32NoCollator(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
 {
     (*info.hash_data)[idx]
         = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), (*info.hash_data)[idx]);
+}
+
+using LoopColumnWithHashInfoFunc = void(const std::string_view &, size_t, ColumnString::WeakHash32Info &);
+template <bool selective>
+FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
+    const ColumnString::Chars_t & a_data,
+    const IColumn::Offsets & a_offsets,
+    ColumnString::WeakHash32Info & info,
+    LoopColumnWithHashInfoFunc && func)
+{
+    size_t rows = a_offsets.size();
+    if constexpr (selective)
+    {
+        RUNTIME_CHECK(info.selective_ptr);
+        rows = info.selective_ptr->size();
+    }
+
+    RUNTIME_CHECK_MSG(
+        info.hash_data->size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        info.hash_data->size(),
+        rows);
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        size_t row = i;
+        if constexpr (selective)
+            row = (*info.selective_ptr)[i];
+
+        size_t a_prev_offset = 0;
+        if likely (row > 0)
+            a_prev_offset = a_offsets[row - 1];
+
+        auto a_size = a_offsets[row] - a_prev_offset;
+
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
+    }
 }
 
 template <typename LoopFunc>
@@ -532,9 +569,7 @@ void ColumnString::updateWeakHash32(
         .selective_ptr = nullptr,
     };
 
-    updateWeakHash32Impl(
-        info,
-        LoopOneColumnWithHashInfo<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator), false>);
+    updateWeakHash32Impl(info, LoopOneColumnWithHashInfo<false>);
 }
 
 void ColumnString::updateWeakHash32(
@@ -549,9 +584,7 @@ void ColumnString::updateWeakHash32(
         .collator = collator,
         .selective_ptr = selective_ptr,
     };
-    updateWeakHash32Impl(
-        info,
-        LoopOneColumnWithHashInfo<decltype(chars), decltype(offsets), decltype(updateWeakHash32NoCollator), true>);
+    updateWeakHash32Impl(info, LoopOneColumnWithHashInfo<true>);
 }
 
 void ColumnString::updateHashWithValues(

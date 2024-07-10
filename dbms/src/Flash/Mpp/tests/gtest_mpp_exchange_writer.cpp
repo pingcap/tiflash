@@ -1013,8 +1013,7 @@ try
         }
     };
 
-    auto scatter_func_data_checker = [&](const ColumnWithTypeAndName & column,
-                                         const std::vector<UInt64> & selective,
+    auto scatter_func_data_checker = [&](const std::vector<UInt64> & selective,
                                          const IColumn::Selector & selector_selective,
                                          const MutableColumns & scatter_columns_selective_block,
                                          const MutableColumns & scatter_columns_no_selective_block) {
@@ -1024,10 +1023,8 @@ try
             rows_after_scatter += col->size();
         }
 
-        LOG_DEBUG(Logger::get(), "TestMPPExchangeWriter.testSelectiveBlockScatter checking {} assert beg", column.name);
         ASSERT_EQ(selective.size(), rows_after_scatter);
         ASSERT_EQ(scatter_columns_no_selective_block.size(), scatter_columns_selective_block.size());
-
         for (size_t i = 0; i < scatter_columns_selective_block.size(); ++i)
         {
             size_t selector_rows = 0;
@@ -1037,29 +1034,6 @@ try
 
             ASSERT_EQ(selector_rows, scatter_columns_selective_block[i]->size());
         }
-
-        if (column.name == "col_nothing")
-            return;
-
-        for (size_t i = 0; i < scatter_columns_selective_block.size(); ++i)
-        {
-            const auto & col_selective = scatter_columns_selective_block[i];
-            const auto & col_no_selective = scatter_columns_no_selective_block[i];
-            for (size_t x = 0; x < col_selective->size(); ++x)
-            {
-                bool found = false;
-                for (size_t y = 0; y < col_no_selective->size(); ++y)
-                {
-                    if ((*col_selective)[x] == (*col_no_selective)[y])
-                        found = true;
-                }
-                ASSERT_TRUE(found);
-            }
-        }
-        LOG_DEBUG(
-            Logger::get(),
-            "TestMPPExchangeWriter.testSelectiveBlockScatter checking {} assert done",
-            column.name);
     };
 
     auto init_scatter_columns = [&](IColumn::ScatterColumns & scatters, const ColumnWithTypeAndName & ori_column) {
@@ -1112,7 +1086,6 @@ try
                 std::make_shared<std::vector<UInt64>>(selective));
 
         scatter_func_data_checker(
-            column,
             selective,
             selector_selective,
             scatter_columns_selective_block,

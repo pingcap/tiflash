@@ -14,10 +14,6 @@
 
 #pragma once
 
-#include <Common/Exception.h>
-#include <Common/WeakHash.h>
-#include <Core/BlockInfo.h>
-#include <TiDB/Collation/Collator.h>
 #include <TiDB/Collation/CollatorCompare.h>
 
 namespace DB
@@ -70,51 +66,4 @@ FLATTEN_INLINE static inline void LoopOneColumn(const Chars & a_data, const Offs
     }
 }
 
-
-// Used when updating hash for column.
-struct WeakHash32Info
-{
-    WeakHash32::Container * hash_data;
-    String sort_key_container;
-    TiDB::TiDBCollatorPtr collator;
-    BlockSelectivePtr selective_ptr;
-};
-
-// Loop one column and invoke callback for each pair.
-// Remove last zero byte.
-template <typename Chars, typename Offsets, typename Func, bool selective>
-FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
-    const Chars & a_data,
-    const Offsets & a_offsets,
-    WeakHash32Info & info,
-    const Func & func)
-{
-    size_t rows = a_offsets.size();
-    if constexpr (selective)
-    {
-        RUNTIME_CHECK(info.selective_ptr);
-        rows = info.selective_ptr->size();
-    }
-
-    RUNTIME_CHECK_MSG(
-        info.hash_data->size() == rows,
-        "size of WeakHash32({}) doesn't match size of column({})",
-        info.hash_data->size(),
-        rows);
-
-    for (size_t i = 0; i < rows; ++i)
-    {
-        size_t row = i;
-        if constexpr (selective)
-            row = (*info.selective_ptr)[i];
-
-        size_t a_prev_offset = 0;
-        if likely (row > 0)
-            a_prev_offset = a_offsets[row - 1];
-
-        auto a_size = a_offsets[row] - a_prev_offset;
-
-        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
-    }
-}
 } // namespace DB
