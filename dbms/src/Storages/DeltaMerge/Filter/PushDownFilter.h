@@ -69,7 +69,7 @@ public:
     static QueryFilterPtr build(
         QueryFilterType filter_type,
         const ColumnDefines & filter_columns_to_read,
-        const ColumnInfos & table_scan_column_info,
+        const ColumnInfos & table_scan_column_infos,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         const ColumnDefines & table_scan_columns_to_read,
         const Context & context,
@@ -119,7 +119,7 @@ public:
     // Use by StorageDisaggregated.
     static PushDownFilterPtr build(
         const RSOperatorPtr & rs_operator,
-        const ColumnInfos & table_scan_column_info,
+        const ColumnInfos & table_scan_column_infos,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & lm_filter_exprs,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & rest_filter_exprs,
         const ColumnDefines & table_scan_columns_to_read,
