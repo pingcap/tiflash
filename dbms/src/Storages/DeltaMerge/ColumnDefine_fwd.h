@@ -14,19 +14,23 @@
 
 #pragma once
 
-#include <string>
+#include <Storages/KVStore/Types.h>
 
-namespace DB
-{
-using String = std::string;
+#include <memory>
+#include <unordered_map>
+#include <vector>
 
-struct EncryptionPath
+namespace TiDB
 {
-    EncryptionPath(const String & full_path_, const String & file_name_)
-        : full_path{full_path_}
-        , file_name{file_name_}
-    {}
-    const String full_path;
-    const String file_name;
-};
-} // namespace DB
+struct ColumnInfo;
+}
+
+namespace DB::DM
+{
+struct ColumnDefine;
+using ColumnDefines = std::vector<ColumnDefine>;
+using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
+using ColumnDefineMap = std::unordered_map<DB::ColumnID, ColumnDefine>;
+
+using ColumnInfos = std::vector<TiDB::ColumnInfo>;
+} // namespace DB::DM

@@ -36,13 +36,8 @@ namespace DB
 {
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
-<<<<<<< HEAD
-=======
-struct CheckpointIngestInfo;
-using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 class MockStorage;
 
->>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 namespace DM
 {
 struct RowKeyRange;
@@ -250,7 +245,6 @@ private:
 
     DM::RSOperatorPtr buildRSOperator(
         const std::unique_ptr<DAGQueryInfo> & dag_query,
-        const DM::ColumnDefines & columns_to_read,
         const Context & context,
         const LoggerPtr & tracing_logger);
     /// Get filters from query to construct rough set operation and push down filters.

@@ -50,44 +50,4 @@ RSOperatorPtr createIsNull(const Attr & attr)                                   
 RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not)     { return std::make_shared<Unsupported>(content, reason, is_not); }
 // clang-format on
 
-<<<<<<< HEAD
-=======
-RSOperatorPtr RSOperator::build(
-    const std::unique_ptr<DAGQueryInfo> & dag_query,
-    const ColumnInfos & scan_column_infos,
-    const ColumnDefines & table_column_defines,
-    bool enable_rs_filter,
-    const LoggerPtr & tracing_logger)
-{
-    RUNTIME_CHECK(dag_query != nullptr);
-    // build rough set operator
-    if (unlikely(!enable_rs_filter))
-    {
-        LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
-        return EMPTY_RS_OPERATOR;
-    }
-
-    /// Query from TiDB / TiSpark
-    auto create_attr_by_column_id = [&table_column_defines](ColumnID column_id) -> Attr {
-        auto iter = std::find_if(
-            table_column_defines.begin(),
-            table_column_defines.end(),
-            [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
-        if (iter != table_column_defines.end())
-            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
-        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
-    auto rs_operator = FilterParser::parseDAGQuery(
-        *dag_query,
-        scan_column_infos,
-        std::move(create_attr_by_column_id),
-        tracing_logger);
-    if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
-        LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
-
-    return rs_operator;
-}
-
->>>>>>> e6fc04addf (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189))
 } // namespace DB::DM
