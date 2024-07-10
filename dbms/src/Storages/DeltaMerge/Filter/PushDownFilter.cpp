@@ -228,14 +228,14 @@ ColumnDefinesPtr buildCastedColumns(
             cd.type = casted_type;
         }
     }
-
+    /*
     if (rest_filter)
     {
         for (const auto & [id, name, type] : rest_filter->generated_column_infos)
         {
             casted_columns->emplace_back(id, name, type);
         }
-    }
+    }*/
     return casted_columns;
 }
 
@@ -290,6 +290,23 @@ QueryFilterPtr QueryFilter::build(
     // build filter expression actions
     auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownFilter(filters);
 
+    const auto & actions = project_after_where->getActions();
+    RUNTIME_CHECK(actions.size() == 1);
+    RUNTIME_CHECK(actions.front().type == ExpressionAction::PROJECT);
+    Names output_names;
+    for (const auto & ci : table_scan_column_info)
+    {
+        if (ci.hasGeneratedColumnFlag())
+        {
+            continue;
+        }
+        const auto & cd = getColumnDefine(table_scan_columns_to_read, ci.id);
+        output_names.push_back(cd.name);
+    }
+    const auto & input_columns = project_after_where->getRequiredColumnsWithTypes();
+    project_after_where = std::make_shared<ExpressionActions>(input_columns);
+    project_after_where->add(ExpressionAction::project(output_names));
+
     auto casted_column_types = extra_cast
         ? getCastedColumnTypes(table_scan_column_info, table_scan_columns_to_read, *analyzer)
         : std::unordered_map<ColumnID, DataTypePtr>{};
@@ -324,7 +341,7 @@ BlockInputStreamPtr QueryFilter::buildFilterInputStream(
     auto filter_name = magic_enum::enum_name(filter_type);
     auto log = Logger::get(fmt::format("{} {}", tracing_id, filter_name));
     LOG_DEBUG(log, "buildFilterInputStream start: {}", stream->getHeader().dumpNames());
-
+    /*
     if (!generated_column_infos.empty())
     {
         stream
@@ -332,7 +349,7 @@ BlockInputStreamPtr QueryFilter::buildFilterInputStream(
         stream->setExtraInfo(fmt::format("{}: generated column placeholder above table scan", filter_name));
         LOG_DEBUG(log, "buildFilterInputStream generated_column_infos: {}", stream->getHeader().dumpNames());
     }
-
+*/
     if (extra_cast)
     {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, tracing_id);
@@ -355,28 +372,21 @@ BlockInputStreamPtr QueryFilter::buildFilterInputStream(
 
 PushDownFilterPtr PushDownFilter::build(
     const RSOperatorPtr & rs_operator,
-    const ColumnInfos & _table_scan_column_info,
+    const ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & lm_filter_exprs,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & rest_filter_exprs,
     const ColumnDefines & table_scan_columns_to_read,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
-    ColumnInfos new_column_infos;
-    for (const auto & ci : _table_scan_column_info)
-    {
-        if (!ci.hasGeneratedColumnFlag())
-        {
-            new_column_infos.push_back(ci);
-        }
-    }
-    auto lm_columns = getFilterColumns(new_column_infos, lm_filter_exprs, table_scan_columns_to_read);
+    // Must use the original `table_scan_column_info` because exprs will get column info by index.
+    auto lm_columns = getFilterColumns(table_scan_column_info, lm_filter_exprs, table_scan_columns_to_read);
 
     auto lm_filter = lm_columns //
         ? QueryFilter::build(
             QueryFilterType::LM,
             *lm_columns,
-            new_column_infos,
+            table_scan_column_info,
             lm_filter_exprs,
             table_scan_columns_to_read,
             context,
@@ -389,7 +399,7 @@ PushDownFilterPtr PushDownFilter::build(
         ? QueryFilter::build(
             QueryFilterType::Rest,
             *rest_columns,
-            new_column_infos,
+            table_scan_column_info,
             rest_filter_exprs,
             table_scan_columns_to_read,
             context,
