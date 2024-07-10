@@ -1334,7 +1334,7 @@ public:
 /// - TiFlash restart
 /// - a new keyspace is created
 /// - meet diff->regenerate_schema_map = true
-/// Thus, we should not assume all the map is empty during syncAllSchema.
+/// Thus, we should not assume the `table_id_map` is empty during syncAllSchema.
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 {
@@ -1487,6 +1487,7 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
         if (auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name); db_keyspace_id != keyspace_id)
             continue;
 
+        // Get the `database_id` parsed from local disk "IDatabase" name
         const DatabaseID database_id = SchemaNameMapper::tryGetDatabaseID(db_name).value_or(-1);
         if (database_id == -1)
         {
@@ -1517,12 +1518,19 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
                 // this is not a physical_table_id of a partition, ignore sliently
                 continue;
             }
+            // Get the `new_database_id` from `table_id_map`
             auto new_database_id = it->second;
             if (new_database_id == database_id)
             {
                 part_to_db_id.erase(it);
                 continue;
             }
+
+            // The `database_id` parse from local disk and in-memory `tidb_id_map` does not match,
+            // it could be cause by:
+            // - tiflash restart during renaming partition table across database
+            // - tiflash restart during exchanging partition table across database
+            // we need to fix the location of `.sql` file to its belonging database.
 
             LOG_WARNING(
                 log,
@@ -1540,6 +1548,13 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
                 managed_storage->getTableInfo(),
                 managed_storage);
             part_to_db_id.erase(it);
+
+            LOG_INFO(
+                log,
+                "FixPartitionsDatabase: erase table from table_id_map.table_id_to_database_id mapping, table_id={}",
+                *opt_tbl_id);
+            table_id_map.eraseFromTableIDToDatabaseID(*opt_tbl_id);
+
             LOG_INFO(
                 log,
                 "FixPartitionsDatabase: partition rename done, "
