@@ -216,9 +216,9 @@ public:
 
     template <bool selective>
     MutableColumns scatterImpl(
-            IColumn::ColumnIndex num_columns,
-            const IColumn::Selector & selector,
-            const BlockSelectivePtr & selective_ptr) const;
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector,
+        const BlockSelectivePtr & selective_ptr) const;
 };
 
 

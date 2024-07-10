@@ -435,9 +435,9 @@ MutableColumns ColumnAggregateFunction::scatter(
 
 template <bool selective>
 MutableColumns ColumnAggregateFunction::scatterImpl(
-        IColumn::ColumnIndex num_columns,
-        const IColumn::Selector & selector,
-        const BlockSelectivePtr & selective_ptr) const
+    IColumn::ColumnIndex num_columns,
+    const IColumn::Selector & selector,
+    const BlockSelectivePtr & selective_ptr) const
 {
     size_t rows = size();
     if constexpr (selective)
@@ -446,9 +446,11 @@ MutableColumns ColumnAggregateFunction::scatterImpl(
         rows = selective_ptr->size();
     }
 
-    RUNTIME_CHECK_MSG(selector.size() == rows,
-            "size of selector({}) doesn't match size of column({})",
-            selector.size(), rows);
+    RUNTIME_CHECK_MSG(
+        selector.size() == rows,
+        "size of selector({}) doesn't match size of column({})",
+        selector.size(),
+        rows);
 
     /// Columns with scattered values will point to this column as the owner of values.
     MutableColumns columns(num_columns);

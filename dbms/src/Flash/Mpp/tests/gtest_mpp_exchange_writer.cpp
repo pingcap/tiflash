@@ -408,7 +408,7 @@ try
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -473,7 +473,7 @@ try
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
         // 3. Start to write.
-        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,
@@ -560,7 +560,7 @@ try
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -624,7 +624,7 @@ try
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -806,7 +806,7 @@ try
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
         // 3. Start to write.
-        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,
@@ -891,7 +891,7 @@ try
 
         // Construct dag_writer.
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
-        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>, true>>(
+        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,
@@ -950,7 +950,7 @@ try
 
         // Construct dag_writer.
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
-        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>, true>>(
+        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,
