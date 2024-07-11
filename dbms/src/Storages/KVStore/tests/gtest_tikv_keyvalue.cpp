@@ -451,7 +451,6 @@ TEST(TiKVKeyValueTest, PortedTests)
             ASSERT_EQ(*tidb_pk, pk);
         }
     }
-
 }
 
 TEST(TiKVKeyValueTest, ParseLockValue)
