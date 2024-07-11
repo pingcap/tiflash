@@ -117,7 +117,7 @@ public:
         union
         {
             T key;
-            char data[sizeof(T)];
+            char data[sizeof(T)] = {};
         };
         size_t sz = vec.size();
         size_t offset = 0;
@@ -138,7 +138,7 @@ public:
         union
         {
             T key;
-            char data[sizeof(T)];
+            char data[sizeof(T)] = {};
         };
         key = t;
         memcpy(pos, data, fixed_size_sum);
@@ -149,7 +149,7 @@ public:
         union
         {
             T key;
-            char data[sizeof(T)];
+            char data[sizeof(T)] = {};
         };
         memcpy(data, pos, fixed_size_sum);
         return key;

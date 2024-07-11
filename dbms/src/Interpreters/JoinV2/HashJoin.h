@@ -131,12 +131,12 @@ private:
     std::vector<std::unique_ptr<MultipleRowContainer>> multi_row_containers;
 
     /// Build phase
-    size_t build_concurrency;
+    size_t build_concurrency = 0;
     std::vector<JoinBuildWorkerData> build_workers_data;
     std::atomic<size_t> active_build_worker = 0;
 
     /// Probe phase
-    size_t probe_concurrency;
+    size_t probe_concurrency = 0;
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
 

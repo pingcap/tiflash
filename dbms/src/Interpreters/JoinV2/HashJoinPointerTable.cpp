@@ -82,7 +82,7 @@ bool HashJoinPointerTable::build(
             RowPtr row_ptr = container->getRowPtr(i);
             assert((reinterpret_cast<uintptr_t>(row_ptr) & (ROW_ALIGN - 1)) == 0);
 
-            size_t hash = unalignedLoad<HashValueType>(row_ptr);
+            auto hash = unalignedLoad<HashValueType>(row_ptr);
             size_t bucket = getBucketNum(hash);
             RowPtr head;
             do
