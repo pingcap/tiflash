@@ -1,0 +1,48 @@
+# Copyright 2024 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table if not exists test.t(a time(6), b time(6), c time(6));
+ 
+mysql> insert into test.t(a, b, c) values('000:00:00.123456', '100:00:00.123456', '200:00:00.123456');
+mysql> insert into test.t(a, b, c) select a + 0.001, b + 0.001, c + 0.001 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.002, b + 0.002, c + 0.002 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.004, b + 0.004, c + 0.004 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.008, b + 0.008, c + 0.008 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.016, b + 0.016, c + 0.016 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.032, b + 0.032, c + 0.032 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.064, b + 0.064, c + 0.064 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.128, b + 0.128, c + 0.128 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.256, b + 0.256, c + 0.256 from test.t;
+mysql> insert into test.t(a, b, c) select a + 0.512, b + 0.512, c + 0.512 from test.t;
+mysql> insert into test.t(a, b, c) select a + 1.024, b + 1.024, c + 1.024 from test.t;
+mysql> insert into test.t(a, b, c) select a + 2.048, b + 2.048, c + 2.048 from test.t;
+mysql> insert into test.t(a, b, c) select a + 4.096, b + 4.096, c + 4.096 from test.t;
+mysql> insert into test.t(a, b, c) select a + 8.192, b + 8.192, c + 8.192 from test.t;
+
+mysql> alter table test.t set tiflash replica 1;
+
+mysql> analyze table test.t;
+
+func> wait_table test t
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, second(c) from test.t where a = '000:00:00.123456' and hour(b) = 100;
++-----------------+------------------+-----------+
+| a               | b                | second(c) |
++-----------------+------------------+-----------+
+| 00:00:00.123456 | 100:00:00.123456 |         0 |
++-----------------+------------------+-----------+
+
+mysql> drop table test.t;
+
