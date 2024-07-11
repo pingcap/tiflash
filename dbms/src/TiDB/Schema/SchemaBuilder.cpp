@@ -1541,6 +1541,17 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
                 *opt_tbl_id,
                 new_database_id);
             auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(tbl_iter->table());
+            if (!managed_storage)
+            {
+                LOG_WARNING(
+                    log,
+                    "FixPartitionsDatabase: failed to cast the IStorage as IManageableStorage, ignore, db_name={} "
+                    "table_name={}",
+                    db_name,
+                    table_name);
+                continue;
+            }
+
             auto new_db_display_name = tryGetDatabaseDisplayNameFromLocal(new_database_id);
             applyRenamePhysicalTable(
                 new_database_id,
