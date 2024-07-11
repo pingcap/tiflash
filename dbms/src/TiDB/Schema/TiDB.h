@@ -422,3 +422,13 @@ std::vector<ColumnInfo> toTiDBColumnInfos(
     const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos);
 
 } // namespace TiDB
+
+template <>
+struct fmt::formatter<TiDB::ColumnInfo>
+{
+    template <typename FormatContext>
+    auto format(const TiDB::ColumnInfo & ci, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "{}", ci.id);
+    }
+};

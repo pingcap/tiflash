@@ -199,10 +199,11 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_pushed_down_filters, // Not care now
-            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
@@ -226,10 +227,11 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     else
     {
         static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
+        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_pushed_down_filters, // Not care now
-            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
@@ -256,10 +258,11 @@ void MockStorage::buildExecFromDeltaMerge(
     if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_pushed_down_filters, // Not care now
-            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
@@ -288,10 +291,11 @@ void MockStorage::buildExecFromDeltaMerge(
     else
     {
         static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
+        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_pushed_down_filters, // Not care now
-            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
@@ -573,6 +577,11 @@ TableInfo MockStorage::getTableInfo(const String & name)
 TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
 {
     return table_infos_for_delta_merge[name];
+}
+
+DM::ColumnDefines MockStorage::getStoreColumnDefines(Int64 table_id)
+{
+    return storage_delta_merge_map[table_id]->getStoreColumnDefines();
 }
 
 ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)

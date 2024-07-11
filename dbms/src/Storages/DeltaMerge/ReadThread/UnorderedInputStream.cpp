@@ -43,7 +43,7 @@ void UnorderedInputStream::pushDownReadyRFList(std::vector<RuntimeFilterPtr> rea
 {
     for (const RuntimeFilterPtr & rf : readyRFList)
     {
-        auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());
+        auto rs_operator = rf->parseToRSOperator();
         task_pool->appendRSOperator(rs_operator);
     }
 }
