@@ -692,7 +692,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
                 "applyRenamePhysicalTable is ignored, physical_table_id={} logical_table_id={}",
                 part_def.id,
                 new_table_info->id);
-            continue; // continue for nex partition
+            continue; // continue for next partition
         }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_ddl_fail_when_rename_partitions);
@@ -1427,7 +1427,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     // `applyRenameLogicalTable` is not atmoic when renaming a partitioned table
     // to new database. There could be a chance that the logical table .sql have
     // been moved to the new database while some partitions' sql are not moved.
-    // Try to detech such situation and fix it.
+    // Try to detect such situation and fix it.
     tryFixPartitionsBelongingDatabase();
 
     // TODO:can be removed if we don't save the .sql
