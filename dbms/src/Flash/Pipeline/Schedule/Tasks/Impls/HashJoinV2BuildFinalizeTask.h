@@ -12,15 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/HashJoinV2BuildFinalizeTask.h>
+#pragma once
+
+#include <Flash/Pipeline/Schedule/Tasks/Impls/EventTask.h>
+#include <Interpreters/JoinV2/HashJoin.h>
 
 namespace DB
 {
-ExecTaskStatus HashJoinV2BuildFinalizeTask::executeImpl()
-{
-    if (!join_ptr->buildPointerTable(index))
-        return ExecTaskStatus::RUNNING;
-    return ExecTaskStatus::FINISHED;
-}
 
+class HashJoinV2BuildFinalizeTask : public EventTask
+{
+public:
+    HashJoinV2BuildFinalizeTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        const HashJoinPtr & join_ptr_,
+        size_t index_)
+        : EventTask(exec_context_, req_id, event_)
+        , join_ptr(join_ptr_)
+        , index(index_)
+    {}
+
+protected:
+    ExecTaskStatus executeImpl() override;
+
+private:
+    HashJoinPtr join_ptr;
+    size_t index;
+};
 } // namespace DB

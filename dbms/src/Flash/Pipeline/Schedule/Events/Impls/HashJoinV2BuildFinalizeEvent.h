@@ -14,31 +14,29 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Interpreters/JoinV2/HashJoin.h>
 
 namespace DB
 {
 
-class HashJoinV2BuildFinalizeTask : public EventTask
+class HashJoinV2BuildFinalizeEvent : public Event
 {
 public:
-    HashJoinV2BuildFinalizeTask(
+    HashJoinV2BuildFinalizeEvent(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const EventPtr & event_,
-        const HashJoinPtr & join_ptr_,
-        size_t index_)
-        : EventTask(exec_context_, req_id, event_)
+        const HashJoinPtr & join_ptr_)
+        : Event(exec_context_, req_id)
         , join_ptr(join_ptr_)
-        , index(index_)
-    {}
+    {
+        assert(join_ptr);
+    }
 
 protected:
-    ExecTaskStatus executeImpl() override;
+    void scheduleImpl() override;
 
 private:
     HashJoinPtr join_ptr;
-    size_t index;
 };
 } // namespace DB

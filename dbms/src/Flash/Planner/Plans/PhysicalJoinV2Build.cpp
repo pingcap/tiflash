@@ -15,7 +15,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
-#include <Flash/Pipeline/Schedule/Events/HashJoinV2BuildFinalizeEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/HashJoinV2BuildFinalizeEvent.h>
 #include <Flash/Planner/Plans/PhysicalJoinV2Build.h>
 #include <Interpreters/Context.h>
 #include <Operators/HashJoinV2BuildSink.h>

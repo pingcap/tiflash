@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/HashJoinV2BuildFinalizeEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/HashJoinV2BuildFinalizeTask.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/HashJoinV2BuildFinalizeEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/HashJoinV2BuildFinalizeTask.h>
 
 namespace DB
 {

@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <common/defines.h>
 
+#include <memory>
 #include <string>
 #include <thread>
 #include <unordered_map>
