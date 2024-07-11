@@ -18,10 +18,6 @@
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wunused-local-typedef"
 namespace DB
 {
 
@@ -180,9 +176,43 @@ public:
     void NO_INLINE joinProbeBlockRightAntiPrefetch();
 
 private:
-    inline void insertRowToBatch(RowPtr row_ptr, size_t key_size);
+    void ALWAYS_INLINE insertRowToBatch(RowPtr row_ptr, size_t key_size) const
+    {
+        wd.insert_batch.push_back(row_ptr);
+        if constexpr (!key_all_raw)
+        {
+            wd.insert_batch_other.push_back(row_ptr + key_size);
+        }
+        FlushBatchIfNecessary<false>();
+    }
+
     template <bool force>
-    inline void FlushBatchIfNecessary();
+    void ALWAYS_INLINE FlushBatchIfNecessary() const
+    {
+        if constexpr (!force)
+        {
+            if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
+                return;
+        }
+        for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+        {
+            IColumn * column = added_columns[column_index].get();
+            if (has_null_map && is_nullable)
+                column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+            column->deserializeAndInsertFromPos(wd.insert_batch);
+        }
+        for (auto [column_index, _] : row_layout.other_required_column_indexes)
+        {
+            if constexpr (key_all_raw)
+                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch);
+            else
+                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch_other);
+        }
+
+        wd.insert_batch.clear();
+        if constexpr (!key_all_raw)
+            wd.insert_batch_other.clear();
+    }
 
 private:
     JoinProbeContext & context;
@@ -195,46 +225,6 @@ private:
     const HashJoinRowLayout & row_layout;
     MutableColumns & added_columns;
 };
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::insertRowToBatch(RowPtr row_ptr, size_t key_size)
-{
-    wd.insert_batch.push_back(row_ptr);
-    if constexpr (!key_all_raw)
-    {
-        wd.insert_batch_other.push_back(row_ptr + key_size);
-    }
-    FlushBatchIfNecessary<false>();
-}
-
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-template <bool force>
-void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::FlushBatchIfNecessary()
-{
-    if constexpr (!force)
-    {
-        if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
-            return;
-    }
-    for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
-    {
-        IColumn * column = added_columns[column_index].get();
-        if (has_null_map && is_nullable)
-            column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-        column->deserializeAndInsertFromPos(wd.insert_batch);
-    }
-    for (auto [column_index, _] : row_layout.other_required_column_indexes)
-    {
-        if constexpr (key_all_raw)
-            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch);
-        else
-            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch_other);
-    }
-
-    wd.insert_batch.clear();
-    if constexpr (!key_all_raw)
-        wd.insert_batch_other.clear();
-}
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
 void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockInner()
@@ -304,7 +294,6 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
     size_t & active_states = context.prefetch_active_states;
     size_t & k = wd.prefetch_iter;
     size_t current_offset = 0;
-    bool current_stage_is_empty;
     while (idx < context.rows || active_states > 0)
     {
         k = k == settings.probe_prefetch_step ? 0 : k;
@@ -366,7 +355,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
             }
         }
 
-        if (idx >= context.rows)
+        if unlikely (idx >= context.rows)
         {
             ++k;
             continue;
@@ -553,7 +542,5 @@ void joinProbeBlock(
         throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
-
-#pragma GCC diagnostic pop
 
 } // namespace DB
