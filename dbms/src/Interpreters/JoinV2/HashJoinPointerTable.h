@@ -56,6 +56,8 @@ public:
         return pointer_table[getBucketNum(hash)].load(std::memory_order_relaxed);
     }
 
+    std::atomic<RowPtr> * getPointerTable() const { return pointer_table; }
+
 private:
     size_t pointer_table_size = 0;
     size_t pointer_table_size_degree = 0;

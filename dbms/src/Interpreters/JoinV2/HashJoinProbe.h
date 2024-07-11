@@ -32,7 +32,8 @@ struct JoinProbeContext
     Block block;
     size_t rows;
     size_t start_row_idx = 0;
-    RowPtr current_row_probe_head = nullptr;
+    size_t prefetch_active_states = 0;
+    RowPtr current_probe_row_ptr = nullptr;
 
     bool is_prepared = false;
     Columns materialized_columns;
@@ -55,10 +56,28 @@ struct JoinProbeContext
         const TiDB::TiDBCollators & collators);
 };
 
+enum class ProbePrefetchStage : UInt8
+{
+    None,
+    FindHeader,
+    FindNext,
+};
+struct ProbePrefetchState
+{
+    ProbePrefetchStage stage = ProbePrefetchStage::None;
+    bool is_matched = false;
+    size_t index;
+    union
+    {
+        RowPtr ptr;
+        std::atomic<RowPtr> * pointer_ptr;
+    };
+};
+
 struct alignas(ABSL_CACHELINE_SIZE) JoinProbeWorkerData
 {
     size_t prefetch_iter = 0;
-    std::unique_ptr<void, std::function<void(void *)>> prefetch_states;
+    std::vector<ProbePrefetchState> prefetch_states;
 
     IColumn::Offsets selective_offsets;
     IColumn::Offsets offsets_to_replicate;

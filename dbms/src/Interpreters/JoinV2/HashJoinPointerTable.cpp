@@ -29,8 +29,7 @@ void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshol
     RUNTIME_ASSERT(1ULL << pointer_table_size_degree == pointer_table_size);
     RUNTIME_ASSERT(pointer_table_size_degree <= 32);
 
-    //enable_probe_prefetch = pointer_table_size >= probe_prefetch_threshold;
-    enable_probe_prefetch = false;
+    enable_probe_prefetch = pointer_table_size >= probe_prefetch_threshold;
 
     pointer_table_size_mask = (pointer_table_size - 1) << (32 - pointer_table_size_degree);
 

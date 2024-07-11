@@ -504,7 +504,7 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
         }
         else
         {
-            size_t end = context.current_row_probe_head == nullptr ? context.start_row_idx : context.start_row_idx + 1;
+            size_t end = context.current_probe_row_ptr == nullptr ? context.start_row_idx : context.start_row_idx + 1;
             for (size_t i = 0; i < existing_columns; ++i)
             {
                 block.safeGetByPosition(i).column
