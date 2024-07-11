@@ -64,7 +64,8 @@ public:
 
     static std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
         QueryFilterType filter_type,
-        const ColumnDefines & filter_columns_to_read,
+        const ColumnDefines & filter_columns,
+        const ColumnDefines & input_columns,
         const ColumnInfos & table_scan_column_infos,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         const ColumnDefines & table_scan_columns_to_read,
