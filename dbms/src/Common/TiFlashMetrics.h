@@ -1085,7 +1085,6 @@ struct MetricFamily
         return *(resource_group_metrics_map[resource_group_name][idx]);
     }
 
-    void setProvideProxyProcessMetrics(bool v);
 
 private:
     void addMetricsForResourceGroup(const String & resource_group_name)
@@ -1141,6 +1140,7 @@ public:
     double getStorageThreadMemory(MemoryAllocType type, const std::string & k);
     void registerProxyThreadMemory(const std::string & k);
     void registerStorageThreadMemory(const std::string & k);
+    void setProvideProxyProcessMetrics(bool v);
 
 private:
     TiFlashMetrics();
