@@ -61,7 +61,7 @@ Table::Table(
     , database_name(database_name_)
     , database_id(database_id_)
     , table_name(table_name_)
-    , col_id(table_info_.columns.size())
+    , col_id(table_info.columns.size())
 {}
 
 MockTiDB::MockTiDB()
