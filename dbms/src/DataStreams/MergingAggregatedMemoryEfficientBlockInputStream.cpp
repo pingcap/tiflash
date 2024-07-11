@@ -525,8 +525,6 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
 
             current_bucket_num = min_bucket_num;
 
-            //            std::cerr << "current_bucket_num = " << current_bucket_num << "\n";
-
             /// No more blocks with ordinary data.
             if (current_bucket_num == NUM_BUCKETS)
                 continue;
@@ -538,15 +536,11 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
             {
                 if (input.block.info.bucket_num == current_bucket_num)
                 {
-                    //                    std::cerr << "having block for current_bucket_num\n";
-
                     blocks_to_merge->emplace_back(std::move(input.block));
                     input.block = Block();
                 }
                 else if (!input.splitted_blocks.empty() && input.splitted_blocks[min_bucket_num])
                 {
-                    //                    std::cerr << "having splitted data for bucket\n";
-
                     blocks_to_merge->emplace_back(std::move(input.splitted_blocks[min_bucket_num]));
                     input.splitted_blocks[min_bucket_num] = Block();
                 }
@@ -557,7 +551,6 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         else
         {
             /// There are only non-partitioned (single-level) data. Just merge them.
-            //            std::cerr << "don't have two level\n";
 
             BlocksToMerge blocks_to_merge = std::make_unique<BlocksList>();
 

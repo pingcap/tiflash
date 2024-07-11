@@ -16,7 +16,6 @@
 
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
@@ -254,7 +253,7 @@ public:
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & data_ranges,
+        const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 

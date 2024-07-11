@@ -377,7 +377,7 @@ public:
     /* const */ DAGRequestKind kind;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
-    // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
+    // `tunnel_set` is always set by `MPPTask` and is used later.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop

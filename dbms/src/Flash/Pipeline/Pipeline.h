@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
-#include <Flash/Executor/ResultQueue.h>
+#include <Flash/Executor/ResultQueue_fwd.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 
 #include <deque>

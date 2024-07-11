@@ -39,6 +39,7 @@ header:
     - 'Cargo.lock'
     - 'Cargo.toml'
     - 'rust-toolchain'
+    - 'rust-toolchain.toml'
     - '.devcontainer/'
     - '**/OWNERS'
     - 'OWNERS_ALIASES'

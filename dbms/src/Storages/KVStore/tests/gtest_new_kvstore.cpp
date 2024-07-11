@@ -20,6 +20,11 @@
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
+#include <Storages/Page/V3/PageDefines.h>
+#include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
@@ -1078,6 +1083,17 @@ try
         delete[] a;
     });
     t2.join();
+
+    std::thread t3([&]() {
+        // Will not cover mmap memory.
+        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+        char * a = new char[120];
+        void * buf = mmap(nullptr, 6000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        ASSERT_LT(*allocated, 6000);
+        munmap(buf, 0);
+        delete[] a;
+    });
+    t3.join();
 }
 CATCH
 
@@ -1128,6 +1144,23 @@ TEST(ProxyMode, Normal)
 try
 {
     ASSERT_EQ(SERVERLESS_PROXY, 0);
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, ParseUniPage)
+try
+{
+    String origin = "0101020000000000000835010000000000021AE8";
+    auto decode = Redact::hexStringToKey(origin.data(), origin.size());
+    const char * data = decode.data();
+    size_t len = decode.size();
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), UniversalPageIdFormat::RAFT_PREFIX);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x02);
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
+    LOG_INFO(DB::Logger::get(), "region_id={}", RecordKVFormat::readUInt64(data, len));
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    LOG_INFO(DB::Logger::get(), "index={}", RecordKVFormat::readUInt64(data, len));
 }
 CATCH
 

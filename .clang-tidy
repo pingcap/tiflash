@@ -208,3 +208,5 @@ CheckOptions:
     value: CamelCase
   - key: readability-identifier-naming.UsingCase
     value: CamelCase
+ExtraArgs:
+- -Wno-unknown-pragmas # remove with LLVM 18 https://github.com/llvm/llvm-project/issues/67380

@@ -105,8 +105,7 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnVector.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
-    src/IO/Compression/CompressionCodecFOR.cpp
-    src/IO/Compression/CompressionCodecDeltaFOR.cpp
+    src/IO/Compression/EncodingUtil.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp
 )
@@ -375,7 +374,7 @@ if (ENABLE_TESTS)
         )
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark tiflash_functions server_for_test delta_merge kvstore)
+    target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark tiflash_functions server_for_test delta_merge kvstore tiflash_aggregate_functions)
 
     add_check(bench_dbms)
 endif ()

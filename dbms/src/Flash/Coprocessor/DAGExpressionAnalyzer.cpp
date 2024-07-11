@@ -31,6 +31,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
@@ -47,7 +48,6 @@
 #include <WindowFunctions/WindowFunctionFactory.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
-
 
 namespace DB
 {
@@ -383,6 +383,22 @@ void buildActionsAfterWindow(
     chain.finalize();
     chain.clear();
 }
+
+std::optional<String> findFirstRow(
+    const AggregateDescriptions & aggregate_descriptions,
+    const String & arg_name,
+    const DataTypePtr & arg_type)
+{
+    for (const auto & desc : aggregate_descriptions)
+    {
+        if (desc.function->getName() == "first_row" && desc.argument_names[0] == arg_name)
+        {
+            RUNTIME_CHECK(desc.function->getReturnType()->equals(*arg_type));
+            return {desc.column_name};
+        }
+    }
+    return {};
+}
 } // namespace
 
 ExpressionActionsChain::Step & DAGExpressionAnalyzer::initAndGetLastStep(ExpressionActionsChain & chain) const
@@ -562,8 +578,9 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     NamesAndTypes & aggregated_columns,
     Names & aggregation_keys,
     std::unordered_set<String> & agg_key_set,
+    KeyRefAggFuncMap & key_ref_agg_func,
     bool group_by_collation_sensitive,
-    TiDB::TiDBCollators & collators)
+    std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators)
 {
     for (const tipb::Expr & expr : group_by)
     {
@@ -575,6 +592,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             /// need double check this assumption when we support agg with collation
             aggregation_keys.push_back(name);
             agg_key_set.emplace(name);
+            RUNTIME_CHECK(collators.insert({name, nullptr}).second);
         }
         /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
         /// info, since the aggregation in TiFlash is actually the partial stage, and TiDB always do
@@ -588,22 +606,35 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             if (removeNullable(type)->isString())
                 collator = getCollatorFromExpr(expr);
             if (!duplicated_key)
-                collators.push_back(collator);
+                collators[name] = collator;
             if (collator != nullptr)
             {
-                /// if the column is a string with collation info, the `sort_key` of the column is used during
-                /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
-                /// extra aggregation function any(group_by_column) here as the output of the group by column
-                TiDB::TiDBCollators arg_collators{collator};
-                appendAggDescription(
-                    {name},
-                    {type},
-                    arg_collators,
-                    "any",
-                    aggregate_descriptions,
-                    aggregated_columns,
-                    false,
-                    context);
+                auto first_row_name = findFirstRow(aggregate_descriptions, name, type);
+                String agg_func_name;
+                if (first_row_name)
+                {
+                    agg_func_name = *first_row_name;
+                    // Got here when this group by key has its corresponding first_row agg func.
+                    aggregated_columns.emplace_back(name, type);
+                }
+                else
+                {
+                    /// if the column is a string with collation info, the `sort_key` of the column is used during
+                    /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
+                    /// extra aggregation function first_row(group_by_column) here as the output of the group by column
+                    TiDB::TiDBCollators arg_collators{collator};
+                    appendAggDescription(
+                        {name},
+                        {type},
+                        arg_collators,
+                        "first_row",
+                        aggregate_descriptions,
+                        aggregated_columns,
+                        false,
+                        context);
+                    agg_func_name = aggregate_descriptions.back().column_name;
+                }
+                key_ref_agg_func.insert({name, agg_func_name});
             }
             else
             {
@@ -615,6 +646,58 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
         }
     }
+#ifndef NDEBUG
+    for (const auto & p : key_ref_agg_func)
+    {
+        LOG_TRACE(Logger::get(), "key_ref_agg_func optimization: {} ref {}", p.first, p.second);
+    }
+#endif
+}
+
+void DAGExpressionAnalyzer::tryEliminateFirstRow(
+    const Names & aggregation_keys,
+    const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
+    AggFuncRefKeyMap & agg_func_ref_key,
+    AggregateDescriptions & aggregate_descriptions)
+{
+    // Assume aggregate_keys and collators are corresponding one by one.
+    // This is assured by buildAggGroupBy().
+    RUNTIME_CHECK(aggregation_keys.size() == collators.size());
+
+    for (const auto & key_name : aggregation_keys)
+    {
+        for (const auto & agg_desc : aggregate_descriptions)
+        {
+            const auto & func_name = agg_desc.function->getName();
+            const auto & collator_iter = collators.find(key_name);
+            RUNTIME_CHECK(collator_iter != collators.end());
+            if (collator_iter->second == nullptr && func_name == "first_row" && agg_desc.argument_names[0] == key_name)
+            {
+                agg_func_ref_key.insert({agg_desc.column_name, key_name});
+            }
+        }
+    }
+
+    if (agg_func_ref_key.empty())
+        return;
+
+    AggregateDescriptions tmp_aggregate_descriptions;
+    tmp_aggregate_descriptions.reserve(aggregate_descriptions.size() - agg_func_ref_key.size());
+    for (const auto & desc : aggregate_descriptions)
+    {
+        if (agg_func_ref_key.find(desc.column_name) == agg_func_ref_key.end())
+        {
+            tmp_aggregate_descriptions.push_back(desc);
+        }
+    }
+    aggregate_descriptions = tmp_aggregate_descriptions;
+
+#ifndef NDEBUG
+    for (const auto & p : agg_func_ref_key)
+    {
+        LOG_TRACE(Logger::get(), "agg_func_ref_key optimization: {} ref {}", p.first, p.second);
+    }
+#endif
 }
 
 void DAGExpressionAnalyzer::buildAggFuncs(
@@ -648,56 +731,6 @@ void DAGExpressionAnalyzer::buildAggFuncs(
                 empty_input_as_null);
         }
     }
-}
-
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> DAGExpressionAnalyzer::
-    appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
-{
-    if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
-    {
-        //should not reach here
-        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
-    }
-
-    auto & step = initAndGetLastStep(chain);
-
-    NamesAndTypes aggregated_columns;
-    AggregateDescriptions aggregate_descriptions;
-    Names aggregation_keys;
-    TiDB::TiDBCollators collators;
-    std::unordered_set<String> agg_key_set;
-    buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
-    buildAggGroupBy(
-        agg.group_by(),
-        step.actions,
-        aggregate_descriptions,
-        aggregated_columns,
-        aggregation_keys,
-        agg_key_set,
-        group_by_collation_sensitive,
-        collators);
-    // set required output for agg funcs's arguments and group by keys.
-    for (const auto & aggregate_description : aggregate_descriptions)
-    {
-        for (const auto & argument_name : aggregate_description.argument_names)
-            step.required_output.push_back(argument_name);
-    }
-    for (const auto & aggregation_key : aggregation_keys)
-        step.required_output.push_back(aggregation_key);
-
-    source_columns = std::move(aggregated_columns);
-
-    auto before_agg = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    auto & after_agg_step = initAndGetLastStep(chain);
-    appendCastAfterAgg(after_agg_step.actions, agg);
-    // after appendCastAfterAgg, current input columns has been modified.
-    for (const auto & column : getCurrentInputColumns())
-        after_agg_step.required_output.push_back(column.name);
-
-    return {aggregation_keys, collators, aggregate_descriptions, before_agg};
 }
 
 bool isWindowFunctionsValid(const tipb::Window & window)
@@ -934,6 +967,30 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     return filter_column_name;
 }
 
+std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownFilter(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+{
+    assert(!conditions.empty());
+
+    ExpressionActionsChain chain;
+    initChain(chain);
+    String filter_column_name = appendWhere(chain, conditions);
+    ExpressionActionsPtr before_where = chain.getLastActions();
+    chain.addStep();
+
+    // remove useless tmp column and keep the schema of local streams and remote streams the same.
+    for (const auto & col : getCurrentInputColumns())
+    {
+        chain.getLastStep().required_output.push_back(col.name);
+    }
+    ExpressionActionsPtr project_after_where = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+
+    RUNTIME_CHECK(!project_after_where->getActions().empty());
+    return {before_where, filter_column_name, project_after_where};
+}
+
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
@@ -1068,45 +1125,6 @@ GroupingSets DAGExpressionAnalyzer::buildExpandGroupingColumns(
     }
     source_columns.emplace_back(Expand::grouping_identifier_column_name, Expand::grouping_identifier_column_type);
     return group_sets_columns;
-}
-
-ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain)
-{
-    auto & last_step = initAndGetLastStep(chain);
-    for (const auto & origin_col : last_step.actions->getSampleBlock().getNamesAndTypesList())
-    {
-        last_step.required_output.push_back(origin_col.name);
-    }
-    auto grouping_sets = buildExpandGroupingColumns(expand, last_step.actions);
-    last_step.actions->add(ExpressionAction::expandSource(grouping_sets));
-
-    auto before_expand = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    auto & after_expand_step = initAndGetLastStep(chain);
-    for (const auto & column : getCurrentInputColumns())
-        after_expand_step.required_output.push_back(column.name);
-    return before_expand;
-}
-
-std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
-    ExpressionActionsChain & chain,
-    const tipb::TopN & topN)
-{
-    if (topN.order_by_size() == 0)
-    {
-        throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
-    }
-
-    auto & step = initAndGetLastStep(chain);
-    auto order_columns = buildOrderColumns(step.actions, topN.order_by());
-
-    assert(static_cast<int>(order_columns.size()) == topN.order_by_size());
-    for (const auto & order_column : order_columns)
-        step.required_output.push_back(order_column.name);
-
-    return order_columns;
 }
 
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
@@ -1289,7 +1307,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     /// same constant column for `1`
     /// Note that the origin left streams and right streams
     /// will never have duplicated columns because in
-    /// DAGQueryBlockInterpreter we add qb_column_prefix in
+    /// PhysicalPlanNode we add column_prefix in
     /// final project step, so if the join condition is not
     /// literal expression, the key names should never be
     /// duplicated. In the above example, the final key names should be
@@ -1443,6 +1461,57 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
     }
 }
 
+// TODO: Maybe no need to append copy column action, just use same column name to reference column.
+ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
+    const NamesAndTypes & aggregated_columns,
+    const KeyRefAggFuncMap & key_ref_agg_func,
+    const AggFuncRefKeyMap & agg_func_ref_key)
+{
+    // aggregated_columns.size() == key_ref_agg_func.size() + agg_func_ref_key.size() happens when:
+    // select group_concat(distinct c1) from t where id = 0;
+    // The first stage of HashAgg will only has one group by expr and no agg func expr.
+    // So aggregated_columns is [first_row(c1)], key_ref_agg_func is [c1->first_row(c1)], agg_func_ref_key is empty.
+    RUNTIME_CHECK(aggregated_columns.size() >= key_ref_agg_func.size() + agg_func_ref_key.size());
+    auto actual_agg_output_col_cnt = aggregated_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
+    NamesAndTypes agg_output_columns;
+    agg_output_columns.reserve(actual_agg_output_col_cnt);
+    for (const auto & col : aggregated_columns)
+    {
+        const bool found_in_key_ref_agg_func = key_ref_agg_func.find(col.name) != key_ref_agg_func.end();
+        const bool found_in_agg_func_ref_key = agg_func_ref_key.find(col.name) != agg_func_ref_key.end();
+
+        // Agg col cannot exists both in key_ref_agg_func and agg_func_ref_key.
+        // Because key_ref_agg_func is only for column with collator,
+        // and agg_func_ref_key is only for column without collator.
+        RUNTIME_CHECK(!(found_in_key_ref_agg_func && found_in_agg_func_ref_key));
+
+        // If agg col doesn't exist neither, it means Aggregator should output it.
+        // Otherwise this col should reference some column of the output column of Aggregator.
+        if (!found_in_key_ref_agg_func && !found_in_agg_func_ref_key)
+        {
+            agg_output_columns.push_back(col);
+        }
+    }
+    RUNTIME_CHECK(!agg_output_columns.empty());
+
+    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(agg_output_columns);
+    for (const auto & pair : key_ref_agg_func)
+    {
+        const auto & key_name = pair.first;
+        const auto & agg_func_name = pair.second;
+        expr_after_agg_actions->add(ExpressionAction::copyColumn(agg_func_name, key_name));
+    }
+
+    for (const auto & pair : agg_func_ref_key)
+    {
+        const auto & agg_func_name = pair.first;
+        const auto & key_name = pair.second;
+        expr_after_agg_actions->add(ExpressionAction::copyColumn(key_name, agg_func_name));
+    }
+    reset(aggregated_columns);
+    return expr_after_agg_actions;
+}
+
 NamesWithAliases DAGExpressionAnalyzer::genNonRootFinalProjectAliases(const String & column_prefix) const
 {
     NamesWithAliases final_project_aliases;
@@ -1452,18 +1521,6 @@ NamesWithAliases DAGExpressionAnalyzer::genNonRootFinalProjectAliases(const Stri
             element.name,
             unique_name_generator.toUniqueName(column_prefix + element.name));
     return final_project_aliases;
-}
-
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
-    ExpressionActionsChain & chain,
-    const String & column_prefix) const
-{
-    NamesWithAliases final_project = genNonRootFinalProjectAliases(column_prefix);
-
-    auto & step = initAndGetLastStep(chain);
-    for (const auto & name : final_project)
-        step.required_output.push_back(name.first);
-    return final_project;
 }
 
 NamesWithAliases DAGExpressionAnalyzer::genRootFinalProjectAliases(
@@ -1558,25 +1615,6 @@ std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjec
         }
     }
     return std::make_pair(need_append_type_cast, std::move(need_append_type_cast_vec));
-}
-
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
-    ExpressionActionsChain & chain,
-    const std::vector<tipb::FieldType> & schema,
-    const std::vector<Int32> & output_offsets,
-    const String & column_prefix,
-    bool keep_session_timezone_info)
-{
-    auto & step = initAndGetLastStep(chain);
-
-    NamesWithAliases final_project
-        = buildFinalProjection(step.actions, schema, output_offsets, column_prefix, keep_session_timezone_info);
-
-    for (const auto & name : final_project)
-    {
-        step.required_output.push_back(name.first);
-    }
-    return final_project;
 }
 
 NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(

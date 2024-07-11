@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Operators/Operator.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/types.h>
 
@@ -38,6 +39,7 @@ struct MockColumnInfo
     String name;
     TiDB::TP type;
     bool nullable = true;
+    Poco::Dynamic::Var collate{}; // default empty means no collation.
 };
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using TableInfo = TiDB::TableInfo;
@@ -145,6 +147,7 @@ public:
 
     TableInfo getTableInfo(const String & name);
     TableInfo getTableInfoForDeltaMerge(const String & name);
+    DM::ColumnDefines getStoreColumnDefines(Int64 table_id);
 
     size_t getTableScanConcurrencyHint(const TiDBTableScan & table_scan);
 

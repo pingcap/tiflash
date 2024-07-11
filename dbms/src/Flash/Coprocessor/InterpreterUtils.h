@@ -96,10 +96,6 @@ void executeFinalSort(
 
 void executeCreatingSets(DAGPipeline & pipeline, const Context & context, size_t max_streams, const LoggerPtr & log);
 
-std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
-    DAGExpressionAnalyzer & analyzer);
-
 void executePushedDownFilter(
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,

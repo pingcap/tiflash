@@ -30,18 +30,12 @@ namespace DB
 class CompressionCodecFOR : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecFOR(UInt8 bytes_size_);
+    explicit CompressionCodecFOR(CompressionDataType data_type_);
 
     UInt8 getMethodByte() const override;
 
     template <std::integral T>
-    static void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
-
-    template <std::integral T>
-    static UInt32 compressData(const T * source, UInt32 count, char * dest);
-
-    template <std::integral T>
-    static void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size);
+    static UInt32 compressData(const T * source, UInt32 source_size, char * dest);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -53,11 +47,8 @@ protected:
 
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
-    bool isCompression() const override { return true; }
-    bool isGenericCompression() const override { return false; }
-
 private:
-    const UInt8 bytes_size;
+    const CompressionDataType data_type;
 };
 
 } // namespace DB

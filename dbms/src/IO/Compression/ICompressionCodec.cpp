@@ -30,6 +30,7 @@ extern const int CORRUPTED_DATA;
 UInt32 ICompressionCodec::compress(const char * source, UInt32 source_size, char * dest) const
 {
     assert(source != nullptr && dest != nullptr);
+    assert(source_size > 0);
 
     dest[0] = getMethodByte();
     UInt8 header_size = getHeaderSize();

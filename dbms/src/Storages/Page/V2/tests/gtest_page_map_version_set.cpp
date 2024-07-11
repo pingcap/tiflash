@@ -786,7 +786,6 @@ TYPED_TEST_P(PageMapVersionSetTest, LiveFiles)
     }
     auto s3 = versions.getSnapshot("", nullptr);
     s3.reset(); // do compact on version-list, and
-    //std::cerr << "s3 reseted." << std::endl;
     auto [livefiles, live_normal_pages] = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 4UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
@@ -800,7 +799,6 @@ TYPED_TEST_P(PageMapVersionSetTest, LiveFiles)
     EXPECT_GT(live_normal_pages.count(3), 0UL);
 
     s2.reset();
-    //std::cerr << "s2 reseted." << std::endl;
     std::tie(livefiles, live_normal_pages) = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 3UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
@@ -812,7 +810,6 @@ TYPED_TEST_P(PageMapVersionSetTest, LiveFiles)
     EXPECT_GT(live_normal_pages.count(2), 0UL);
 
     s1.reset();
-    //std::cerr << "s1 reseted." << std::endl;
     std::tie(livefiles, live_normal_pages) = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 2UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current
