@@ -509,8 +509,11 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
             return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
-    auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
+    auto rs_operator = DM::FilterParser::parseDAGQuery(
+        *dag_query,
+        table_scan.getColumns(),
+        std::move(create_attr_by_column_id),
+        log);
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
     return rs_operator;
