@@ -79,19 +79,19 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     return false;
 }
 
-ColumnDefine getColumnDefineForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read)
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnInfos & scan_column_infos)
 {
     assert(isColumnExpr(expr));
     auto column_index = decodeDAGInt64(expr.val());
-    if (column_index < 0 || column_index >= static_cast<Int64>(columns_to_read.size()))
+    if (column_index < 0 || column_index >= static_cast<Int64>(scan_column_infos.size()))
     {
         throw TiFlashException(
             Errors::Coprocessor::BadRequest,
             "Column index out of bound: {}, should in [0,{})",
             column_index,
-            columns_to_read.size());
+            scan_column_infos.size());
     }
-    return columns_to_read[column_index];
+    return scan_column_infos[column_index].id;
 }
 
 // convert literal value from timezone specified in cop request to UTC in-place
@@ -110,7 +110,7 @@ inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezon
 inline RSOperatorPtr parseTiCompareExpr( //
     const tipb::Expr & expr,
     const FilterParser::RSFilterType filter_type,
-    const ColumnDefines & columns_to_read,
+    const ColumnInfos & scan_column_infos,
     const FilterParser::AttrCreatorByColumnID & creator,
     const TimezoneInfo & timezone_info)
 {
@@ -163,8 +163,8 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     tipb::ScalarFuncSig_Name(expr.sig()),
                     field_type));
 
-            const auto col = getColumnDefineForColumnExpr(child, columns_to_read);
-            attr = creator(col.id);
+            auto col_id = getColumnIDForColumnExpr(child, scan_column_infos);
+            attr = creator(col_id);
         }
         else if (isLiteralExpr(child))
         {
@@ -243,7 +243,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
 
 RSOperatorPtr parseTiExpr(
     const tipb::Expr & expr,
-    const ColumnDefines & columns_to_read,
+    const ColumnInfos & scan_column_infos,
     const FilterParser::AttrCreatorByColumnID & creator,
     const TimezoneInfo & timezone_info,
     const LoggerPtr & log)
@@ -273,7 +273,7 @@ RSOperatorPtr parseTiExpr(
                     fmt::format("logical not with {} children is not supported", expr.children_size()));
 
             if (const auto & child = expr.children(0); likely(isFunctionExpr(child)))
-                return createNot(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
+                return createNot(parseTiExpr(child, scan_column_infos, creator, timezone_info, log));
             else
                 return createUnsupported(fmt::format(
                     "child of logical not is not function, child_type={}",
@@ -288,7 +288,7 @@ RSOperatorPtr parseTiExpr(
             for (const auto & child : expr.children())
             {
                 if (likely(isFunctionExpr(child)))
-                    children.emplace_back(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
+                    children.emplace_back(parseTiExpr(child, scan_column_infos, creator, timezone_info, log));
                 else
                     children.emplace_back(createUnsupported(fmt::format(
                         "child of logical operator is not function, child_type={}",
@@ -307,7 +307,7 @@ RSOperatorPtr parseTiExpr(
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEqual:
         case FilterParser::RSFilterType::In:
-            return parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info);
+            return parseTiCompareExpr(expr, filter_type, scan_column_infos, creator, timezone_info);
 
         case FilterParser::RSFilterType::IsNull:
         {
@@ -330,8 +330,8 @@ RSOperatorPtr parseTiExpr(
                 auto field_type = child.field_type().tp();
                 if (isRoughSetFilterSupportType(field_type))
                 {
-                    const auto col = getColumnDefineForColumnExpr(child, columns_to_read);
-                    Attr attr = creator(col.id);
+                    auto col_id = getColumnIDForColumnExpr(child, scan_column_infos);
+                    auto attr = creator(col_id);
                     return createIsNull(attr);
                 }
                 return createUnsupported(
@@ -358,7 +358,7 @@ RSOperatorPtr parseTiExpr(
 
 RSOperatorPtr FilterParser::parseDAGQuery(
     const DAGQueryInfo & dag_info,
-    const ColumnDefines & columns_to_read,
+    const ColumnInfos & scan_column_infos,
     FilterParser::AttrCreatorByColumnID && creator,
     const LoggerPtr & log)
 {
@@ -367,11 +367,11 @@ RSOperatorPtr FilterParser::parseDAGQuery(
     children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
     for (const auto & filter : dag_info.filters)
     {
-        children.emplace_back(cop::parseTiExpr(filter, columns_to_read, creator, dag_info.timezone_info, log));
+        children.emplace_back(cop::parseTiExpr(filter, scan_column_infos, creator, dag_info.timezone_info, log));
     }
     for (const auto & filter : dag_info.pushed_down_filters)
     {
-        children.emplace_back(cop::parseTiExpr(filter, columns_to_read, creator, dag_info.timezone_info, log));
+        children.emplace_back(cop::parseTiExpr(filter, scan_column_infos, creator, dag_info.timezone_info, log));
     }
 
     if (children.empty())
@@ -385,7 +385,7 @@ RSOperatorPtr FilterParser::parseDAGQuery(
 RSOperatorPtr FilterParser::parseRFInExpr(
     const tipb::RuntimeFilterType rf_type,
     const tipb::Expr & target_expr,
-    const ColumnDefines & columns_to_read,
+    const std::optional<Attr> & target_attr,
     const std::set<Field> & setElements,
     const TimezoneInfo & timezone_info)
 {
@@ -393,11 +393,10 @@ RSOperatorPtr FilterParser::parseRFInExpr(
     {
     case tipb::IN:
     {
-        if (!isColumnExpr(target_expr))
+        if (!isColumnExpr(target_expr) || !target_attr)
             return createUnsupported(
                 fmt::format("rf target expr is not column expr, expr.tp={}", tipb::ExprType_Name(target_expr.tp())));
-        auto column_define = cop::getColumnDefineForColumnExpr(target_expr, columns_to_read);
-        auto attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
+        const auto & attr = *target_attr;
         if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
         {
             Fields values;
@@ -419,6 +418,27 @@ RSOperatorPtr FilterParser::parseRFInExpr(
     case tipb::BLOOM_FILTER:
         return createUnsupported("function params should be in predicate");
     }
+}
+
+std::optional<Attr> FilterParser::createAttr(
+    const tipb::Expr & expr,
+    const ColumnInfos & scan_column_infos,
+    const ColumnDefines & table_column_defines)
+{
+    if (!isColumnExpr(expr))
+    {
+        return std::nullopt;
+    }
+    auto col_id = cop::getColumnIDForColumnExpr(expr, scan_column_infos);
+    auto it = std::find_if( //
+        table_column_defines.cbegin(),
+        table_column_defines.cend(),
+        [col_id](const ColumnDefine & cd) { return cd.id == col_id; });
+    if (it != table_column_defines.cend())
+    {
+        return Attr{.col_name = it->name, .col_id = it->id, .type = it->type};
+    }
+    return std::nullopt;
 }
 
 bool FilterParser::isRSFilterSupportType(const Int32 field_type)

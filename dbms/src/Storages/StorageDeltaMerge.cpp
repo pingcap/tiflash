@@ -733,6 +733,7 @@ DM::RowKeyRanges parseMvccQueryInfo(
 
 RuntimeFilteList parseRuntimeFilterList(
     const SelectQueryInfo & query_info,
+    const DM::ColumnDefines & table_column_defines,
     const Context & db_context,
     const LoggerPtr & log)
 {
@@ -743,6 +744,10 @@ RuntimeFilteList parseRuntimeFilterList(
     auto runtime_filter_list = db_context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(
         query_info.dag_query->runtime_filter_ids);
     LOG_DEBUG(log, "build runtime filter in local stream, list size:{}", runtime_filter_list.size());
+    for (auto & rf : runtime_filter_list)
+    {
+        rf->setTargetAttr(query_info.dag_query->source_columns, table_column_defines);
+    }
     return runtime_filter_list;
 }
 } // namespace
@@ -797,7 +802,7 @@ BlockInputStreams StorageDeltaMerge::read(
 
     auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
 
-    auto runtime_filter_list = parseRuntimeFilterList(query_info, context, log);
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
@@ -880,7 +885,7 @@ void StorageDeltaMerge::read(
 
     auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
 
-    auto runtime_filter_list = parseRuntimeFilterList(query_info, context, log);
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
 

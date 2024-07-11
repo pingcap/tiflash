@@ -51,7 +51,7 @@ RSOperatorPtr createUnsupported(const String & reason)                          
 
 RSOperatorPtr RSOperator::build(
     const std::unique_ptr<DAGQueryInfo> & dag_query,
-    const ColumnDefines & columns_to_read,
+    const ColumnInfos & scan_column_infos,
     const ColumnDefines & table_column_defines,
     bool enable_rs_filter,
     const LoggerPtr & tracing_logger)
@@ -75,8 +75,11 @@ RSOperatorPtr RSOperator::build(
         // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
         return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
-    DM::RSOperatorPtr rs_operator
-        = FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), tracing_logger);
+    auto rs_operator = FilterParser::parseDAGQuery(
+        *dag_query,
+        scan_column_infos,
+        std::move(create_attr_by_column_id),
+        tracing_logger);
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
 
