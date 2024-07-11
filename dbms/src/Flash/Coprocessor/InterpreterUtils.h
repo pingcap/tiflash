@@ -119,4 +119,9 @@ void executeGeneratedColumnPlaceholder(
     PipelineExecGroupBuilder & group_builder,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log);
+
+inline bool pushDownAllFilters(bool push_down_all, bool keep_order)
+{
+    return push_down_all && !keep_order;
+}
 } // namespace DB

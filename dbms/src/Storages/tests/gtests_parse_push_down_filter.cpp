@@ -125,6 +125,7 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
         {},
         columns_to_read,
         *ctx,
+        false,
         log);
     return push_down_filter;
 }

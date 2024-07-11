@@ -335,6 +335,7 @@ PushDownFilterPtr PushDownFilter::build(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & rest_filter_exprs,
     const ColumnDefines & table_scan_columns_to_read,
     const Context & context,
+    const bool keep_order,
     const LoggerPtr & tracing_logger)
 {
     // Must use the original `table_scan_column_infos` because exprs will get column info by index.
@@ -358,7 +359,8 @@ PushDownFilterPtr PushDownFilter::build(
                                    : std::make_shared<ColumnDefines>(table_scan_columns_to_read);
     QueryFilterPtr rest_filter;
     std::unordered_map<ColumnID, DataTypePtr> rest_casted_columns;
-    if (context.getSettingsRef().force_push_down_all_filters_to_scan && !rest_filter_exprs.empty())
+    if (::DB::pushDownAllFilters(context.getSettingsRef().force_push_down_all_filters_to_scan, keep_order)
+        && !rest_filter_exprs.empty())
     {
         auto rest_filter_columns
             = getFilterColumns(table_scan_column_infos, rest_filter_exprs, table_scan_columns_to_read);
@@ -409,6 +411,7 @@ PushDownFilterPtr PushDownFilter::build(
         dag_query->filters,
         table_scan_columns_to_read,
         context,
+        query_info.keep_order,
         tracing_logger);
 }
 } // namespace DB::DM

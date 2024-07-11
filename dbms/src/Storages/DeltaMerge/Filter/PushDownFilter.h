@@ -118,6 +118,7 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & rest_filter_exprs,
         const ColumnDefines & table_scan_columns_to_read,
         const Context & context,
+        const bool keep_order,
         const LoggerPtr & tracing_logger);
 
     // Use by StorageDeltaMerge.

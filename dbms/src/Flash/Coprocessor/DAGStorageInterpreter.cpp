@@ -362,7 +362,10 @@ void DAGStorageInterpreter::executeImpl(
             /// handle filter conditions for local table scan.
             /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
             /// TODO add runtime filter in Filter input stream.
-            if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
+            if (filter_conditions.hasValue()
+                && likely(!::DB::pushDownAllFilters(
+                    context.getSettingsRef().force_push_down_all_filters_to_scan,
+                    table_scan.keepOrder())))
             {
                 ::DB::executePushedDownFilter(exec_context, group_builder, filter_conditions, analyzer, log);
                 dag_context.addOperatorProfileInfos(
@@ -479,7 +482,10 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
             /// handle filter conditions for local table scan.
             /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
             /// TODO add runtime filter in Filter input stream.
-            if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
+            if (filter_conditions.hasValue()
+                && likely(!::DB::pushDownAllFilters(
+                    context.getSettingsRef().force_push_down_all_filters_to_scan,
+                    table_scan.keepOrder())))
             {
                 ::DB::executePushedDownFilter(filter_conditions, analyzer, log, pipeline);
                 recordProfileStreams(pipeline, filter_conditions.executor_id);
@@ -1532,7 +1538,9 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
     std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
         getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
-    if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+    if (unlikely(::DB::pushDownAllFilters(
+            context.getSettingsRef().force_push_down_all_filters_to_scan,
+            table_scan.keepOrder())))
     {
         for (const auto & expr : filter_conditions.conditions)
             getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
