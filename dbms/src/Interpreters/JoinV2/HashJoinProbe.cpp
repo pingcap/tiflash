@@ -214,6 +214,22 @@ private:
             wd.insert_batch_other.clear();
     }
 
+    void ALWAYS_INLINE FillNullMap(size_t size) const
+    {
+        if constexpr (has_null_map)
+        {
+            for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+            {
+                if (is_nullable)
+                {
+                    auto & null_map_vec
+                        = static_cast<ColumnNullable &>(*added_columns[column_index]).getNullMapColumn().getData();
+                    null_map_vec.resize_fill(null_map_vec.size() + size, 0);
+                }
+            }
+        }
+    }
+
 private:
     JoinProbeContext & context;
     JoinProbeWorkerData & wd;
@@ -270,18 +286,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
         }
     }
     FlushBatchIfNecessary<true>();
-    if constexpr (has_null_map)
-    {
-        for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
-        {
-            if (is_nullable)
-            {
-                auto & null_map_vec
-                    = static_cast<ColumnNullable &>(*added_columns[column_index]).getNullMapColumn().getData();
-                null_map_vec.resize_fill(null_map_vec.size() + current_offset, 0);
-            }
-        }
-    }
+    FillNullMap(current_offset);
 }
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>
@@ -308,7 +313,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
                 PREFETCH_READ(next_ptr + row_layout.next_pointer_offset);
             }
 
-            const auto & key = key_getter.getJoinKey(state->index);
+            const auto & key = key_getter.getJoinKeyWithBufferHint(state->index);
             const auto & key2 = key_getter.deserializeJoinKey(ptr + row_layout.key_offset);
             if (key_getter.joinKeyIsEqual(key, key2))
             {
@@ -361,7 +366,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
             continue;
         }
 
-        const auto & key = key_getter.getJoinKey(idx);
+        const auto & key = key_getter.getJoinKeyWithBufferHint(idx);
         size_t hash = static_cast<HashValueType>(Hash()(key));
         size_t bucket = pointer_table.getBucketNum(hash);
         state->pointer_ptr = pointer_table.getPointerTable() + bucket;
@@ -375,6 +380,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
     }
 
     FlushBatchIfNecessary<true>();
+    FillNullMap(current_offset);
 }
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw>

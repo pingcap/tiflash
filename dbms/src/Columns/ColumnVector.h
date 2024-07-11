@@ -191,7 +191,7 @@ private:
         : data(n, x)
     {}
     ColumnVector(const ColumnVector & src)
-        : data(src.data.begin(), src.data.end()){};
+        : data(src.data.begin(), src.data.end()) {};
 
     /// Sugar constructor.
     ColumnVector(std::initializer_list<T> il)

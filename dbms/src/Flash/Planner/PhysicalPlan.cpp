@@ -247,13 +247,13 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
 {
     const auto & final_projection = is_root
         ? PhysicalProjection::buildRootFinal(
-            context,
-            log,
-            dagContext().output_field_types,
-            dagContext().output_offsets,
-            column_prefix,
-            dagContext().keep_session_timezone_info,
-            popBack())
+              context,
+              log,
+              dagContext().output_field_types,
+              dagContext().output_offsets,
+              column_prefix,
+              dagContext().keep_session_timezone_info,
+              popBack())
         : PhysicalProjection::buildNonRootFinal(context, log, column_prefix, popBack());
     pushBack(final_projection);
 }

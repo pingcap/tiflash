@@ -57,7 +57,7 @@ private:
     ColumnString(const ColumnString & src)
         : COWPtrHelper<IColumn, ColumnString>(src)
         , offsets(src.offsets.begin(), src.offsets.end())
-        , chars(src.chars.begin(), src.chars.end()){};
+        , chars(src.chars.begin(), src.chars.end()) {};
 
     void ALWAYS_INLINE insertFromImpl(const ColumnString & src, size_t n)
     {
