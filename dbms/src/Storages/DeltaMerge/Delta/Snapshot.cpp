@@ -98,8 +98,8 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
     //
     // So here, we should filter out those out-of-range rows.
 
-    auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
-    auto total_delta_rows = delta_snap->getRows();
+    const auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
+    const auto total_delta_rows = delta_snap->getRows();
 
     auto persisted_files_start = std::min(offset, mem_table_rows_offset);
     auto persisted_files_end = std::min(offset + limit, mem_table_rows_offset);

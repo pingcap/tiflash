@@ -79,6 +79,11 @@ struct SchemaNameMapper
         auto table_name = fmt::format("{}{}", TABLE_PREFIX, table_info.id);
         return map2Keyspace(table_info.keyspace_id, table_name);
     }
+    virtual String mapTableNameByID(const KeyspaceID keyspace, const TiDB::TableID table_id) const
+    {
+        auto table_name = fmt::format("{}{}", TABLE_PREFIX, table_id);
+        return map2Keyspace(keyspace, table_name);
+    }
     virtual String displayTableName(const TiDB::TableInfo & table_info) const
     {
         return map2Keyspace(table_info.keyspace_id, table_info.name);
