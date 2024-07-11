@@ -119,7 +119,7 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
     adjust_processed_rows += total_rows;
     adjust_hit_rows += hit_rows;
 
-    if (adjust_processed_rows < adjust_row_limit)
+    if (adjust_processed_rows < adjust_row_limit * 0.8)
         return;
 
     float hit_rate = static_cast<double>(adjust_hit_rows) / adjust_processed_rows;
@@ -162,7 +162,7 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
     Block new_block;
     const auto & aggregate_descriptions = aggregator->getParams().aggregates;
     Arena arena;
-    for (size_t col_idx = 0; col_idx < block.columns(); ++col_idx)
+    for (size_t col_idx = 0; col_idx < header.columns(); ++col_idx)
     {
         auto col_name = header.getByPosition(col_idx).name;
         if (block.has(col_name))
