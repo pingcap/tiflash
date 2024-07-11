@@ -112,4 +112,17 @@ mysql> insert into test.part4(id, store_id) values(1,1),(2,2),(3,3),(11,11),(16,
 mysql> alter table test.part4 set tiflash replica 1;
 func> wait_table test part4
 
-mysql> rename test.part4 to test_new.part4;
+mysql> rename table test.part4 to test_new.part4;
+mysql> alter table test_new.part4 add column c1 int;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.part4 order by id;
++----+----------+------+
+| id | store_id | c1   |
++----+----------+------+
+|  1 |        1 | NULL |
+|  2 |        2 | NULL |
+|  3 |        3 | NULL |
+| 11 |       11 | NULL |
+| 16 |       16 | NULL |
++----+----------+------+
+
+mysql> drop table if exists test_new.part4
