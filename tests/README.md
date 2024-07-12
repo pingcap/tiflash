@@ -12,6 +12,9 @@ export TIFLASH_PORT=9000
 # Prepare a config file with `tcp_port` enabled
 cat << EOF > tiflash.toml
 tcp_port = ${TIFLASH_PORT}
+# If you're deploying a testing cluster where the disk is not exclusively dedicated to TiFlash,
+# it is necessary to set "capacity". Otherwise, PD will not add peers to TiFlash, making the
+# tiflash replica can not be available.
 capacity = 1000000000
 
 [logger]
