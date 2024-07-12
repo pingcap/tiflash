@@ -117,7 +117,9 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
     adjust_processed_rows += total_rows;
     adjust_hit_rows += hit_rows;
 
-    if (adjust_processed_rows < adjust_row_limit * 0.8)
+    LOG_DEBUG(log, "adjust state info: processed: {}, hit: {}, limit: {}", adjust_processed_rows, adjust_hit_rows, adjust_row_limit);
+
+    if (adjust_processed_rows < adjust_row_limit)
         return;
 
     float hit_rate = static_cast<double>(adjust_hit_rows) / adjust_processed_rows;
@@ -142,6 +144,7 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
 void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 {
     state_processed_rows += block_rows;
+    LOG_DEBUG(log, "other state info: state: {}, processed: {}, limit: {}", magic_enum::enum_name(state), state_processed_rows, other_state_row_limit);
     if (state_processed_rows >= other_state_row_limit)
     {
         state = State::Adjust;

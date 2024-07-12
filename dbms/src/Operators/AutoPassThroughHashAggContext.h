@@ -59,7 +59,7 @@ public:
         UInt64 other_state_unit_num = 5)
         : state(State::Init)
         , many_data(std::vector<AggregatedDataVariantsPtr>(1, nullptr))
-        , adjust_row_limit(row_limit_unit_ * adjust_state_unit_num)
+        , adjust_row_limit(row_limit_unit_ * adjust_state_unit_num * 0.8)
         , other_state_row_limit(row_limit_unit_ * other_state_unit_num)
         , row_limit_unit(row_limit_unit_)
         , log(Logger::get(req_id_))
