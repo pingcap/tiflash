@@ -51,7 +51,7 @@ private:
     ColumnFixedString(const ColumnFixedString & src)
         : COWPtrHelper<IColumn, ColumnFixedString>(src)
         , chars(src.chars.begin(), src.chars.end())
-        , n(src.n) {};
+        , n(src.n){};
 
 public:
     std::string getName() const override { return "FixedString(" + std::to_string(n) + ")"; }
