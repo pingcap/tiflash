@@ -820,8 +820,7 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     {
         LOG_INFO(
             log,
-            "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={} "
-            "action={}",
+            "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={} action={}",
             name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
             database_id,
             table_info->id,

@@ -216,7 +216,7 @@ TEST_F(TableIDMapTest, ExchangePartitionCrossDatabase)
 
 TEST_F(TableIDMapTest, Erase)
 {
-        TableIDMap mapping(log);
+    TableIDMap mapping(log);
     {
         /// Prepare
         // partition table
