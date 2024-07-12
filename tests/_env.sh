@@ -30,7 +30,7 @@ if [ -z ${storage_bin+x} ]; then
 fi
 
 # Server address for connecting
-export storage_server="127.0.0.1"
+export storage_server=${storage_server:-"127.0.0.1"}
 
 # Server port for connecting
 export storage_port=${storage_port:-9000}
@@ -39,13 +39,13 @@ export storage_port=${storage_port:-9000}
 export storage_db="system"
 
 # TiDB address
-export tidb_server="127.0.0.1"
+export tidb_server=${tidb_server:-"127.0.0.1"}
 
 # TiDB port
-export tidb_port="4000"
+export tidb_port=${tidb_port:-"4000"}
 
 # TiDB status port
-export tidb_status_port="10080"
+export tidb_status_port=${tidb_status_port:-"10080"}
 
 # TiDB default database
 export tidb_db="test"
@@ -54,8 +54,8 @@ export tidb_db="test"
 export tidb_table="t"
 
 # Whether run scripts with verbose output
+# "true" or "false"
 export verbose=${verbose:-"false"}
-# export verbose="true"
 
 export LANG=en_US.utf-8
 export LC_ALL=en_US.utf-8
