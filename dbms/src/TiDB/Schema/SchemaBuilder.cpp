@@ -1278,8 +1278,16 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         LOG_DEBUG(log, "table {} does not exist.", table_id);
         return;
     }
+
+    // Skip updating the tombstone_ts if the table is already tombstone.
+    if (auto tombstone_ts = storage->getTombstone(); tombstone_ts != 0)
+    {
+        LOG_INFO(log, "Tombstone table {}.{} has been done before, tombstone={}", db_name, name_mapper.debugTableName(storage->getTableInfo()), tombstone_ts);
+        return;
+    }
+
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
-    LOG_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Tombstone table {}.{} begin", db_name, name_mapper.debugTableName(storage->getTableInfo()));
     const auto tombstone_ts = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
     AlterCommands commands;
     {
@@ -1295,7 +1303,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     }
     auto alter_lock = storage->lockForAlter(getThreadName());
     storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
-    LOG_INFO(log, "Tombstoned table {}.{}, tombstone={}", db_name, name_mapper.debugTableName(storage->getTableInfo()), tombstone_ts);
+    LOG_INFO(log, "Tombstone table {}.{} end, tombstone={}", db_name, name_mapper.debugTableName(storage->getTableInfo()), tombstone_ts);
 }
 
 template <typename Getter, typename NameMapper>
