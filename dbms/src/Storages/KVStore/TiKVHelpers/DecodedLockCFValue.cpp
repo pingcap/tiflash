@@ -81,11 +81,13 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 res.txn_size = readUInt64(data, len);
                 break;
             }
+#if SERVERLESS_PROXY != 0
             case IS_TXN_FILE_PREFIX:
             {
                 res.is_txn_file = true;
                 break;
             }
+#endif
             case ASYNC_COMMIT_PREFIX:
             {
                 res.use_async_commit = true;
