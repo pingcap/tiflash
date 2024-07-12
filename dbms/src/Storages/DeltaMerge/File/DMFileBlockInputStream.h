@@ -31,9 +31,10 @@ inline static constexpr size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_data_sharing_)
+    DMFileBlockInputStream(DMFileReader && reader_, bool enable_data_sharing_, const PredicateFilterPtr & filter_)
         : reader(std::move(reader_))
         , enable_data_sharing(enable_data_sharing_)
+        , filter(filter_)
     {
         if (enable_data_sharing)
         {
@@ -65,6 +66,7 @@ private:
     friend class tests::DMFileMetaV2Test;
     DMFileReader reader;
     const bool enable_data_sharing;
+    PredicateFilterPtr filter;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
@@ -155,6 +157,12 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & setFilter(const PredicateFilterPtr & filter_)
+    {
+        filter = filter_;
+        return *this;
+    }
+
 private:
     // These methods are called by the ctor
 
@@ -194,6 +202,7 @@ private:
     size_t max_sharing_column_bytes_for_all = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
+    PredicateFilterPtr filter;
 };
 
 /**

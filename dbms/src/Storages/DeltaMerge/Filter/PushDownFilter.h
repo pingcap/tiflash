@@ -30,13 +30,13 @@ struct PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 inline static const PushDownFilterPtr EMPTY_FILTER{};
 
-class QueryFilter;
-using QueryFilterPtr = std::shared_ptr<QueryFilter>;
+class PredicateFilter;
+using PredicateFilterPtr = std::shared_ptr<PredicateFilter>;
 
-class QueryFilter
+class PredicateFilter
 {
 public:
-    QueryFilter(
+    PredicateFilter(
         const ExpressionActionsPtr & before_where_,
         const ExpressionActionsPtr & project_after_where_,
         const String filter_column_name_,
@@ -55,7 +55,7 @@ public:
         BlockInputStreamPtr stream,
         bool need_project) const;
 
-    static std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
+    static std::pair<PredicateFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
         const ColumnDefines & filter_columns,
         const ColumnDefines & input_columns,
         const ColumnInfos & table_scan_column_infos,
@@ -83,8 +83,8 @@ struct PushDownFilter
 public:
     PushDownFilter(
         const RSOperatorPtr & rs_operator_,
-        const QueryFilterPtr & lm_filter_,
-        const QueryFilterPtr & rest_filter_,
+        const PredicateFilterPtr & lm_filter_,
+        const PredicateFilterPtr & rest_filter_,
         const ColumnDefinesPtr & lm_columns_,
         const ColumnDefinesPtr & rest_columns_,
         const ColumnDefinesPtr & casted_columns_)
@@ -128,8 +128,8 @@ public:
     }
 
     RSOperatorPtr rs_operator;
-    QueryFilterPtr lm_filter;
-    QueryFilterPtr rest_filter;
+    PredicateFilterPtr lm_filter;
+    PredicateFilterPtr rest_filter;
 
 private:
     ColumnDefinesPtr lm_columns;

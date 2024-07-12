@@ -515,11 +515,12 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     const DMContext & context,
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
-    const RSOperatorPtr & filter,
+    const RSOperatorPtr & rs_filter,
     UInt64 max_data_version,
     size_t expected_block_size,
     bool enable_handle_clean_read,
     ReadTag read_tag,
+    const PredicateFilterPtr & filter,
     bool is_fast_scan,
     bool enable_del_clean_read,
     const std::vector<IdSetPtr> & read_packs,
@@ -540,12 +541,13 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     {
         DMFileBlockInputStreamBuilder builder(context.global_context);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
-            .setRSOperator(filter)
+            .setRSOperator(rs_filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
             .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr)
-            .setReadTag(read_tag);
+            .setReadTag(read_tag)
+            .setFilter(filter);
         streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }

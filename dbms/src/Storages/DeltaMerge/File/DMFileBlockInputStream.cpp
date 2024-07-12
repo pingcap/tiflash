@@ -93,7 +93,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         scan_context,
         read_tag);
 
-    return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0);
+    return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0, filter);
 }
 
 DMFileBlockInputStreamPtr createSimpleBlockInputStream(

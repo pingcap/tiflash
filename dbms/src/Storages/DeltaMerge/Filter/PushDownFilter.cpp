@@ -231,7 +231,7 @@ ColumnDefinesPtr buildCastedColumns(
 
 } // namespace
 
-std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> QueryFilter::build(
+std::pair<PredicateFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> PredicateFilter::build(
     const ColumnDefines & filter_columns,
     const ColumnDefines & input_columns,
     const ColumnInfos & table_scan_column_infos,
@@ -254,7 +254,7 @@ std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> QueryFilter
     // Currently, we merge the columns of lm and rest before executing the rest filters.
     // TODO: maybe executing the rest filters before merge.
     //const auto & need_project_cols
-    //= filter_type == QueryFilterType::LM ? filter_columns_to_read : table_scan_columns_to_read;
+    //= filter_type == PredicateFilterType::LM ? filter_columns_to_read : table_scan_columns_to_read;
     auto extra_cast = buildExtraCast(table_scan_column_infos, analyzer, may_need_add_cast_column, input_columns);
 
     // build filter expression actions
@@ -294,11 +294,11 @@ std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> QueryFilter
         project_after_where->dumpActions());
 
     return {
-        std::make_shared<QueryFilter>(before_where, project_after_where, filter_column_name, extra_cast, log),
+        std::make_shared<PredicateFilter>(before_where, project_after_where, filter_column_name, extra_cast, log),
         std::move(casted_column_types)};
 }
 
-BlockInputStreamPtr QueryFilter::buildFilterInputStream(BlockInputStreamPtr stream, bool need_project) const
+BlockInputStreamPtr PredicateFilter::buildFilterInputStream(BlockInputStreamPtr stream, bool need_project) const
 {
     LOG_DEBUG(log, "buildFilterInputStream start: {}", stream->getHeader().dumpNames());
     if (extra_cast)
@@ -333,11 +333,11 @@ PushDownFilterPtr PushDownFilter::build(
 {
     // Must use the original `table_scan_column_infos` because exprs will get column info by index.
     auto lm_columns = getFilterColumns(table_scan_column_infos, lm_filter_exprs, table_scan_columns_to_read);
-    QueryFilterPtr lm_filter;
+    PredicateFilterPtr lm_filter;
     std::unordered_map<ColumnID, DataTypePtr> lm_casted_columns;
     if (lm_columns)
     {
-        std::tie(lm_filter, lm_casted_columns) = QueryFilter::build(
+        std::tie(lm_filter, lm_casted_columns) = PredicateFilter::build(
             /*filter_columns*/ *lm_columns,
             /*input_columns*/ *lm_columns,
             table_scan_column_infos,
@@ -349,14 +349,14 @@ PushDownFilterPtr PushDownFilter::build(
 
     auto rest_columns = lm_columns ? removeColumnDefines(table_scan_columns_to_read, *lm_columns)
                                    : std::make_shared<ColumnDefines>(table_scan_columns_to_read);
-    QueryFilterPtr rest_filter;
+    PredicateFilterPtr rest_filter;
     std::unordered_map<ColumnID, DataTypePtr> rest_casted_columns;
     if (::DB::pushDownAllFilters(context.getSettingsRef().force_push_down_all_filters_to_scan, keep_order)
         && !rest_filter_exprs.empty())
     {
         auto rest_filter_columns
             = getFilterColumns(table_scan_column_infos, rest_filter_exprs, table_scan_columns_to_read);
-        std::tie(rest_filter, rest_casted_columns) = QueryFilter::build(
+        std::tie(rest_filter, rest_casted_columns) = PredicateFilter::build(
             /*filter_columns*/ *rest_filter_columns,
             /*input_columns*/ table_scan_columns_to_read,
             table_scan_column_infos,

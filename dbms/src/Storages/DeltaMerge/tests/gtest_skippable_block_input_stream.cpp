@@ -111,6 +111,7 @@ protected:
             DEFAULT_BLOCK_SIZE,
             enable_handle_clean_read,
             ReadTag::Internal,
+            /*predicate_filter*/ nullptr,
             is_fast_scan,
             enable_del_clean_read);
 

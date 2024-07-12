@@ -1095,6 +1095,7 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::Query,
+        /* predicate_filter */ nullptr,
         /* is_fast_scan */ true,
         enable_del_clean_read);
 
@@ -2521,6 +2522,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
         expected_block_size,
         /* enable_handle_clean_read */ false,
         read_tag,
+        /* predicate_filter */ nullptr,
         /* is_fast_scan */ false,
         /* enable_del_clean_read */ false);
     RowKeyRange rowkey_range = rowkey_ranges.size() == 1
@@ -3066,6 +3068,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         expected_block_size,
         /*enable_handle_clean_read*/ false,
         ReadTag::MVCC,
+        /* predicate_filter */ nullptr,
         /*is_fast_scan*/ false,
         /*enable_del_clean_read*/ false,
         /*read_packs*/ some_packs_sets,
@@ -3116,6 +3119,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::Query,
+        /* predicate_filter TODO*/ nullptr,
         is_fast_scan,
         enable_del_clean_read);
 
@@ -3162,6 +3166,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::LMFilter,
+        /*predicate_filter TODO*/ nullptr,
         is_fast_scan,
         enable_del_clean_read);
     SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
@@ -3169,7 +3174,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         segment_snap->delta,
         filter_columns,
         this->rowkey_range,
-        ReadTag::LMFilter);
+        ReadTag::LMFilter); /*predicate_filter TODO*/
 
     if (unlikely(filter_columns->size() == columns_to_read.size()))
     {
@@ -3214,6 +3219,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::Query,
+        /*predicate_filter TODO*/ nullptr,
         is_fast_scan,
         enable_del_clean_read);
     SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
