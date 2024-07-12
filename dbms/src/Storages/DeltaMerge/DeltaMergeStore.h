@@ -546,7 +546,7 @@ private:
         const Context & db_context,
         const DB::Settings & db_settings,
         const String & tracing_id = "",
-        ScanContextPtr scan_context = nullptr);
+        ScanContextPtr scan_context = nullptr) const;
 
     static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
@@ -757,7 +757,7 @@ private:
         const RowKeyRanges & sorted_ranges,
         size_t expected_tasks_count = 1,
         const SegmentIdSet & read_segments = {},
-        bool try_split_task = true);
+        bool try_split_task = true) const;
 
 private:
     /**
@@ -776,13 +776,30 @@ private:
         const SegmentPtr & segment,
         ThreadType thread_type,
         InputType input_type);
+
+    // Returns <SegmentReadTaskPool, DMContext, enable_read_thread, final_num_stream, log_tracing_id>
+    std::tuple<SegmentReadTaskPoolPtr, DMContextPtr, bool, size_t, String> prepareRead(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const ColumnDefines & columns_to_read,
+        const RowKeyRanges & sorted_ranges,
+        size_t num_streams,
+        UInt64 start_ts,
+        const PushDownFilterPtr & filter,
+        const String & tracing_id,
+        bool keep_order,
+        bool is_fast_scan,
+        size_t expected_block_size,
+        const SegmentIdSet & read_segments,
+        size_t extra_table_id_index,
+        ScanContextPtr scan_context);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
 public:
 #endif
     void dropAllSegments(bool keep_first_segment);
-    String getLogTracingId(const DMContext & dm_ctx);
+    String getLogTracingId(const DMContext & dm_ctx) const;
     // Returns segment that contains start_key and whether 'segments' is empty.
     std::pair<SegmentPtr, bool> getSegmentByStartKeyInner(const RowKeyValueRef & start_key);
     std::pair<SegmentPtr, bool> getSegmentByStartKey(

@@ -181,7 +181,8 @@ public:
     // The memory tracker of MPPTask.
     const MemoryTrackerPtr mem_tracker;
 
-    ColumnDefines & getColumnToRead() { return columns_to_read; }
+    const ColumnDefines & getColumnToRead() const { return columns_to_read; }
+    const AfterSegmentRead & getAfterSegmentRead() const { return after_segment_read; }
 
     void appendRSOperator(RSOperatorPtr & new_filter) const
     {
