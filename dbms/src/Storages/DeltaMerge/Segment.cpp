@@ -3185,7 +3185,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             segment_snap->stable->getDMFilesRows(),
             bitmap_filter,
             dm_context.tracing_id);
-        return filter->lm_filter->buildFilterInputStream(stream, /*need_project*/ true, dm_context.tracing_id);
+        return filter->lm_filter->buildFilterInputStream(stream, /*need_project*/ true);
     }
 
     BlockInputStreamPtr filter_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
@@ -3200,8 +3200,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     // hstackBlocks will just join the columns in columns_to_read.
     filter_column_stream = filter->lm_filter->buildFilterInputStream(
         filter_column_stream,
-        /*need_project*/ false,
-        dm_context.tracing_id);
+        /*need_project*/ false);
 
     const auto & rest_columns_to_read = filter->restColumns();
     RUNTIME_CHECK(rest_columns_to_read != nullptr);
@@ -3318,7 +3317,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     }
 
     return filter && filter->hasRestFilter()
-        ? filter->rest_filter->buildFilterInputStream(stream, /*need_project*/ true, dm_context.tracing_id)
+        ? filter->rest_filter->buildFilterInputStream(stream, /*need_project*/ true)
         : stream;
 }
 

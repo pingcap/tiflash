@@ -232,16 +232,14 @@ ColumnDefinesPtr buildCastedColumns(
 } // namespace
 
 std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> QueryFilter::build(
-    QueryFilterType filter_type,
     const ColumnDefines & filter_columns,
     const ColumnDefines & input_columns,
     const ColumnInfos & table_scan_column_infos,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     const ColumnDefines & table_scan_columns_to_read,
     const Context & context,
-    const LoggerPtr & tracing_logger)
+    const LoggerPtr & log)
 {
-    auto log = tracing_logger->getChild(magic_enum::enum_name(filter_type));
     if (filters.empty())
     {
         LOG_DEBUG(log, "Push down filter is empty");
@@ -296,33 +294,28 @@ std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> QueryFilter
         project_after_where->dumpActions());
 
     return {
-        std::make_shared<QueryFilter>(filter_type, before_where, project_after_where, filter_column_name, extra_cast),
+        std::make_shared<QueryFilter>(before_where, project_after_where, filter_column_name, extra_cast, log),
         std::move(casted_column_types)};
 }
 
-BlockInputStreamPtr QueryFilter::buildFilterInputStream(
-    BlockInputStreamPtr stream,
-    bool need_project,
-    const String & tracing_id) const
+BlockInputStreamPtr QueryFilter::buildFilterInputStream(BlockInputStreamPtr stream, bool need_project) const
 {
-    auto filter_name = magic_enum::enum_name(filter_type);
-    auto log = Logger::get(fmt::format("{} {}", tracing_id, filter_name));
     LOG_DEBUG(log, "buildFilterInputStream start: {}", stream->getHeader().dumpNames());
     if (extra_cast)
     {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, tracing_id);
-        stream->setExtraInfo(fmt::format("{}: cast after tablescanning", filter_name));
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+        stream->setExtraInfo("extra cast after tablescanning");
         LOG_DEBUG(log, "buildFilterInputStream extra_cast: {}", stream->getHeader().dumpNames());
     }
 
-    stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, tracing_id);
-    stream->setExtraInfo(fmt::format("{}: push down filter", filter_name));
+    stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
+    stream->setExtraInfo("push down filter");
     LOG_DEBUG(log, "buildFilterInputStream filter: {}", stream->getHeader().dumpNames());
 
     if (need_project)
     {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, tracing_id);
-        stream->setExtraInfo(fmt::format("{}: project after where", filter_name));
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
+        stream->setExtraInfo("project after where");
         LOG_DEBUG(log, "buildFilterInputStream project: {}", stream->getHeader().dumpNames());
     }
     return stream;
@@ -345,14 +338,13 @@ PushDownFilterPtr PushDownFilter::build(
     if (lm_columns)
     {
         std::tie(lm_filter, lm_casted_columns) = QueryFilter::build(
-            QueryFilterType::LM,
             /*filter_columns*/ *lm_columns,
             /*input_columns*/ *lm_columns,
             table_scan_column_infos,
             lm_filter_exprs,
             table_scan_columns_to_read,
             context,
-            tracing_logger);
+            tracing_logger->getChild("LM"));
     }
 
     auto rest_columns = lm_columns ? removeColumnDefines(table_scan_columns_to_read, *lm_columns)
@@ -365,14 +357,13 @@ PushDownFilterPtr PushDownFilter::build(
         auto rest_filter_columns
             = getFilterColumns(table_scan_column_infos, rest_filter_exprs, table_scan_columns_to_read);
         std::tie(rest_filter, rest_casted_columns) = QueryFilter::build(
-            QueryFilterType::Rest,
             /*filter_columns*/ *rest_filter_columns,
             /*input_columns*/ table_scan_columns_to_read,
             table_scan_column_infos,
             rest_filter_exprs,
             table_scan_columns_to_read,
             context,
-            tracing_logger);
+            tracing_logger->getChild("Rest"));
     }
     auto casted_columns = buildCastedColumns(table_scan_columns_to_read, lm_casted_columns, rest_casted_columns);
     LOG_DEBUG(tracing_logger, "casted_columns={}", *casted_columns);

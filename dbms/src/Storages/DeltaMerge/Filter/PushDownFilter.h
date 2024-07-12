@@ -33,37 +33,29 @@ inline static const PushDownFilterPtr EMPTY_FILTER{};
 class QueryFilter;
 using QueryFilterPtr = std::shared_ptr<QueryFilter>;
 
-enum class QueryFilterType
-{
-    LM,
-    Rest,
-};
-
 class QueryFilter
 {
 public:
     QueryFilter(
-        QueryFilterType filter_type_,
         const ExpressionActionsPtr & before_where_,
         const ExpressionActionsPtr & project_after_where_,
         const String filter_column_name_,
-        const ExpressionActionsPtr & extra_cast_)
-        : filter_type(filter_type_)
-        , before_where(before_where_)
+        const ExpressionActionsPtr & extra_cast_,
+        const LoggerPtr & log_)
+        : before_where(before_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
         , extra_cast(extra_cast_)
+        , log(log_)
     {}
 
     bool empty() const { return before_where == nullptr; }
 
     BlockInputStreamPtr buildFilterInputStream( //
         BlockInputStreamPtr stream,
-        bool need_project,
-        const String & tracing_id) const;
+        bool need_project) const;
 
     static std::pair<QueryFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
-        QueryFilterType filter_type,
         const ColumnDefines & filter_columns,
         const ColumnDefines & input_columns,
         const ColumnInfos & table_scan_column_infos,
@@ -72,7 +64,6 @@ public:
         const Context & context,
         const LoggerPtr & tracing_logger);
 
-    const QueryFilterType filter_type;
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
     const ExpressionActionsPtr before_where;
@@ -83,6 +74,8 @@ public:
     const String filter_column_name;
     // The expression actions used to cast the timestamp/datetime column
     const ExpressionActionsPtr extra_cast;
+
+    LoggerPtr log;
 };
 
 struct PushDownFilter
