@@ -49,7 +49,7 @@ void JoinProbeContext::prepareForHashProbe(
     ASTTableJoin::Kind kind,
     const Names & key_names,
     const String & filter_column,
-    const NameSet & probe_output_name_set [[maybe_unused]],
+    const NameSet & probe_output_name_set,
     const TiDB::TiDBCollators & collators)
 {
     if (is_prepared)

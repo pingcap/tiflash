@@ -513,6 +513,9 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
         }
     }
 
+    ///TODO: support other condition
+    RUNTIME_ASSERT(!has_other_condition);
+
     return block;
 }
 
