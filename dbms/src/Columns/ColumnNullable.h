@@ -207,6 +207,13 @@ private:
 
     template <bool negative>
     void applyNullMapImpl(const ColumnUInt8 & map);
+
+    template <bool selective>
+    void updateWeakHash32Impl(
+        WeakHash32 & hash,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container,
+        const BlockSelectivePtr & selective_ptr) const;
 };
 
 

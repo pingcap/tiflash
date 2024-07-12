@@ -110,16 +110,11 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::write(const B
         "Output column size mismatch with field type size");
 
     size_t rows = 0;
-    if constexpr (selective_block)
-    {
-        RUNTIME_CHECK(block.info.selective);
+    if (block.info.selective)
         rows = block.info.selective->size();
-    }
     else
-    {
-        RUNTIME_CHECK(!block.info.selective);
         rows = block.rows();
-    }
+
     if (rows > 0)
     {
         rows_in_blocks += rows;
@@ -168,7 +163,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::batchWriteFin
                 assertBlockSchema(expected_types, block, FineGrainedShuffleWriterLabels[MPPDataPacketV1]);
             }
 
-            if constexpr (selective_block)
+            if (block.info.selective)
                 HashBaseWriterHelper::scatterColumnsForFineGrainedShuffleSelectiveBlock(
                     block,
                     partition_col_ids,

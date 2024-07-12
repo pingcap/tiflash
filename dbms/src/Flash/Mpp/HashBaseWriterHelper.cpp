@@ -175,9 +175,7 @@ void scatterColumnsSelectiveBlock(
     uint32_t bucket_num,
     std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
-    RUNTIME_CHECK(input_block.info.selective);
-    if unlikely (input_block.info.selective->empty())
-        return;
+    RUNTIME_CHECK(input_block.info.selective && !input_block.info.selective->empty());
 
     WeakHash32 hash(0);
     computeHashSelectiveBlock(input_block, partition_col_ids, collators, partition_key_containers, hash);
@@ -236,9 +234,7 @@ void scatterColumnsForFineGrainedShuffleSelectiveBlock(
     IColumn::Selector & selector,
     std::vector<IColumn::ScatterColumns> & scattered)
 {
-    RUNTIME_CHECK(block.info.selective);
-    if unlikely (block.info.selective->empty())
-        return;
+    RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
 
     computeHashSelectiveBlock(block, partition_col_ids, collators, partition_key_containers, hash);
 

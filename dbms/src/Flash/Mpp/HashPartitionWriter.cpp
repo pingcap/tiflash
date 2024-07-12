@@ -101,7 +101,12 @@ bool HashPartitionWriter<ExchangeWriterPtr, selective_block>::isWritable() const
 template <class ExchangeWriterPtr, bool selective_block>
 void HashPartitionWriter<ExchangeWriterPtr, selective_block>::writeImplV1(const Block & block)
 {
-    size_t rows = block.rows();
+    size_t rows = 0;
+    if (block.info.selective)
+        rows = block.info.selective->size();
+    else
+        rows = block.rows();
+
     if (rows > 0)
     {
         rows_in_blocks += rows;
@@ -116,7 +121,12 @@ void HashPartitionWriter<ExchangeWriterPtr, selective_block>::writeImplV1(const 
 template <class ExchangeWriterPtr, bool selective_block>
 void HashPartitionWriter<ExchangeWriterPtr, selective_block>::writeImpl(const Block & block)
 {
-    size_t rows = block.rows();
+    size_t rows = 0;
+    if (block.info.selective)
+        rows = block.info.selective->size();
+    else
+        rows = block.rows();
+
     if (rows > 0)
     {
         rows_in_blocks += rows;
@@ -173,7 +183,7 @@ void HashPartitionWriter<ExchangeWriterPtr, selective_block>::partitionAndWriteB
             assertBlockSchema(expected_types, block, HashPartitionWriterLabels[MPPDataPacketV1]);
         }
         auto && dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-        if constexpr (selective_block)
+        if (block.info.selective)
             HashBaseWriterHelper::scatterColumnsSelectiveBlock(
                 block,
                 partition_col_ids,
@@ -236,7 +246,7 @@ void HashPartitionWriter<ExchangeWriterPtr, selective_block>::partitionAndWriteB
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            if constexpr (selective_block)
+            if (block.info.selective)
                 HashBaseWriterHelper::scatterColumnsSelectiveBlock(
                     block,
                     partition_col_ids,
@@ -289,5 +299,6 @@ template class HashPartitionWriter<SyncMPPTunnelSetWriterPtr, true>;
 template class HashPartitionWriter<SyncMPPTunnelSetWriterPtr, false>;
 template class HashPartitionWriter<AsyncMPPTunnelSetWriterPtr, true>;
 template class HashPartitionWriter<AsyncMPPTunnelSetWriterPtr, false>;
+
 
 } // namespace DB

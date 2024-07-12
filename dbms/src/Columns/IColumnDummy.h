@@ -143,14 +143,22 @@ public:
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
-        RUNTIME_CHECK_MSG(s == selector.size(), "Size of selector doesn't match size of column.");
+        RUNTIME_CHECK_MSG(
+            s == selector.size(),
+            "Size of selector({}) doesn't match size of column({}).",
+            selector.size(),
+            s);
         return scatterImplForDummyColumn(num_columns, selector);
     }
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
         const override
     {
-        RUNTIME_CHECK_MSG(selective->size() == selector.size(), "Size of selector doesn't match size of column.");
+        RUNTIME_CHECK_MSG(
+            selective->size() == selector.size(),
+            "Size of selector({}) doesn't match size of column({}).",
+            selector.size(),
+            selective->size());
         return scatterImplForDummyColumn(num_columns, selector);
     }
 
@@ -169,14 +177,22 @@ public:
 
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
-        RUNTIME_CHECK_MSG(s == selector.size(), "Size of selector doesn't match size of column.");
+        RUNTIME_CHECK_MSG(
+            s == selector.size(),
+            "size of selector({}) doesn't match size of column({})",
+            selector.size(),
+            s);
         scatterToImplForDummyColumn(columns, selector);
     }
 
     void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
         const override
     {
-        RUNTIME_CHECK_MSG(selective->size() == selector.size(), "Size of selector doesn't match size of column.");
+        RUNTIME_CHECK_MSG(
+            selective->size() == selector.size(),
+            "size of selector({}) doesn't match size of column({})",
+            selector.size(),
+            selective->size());
         scatterToImplForDummyColumn(columns, selector);
     }
 

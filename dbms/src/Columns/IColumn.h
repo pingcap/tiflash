@@ -502,10 +502,11 @@ protected:
     {
         size_t num_rows = size();
 
-        if (num_rows != selector.size())
-            throw Exception(
-                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        RUNTIME_CHECK_MSG(
+            num_rows == selector.size(),
+            "Size of selector: {} doesn't match size of column: {}",
+            selector.size(),
+            num_rows);
 
         ScatterColumns columns;
         initializeScatterColumns(columns, num_columns, num_rows);

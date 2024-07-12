@@ -32,6 +32,15 @@ public:
     using Chars_t = PaddedPODArray<UInt8>;
     static const auto APPROX_STRING_SIZE = 64;
 
+    // Used when updating hash for column.
+    struct WeakHash32Info
+    {
+        WeakHash32::Container * hash_data;
+        String sort_key_container;
+        TiDB::TiDBCollatorPtr collator;
+        BlockSelectivePtr selective_ptr;
+    };
+
 private:
     friend class COWPtrHelper<IColumn, ColumnString>;
 

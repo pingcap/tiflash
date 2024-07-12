@@ -23,7 +23,6 @@
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
 
-
 template <typename T>
 bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
 
@@ -146,25 +145,7 @@ void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, c
 template <typename T>
 void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    auto s = data.size();
-
-    RUNTIME_CHECK_MSG(
-        hash.getData().size() == s,
-        "Size of WeakHash32({}) doesn't match size of column({})",
-        hash.getData().size(),
-        s);
-
-    const T * begin = data.data();
-    const T * end = begin + s;
-    UInt32 * hash_data = hash.getData().data();
-
-    while (begin < end)
-    {
-        *hash_data = wideIntHashCRC32(*begin, *hash_data);
-
-        ++begin;
-        ++hash_data;
-    }
+    updateWeakHash32Impl<false>(hash, nullptr);
 }
 
 template <typename T>
@@ -174,20 +155,40 @@ void ColumnDecimal<T>::updateWeakHash32(
     String &,
     const BlockSelectivePtr & selective_ptr) const
 {
-    const auto selective_rows = selective_ptr->size();
+    updateWeakHash32Impl<true>(hash, selective_ptr);
+}
+
+template <typename T>
+template <bool selective>
+void ColumnDecimal<T>::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const
+{
+    size_t rows;
+    if constexpr (selective)
+    {
+        RUNTIME_CHECK(selective_ptr);
+        rows = selective_ptr->size();
+    }
+    else
+    {
+        rows = data.size();
+    }
+
     RUNTIME_CHECK_MSG(
-        hash.getData().size() == selective_rows,
-        "Size of WeakHash32({}) doesn't match size of selective column({})",
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
         hash.getData().size(),
-        selective_rows);
+        rows);
 
     const T * begin = data.data();
     UInt32 * hash_data = hash.getData().data();
 
-    for (const auto & row : *selective_ptr)
+    for (size_t i = 0; i < rows; ++i)
     {
-        *hash_data = wideIntHashCRC32(*(begin + row), *hash_data);
+        size_t row = i;
+        if constexpr (selective)
+            row = (*selective_ptr)[i];
 
+        *hash_data = wideIntHashCRC32(*(begin + row), *hash_data);
         ++hash_data;
     }
 }

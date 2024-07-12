@@ -191,7 +191,7 @@ public:
     ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective_ptr)
         const override;
 
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
@@ -210,6 +210,15 @@ public:
     const Container & getData() const { return data; }
 
     void getExtremes(Field & min, Field & max) const override;
+
+    template <bool selective>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
+
+    template <bool selective>
+    MutableColumns scatterImpl(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector,
+        const BlockSelectivePtr & selective_ptr) const;
 };
 
 

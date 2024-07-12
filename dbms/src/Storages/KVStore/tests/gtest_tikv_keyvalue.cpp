@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <IO/VarInt.h>
 #include <Storages/KVStore/Decode/TiKVHelper.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -68,6 +70,13 @@ TiKVValue encode_lock_cf_value(
         res.write(RecordKVFormat::LAST_CHANGE_PREFIX);
         RecordKVFormat::encodeUInt64(12345678, res);
         TiKV::writeVarUInt(87654321, res);
+    }
+    {
+        res.write(RecordKVFormat::TXN_SOURCE_PREFIX_FOR_LOCK);
+        TiKV::writeVarUInt(876543, res);
+    }
+    {
+        res.write(RecordKVFormat::PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX);
     }
     return TiKVValue(res.releaseStr());
 }
@@ -443,6 +452,47 @@ TEST(TiKVKeyValueTest, PortedTests)
         }
     }
 }
+
+TEST(TiKVKeyValueTest, ParseLockValue)
+try
+{
+    // prepare
+    std::string shor_value = "value";
+    auto lock_for_update_ts = 7777, txn_size = 1;
+    const std::vector<std::string> & async_commit = {"s1", "s2"};
+    const std::vector<uint64_t> & rollback = {3, 4};
+    auto lock_value = encode_lock_cf_value(
+        Region::DelFlag,
+        "primary key",
+        421321,
+        std::numeric_limits<UInt64>::max(),
+        &shor_value,
+        66666,
+        lock_for_update_ts,
+        txn_size,
+        async_commit,
+        rollback);
+
+    // parse
+    auto ori_key = std::make_shared<const TiKVKey>(RecordKVFormat::genKey(1, 88888));
+    auto lock = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value)));
+
+    // check the parsed result
+    {
+        auto & lock_info = lock;
+        ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.lock_type);
+        ASSERT_TRUE("primary key" == lock_info.primary_lock);
+        ASSERT_TRUE(421321 == lock_info.lock_version);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.lock_ttl);
+        ASSERT_TRUE(66666 == lock_info.min_commit_ts);
+        ASSERT_TRUE(ori_key == lock_info.key);
+        ASSERT_EQ(lock_for_update_ts, lock_info.lock_for_update_ts);
+        ASSERT_EQ(txn_size, lock_info.txn_size);
+
+        ASSERT_EQ(true, lock_info.use_async_commit);
+    }
+}
+CATCH
 
 TEST(TiKVKeyValueTest, Redact)
 try

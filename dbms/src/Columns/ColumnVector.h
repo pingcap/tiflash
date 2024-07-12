@@ -411,6 +411,9 @@ public:
 
     T & getElement(size_t n) { return data[n]; }
 
+    template <bool selective>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
+
 protected:
     Container data;
 };

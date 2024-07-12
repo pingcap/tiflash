@@ -191,11 +191,11 @@ void ColumnTuple::updateWeakHash32(
 {
     auto s = size();
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
-                + std::to_string(hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == s,
+        "size of WeakHash32({}) does not match size of column({})",
+        hash.getData().size(),
+        s);
 
     for (const auto & column : columns)
         column->updateWeakHash32(hash, collator, sort_key_container);
@@ -207,13 +207,13 @@ void ColumnTuple::updateWeakHash32(
     String & sort_key_container,
     const BlockSelectivePtr & selective_ptr) const
 {
-    const auto selective_rows = selective_ptr->size();
+    const size_t rows = selective_ptr->size();
 
     RUNTIME_CHECK_MSG(
-        hash.getData().size() == selective_rows,
-        "Size of WeakHash32({}) does not match size of selective column({})",
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
         hash.getData().size(),
-        selective_rows);
+        rows);
 
     for (const auto & column : columns)
         column->updateWeakHash32(hash, collator, sort_key_container, selective_ptr);
