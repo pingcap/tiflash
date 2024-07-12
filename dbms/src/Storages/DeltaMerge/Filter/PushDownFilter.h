@@ -62,7 +62,7 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         const ColumnDefines & table_scan_columns_to_read,
         const Context & context,
-        const LoggerPtr & tracing_logger);
+        const LoggerPtr & log);
 
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
