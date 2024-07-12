@@ -34,14 +34,14 @@ Block AutoPassThroughAggregatingBlockInputStream<force_streaming>::readImpl()
         }
 
         if (!auto_pass_through_context->passThroughBufferEmpty())
-            return checkSelective(auto_pass_through_context->popPassThroughBuffer());
+            return auto_pass_through_context->popPassThroughBuffer();
     }
 
     assert(build_done);
     if (!auto_pass_through_context->passThroughBufferEmpty())
-        return checkSelective(auto_pass_through_context->popPassThroughBuffer());
+        return auto_pass_through_context->popPassThroughBuffer();
 
-    return checkSelective(auto_pass_through_context->getData());
+    return auto_pass_through_context->getData();
 }
 
 } // namespace DB

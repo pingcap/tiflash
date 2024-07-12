@@ -77,7 +77,6 @@ void AutoPassThroughHashAggContext::onBlockAuto(Block & block)
 void AutoPassThroughHashAggContext::onBlockForceStreaming(Block & block)
 {
     auto new_block = getPassThroughBlock(block);
-    makeFullSelective(new_block);
     pushPassThroughBuffer(new_block);
 }
 
@@ -102,7 +101,6 @@ Block AutoPassThroughHashAggContext::getData()
     if (merging_buckets)
     {
         auto block = merging_buckets->getData(/*concurrency_index=*/0);
-        makeFullSelective(block);
         return block;
     }
     return {};
@@ -201,22 +199,5 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
         RUNTIME_CHECK_MSG(agg_func_col_found, "cannot find agg func column({}) from aggregate descriptions", col_name);
     }
     return new_block;
-}
-
-void AutoPassThroughHashAggContext::makeFullSelective(Block & block)
-{
-    if (!block)
-        return;
-
-    RUNTIME_CHECK(!block.info.selective);
-    auto selective = std::make_shared<std::vector<UInt64>>(block.rows());
-    std::iota(selective->begin(), selective->end(), 0);
-    block.info.selective = selective;
-}
-
-Block checkSelective(const Block & block)
-{
-    RUNTIME_CHECK(!block || block.info.selective);
-    return block;
 }
 } // namespace DB

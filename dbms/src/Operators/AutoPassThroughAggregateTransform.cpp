@@ -34,13 +34,13 @@ OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::transformImpl
 
         if (!auto_pass_through_context->passThroughBufferEmpty())
         {
-            block = checkSelective(auto_pass_through_context->popPassThroughBuffer());
+            block = auto_pass_through_context->popPassThroughBuffer();
             return OperatorStatus::HAS_OUTPUT;
         }
 
         if unlikely (!block)
         {
-            block = checkSelective(auto_pass_through_context->getData());
+            block = auto_pass_through_context->getData();
             return OperatorStatus::HAS_OUTPUT;
         }
 
@@ -58,7 +58,7 @@ OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::tryOutputImpl
 {
     if (!auto_pass_through_context->passThroughBufferEmpty())
     {
-        block = checkSelective(auto_pass_through_context->popPassThroughBuffer());
+        block = auto_pass_through_context->popPassThroughBuffer();
         return OperatorStatus::HAS_OUTPUT;
     }
 
@@ -70,7 +70,7 @@ OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::tryOutputImpl
     }
     case Status::hash_map_done:
     {
-        block = checkSelective(auto_pass_through_context->getData());
+        block = auto_pass_through_context->getData();
         return OperatorStatus::HAS_OUTPUT;
     }
     default:

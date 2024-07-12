@@ -19,8 +19,6 @@
 
 namespace DB
 {
-Block checkSelective(const Block & block);
-
 struct AutoPassThroughSwitcher
 {
     explicit AutoPassThroughSwitcher(const ::tipb::Aggregation & aggregation)
