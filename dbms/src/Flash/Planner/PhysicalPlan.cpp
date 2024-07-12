@@ -210,8 +210,10 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         auto left = popBack();
 
         auto fine_grained_shuffle = FineGrainedShuffle(executor);
-        if (context.getSettingsRef().enable_hash_join_v2 && context.getSettingsRef().enable_resource_control
-            && !fine_grained_shuffle.enable() && PhysicalJoinV2::isSupported(executor->join()))
+        auto & settings = context.getSettingsRef();
+        if (settings.enable_hash_join_v2 && settings.enable_resource_control && !fine_grained_shuffle.enable()
+            && PhysicalJoinV2::isSupported(executor->join()) && settings.max_bytes_before_external_join == 0
+            && !context.getDAGContext()->isInAutoSpillMode())
         {
             pushBack(
                 PhysicalJoinV2::build(context, executor_id, log, executor->join(), fine_grained_shuffle, left, right));
@@ -247,13 +249,13 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
 {
     const auto & final_projection = is_root
         ? PhysicalProjection::buildRootFinal(
-            context,
-            log,
-            dagContext().output_field_types,
-            dagContext().output_offsets,
-            column_prefix,
-            dagContext().keep_session_timezone_info,
-            popBack())
+              context,
+              log,
+              dagContext().output_field_types,
+              dagContext().output_offsets,
+              column_prefix,
+              dagContext().keep_session_timezone_info,
+              popBack())
         : PhysicalProjection::buildNonRootFinal(context, log, column_prefix, popBack());
     pushBack(final_projection);
 }
