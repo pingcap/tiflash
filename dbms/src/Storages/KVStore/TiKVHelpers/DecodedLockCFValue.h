@@ -39,6 +39,7 @@ struct DecodedLockCFValue : boost::noncopyable
     UInt64 min_commit_ts{0};
     std::string_view secondaries;
     std::string_view primary_lock;
+    bool is_txn_file{0};
     // For large txn, generation is not zero.
     UInt64 generation{0};
 };

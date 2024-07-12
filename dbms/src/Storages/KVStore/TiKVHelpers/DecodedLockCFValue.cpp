@@ -81,6 +81,11 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 res.txn_size = readUInt64(data, len);
                 break;
             }
+            case IS_TXN_FILE_PREFIX:
+            {
+                res.is_txn_file = true;
+                break;
+            }
             case ASYNC_COMMIT_PREFIX:
             {
                 res.use_async_commit = true;
@@ -159,6 +164,7 @@ void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
     res.set_txn_size(txn_size);
     res.set_use_async_commit(use_async_commit);
     res.set_key(decodeTiKVKey(*key));
+    res.set_is_txn_file(is_txn_file);
 
     if (use_async_commit)
     {
