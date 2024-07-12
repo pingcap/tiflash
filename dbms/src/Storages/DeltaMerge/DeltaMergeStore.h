@@ -777,8 +777,8 @@ private:
         ThreadType thread_type,
         InputType input_type);
 
-    // Returns <SegmentReadTaskPool, DMContext, enable_read_thread, final_num_stream, log_tracing_id>
-    std::tuple<SegmentReadTaskPoolPtr, DMContextPtr, bool, size_t, String> prepareRead(
+    // Returns <SegmentReadTaskPool, DMContext, enable_read_thread, final_num_stream>
+    std::tuple<SegmentReadTaskPoolPtr, DMContextPtr, bool, size_t> prepareRead(
         const Context & db_context,
         const DB::Settings & db_settings,
         const ColumnDefines & columns_to_read,

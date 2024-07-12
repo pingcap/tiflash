@@ -1197,7 +1197,7 @@ BlockInputStreams DeltaMergeStore::read(
     size_t extra_table_id_index,
     ScanContextPtr scan_context)
 {
-    auto [read_task_pool, dm_context, enable_read_thread, final_num_stream, log_tracing_id] = prepareRead(
+    auto [read_task_pool, dm_context, enable_read_thread, final_num_stream] = prepareRead(
         db_context,
         db_settings,
         columns_to_read,
@@ -1212,7 +1212,7 @@ BlockInputStreams DeltaMergeStore::read(
         read_segments,
         extra_table_id_index,
         scan_context);
-
+    auto log_tracing_id = read_task_pool->getLogger()->identifier();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1262,7 +1262,7 @@ BlockInputStreams DeltaMergeStore::read(
     return res;
 }
 
-std::tuple<SegmentReadTaskPoolPtr, DMContextPtr, bool, size_t, String> DeltaMergeStore::prepareRead(
+std::tuple<SegmentReadTaskPoolPtr, DMContextPtr, bool, size_t> DeltaMergeStore::prepareRead(
     const Context & db_context,
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
@@ -1316,7 +1316,7 @@ std::tuple<SegmentReadTaskPoolPtr, DMContextPtr, bool, size_t, String> DeltaMerg
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
-    return {read_task_pool, dm_context, enable_read_thread, final_num_stream, std::move(log_tracing_id)};
+    return {read_task_pool, dm_context, enable_read_thread, final_num_stream};
 }
 
 void DeltaMergeStore::read(
@@ -1339,7 +1339,7 @@ void DeltaMergeStore::read(
     size_t extra_table_id_index,
     ScanContextPtr scan_context)
 {
-    auto [read_task_pool, dm_context, enable_read_thread, final_num_stream, log_tracing_id] = prepareRead(
+    auto [read_task_pool, dm_context, enable_read_thread, final_num_stream] = prepareRead(
         db_context,
         db_settings,
         columns_to_read,
@@ -1354,7 +1354,7 @@ void DeltaMergeStore::read(
         read_segments,
         extra_table_id_index,
         scan_context);
-
+    auto log_tracing_id = read_task_pool->getLogger()->identifier();
     if (enable_read_thread)
     {
         for (size_t i = 0; i < final_num_stream; ++i)
