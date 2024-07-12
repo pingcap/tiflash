@@ -101,11 +101,8 @@ namespace DB
     M(force_use_dmfile_format_v3)                            \
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
-<<<<<<< HEAD
     M(skip_seek_before_read_dmfile)                          \
-=======
     M(force_schema_sync_diff_fail)                           \
->>>>>>> 02b61ea530 (ddl: Fix rename partitioned table is not atomic (#9133))
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
