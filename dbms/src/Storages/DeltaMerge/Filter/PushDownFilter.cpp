@@ -99,10 +99,14 @@ PushDownFilterPtr PushDownFilter::build(
         has_cast)
     {
         NamesWithAliases project_cols;
-        for (size_t i = 0; i < columns_to_read.size(); ++i)
+        for (size_t i = 0; i < table_scan_column_info.size(); ++i)
         {
-            if (filter_col_id_set.contains(columns_to_read[i].id))
-                project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
+            if (filter_col_id_set.contains(table_scan_column_info[i].id))
+            {
+                auto it = columns_to_read_map.find(table_scan_column_info[i].id);
+                RUNTIME_CHECK(it != columns_to_read_map.end(), table_scan_column_info[i].id);
+                project_cols.emplace_back(casted_columns[i], it->second.name);
+            }
         }
         actions->add(ExpressionAction::project(project_cols));
 
@@ -162,15 +166,15 @@ PushDownFilterPtr PushDownFilter::build(
     if (unlikely(dag_query == nullptr))
         return EMPTY_FILTER;
 
+    const auto & columns_to_read_info = dag_query->source_columns;
     // build rough set operator
     const auto rs_operator = RSOperator::build(
         dag_query,
-        columns_to_read,
+        columns_to_read_info,
         table_column_defines,
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
     // build push down filter
-    const auto & columns_to_read_info = dag_query->source_columns;
     const auto & pushed_down_filters = dag_query->pushed_down_filters;
     if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && !dag_query->filters.empty())
     {

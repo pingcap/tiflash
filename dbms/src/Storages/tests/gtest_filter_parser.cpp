@@ -122,7 +122,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
 
-    return DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
+    return DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
 }
 
 // Test cases for col and literal

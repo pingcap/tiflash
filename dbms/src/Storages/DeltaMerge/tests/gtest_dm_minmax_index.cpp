@@ -2235,10 +2235,15 @@ try
     const ColumnDefines columns_to_read
         = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
            ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
+    // Only need id of ColumnInfo
+    TiDB::ColumnInfo a, b;
+    a.id = 1;
+    b.id = 2;
+    ColumnInfos column_infos = {a, b};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         pushed_down_filters, // Not care now
-        std::vector<TiDB::ColumnInfo>{}, // Not care now
+        column_infos,
         std::vector<int>{},
         0,
         context->getTimezoneInfo());
@@ -2252,7 +2257,7 @@ try
         return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
     const auto op
-        = DB::DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, create_attr_by_column_id, Logger::get());
+        = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, create_attr_by_column_id, Logger::get());
     EXPECT_EQ(
         op->toDebugString(),
         R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");

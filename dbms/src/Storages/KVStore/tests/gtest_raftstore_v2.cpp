@@ -871,7 +871,7 @@ try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
-    proxy_instance->proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":3}})";
+    proxy_instance->proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":3},"server":{"engine-addr":"123"}})";
     KVStore & kvs = getKVS();
     kvs.fetchProxyConfig(proxy_helper.get());
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);

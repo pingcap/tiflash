@@ -73,6 +73,7 @@ KVStore::KVStore(Context & context)
     {
         LOG_WARNING(log, "JointThreadInfoJeallocMap is not inited from context");
     }
+    fetchProxyConfig(proxy_helper);
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -119,6 +120,10 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
 
 void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
 {
+    if (proxy_config_summary.valid)
+    {
+        LOG_INFO(log, "Skip duplicated parsing proxy config");
+    }
     // Try fetch proxy's config as a json string
     if (proxy_helper && proxy_helper->fn_get_config_json)
     {
@@ -133,7 +138,13 @@ void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
             auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
             auto raftstore = ptr->getObject("raftstore");
             proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
-            LOG_INFO(log, "Parsed proxy config snap_handle_pool_size {}", proxy_config_summary.snap_handle_pool_size);
+            auto server = ptr->getObject("server");
+            proxy_config_summary.engine_addr = server->getValue<std::string>("engine-addr");
+            LOG_INFO(
+                log,
+                "Parsed proxy config: snap_handle_pool_size={} engine_addr={}",
+                proxy_config_summary.snap_handle_pool_size,
+                proxy_config_summary.engine_addr);
             proxy_config_summary.valid = true;
         }
         catch (...)
@@ -448,6 +459,7 @@ size_t KVStore::getOngoingPrehandleTaskCount() const
 {
     return std::max(0, ongoing_prehandle_task_count.load());
 }
+
 size_t KVStore::getOngoingPrehandleSubtaskCount() const
 {
     return std::max(0, prehandling_trace.ongoing_prehandle_subtask_count.load());

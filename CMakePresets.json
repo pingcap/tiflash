@@ -2,7 +2,7 @@
   "version": 3,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 21,
+    "minor": 23,
     "patch": 0
   },
   "configurePresets": [
@@ -72,7 +72,8 @@
         "tests-on"
       ],
       "displayName": "Development: DEBUG build with tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-debug"
     },
     {
         "name": "dev-coverage",
@@ -83,7 +84,8 @@
         "displayName": "Development: DEBUG build with tests and code coverage enabled",
         "cacheVariables": {
             "TEST_LLVM_COVERAGE": "ON"
-        }
+        },
+        "binaryDir": "${sourceDir}/cmake-build-coverage"
     },
     {
       "name": "release",
@@ -92,7 +94,8 @@
         "tests-off"
       ],
       "displayName": "Release: RELWITHDEBINFO build without tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-release"
     },
     {
       "name": "asan",
@@ -101,7 +104,8 @@
         "tests-on"
       ],
       "displayName": "AddressSanitizer: ASAN build with tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-asan"
     },
     {
       "name": "tsan",
@@ -110,7 +114,8 @@
         "tests-on"
       ],
       "displayName": "ThreadSanitizer: TSAN build with tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-tsan"
     },
     {
       "name": "benchmarks",
@@ -119,7 +124,8 @@
         "tests-on"
       ],
       "displayName": "Benchmarks: RELEASE build with benchmarks enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-release"
     }
   ]
 }
