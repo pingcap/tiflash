@@ -1478,8 +1478,9 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
     auto part_to_db_id = table_id_map.getAllPartitionsBelongDatabase();
     for (const auto & [db_name, db_ptr] : context.getDatabases())
     {
+        // No more partition need to be checked.
         if (part_to_db_id.empty())
-            return;
+            break;
 
         if (db_name == "system")
             continue;
@@ -1522,6 +1523,7 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
             auto new_database_id = it->second;
             if (new_database_id == database_id)
             {
+                // the database_id match, nothing need to be changed
                 part_to_db_id.erase(it);
                 continue;
             }
@@ -1545,10 +1547,11 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
             {
                 LOG_WARNING(
                     log,
-                    "FixPartitionsDatabase: failed to cast the IStorage as IManageableStorage, ignore, db_name={} "
-                    "table_name={}",
+                    "FixPartitionsDatabase: failed to cast the IStorage as IManageableStorage, ignore, "
+                    "db_name={} table_name={} table_id={}",
                     db_name,
-                    table_name);
+                    table_name,
+                    *opt_tbl_id);
                 continue;
             }
 
