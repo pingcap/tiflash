@@ -15,6 +15,7 @@
 #include <Storages/KVStore/Types.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/TableIDMap.h>
 #include <gtest/gtest.h>
 #include <gtest/internal/gtest-internal.h>
 
@@ -27,7 +28,15 @@ namespace DB::tests
     std::tuple<bool, DatabaseID, TableID> rhs)
 {
     if (std::get<0>(lhs) == std::get<0>(rhs))
-        return ::testing::AssertionSuccess();
+    {
+        // not found
+        if (!std::get<0>(lhs))
+            return ::testing::AssertionSuccess();
+        // the mapping is found, compare the database_id -> table_id
+        if (std::get<1>(lhs) == std::get<1>(rhs) //
+            && std::get<2>(lhs) == std::get<2>(rhs))
+            return ::testing::AssertionSuccess();
+    }
     return ::testing::internal::EqFailure(
         lhs_expr,
         rhs_expr,
@@ -202,6 +211,49 @@ TEST_F(TableIDMapTest, ExchangePartitionCrossDatabase)
         EXPECT_EQ(p_to_db.at(non_partition_table_id), 2);
         EXPECT_EQ(p_to_db.at(102), 2);
         EXPECT_EQ(p_to_db.at(103), 2);
+    }
+}
+
+TEST_F(TableIDMapTest, Erase)
+{
+        TableIDMap mapping(log);
+    {
+        /// Prepare
+        // partition table
+        TableID partition_logical_table_id = 100;
+        mapping.emplaceTableID(partition_logical_table_id, 2);
+        mapping.emplacePartitionTableID(101, 100);
+        mapping.emplacePartitionTableID(102, 100);
+        mapping.emplacePartitionTableID(103, 100);
+        // non-partition table
+        TableID non_partition_table_id = 200;
+        mapping.emplaceTableID(non_partition_table_id, 7);
+
+        ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(100));
+        ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(101));
+        ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(102));
+        ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(103));
+        ASSERT_MAPPING_EQ(std::make_tuple(true, 7, 200), mapping.findDatabaseIDAndLogicalTableID(200));
+
+        mapping.erase(101);
+        ASSERT_MAPPING_EQ(std::make_tuple(false, 0, 0), mapping.findDatabaseIDAndLogicalTableID(101));
+    }
+
+    mapping.clear();
+
+    {
+        /// Prepare, assume that one table_id is inserted into two mapping
+        // partition table
+        TableID partition_logical_table_id = 100;
+        mapping.emplaceTableID(partition_logical_table_id, 2);
+        mapping.emplacePartitionTableID(101, 100);
+        // non-partition table
+        mapping.emplaceTableID(101, 7);
+        ASSERT_EQ(mapping.findTableIDInDatabaseMap(101), 7);
+
+        mapping.eraseFromTableIDToDatabaseID(101);
+        ASSERT_MAPPING_EQ(std::make_tuple(true, 2, 100), mapping.findDatabaseIDAndLogicalTableID(101));
+        ASSERT_EQ(mapping.findTableIDInDatabaseMap(101), -1);
     }
 }
 
