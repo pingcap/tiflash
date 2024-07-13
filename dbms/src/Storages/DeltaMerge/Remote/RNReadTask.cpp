@@ -33,7 +33,8 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
     StoreID store_id,
     const String & store_address,
     KeyspaceID keyspace_id,
-    TableID physical_table_id)
+    TableID physical_table_id,
+    ColumnID pk_col_id)
 {
     RowKeyRange segment_range;
     {
@@ -60,6 +61,7 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         /* min_version */ 0,
         keyspace_id,
         physical_table_id,
+        pk_col_id,
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,
         db_context.getSettingsRef(),

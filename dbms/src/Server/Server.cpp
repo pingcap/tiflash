@@ -1451,6 +1451,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (vec_index_cache_entities)
         global_context->setVectorIndexCache(vec_index_cache_entities);
 
+    size_t column_cache_long_term_size
+        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
+    if (column_cache_long_term_size)
+        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
+
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
     ///   controls the number of total bytes keep in the memory.

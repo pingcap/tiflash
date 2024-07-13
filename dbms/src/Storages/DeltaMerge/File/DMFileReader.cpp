@@ -25,6 +25,7 @@
 #include <Poco/File.h>
 #include <Poco/Thread_STD.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
@@ -620,6 +621,7 @@ Block DMFileReader::read()
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
             const auto & cd = read_columns[i];
+
             if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle_on_fast_mode)
             {
                 // Return the first row's handle
@@ -683,7 +685,29 @@ Block DMFileReader::read()
                 const auto stream_name = DMFile::getFileNameBase(cd.id);
                 if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
                 {
-                    if (enable_column_cache && isCacheableColumn(cd))
+                    if (column_cache_long_term && cd.id == pk_col_id && ColumnCacheLongTerm::isCacheableColumn(cd))
+                    {
+                        // ColumnCacheLongTerm only caches user assigned PrimaryKey column.
+
+                        auto column_all_data = column_cache_long_term->get(dmfile, cd.id, [&]() -> IColumn::Ptr {
+                            // Always read all packs when filling cache
+                            auto data_type = dmfile->getColumnStat(cd.id).type;
+                            auto all_packs = dmfile->getPacks();
+                            auto all_rows = dmfile->getRows();
+                            ColumnPtr column;
+                            readColumn(cd, column, 0, all_packs, all_rows, 0);
+                            return column;
+                        });
+
+                        auto data_type = dmfile->getColumnStat(cd.id).type;
+                        auto result_column = data_type->createColumn();
+                        result_column->insertRangeFrom(*column_all_data, start_row_offset, read_rows);
+
+                        auto converted_column
+                            = convertColumnByColumnDefineIfNeed(data_type, std::move(result_column), cd);
+                        res.insert(ColumnWithTypeAndName{converted_column, cd.type, cd.name, cd.id});
+                    }
+                    else if (enable_column_cache && isCacheableColumn(cd))
                     {
                         auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 

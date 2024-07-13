@@ -70,18 +70,6 @@ public:
         }
         return s;
     }
-
-    // Return how many valid rows.
-    size_t count() const
-    {
-        size_t n = 0;
-        for (UInt32 i = 0; i < size(); i++)
-        {
-            if (get(i))
-                n++;
-        }
-        return n;
-    }
 };
 
 } // namespace DB::DM

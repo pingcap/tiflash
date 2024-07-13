@@ -48,6 +48,7 @@ public:
             "t_100",
             NullspaceID,
             100,
+            /*pk_col_id*/ 0,
             true,
             *cols,
             handle_column_define,

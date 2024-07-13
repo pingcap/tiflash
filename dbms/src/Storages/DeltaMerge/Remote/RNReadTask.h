@@ -84,7 +84,8 @@ public:
         StoreID store_id,
         const String & store_address,
         KeyspaceID keyspace_id,
-        TableID physical_table_id);
+        TableID physical_table_id,
+        ColumnID pk_col_id);
 
     String info() const
     {

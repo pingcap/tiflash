@@ -52,7 +52,7 @@ private:
     static std::vector<UInt32> calcPackStartRowID(const DMFileMeta::PackStats & pack_stats);
 
     static MutableColumnPtr calcResultsByPack(
-        std::vector<VectorIndexViewer::Key> && results,
+        const std::vector<VectorIndexViewer::Key> & results,
         const DMFileMeta::PackStats & pack_stats,
         const std::vector<UInt32> & pack_start_rowid);
 
@@ -62,12 +62,12 @@ public:
     explicit VectorColumnFromIndexReader(
         const DMFilePtr & dmfile_,
         const VectorIndexViewerPtr & index_,
-        std::vector<VectorIndexViewer::Key> && results_)
+        const std::vector<VectorIndexViewer::Key> & sorted_results_)
         : dmfile(dmfile_)
         , pack_stats(dmfile_->getPackStats())
         , pack_start_rowid(calcPackStartRowID(pack_stats))
         , index(index_)
-        , results_by_pack(calcResultsByPack(std::move(results_), pack_stats, pack_start_rowid))
+        , results_by_pack(calcResultsByPack(sorted_results_, pack_stats, pack_start_rowid))
     {}
 
     void read(MutableColumnPtr & column, size_t start_pack_id, UInt32 read_rows);

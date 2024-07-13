@@ -55,6 +55,14 @@ struct DMContext : private boost::noncopyable
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;
 
+    /// The user-defined PK column. If multi-column PK, or no PK, it is 0.
+    /// Note that user-defined PK will never be _tidb_rowid.
+    ///
+    /// @warning This field is later added. It is just set to 0 in existing tests
+    /// for convenience. If you develop some feature rely on this field, remember
+    /// to modify related unit tests.
+    const ColumnID pk_col_id;
+
     bool is_common_handle;
     // The number of columns in primary key if is_common_handle = true, otherwise, should always be 1.
     size_t rowkey_column_size;
@@ -100,6 +108,7 @@ public:
         const DB::Timestamp min_version_,
         KeyspaceID keyspace_id_,
         TableID physical_table_id_,
+        ColumnID pk_col_id_,
         bool is_common_handle_,
         size_t rowkey_column_size_,
         const DB::Settings & settings,
@@ -111,6 +120,7 @@ public:
         , min_version(min_version_)
         , keyspace_id(keyspace_id_)
         , physical_table_id(physical_table_id_)
+        , pk_col_id(pk_col_id_)
         , is_common_handle(is_common_handle_)
         , rowkey_column_size(rowkey_column_size_)
         , segment_limit_rows(settings.dt_segment_limit_rows)

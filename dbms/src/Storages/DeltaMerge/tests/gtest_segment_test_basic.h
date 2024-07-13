@@ -39,13 +39,16 @@ public:
     struct SegmentTestOptions
     {
         bool is_common_handle = false;
+        ColumnID pk_col_id = 0;
         DB::Settings db_settings;
     };
 
-    void SetUp() override
+    void SetUp() override { SetUp({}); }
+
+    void SetUp(const SegmentTestOptions & options)
     {
         TiFlashStorageTestBasic::SetUp();
-        buildFirstSegmentWithOptions({});
+        buildFirstSegmentWithOptions(options);
     }
 
 public:

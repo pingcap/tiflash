@@ -80,15 +80,7 @@ std::vector<std::string> VectorDistanceSIMDFeatures::get()
 VectorFloat32Ref::VectorFloat32Ref(const Float32 * elements, size_t n)
     : elements(elements)
     , elements_n(n)
-{
-    for (size_t i = 0; i < n; ++i)
-    {
-        if (std::isnan(elements[i]))
-            throw Exception("NaN not allowed in vector", ErrorCodes::BAD_ARGUMENTS);
-        if (std::isinf(elements[i]))
-            throw Exception("infinite value not allowed in vector", ErrorCodes::BAD_ARGUMENTS);
-    }
-}
+{}
 
 void VectorFloat32Ref::checkDims(VectorFloat32Ref b) const
 {

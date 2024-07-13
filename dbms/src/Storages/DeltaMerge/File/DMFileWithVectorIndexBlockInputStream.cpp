@@ -17,8 +17,9 @@
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
 #include <Storages/S3/FileCache.h>
+#include <Storages/S3/FileCachePerf.h>
 
-#include "Storages/S3/FileCachePerf.h"
+#include <algorithm>
 
 namespace DB::ErrorCodes
 {
@@ -129,14 +130,38 @@ Block DMFileWithVectorIndexBlockInputStream::readImpl(FilterPtr & res_filter)
     else
         res = readByIndexReader();
 
-    // Filter the output rows. If no rows need to filter, res_filter is nullptr.
-    filter.resize(res.rows());
-    bool all_match = valid_rows_after_search.get(filter, res.startOffset(), res.rows());
+    if (!res)
+        return {};
 
-    if unlikely (all_match)
-        res_filter = nullptr;
-    else
-        res_filter = &filter;
+    // Assign output filter according to sorted_results.
+    //
+    // For example, if sorted_results is [3, 10], the complete filter array is:
+    // [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1]
+    // And we should only return filter array starting from res.startOffset(), like:
+    // [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1]
+    //              ^startOffset   ^startOffset+rows
+    //     filter: [0, 0, 0, 0, 0]
+    //
+    // We will use startOffset as lowerBound (inclusive), ans startOffset+rows
+    // as upperBound (exclusive) to find whether this range has a match in sorted_results.
+
+    const auto start_offset = res.startOffset();
+    const auto max_rowid_exclusive = start_offset + res.rows();
+
+    filter.clear();
+    filter.resize_fill(res.rows(), 0);
+
+    auto it = std::lower_bound(sorted_results.begin(), sorted_results.end(), start_offset);
+    while (it != sorted_results.end())
+    {
+        auto rowid = *it;
+        if (rowid >= max_rowid_exclusive)
+            break;
+        filter[rowid - start_offset] = 1;
+        ++it;
+    }
+
+    res_filter = &filter;
     return res;
 }
 
@@ -172,6 +197,7 @@ Block DMFileWithVectorIndexBlockInputStream::readByIndexReader()
     block.setStartOffset(block_start_row_id);
 
     auto vec_column = vec_cd.type->createColumn();
+    vec_column->reserve(read_rows);
 
     Stopwatch w;
     vec_column_reader->read(vec_column, read_pack_id, read_rows);
@@ -196,16 +222,19 @@ Block DMFileWithVectorIndexBlockInputStream::readByFollowingOtherColumns()
     if (!block_others)
         return {};
 
+    auto read_rows = block_others.rows();
+
     // Using vec_cd.type to construct a Column directly instead of using
     // the type from dmfile, so that we don't need extra transforms
     // (e.g. wrap with a Nullable). vec_column_reader is compatible with
     // both Nullable and NotNullable.
     auto vec_column = vec_cd.type->createColumn();
+    vec_column->reserve(read_rows);
 
     // Then read from vector index for the same pack.
     w.restart();
 
-    vec_column_reader->read(vec_column, getPackIdFromBlock(block_others), block_others.rows());
+    vec_column_reader->read(vec_column, getPackIdFromBlock(block_others), read_rows);
     duration_read_from_vec_index_seconds += w.elapsedSeconds();
 
     // Re-assemble block using the same layout as header_layout.
@@ -360,7 +389,10 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
     auto perf_begin = PerfContext::vector_search;
 
     RUNTIME_CHECK(valid_rows.size() >= dmfile->getRows(), valid_rows.size(), dmfile->getRows());
-    auto results_rowid = vec_index->search(ann_query_info, valid_rows);
+    sorted_results = vec_index->search(ann_query_info, valid_rows);
+    std::sort(sorted_results.begin(), sorted_results.end());
+    // results must not contain duplicates. Usually there should be no duplicates.
+    sorted_results.erase(std::unique(sorted_results.begin(), sorted_results.end()), sorted_results.end());
 
     auto discarded_nodes = PerfContext::vector_search.discarded_nodes - perf_begin.discarded_nodes;
     auto visited_nodes = PerfContext::vector_search.visited_nodes - perf_begin.visited_nodes;
@@ -370,24 +402,10 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
     scan_context->total_vector_idx_search_discarded_nodes += discarded_nodes;
     scan_context->total_vector_idx_search_visited_nodes += visited_nodes;
 
-    size_t rows_after_mvcc = valid_rows.count();
-    size_t rows_after_vector_search = results_rowid.size();
-
-    // After searching with the BitmapFilter, we create a bitmap
-    // to exclude rows that are not in the search result, because these rows
-    // are produced as [] or NULL, which is not a valid vector for future use.
-    // The bitmap will be used when returning the output to the caller.
-    {
-        valid_rows_after_search = BitmapFilter(valid_rows.size(), false);
-        for (auto rowid : results_rowid)
-            valid_rows_after_search.set(rowid, 1, true);
-        valid_rows_after_search.runOptimize();
-    }
-
     vec_column_reader = std::make_shared<VectorColumnFromIndexReader>( //
         dmfile,
         vec_index,
-        std::move(results_rowid));
+        sorted_results);
 
     // Vector index is very likely to filter out some packs. For example,
     // if we query for Top 1, then only 1 pack will be remained. So we
@@ -399,7 +417,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
     auto & use_packs = reader.pack_filter.getUsePacks();
 
     size_t results_it = 0;
-    const size_t results_it_max = results_rowid.size();
+    const size_t results_it_max = sorted_results.size();
 
     UInt32 pack_start = 0;
 
@@ -412,8 +430,8 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
 
         UInt32 pack_end = pack_start + pack_stats[pack_id].rows;
         while (results_it < results_it_max //
-               && results_rowid[results_it] >= pack_start //
-               && results_rowid[results_it] < pack_end)
+               && sorted_results[results_it] >= pack_start //
+               && sorted_results[results_it] < pack_end)
         {
             pack_has_result = true;
             results_it++;
@@ -434,7 +452,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
         log,
         "Finished vector search over column dmf_{}/{}(id={}), cost={:.2f}s "
         "top_k_[query/visited/discarded/result]={}/{}/{}/{} "
-        "rows_[file/after_mvcc/after_search]={}/{}/{} "
+        "rows_[file/after_search]={}/{} "
         "pack_[total/before_search/after_search]={}/{}/{}",
 
         dmfile->fileId(),
@@ -445,11 +463,10 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
         ann_query_info->top_k(),
         visited_nodes, // Visited nodes will be larger than query_top_k when there are MVCC rows
         discarded_nodes, // How many nodes are skipped by MVCC
-        results_rowid.size(),
+        sorted_results.size(),
 
         dmfile->getRows(),
-        rows_after_mvcc,
-        rows_after_vector_search,
+        sorted_results.size(),
 
         pack_stats.size(),
         valid_packs_before_search,

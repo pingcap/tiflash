@@ -182,7 +182,7 @@ private:
     // Set after load().
     VectorColumnFromIndexReaderPtr vec_column_reader = nullptr;
     // Set after load(). Used to filter the output rows.
-    BitmapFilter valid_rows_after_search{0, false};
+    std::vector<UInt32> sorted_results{}; // Key is rowid
     IColumn::Filter filter{};
 
     bool loaded = false;

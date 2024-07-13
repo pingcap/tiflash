@@ -56,6 +56,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
@@ -154,6 +155,7 @@ struct ContextShared
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
     mutable DM::VectorIndexCachePtr vector_index_cache;
+    mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
     ViewDependencies view_dependencies; /// Current dependencies
@@ -1430,6 +1432,28 @@ void Context::dropVectorIndexCache() const
     auto lock = getLock();
     if (shared->vector_index_cache)
         shared->vector_index_cache.reset();
+}
+
+void Context::setColumnCacheLongTerm(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    RUNTIME_CHECK(!shared->column_cache_long_term);
+
+    shared->column_cache_long_term = std::make_shared<DM::ColumnCacheLongTerm>(cache_size_in_bytes);
+}
+
+DM::ColumnCacheLongTermPtr Context::getColumnCacheLongTerm() const
+{
+    auto lock = getLock();
+    return shared->column_cache_long_term;
+}
+
+void Context::dropColumnCacheLongTerm() const
+{
+    auto lock = getLock();
+    if (shared->column_cache_long_term)
+        shared->column_cache_long_term.reset();
 }
 
 bool Context::isDeltaIndexLimited() const

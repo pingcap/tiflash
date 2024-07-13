@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
@@ -197,6 +198,17 @@ private:
 
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
     std::unordered_map<ColId, bool> last_read_from_cache{};
+
+public:
+    void setColumnCacheLongTerm(ColumnCacheLongTermPtr column_cache_long_term_, ColumnID pk_col_id_)
+    {
+        column_cache_long_term = column_cache_long_term_;
+        pk_col_id = pk_col_id_;
+    }
+
+private:
+    ColumnCacheLongTermPtr column_cache_long_term = nullptr;
+    ColumnID pk_col_id = 0;
 };
 
 } // namespace DM

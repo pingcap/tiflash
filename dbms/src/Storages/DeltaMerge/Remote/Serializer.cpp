@@ -53,6 +53,7 @@ RemotePb::RemotePhysicalTable Serializer::serializeTo(
     remote_table.set_snapshot_id(task_id.toMeta().SerializeAsString());
     remote_table.set_keyspace_id(snap->ks_physical_table_id.first);
     remote_table.set_table_id(snap->ks_physical_table_id.second);
+    remote_table.set_pk_col_id(snap->pk_col_id);
     for (const auto & [seg_id, seg_task] : snap->tasks)
     {
         auto remote_seg = Serializer::serializeTo(

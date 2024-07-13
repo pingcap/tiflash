@@ -144,7 +144,7 @@ private:
     std::unique_ptr<TableInfo> table_info;
     std::unique_ptr<KeyGenerator> key_gen;
     std::unique_ptr<TimestampGenerator> ts_gen;
-    std::unique_ptr<DeltaMergeStore> store;
+    std::shared_ptr<DeltaMergeStore> store;
 
     std::unique_ptr<HandleLock> handle_lock;
     std::shared_ptr<SharedHandleTable> handle_table;

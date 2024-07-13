@@ -315,6 +315,14 @@ void ColumnArray::insertDefault()
     getOffsets().push_back(getOffsets().empty() ? 0 : getOffsets().back());
 }
 
+void ColumnArray::insertManyDefaults(size_t length)
+{
+    auto & offsets = getOffsets();
+    size_t v = 0;
+    if (!offsets.empty())
+        v = offsets.back();
+    offsets.resize_fill(offsets.size() + length, v);
+}
 
 void ColumnArray::popBack(size_t n)
 {

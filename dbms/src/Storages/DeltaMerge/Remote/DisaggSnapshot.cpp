@@ -74,8 +74,10 @@ bool DisaggReadSnapshot::empty() const
 
 DisaggPhysicalTableReadSnapshot::DisaggPhysicalTableReadSnapshot(
     KeyspaceTableID ks_table_id_,
+    ColumnID pk_col_id_,
     SegmentReadTasks && tasks_)
     : ks_physical_table_id(ks_table_id_)
+    , pk_col_id(pk_col_id_)
 {
     for (auto && t : tasks_)
     {
