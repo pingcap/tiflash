@@ -65,7 +65,8 @@ SegmentReadTask::SegmentReadTask(
     StoreID store_id_,
     const String & store_address,
     KeyspaceID keyspace_id,
-    TableID physical_table_id)
+    TableID physical_table_id,
+    ColumnID pk_col_id)
     : store_id(store_id_)
 {
     CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
@@ -86,6 +87,7 @@ SegmentReadTask::SegmentReadTask(
         /* min_version */ 0,
         keyspace_id,
         physical_table_id,
+        pk_col_id,
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,
         db_context.getSettingsRef(),

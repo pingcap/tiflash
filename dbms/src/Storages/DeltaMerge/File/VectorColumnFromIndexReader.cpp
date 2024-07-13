@@ -17,7 +17,6 @@
 
 #include <algorithm>
 
-
 namespace DB::DM
 {
 

@@ -920,6 +920,7 @@ std::unique_ptr<DMContext> SegmentTestBasic::createDMContext()
         /*min_version_*/ 0,
         NullspaceID,
         /*physical_table_id*/ 100,
+        /*pk_col_id*/ options.pk_col_id,
         options.is_common_handle,
         1,
         db_context->getSettingsRef());

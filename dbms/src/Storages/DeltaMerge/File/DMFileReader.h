@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
 #include <Storages/DeltaMerge/File/ColumnStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
@@ -182,6 +183,18 @@ private:
     // Each pair object indicates several continuous packs with RSResult::All and will be read as a Block.
     // It is sorted by start_pack.
     std::queue<std::pair<size_t, size_t>> all_match_block_infos;
+    std::unordered_map<ColId, bool> last_read_from_cache{};
+
+public:
+    void setColumnCacheLongTerm(ColumnCacheLongTermPtr column_cache_long_term_, ColumnID pk_col_id_)
+    {
+        column_cache_long_term = column_cache_long_term_;
+        pk_col_id = pk_col_id_;
+    }
+
+private:
+    ColumnCacheLongTermPtr column_cache_long_term = nullptr;
+    ColumnID pk_col_id = 0;
 };
 
 } // namespace DB::DM

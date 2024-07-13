@@ -118,6 +118,7 @@ bool checkMatch(
         name,
         NullspaceID,
         /*table_id*/ next_table_id++,
+        /*pk_col_id*/ 0,
         true,
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),

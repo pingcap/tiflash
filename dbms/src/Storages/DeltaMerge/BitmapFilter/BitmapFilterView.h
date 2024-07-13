@@ -46,13 +46,17 @@ public:
 
     inline UInt32 offset() const { return filter_offset; }
 
-    // Return how many valid rows.
-    size_t count() const
+    String toDebugString() const
     {
-        return std::count(
-            filter->filter.cbegin() + filter_offset,
-            filter->filter.cbegin() + filter_offset + filter_size,
-            true);
+        String s(size(), '1');
+        for (UInt32 i = 0; i < size(); i++)
+        {
+            if (!get(i))
+            {
+                s[i] = '0';
+            }
+        }
+        return s;
     }
 };
 
