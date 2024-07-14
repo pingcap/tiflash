@@ -166,6 +166,7 @@ void executeExpression(
     const String & extra_info,
     bool after_auto_pass_through_hashagg)
 {
+    after_auto_pass_through_hashagg = false; // todo fix
     if (expr_actions && !expr_actions->getActions().empty())
     {
         if (after_auto_pass_through_hashagg)
@@ -192,6 +193,7 @@ void executeExpression(
     const LoggerPtr & log,
     bool after_auto_pass_through_hashagg)
 {
+    after_auto_pass_through_hashagg = false; // todo fix
     if (expr_actions && !expr_actions->getActions().empty())
     {
         if (after_auto_pass_through_hashagg)
