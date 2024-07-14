@@ -124,18 +124,19 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
 
     float hit_rate = static_cast<double>(adjust_hit_rows) / adjust_processed_rows;
     RUNTIME_CHECK(std::isnormal(hit_rate) || hit_rate == 0.0);
-    if (hit_rate >= PreHashAggRateLimit)
-    {
-        state = State::PreHashAgg;
-    }
-    else if (hit_rate <= PassThroughRateLimit)
-    {
-        state = State::PassThrough;
-    }
-    else
-    {
-        state = State::Selective;
-    }
+    LOG_DEBUG(log, "adjust state info: processed: {}, hit: {}, limit: {}, hit rate: {}", adjust_processed_rows, adjust_hit_rows, adjust_row_limit, hit_rate);
+    // if (hit_rate >= PreHashAggRateLimit)
+    // {
+    //     state = State::PreHashAgg;
+    // }
+    // else if (hit_rate <= PassThroughRateLimit)
+    // {
+    //     state = State::PassThrough;
+    // }
+    // else
+    // {
+    //     state = State::Selective;
+    // }
 
     adjust_processed_rows = 0;
     adjust_hit_rows = 0;
