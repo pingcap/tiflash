@@ -69,6 +69,6 @@ private:
     TiDB::TiDBCollators partition_col_collators;
     tipb::ExchangeType exchange_type;
     tipb::CompressionMode compression_mode;
-    bool auto_pass_through_agg;
+    bool auto_pass_through_agg; // todo del
 };
 } // namespace DB

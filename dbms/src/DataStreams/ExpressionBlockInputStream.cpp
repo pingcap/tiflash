@@ -17,8 +17,8 @@
 
 namespace DB
 {
-template <bool check_block_selective>
-ExpressionBlockInputStream<check_block_selective>::ExpressionBlockInputStream(
+template <bool selective>
+ExpressionBlockInputStream<selective>::ExpressionBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & expression_,
     const String & req_id)
@@ -28,24 +28,23 @@ ExpressionBlockInputStream<check_block_selective>::ExpressionBlockInputStream(
     children.push_back(input);
 }
 
-template <bool check_block_selective>
-Block ExpressionBlockInputStream<check_block_selective>::getHeader() const
+template <bool selective>
+Block ExpressionBlockInputStream<selective>::getHeader() const
 {
     Block res = children.back()->getHeader();
     expression->execute(res);
     return res;
 }
 
-template <bool check_block_selective>
-Block ExpressionBlockInputStream<check_block_selective>::readImpl()
+template <bool selective>
+Block ExpressionBlockInputStream<selective>::readImpl()
 {
     Block res = children.back()->read();
     if (!res)
         return res;
 
-    if constexpr (check_block_selective)
+    if constexpr (selective)
     {
-        RUNTIME_CHECK(res.info.selective);
         auto ori_info = res.info;
         expression->execute(res);
         res.info = ori_info;

@@ -25,8 +25,8 @@ namespace DB
 
 const char * FineGrainedShuffleWriterLabels[] = {"FineGrainedShuffleWriter", "FineGrainedShuffleWriter-V1"};
 
-template <class ExchangeWriterPtr, bool selective_block>
-FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::FineGrainedShuffleWriter(
+template <class ExchangeWriterPtr>
+FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
@@ -52,8 +52,8 @@ FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::FineGrainedShuffle
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
 }
 
-template <class ExchangeWriterPtr, bool selective_block>
-void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::prepare(const Block & sample_block)
+template <class ExchangeWriterPtr>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_block)
 {
     /// Initialize header block, use column type to create new empty column to handle potential null column cases
     const auto & column_with_type_and_names = sample_block.getColumnsWithTypeAndName();
@@ -88,21 +88,21 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::prepare(const
     prepared = true;
 }
 
-template <class ExchangeWriterPtr, bool selective_block>
-void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::flush()
+template <class ExchangeWriterPtr>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
         batchWriteFineGrainedShuffle();
 }
 
-template <class ExchangeWriterPtr, bool selective_block>
-bool FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::isWritable() const
+template <class ExchangeWriterPtr>
+bool FineGrainedShuffleWriter<ExchangeWriterPtr>::isWritable() const
 {
     return writer->isWritable();
 }
 
-template <class ExchangeWriterPtr, bool selective_block>
-void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::write(const Block & block)
+template <class ExchangeWriterPtr>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");
     RUNTIME_CHECK_MSG(
@@ -126,8 +126,8 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::write(const B
         batchWriteFineGrainedShuffle();
 }
 
-template <class ExchangeWriterPtr, bool selective_block>
-void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::initScatterColumns()
+template <class ExchangeWriterPtr>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::initScatterColumns()
 {
     scattered.resize(num_columns);
     for (size_t col_id = 0; col_id < num_columns; ++col_id)
@@ -143,9 +143,9 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::initScatterCo
     }
 }
 
-template <class ExchangeWriterPtr, bool selective_block>
+template <class ExchangeWriterPtr>
 template <MPPDataPacketVersion version>
-void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::batchWriteFineGrainedShuffleImpl()
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleImpl()
 {
     if (blocks.empty())
         return;
@@ -207,8 +207,8 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::batchWriteFin
     }
 }
 
-template <class ExchangeWriterPtr, bool selective_block>
-void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::batchWriteFineGrainedShuffle()
+template <class ExchangeWriterPtr>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 {
     switch (data_codec_version)
     {
@@ -226,9 +226,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr, selective_block>::batchWriteFin
     }
 }
 
-template class FineGrainedShuffleWriter<SyncMPPTunnelSetWriterPtr, true>;
-template class FineGrainedShuffleWriter<SyncMPPTunnelSetWriterPtr, false>;
-template class FineGrainedShuffleWriter<AsyncMPPTunnelSetWriterPtr, true>;
-template class FineGrainedShuffleWriter<AsyncMPPTunnelSetWriterPtr, false>;
+template class FineGrainedShuffleWriter<SyncMPPTunnelSetWriterPtr>;
+template class FineGrainedShuffleWriter<AsyncMPPTunnelSetWriterPtr>;
 
 } // namespace DB

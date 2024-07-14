@@ -382,210 +382,6 @@ public:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-class TestMPPExchangeWriter : public testing::Test
-{
-protected:
-    void SetUp() override
-    {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
-        dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
-        dag_context_ptr->kind = DAGRequestKind::MPP;
-        dag_context_ptr->is_root_mpp_task = false;
-        dag_context_ptr->result_field_types = makeFields();
-    }
-
-public:
-    TestMPPExchangeWriter()
-        : part_col_ids{0}
-        , part_col_collators{TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)}
-    {}
-
-    // Return 10 Int64 column.
-    static std::vector<tipb::FieldType> makeFields()
-    {
-        std::vector<tipb::FieldType> fields(10);
-        for (int i = 0; i < 10; ++i)
-        {
-            fields[i].set_tp(TiDB::TypeLongLong);
-            fields[i].set_flag(TiDB::ColumnFlagNotNull);
-        }
-        return fields;
-    }
-
-    // Return a block with **rows** and 10 Int64 column.
-    static Block prepareUniformBlock(size_t rows)
-    {
-        std::vector<Int64> uniform_data_set;
-        for (size_t i = 0; i < rows; ++i)
-        {
-            uniform_data_set.push_back(i);
-        }
-        Block block;
-        for (int i = 0; i < 10; ++i)
-        {
-            DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
-            MutableColumnPtr int64_col = int64_data_type->createColumn();
-            for (Int64 r : uniform_data_set)
-            {
-                int64_col->insert(Field(r));
-            }
-            block.insert(
-                ColumnWithTypeAndName{std::move(int64_col), int64_data_type, String("col") + std::to_string(i)});
-        }
-        return block;
-    }
-
-    // Return a block with **rows** and 10 Int64 column.
-    static Block prepareRandomBlock(size_t rows)
-    {
-        Block block;
-        for (size_t i = 0; i < 10; ++i)
-        {
-            DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
-            auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
-            block.insert(
-                ColumnWithTypeAndName{std::move(int64_column), int64_data_type, String("col") + std::to_string(i)});
-        }
-        return block;
-    }
-
-    static std::vector<std::vector<Block>> decodeWriteReportsV0(
-        const Block & header,
-        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
-    {
-        std::vector<std::vector<Block>> decoded_blocks;
-        decoded_blocks.reserve(write_reports.size());
-        for (const auto & rec : write_reports)
-        {
-            const TrackedMppDataPacketPtr & packet = rec.second;
-            std::vector<Block> part_blocks;
-            part_blocks.reserve(packet->getPacket().chunks_size());
-            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
-            {
-                part_blocks.push_back(CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header));
-            }
-            decoded_blocks.push_back(part_blocks);
-        }
-        return decoded_blocks;
-    }
-
-    static std::vector<std::vector<Block>> decodeWriteReportsV1(
-        bool is_fine_grained_shuffle,
-        const tipb::CompressionMode & mode,
-        const std::shared_ptr<MockExchangeWriter> & mock_writer,
-        const Block & header,
-        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
-    {
-        CHBlockChunkDecodeAndSquash decoder(header, 512);
-        std::vector<std::vector<Block>> decoded_blocks;
-
-        for (const auto & report : write_reports)
-        {
-            const auto part_index = report.first;
-            const TrackedMppDataPacketPtr & packet = report.second;
-
-            if unlikely (
-                is_fine_grained_shuffle && packet->getPacket().chunks_size() != packet->getPacket().stream_ids_size())
-                throw Exception("unexpected stream id size");
-
-            if unlikely (DB::MPPDataPacketV1 != packet->getPacket().version())
-                throw Exception("expect mpp version V1");
-
-            std::vector<Block> part_blocks;
-            part_blocks.reserve(packet->getPacket().chunks_size());
-
-            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
-            {
-                const auto & chunk = packet->getPacket().chunks(i);
-
-                auto tar_method_byte = mock_writer->isLocal(part_index)
-                    ? CompressionMethodByte::NONE
-                    : GetCompressionMethodByte(ToInternalCompressionMethod(mode));
-
-                if unlikely (CompressionMethodByte(chunk[0]) != tar_method_byte)
-                    throw Exception("unexpected tar_method_byte");
-
-                auto && result = decoder.decodeAndSquashV1(chunk);
-                if (!result)
-                    result = decoder.flush();
-                assert(result);
-                part_blocks.push_back(std::move(*result));
-            }
-            decoded_blocks.push_back(part_blocks);
-        }
-        return decoded_blocks;
-    }
-
-    static std::vector<UInt64> generateRandomSelective(size_t block_total_rows, size_t selective_rows)
-    {
-        if unlikely (block_total_rows < selective_rows)
-            throw Exception("expect total rows is greater than selective rows");
-
-        std::vector<UInt64> selective(selective_rows, 0);
-        std::set<UInt64> selective_dup;
-        srand(time(nullptr));
-        for (auto & selected_row : selective)
-        {
-            UInt64 rand_row = static_cast<UInt64>(rand()) % block_total_rows; // NOLINT
-            for (size_t j = 0; j < block_total_rows; ++j)
-            {
-                if (selective_dup.find(rand_row) == selective_dup.end())
-                {
-                    break;
-                }
-                else
-                {
-                    ++rand_row;
-                }
-            }
-            if unlikely (selective_dup.find(rand_row) != selective_dup.end())
-                throw Exception("expect random_row is unique");
-
-            selective_dup.insert(rand_row);
-            selected_row = rand_row;
-        }
-        if unlikely (selective_dup.size() != selective.size())
-            throw Exception("unexpected selective vec size");
-        return selective;
-    }
-
-    static void decodeAndCheckBlockForSelectiveBlock(
-        bool is_fine_grained_shuffle,
-        const DB::MPPDataPacketVersion & mpp_version,
-        const Block & header,
-        size_t expect_part_num,
-        size_t expect_selective_rows,
-        tipb::CompressionMode mode,
-        std::shared_ptr<MockExchangeWriter> mock_writer,
-        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_records)
-    {
-        std::vector<std::vector<Block>> decoded_blocks;
-        ASSERT_EQ(write_records.size(), expect_part_num);
-        if (mpp_version == DB::MPPDataPacketV0)
-            decoded_blocks = decodeWriteReportsV0(header, write_records);
-        else
-            decoded_blocks = decodeWriteReportsV1(is_fine_grained_shuffle, mode, mock_writer, header, write_records);
-
-        size_t res_rows = 0;
-        for (const auto & part_blocks : decoded_blocks)
-        {
-            for (const auto & block : part_blocks)
-            {
-                res_rows += block.rows();
-            }
-        }
-        // There should be part_num packet.
-        ASSERT_EQ(decoded_blocks.size(), expect_part_num);
-        // Total sent rows should equals selective count.
-        ASSERT_EQ(res_rows, expect_selective_rows);
-    }
-
-    std::vector<Int64> part_col_ids;
-    TiDB::TiDBCollators part_col_collators;
-
-    std::unique_ptr<DAGContext> dag_context_ptr;
-};
-
 // Input block data is distributed uniform.
 // partition_num: 4
 // fine_grained_shuffle_stream_count: 8
@@ -612,7 +408,7 @@ try
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -677,7 +473,7 @@ try
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
         // 3. Start to write.
-        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,
@@ -764,7 +560,7 @@ try
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -828,7 +624,7 @@ try
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -1010,7 +806,7 @@ try
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
 
         // 3. Start to write.
-        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>, false>>(
+        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             part_col_ids,
             part_col_collators,

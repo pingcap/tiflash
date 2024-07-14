@@ -94,8 +94,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             compression_mode,
             context.getSettingsRef().batch_send_min_limit_compression,
             log->identifier(),
-            /*is_async=*/false,
-            /*selective_block=*/auto_pass_through_agg);
+            /*is_async=*/false);
         stream
             = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
@@ -131,8 +130,7 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
             compression_mode,
             context.getSettingsRef().batch_send_min_limit_compression,
             log->identifier(),
-            /*is_async=*/true,
-            /*selective_block=*/auto_pass_through_agg);
+            /*is_async=*/true);
         builder.setSinkOp(
             std::make_unique<ExchangeSenderSinkOp>(exec_context, log->identifier(), std::move(response_writer)));
     });

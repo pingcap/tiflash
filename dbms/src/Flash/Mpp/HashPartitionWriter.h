@@ -25,7 +25,7 @@ class DAGContext;
 enum class CompressionMethod;
 enum MPPDataPacketVersion : int64_t;
 
-template <class ExchangeWriterPtr, bool selective_block>
+template <class ExchangeWriterPtr>
 class HashPartitionWriter : public DAGResponseWriter
 {
 public:
