@@ -88,7 +88,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
         child,
         "final projection",
         project_actions,
-        /*after_auto_pass_through_hashagg*/false); // todo fix
+        after_auto_pass_through_hashagg);
     // Final Projection is not a tidb operator, so no need to record profile streams.
     physical_projection->notTiDBOperator();
     return physical_projection;
@@ -136,7 +136,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         child,
         "final projection",
         project_actions,
-        /*after_auto_pass_through_hashagg*/false); // todo fix
+        after_auto_pass_through_hashagg);
     // Final Projection is not a tidb operator, so no need to record profile streams.
     physical_projection->notTiDBOperator();
     return physical_projection;
