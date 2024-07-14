@@ -15,6 +15,7 @@
 #include <Operators/AutoPassThroughHashAggContext.h>
 
 #include <magic_enum.hpp>
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -101,8 +102,17 @@ Block AutoPassThroughHashAggContext::getData()
     if (merging_buckets)
     {
         auto block = merging_buckets->getData(/*concurrency_index=*/0);
+        if (block)
+        {
+            LOG_DEBUG(log, "gjt debug getData block: {}", block.dumpStructure());
+        }
+        else
+        {
+            LOG_DEBUG(log, "gjt debug getData got merging buckets but empty block");
+        }
         return block;
     }
+    LOG_DEBUG(log, "gjt debug getData empty block");
     return {};
 }
 
@@ -191,8 +201,6 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
         if (func_name.find("count") != std::string::npos)
         {
             auto count_agg_func_mut_col = ColumnVector<UInt64>::create();
-
-            // todo reserve
             count_agg_func_mut_col->reserve(block.rows());
             const auto field = Field(static_cast<UInt64>(0));
             for (size_t i = 0; i < block.rows(); ++i)
@@ -218,30 +226,33 @@ Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
             {
                 const String func_name = desc.function->getName();
                 ColumnPtr new_col;
-                // todo col_name has extra space ending
-                // todo make sure it's lowercase
-                if (func_name.find("sum") != std::string::npos)
-                {
-                    // todo type ok?
-                    const Names & arg_names = desc.argument_names;
-                    RUNTIME_CHECK(arg_names.size() == 1);
-                    new_col = block.getByName(arg_names[0]).column;
-                }
-                else if (func_name.find("count") != std::string::npos)
-                {
-                    new_col = count_agg_func_col;
-                }
-                else if (func_name.find("first_row") != std::string::npos)
-                {
-                    const Names & arg_names = desc.argument_names;
-                    RUNTIME_CHECK(arg_names.size() == 1);
-                    new_col = block.getByName(arg_names[0]).column;
-                }
-                else
-                {
+                // // todo col_name has extra space ending
+                // // todo make sure it's lowercase
+                // if (func_name.find("sum") != std::string::npos)
+                // {
+                //     // todo type ok?
+                //     const Names & arg_names = desc.argument_names;
+                //     RUNTIME_CHECK(arg_names.size() == 1);
+                //     new_col = block.getByName(arg_names[0]).column;
+                //     // if (const auto * col_nullable = checkAndGetColumn<const ColumnNullable *>(new_col.get()))
+                //     //     new_col = col_nullable->getNestedColumnPtr();
+                // }
+                // else if (func_name.find("count") != std::string::npos)
+                // {
+                //     new_col = count_agg_func_col;
+                // }
+                // else if (func_name.find("first_row") != std::string::npos)
+                // {
+                //     const Names & arg_names = desc.argument_names;
+                //     RUNTIME_CHECK(arg_names.size() == 1);
+                //     new_col = block.getByName(arg_names[0]).column;
+                // }
+                // else
+                // {
                     // todo other agg funcs
                     new_col = getPassThroughColumnGeneric(desc, block, arena);
-                }
+                // }
+                RUNTIME_CHECK(new_col);
                 agg_func_col_found = true;
                 new_block.insert(
                         col_idx,

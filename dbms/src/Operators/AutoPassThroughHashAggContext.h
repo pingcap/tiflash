@@ -92,6 +92,14 @@ public:
     Block popPassThroughBuffer()
     {
         Block res = pass_through_block_buffer.front();
+        if (res)
+        {
+            LOG_DEBUG(log, "gjt debug getData block: {}", res.dumpStructure());
+        }
+        else
+        {
+            LOG_DEBUG(log, "gjt debug getData got merging buckets but empty block");
+        }
         pass_through_block_buffer.pop_front();
         return res;
     }

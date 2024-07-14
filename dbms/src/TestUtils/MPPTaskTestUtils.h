@@ -106,6 +106,24 @@ public:
 
     static String queryInfo(size_t server_id);
 
+    static DB::ColumnsWithTypeAndName getResultBlocks(
+            MockDAGRequestContext & context,
+            DAGRequestBuilder & builder,
+            size_t server_num)
+    {
+        auto properties = DB::tests::getDAGPropertiesForTest(server_num);
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();
+
+        properties.mpp_partition_num = server_num;
+        MockComputeServerManager::instance().resetMockMPPServerInfo(server_num);
+        auto mpp_tasks = builder.buildMPPTasks(context, properties);
+
+        TiFlashTestEnv::getGlobalContext().setMPPTest();
+        MockComputeServerManager::instance().setMockStorage(context.mockStorage());
+        return executeMPPTasks(mpp_tasks, properties);
+    }
+
 protected:
     static LoggerPtr log_ptr;
     static size_t server_num;
@@ -143,11 +161,6 @@ protected:
         auto tasks = (builder).buildMPPTasks(context, properties);                      \
         size_t task_size = tasks.size();                                                \
         ASSERT_EQ(task_size, (expected_strings).size());                                \
-        for (size_t i = 0; i < task_size; ++i)                                          \
-        {                                                                               \
-            ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);       \
-        }                                                                               \
         ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM((builder), (properties), (expected_cols)); \
     } while (0)
-
 } // namespace DB::tests

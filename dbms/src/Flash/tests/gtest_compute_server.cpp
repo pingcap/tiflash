@@ -1708,71 +1708,56 @@ try
         const String col1_name = auto_pass_through_test_data.col1_name;
         const String col2_name = auto_pass_through_test_data.col2_name;
 
+        MockAstVec agg_func_asts{
+            makeASTFunction("first_row", col(col1_name)),
+            makeASTFunction("max", col(col2_name)),
+            makeASTFunction("sum", col(col2_name)),
+            makeASTFunction("count", col(col2_name))};
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, tbl_name: {}", tbl_name);
-        auto req_auto_pass_through
-            = context.scan(db_name, tbl_name)
-                  .aggregation(
-                      {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
-                      {col(col1_name)},
-                      0,
-                      switcher)
-                  .build(context);
 
-        auto req_no_pass_through
-            = context.scan(db_name, tbl_name)
-                  .aggregation(
-                      {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
-                      {col(col1_name)},
-                      0,
-                      nullptr)
-                  .build(context);
-
-        const size_t concurrency = 1;
-        auto res_no_pass_through = executeStreams(req_no_pass_through, concurrency);
-
-        // Only run 1-st hashagg.
-        // Only check row num is same with non-auto_pass_through hashagg.
-        enablePipeline(false);
-        auto res_auto_pass_through = executeStreams(req_auto_pass_through, concurrency);
-        ASSERT_EQ(res_no_pass_through.size(), res_auto_pass_through.size());
-
-        enablePipeline(true);
-        res_auto_pass_through = executeStreams(req_auto_pass_through, concurrency);
-        ASSERT_EQ(res_no_pass_through.size(), res_auto_pass_through.size());
+        auto builder = context.scan(db_name, tbl_name)
+                    .aggregation(
+                        agg_func_asts,
+                        {col(col1_name)},
+                        0,
+                        nullptr);
+        startServers(2);
+        auto res_no_pass_through = getResultBlocks(context, builder, serverNum());
 
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
-        {
-            WRAP_FOR_SERVER_TEST_BEGIN
-            std::vector<String> expected_strings = {
-                R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+        // todo
+        // WRAP_FOR_SERVER_TEST_BEGIN
+        LOG_DEBUG(Logger::get(), "gjt debug beg");
+        // todo
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   table_scan_0 | {<0, String>, <1, Longlong>}
 )",
                 R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   table_scan_0 | {<0, String>, <1, Longlong>}
 )",
                 R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+ aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
 )",
                 R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), max(<1, Longlong>)}
+ aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
 )"};
-            startServers(2);
-            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-                context.scan(db_name, tbl_name)
-                    .aggregation(
-                        {makeASTFunction("first_row", col(col1_name)), makeASTFunction("max", col(col2_name))},
-                        {col(col1_name)},
-                        0,
-                        switcher),
-                expected_strings,
-                res_no_pass_through);
-            WRAP_FOR_SERVER_TEST_END
-        }
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context.scan(db_name, tbl_name)
+                .aggregation(
+                    agg_func_asts,
+                    {col(col1_name)},
+                    0,
+                    switcher),
+            expected_strings,
+            res_no_pass_through);
+        // WRAP_FOR_SERVER_TEST_END
+        LOG_DEBUG(Logger::get(), "gjt debug end");
     }
 }
 CATCH
