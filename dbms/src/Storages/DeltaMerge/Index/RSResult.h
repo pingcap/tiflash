@@ -104,4 +104,10 @@ ALWAYS_INLINE inline bool isUse(RSResult res) noexcept
 {
     return res != RSResult::None && res != RSResult::NoneNull;
 }
+
+ALWAYS_INLINE inline bool allMatch(RSResult res) noexcept
+{
+    return res == RSResult::All;
+}
+
 } // namespace DB::DM

@@ -96,7 +96,7 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    size_t getReadRows();
+    std::tuple<size_t, bool> getReadRows();
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
