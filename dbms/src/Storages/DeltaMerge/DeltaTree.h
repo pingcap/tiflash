@@ -174,8 +174,8 @@ struct DTLeaf
 
     static inline bool overflow(size_t count) { return count > M * S; }
     static inline bool underflow(size_t count) { return count < M; }
-    inline bool legal() { return !overflow(count) && !underflow(count); }
-    inline std::string state() { return overflow(count) ? "overflow" : (underflow(count) ? "underflow" : "legal"); }
+    inline bool legal() const { return !overflow(count) && !underflow(count); }
+    inline String state() const { return overflow(count) ? "overflow" : (underflow(count) ? "underflow" : "legal"); }
 
     /// shift entries from pos with n steps.
     inline void shiftEntries(size_t pos, int n)
@@ -371,8 +371,8 @@ struct DTIntern
 
     static inline bool overflow(size_t count) { return count > F * S; }
     static inline bool underflow(size_t count) { return count < F; }
-    inline bool legal() { return !overflow(count) && !underflow(count); }
-    inline std::string state() { return overflow(count) ? "overflow" : (underflow(count) ? "underflow" : "legal"); }
+    inline bool legal() const { return !overflow(count) && !underflow(count); }
+    inline String state() const { return overflow(count) ? "overflow" : (underflow(count) ? "underflow" : "legal"); }
 
     /// shift entries from pos with n steps.
     inline void shiftEntries(size_t child_pos, int n)

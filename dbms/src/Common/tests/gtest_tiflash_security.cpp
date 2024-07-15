@@ -76,6 +76,24 @@ cert_allowed_cn="tidb"
     ASSERT_EQ((int)new_tiflash_config.allowedCommonNames().count("tidb"), 0);
 }
 
+TEST(TiFlashSecurityTest, EmptyConfig)
+{
+    TiFlashSecurityConfig tiflash_config;
+    const auto log = Logger::get();
+    tiflash_config.setLog(log);
+
+    String test =
+        R"(
+[security]
+ca_path=""
+cert_path=""
+key_path=""
+        )";
+    auto new_config = loadConfigFromString(test);
+    tiflash_config.update(*new_config);
+    ASSERT_FALSE(tiflash_config.hasTlsConfig());
+}
+
 TEST(TiFlashSecurityTest, RedactLogConfig)
 {
     for (const auto & [input, expect] : std::vector<std::pair<String, RedactMode>>{
