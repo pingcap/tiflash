@@ -320,6 +320,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         {
             group_builder.transform([&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<AutoPassThroughAggregateTransform<true>>(
+                    builder.getCurrentHeader(),
                     exec_context,
                     params,
                     log->identifier(),
@@ -330,6 +331,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         {
             group_builder.transform([&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<AutoPassThroughAggregateTransform<false>>(
+                    builder.getCurrentHeader(),
                     exec_context,
                     params,
                     log->identifier(),

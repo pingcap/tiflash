@@ -25,6 +25,7 @@ class AutoPassThroughAggregateTransform : public TransformOp
 {
 public:
     AutoPassThroughAggregateTransform(
+        const Block & child_header_,
         PipelineExecutorContext & exec_context_,
         const Aggregator::Params & params_,
         const String & req_id_,
@@ -33,6 +34,7 @@ public:
         , status(Status::building_hash_map)
     {
         auto_pass_through_context = std::make_shared<AutoPassThroughHashAggContext>(
+            child_header_,
             params_,
             [&]() { return exec_context.isCancelled(); },
             req_id_,

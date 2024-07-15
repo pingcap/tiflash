@@ -51,6 +51,7 @@ class ComputeServerRunner : public DB::tests::MPPTaskTestUtils
 {
 public:
     void initializeContext() override
+    try
     {
         ExecutorTest::initializeContext();
         switcher = std::make_shared<AutoPassThroughSwitcher>(true, ::tipb::TiFlashPreAggMode::Auto);
@@ -141,6 +142,7 @@ public:
             {{"col1", TiDB::TP::TypeLong}},
             {toNullableVec<Int32>("col1", {})});
     }
+    CATCH
 
     void addOneGather(
         std::vector<std::thread> & running_queries,
@@ -314,7 +316,14 @@ public:
                 aggregate_descriptions,
                 /*final=*/true,
                 spill_config);
+
+            ColumnsWithTypeAndName cols{
+                {nullptr, col1_data_type, col1_name},
+                {nullptr, col2_data_type, col2_name}};
+            Block child_header(cols);
+
             return std::make_unique<AutoPassThroughHashAggContext>(
+                child_header,
                 *params,
                 [&]() { return false; },
                 req_id,

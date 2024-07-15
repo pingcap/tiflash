@@ -36,6 +36,7 @@ public:
     {
         children.push_back(input_);
         auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(
+            children[0]->getHeader(),
             params_,
             [&]() { return this->isCancelled(); },
             req_id,

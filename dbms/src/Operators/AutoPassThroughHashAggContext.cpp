@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/AutoPassThroughHashAggContext.h>
+#include <Columns/ColumnDecimal.h>
 
 #include <magic_enum.hpp>
 #include <ext/scope_guard.h>
@@ -167,100 +168,15 @@ void AutoPassThroughHashAggContext::pushPassThroughBuffer(const Block & block)
     pass_through_block_buffer.push_back(block);
 }
 
-ColumnPtr getPassThroughColumnGeneric(const AggregateDescription & desc, const Block & block, Arena & arena)
-{
-    auto new_col = desc.function->getReturnType()->createColumn();
-    new_col->reserve(block.rows());
-    auto * place = arena.alignedAlloc(desc.function->sizeOfData(), desc.function->alignOfData());
-
-    ColumnRawPtrs argument_columns;
-    argument_columns.reserve(block.columns());
-    for (auto arg_col_idx : desc.arguments)
-        argument_columns.push_back(block.getByPosition(arg_col_idx).column.get());
-
-    for (size_t row_idx = 0; row_idx < block.rows(); ++row_idx)
-    {
-        desc.function->create(place);
-        desc.function->add(place, argument_columns.data(), row_idx, &arena);
-        desc.function->insertResultInto(place, *new_col, &arena);
-    }
-    return new_col;
-}
-
 Block AutoPassThroughHashAggContext::getPassThroughBlock(const Block & block)
 {
-    auto header = aggregator->getHeader(/*final=*/true);
-    Block new_block;
-    const auto & aggregate_descriptions = aggregator->getParams().aggregates;
-    Arena arena;
-    // todo maybe static
-    ColumnPtr count_agg_func_col;
-    for (const auto & desc : aggregate_descriptions)
+    auto new_block = aggregator->getHeader(/*final=*/true);
+    // header.columns() should be equal to  column_generators.size(), already checked in ctor.
+    for (size_t i = 0; i < new_block.columns(); ++i)
     {
-        const String func_name = desc.function->getName();
-        if (func_name.find("count") != std::string::npos)
-        {
-            auto count_agg_func_mut_col = ColumnVector<UInt64>::create();
-            count_agg_func_mut_col->reserve(block.rows());
-            const auto field = Field(static_cast<UInt64>(0));
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                count_agg_func_mut_col->insert(field);
-            }
-            count_agg_func_col = std::move(count_agg_func_mut_col);
-        }
-    }
-    for (size_t col_idx = 0; col_idx < header.columns(); ++col_idx)
-    {
-        auto col_name = header.getByPosition(col_idx).name;
-        if (block.has(col_name))
-        {
-            new_block.insert(col_idx, block.getByName(col_name));
-            continue;
-        }
-
-        bool agg_func_col_found = false;
-        for (const auto & desc : aggregate_descriptions)
-        {
-            if (desc.column_name == col_name)
-            {
-                const String func_name = desc.function->getName();
-                ColumnPtr new_col;
-                // // todo col_name has extra space ending
-                // // todo make sure it's lowercase
-                // if (func_name.find("sum") != std::string::npos)
-                // {
-                //     // todo type ok?
-                //     const Names & arg_names = desc.argument_names;
-                //     RUNTIME_CHECK(arg_names.size() == 1);
-                //     new_col = block.getByName(arg_names[0]).column;
-                //     // if (const auto * col_nullable = checkAndGetColumn<const ColumnNullable *>(new_col.get()))
-                //     //     new_col = col_nullable->getNestedColumnPtr();
-                // }
-                // else if (func_name.find("count") != std::string::npos)
-                // {
-                //     new_col = count_agg_func_col;
-                // }
-                // else if (func_name.find("first_row") != std::string::npos)
-                // {
-                //     const Names & arg_names = desc.argument_names;
-                //     RUNTIME_CHECK(arg_names.size() == 1);
-                //     new_col = block.getByName(arg_names[0]).column;
-                // }
-                // else
-                // {
-                    // todo other agg funcs
-                    new_col = getPassThroughColumnGeneric(desc, block, arena);
-                // }
-                RUNTIME_CHECK(new_col);
-                agg_func_col_found = true;
-                new_block.insert(
-                        col_idx,
-                        ColumnWithTypeAndName{std::move(new_col), desc.function->getReturnType(), desc.column_name});
-                break;
-            }
-        }
-        RUNTIME_CHECK_MSG(agg_func_col_found, "cannot find agg func column({}) from aggregate descriptions", col_name);
+        auto res = column_generators[i](block);
+        RUNTIME_CHECK(res);
+        new_block.getByPosition(i).column = res;
     }
     return new_block;
 }

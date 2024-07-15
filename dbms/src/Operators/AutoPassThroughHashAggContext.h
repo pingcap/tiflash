@@ -16,6 +16,7 @@
 
 #include <Interpreters/Aggregator.h>
 #include <tipb/executor.pb.h>
+#include <Operators/AutoPassThroughHashAggHelper.h>
 
 namespace DB
 {
@@ -51,6 +52,7 @@ class AutoPassThroughHashAggContext
 {
 public:
     AutoPassThroughHashAggContext(
+        const Block & child_header_,
         const Aggregator::Params & params_,
         Aggregator::CancellationHook && hook,
         const String & req_id_,
@@ -71,6 +73,11 @@ public:
         agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
         RUNTIME_CHECK(adjust_row_limit > 1024 && other_state_row_limit > 1024);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
+
+        auto header = aggregator->getHeader(/*final=*/true);
+        const auto & aggregate_descriptions = aggregator->getParams().aggregates;
+        column_generators = setUpPassThroughColumnGenerator(header, child_header_, aggregate_descriptions);
+        RUNTIME_CHECK(header.columns() == column_generators.size());
     }
 
     ~AutoPassThroughHashAggContext() { statistics.log(log); }
@@ -213,7 +220,13 @@ private:
     LoggerPtr log;
 
     static constexpr size_t INIT_STATE_HASHMAP_THRESHOLD = 2 * 1024 * 1024;
+
+    std::vector<AutoPassThroughColumnGenerator> column_generators;
 };
+
+ColumnPtr getPassThroughColumnForSum(const AggregateDescription & desc, const Block & block);
+ColumnPtr getPassThroughColumnForCount(const AggregateDescription & desc, const Block & block);
+ColumnPtr getPassThroughColumnGeneric(const AggregateDescription & desc, const Block & block, Arena & arena);
 
 using AutoPassThroughHashAggContextPtr = std::shared_ptr<AutoPassThroughHashAggContext>;
 } // namespace DB
