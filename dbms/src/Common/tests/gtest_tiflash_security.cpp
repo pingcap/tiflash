@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/TiFlashSecurity.h>
 #include <Poco/File.h>
 #include <Poco/FileStream.h>
 #include <TestUtils/ConfigTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>
@@ -49,9 +51,8 @@ TEST(TiFlashSecurityTest, Config)
         ASSERT_EQ(cns.count("efg"), 1);
     }
 
-    TiFlashSecurityConfig tiflash_config;
     const auto log = Logger::get();
-    tiflash_config.setLog(log);
+    TiFlashSecurityConfig tiflash_config(log);
 
     String test =
         R"(
@@ -77,22 +78,51 @@ cert_allowed_cn="tidb"
 }
 
 TEST(TiFlashSecurityTest, EmptyConfig)
+try
 {
-    TiFlashSecurityConfig tiflash_config;
     const auto log = Logger::get();
-    tiflash_config.setLog(log);
 
-    String test =
-        R"(
-[security]
+    for (const auto & c : Strings{
+             // empty strings
+             R"([security]
+ca_path=""
+cert_path=""
+key_path="")",
+             // non-empty strings with space only
+             R"([security]
 ca_path="  "
 cert_path=""
-key_path=""
-        )";
-    auto new_config = loadConfigFromString(test);
-    tiflash_config.update(*new_config);
-    ASSERT_FALSE(tiflash_config.hasTlsConfig());
+key_path="")",
+             // only a part of ssl path is set
+             R"([security]
+ca_path="security/ca.pem"
+cert_path=""
+key_path="")",
+             R"([security]
+ca_path=""
+cert_path="security/cert.pem"
+key_path="")",
+             R"([security]
+ca_path=""
+cert_path=""
+key_path="security/key.pem")",
+         })
+    {
+        TiFlashSecurityConfig tiflash_config(log);
+        auto new_config = loadConfigFromString(c);
+        try
+        {
+            tiflash_config.init(*new_config);
+            ASSERT_FALSE(tiflash_config.hasTlsConfig()) << fmt::format("case: {}", c);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_FALSE(tiflash_config.hasTlsConfig()) << fmt::format("case: {}", c);
+            ASSERT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER) << fmt::format("case: {}", c);
+        }
+    }
 }
+CATCH
 
 TEST(TiFlashSecurityTest, RedactLogConfig)
 {

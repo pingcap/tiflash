@@ -41,8 +41,6 @@ extern const int INVALID_CONFIG_PARAMETER;
 class TiFlashSecurityConfig : public ConfigObject
 {
 public:
-    TiFlashSecurityConfig() = default;
-
     explicit TiFlashSecurityConfig(const LoggerPtr & log_)
         : log(log_)
     {}
@@ -54,12 +52,6 @@ public:
             update(config);
             inited = true;
         }
-    }
-
-    void setLog(const LoggerPtr & log_)
-    {
-        std::unique_lock lock(mu);
-        log = log_;
     }
 
     bool hasTlsConfig()
@@ -358,8 +350,10 @@ private:
     String key_path;
 
     FilesChangesTracker cert_files;
-    RedactMode redact_info_log = RedactMode::Disable;
     std::set<String> allowed_common_names;
+
+    RedactMode redact_info_log = RedactMode::Disable;
+
     bool has_tls_config = false;
     bool has_security = false;
     bool inited = false;
