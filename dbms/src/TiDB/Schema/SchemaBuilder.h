@@ -74,7 +74,7 @@ private:
     void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id, std::string_view action);
 
     /// Parameter schema_name should be mapped.
-    void applyDropPhysicalTable(const String & db_name, TableID table_id, std::string_view action);
+    void applyDropPhysicalTable(const String & db_name, TableID table_id, bool must_update_tombstone, std::string_view action);
 
     void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
