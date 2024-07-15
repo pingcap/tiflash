@@ -3139,7 +3139,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         dm_context.tracing_id);
 }
 
-BlockInputStreamPtr Segment::getPushDownBFInputStream(
+BlockInputStreamPtr Segment::getBitmapFilterInputStreamPushDown(
     BitmapFilterPtr && bitmap_filter,
     const SegmentSnapshotPtr & segment_snap,
     const DMContext & dm_context,
@@ -3155,18 +3155,17 @@ BlockInputStreamPtr Segment::getPushDownBFInputStream(
     const auto enable_handle_clean_read = !hasColumn(*columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;
     const auto enable_del_clean_read = !hasColumn(*columns_to_read, TAG_COLUMN_ID);
-
+    const auto & predicate_filter = push_down_filter ? push_down_filter->rest_filter : nullptr;
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *columns_to_read,
         read_ranges,
-        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-        ,
+        push_down_filter ? push_down_filter->rs_operator : EMPTY_RS_OPERATOR,
         start_ts,
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::Query,
-        /* predicate_filter */ filter ? filter->rest_filter : nullptr,
+        predicate_filter,
         is_fast_scan,
         enable_del_clean_read);
 
@@ -3176,7 +3175,7 @@ BlockInputStreamPtr Segment::getPushDownBFInputStream(
         columns_to_read,
         this->rowkey_range,
         ReadTag::Query,
-        /* predicate_filter */ filter ? filter->rest_filter : nullptr);
+        predicate_filter);
 
     return std::make_shared<BitmapFilterBlockInputStream>(
         *columns_to_read,
