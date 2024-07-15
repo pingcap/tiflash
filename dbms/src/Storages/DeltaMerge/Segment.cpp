@@ -3149,7 +3149,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStreamPushDown(
     UInt64 start_ts,
     size_t expected_block_size)
 {
-    assert(filter == nullptr || filter->lm_filter == nullptr);
+    assert(push_down_filter == nullptr || push_down_filter->lm_filter == nullptr);
 
     // set `is_fast_scan` to true to try to enable clean read
     const auto enable_handle_clean_read = !hasColumn(*columns_to_read, EXTRA_HANDLE_COLUMN_ID);
