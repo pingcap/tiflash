@@ -1537,6 +1537,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
 
     auto & tmt_context = context.getTMTContext();
 
+    const String action = "DropAllSchema";
     /// Drop all tables.
     auto storage_map = tmt_context.getStorages().getAllStorage();
     for (const auto & storage : storage_map)
@@ -1546,7 +1547,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
         {
             continue;
         }
-        applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id);
+        applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id, /*must_update_tombstone*/ false, action);
         LOG_DEBUG(log, "Table {}.{} dropped during drop all schemas", storage.second->getDatabaseName(), name_mapper.debugTableName(table_info));
     }
 
