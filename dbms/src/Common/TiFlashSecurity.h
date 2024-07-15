@@ -272,17 +272,17 @@ private:
         String new_key_path;
         if (config.has("security.ca_path"))
         {
-            new_ca_path = config.getString("security.ca_path");
+            new_ca_path = Poco::trim(config.getString("security.ca_path"));
             miss_ca_path = new_ca_path.empty();
         }
         if (config.has("security.cert_path"))
         {
-            new_cert_path = config.getString("security.cert_path");
+            new_cert_path = Poco::trim(config.getString("security.cert_path"));
             miss_cert_path = new_cert_path.empty();
         }
         if (config.has("security.key_path"))
         {
-            new_key_path = config.getString("security.key_path");
+            new_key_path = Poco::trim(config.getString("security.key_path"));
             miss_key_path = new_key_path.empty();
         }
 

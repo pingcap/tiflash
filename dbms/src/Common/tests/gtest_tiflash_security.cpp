@@ -85,7 +85,7 @@ TEST(TiFlashSecurityTest, EmptyConfig)
     String test =
         R"(
 [security]
-ca_path=""
+ca_path="  "
 cert_path=""
 key_path=""
         )";
