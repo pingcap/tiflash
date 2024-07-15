@@ -571,13 +571,15 @@ public:
 
     Block read(FilterPtr & res_filter, bool return_filter) override
     {
+        // TODO: if return_filter is false??
+        RUNTIME_CHECK(return_filter);
         if (filter && filter->alwaysFalse())
         {
             return {};
         }
         while (true)
         {
-            auto block = doRead();
+            auto block = read();
             if (!block || !filter)
             {
                 res_filter = nullptr;
@@ -594,7 +596,6 @@ public:
             {
                 return block;
             }
-            // TODO: if return_filter is false??
         }
     }
 

@@ -39,6 +39,12 @@ Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_fil
 {
     FilterPtr block_filter = nullptr;
     auto [block, from_delta] = readBlock(stable, delta, block_filter, /*return_filter*/ true);
+    LOG_DEBUG(
+        log,
+        "readBlock: rows={} from_delta={} block_filter={}",
+        block.rows(),
+        from_delta,
+        fmt::ptr(block_filter));
     if (block)
     {
         if (from_delta)
@@ -77,6 +83,7 @@ Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_fil
             res_filter = nullptr;
         }
     }
+    LOG_DEBUG(log, "Final readBlock: rows={}", block.rows());
     return block;
 }
 

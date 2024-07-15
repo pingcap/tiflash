@@ -366,7 +366,7 @@ PushDownFilterPtr PushDownFilter::build(
             tracing_logger->getChild("Rest"));
     }
     auto casted_columns = buildCastedColumns(table_scan_columns_to_read, lm_casted_columns, rest_casted_columns);
-    LOG_DEBUG(tracing_logger, "casted_columns={}", *casted_columns);
+    LOG_DEBUG(tracing_logger, "columns_to_read: {} => {}", table_scan_columns_to_read, *casted_columns);
     return std::make_shared<PushDownFilter>(
         rs_operator,
         lm_filter,
