@@ -82,11 +82,15 @@ public:
 
     static bool isCacheableColumn(const ColumnDefine & cd) { return cd.type->isInteger(); }
 
-    IColumn::Ptr get(const DMFilePtr & dmfile, ColumnID column_id, std::function<IColumn::Ptr()> load_fn)
+    IColumn::Ptr get(
+        const String & dmf_parent_path,
+        PageIdU64 dmf_id,
+        ColumnID column_id,
+        std::function<IColumn::Ptr()> load_fn)
     {
         auto key = CacheKey{
-            .dmfile_parent_path = dmfile->parentPath(),
-            .dmfile_id = dmfile->fileId(),
+            .dmfile_parent_path = dmf_parent_path,
+            .dmfile_id = dmf_id,
             .column_id = column_id,
         };
         auto [result, _] = cache.getOrSet(key, [&load_fn] { return std::make_shared<IColumn::Ptr>(load_fn()); });
