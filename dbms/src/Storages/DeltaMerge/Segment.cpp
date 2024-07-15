@@ -3139,6 +3139,54 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         dm_context.tracing_id);
 }
 
+BlockInputStreamPtr Segment::getPushDownBFInputStream(
+    BitmapFilterPtr && bitmap_filter,
+    const SegmentSnapshotPtr & segment_snap,
+    const DMContext & dm_context,
+    const ColumnDefinesPtr & columns_to_read,
+    const RowKeyRanges & read_ranges,
+    const PushDownFilterPtr & push_down_filter,
+    UInt64 start_ts,
+    size_t expected_block_size)
+{
+    assert(filter == nullptr || filter->lm_filter == nullptr);
+
+    // set `is_fast_scan` to true to try to enable clean read
+    const auto enable_handle_clean_read = !hasColumn(*columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+    constexpr auto is_fast_scan = true;
+    const auto enable_del_clean_read = !hasColumn(*columns_to_read, TAG_COLUMN_ID);
+
+    SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
+        dm_context,
+        *columns_to_read,
+        read_ranges,
+        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+        ,
+        start_ts,
+        expected_block_size,
+        enable_handle_clean_read,
+        ReadTag::Query,
+        /* predicate_filter */ filter ? filter->rest_filter : nullptr,
+        is_fast_scan,
+        enable_del_clean_read);
+
+    SkippableBlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
+        dm_context,
+        segment_snap->delta,
+        columns_to_read,
+        this->rowkey_range,
+        ReadTag::Query,
+        /* predicate_filter */ filter ? filter->rest_filter : nullptr);
+
+    return std::make_shared<BitmapFilterBlockInputStream>(
+        *columns_to_read,
+        stable_stream,
+        delta_stream,
+        segment_snap->stable->getDMFilesRows(),
+        bitmap_filter,
+        dm_context.tracing_id);
+}
+
 BlockInputStreamPtr Segment::getLateMaterializationStream(
     BitmapFilterPtr && bitmap_filter,
     const DMContext & dm_context,
@@ -3307,25 +3355,26 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             filter,
             start_ts,
             read_data_block_rows);
+        stream = filter && filter->hasRestFilter()
+            ? filter->rest_filter->buildFilterInputStream(stream, /*need_project*/ true)
+            : stream;
     }
     else // !filter || !filter->hasLMFilter()
     {
         const auto & read_columns = filter && filter->restColumns() ? filter->restColumns()
                                                                     : std::make_shared<ColumnDefines>(columns_to_read);
-        stream = getBitmapFilterInputStream(
+        stream = getBitmapFilterInputStreamPushDown(
             std::move(bitmap_filter),
             segment_snap,
             dm_context,
             read_columns,
             real_ranges,
-            filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+            filter,
             start_ts,
             read_data_block_rows);
     }
 
-    return filter && filter->hasRestFilter()
-        ? filter->rest_filter->buildFilterInputStream(stream, /*need_project*/ true)
-        : stream;
+    return stream;
 }
 
 // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.

@@ -702,6 +702,15 @@ public:
         const RSOperatorPtr & filter,
         UInt64 start_ts,
         size_t expected_block_size);
+    BlockInputStreamPtr getBitmapFilterInputStreamPushDown(
+        BitmapFilterPtr && bitmap_filter,
+        const SegmentSnapshotPtr & segment_snap,
+        const DMContext & dm_context,
+        const ColumnDefinesPtr & columns_to_read,
+        const RowKeyRanges & read_ranges,
+        const PushDownFilterPtr & push_down_filter,
+        UInt64 start_ts,
+        size_t expected_block_size);
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
