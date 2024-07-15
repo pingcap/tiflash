@@ -160,26 +160,25 @@ void ColumnAggregateFunction::updateHashWithValues(
 
 void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    updateWeakHash32Impl<false>(hash, nullptr);
+    updateWeakHash32Impl<false>(hash, {});
 }
 
 void ColumnAggregateFunction::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr &,
     String &,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
-    updateWeakHash32Impl<true>(hash, selective_ptr);
+    updateWeakHash32Impl<true>(hash, selective);
 }
 
-template <bool selective>
-void ColumnAggregateFunction::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const
+template <bool selective_block>
+void ColumnAggregateFunction::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const
 {
     size_t rows;
-    if constexpr (selective)
+    if constexpr (selective_block)
     {
-        RUNTIME_CHECK(selective_ptr);
-        rows = selective_ptr->size();
+        rows = selective.size();
     }
     else
     {
@@ -198,8 +197,8 @@ void ColumnAggregateFunction::updateWeakHash32Impl(WeakHash32 & hash, const Bloc
     for (size_t i = 0; i < rows; ++i)
     {
         size_t row = i;
-        if constexpr (selective)
-            row = (*selective_ptr)[i];
+        if constexpr (selective_block)
+            row = selective[i];
 
         WriteBufferFromVector<std::vector<UInt8>> wbuf(v);
         func->serialize(data[row], wbuf);
@@ -426,28 +425,27 @@ ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_r
 MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector)
     const
 {
-    return scatterImpl<false>(num_columns, selector, nullptr);
+    return scatterImpl<false>(num_columns, selector, {});
 }
 
 MutableColumns ColumnAggregateFunction::scatter(
     IColumn::ColumnIndex num_columns,
     const IColumn::Selector & selector,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
-    return scatterImpl<true>(num_columns, selector, selective_ptr);
+    return scatterImpl<true>(num_columns, selector, selective);
 }
 
-template <bool selective>
+template <bool selective_block>
 MutableColumns ColumnAggregateFunction::scatterImpl(
     IColumn::ColumnIndex num_columns,
     const IColumn::Selector & selector,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
     size_t rows = size();
-    if constexpr (selective)
+    if constexpr (selective_block)
     {
-        RUNTIME_CHECK(selective_ptr);
-        rows = selective_ptr->size();
+        rows = selective.size();
     }
 
     RUNTIME_CHECK_MSG(
@@ -472,8 +470,8 @@ MutableColumns ColumnAggregateFunction::scatterImpl(
     for (size_t i = 0; i < rows; ++i)
     {
         size_t row = i;
-        if constexpr (selective)
-            row = (*selective_ptr)[i];
+        if constexpr (selective_block)
+            row = selective[i];
 
         static_cast<ColumnAggregateFunction &>(*columns[selector[i]]).data.push_back(data[row]);
     }
@@ -485,7 +483,7 @@ void ColumnAggregateFunction::scatterTo(ScatterColumns &, const Selector &) cons
     throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }
 
-void ColumnAggregateFunction::scatterTo(ScatterColumns &, const Selector &, const BlockSelectivePtr &) const
+void ColumnAggregateFunction::scatterTo(ScatterColumns &, const Selector &, const BlockSelective &) const
 {
     throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }

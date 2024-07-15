@@ -85,7 +85,7 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
         const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insert(const Field & x) override;
@@ -146,7 +146,7 @@ public:
     {
         return scatterImpl<ColumnArray>(num_columns, selector);
     }
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
         const override
     {
         return scatterImpl<ColumnArray>(num_columns, selector, selective);
@@ -155,8 +155,7 @@ public:
     {
         scatterToImpl<ColumnArray>(columns, selector);
     }
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
-        const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
     {
         scatterToImpl<ColumnArray>(columns, selector, selective);
     }
@@ -209,12 +208,12 @@ private:
     ColumnPtr filterNullable(const Filter & filt, ssize_t result_size_hint) const;
     ColumnPtr filterGeneric(const Filter & filt, ssize_t result_size_hint) const;
 
-    template <bool selective>
+    template <bool selective_block>
     void updateWeakHash32Impl(
         WeakHash32 & hash,
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container,
-        const BlockSelectivePtr & selective_ptr) const;
+        const BlockSelective & selective) const;
 };
 
 

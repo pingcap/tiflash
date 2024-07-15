@@ -109,12 +109,12 @@ public:
         const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
         const override;
 
     int compareAt(size_t p1, size_t p2, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
-        const ColumnFixedString & rhs = static_cast<const ColumnFixedString &>(rhs_);
+        const auto & rhs = static_cast<const ColumnFixedString &>(rhs_);
         return memcmp(&chars[p1 * n], &rhs.chars[p2 * n], n);
     }
 
@@ -133,7 +133,7 @@ public:
         return scatterImpl<ColumnFixedString>(num_columns, selector);
     }
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
         const override
     {
         return scatterImpl<ColumnFixedString>(num_columns, selector, selective);
@@ -143,8 +143,7 @@ public:
     {
         scatterToImpl<ColumnFixedString>(columns, selector);
     }
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
-        const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
     {
         scatterToImpl<ColumnFixedString>(columns, selector, selective);
     }
@@ -169,8 +168,8 @@ public:
 
     size_t getN() const { return n; }
 
-    template <bool selective>
-    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
+    template <bool selective_block>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const;
 };
 
 

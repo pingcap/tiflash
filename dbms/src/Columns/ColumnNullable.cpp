@@ -110,30 +110,29 @@ void ColumnNullable::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    updateWeakHash32Impl<false>(hash, collator, sort_key_container, nullptr);
+    updateWeakHash32Impl<false>(hash, collator, sort_key_container, {});
 }
 
 void ColumnNullable::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
-    updateWeakHash32Impl<true>(hash, collator, sort_key_container, selective_ptr);
+    updateWeakHash32Impl<true>(hash, collator, sort_key_container, selective);
 }
 
-template <bool selective>
+template <bool selective_block>
 void ColumnNullable::updateWeakHash32Impl(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
     size_t rows;
-    if constexpr (selective)
+    if constexpr (selective_block)
     {
-        RUNTIME_CHECK(selective_ptr);
-        rows = selective_ptr->size();
+        rows = selective.size();
     }
     else
     {
@@ -147,8 +146,8 @@ void ColumnNullable::updateWeakHash32Impl(
         rows);
 
     WeakHash32 old_hash = hash;
-    if constexpr (selective)
-        nested_column->updateWeakHash32(hash, collator, sort_key_container, selective_ptr);
+    if constexpr (selective_block)
+        nested_column->updateWeakHash32(hash, collator, sort_key_container, selective);
     else
         nested_column->updateWeakHash32(hash, collator, sort_key_container);
 
@@ -159,8 +158,8 @@ void ColumnNullable::updateWeakHash32Impl(
     for (size_t i = 0; i < rows; ++i)
     {
         size_t row = i;
-        if constexpr (selective)
-            row = (*selective_ptr)[i];
+        if constexpr (selective_block)
+            row = selective[i];
 
         if (null_map_data[row])
             *hash_data = *old_hash_data;
