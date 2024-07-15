@@ -689,15 +689,19 @@ Block DMFileReader::read()
                     {
                         // ColumnCacheLongTerm only caches user assigned PrimaryKey column.
 
-                        auto column_all_data = column_cache_long_term->get(dmfile, cd.id, [&]() -> IColumn::Ptr {
-                            // Always read all packs when filling cache
-                            auto data_type = dmfile->getColumnStat(cd.id).type;
-                            auto all_packs = dmfile->getPacks();
-                            auto all_rows = dmfile->getRows();
-                            ColumnPtr column;
-                            readColumn(cd, column, 0, all_packs, all_rows, 0);
-                            return column;
-                        });
+                        auto column_all_data = column_cache_long_term->get(
+                            dmfile->parentPath(),
+                            dmfile->fileId(),
+                            cd.id,
+                            [&]() -> IColumn::Ptr {
+                                // Always read all packs when filling cache
+                                auto data_type = dmfile->getColumnStat(cd.id).type;
+                                auto all_packs = dmfile->getPacks();
+                                auto all_rows = dmfile->getRows();
+                                ColumnPtr column;
+                                readColumn(cd, column, 0, all_packs, all_rows, 0);
+                                return column;
+                            });
 
                         auto data_type = dmfile->getColumnStat(cd.id).type;
                         auto result_column = data_type->createColumn();

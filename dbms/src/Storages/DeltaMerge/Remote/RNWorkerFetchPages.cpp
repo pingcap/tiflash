@@ -94,6 +94,12 @@ disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
 
 RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
 {
+    if (seg_task->meta.delta_tinycf_page_ids.empty())
+    {
+        // No page need to be fetched or guarded.
+        return seg_task;
+    }
+
     MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
