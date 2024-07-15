@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <DataStreams/FilterTransformAction.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -54,6 +55,32 @@ public:
     BlockInputStreamPtr buildFilterInputStream( //
         BlockInputStreamPtr stream,
         bool need_project) const;
+
+    FilterTransformAction getFilterTransformAction(const Block & header) const
+    {
+        return FilterTransformAction{header, before_where, filter_column_name};
+    }
+
+    static bool transformBlock(
+        ExpressionActionsPtr & extra_cast,
+        FilterTransformAction & filter_trans,
+        ExpressionActions & project,
+        Block & block,
+        FilterPtr & res_filter,
+        bool return_filter)
+    {
+        if (extra_cast)
+        {
+            extra_cast->execute(block);
+        }
+
+        if (filter_trans.transform(block, res_filter, return_filter))
+        {
+            project.execute(block);
+            return true;
+        }
+        return false;
+    }
 
     static std::pair<PredicateFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
         const ColumnDefines & filter_columns,

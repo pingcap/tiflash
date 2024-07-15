@@ -31,10 +31,10 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageDefinesBase.h>
-
 
 namespace DB::DM
 {
@@ -489,13 +489,18 @@ private:
     bool persisted_files_done = false;
     size_t read_rows = 0;
 
+    ExpressionActionsPtr extra_cast;
+    std::optional<FilterTransformAction> filter;
+    ExpressionActionsPtr project_after_where;
+
 public:
     DeltaValueInputStream(
         const DMContext & context_,
         const DeltaSnapshotPtr & delta_snap_,
         const ColumnDefinesPtr & col_defs_,
         const RowKeyRange & segment_range_,
-        ReadTag read_tag_)
+        ReadTag read_tag_,
+        const PredicateFilterPtr & filter_ = nullptr)
         : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_, read_tag_)
         , persisted_files_input_stream(
               context_,
@@ -503,6 +508,12 @@ public:
               col_defs_,
               segment_range_,
               read_tag_)
+        , extra_cast(filter_ != nullptr ? filter_->extra_cast : nullptr)
+        , filter(
+              filter_ != nullptr
+                  ? std::optional(filter_->getFilterTransformAction(persisted_files_input_stream.getHeader()))
+                  : std::nullopt)
+        , project_after_where(filter_ != nullptr ? filter_->project_after_where : nullptr)
     {}
 
     String getName() const override { return "DeltaValue"; }
@@ -558,6 +569,36 @@ public:
         return block;
     }
 
+    Block read(FilterPtr & res_filter, bool return_filter) override
+    {
+        if (filter && filter->alwaysFalse())
+        {
+            return {};
+        }
+        while (true)
+        {
+            auto block = doRead();
+            if (!block || !filter)
+            {
+                res_filter = nullptr;
+                return block;
+            }
+
+            if (PredicateFilter::transformBlock(
+                    extra_cast,
+                    *filter,
+                    *project_after_where,
+                    block,
+                    res_filter,
+                    return_filter))
+            {
+                return block;
+            }
+            // TODO: if return_filter is false??
+        }
+    }
+
+private:
     // Read block from old to new.
     Block doRead()
     {

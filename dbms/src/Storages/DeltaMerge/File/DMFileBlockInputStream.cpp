@@ -122,4 +122,32 @@ DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(c
     return *this;
 }
 
+Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
+{
+    if (filter && filter->alwaysFalse())
+    {
+        return {};
+    }
+    while (true)
+    {
+        auto block = reader.read();
+        if (!block || !filter)
+        {
+            res_filter = nullptr;
+            return block;
+        }
+
+        if (PredicateFilter::transformBlock(
+                extra_cast,
+                *filter,
+                *project_after_where,
+                block,
+                res_filter,
+                return_filter))
+        {
+            return block;
+        }
+        // TODO: if return_filter is false??
+    }
+}
 } // namespace DB::DM

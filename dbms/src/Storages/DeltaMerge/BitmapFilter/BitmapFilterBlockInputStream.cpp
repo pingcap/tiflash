@@ -37,7 +37,8 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
 
 Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
-    auto [block, from_delta] = readBlock(stable, delta);
+    FilterPtr block_filter = nullptr;
+    auto [block, from_delta] = readBlock(stable, delta, block_filter, /*return_filter*/ true);
     if (block)
     {
         if (from_delta)
@@ -45,20 +46,29 @@ Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_fil
             block.setStartOffset(block.startOffset() + stable_rows);
         }
 
-        filter.resize(block.rows());
-        bool all_match = bitmap_filter->get(filter, block.startOffset(), block.rows());
+        bool all_match = false;
+        if (block_filter)
+        {
+            bitmap_filter->rangeAnd(*block_filter, block.startOffset(), block.rows());
+        }
+        else
+        {
+            filter.resize(block.rows());
+            block_filter = &filter;
+            all_match = bitmap_filter->get(*block_filter, block.startOffset(), block.rows());
+        }
         if (!all_match)
         {
             if (return_filter)
             {
-                res_filter = &filter;
+                res_filter = block_filter;
             }
             else
             {
-                size_t passed_count = countBytesInFilter(filter);
+                size_t passed_count = countBytesInFilter(*block_filter);
                 for (auto & col : block)
                 {
-                    col.column = col.column->filter(filter, passed_count);
+                    col.column = col.column->filter(*block_filter, passed_count);
                 }
             }
         }

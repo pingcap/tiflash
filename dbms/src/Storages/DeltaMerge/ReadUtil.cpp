@@ -109,4 +109,35 @@ std::pair<Block, bool> readBlockWithFilter(
     }
 }
 
+std::pair<Block, bool> readBlock(
+    SkippableBlockInputStreamPtr & stable,
+    SkippableBlockInputStreamPtr & delta,
+    FilterPtr & res_filter,
+    bool return_filter)
+{
+    if (stable == nullptr && delta == nullptr)
+    {
+        return {{}, false};
+    }
+
+    if (stable == nullptr)
+    {
+        return {delta->read(res_filter, return_filter), true};
+    }
+
+    auto block = stable->read(res_filter, return_filter);
+    if (block)
+    {
+        return {block, false};
+    }
+    else
+    {
+        stable = nullptr;
+        if (delta != nullptr)
+        {
+            block = delta->read(res_filter, return_filter);
+        }
+        return {block, true};
+    }
+}
 } // namespace DB::DM

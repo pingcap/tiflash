@@ -34,7 +34,10 @@ public:
     DMFileBlockInputStream(DMFileReader && reader_, bool enable_data_sharing_, const PredicateFilterPtr & filter_)
         : reader(std::move(reader_))
         , enable_data_sharing(enable_data_sharing_)
-        , filter(filter_)
+        , extra_cast(filter_ != nullptr ? filter_->extra_cast : nullptr)
+        , filter(
+              filter_ != nullptr ? std::optional(filter_->getFilterTransformAction(reader.getHeader())) : std::nullopt)
+        , project_after_where(filter_ != nullptr ? filter_->project_after_where : nullptr)
     {
         if (enable_data_sharing)
         {
@@ -62,11 +65,16 @@ public:
 
     Block readWithFilter(const IColumn::Filter & filter) override { return reader.readWithFilter(filter); }
 
+    Block read(FilterPtr & res_filter, bool return_filter) override;
+
 private:
     friend class tests::DMFileMetaV2Test;
     DMFileReader reader;
     const bool enable_data_sharing;
-    PredicateFilterPtr filter;
+
+    ExpressionActionsPtr extra_cast;
+    std::optional<FilterTransformAction> filter;
+    ExpressionActionsPtr project_after_where;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
