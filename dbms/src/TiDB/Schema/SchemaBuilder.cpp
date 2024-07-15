@@ -690,7 +690,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(const T
                 // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchema` -> `applyPartitionDiffOnLogicalTable` without `applyExchangeTablePartition`
                 // The physical table maybe `EXCHANGE` to another database, try to find the partition from all database
                 auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
-                applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id, "exchange partition");
+                applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id, /*must_must_must_update_tombstone*/ false, "exchange partition");
             }
         }
     }
@@ -1280,7 +1280,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateLogicalTable(const TiDB::DBIn
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db_name, TableID table_id, std::string_view action)
+void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db_name, TableID table_id, bool must_update_tombstone, std::string_view action)
 {
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_id);
@@ -1290,11 +1290,15 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         return;
     }
 
-    // Skip updating the tombstone_ts if the table is already tombstone.
-    if (auto tombstone_ts = storage->getTombstone(); tombstone_ts != 0)
+    if (!must_update_tombstone)
     {
-        LOG_INFO(log, "Tombstone table {}.{} has been done before, action={} tombstone={}", db_name, name_mapper.debugTableName(storage->getTableInfo()), action, tombstone_ts);
-        return;
+        // When must_update_tombstone == false, we can try to skip updating
+        // the tombstone_ts if the table is already tombstone.
+        if (auto tombstone_ts = storage->getTombstone(); tombstone_ts != 0)
+        {
+            LOG_INFO(log, "Tombstone table {}.{} has been done before, action={} tombstone={}", db_name, name_mapper.debugTableName(storage->getTableInfo()), action, tombstone_ts);
+            return;
+        }
     }
 
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
@@ -1332,13 +1336,13 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DBInfoPtr & db_info
     {
         for (const auto & part_def : table_info.partition.definitions)
         {
-            applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), part_def.id, action);
+            applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), part_def.id, /*must_update_tombstone*/ true, action);
         }
     }
 
     // Drop logical table at last, only logical table drop will be treated as "complete".
     // Intermediate failure will hide the logical table drop so that schema syncing when restart will re-drop all (despite some physical tables may have dropped).
-    applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), table_info.id, action);
+    applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), table_info.id, /*must_update_tombstone*/ true, action);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1490,7 +1494,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     {
         if (table_set.count(it->first) == 0)
         {
-            applyDropPhysicalTable(it->second->getDatabaseName(), it->first, "SyncAllSchema");
+            applyDropPhysicalTable(it->second->getDatabaseName(), it->first, /*must_update_tombstone*/ false, "SyncAllSchema");
             LOG_INFO(log, "Table {}.{} dropped during sync all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(it->second->getTableInfo()));
         }
     }
