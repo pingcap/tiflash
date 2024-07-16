@@ -691,14 +691,13 @@ void HashJoin::handleOtherConditions(Block & block, size_t stream_index) const
     auto block_rows = block.rows();
     non_equal_conditions.other_cond_expr->execute(block);
 
-    auto & wd = probe_workers_data[stream_index];
-    auto & filter = wd.filter_column->getData();
+    auto & filter = probe_workers_data[stream_index].filter_column->getData();
     filter.clear();
     filter.reserve(block_rows);
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
 
     removeUselessColumn(block);
-    auto result_size_hint = countBytesInFilter(filter);
+    size_t result_size_hint = countBytesInFilter(filter);
     /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
     for (size_t i = 0; i < block.columns(); ++i)
         block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, result_size_hint);
