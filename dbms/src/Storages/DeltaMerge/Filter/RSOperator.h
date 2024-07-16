@@ -19,6 +19,11 @@
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 
+namespace DB
+{
+struct DAGQueryInfo;
+}
+
 namespace DB::DM
 {
 
@@ -48,6 +53,13 @@ public:
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual ColIds getColumnIDs() = 0;
+
+    static RSOperatorPtr build(
+        const std::unique_ptr<DAGQueryInfo> & dag_query,
+        const ColumnInfos & scan_column_infos,
+        const ColumnDefines & table_column_defines,
+        bool enable_rs_filter,
+        const LoggerPtr & tracing_logger);
 };
 
 class ColCmpVal : public RSOperator
@@ -151,6 +163,6 @@ RSOperatorPtr createLike(const Attr & attr, const Field & value);
 //
 RSOperatorPtr createIsNull(const Attr & attr);
 //
-RSOperatorPtr createUnsupported(const String & content, const String & reason);
+RSOperatorPtr createUnsupported(const String & reason);
 
 } // namespace DB::DM

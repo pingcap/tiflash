@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,27 +14,10 @@
 
 #pragma once
 
-#include <Interpreters/Context_fwd.h>
-#include <Interpreters/IQuerySource.h>
+#include <memory>
 
 namespace DB
 {
-class DAGContext;
-
-class PlanQuerySource : public IQuerySource
-{
-public:
-    explicit PlanQuerySource(Context & context_);
-
-    std::tuple<std::string, ASTPtr> parse(size_t) override;
-    String str(size_t max_query_size) override;
-    std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
-
-    DAGContext & getDAGContext() const;
-    const tipb::DAGRequest & getDAGRequest() const;
-
-private:
-    Context & context;
-};
-
+class ResultQueue;
+using ResultQueuePtr = std::shared_ptr<ResultQueue>;
 } // namespace DB

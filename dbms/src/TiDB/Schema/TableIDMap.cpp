@@ -15,6 +15,8 @@
 #include <TiDB/Schema/TableIDMap.h>
 #include <common/logger_useful.h>
 
+#include <mutex>
+
 namespace DB
 {
 
@@ -111,7 +113,7 @@ void TableIDMap::exchangeTablePartition(
 
 std::tuple<bool, DatabaseID, TableID> TableIDMap::findDatabaseIDAndLogicalTableID(TableID physical_table_id) const
 {
-    std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);
+    std::shared_lock lock(mtx_id_mapping);
     DatabaseID database_id = -1;
     if (auto database_iter = table_id_to_database_id.find(physical_table_id);
         database_iter != table_id_to_database_id.end())
@@ -138,6 +140,38 @@ std::tuple<bool, DatabaseID, TableID> TableIDMap::findDatabaseIDAndLogicalTableI
         }
     }
     return {false, 0, 0};
+}
+
+std::map<TableID, DatabaseID> TableIDMap::getAllPartitionsBelongDatabase() const
+{
+    std::shared_lock lock(mtx_id_mapping);
+    std::map<TableID, DatabaseID> part_to_db;
+    for (const auto & [part_id, logical_table_id] : partition_id_to_logical_id)
+    {
+        auto iter = table_id_to_database_id.find(logical_table_id);
+        if (iter != table_id_to_database_id.end())
+        {
+            part_to_db[part_id] = iter->second;
+            continue;
+        }
+        // something wrong happen
+        LOG_WARNING(
+            log,
+            "Can not find logical_table_id to database_id for partition, physical_table_id={} "
+            "logical_table_id={}",
+            part_id,
+            logical_table_id);
+    }
+    return part_to_db;
+}
+
+void TableIDMap::eraseFromTableIDToDatabaseID(DB::TableID table_id)
+{
+    std::unique_lock lock(mtx_id_mapping);
+    // This function is to erase the `table_id` from `table_id_to_database_id`
+    // to fix some in-memory mapping inconsistency.
+    // `partition_id_to_logical_id` is not affected.
+    table_id_to_database_id.erase(table_id);
 }
 
 } // namespace DB

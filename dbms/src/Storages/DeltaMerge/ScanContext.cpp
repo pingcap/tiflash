@@ -104,6 +104,13 @@ String ScanContext::toJson() const
     json->set("dmfile_lm_filter_skipped_rows", dmfile_lm_filter_skipped_rows.load());
     json->set("dmfile_read_time", fmt::format("{:.3f}ms", total_dmfile_read_time_ns.load() / NS_TO_MS_SCALE));
 
+    json->set(
+        "rs_pack_filter_check_time",
+        fmt::format("{:.3f}ms", total_rs_pack_filter_check_time_ns.load() / NS_TO_MS_SCALE));
+    json->set("rs_pack_filter_none", rs_pack_filter_none.load());
+    json->set("rs_pack_filter_some", rs_pack_filter_some.load());
+    json->set("rs_pack_filter_all", rs_pack_filter_all.load());
+
     json->set("num_remote_region", total_remote_region_num.load());
     json->set("num_local_region", total_local_region_num.load());
     json->set("num_stale_read", num_stale_read.load());

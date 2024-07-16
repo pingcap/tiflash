@@ -440,21 +440,22 @@ void StableValueSpace::calculateStableProperty(
             context.getReadLimiter(),
             context.scan_context,
             context.tracing_id);
-        const auto & use_packs = pack_filter.getUsePacksConst();
+        const auto & pack_res = pack_filter.getPackResConst();
         size_t new_pack_properties_index = 0;
         const bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
-            const size_t use_packs_count = std::count(use_packs.begin(), use_packs.end(), true);
+            const size_t use_packs_count = pack_filter.countUsePack();
+
             RUNTIME_CHECK_MSG(
                 static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count,
                 "size doesn't match, new_pack_properties_size={} use_packs_size={}",
                 new_pack_properties.property_size(),
                 use_packs_count);
         }
-        for (size_t pack_id = 0; pack_id < use_packs.size(); ++pack_id)
+        for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
         {
-            if (!use_packs[pack_id])
+            if (!isUse(pack_res[pack_id]))
                 continue;
             property.num_versions += pack_stats[pack_id].rows;
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
@@ -589,10 +590,10 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             context.scan_context,
             context.tracing_id);
         const auto & pack_stats = f->getPackStats();
-        const auto & use_packs = filter.getUsePacksConst();
+        const auto & pack_res = filter.getPackResConst();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (use_packs[i])
+            if (isUse(pack_res[i]))
             {
                 ++match_packs;
                 total_match_rows += pack_stats[i].rows;

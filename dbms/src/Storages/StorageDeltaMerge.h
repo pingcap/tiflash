@@ -40,6 +40,8 @@ struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+class MockStorage;
+
 namespace DM
 {
 struct RowKeyRange;
@@ -208,14 +210,6 @@ public:
 
     DM::DMConfigurationOpt createChecksumConfig() const { return DM::DMChecksumConfig::fromDBContext(global_context); }
 
-    static DM::PushDownFilterPtr buildPushDownFilter(
-        const DM::RSOperatorPtr & rs_operator,
-        const ColumnInfos & table_scan_column_info,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
-        const DM::ColumnDefines & columns_to_read,
-        const Context & context,
-        const LoggerPtr & tracing_logger);
-
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
@@ -251,27 +245,6 @@ private:
     DM::ColumnDefines getStoreColumnDefines() const override;
     bool dataDirExist();
     void shutdownImpl();
-
-    DM::RSOperatorPtr buildRSOperator(
-        const std::unique_ptr<DAGQueryInfo> & dag_query,
-        const DM::ColumnDefines & columns_to_read,
-        const Context & context,
-        const LoggerPtr & tracing_logger);
-    /// Get filters from query to construct rough set operation and push down filters.
-    DM::PushDownFilterPtr parsePushDownFilter(
-        const SelectQueryInfo & query_info,
-        const DM::ColumnDefines & columns_to_read,
-        const Context & context,
-        const LoggerPtr & tracing_logger);
-
-    DM::RowKeyRanges parseMvccQueryInfo(
-        const DB::MvccQueryInfo & mvcc_query_info,
-        unsigned num_streams,
-        const Context & context,
-        const String & req_id,
-        const LoggerPtr & tracing_logger);
-
-    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -330,6 +303,8 @@ private:
     Context & global_context;
 
     LoggerPtr log;
+
+    friend class MockStorage;
 };
 
 

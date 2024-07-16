@@ -17,7 +17,10 @@
 # Prepare basic environment for CI/CD.
 
 function prepare_basic() {
-    yum install -y epel-release centos-release-scl
+    yum install -y epel-release centos-release-scl && \
+    sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo && \
+    sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo && \
+    sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
     yum install -y \
          devscripts \
          fakeroot \

@@ -118,6 +118,7 @@ struct ProxyConfigSummary
 {
     bool valid = false;
     size_t snap_handle_pool_size = 0;
+    std::string engine_addr;
 };
 
 /// KVStore manages raft replication and transactions.
@@ -151,6 +152,7 @@ public:
     void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
+    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
@@ -229,6 +231,7 @@ public: // Raft Snapshot
     void releasePreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
     void abortPreHandleSnapshot(uint64_t region_id, TMTContext & tmt);
     size_t getOngoingPrehandleTaskCount() const;
+    size_t getOngoingPrehandleSubtaskCount() const;
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     size_t getMaxParallelPrehandleSize() const;
 
@@ -279,7 +282,6 @@ private:
     };
     StoreMeta & getStore();
     const StoreMeta & getStore() const;
-    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
     //  ---- Raft Snapshot ----  //
 
@@ -413,6 +415,7 @@ private:
     // Relates to `queue_size` in `can_apply_snapshot`,
     // we can't have access to these codes though.
     std::atomic<int64_t> ongoing_prehandle_task_count{0};
+    std::atomic<int64_t> ongoing_prehandle_subtask_count{0};
     ProxyConfigSummary proxy_config_summary;
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map;
@@ -429,6 +432,12 @@ class KVStoreTaskLock : private boost::noncopyable
 };
 
 void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
-void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t &, double, double, double);
+void WaitCheckRegionReadyImpl(
+    const TMTContext &,
+    KVStore & kvstore,
+    const std::atomic_size_t &,
+    double,
+    double,
+    double);
 
 } // namespace DB
