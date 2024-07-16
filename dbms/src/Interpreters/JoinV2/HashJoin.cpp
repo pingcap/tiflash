@@ -89,6 +89,60 @@ StringCollatorKind getStringCollatorKind(const TiDB::TiDBCollators & collators)
     }
 }
 
+void mergeNullAndFilterResult(
+    Block & block,
+    ColumnVector<UInt8>::Container & filter_column,
+    const String & filter_column_name,
+    bool null_as_true)
+{
+    if (filter_column_name.empty())
+        return;
+    ColumnPtr current_filter_column = block.getByName(filter_column_name).column;
+    auto [filter_vec, nullmap_vec] = getDataAndNullMapVectorFromFilterColumn(current_filter_column);
+    if (nullmap_vec != nullptr)
+    {
+        if (filter_column.empty())
+        {
+            filter_column.insert(nullmap_vec->begin(), nullmap_vec->end());
+            if (null_as_true)
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = filter_column[i] || (*filter_vec)[i];
+            }
+            else
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = !filter_column[i] && (*filter_vec)[i];
+            }
+        }
+        else
+        {
+            if (null_as_true)
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = filter_column[i] && ((*nullmap_vec)[i] || (*filter_vec)[i]);
+            }
+            else
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = filter_column[i] && !(*nullmap_vec)[i] && (*filter_vec)[i];
+            }
+        }
+    }
+    else
+    {
+        if (filter_column.empty())
+        {
+            filter_column.insert(filter_vec->begin(), filter_vec->end());
+        }
+        else
+        {
+            for (size_t i = 0; i < filter_vec->size(); ++i)
+                filter_column[i] = filter_column[i] && (*filter_vec)[i];
+        }
+    }
+}
+
 } // namespace
 
 HashJoin::HashJoin(
@@ -513,8 +567,8 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
         }
     }
 
-    ///TODO: support other condition
-    RUNTIME_ASSERT(!has_other_condition);
+    if (has_other_condition)
+        handleOtherConditions(block, stream_index);
 
     return block;
 }
@@ -627,6 +681,26 @@ void HashJoin::finalize(const Names & parent_require)
         required_columns.push_back(name);
 
     finalized = true;
+}
+
+void HashJoin::handleOtherConditions(Block & block, size_t stream_index) const
+{
+    /// save block_rows because block.rows() returns the first column's size, after other_cond_expr->execute(block),
+    /// some column maybe removed, and the first column maybe the match_helper_column which does not have the same size
+    /// as the other columns
+    auto block_rows = block.rows();
+    non_equal_conditions.other_cond_expr->execute(block);
+
+    auto & wd = probe_workers_data[stream_index];
+    auto & filter = wd.filter_column->getData();
+    filter.reserve(block_rows);
+    mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
+
+    removeUselessColumn(block);
+    auto result_size_hint = countBytesInFilter(filter);
+    /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
+    for (size_t i = 0; i < block.columns(); ++i)
+        block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, result_size_hint);
 }
 
 } // namespace DB

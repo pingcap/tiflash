@@ -80,6 +80,8 @@ private:
 
     void workAfterBuildFinish();
 
+    void handleOtherConditions(Block & block, size_t stream_index) const;
+
 private:
     const ASTTableJoin::Kind kind;
     const String join_req_id;
