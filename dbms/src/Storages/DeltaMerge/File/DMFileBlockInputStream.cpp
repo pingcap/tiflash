@@ -130,26 +130,44 @@ Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
     while (true)
     {
         auto block = reader.read();
-        if (!block || !filter)
-        {
-            if (return_filter)
-                res_filter = nullptr;
-            return block;
-        }
-
-        if (PredicateFilter::transformBlock(
-                extra_cast,
-                *filter,
-                *project_after_where,
-                filter_column_name,
-                block,
-                filter_result,
-                return_filter))
-        {
-            if (return_filter)
-                res_filter = filter_result.empty() ? nullptr : &filter_result;
-            return block;
-        }
+        return filterBlock(block, res_filter, return_filter) ? block : Block{}; // TODO: Does return empty block is ok?
     }
 }
+
+Block DMFileBlockInputStream::readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter)
+{
+    auto block = reader.readWithFilter(filter);
+    return filterBlock(block, res_filter, return_filter) ? block : Block{}; // TODO: Does return empty block is ok?
+}
+
+// If some/all rows are passed, return true.
+// If none rows is passed, return false.
+bool DMFileBlockInputStream::filterBlock(Block & block, FilterPtr & res_filter, bool return_filter)
+{
+    if (!block)
+        return false;
+
+    if (!filter)
+    {
+        if (return_filter)
+            res_filter = nullptr;
+        return true;
+    }
+
+    if (PredicateFilter::transformBlock(
+            extra_cast,
+            *filter,
+            *project_after_where,
+            filter_column_name,
+            block,
+            filter_result,
+            return_filter))
+    {
+        if (return_filter)
+            res_filter = filter_result.empty() ? nullptr : &filter_result;
+        return true;
+    }
+    return false;
+}
+
 } // namespace DB::DM

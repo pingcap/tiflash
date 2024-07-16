@@ -550,7 +550,7 @@ public:
         }
     }
 
-    Block readWithFilter(const IColumn::Filter & filter, FilterPtr & /*res_filter*/, bool /*return_filter*/) override
+    Block readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter) override
     {
         auto block = read();
         if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
@@ -560,7 +560,7 @@ public:
                 col.column = col.column->filter(filter, passed_count);
             }
         }
-        return block;
+        return filterBlock(block, res_filter, return_filter) ? block : Block{}; // TODO: Does return empty block is ok?
     }
 
     Block read() override
@@ -577,26 +577,8 @@ public:
         while (true)
         {
             auto block = readAndSetOffset();
-            if (!block || !filter)
-            {
-                if (return_filter)
-                    res_filter = nullptr;
-                return block;
-            }
-
-            if (PredicateFilter::transformBlock(
-                    extra_cast,
-                    *filter,
-                    *project_after_where,
-                    filter_column_name,
-                    block,
-                    filter_result,
-                    return_filter))
-            {
-                if (return_filter)
-                    res_filter = filter_result.empty() ? nullptr : &filter_result;
-                return block;
-            }
+            return filterBlock(block, res_filter, return_filter) ? block
+                                                                 : Block{}; // TODO: Does return empty block is ok?
         }
     }
 
@@ -623,6 +605,36 @@ private:
         block.setStartOffset(read_rows);
         read_rows += block.rows();
         return block;
+    }
+
+    // If some/all rows are passed, return true.
+    // If none rows is passed, return false.
+    bool filterBlock(Block & block, FilterPtr & res_filter, bool return_filter)
+    {
+        if (!block)
+            return false;
+
+        if (!filter)
+        {
+            if (return_filter)
+                res_filter = nullptr;
+            return true;
+        }
+
+        if (PredicateFilter::transformBlock(
+                extra_cast,
+                *filter,
+                *project_after_where,
+                filter_column_name,
+                block,
+                filter_result,
+                return_filter))
+        {
+            if (return_filter)
+                res_filter = filter_result.empty() ? nullptr : &filter_result;
+            return true;
+        }
+        return false;
     }
 };
 
