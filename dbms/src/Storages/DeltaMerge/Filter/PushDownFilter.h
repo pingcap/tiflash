@@ -56,8 +56,12 @@ public:
         BlockInputStreamPtr stream,
         bool need_project) const;
 
-    FilterTransformAction getFilterTransformAction(const Block & header) const
+    FilterTransformAction getFilterTransformAction(Block && header) const
     {
+        if (extra_cast)
+        {
+            extra_cast->execute(header);
+        }
         return FilterTransformAction{header, before_where, filter_column_name};
     }
 
