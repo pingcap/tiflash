@@ -66,7 +66,7 @@ public:
         FilterTransformAction & filter_trans,
         ExpressionActions & project,
         Block & block,
-        FilterPtr & res_filter,
+        IColumn::Filter & filter_result,
         bool return_filter)
     {
         if (extra_cast)
@@ -74,12 +74,22 @@ public:
             extra_cast->execute(block);
         }
 
-        if (filter_trans.transform(block, res_filter, return_filter))
+        FilterPtr f = nullptr;
+        if (filter_trans.transform(block, f, return_filter))
         {
+            // `f` points to a filter column in block.
+            // This column will be destroy after projecting, so copy/swap it.
+            if (return_filter)
+            {
+                if (f)
+                    filter_result.swap(*f); // Some
+                else
+                    filter_result.resize(0); // All
+            }
             project.execute(block);
-            return true;
+            return true; // Some or All, according to the content of filter_result
         }
-        return false;
+        return false; // None
     }
 
     static std::pair<PredicateFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(

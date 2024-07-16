@@ -89,7 +89,7 @@ bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 
 void BitmapFilter::rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 {
-    RUNTIME_CHECK(start + limit <= filter.size() && f.size() == limit);
+    RUNTIME_CHECK(start + limit <= filter.size() && f.size() == limit, start, limit, filter.size(), f.size());
     auto begin = filter.cbegin() + start;
     if (!all_match)
     {
@@ -112,7 +112,7 @@ String BitmapFilter::toDebugString() const
             s[i] = '0';
         }
     }
-    return fmt::format("{}", s);
+    return s;
 }
 
 size_t BitmapFilter::count() const

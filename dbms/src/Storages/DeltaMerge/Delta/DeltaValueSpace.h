@@ -492,6 +492,7 @@ private:
     ExpressionActionsPtr extra_cast;
     std::optional<FilterTransformAction> filter;
     ExpressionActionsPtr project_after_where;
+    IColumn::Filter filter_result;
 
 public:
     DeltaValueInputStream(
@@ -591,9 +592,10 @@ public:
                     *filter,
                     *project_after_where,
                     block,
-                    res_filter,
+                    filter_result,
                     return_filter))
             {
+                res_filter = filter_result.empty() ? nullptr : &filter_result;
                 return block;
             }
         }

@@ -144,9 +144,10 @@ Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
                 *filter,
                 *project_after_where,
                 block,
-                res_filter,
+                filter_result,
                 return_filter))
         {
+            res_filter = filter_result.empty() ? nullptr : &filter_result;
             return block;
         }
     }

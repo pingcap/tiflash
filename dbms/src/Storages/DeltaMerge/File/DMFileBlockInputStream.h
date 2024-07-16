@@ -75,6 +75,8 @@ private:
     ExpressionActionsPtr extra_cast;
     std::optional<FilterTransformAction> filter;
     ExpressionActionsPtr project_after_where;
+
+    IColumn::Filter filter_result;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
