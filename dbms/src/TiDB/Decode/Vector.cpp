@@ -33,7 +33,7 @@
 #define SIMSIMD_TARGET_NEON 1
 #define SIMSIMD_TARGET_SVE 0 // Clang13's header does not support enableing SVE for region
 #define SIMSIMD_TARGET_HASWELL 1
-#define SIMSIMD_TARGET_SKYLAKE 0 // Clang13 does not support AVX512
+#define SIMSIMD_TARGET_SKYLAKE 1
 #define SIMSIMD_TARGET_ICE 0
 #define SIMSIMD_TARGET_GENOA 0
 #define SIMSIMD_TARGET_SAPPHIRE 0
@@ -58,22 +58,45 @@ simsimd_capability_t simd_capabilities()
     return static_capabilities;
 }
 
+simsimd_capability_t actual_capability(simsimd_datatype_t data_type, simsimd_metric_kind_t kind)
+{
+    simsimd_metric_punned_t metric = nullptr;
+    simsimd_capability_t used_capability;
+    simsimd_find_metric_punned(
+        kind,
+        data_type,
+        simsimd_details::simd_capabilities(),
+        simsimd_cap_any_k,
+        &metric,
+        &used_capability);
+
+    return used_capability;
+}
+
 } // namespace simsimd_details
 
 std::vector<std::string> VectorDistanceSIMDFeatures::get()
 {
-    simsimd_capability_t caps = simsimd_details::simd_capabilities();
+    simsimd_capability_t cap_l2 = simsimd_details::actual_capability(simsimd_datatype_f32_k, simsimd_metric_l2sq_k);
+    simsimd_capability_t cap_cos = simsimd_details::actual_capability(simsimd_datatype_f32_k, simsimd_metric_cos_k);
+
+    auto cap_to_string = [](simsimd_capability_t cap) -> String {
+        if (cap & simsimd_cap_neon_k)
+            return "neon";
+        if (cap & simsimd_cap_sve_k)
+            return "sve";
+        if (cap & simsimd_cap_sve2_k)
+            return "sve2";
+        if (cap & simsimd_cap_haswell_k)
+            return "haswell";
+        if (cap & simsimd_cap_skylake_k)
+            return "skylake";
+        return "serial";
+    };
+
     std::vector<std::string> ret{};
-    if (caps & simsimd_cap_neon_k)
-        ret.push_back("vec_distance=neon");
-    if (caps & simsimd_cap_sve_k)
-        ret.push_back("vec_distance=sve");
-    if (caps & simsimd_cap_sve2_k)
-        ret.push_back("vec_distance=sve2");
-    if (caps & simsimd_cap_haswell_k)
-        ret.push_back("vec_distance=haswell");
-    if (caps & simsimd_cap_skylake_k)
-        ret.push_back("vec_distance=skylake");
+    ret.push_back("vec.l2=" + cap_to_string(cap_l2));
+    ret.push_back("vec.cos=" + cap_to_string(cap_cos));
     return ret;
 }
 
