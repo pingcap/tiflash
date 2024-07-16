@@ -75,7 +75,7 @@ cert_allowed_cn="tidb"
         auto new_tiflash_config = TiFlashSecurityConfig(log);
         new_tiflash_config.init(*new_config);
         ASSERT_FALSE(new_tiflash_config.hasTlsConfig());
-        // allowed common names is ignore when tls is not enabled
+        // allowed common names is ignored when tls is not enabled
         ASSERT_EQ(new_tiflash_config.allowedCommonNames().count("tidb"), 0);
     }
 }
@@ -98,10 +98,11 @@ cert_path=""
 key_path="")",
          })
     {
+        SCOPED_TRACE(fmt::format("case: {}", c));
         TiFlashSecurityConfig tiflash_config(log);
         auto new_config = loadConfigFromString(c);
         tiflash_config.init(*new_config);
-        ASSERT_FALSE(tiflash_config.hasTlsConfig()) << fmt::format("case: {}", c);
+        ASSERT_FALSE(tiflash_config.hasTlsConfig());
     }
 }
 CATCH
@@ -136,19 +137,20 @@ ca_path="security/ca.pem"
 key_path="security/key.pem")",
          })
     {
+        SCOPED_TRACE(fmt::format("case: {}", c));
         TiFlashSecurityConfig tiflash_config(log);
         auto new_config = loadConfigFromString(c);
         try
         {
             tiflash_config.init(*new_config);
-            ASSERT_FALSE(true) << fmt::format("should raise exception, case: {}", c);
+            ASSERT_FALSE(true) << "should raise exception";
         }
         catch (Exception & e)
         {
-            // has_tls remain false when exception raise
-            ASSERT_FALSE(tiflash_config.hasTlsConfig()) << fmt::format("case: {}", c);
+            // has_tls remains false when an exception raise
+            ASSERT_FALSE(tiflash_config.hasTlsConfig());
             // the error code must be INVALID_CONFIG_PARAMETER
-            ASSERT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER) << fmt::format("case: {}", c);
+            ASSERT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
 }
