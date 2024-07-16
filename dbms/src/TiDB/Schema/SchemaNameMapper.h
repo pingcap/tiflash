@@ -59,6 +59,24 @@ struct SchemaNameMapper
             return std::nullopt;
         }
     }
+    static std::optional<TableID> tryGetTableID(const String & name)
+    {
+        auto pos = name.find(TABLE_PREFIX);
+        if (pos == String::npos || name.length() <= pos + TABLE_PREFIX.length())
+            return std::nullopt;
+        try
+        {
+            return std::stoull(name.substr(pos + TABLE_PREFIX.length()));
+        }
+        catch (std::invalid_argument & e)
+        {
+            return std::nullopt;
+        }
+        catch (std::out_of_range & e)
+        {
+            return std::nullopt;
+        }
+    }
 
     static String map2Keyspace(KeyspaceID keyspace_id, const String & name)
     {
