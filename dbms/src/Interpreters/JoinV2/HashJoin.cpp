@@ -693,6 +693,7 @@ void HashJoin::handleOtherConditions(Block & block, size_t stream_index) const
 
     auto & wd = probe_workers_data[stream_index];
     auto & filter = wd.filter_column->getData();
+    filter.clear();
     filter.reserve(block_rows);
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
 
