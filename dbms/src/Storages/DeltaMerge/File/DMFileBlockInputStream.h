@@ -34,10 +34,10 @@ public:
     DMFileBlockInputStream(DMFileReader && reader_, bool enable_data_sharing_, const PredicateFilterPtr & filter_)
         : reader(std::move(reader_))
         , enable_data_sharing(enable_data_sharing_)
-        , extra_cast(filter_ != nullptr ? filter_->extra_cast : nullptr)
-        , filter(
-              filter_ != nullptr ? std::optional(filter_->getFilterTransformAction(reader.getHeader())) : std::nullopt)
-        , project_after_where(filter_ != nullptr ? filter_->project_after_where : nullptr)
+        , extra_cast(filter_ ? filter_->extra_cast : nullptr)
+        , filter(filter_ ? std::optional(filter_->getFilterTransformAction(reader.getHeader())) : std::nullopt)
+        , project_after_where(filter_ ? filter_->project_after_where : nullptr)
+        , filter_column_name(filter_ ? filter_->filter_column_name : "")
     {
         if (enable_data_sharing)
         {
@@ -75,6 +75,7 @@ private:
     ExpressionActionsPtr extra_cast;
     std::optional<FilterTransformAction> filter;
     ExpressionActionsPtr project_after_where;
+    String filter_column_name;
 
     IColumn::Filter filter_result;
 };

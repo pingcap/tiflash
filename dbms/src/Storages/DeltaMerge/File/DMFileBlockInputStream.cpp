@@ -143,6 +143,7 @@ Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
                 extra_cast,
                 *filter,
                 *project_after_where,
+                filter_column_name,
                 block,
                 filter_result,
                 return_filter))

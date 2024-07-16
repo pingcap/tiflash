@@ -492,6 +492,7 @@ private:
     ExpressionActionsPtr extra_cast;
     std::optional<FilterTransformAction> filter;
     ExpressionActionsPtr project_after_where;
+    String filter_column_name;
     IColumn::Filter filter_result;
 
 public:
@@ -509,12 +510,12 @@ public:
               col_defs_,
               segment_range_,
               read_tag_)
-        , extra_cast(filter_ != nullptr ? filter_->extra_cast : nullptr)
+        , extra_cast(filter_ ? filter_->extra_cast : nullptr)
         , filter(
-              filter_ != nullptr
-                  ? std::optional(filter_->getFilterTransformAction(persisted_files_input_stream.getHeader()))
-                  : std::nullopt)
-        , project_after_where(filter_ != nullptr ? filter_->project_after_where : nullptr)
+              filter_ ? std::optional(filter_->getFilterTransformAction(persisted_files_input_stream.getHeader()))
+                      : std::nullopt)
+        , project_after_where(filter_ ? filter_->project_after_where : nullptr)
+        , filter_column_name(filter_ ? filter_->filter_column_name : "")
     {}
 
     String getName() const override { return "DeltaValue"; }
@@ -591,6 +592,7 @@ public:
                     extra_cast,
                     *filter,
                     *project_after_where,
+                    filter_column_name,
                     block,
                     filter_result,
                     return_filter))

@@ -65,6 +65,7 @@ public:
         ExpressionActionsPtr & extra_cast,
         FilterTransformAction & filter_trans,
         ExpressionActions & project,
+        [[maybe_unused]] const String & filter_column_name,
         Block & block,
         IColumn::Filter & filter_result,
         bool return_filter)
@@ -82,9 +83,11 @@ public:
             if (return_filter)
             {
                 if (f)
-                    filter_result.swap(*f); // Some
+                    filter_result.assign(*f); // Some, TODO: cannot swap, how to reduce copy?
                 else
                     filter_result.resize(0); // All
+
+                // block.erase(filter_column_name); // TODO: Maybe just erase, not project.
             }
             project.execute(block);
             return true; // Some or All, according to the content of filter_result
