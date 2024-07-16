@@ -52,29 +52,32 @@ TEST(TiFlashSecurityTest, Config)
     }
 
     const auto log = Logger::get();
-    TiFlashSecurityConfig tiflash_config(log);
 
-    String test =
-        R"(
+    {
+        auto new_config = loadConfigFromString(R"(
 [security]
 ca_path="security/ca.pem"
 cert_path="security/cert.pem"
 key_path="security/key.pem"
 cert_allowed_cn="tidb"
-        )";
-    auto new_config = loadConfigFromString(test);
-    tiflash_config.update(*new_config);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("tidb"), 1);
+        )");
+        TiFlashSecurityConfig tiflash_config(log);
+        tiflash_config.init(*new_config);
+        ASSERT_TRUE(tiflash_config.hasTlsConfig());
+        ASSERT_EQ(tiflash_config.allowedCommonNames().count("tidb"), 1);
+    }
 
-    test =
-        R"(
+    {
+        auto new_config = loadConfigFromString(R"(
 [security]
 cert_allowed_cn="tidb"
-        )";
-    new_config = loadConfigFromString(test);
-    auto new_tiflash_config = TiFlashSecurityConfig(log);
-    new_tiflash_config.init(*new_config);
-    ASSERT_EQ((int)new_tiflash_config.allowedCommonNames().count("tidb"), 0);
+        )");
+        auto new_tiflash_config = TiFlashSecurityConfig(log);
+        new_tiflash_config.init(*new_config);
+        ASSERT_FALSE(new_tiflash_config.hasTlsConfig());
+        // allowed common names is ignore when tls is not enabled
+        ASSERT_EQ(new_tiflash_config.allowedCommonNames().count("tidb"), 0);
+    }
 }
 
 TEST(TiFlashSecurityTest, EmptyConfig)
@@ -93,6 +96,22 @@ key_path="")",
 ca_path="  "
 cert_path=""
 key_path="")",
+         })
+    {
+        TiFlashSecurityConfig tiflash_config(log);
+        auto new_config = loadConfigFromString(c);
+        tiflash_config.init(*new_config);
+        ASSERT_FALSE(tiflash_config.hasTlsConfig()) << fmt::format("case: {}", c);
+    }
+}
+CATCH
+
+TEST(TiFlashSecurityTest, InvalidConfig)
+try
+{
+    const auto log = Logger::get();
+
+    for (const auto & c : Strings{
              // only a part of ssl path is set
              R"([security]
 ca_path="security/ca.pem"
@@ -113,11 +132,13 @@ key_path="security/key.pem")",
         try
         {
             tiflash_config.init(*new_config);
-            ASSERT_FALSE(tiflash_config.hasTlsConfig()) << fmt::format("case: {}", c);
+            ASSERT_FALSE(true) << fmt::format("should raise exception, case: {}", c);
         }
         catch (Exception & e)
         {
+            // has_tls remain false when exception raise
             ASSERT_FALSE(tiflash_config.hasTlsConfig()) << fmt::format("case: {}", c);
+            // the error code must be INVALID_CONFIG_PARAMETER
             ASSERT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER) << fmt::format("case: {}", c);
         }
     }
