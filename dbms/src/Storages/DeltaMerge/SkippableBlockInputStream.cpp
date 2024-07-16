@@ -96,7 +96,10 @@ size_t ConcatSkippableBlockInputStream<need_row_id>::skipNextBlock()
 }
 
 template <bool need_row_id>
-Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter)
+Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(
+    const IColumn::Filter & filter,
+    FilterPtr & res_filter,
+    bool return_filter)
 {
     Block res;
 

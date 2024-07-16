@@ -43,7 +43,7 @@ public:
     /// Return empty block if failed to read or the end of stream.
     /// Note: filter can not be all false.
     /// Only used in Late Materialization.
-    virtual Block readWithFilter(const IColumn::Filter & filter,  FilterPtr & res_filter, bool return_filter) = 0;
+    virtual Block readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter) = 0;
 };
 
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
