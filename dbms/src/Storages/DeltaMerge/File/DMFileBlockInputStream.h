@@ -61,7 +61,11 @@ public:
 
     size_t skipNextBlock() override { return reader.skipNextBlock(); }
 
-    Block read() override { return reader.read(); }
+    Block read() override
+    {
+        FilterPtr filter_ignored;
+        return read(filter_ignored, false);
+    }
 
     Block readWithFilter(const IColumn::Filter & filter) override { return reader.readWithFilter(filter); }
 

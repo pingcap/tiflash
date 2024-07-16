@@ -565,26 +565,22 @@ public:
 
     Block read() override
     {
-        auto block = doRead();
-        block.setStartOffset(read_rows);
-        read_rows += block.rows();
-        return block;
+        FilterPtr filter_ignored;
+        return read(filter_ignored, false);
     }
 
     Block read(FilterPtr & res_filter, bool return_filter) override
     {
-        // TODO: if return_filter is false??
-        RUNTIME_CHECK(return_filter);
         if (filter && filter->alwaysFalse())
-        {
             return {};
-        }
+
         while (true)
         {
-            auto block = read();
+            auto block = readAndSetOffset();
             if (!block || !filter)
             {
-                res_filter = nullptr;
+                if (return_filter)
+                    res_filter = nullptr;
                 return block;
             }
 
@@ -597,7 +593,8 @@ public:
                     filter_result,
                     return_filter))
             {
-                res_filter = filter_result.empty() ? nullptr : &filter_result;
+                if (return_filter)
+                    res_filter = filter_result.empty() ? nullptr : &filter_result;
                 return block;
             }
         }
@@ -618,6 +615,14 @@ private:
             persisted_files_done = true;
             return mem_table_input_stream.read();
         }
+    }
+
+    Block readAndSetOffset()
+    {
+        auto block = doRead();
+        block.setStartOffset(read_rows);
+        read_rows += block.rows();
+        return block;
     }
 };
 

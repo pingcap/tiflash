@@ -68,32 +68,7 @@ public:
         [[maybe_unused]] const String & filter_column_name,
         Block & block,
         IColumn::Filter & filter_result,
-        bool return_filter)
-    {
-        if (extra_cast)
-        {
-            extra_cast->execute(block);
-        }
-
-        FilterPtr f = nullptr;
-        if (filter_trans.transform(block, f, return_filter))
-        {
-            // `f` points to a filter column in block.
-            // This column will be destroy after projecting, so copy/swap it.
-            if (return_filter)
-            {
-                if (f)
-                    filter_result.assign(*f); // Some, TODO: cannot swap, how to reduce copy?
-                else
-                    filter_result.resize(0); // All
-
-                // block.erase(filter_column_name); // TODO: Maybe just erase, not project.
-            }
-            project.execute(block);
-            return true; // Some or All, according to the content of filter_result
-        }
-        return false; // None
-    }
+        bool return_filter);
 
     static std::pair<PredicateFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
         const ColumnDefines & filter_columns,
