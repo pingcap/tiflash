@@ -131,12 +131,7 @@ void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
         src += sizeof(T);
         auto count = unalignedLoad<UInt8>(src);
         src += sizeof(UInt8);
-        if (unlikely(dest + count * sizeof(T) > dest_end))
-            throw Exception(
-                ErrorCodes::CANNOT_DECOMPRESS,
-                "Cannot use RunLength decoding, data is too large, count={} elem_byte={}",
-                count,
-                sizeof(T));
+        assert(dest + count * sizeof(T) <= dest_end);
         if constexpr (std::is_same_v<T, UInt8> || std::is_same_v<T, Int8>)
         {
             memset(dest, value, count);
