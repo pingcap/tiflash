@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/SharedMutexProtected.h>
 #include <Common/nocopyable.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
@@ -25,9 +26,6 @@
 #include <common/types.h>
 #include <fmt/chrono.h>
 
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
 
 namespace DB::DM::Remote
 {
@@ -54,21 +52,23 @@ public:
         const DisaggReadSnapshotPtr & snap,
         const Timepoint & expired_at)
     {
-        std::unique_lock lock(mtx);
-        LOG_INFO(log, "Register Disaggregated Snapshot, task_id={}", task_id);
+        return snapshots.withExclusive([&](auto & snapshots) {
+            LOG_INFO(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
-        // Since EstablishDisagg may be retried, there may be existing snapshot.
-        // We replace these existing snapshot using a new one.
-        snapshots.insert_or_assign(task_id, SnapshotWithExpireTime{.snap = snap, .expired_at = expired_at});
-        return true;
+            // Since EstablishDisagg may be retried, there may be existing snapshot.
+            // We replace these existing snapshot using a new one.
+            snapshots[task_id] = SnapshotWithExpireTime{.snap = snap, .expired_at = expired_at};
+            return true;
+        });
     }
 
     DisaggReadSnapshotPtr getSnapshot(const DisaggTaskId & task_id) const
     {
-        std::shared_lock read_lock(mtx);
-        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            return iter->second.snap;
-        return nullptr;
+        return snapshots.withShared([&](auto & snapshots) {
+            if (auto iter = snapshots.find(task_id); iter != snapshots.end())
+                return iter->second.snap;
+            return DisaggReadSnapshotPtr{nullptr};
+        });
     }
 
     bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
@@ -78,21 +78,21 @@ public:
 private:
     bool unregisterSnapshot(const DisaggTaskId & task_id)
     {
-        std::unique_lock lock(mtx);
-        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-        {
-            LOG_INFO(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
-            snapshots.erase(iter);
-            return true;
-        }
-        return false;
+        return snapshots.withExclusive([&](auto & snapshots) {
+            if (auto iter = snapshots.find(task_id); iter != snapshots.end())
+            {
+                LOG_INFO(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
+                snapshots.erase(iter);
+                return true;
+            }
+            return false;
+        });
     }
 
     void clearExpiredSnapshots();
 
 private:
-    mutable std::shared_mutex mtx;
-    std::unordered_map<DisaggTaskId, SnapshotWithExpireTime> snapshots;
+    SharedMutexProtected<std::unordered_map<DisaggTaskId, SnapshotWithExpireTime>> snapshots;
 
     BackgroundProcessingPool & pool;
     BackgroundProcessingPool::TaskHandle handle;
