@@ -22,7 +22,7 @@ namespace DB
 using AutoPassThroughColumnGenerator = std::function<ColumnPtr(const Block & child_block)>;
 
 // todo description
-std::vector<AutoPassThroughColumnGenerator> setUpPassThroughColumnGenerator(
+std::vector<AutoPassThroughColumnGenerator> setUpAutoPassThroughColumnGenerator(
         const Block & header,
         const Block & child_header,
         const AggregateDescriptions & aggregate_descriptions);

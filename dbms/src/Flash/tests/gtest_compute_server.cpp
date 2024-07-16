@@ -199,6 +199,8 @@ public:
 
             col1_data_type = std::make_shared<DataTypeString>();
             col2_data_type = std::make_shared<DataTypeInt64>();
+            col3_data_type = std::make_shared<DataTypeDecimal<Decimal64>>(col3_prec, col3_scale);
+            col4_data_type = std::make_shared<DataTypeUInt8>();
 
             auto_pass_through_context = buildAutoPassHashAggThroughContext(context);
             // 1 block for adjust state, 3 blocks for other state
@@ -210,21 +212,44 @@ public:
             std::tie(medium_ndv_blocks, medium_ndv_block) = buildBlocksForMediumNDV(/*block_num*/ 40);
             std::tie(random_blocks, random_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
 
+            MockColumnInfoVec column_infos{
+                {col1_name, TiDB::TP::TypeString, false},
+                {col2_name, TiDB::TP::TypeLongLong, false},
+                {col4_name, TiDB::TP::TypeTiny, false}};
+
             context.addMockTable(
                 {db_name, high_ndv_tbl_name},
-                {{col1_name, TiDB::TP::TypeString, false}, {col2_name, TiDB::TP::TypeLongLong, false}},
+                column_infos,
                 high_ndv_block.getColumnsWithTypeAndName());
             context.addMockTable(
                 {db_name, low_ndv_tbl_name},
-                {{col1_name, TiDB::TP::TypeString, false}, {col2_name, TiDB::TP::TypeLongLong, false}},
+                column_infos,
                 low_ndv_block.getColumnsWithTypeAndName());
             context.addMockTable(
                 {db_name, medium_ndv_tbl_name},
-                {{col1_name, TiDB::TP::TypeString, false}, {col2_name, TiDB::TP::TypeLongLong, false}},
+                column_infos,
+                medium_ndv_block.getColumnsWithTypeAndName());
+
+            MockColumnInfoVec nullable_column_infos{
+                {col1_name, TiDB::TP::TypeString, true},
+                {col2_name, TiDB::TP::TypeLongLong, true},
+                {col4_name, TiDB::TP::TypeTiny, true}};
+
+            context.addMockTable(
+                {db_name, nullable_high_ndv_tbl_name},
+                nullable_column_infos,
+                high_ndv_block.getColumnsWithTypeAndName());
+            context.addMockTable(
+                {db_name, nullable_low_ndv_tbl_name},
+                nullable_column_infos,
+                low_ndv_block.getColumnsWithTypeAndName());
+            context.addMockTable(
+                {db_name, nullable_medium_ndv_tbl_name},
+                nullable_column_infos,
                 medium_ndv_block.getColumnsWithTypeAndName());
         }
 
-        void appendAggDescription(
+        static void appendAggDescription(
             const Names & arg_names,
             const DataTypes & arg_types,
             TiDB::TiDBCollators & arg_collators,
@@ -280,7 +305,7 @@ public:
                 "first_row",
                 aggregate_descriptions,
                 aggregated_columns,
-                /*empty_input_as_null*/ true,
+                /*empty_input_as_null*/ false,
                 *context.context);
             appendAggDescription(
                 Names{col2_name},
@@ -289,7 +314,7 @@ public:
                 "sum",
                 aggregate_descriptions,
                 aggregated_columns,
-                /*empty_input_as_null*/ true, // todo?
+                /*empty_input_as_null*/ false, // todo?
                 *context.context);
 
             AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
@@ -338,12 +363,14 @@ public:
 
             auto col1_in_one = col1_data_type->createColumn();
             auto col2_in_one = col2_data_type->createColumn();
+            auto col4_in_one = col4_data_type->createColumn();
 
             BlocksList res;
             for (size_t i = 0; i < block_num; ++i)
             {
                 auto col1 = col1_data_type->createColumn();
                 auto col2 = col2_data_type->createColumn();
+                auto col4 = col4_data_type->createColumn();
 
                 std::vector<String> cur_distinct_repo_names;
                 cur_distinct_repo_names.reserve(block_size / 2);
@@ -363,18 +390,25 @@ public:
                     auto commit_num = cur_distinct_commit_nums[idx];
                     col1->insert(Field(repo_name.data(), repo_name.size()));
                     col2->insert(Field(static_cast<Int64>(commit_num)));
+                    // DecimalField<Decimal64> decimal_field(Decimal64(static_cast<Int64>(commit_num)), col3_scale);
+                    // col3->insert(Field(decimal_field));
+                    col4->insert(Field(static_cast<UInt64>(commit_num)));
 
                     col1_in_one->insert(Field(repo_name.data(), repo_name.size()));
                     col2_in_one->insert(Field(static_cast<Int64>(commit_num)));
+                    // col3_in_one->insert(Field(decimal_field));
+                    col4_in_one->insert(Field(static_cast<UInt64>(commit_num)));
                 }
                 ColumnsWithTypeAndName cols{
                     {std::move(col1), col1_data_type, col1_name},
-                    {std::move(col2), col2_data_type, col2_name}};
+                    {std::move(col2), col2_data_type, col2_name},
+                    {std::move(col4), col4_data_type, col4_name}};
                 res.push_back(Block(cols));
             }
             ColumnsWithTypeAndName cols{
                 {std::move(col1_in_one), col1_data_type, col1_name},
-                {std::move(col2_in_one), col2_data_type, col2_name}};
+                {std::move(col2_in_one), col2_data_type, col2_name},
+                {std::move(col4_in_one), col4_data_type, col4_name}};
             Block res_in_one(cols);
             return {res, res_in_one};
         }
@@ -386,12 +420,14 @@ public:
 
             auto col1_in_one = col1_data_type->createColumn();
             auto col2_in_one = col2_data_type->createColumn();
+            auto col4_in_one = col4_data_type->createColumn();
 
             BlocksList res;
             for (size_t i = 0; i < block_num; ++i)
             {
                 auto col1 = col1_data_type->createColumn();
                 auto col2 = col2_data_type->createColumn();
+                auto col4 = col4_data_type->createColumn();
 
                 for (size_t j = 0; j < block_size; ++j)
                 {
@@ -400,18 +436,25 @@ public:
                     auto commit_num = distinct_commit_nums[idx];
                     col1->insert(Field(repo_name.data(), repo_name.size()));
                     col2->insert(Field(static_cast<Int64>(commit_num)));
+                    // DecimalField<Decimal64> decimal_field(Decimal64(static_cast<Int64>(commit_num)), col3_scale);
+                    // col3->insert(Field(decimal_field));
+                    col4->insert(Field(static_cast<UInt64>(commit_num)));
 
                     col1_in_one->insert(Field(repo_name.data(), repo_name.size()));
                     col2_in_one->insert(Field(static_cast<Int64>(commit_num)));
+                    // col3_in_one->insert(Field(decimal_field));
+                    col4_in_one->insert(Field(static_cast<UInt64>(commit_num)));
                 }
                 ColumnsWithTypeAndName cols{
                     {std::move(col1), col1_data_type, col1_name},
-                    {std::move(col2), col2_data_type, col2_name}};
+                    {std::move(col2), col2_data_type, col2_name},
+                    {std::move(col4), col4_data_type, col4_name}};
                 res.push_back(Block(cols));
             }
             ColumnsWithTypeAndName cols{
                 {std::move(col1_in_one), col1_data_type, col1_name},
-                {std::move(col2_in_one), col2_data_type, col2_name}};
+                {std::move(col2_in_one), col2_data_type, col2_name},
+                {std::move(col4_in_one), col4_data_type, col4_name}};
             Block res_in_one(cols);
             return {res, res_in_one};
         }
@@ -486,13 +529,25 @@ public:
         std::unique_ptr<AutoPassThroughHashAggContext> auto_pass_through_context;
         const String col1_name = "repo_name";
         const String col2_name = "commit_num";
+        // todo: col3 is used to test decimal type, but execute test framework doesn't support decimal for now.
+        const String col3_name = "quantity_num";
+        const String col4_name = "status";
         const String db_name = "test_db";
         const String high_ndv_tbl_name = "test_tbl_high_ndv";
         const String low_ndv_tbl_name = "test_tbl_low_ndv";
         const String medium_ndv_tbl_name = "test_tbl_medium_ndv";
+        const String nullable_high_ndv_tbl_name = "test_nullable_tbl_high_ndv";
+        const String nullable_low_ndv_tbl_name = "test_nullable_tbl_low_ndv";
+        const String nullable_medium_ndv_tbl_name = "test_nullable_tbl_medium_ndv";
 
+        // todo also test nullable
         DataTypePtr col1_data_type;
         DataTypePtr col2_data_type;
+        DataTypePtr col3_data_type;
+        DataTypePtr col4_data_type;
+
+        const size_t col3_prec = 15;
+        const size_t col3_scale = 2;
 
         BlocksList high_ndv_blocks;
         BlocksList low_ndv_blocks;
@@ -1710,18 +1765,31 @@ try
     auto workloads = std::vector{
         auto_pass_through_test_data.low_ndv_tbl_name,
         auto_pass_through_test_data.high_ndv_tbl_name,
-        auto_pass_through_test_data.medium_ndv_tbl_name};
+        auto_pass_through_test_data.medium_ndv_tbl_name,
+        auto_pass_through_test_data.nullable_low_ndv_tbl_name,
+        auto_pass_through_test_data.nullable_high_ndv_tbl_name,
+        auto_pass_through_test_data.nullable_medium_ndv_tbl_name,
+    };
     for (const auto & tbl_name : workloads)
     {
         const String db_name = auto_pass_through_test_data.db_name;
         const String col1_name = auto_pass_through_test_data.col1_name;
         const String col2_name = auto_pass_through_test_data.col2_name;
+        const String col4_name = auto_pass_through_test_data.col4_name;
 
+        // todo group array.
         MockAstVec agg_func_asts{
             makeASTFunction("first_row", col(col1_name)),
+            makeASTFunction("first_row", col(col2_name)),
+            makeASTFunction("min", col(col2_name)),
             makeASTFunction("max", col(col2_name)),
             makeASTFunction("sum", col(col2_name)),
-            makeASTFunction("count", col(col2_name))};
+            makeASTFunction("count", col(col2_name)),
+            makeASTFunction("first_row", col(col4_name)),
+            makeASTFunction("min", col(col4_name)),
+            makeASTFunction("max", col(col4_name)),
+            makeASTFunction("sum", col(col4_name)),
+            makeASTFunction("count", col(col4_name))};
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, tbl_name: {}", tbl_name);
 
         auto builder = context.scan(db_name, tbl_name)
@@ -1735,9 +1803,8 @@ try
 
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
-        // todo
-        // WRAP_FOR_SERVER_TEST_BEGIN
-        LOG_DEBUG(Logger::get(), "gjt debug beg");
+        WRAP_FOR_SERVER_TEST_BEGIN
+        LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, start test auto pass");
         // todo
         std::vector<String> expected_strings = {
             R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
@@ -1765,7 +1832,7 @@ try
                     switcher),
             expected_strings,
             res_no_pass_through);
-        // WRAP_FOR_SERVER_TEST_END
+        WRAP_FOR_SERVER_TEST_END
         LOG_DEBUG(Logger::get(), "gjt debug end");
     }
 }

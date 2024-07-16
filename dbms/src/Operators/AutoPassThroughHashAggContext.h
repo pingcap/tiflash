@@ -76,7 +76,7 @@ public:
 
         auto header = aggregator->getHeader(/*final=*/true);
         const auto & aggregate_descriptions = aggregator->getParams().aggregates;
-        column_generators = setUpPassThroughColumnGenerator(header, child_header_, aggregate_descriptions);
+        column_generators = setUpAutoPassThroughColumnGenerator(header, child_header_, aggregate_descriptions);
         RUNTIME_CHECK(header.columns() == column_generators.size());
     }
 

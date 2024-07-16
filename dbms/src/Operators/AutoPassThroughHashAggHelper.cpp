@@ -21,6 +21,7 @@
 #include <Operators/AutoPassThroughHashAggHelper.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <Common/Logger.h>
+#include <Common/Exception.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -176,8 +177,6 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
             (from_type->getTypeId() == to_type->getTypeId()))
         return std::bind(genPassThroughColumnByCopy, required_column.type, agg_desc.argument_names[0], std::placeholders::_1); // NOLINT
 
-    AutoPassThroughColumnGenerator generator = nullptr;
-
 #define FOR_DECIMAL_TYPES_INNER(M_outer_type, M) \
     M(M_outer_type, Decimal32) \
     M(M_outer_type, Decimal64) \
@@ -188,7 +187,6 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
     do { \
         if (checkDataType<DataTypeDecimal<TO_NATIVE_TYPE>>(to_type.get())) \
         { \
-            RUNTIME_CHECK(!generator); \
             if (arg_from_type->isNullable()) \
                 return std::bind(genPassThroughColumnForSumDecimal<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, true>, agg_desc, std::placeholders::_1); \
             else \
@@ -237,9 +235,8 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
     // todo NUMERIC -> NUMBER
 #define DISPATCH_NUMBER_INNER(FROM_NATIVE_TYPE, TO_NATIVE_TYPE) \
     do { \
-        if (checkDataType<DataTypeNumber<FROM_NATIVE_TYPE>>(to_type.get())) \
+        if (checkDataType<DataTypeNumber<TO_NATIVE_TYPE>>(to_type.get())) \
         { \
-            RUNTIME_CHECK(!generator); \
             if (arg_from_type->isNullable()) \
                 return std::bind(genPassThroughColumnForSumNumber<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, true>, agg_desc, std::placeholders::_1); \
             else \
@@ -285,8 +282,8 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
 #undef FOR_NUMBER_TYPES_INNER
 #undef FOR_NUMBER_TYPES_OUTER
 
-    RUNTIME_CHECK(generator);
-    return generator;
+    throw Exception(fmt::format("choose auto passthrough column generator failed. from type: {}, to type: {}",
+            arg_from_type->getName(), arg_to_type->getName()));
 }
 
 ColumnPtr genPassThroughColumnGeneric(const AggregateDescription & desc, const Block & child_block)
@@ -313,7 +310,7 @@ ColumnPtr genPassThroughColumnGeneric(const AggregateDescription & desc, const B
     return new_col;
 }
 
-std::vector<AutoPassThroughColumnGenerator> setUpPassThroughColumnGenerator(
+std::vector<AutoPassThroughColumnGenerator> setUpAutoPassThroughColumnGenerator(
         const Block & header,
         const Block & child_header,
         const AggregateDescriptions & aggregate_descriptions)
