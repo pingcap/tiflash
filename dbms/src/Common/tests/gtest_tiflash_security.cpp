@@ -125,6 +125,15 @@ key_path="")",
 ca_path=""
 cert_path=""
 key_path="security/key.pem")",
+             R"([security]
+ca_path=""
+cert_path="security/cert.pem"
+key_path="security/key.pem")",
+             // comment out
+             R"([security]
+ca_path="security/ca.pem"
+#cert_path="security/cert.pem"
+key_path="security/key.pem")",
          })
     {
         TiFlashSecurityConfig tiflash_config(log);
