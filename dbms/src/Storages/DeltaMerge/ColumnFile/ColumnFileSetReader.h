@@ -165,7 +165,7 @@ public:
         return {};
     }
 
-    Block readWithFilter(const IColumn::Filter &) override
+    Block readWithFilter(const IColumn::Filter &, FilterPtr &, bool) override
     {
         throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }

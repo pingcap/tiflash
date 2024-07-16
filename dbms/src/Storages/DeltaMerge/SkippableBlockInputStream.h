@@ -43,7 +43,7 @@ public:
     /// Return empty block if failed to read or the end of stream.
     /// Note: filter can not be all false.
     /// Only used in Late Materialization.
-    virtual Block readWithFilter(const IColumn::Filter & filter) = 0;
+    virtual Block readWithFilter(const IColumn::Filter & filter,  FilterPtr & res_filter, bool return_filter) = 0;
 };
 
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
@@ -64,7 +64,7 @@ public:
 
     size_t skipNextBlock() override { return 0; }
 
-    Block readWithFilter(const IColumn::Filter &) override { return {}; }
+    Block readWithFilter(const IColumn::Filter &, FilterPtr &, bool) override { return {}; }
 
     Block read() override { return {}; }
 
@@ -91,7 +91,7 @@ public:
 
     size_t skipNextBlock() override;
 
-    Block readWithFilter(const IColumn::Filter & filter) override;
+    Block readWithFilter(const IColumn::Filter & filter, FilterPtr &, bool) override;
 
     Block read() override;
 

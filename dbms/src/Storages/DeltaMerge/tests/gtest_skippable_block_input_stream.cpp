@@ -210,7 +210,8 @@ protected:
             {
                 col.column = col.column->filter(filter, passed_count);
             }
-            auto blk2 = stream2->readWithFilter(filter);
+            FilterPtr res_filter;
+            auto blk2 = stream2->readWithFilter(filter, res_filter, /*return_filter*/false);
             ASSERT_EQ(blk.startOffset(), blk2.startOffset());
             ASSERT_BLOCK_EQ(blk, blk2);
         }

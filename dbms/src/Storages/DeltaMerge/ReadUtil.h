@@ -46,5 +46,7 @@ size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStrea
 std::pair<Block, bool> readBlockWithFilter(
     SkippableBlockInputStreamPtr & stable,
     SkippableBlockInputStreamPtr & delta,
-    const IColumn::Filter & filter);
+    const IColumn::Filter & filter,
+    FilterPtr & res_filter,
+    bool return_filter);
 } // namespace DB::DM

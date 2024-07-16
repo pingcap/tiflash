@@ -550,7 +550,7 @@ public:
         }
     }
 
-    Block readWithFilter(const IColumn::Filter & filter) override
+    Block readWithFilter(const IColumn::Filter & filter, FilterPtr & /*res_filter*/, bool /*return_filter*/) override
     {
         auto block = read();
         if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())

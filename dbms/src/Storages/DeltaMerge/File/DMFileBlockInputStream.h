@@ -67,7 +67,7 @@ public:
         return read(filter_ignored, false);
     }
 
-    Block readWithFilter(const IColumn::Filter & filter) override { return reader.readWithFilter(filter); }
+    Block readWithFilter(const IColumn::Filter & filter, FilterPtr & /*res_filter*/, bool /*return_filter*/) override { return reader.readWithFilter(filter); }
 
     Block read(FilterPtr & res_filter, bool return_filter) override;
 

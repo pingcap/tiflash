@@ -109,7 +109,8 @@ Block LateMaterializationBlockInputStream::read()
                 // And the performance read and then filter is is better than readWithFilter,
                 // so only if the number of rows left after filtering out is large enough,
                 // we can skip some packs of the next block, call readWithFilter to get the next block.
-                rest_column_block = rest_column_stream->readWithFilter(*filter);
+                FilterPtr res_filter_ignored;
+                rest_column_block = rest_column_stream->readWithFilter(*filter, res_filter_ignored, /*return_filter*/false);
                 for (auto & col : filter_column_block)
                 {
                     if (col.name == filter_column_name)

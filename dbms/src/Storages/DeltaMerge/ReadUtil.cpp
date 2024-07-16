@@ -76,7 +76,9 @@ size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStrea
 std::pair<Block, bool> readBlockWithFilter(
     SkippableBlockInputStreamPtr & stable,
     SkippableBlockInputStreamPtr & delta,
-    const IColumn::Filter & filter)
+    const IColumn::Filter & filter,
+    FilterPtr & res_filter,
+    bool return_filter)
 {
     if (filter.empty())
     {
@@ -90,10 +92,10 @@ std::pair<Block, bool> readBlockWithFilter(
 
     if (stable == nullptr)
     {
-        return {delta->readWithFilter(filter), true};
+        return {delta->readWithFilter(filter, res_filter, return_filter), true};
     }
 
-    auto block = stable->readWithFilter(filter);
+    auto block = stable->readWithFilter(filter, res_filter, return_filter);
     if (block)
     {
         return {block, false};
@@ -103,7 +105,7 @@ std::pair<Block, bool> readBlockWithFilter(
         stable = nullptr;
         if (delta != nullptr)
         {
-            block = delta->readWithFilter(filter);
+            block = delta->readWithFilter(filter, res_filter, return_filter);
         }
         return {block, true};
     }
