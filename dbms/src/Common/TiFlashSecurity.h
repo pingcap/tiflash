@@ -88,31 +88,7 @@ public:
     bool update(Poco::Util::AbstractConfiguration & config)
     {
         std::unique_lock lock(mu);
-        if (config.has("security"))
-        {
-            if (inited && !has_security)
-            {
-                LOG_WARNING(log, "Can't add security config online");
-                return false;
-            }
-            has_security = true;
-
-            bool cert_file_updated = updateCertPath(config);
-
-            if (config.has("security.cert_allowed_cn") && has_tls_config)
-            {
-                String verify_cns = config.getString("security.cert_allowed_cn");
-                allowed_common_names = parseAllowedCN(verify_cns);
-            }
-
-            // Mostly options name are combined with "_", keep this style
-            if (config.has("security.redact_info_log"))
-            {
-                redact_info_log = parseRedactLog(config.getString("security.redact_info_log"));
-            }
-            return cert_file_updated;
-        }
-        else
+        if (!config.has("security"))
         {
             if (inited && has_security)
             {
@@ -122,8 +98,31 @@ public:
             {
                 LOG_INFO(log, "security config is not set");
             }
+            return false;
         }
-        return false;
+
+        assert(config.has("security"));
+        if (inited && !has_security)
+        {
+            LOG_WARNING(log, "Can't add security config online");
+            return false;
+        }
+        has_security = true;
+
+        bool cert_file_updated = updateCertPath(config);
+
+        if (config.has("security.cert_allowed_cn") && has_tls_config)
+        {
+            String verify_cns = config.getString("security.cert_allowed_cn");
+            allowed_common_names = parseAllowedCN(verify_cns);
+        }
+
+        // Mostly options name are combined with "_", keep this style
+        if (config.has("security.redact_info_log"))
+        {
+            redact_info_log = parseRedactLog(config.getString("security.redact_info_log"));
+        }
+        return cert_file_updated;
     }
 
     static RedactMode parseRedactLog(const String & config_str)
