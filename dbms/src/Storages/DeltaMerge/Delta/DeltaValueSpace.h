@@ -490,7 +490,7 @@ private:
     size_t read_rows = 0;
 
     ExpressionActionsPtr extra_cast;
-    std::optional<FilterTransformAction> filter;
+    std::optional<FilterTransformAction> filter_trans;
     ExpressionActionsPtr project_after_where;
     String filter_column_name;
     IColumn::Filter filter_result;
@@ -511,7 +511,7 @@ public:
               segment_range_,
               read_tag_)
         , extra_cast(filter_ ? filter_->extra_cast : nullptr)
-        , filter(
+        , filter_trans(
               filter_ ? std::optional(filter_->getFilterTransformAction(persisted_files_input_stream.getHeader()))
                       : std::nullopt)
         , project_after_where(filter_ ? filter_->project_after_where : nullptr)
@@ -560,7 +560,13 @@ public:
                 col.column = col.column->filter(filter, passed_count);
             }
         }
-        return filterBlock(block, res_filter, return_filter) ? block : Block{}; // TODO: Does return empty block is ok?
+        if (filter_trans)
+        {
+            RUNTIME_CHECK(return_filter);
+            // filterBlock should always return true where return_filter is true.
+            RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+        }
+        return block;
     }
 
     Block read() override
@@ -571,15 +577,17 @@ public:
 
     Block read(FilterPtr & res_filter, bool return_filter) override
     {
-        if (filter && filter->alwaysFalse())
+        if (filter_trans && filter_trans->alwaysFalse())
             return {};
 
-        while (true)
+        auto block = readAndSetOffset();
+        if (filter_trans)
         {
-            auto block = readAndSetOffset();
-            return filterBlock(block, res_filter, return_filter) ? block
-                                                                 : Block{}; // TODO: Does return empty block is ok?
+            RUNTIME_CHECK(return_filter);
+            // filterBlock should always return true where return_filter is true
+            RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
         }
+        return block;
     }
 
 private:
@@ -612,29 +620,19 @@ private:
     bool filterBlock(Block & block, FilterPtr & res_filter, bool return_filter)
     {
         if (!block)
-            return false;
-
-        if (!filter)
-        {
-            if (return_filter)
-                res_filter = nullptr;
             return true;
-        }
 
-        if (PredicateFilter::transformBlock(
-                extra_cast,
-                *filter,
-                *project_after_where,
-                filter_column_name,
-                block,
-                filter_result,
-                return_filter))
-        {
-            if (return_filter)
-                res_filter = filter_result.empty() ? nullptr : &filter_result;
-            return true;
-        }
-        return false;
+        auto res = PredicateFilter::transformBlock(
+            extra_cast,
+            *filter_trans,
+            *project_after_where,
+            filter_column_name,
+            block,
+            filter_result,
+            return_filter);
+        if (res && return_filter)
+            res_filter = filter_result.empty() ? nullptr : &filter_result;
+        return res;
     }
 };
 

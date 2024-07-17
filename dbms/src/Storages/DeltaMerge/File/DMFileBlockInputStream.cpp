@@ -124,20 +124,30 @@ DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(c
 
 Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
-    if (filter && filter->alwaysFalse())
+    if (filter_trans && filter_trans->alwaysFalse())
         return {};
 
-    while (true)
+
+    auto block = reader.read();
+    if (filter_trans)
     {
-        auto block = reader.read();
-        return filterBlock(block, res_filter, return_filter) ? block : Block{}; // TODO: Does return empty block is ok?
+        RUNTIME_CHECK(return_filter);
+        // filterBlock should always return true where return_filter is true
+        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
     }
+    return block;
 }
 
 Block DMFileBlockInputStream::readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter)
 {
     auto block = reader.readWithFilter(filter);
-    return filterBlock(block, res_filter, return_filter) ? block : Block{}; // TODO: Does return empty block is ok?
+    if (filter_trans)
+    {
+        RUNTIME_CHECK(return_filter);
+        // filterBlock should always return true where return_filter is true.
+        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+    }
+    return block;
 }
 
 // If some/all rows are passed, return true.
@@ -145,29 +155,19 @@ Block DMFileBlockInputStream::readWithFilter(const IColumn::Filter & filter, Fil
 bool DMFileBlockInputStream::filterBlock(Block & block, FilterPtr & res_filter, bool return_filter)
 {
     if (!block)
-        return false;
-
-    if (!filter)
-    {
-        if (return_filter)
-            res_filter = nullptr;
         return true;
-    }
 
-    if (PredicateFilter::transformBlock(
-            extra_cast,
-            *filter,
-            *project_after_where,
-            filter_column_name,
-            block,
-            filter_result,
-            return_filter))
-    {
-        if (return_filter)
-            res_filter = filter_result.empty() ? nullptr : &filter_result;
-        return true;
-    }
-    return false;
+    auto res = PredicateFilter::transformBlock(
+        extra_cast,
+        *filter_trans,
+        *project_after_where,
+        filter_column_name,
+        block,
+        filter_result,
+        return_filter);
+    if (res && return_filter)
+        res_filter = filter_result.empty() ? nullptr : &filter_result;
+    return res;
 }
 
 } // namespace DB::DM
