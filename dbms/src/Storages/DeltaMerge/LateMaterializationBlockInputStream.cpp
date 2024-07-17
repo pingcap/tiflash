@@ -26,7 +26,7 @@ namespace
 void doFilter(Block & block, IColumn::Filter & f, size_t passed_count, const String & ignore_name)
 {
     for (auto & col : block)
-        if (!ignore_name.empty() && col.name != ignore_name)
+        if (ignore_name.empty() || col.name != ignore_name)
             col.column = col.column->filter(f, passed_count);
 }
 
@@ -62,12 +62,12 @@ Block LateMaterializationBlockInputStream::read()
 {
     Block filter_column_block;
     FilterPtr lm_res_filter = nullptr;
-    Block rest_column_block;
-    FilterPtr rest_res_filter = nullptr;
 
     // Until non-empty block after filtering or end of stream.
     while (true)
     {
+        Block rest_column_block;
+        FilterPtr rest_res_filter = nullptr;
         filter_column_block = filter_column_stream->read(lm_res_filter, true);
 
         // If filter_column_block is empty, it means that the stream has ended.
@@ -151,7 +151,6 @@ Block LateMaterializationBlockInputStream::read()
                         (*lm_res_filter)[i] = (*rest_res_filter)[i] && (*lm_res_filter)[i];
                     passed_count = countBytesInFilter(*lm_res_filter);
                 }
-
                 doFilter(filter_column_block, rest_column_block, *lm_res_filter, filter_column_name, passed_count);
             }
             else
