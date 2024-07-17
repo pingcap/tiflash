@@ -86,35 +86,7 @@ public:
     bool update(Poco::Util::AbstractConfiguration & config)
     {
         std::unique_lock lock(mu);
-<<<<<<< HEAD
-        if (config.has("security"))
-        {
-            if (inited && !has_security)
-            {
-                LOG_WARNING(log, "Can't add security config online");
-                return false;
-            }
-            has_security = true;
-
-            bool cert_file_updated = updateCertPath(config);
-
-            if (config.has("security.cert_allowed_cn") && has_tls_config)
-            {
-                String verify_cns = config.getString("security.cert_allowed_cn");
-                parseAllowedCN(verify_cns);
-            }
-
-            // Mostly options name are combined with "_", keep this style
-            if (config.has("security.redact_info_log"))
-            {
-                redact_info_log = config.getBool("security.redact_info_log");
-            }
-            return cert_file_updated;
-        }
-        else
-=======
         if (!config.has("security"))
->>>>>>> 951e010ab8 (security: Allow empty security config for disabling tls (#9234))
         {
             if (inited && has_security)
             {
@@ -146,17 +118,19 @@ public:
         // Mostly options name are combined with "_", keep this style
         if (config.has("security.redact_info_log"))
         {
-            redact_info_log = parseRedactLog(config.getString("security.redact_info_log"));
+            redact_info_log = config.getBool("security.redact_info_log");
         }
         return cert_file_updated;
     }
 
-    void parseAllowedCN(String verify_cns)
+    static std::set<String> parseAllowedCN(String verify_cns)
     {
         if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
         {
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
         }
+
+        std::set<String> common_names;
         Poco::StringTokenizer string_tokens(verify_cns, ",");
         for (const auto & string_token : string_tokens)
         {
@@ -165,8 +139,9 @@ public:
             {
                 cn = cn.substr(1, cn.size() - 2);
             }
-            allowed_common_names.insert(std::move(cn));
+            common_names.insert(std::move(cn));
         }
+        return common_names;
     }
 
     bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
@@ -341,13 +316,9 @@ private:
     String key_path;
 
     FilesChangesTracker cert_files;
-<<<<<<< HEAD
-    bool redact_info_log = false;
-=======
->>>>>>> 951e010ab8 (security: Allow empty security config for disabling tls (#9234))
     std::set<String> allowed_common_names;
 
-    RedactMode redact_info_log = RedactMode::Disable;
+    bool redact_info_log = false;
 
     bool has_tls_config = false;
     bool has_security = false;
