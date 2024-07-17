@@ -18,6 +18,7 @@
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
 #include <lz4.h>
+#include <rle.h>
 
 
 namespace DB
@@ -246,7 +247,8 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     }
     case IntegerMode::RunLength:
     {
-        compressed_size += Compression::runLengthEncoding<T>(source, source_size, dest, source_size);
+        UInt32 max_dest_size = rle_compress_bounds(source_size);
+        compressed_size += Compression::runLengthEncoding<T>(source, source_size, dest, max_dest_size);
         break;
     }
     case IntegerMode::FOR:
