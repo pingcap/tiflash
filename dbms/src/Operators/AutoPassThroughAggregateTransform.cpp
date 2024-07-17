@@ -20,38 +20,6 @@
 namespace DB
 {
 
-// template <bool force_streaming>
-// OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::transformImpl(Block & block)
-// {
-//     switch (status)
-//     {
-//     case Status::building_hash_map:
-//     {
-//         if unlikely (!block)
-//             status = Status::hash_map_done;
-//         else
-//             auto_pass_through_context->onBlock<force_streaming>(block);
-// 
-//         if (!auto_pass_through_context->passThroughBufferEmpty())
-//         {
-//             block = auto_pass_through_context->popPassThroughBuffer();
-//             return OperatorStatus::HAS_OUTPUT;
-//         }
-// 
-//         if unlikely (!block)
-//         {
-//             block = auto_pass_through_context->getData();
-//             return OperatorStatus::HAS_OUTPUT;
-//         }
-// 
-//         return OperatorStatus::NEED_INPUT;
-//     }
-//     default:
-//     {
-//         throw Exception(fmt::format("unexpected status: {}", magic_enum::enum_name(status)));
-//     }
-//     }
-// }
 template <bool force_streaming>
 OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::transformImpl(Block & block)
 {
@@ -60,19 +28,23 @@ OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::transformImpl
     case Status::building_hash_map:
     {
         if unlikely (!block)
-        {
             status = Status::hash_map_done;
-            if (!auto_pass_through_context->passThroughBufferEmpty())
-                block = auto_pass_through_context->popPassThroughBuffer();
-            else
-                block = auto_pass_through_context->getData();
+        else
+            auto_pass_through_context->onBlock<force_streaming>(block);
+
+        if (!auto_pass_through_context->passThroughBufferEmpty())
+        {
+            block = auto_pass_through_context->popPassThroughBuffer();
             return OperatorStatus::HAS_OUTPUT;
         }
-        else
+
+        if unlikely (!block)
         {
-            auto_pass_through_context->onBlock<force_streaming>(block);
-            return OperatorStatus::NEED_INPUT;
+            block = auto_pass_through_context->getData();
+            return OperatorStatus::HAS_OUTPUT;
         }
+
+        return OperatorStatus::NEED_INPUT;
     }
     default:
     {

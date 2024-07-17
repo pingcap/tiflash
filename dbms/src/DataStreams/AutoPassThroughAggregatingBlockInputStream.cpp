@@ -17,33 +17,6 @@
 namespace DB
 {
 
-// template <bool force_streaming>
-// Block AutoPassThroughAggregatingBlockInputStream<force_streaming>::readImpl()
-// {
-//     while (!build_done)
-//     {
-//         Block block = children[0]->read();
-//         if (block)
-//         {
-//             auto_pass_through_context->onBlock<force_streaming>(block);
-//         }
-//         else
-//         {
-//             build_done = true;
-//             break;
-//         }
-// 
-//         if (!auto_pass_through_context->passThroughBufferEmpty())
-//             return auto_pass_through_context->popPassThroughBuffer();
-//     }
-// 
-//     assert(build_done);
-//     if (!auto_pass_through_context->passThroughBufferEmpty())
-//         return auto_pass_through_context->popPassThroughBuffer();
-// 
-//     return auto_pass_through_context->getData();
-// }
-
 template <bool force_streaming>
 Block AutoPassThroughAggregatingBlockInputStream<force_streaming>::readImpl()
 {
@@ -59,6 +32,9 @@ Block AutoPassThroughAggregatingBlockInputStream<force_streaming>::readImpl()
             build_done = true;
             break;
         }
+
+        if (!auto_pass_through_context->passThroughBufferEmpty())
+            return auto_pass_through_context->popPassThroughBuffer();
     }
 
     assert(build_done);
