@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Interpreters/Aggregator.h>
-#include <tipb/executor.pb.h>
 #include <Operators/AutoPassThroughHashAggHelper.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {

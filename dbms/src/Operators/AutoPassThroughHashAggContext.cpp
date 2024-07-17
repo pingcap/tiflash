@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/AutoPassThroughHashAggContext.h>
 #include <Columns/ColumnDecimal.h>
+#include <Operators/AutoPassThroughHashAggContext.h>
 
-#include <magic_enum.hpp>
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -128,7 +128,12 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
     adjust_processed_rows += total_rows;
     adjust_hit_rows += hit_rows;
 
-    LOG_DEBUG(log, "adjust state info: processed: {}, hit: {}, limit: {}", adjust_processed_rows, adjust_hit_rows, adjust_row_limit);
+    LOG_DEBUG(
+        log,
+        "adjust state info: processed: {}, hit: {}, limit: {}",
+        adjust_processed_rows,
+        adjust_hit_rows,
+        adjust_row_limit);
 
     if (adjust_processed_rows < adjust_row_limit)
         return;
@@ -155,7 +160,12 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
 void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 {
     state_processed_rows += block_rows;
-    LOG_DEBUG(log, "other state info: state: {}, processed: {}, limit: {}", magic_enum::enum_name(state), state_processed_rows, other_state_row_limit);
+    LOG_DEBUG(
+        log,
+        "other state info: state: {}, processed: {}, limit: {}",
+        magic_enum::enum_name(state),
+        state_processed_rows,
+        other_state_row_limit);
     if (state_processed_rows >= other_state_row_limit)
     {
         state = State::Adjust;

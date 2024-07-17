@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Core/ColumnWithTypeAndName.h>
-#include <Interpreters/Context.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeDecimal.h>
-#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/Context.h>
 #include <Operators/AutoPassThroughHashAggHelper.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/ColumnGenerator.h>
-
+#include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -35,10 +34,7 @@ namespace tests
 class TestAutoPassThroughHelper : public ::testing::Test
 {
 public:
-    void SetUp() override
-    {
-        ::DB::registerAggregateFunctions();
-    }
+    void SetUp() override { ::DB::registerAggregateFunctions(); }
 };
 
 TEST_F(TestAutoPassThroughHelper, basic)
@@ -72,62 +68,49 @@ try
     };
     auto context = TiFlashTestEnv::getContext();
     AggregateDescriptions agg_descs{
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_uint8}, {}, 0, false),
-            .parameters = {},
-            .arguments = {0},
-            .argument_names = {"col_uint8"},
-            .column_name = "sum(col_uint8)"
-        },
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_decimal64}, {}, 0, false),
-            .parameters = {},
-            .arguments = {1},
-            .argument_names = {"col_decimal64"},
-            .column_name = "sum(col_decimal64)"
-        },
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "sum", {nullable_data_type_uint8}, {}, 0, false),
-            .parameters = {},
-            .arguments = {2},
-            .argument_names = {"nullable_col_uint8"},
-            .column_name = "sum(nullable_col_uint8)"
-        },
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "sum", {nullable_data_type_decimal64}, {}, 0, false),
-            .parameters = {},
-            .arguments = {3},
-            .argument_names = {"nullable_col_decimal64"},
-            .column_name = "sum(nullable_col_decimal64)"
-        },
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "count", {data_type_uint8}, {}, 0, false),
-            .parameters = {},
-            .arguments = {0},
-            .argument_names = {"col_uint8"},
-            .column_name = "count(col_uint8)"
-        },
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "count", {data_type_decimal64}, {}, 0, false),
-            .parameters = {},
-            .arguments = {1},
-            .argument_names = {"col_decimal64"},
-            .column_name = "count(col_decimal64)"
-        },
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "first_row", {data_type_str}, {}, 0, false),
-            .parameters = {},
-            .arguments = {4},
-            .argument_names = {"col_str"},
-            .column_name = "count(col_str)"
-        },
-        {
-            .function = AggregateFunctionFactory::instance().get(*context, "first_row", {nullable_data_type_str}, {}, 0, false),
-            .parameters = {},
-            .arguments = {5},
-            .argument_names = {"nullable_col_str"},
-            .column_name = "count(nullable_col_str)"
-        },
+        {.function = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_uint8}, {}, 0, false),
+         .parameters = {},
+         .arguments = {0},
+         .argument_names = {"col_uint8"},
+         .column_name = "sum(col_uint8)"},
+        {.function = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_decimal64}, {}, 0, false),
+         .parameters = {},
+         .arguments = {1},
+         .argument_names = {"col_decimal64"},
+         .column_name = "sum(col_decimal64)"},
+        {.function
+         = AggregateFunctionFactory::instance().get(*context, "sum", {nullable_data_type_uint8}, {}, 0, false),
+         .parameters = {},
+         .arguments = {2},
+         .argument_names = {"nullable_col_uint8"},
+         .column_name = "sum(nullable_col_uint8)"},
+        {.function
+         = AggregateFunctionFactory::instance().get(*context, "sum", {nullable_data_type_decimal64}, {}, 0, false),
+         .parameters = {},
+         .arguments = {3},
+         .argument_names = {"nullable_col_decimal64"},
+         .column_name = "sum(nullable_col_decimal64)"},
+        {.function = AggregateFunctionFactory::instance().get(*context, "count", {data_type_uint8}, {}, 0, false),
+         .parameters = {},
+         .arguments = {0},
+         .argument_names = {"col_uint8"},
+         .column_name = "count(col_uint8)"},
+        {.function = AggregateFunctionFactory::instance().get(*context, "count", {data_type_decimal64}, {}, 0, false),
+         .parameters = {},
+         .arguments = {1},
+         .argument_names = {"col_decimal64"},
+         .column_name = "count(col_decimal64)"},
+        {.function = AggregateFunctionFactory::instance().get(*context, "first_row", {data_type_str}, {}, 0, false),
+         .parameters = {},
+         .arguments = {4},
+         .argument_names = {"col_str"},
+         .column_name = "count(col_str)"},
+        {.function
+         = AggregateFunctionFactory::instance().get(*context, "first_row", {nullable_data_type_str}, {}, 0, false),
+         .parameters = {},
+         .arguments = {5},
+         .argument_names = {"nullable_col_str"},
+         .column_name = "count(nullable_col_str)"},
     };
 
     ColumnsWithTypeAndName header;

@@ -221,10 +221,7 @@ public:
                 {db_name, high_ndv_tbl_name},
                 column_infos,
                 high_ndv_block.getColumnsWithTypeAndName());
-            context.addMockTable(
-                {db_name, low_ndv_tbl_name},
-                column_infos,
-                low_ndv_block.getColumnsWithTypeAndName());
+            context.addMockTable({db_name, low_ndv_tbl_name}, column_infos, low_ndv_block.getColumnsWithTypeAndName());
             context.addMockTable(
                 {db_name, medium_ndv_tbl_name},
                 column_infos,
@@ -342,9 +339,7 @@ public:
                 /*final=*/true,
                 spill_config);
 
-            ColumnsWithTypeAndName cols{
-                {nullptr, col1_data_type, col1_name},
-                {nullptr, col2_data_type, col2_name}};
+            ColumnsWithTypeAndName cols{{nullptr, col1_data_type, col1_name}, {nullptr, col2_data_type, col2_name}};
             Block child_header(cols);
 
             return std::make_unique<AutoPassThroughHashAggContext>(
@@ -540,7 +535,6 @@ public:
         const String nullable_low_ndv_tbl_name = "test_nullable_tbl_low_ndv";
         const String nullable_medium_ndv_tbl_name = "test_nullable_tbl_medium_ndv";
 
-        // todo also test nullable
         DataTypePtr col1_data_type;
         DataTypePtr col2_data_type;
         DataTypePtr col3_data_type;
@@ -1792,12 +1786,7 @@ try
             makeASTFunction("count", col(col4_name))};
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, tbl_name: {}", tbl_name);
 
-        auto builder = context.scan(db_name, tbl_name)
-                    .aggregation(
-                        agg_func_asts,
-                        {col(col1_name)},
-                        0,
-                        nullptr);
+        auto builder = context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, nullptr);
         startServers(2);
         auto res_no_pass_through = getResultBlocks(context, builder, serverNum());
 
@@ -1811,25 +1800,20 @@ try
  aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   table_scan_0 | {<0, String>, <1, Longlong>}
 )",
-                R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
  aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   table_scan_0 | {<0, String>, <1, Longlong>}
 )",
-                R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
  aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
 )",
-                R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
  aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
   exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
 )"};
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-            context.scan(db_name, tbl_name)
-                .aggregation(
-                    agg_func_asts,
-                    {col(col1_name)},
-                    0,
-                    switcher),
+            context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, switcher),
             expected_strings,
             res_no_pass_through);
         WRAP_FOR_SERVER_TEST_END

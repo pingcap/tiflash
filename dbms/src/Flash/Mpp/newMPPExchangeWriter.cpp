@@ -88,9 +88,6 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
         else
         {
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
-            // todo check
-            // selective_block is only used for 1st HashAgg, so only for hash partition or fine grained shuffle.
-            // RUNTIME_CHECK(!selective_block);
             return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
                 chosen_batch_send_min_limit,

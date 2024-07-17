@@ -107,9 +107,9 @@ public:
     static String queryInfo(size_t server_id);
 
     static DB::ColumnsWithTypeAndName getResultBlocks(
-            MockDAGRequestContext & context,
-            DAGRequestBuilder & builder,
-            size_t server_num)
+        MockDAGRequestContext & context,
+        DAGRequestBuilder & builder,
+        size_t server_num)
     {
         auto properties = DB::tests::getDAGPropertiesForTest(server_num);
         for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)

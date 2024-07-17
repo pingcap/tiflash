@@ -31,7 +31,6 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
     const LoggerPtr & log,
     const tipb::ExchangeSender & exchange_sender,
     const FineGrainedShuffle & fine_grained_shuffle,
-    bool auto_pass_through_agg_flag,
     const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
@@ -49,8 +48,7 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
         partition_col_ids,
         partition_col_collators,
         exchange_sender.tp(),
-        exchange_sender.compression(),
-        auto_pass_through_agg_flag);
+        exchange_sender.compression());
     // executeUnion will be call after sender.transform, so don't need to restore concurrency.
     physical_exchange_sender->disableRestoreConcurrency();
     return physical_exchange_sender;

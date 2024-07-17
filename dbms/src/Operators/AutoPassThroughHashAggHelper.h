@@ -23,9 +23,9 @@ using AutoPassThroughColumnGenerator = std::function<ColumnPtr(const Block & chi
 
 // todo description
 std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
-        const Block & required_header,
-        const Block & child_header,
-        const AggregateDescriptions & aggregate_descriptions);
+    const Block & required_header,
+    const Block & child_header,
+    const AggregateDescriptions & aggregate_descriptions);
 
 ColumnPtr genPassThroughColumnGeneric(const AggregateDescription & desc, const Block & child_block);
 } // namespace DB

@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Operators/AutoPassThroughHashAggContext.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Core/Block.h>
-#include <TestUtils/ColumnGenerator.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-
+#include <Operators/AutoPassThroughHashAggContext.h>
+#include <TestUtils/ColumnGenerator.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
 
 namespace DB
@@ -56,27 +55,33 @@ public:
             for (size_t i = 0; i < block_num; ++i)
             {
                 {
-                    auto col_int64 = ColumnGenerator::instance().generate({block_size, data_type_int64->getName(), RANDOM, col_int64_name});
-                    auto col_decimal = ColumnGenerator::instance().generate({block_size, data_type_decimal->getName(), RANDOM, col_decimal_name});
+                    auto col_int64 = ColumnGenerator::instance().generate(
+                        {block_size, data_type_int64->getName(), RANDOM, col_int64_name});
+                    auto col_decimal = ColumnGenerator::instance().generate(
+                        {block_size, data_type_decimal->getName(), RANDOM, col_decimal_name});
                     blocks.push_back({col_int64, col_decimal});
                 }
 
                 {
-                    auto col_int64 = ColumnGenerator::instance().generate({block_size, data_type_int64->getName(), RANDOM, col_int64_name});
-                    auto col_decimal = ColumnGenerator::instance().generate({block_size, data_type_decimal->getName(), RANDOM, col_decimal_name});
+                    auto col_int64 = ColumnGenerator::instance().generate(
+                        {block_size, data_type_int64->getName(), RANDOM, col_int64_name});
+                    auto col_decimal = ColumnGenerator::instance().generate(
+                        {block_size, data_type_decimal->getName(), RANDOM, col_decimal_name});
 
-                    auto col_nullmap = ColumnUInt8::create(block_size/2, 0);
+                    auto col_nullmap = ColumnUInt8::create(block_size / 2, 0);
                     col_nullmap->reserve(block_size);
-                    for (size_t i = 0; i < block_size/2; ++i)
+                    for (size_t i = 0; i < block_size / 2; ++i)
                         col_nullmap->insert(Field(static_cast<UInt64>(1)));
 
                     auto col_nullmap_1 = col_nullmap->clone();
 
-                    auto col_int64_nullable = ColumnNullable::create(std::move(col_int64.column), std::move(col_nullmap));
-                    auto col_decimal_nullable = ColumnNullable::create(std::move(col_decimal.column), std::move(col_nullmap_1));
-                    nullable_blocks.push_back({
-                            {std::move(col_int64_nullable), data_type_int64_nullable, "int64_nullable"},
-                            {std::move(col_decimal_nullable), data_type_decimal_nullable, "decimal_nullable"}});
+                    auto col_int64_nullable
+                        = ColumnNullable::create(std::move(col_int64.column), std::move(col_nullmap));
+                    auto col_decimal_nullable
+                        = ColumnNullable::create(std::move(col_decimal.column), std::move(col_nullmap_1));
+                    nullable_blocks.push_back(
+                        {{std::move(col_int64_nullable), data_type_int64_nullable, "int64_nullable"},
+                         {std::move(col_decimal_nullable), data_type_decimal_nullable, "decimal_nullable"}});
                 }
             }
         }
@@ -116,30 +121,27 @@ public:
             .column_name = "out_col",
         };
 
-        child_not_null_header = Block({
-                {data_type_int64, col_int64_name},
-                {data_type_decimal, col_decimal_name}});
-        child_nullable_header = Block({
-                {data_type_int64_nullable, col_int64_name},
-                {data_type_decimal_nullable, col_decimal_name}});
+        child_not_null_header = Block({{data_type_int64, col_int64_name}, {data_type_decimal, col_decimal_name}});
+        child_nullable_header
+            = Block({{data_type_int64_nullable, col_int64_name}, {data_type_decimal_nullable, col_decimal_name}});
 
         // todo sum or sumWithOverflow
         auto sum_agg_func = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_decimal});
         sum_not_null_header = Block({
-                {sum_agg_func->getReturnType(), "out_col"},
-                });
+            {sum_agg_func->getReturnType(), "out_col"},
+        });
         sum_agg_func = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_decimal_nullable});
         sum_nullable_header = Block({
-                {sum_agg_func->getReturnType(), "out_col"},
-                });
+            {sum_agg_func->getReturnType(), "out_col"},
+        });
         auto count_agg_func = AggregateFunctionFactory::instance().get(*context, "count", {data_type_decimal});
         count_not_null_header = Block({
-                {count_agg_func->getReturnType(), "out_col"},
-                });
+            {count_agg_func->getReturnType(), "out_col"},
+        });
         count_agg_func = AggregateFunctionFactory::instance().get(*context, "count", {data_type_decimal_nullable});
         count_nullable_header = Block({
-                {count_agg_func->getReturnType(), "out_col"},
-                });
+            {count_agg_func->getReturnType(), "out_col"},
+        });
     }
     CATCH
 
@@ -168,21 +170,21 @@ public:
 std::vector<Block> BenchAutoPassThroughColumnGenerator::blocks;
 std::vector<Block> BenchAutoPassThroughColumnGenerator::nullable_blocks;
 
-#define DEFINE_GENERIC_BENCH(NAME, DESC, BLOCKS) \
+#define DEFINE_GENERIC_BENCH(NAME, DESC, BLOCKS)                                            \
     BENCHMARK_DEFINE_F(BenchAutoPassThroughColumnGenerator, NAME)(benchmark::State & state) \
-    try \
-    { \
-        for (const auto & _ : state) \
-        { \
-            std::vector<ColumnPtr> out_cols; \
-            out_cols.reserve(BenchAutoPassThroughColumnGenerator::BLOCKS.size()); \
-            for (const auto & block : BenchAutoPassThroughColumnGenerator::BLOCKS) \
-            { \
-                out_cols.push_back(::DB::genPassThroughColumnGeneric(DESC, block)); \
-            } \
-        } \
-    } \
-    CATCH \
+    try                                                                                     \
+    {                                                                                       \
+        for (const auto & _ : state)                                                        \
+        {                                                                                   \
+            std::vector<ColumnPtr> out_cols;                                                \
+            out_cols.reserve(BenchAutoPassThroughColumnGenerator::BLOCKS.size());           \
+            for (const auto & block : BenchAutoPassThroughColumnGenerator::BLOCKS)          \
+            {                                                                               \
+                out_cols.push_back(::DB::genPassThroughColumnGeneric(DESC, block));         \
+            }                                                                               \
+        }                                                                                   \
+    }                                                                                       \
+    CATCH                                                                                   \
     BENCHMARK_REGISTER_F(BenchAutoPassThroughColumnGenerator, NAME);
 
 DEFINE_GENERIC_BENCH(generic_count_notnull, count_not_null_desc, blocks)
@@ -190,27 +192,32 @@ DEFINE_GENERIC_BENCH(generic_count_nullable, count_nullable_desc, nullable_block
 DEFINE_GENERIC_BENCH(generic_sum_notnull, sum_not_null_desc, blocks)
 DEFINE_GENERIC_BENCH(generic_sum_nullable, sum_nullable_desc, nullable_blocks)
 
-#define DEFINE_FAST_BENCH(NAME, DESC, HEADER, CHILD_HEADER, BLOCKS) \
-BENCHMARK_DEFINE_F(BenchAutoPassThroughColumnGenerator, NAME)(benchmark::State & state) \
-try \
-{ \
-    auto generators = setupAutoPassThroughColumnGenerator(HEADER, CHILD_HEADER, {DESC}); \
-    assert(generators.size() == 1); \
-    for (const auto & _ : state) \
-    { \
-        std::vector<ColumnPtr> out_cols; \
-        out_cols.reserve(BenchAutoPassThroughColumnGenerator::BLOCKS.size()); \
-        for (const auto & block : BenchAutoPassThroughColumnGenerator::BLOCKS) \
-        { \
-            out_cols.push_back(generators[0](block)); \
-        } \
-    } \
-} \
-CATCH \
-BENCHMARK_REGISTER_F(BenchAutoPassThroughColumnGenerator, NAME);
+#define DEFINE_FAST_BENCH(NAME, DESC, HEADER, CHILD_HEADER, BLOCKS)                          \
+    BENCHMARK_DEFINE_F(BenchAutoPassThroughColumnGenerator, NAME)(benchmark::State & state)  \
+    try                                                                                      \
+    {                                                                                        \
+        auto generators = setupAutoPassThroughColumnGenerator(HEADER, CHILD_HEADER, {DESC}); \
+        assert(generators.size() == 1);                                                      \
+        for (const auto & _ : state)                                                         \
+        {                                                                                    \
+            std::vector<ColumnPtr> out_cols;                                                 \
+            out_cols.reserve(BenchAutoPassThroughColumnGenerator::BLOCKS.size());            \
+            for (const auto & block : BenchAutoPassThroughColumnGenerator::BLOCKS)           \
+            {                                                                                \
+                out_cols.push_back(generators[0](block));                                    \
+            }                                                                                \
+        }                                                                                    \
+    }                                                                                        \
+    CATCH                                                                                    \
+    BENCHMARK_REGISTER_F(BenchAutoPassThroughColumnGenerator, NAME);
 
 DEFINE_FAST_BENCH(fast_count_notnull, count_not_null_desc, count_not_null_header, child_not_null_header, blocks)
-DEFINE_FAST_BENCH(fast_count_nullable, count_nullable_desc, count_nullable_header, child_nullable_header, nullable_blocks)
+DEFINE_FAST_BENCH(
+    fast_count_nullable,
+    count_nullable_desc,
+    count_nullable_header,
+    child_nullable_header,
+    nullable_blocks)
 DEFINE_FAST_BENCH(fast_sum_notnull, sum_not_null_desc, sum_not_null_header, child_not_null_header, blocks)
 DEFINE_FAST_BENCH(fast_sum_nullable, sum_nullable_desc, sum_nullable_header, child_nullable_header, nullable_blocks)
 
