@@ -20,6 +20,28 @@
 
 namespace DB::DM
 {
+namespace
+{
+
+void doFilter(Block & block, IColumn::Filter & f, size_t passed_count, const String & ignore_name)
+{
+    for (auto & col : block)
+        if (!ignore_name.empty() && col.name != ignore_name)
+            col.column = col.column->filter(f, passed_count);
+}
+
+void doFilter(
+    Block & filter_column_block,
+    Block & rest_column_block,
+    IColumn::Filter & f,
+    const String & filter_column_name,
+    std::optional<size_t> passed_count = std::nullopt)
+{
+    auto count = passed_count ? *passed_count : countBytesInFilter(f);
+    doFilter(filter_column_block, f, count, filter_column_name);
+    doFilter(rest_column_block, f, count, "");
+}
+} // namespace
 
 LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     const ColumnDefines & columns_to_read,
@@ -39,49 +61,48 @@ LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
 Block LateMaterializationBlockInputStream::read()
 {
     Block filter_column_block;
-    FilterPtr filter = nullptr;
+    FilterPtr lm_res_filter = nullptr;
+    Block rest_column_block;
+    FilterPtr rest_res_filter = nullptr;
 
     // Until non-empty block after filtering or end of stream.
     while (true)
     {
-        filter_column_block = filter_column_stream->read(filter, true);
+        filter_column_block = filter_column_stream->read(lm_res_filter, true);
 
         // If filter_column_block is empty, it means that the stream has ended.
         // No need to read the rest_column_stream, just return an empty block.
         if (!filter_column_block)
             return filter_column_block;
 
-        // If filter is nullptr, it means that these push down filters are always true.
-        if (!filter)
+        if (!lm_res_filter) // LM filter all match
         {
-            IColumn::Filter col_filter;
-            col_filter.resize(filter_column_block.rows());
-            Block rest_column_block;
-            if (bitmap_filter->get(col_filter, filter_column_block.startOffset(), filter_column_block.rows()))
+            rest_column_block = rest_column_stream->read(rest_res_filter, true);
+            if (!rest_res_filter) // Rest filter all match
             {
-                rest_column_block = rest_column_stream->read();
+                IColumn::Filter mvcc_filter;
+                mvcc_filter.resize(filter_column_block.rows());
+                if (!bitmap_filter->get(mvcc_filter, filter_column_block.startOffset(), filter_column_block.rows()))
+                {
+                    doFilter(filter_column_block, rest_column_block, mvcc_filter, filter_column_name);
+                }
             }
             else
             {
-                rest_column_block = rest_column_stream->read();
-                size_t passed_count = countBytesInFilter(col_filter);
-                for (auto & col : rest_column_block)
-                {
-                    col.column = col.column->filter(col_filter, passed_count);
-                }
-                for (auto & col : filter_column_block)
-                {
-                    col.column = col.column->filter(col_filter, passed_count);
-                }
+                bitmap_filter->rangeAnd(
+                    *rest_res_filter,
+                    filter_column_block.startOffset(),
+                    filter_column_block.rows());
+                doFilter(filter_column_block, rest_column_block, *rest_res_filter, filter_column_name);
             }
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
 
         size_t rows = filter_column_block.rows();
         // bitmap_filter[start_offset, start_offset + rows] & filter -> filter
-        bitmap_filter->rangeAnd(*filter, filter_column_block.startOffset(), rows);
+        bitmap_filter->rangeAnd(*lm_res_filter, filter_column_block.startOffset(), rows);
 
-        if (size_t passed_count = countBytesInFilter(*filter); passed_count == 0)
+        if (size_t passed_count = countBytesInFilter(*lm_res_filter); passed_count == 0)
         {
             // if all rows are filtered, skip the next block of rest_column_stream
             if (size_t skipped_rows = rest_column_stream->skipNextBlock(); skipped_rows == 0)
@@ -90,7 +111,7 @@ Block LateMaterializationBlockInputStream::read()
                 // NOTE: skipNextBlock() return 0 only if failed to skip or meets the end of stream,
                 //       but the filter_column_stream doesn't meet the end of stream
                 //       so it is an unexpected behavior.
-                rest_column_stream->read();
+                rest_column_stream->read(rest_res_filter, true);
                 LOG_ERROR(
                     log,
                     "Late materialization skip block failed, at start_offset: {}, rows: {}",
@@ -100,7 +121,6 @@ Block LateMaterializationBlockInputStream::read()
         }
         else
         {
-            Block rest_column_block;
             auto filter_out_count = rows - passed_count;
             if (filter_out_count >= DEFAULT_MERGE_BLOCK_SIZE * 2)
             {
@@ -109,36 +129,42 @@ Block LateMaterializationBlockInputStream::read()
                 // And the performance read and then filter is is better than readWithFilter,
                 // so only if the number of rows left after filtering out is large enough,
                 // we can skip some packs of the next block, call readWithFilter to get the next block.
-                FilterPtr res_filter_ignored;
-                rest_column_block
-                    = rest_column_stream->readWithFilter(*filter, res_filter_ignored, /*return_filter*/ false);
-                for (auto & col : filter_column_block)
-                {
-                    if (col.name == filter_column_name)
-                        continue;
-                    col.column = col.column->filter(*filter, passed_count);
-                }
+                rest_column_block = rest_column_stream->readWithFilter(*lm_res_filter, rest_res_filter, true);
+                // Filter `filter_column_block` so that it aligns with `rest_column_block`.
+                doFilter(filter_column_block, *lm_res_filter, passed_count, filter_column_name);
+
+                if (rest_res_filter)
+                    doFilter(filter_column_block, rest_column_block, *rest_res_filter, filter_column_name);
             }
             else if (filter_out_count > 0)
             {
                 // if the number of rows left after filtering out is small, we can't skip any packs of the next block
                 // so we call read() to get the next block, and then filter it.
-                rest_column_block = rest_column_stream->read();
-                for (auto & col : rest_column_block)
+                rest_column_block = rest_column_stream->read(rest_res_filter, true);
+                if (rest_res_filter)
                 {
-                    col.column = col.column->filter(*filter, passed_count);
+                    RUNTIME_CHECK(
+                        rest_res_filter->size() == lm_res_filter->size(),
+                        rest_res_filter->size(),
+                        lm_res_filter->size());
+                    for (size_t i = 0; i < rest_res_filter->size(); ++i)
+                        (*lm_res_filter)[i] = (*rest_res_filter)[i] && (*lm_res_filter)[i];
+                    passed_count = countBytesInFilter(*lm_res_filter);
                 }
-                for (auto & col : filter_column_block)
-                {
-                    if (col.name == filter_column_name)
-                        continue;
-                    col.column = col.column->filter(*filter, passed_count);
-                }
+
+                doFilter(filter_column_block, rest_column_block, *lm_res_filter, filter_column_name, passed_count);
             }
             else
             {
                 // if all rows are passed, just read the next block of rest_column_stream
-                rest_column_block = rest_column_stream->read();
+                rest_column_block = rest_column_stream->read(rest_res_filter, true);
+                if (rest_res_filter)
+                    doFilter(
+                        filter_column_block,
+                        rest_column_block,
+                        *rest_res_filter,
+                        filter_column_name,
+                        passed_count);
             }
 
             // make sure the position and size of filter_column_block and rest_column_block are the same

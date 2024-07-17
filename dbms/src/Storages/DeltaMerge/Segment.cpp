@@ -3293,6 +3293,108 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
 }
 
+BlockInputStreamPtr Segment::getLateMaterializationStreamPushDown(
+    BitmapFilterPtr && bitmap_filter,
+    const DMContext & dm_context,
+    const ColumnDefines & columns_to_read,
+    const SegmentSnapshotPtr & segment_snap,
+    const RowKeyRanges & data_ranges,
+    const PushDownFilterPtr & filter,
+    UInt64 start_ts,
+    size_t expected_block_size)
+{
+    // set `is_fast_scan` to true to try to enable clean read
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+    constexpr auto is_fast_scan = true;
+    auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
+
+    // construct (stable and delta) streams by the filter column
+    const auto & filter_columns = filter->LMColumns();
+    RUNTIME_CHECK(filter_columns != nullptr);
+    const auto & lm_predicate_filter = filter->lm_filter;
+    SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
+        dm_context,
+        *filter_columns,
+        data_ranges,
+        filter->rs_operator,
+        start_ts,
+        expected_block_size,
+        enable_handle_clean_read,
+        ReadTag::LMFilter,
+        lm_predicate_filter,
+        is_fast_scan,
+        enable_del_clean_read);
+    SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
+        dm_context,
+        segment_snap->delta,
+        filter_columns,
+        this->rowkey_range,
+        ReadTag::LMFilter,
+        lm_predicate_filter);
+
+    if (unlikely(filter_columns->size() == columns_to_read.size()))
+    {
+        LOG_ERROR(
+            segment_snap->log,
+            "Late materialization filter columns size equal to read columns size, which is not expected, "
+            "filter_columns_size={}",
+            filter_columns->size());
+        return std::make_shared<BitmapFilterBlockInputStream>(
+            *filter_columns,
+            filter_column_stable_stream,
+            filter_column_delta_stream,
+            segment_snap->stable->getDMFilesRows(),
+            bitmap_filter,
+            dm_context.tracing_id);
+    }
+
+    BlockInputStreamPtr filter_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
+        *filter_columns,
+        filter_column_stable_stream,
+        filter_column_delta_stream,
+        segment_snap->stable->getDMFilesRows(),
+        dm_context.tracing_id);
+
+    const auto & rest_columns_to_read = filter->restColumns();
+    RUNTIME_CHECK(rest_columns_to_read != nullptr);
+    const auto & rest_predicate_filter = filter->rest_filter;
+    // construct stream for the rest columns
+    SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
+        dm_context,
+        *rest_columns_to_read,
+        data_ranges,
+        filter->rs_operator,
+        start_ts,
+        expected_block_size,
+        enable_handle_clean_read,
+        ReadTag::Query,
+        rest_predicate_filter,
+        is_fast_scan,
+        enable_del_clean_read);
+    SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
+        dm_context,
+        segment_snap->delta,
+        rest_columns_to_read,
+        this->rowkey_range,
+        ReadTag::Query,
+        rest_predicate_filter);
+    SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
+        *rest_columns_to_read,
+        rest_column_stable_stream,
+        rest_column_delta_stream,
+        segment_snap->stable->getDMFilesRows(),
+        dm_context.tracing_id);
+
+    // construct late materialization stream
+    return std::make_shared<LateMaterializationBlockInputStream>(
+        columns_to_read,
+        filter->lm_filter->filter_column_name,
+        filter_column_stream,
+        rest_column_stream,
+        bitmap_filter,
+        dm_context.tracing_id);
+}
+
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
 {
     RowKeyRanges real_ranges;
@@ -3345,7 +3447,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     BlockInputStreamPtr stream;
     if (filter && filter->hasLMFilter())
     {
-        stream = getLateMaterializationStream(
+        stream = getLateMaterializationStreamPushDown(
             std::move(bitmap_filter),
             dm_context,
             columns_to_read,
@@ -3354,9 +3456,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             filter,
             start_ts,
             read_data_block_rows);
-        stream = filter && filter->hasRestFilter()
-            ? filter->rest_filter->buildFilterInputStream(stream, /*need_project*/ true)
-            : stream;
     }
     else // !filter || !filter->hasLMFilter()
     {

@@ -79,6 +79,19 @@ public:
         return block;
     }
 
+    Block read(FilterPtr & res_filter, bool return_filter) override
+    {
+        auto [block, from_delta] = readBlock(stable, delta, res_filter, return_filter);
+        if (block)
+        {
+            if (from_delta)
+            {
+                block.setStartOffset(block.startOffset() + stable_rows);
+            }
+        }
+        return block;
+    }
+
 private:
     Block header;
     SkippableBlockInputStreamPtr stable;

@@ -730,6 +730,15 @@ public:
         const PushDownFilterPtr & filter,
         UInt64 start_ts,
         size_t expected_block_size);
+    BlockInputStreamPtr getLateMaterializationStreamPushDown(
+        BitmapFilterPtr && bitmap_filter,
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & data_ranges,
+        const PushDownFilterPtr & filter,
+        UInt64 start_ts,
+        size_t expected_block_size);
 
     // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
     static size_t clipBlockRows(
