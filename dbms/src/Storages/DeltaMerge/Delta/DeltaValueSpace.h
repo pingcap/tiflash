@@ -566,6 +566,10 @@ public:
             // filterBlock should always return true where return_filter is true.
             RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
         }
+        else
+        {
+            res_filter = nullptr;
+        }
         return block;
     }
 
@@ -586,6 +590,10 @@ public:
             RUNTIME_CHECK(return_filter);
             // filterBlock should always return true where return_filter is true
             RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+        }
+        else
+        {
+            res_filter = nullptr;
         }
         return block;
     }

@@ -127,25 +127,32 @@ Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
     if (filter_trans && filter_trans->alwaysFalse())
         return {};
 
-
-    auto block = reader.read();
-    if (filter_trans)
+    auto [block, all_match] = reader.read();
+    if (filter_trans && !all_match)
     {
         RUNTIME_CHECK(return_filter);
         // filterBlock should always return true where return_filter is true
         RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+    }
+    else // !filter_trans || all_match
+    {
+        res_filter = nullptr;
     }
     return block;
 }
 
 Block DMFileBlockInputStream::readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter)
 {
-    auto block = reader.readWithFilter(filter);
+    auto [block, all_match] = reader.readWithFilter(filter);
     if (filter_trans)
     {
         RUNTIME_CHECK(return_filter);
         // filterBlock should always return true where return_filter is true.
         RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+    }
+    else // !filter_trans || all_match
+    {
+        res_filter = nullptr;
     }
     return block;
 }

@@ -80,9 +80,9 @@ public:
     size_t skipNextBlock();
 
     /// Read specified rows.
-    Block readWithFilter(const IColumn::Filter & filter);
+    std::pair<Block, bool> readWithFilter(const IColumn::Filter & filter);
 
-    Block read();
+    std::pair<Block, bool> read();
     std::string path() const
     {
         // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.

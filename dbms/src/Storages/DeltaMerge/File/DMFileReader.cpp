@@ -170,13 +170,13 @@ std::tuple<size_t, bool> DMFileReader::getReadRows()
     return {read_rows, allMatch(last_pack_res)};
 }
 
-Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
+std::pair<Block, bool> DMFileReader::readWithFilter(const IColumn::Filter & filter)
 {
     /// 1. Skip filtered out packs.
     if (size_t skip_rows; !getSkippedRows(skip_rows))
     {
         // no block left in the stream
-        return {};
+        return {{}, false};
     }
 
     /// 2. Mark pack_res[i] = None if all rows in the i-th pack are filtered out by filter.
@@ -234,7 +234,8 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         //      When i = next_pack_id + 5, call read() to read {next_pack_id + 3, next_pack_id + 4, next_pack_id + 5}th packs
         if (isUse(pack_res[pack_id]) && (pack_id + 1 == pack_res.size() || !isUse(pack_res[pack_id + 1])))
         {
-            Block block = read();
+            auto [block, t] = read();
+            RUNTIME_CHECK(t == all_match);
             size_t rows = block.rows();
 
             if (size_t passed_count = countBytesInFilter(filter, offset, rows); passed_count != rows)
@@ -276,7 +277,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
     Block res = getHeader().cloneWithColumns(std::move(columns));
     res.setStartOffset(start_row_offset);
-    return res;
+    return {res, all_match};
 }
 
 bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
@@ -284,14 +285,14 @@ bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
 }
 
-Block DMFileReader::read()
+std::pair<Block, bool> DMFileReader::read()
 {
     Stopwatch watch;
     SCOPE_EXIT(scan_context->total_dmfile_read_time_ns += watch.elapsed(););
 
     /// 1. Skip filtered out packs.
     if (size_t skip_rows; !getSkippedRows(skip_rows))
-        return {};
+        return {{}, false};
 
     /// 2. Find the max continuous rows can be read.
 
@@ -404,7 +405,7 @@ Block DMFileReader::read()
 
     Block res(std::move(columns));
     res.setStartOffset(start_row_offset);
-    return res;
+    return {res, all_match};
 }
 
 ColumnPtr DMFileReader::cleanRead(
