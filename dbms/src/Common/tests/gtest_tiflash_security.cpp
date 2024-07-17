@@ -32,9 +32,6 @@ class TiFlashSecurityTest : public ext::Singleton<TiFlashSecurityTest>
 
 TEST(TiFlashSecurityTest, Config)
 {
-<<<<<<< HEAD
-    TiFlashSecurityConfig tiflash_config;
-=======
     {
         auto cns = TiFlashSecurityConfig::parseAllowedCN(String("[abc,efg]"));
         ASSERT_EQ(cns.count("abc"), 1);
@@ -59,38 +56,10 @@ TEST(TiFlashSecurityTest, Config)
         ASSERT_EQ(cns.count("efg"), 1);
     }
 
->>>>>>> 951e010ab8 (security: Allow empty security config for disabling tls (#9234))
     const auto log = Logger::get();
 
-<<<<<<< HEAD
-    tiflash_config.parseAllowedCN(String("[abc,efg]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"(["abc","efg"])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String("[ abc , efg ]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"([ "abc", "efg" ])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    String test =
-        R"(
-=======
     {
         auto new_config = loadConfigFromString(R"(
->>>>>>> 951e010ab8 (security: Allow empty security config for disabling tls (#9234))
 [security]
 ca_path="security/ca.pem"
 cert_path="security/cert.pem"
@@ -116,8 +85,6 @@ cert_allowed_cn="tidb"
     }
 }
 
-<<<<<<< HEAD
-=======
 TEST(TiFlashSecurityTest, EmptyConfig)
 try
 {
@@ -194,32 +161,6 @@ key_path="security/key.pem")",
 }
 CATCH
 
-TEST(TiFlashSecurityTest, RedactLogConfig)
-{
-    for (const auto & [input, expect] : std::vector<std::pair<String, RedactMode>>{
-             {"marker", RedactMode::Marker},
-             {"Marker", RedactMode::Marker},
-             {"MARKER", RedactMode::Marker},
-             {"true", RedactMode::Enable},
-             {"True", RedactMode::Enable},
-             {"TRUE", RedactMode::Enable},
-             {"yes", RedactMode::Enable},
-             {"on", RedactMode::Enable},
-             {"1", RedactMode::Enable},
-             {"2", RedactMode::Enable},
-             {"false", RedactMode::Disable},
-             {"False", RedactMode::Disable},
-             {"FALSE", RedactMode::Disable},
-             {"no", RedactMode::Disable},
-             {"off", RedactMode::Disable},
-             {"0", RedactMode::Disable},
-         })
-    {
-        EXPECT_EQ(TiFlashSecurityConfig::parseRedactLog(input), expect);
-    }
-}
-
->>>>>>> 951e010ab8 (security: Allow empty security config for disabling tls (#9234))
 TEST(TiFlashSecurityTest, Update)
 {
     String test =
