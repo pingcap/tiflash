@@ -316,13 +316,9 @@ private:
     String key_path;
 
     FilesChangesTracker cert_files;
-<<<<<<< HEAD
-    bool redact_info_log = false;
-=======
->>>>>>> 951e010ab8 (security: Allow empty security config for disabling tls (#9234))
     std::set<String> allowed_common_names;
 
-    RedactMode redact_info_log = RedactMode::Disable;
+    bool redact_info_log = false;
 
     bool has_tls_config = false;
     bool has_security = false;
