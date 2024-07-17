@@ -95,6 +95,8 @@ public:
 
     Block read() override;
 
+    Block read(FilterPtr & res_filter, bool return_filter) override;
+
 private:
     ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit);
 
