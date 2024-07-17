@@ -387,9 +387,10 @@ PushDownFilterPtr PushDownFilter::build(
     {
         auto rest_filter_columns
             = getFilterColumns(table_scan_column_infos, rest_filter_exprs, table_scan_columns_to_read);
+
         std::tie(rest_filter, rest_casted_columns) = PredicateFilter::build(
             /*filter_columns*/ *rest_filter_columns,
-            /*input_columns*/ table_scan_columns_to_read,
+            /*input_columns*/ *rest_columns, // Will read rest_columns together
             table_scan_column_infos,
             rest_filter_exprs,
             table_scan_columns_to_read,
