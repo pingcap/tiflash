@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <IO/Compression/EncodingUtil.h>
 #include <IO/Compression/ICompressionCodec.h>
 
 #include <span>
@@ -67,9 +66,6 @@ private:
     using ConstantState = T;
 
     template <std::integral T>
-    using RunLengthState = Compression::RunLengthPairs<T>;
-
-    template <std::integral T>
     struct FORState
     {
         std::vector<T> values;
@@ -88,7 +84,7 @@ private:
 
     // State is a union of different states for different modes
     template <std::integral T>
-    using IntegerState = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
+    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
 
     class IntegerCompressContext
     {

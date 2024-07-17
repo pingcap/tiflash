@@ -200,6 +200,7 @@ target_link_libraries (tiflash_common_io
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     fastpforlib
+    hypersonic-rle
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)

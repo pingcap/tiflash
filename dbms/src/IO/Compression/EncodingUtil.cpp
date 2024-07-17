@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <IO/Compression/EncodingUtil.h>
+#include <rle.h>
 
 #if defined(__AVX2__)
 #include <immintrin.h>
@@ -288,6 +289,148 @@ void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
         tmp_buffer + TYPE_BYTE_SIZE,
         required_size - TYPE_BYTE_SIZE);
     deltaDecoding<UInt64>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
+}
+
+/// Run-length encoding
+
+#if defined(__AVX2__)
+
+template <>
+size_t estimateRunLengthDecodedByteSize<UInt8>(const UInt8 * values, UInt32 count)
+{
+    size_t estimate_rle_size = RunLengthPairLength<UInt8>;
+    constexpr auto simd_width = sizeof(__m256i) / sizeof(UInt8);
+    UInt32 i = 1;
+    while (i + simd_width - 1 < count)
+    {
+        auto prev = _mm256_set1_epi8(values[i - 1]);
+        auto curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(values + i));
+        auto cmp_result = _mm256_cmpeq_epi8(prev, curr);
+        int mask = _mm256_movemask_epi8(cmp_result);
+        if (int count = __builtin_ctz(~mask) / 2; count > 0)
+        {
+            i += count;
+        }
+        else
+        {
+            estimate_rle_size += RunLengthPairLength<UInt8>;
+            ++i;
+        }
+    }
+    for (; i < count; ++i)
+    {
+        if (values[i] != values[i - 1])
+            estimate_rle_size += RunLengthPairLength<UInt8>;
+    }
+    return estimate_rle_size;
+}
+
+template <>
+size_t estimateRunLengthDecodedByteSize<UInt16>(const UInt16 * values, UInt32 count)
+{
+    size_t estimate_rle_size = RunLengthPairLength<UInt16>;
+    constexpr auto simd_width = sizeof(__m256i) / sizeof(UInt16);
+    UInt32 i = 1;
+    while (i + simd_width - 1 < count)
+    {
+        auto prev = _mm256_set1_epi16(values[i - 1]);
+        auto curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(values + i));
+        auto cmp_result = _mm256_cmpeq_epi16(prev, curr);
+        int mask = _mm256_movemask_epi8(cmp_result);
+        if (int count = __builtin_ctz(~mask) / 2; count > 0)
+        {
+            i += count;
+        }
+        else
+        {
+            estimate_rle_size += RunLengthPairLength<UInt16>;
+            ++i;
+        }
+    }
+    for (; i < count; ++i)
+    {
+        if (values[i] != values[i - 1])
+            estimate_rle_size += RunLengthPairLength<UInt16>;
+    }
+    return estimate_rle_size;
+}
+
+#endif
+
+template <>
+size_t runLengthEncoding<UInt8>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    return rle8_multi_compress(
+        reinterpret_cast<const unsigned char *>(source),
+        source_size,
+        reinterpret_cast<unsigned char *>(dest),
+        dest_size);
+}
+
+template <>
+size_t runLengthEncoding<UInt16>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    return rle16_sym_compress(
+        reinterpret_cast<const unsigned char *>(source),
+        source_size,
+        reinterpret_cast<unsigned char *>(dest),
+        dest_size);
+}
+
+template <>
+size_t runLengthEncoding<UInt32>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    return rle32_byte_compress(
+        reinterpret_cast<const unsigned char *>(source),
+        source_size,
+        reinterpret_cast<unsigned char *>(dest),
+        dest_size);
+}
+
+template <>
+size_t runLengthEncoding<UInt64>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    return rle64_byte_packed_compress(
+        reinterpret_cast<const unsigned char *>(source),
+        source_size,
+        reinterpret_cast<unsigned char *>(dest),
+        dest_size);
+}
+
+template <>
+void runLengthDecoding<UInt8>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    unsigned char unsigned_dest[dest_size + rle_decompress_additional_size()];
+    rle8_decompress(reinterpret_cast<const unsigned char *>(source), source_size, unsigned_dest, dest_size);
+    memcpy(dest, unsigned_dest, dest_size);
+}
+
+template <>
+void runLengthDecoding<UInt16>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    unsigned char unsigned_dest[dest_size + rle_decompress_additional_size()];
+    rle16_sym_decompress(reinterpret_cast<const unsigned char *>(source), source_size, unsigned_dest, dest_size);
+    memcpy(dest, unsigned_dest, dest_size);
+}
+
+template <>
+void runLengthDecoding<UInt32>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    unsigned char unsigned_dest[dest_size + rle_decompress_additional_size()];
+    rle32_byte_decompress(reinterpret_cast<const unsigned char *>(source), source_size, unsigned_dest, dest_size);
+    memcpy(dest, unsigned_dest, dest_size);
+}
+
+template <>
+void runLengthDecoding<UInt64>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    unsigned char unsigned_dest[dest_size + rle_decompress_additional_size()];
+    rle64_byte_packed_decompress(
+        reinterpret_cast<const unsigned char *>(source),
+        source_size,
+        unsigned_dest,
+        dest_size);
+    memcpy(dest, unsigned_dest, dest_size);
 }
 
 } // namespace DB::Compression
