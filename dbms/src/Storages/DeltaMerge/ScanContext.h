@@ -136,6 +136,16 @@ public:
         num_stale_read = tiflash_scan_context_pb.stale_read_regions();
         build_inputstream_time_ns = tiflash_scan_context_pb.total_build_inputstream_ms() * 1000000;
 
+        total_vector_idx_load_from_s3 = tiflash_scan_context_pb.total_vector_idx_load_from_s3();
+        total_vector_idx_load_from_disk = tiflash_scan_context_pb.total_vector_idx_load_from_disk();
+        total_vector_idx_load_from_cache = tiflash_scan_context_pb.total_vector_idx_load_from_cache();
+        total_vector_idx_load_time_ms = tiflash_scan_context_pb.total_vector_idx_load_time_ms();
+        total_vector_idx_search_time_ms = tiflash_scan_context_pb.total_vector_idx_search_time_ms();
+        total_vector_idx_search_visited_nodes = tiflash_scan_context_pb.total_vector_idx_search_visited_nodes();
+        total_vector_idx_search_discarded_nodes = tiflash_scan_context_pb.total_vector_idx_search_discarded_nodes();
+        total_vector_idx_read_vec_time_ms = tiflash_scan_context_pb.total_vector_idx_read_vec_time_ms();
+        total_vector_idx_read_others_time_ms = tiflash_scan_context_pb.total_vector_idx_read_others_time_ms();
+
         setStreamCost(
             tiflash_scan_context_pb.min_local_stream_ms() * 1000000,
             tiflash_scan_context_pb.max_local_stream_ms() * 1000000,
@@ -193,6 +203,16 @@ public:
         tiflash_scan_context_pb.set_min_remote_stream_ms(remote_min_stream_cost_ns / 1000000);
         tiflash_scan_context_pb.set_max_remote_stream_ms(remote_max_stream_cost_ns / 1000000);
 
+        tiflash_scan_context_pb.set_total_vector_idx_load_from_s3(total_vector_idx_load_from_s3);
+        tiflash_scan_context_pb.set_total_vector_idx_load_from_disk(total_vector_idx_load_from_disk);
+        tiflash_scan_context_pb.set_total_vector_idx_load_from_cache(total_vector_idx_load_from_cache);
+        tiflash_scan_context_pb.set_total_vector_idx_load_time_ms(total_vector_idx_load_time_ms);
+        tiflash_scan_context_pb.set_total_vector_idx_search_time_ms(total_vector_idx_search_time_ms);
+        tiflash_scan_context_pb.set_total_vector_idx_search_visited_nodes(total_vector_idx_search_visited_nodes);
+        tiflash_scan_context_pb.set_total_vector_idx_search_discarded_nodes(total_vector_idx_search_discarded_nodes);
+        tiflash_scan_context_pb.set_total_vector_idx_read_vec_time_ms(total_vector_idx_read_vec_time_ms);
+        tiflash_scan_context_pb.set_total_vector_idx_read_others_time_ms(total_vector_idx_read_others_time_ms);
+
         serializeRegionNumOfInstance(tiflash_scan_context_pb);
 
         tiflash_scan_context_pb.set_total_vector_idx_load_from_s3(total_vector_idx_load_from_s3);
@@ -243,6 +263,16 @@ public:
         build_bitmap_time_ns += other.build_bitmap_time_ns;
 
         num_stale_read += other.num_stale_read;
+
+        total_vector_idx_load_from_s3 += other.total_vector_idx_load_from_s3;
+        total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk;
+        total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache;
+        total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms;
+        total_vector_idx_search_time_ms += other.total_vector_idx_search_time_ms;
+        total_vector_idx_search_visited_nodes += other.total_vector_idx_search_visited_nodes;
+        total_vector_idx_search_discarded_nodes += other.total_vector_idx_search_discarded_nodes;
+        total_vector_idx_read_vec_time_ms += other.total_vector_idx_read_vec_time_ms;
+        total_vector_idx_read_others_time_ms += other.total_vector_idx_read_others_time_ms;
 
         mergeStreamCost(
             other.local_min_stream_cost_ns,
@@ -295,6 +325,16 @@ public:
         build_bitmap_time_ns += other.total_build_bitmap_ms() * 1000000;
         num_stale_read += other.stale_read_regions();
         build_inputstream_time_ns += other.total_build_inputstream_ms() * 1000000;
+
+        total_vector_idx_load_from_s3 += other.total_vector_idx_load_from_s3();
+        total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk();
+        total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache();
+        total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms();
+        total_vector_idx_search_time_ms += other.total_vector_idx_search_time_ms();
+        total_vector_idx_search_visited_nodes += other.total_vector_idx_search_visited_nodes();
+        total_vector_idx_search_discarded_nodes += other.total_vector_idx_search_discarded_nodes();
+        total_vector_idx_read_vec_time_ms += other.total_vector_idx_read_vec_time_ms();
+        total_vector_idx_read_others_time_ms += other.total_vector_idx_read_others_time_ms();
 
         mergeStreamCost(
             other.min_local_stream_ms() * 1000000,
