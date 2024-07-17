@@ -59,10 +59,12 @@ public:
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         const String & extra_info_,
-        const ExpressionActionsPtr & project_actions_)
+        const ExpressionActionsPtr & project_actions_,
+        bool after_auto_pass_through_hashagg_)
         : PhysicalUnary(executor_id_, PlanType::Projection, schema_, fine_grained_shuffle_, req_id, child_)
         , extra_info(extra_info_)
         , project_actions(project_actions_)
+        , after_auto_pass_through_hashagg(after_auto_pass_through_hashagg_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -82,5 +84,6 @@ private:
     const String extra_info;
 
     ExpressionActionsPtr project_actions;
+    bool after_auto_pass_through_hashagg;
 };
 } // namespace DB

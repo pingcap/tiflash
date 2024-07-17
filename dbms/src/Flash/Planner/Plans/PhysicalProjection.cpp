@@ -52,7 +52,8 @@ PhysicalPlanNodePtr PhysicalProjection::build(
         log->identifier(),
         child,
         "projection",
-        project_actions);
+        project_actions,
+        /*after_auto_pass_through_hashagg=*/false);
     return physical_projection;
 }
 
@@ -145,7 +146,7 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
 {
     child->buildBlockInputStream(pipeline, context, max_streams);
 
-    executeExpression(pipeline, project_actions, log, extra_info);
+    executeExpression(pipeline, project_actions, log, extra_info, after_auto_pass_through_hashagg);
 }
 
 void PhysicalProjection::buildPipelineExecGroupImpl(
@@ -154,7 +155,7 @@ void PhysicalProjection::buildPipelineExecGroupImpl(
     Context & /*context*/,
     size_t /*concurrency*/)
 {
-    executeExpression(exec_context, group_builder, project_actions, log);
+    executeExpression(exec_context, group_builder, project_actions, log, after_auto_pass_through_hashagg);
 }
 
 void PhysicalProjection::finalizeImpl(const Names & parent_require)
