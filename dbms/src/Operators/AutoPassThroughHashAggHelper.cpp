@@ -59,13 +59,19 @@ ColumnPtr genPassThroughColumnForCount(const AggregateDescription & desc, const 
     if (argument_column.type->isNullable())
     {
         const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
-        auto & datas = count_agg_func_res->getData();
-        for (size_t i = 0; i < child_block.rows(); ++i)
-        {
-            if (col_nullable->isNullAt(i))
-                datas[i] = 0;
-        }
+        auto nullmap = col_nullable->getNullMapColumnPtr()->cloneFullColumn();
+        return ColumnNullable::create(std::move(count_agg_func_res), std::move(nullmap));
     }
+    // if (argument_column.type->isNullable())
+    // {
+    //     const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
+    //     auto & datas = count_agg_func_res->getData();
+    //     for (size_t i = 0; i < child_block.rows(); ++i)
+    //     {
+    //         if (col_nullable->isNullAt(i))
+    //             datas[i] = 0;
+    //     }
+    // }
     return count_agg_func_res;
 }
 
