@@ -114,6 +114,7 @@ ColumnPtr genPassThroughColumnForSumDecimal(const AggregateDescription & desc, c
     return out_col;
 }
 
+// todo macro same with genPassThroughColumnForSumDecimal
 template <typename FromNumberType, typename ToNumberType, bool nullable>
 ColumnPtr genPassThroughColumnForSumNumber(const AggregateDescription & desc, const Block & child_block)
 {
@@ -310,16 +311,16 @@ ColumnPtr genPassThroughColumnGeneric(const AggregateDescription & desc, const B
     return new_col;
 }
 
-std::vector<AutoPassThroughColumnGenerator> setUpAutoPassThroughColumnGenerator(
-        const Block & header,
+std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
+        const Block & required_header,
         const Block & child_header,
         const AggregateDescriptions & aggregate_descriptions)
 {
     std::vector<AutoPassThroughColumnGenerator> results;
-    results.reserve(header.columns());
-    for (size_t col_idx = 0; col_idx < header.columns(); ++col_idx)
+    results.reserve(required_header.columns());
+    for (size_t col_idx = 0; col_idx < required_header.columns(); ++col_idx)
     {
-        const auto & required_column = header.getByPosition(col_idx);
+        const auto & required_column = required_header.getByPosition(col_idx);
         if (child_header.has(required_column.name))
         {
             results.push_back(std::bind(genPassThroughColumnByCopy, required_column.type, required_column.name, std::placeholders::_1)); // NOLINT
