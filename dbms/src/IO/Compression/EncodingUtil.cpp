@@ -13,7 +13,11 @@
 // limitations under the License.
 
 #include <IO/Compression/EncodingUtil.h>
+#if defined(__x86_64__) || defined(__x86_64) || defined(__amd64) || defined(__amd64__)
 #include <rle.h>
+#else
+#include <lz4.h>
+#endif
 
 #if defined(__AVX2__)
 #include <immintrin.h>
@@ -486,7 +490,7 @@ template size_t runLengthEncoding<UInt32>(const char *, UInt32, char *, UInt32);
 template size_t runLengthEncoding<UInt64>(const char *, UInt32, char *, UInt32);
 
 template <std::integral T>
-void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void runLengthDecoding(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     if (unlikely(source_size % RunLengthPairLength<T> != 0))
         throw Exception(
@@ -498,10 +502,10 @@ void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
     const char * dest_end = dest + dest_size;
     for (UInt32 i = 0; i < source_size / RunLengthPairLength<T>; ++i)
     {
-        T value = unalignedLoad<T>(src);
-        src += sizeof(T);
-        auto count = unalignedLoad<UInt8>(src);
-        src += sizeof(UInt8);
+        T value = unalignedLoad<T>(source);
+        source += sizeof(T);
+        auto count = unalignedLoad<UInt8>(source);
+        source += sizeof(UInt8);
         if (unlikely(dest + count * sizeof(T) > dest_end))
             throw Exception(
                 ErrorCodes::CANNOT_DECOMPRESS,

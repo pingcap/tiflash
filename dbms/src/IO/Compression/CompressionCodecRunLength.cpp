@@ -15,7 +15,9 @@
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecRunLength.h>
 #include <IO/Compression/CompressionInfo.h>
+#include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
+#include <lz4.h>
 
 #include <magic_enum.hpp>
 
@@ -44,23 +46,51 @@ UInt32 CompressionCodecRunLength::getMaxCompressedDataSize(UInt32 uncompressed_s
     return 1 + Compression::runLengthEncodingBounds(uncompressed_size);
 }
 
-UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 source_size, char * dest) const
+template <typename T>
+UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UInt32 source_size, char * dest) const
 {
+    constexpr auto bytes_size = sizeof(T);
+    if unlikely (source_size % bytes_size != 0)
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
+
+    const auto * typed_source = reinterpret_cast<const T *>(source);
+    const auto count = source_size / bytes_size;
+
+    auto dest_size = Compression::estimateRunLengthDecodedByteSize(typed_source, count);
+
+    if (dest_size >= source_size)
+    {
+        // treat as unknown data type
+        dest[0] = magic_enum::enum_integer(CompressionDataType::Unknown);
+        dest += 1;
+        auto success = LZ4_compress_fast(
+            source,
+            dest,
+            source_size,
+            LZ4_COMPRESSBOUND(source_size),
+            CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
+        if (unlikely(!success))
+            throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
+        return 1 + success;
+    }
+
     dest[0] = magic_enum::enum_integer(data_type);
     dest += 1;
+    return 1 + DB::Compression::runLengthEncoding<T>(source, source_size, dest, dest_size);
+}
 
-    auto dest_size = Compression::runLengthEncodingBounds(source_size);
-
+UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 source_size, char * dest) const
+{
     switch (data_type)
     {
     case CompressionDataType::Int8:
-        return 1 + Compression::runLengthEncoding<UInt8>(source, source_size, dest, dest_size);
+        return compressDataForInteger<UInt8>(source, source_size, dest);
     case CompressionDataType::Int16:
-        return 1 + Compression::runLengthEncoding<UInt16>(source, source_size, dest, dest_size);
+        return compressDataForInteger<UInt16>(source, source_size, dest);
     case CompressionDataType::Int32:
-        return 1 + Compression::runLengthEncoding<UInt32>(source, source_size, dest, dest_size);
+        return compressDataForInteger<UInt32>(source, source_size, dest);
     case CompressionDataType::Int64:
-        return 1 + Compression::runLengthEncoding<UInt64>(source, source_size, dest, dest_size);
+        return compressDataForInteger<UInt64>(source, source_size, dest);
     default:
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Unsupported data type: {}", magic_enum::enum_name(data_type));
     }
@@ -101,10 +131,9 @@ void CompressionCodecRunLength::doDecompressData(
         Compression::runLengthDecoding<UInt64>(source, source_size, dest, uncompressed_size);
         break;
     default:
-        throw Exception(
-            ErrorCodes::CANNOT_DECOMPRESS,
-            "Cannot decompress RunLength-encoded data. Unknown data type {}",
-            bytes_size);
+        if (unlikely(LZ4_decompress_safe(source, dest, source_size, uncompressed_size) < 0))
+            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
+        break;
     }
 }
 
