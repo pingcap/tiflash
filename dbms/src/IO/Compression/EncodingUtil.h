@@ -96,7 +96,7 @@ static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
 UInt32 runLengthEncodingBounds(UInt32 source_size);
 
 template <std::integral T>
-size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);
+size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest);
 
 template <std::integral T>
 void runLengthDecoding(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);

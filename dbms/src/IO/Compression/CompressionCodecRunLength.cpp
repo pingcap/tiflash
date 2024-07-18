@@ -56,9 +56,7 @@ UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UI
     const auto * typed_source = reinterpret_cast<const T *>(source);
     const auto count = source_size / bytes_size;
 
-    auto dest_size = Compression::estimateRunLengthDecodedByteSize(typed_source, count);
-
-    if (dest_size >= source_size)
+    if (Compression::estimateRunLengthDecodedByteSize(typed_source, count) >= source_size)
     {
         // treat as unknown data type
         dest[0] = magic_enum::enum_integer(CompressionDataType::Unknown);
@@ -76,7 +74,7 @@ UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UI
 
     dest[0] = magic_enum::enum_integer(data_type);
     dest += 1;
-    return 1 + DB::Compression::runLengthEncoding<T>(source, source_size, dest, dest_size);
+    return 1 + DB::Compression::runLengthEncoding<T>(source, source_size, dest);
 }
 
 UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 source_size, char * dest) const

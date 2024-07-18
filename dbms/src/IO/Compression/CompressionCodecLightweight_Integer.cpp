@@ -248,8 +248,7 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     }
     case IntegerMode::RunLength:
     {
-        UInt32 max_dest_size = Compression::runLengthEncodingBounds(source_size);
-        compressed_size += Compression::runLengthEncoding<T>(source, source_size, dest, max_dest_size);
+        compressed_size += Compression::runLengthEncoding<T>(source, source_size, dest);
         break;
     }
     case IntegerMode::FOR:

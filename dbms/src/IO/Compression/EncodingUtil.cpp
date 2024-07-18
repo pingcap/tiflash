@@ -369,43 +369,43 @@ size_t estimateRunLengthDecodedByteSize<UInt16>(const UInt16 * values, UInt32 co
 #endif
 
 template <>
-size_t runLengthEncoding<UInt8>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+size_t runLengthEncoding<UInt8>(const char * source, UInt32 source_size, char * dest)
 {
     return rle8_multi_compress(
         reinterpret_cast<const unsigned char *>(source),
         source_size,
         reinterpret_cast<unsigned char *>(dest),
-        dest_size);
+        rle_compress_bounds(source_size));
 }
 
 template <>
-size_t runLengthEncoding<UInt16>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+size_t runLengthEncoding<UInt16>(const char * source, UInt32 source_size, char * dest)
 {
     return rle16_sym_compress(
         reinterpret_cast<const unsigned char *>(source),
         source_size,
         reinterpret_cast<unsigned char *>(dest),
-        dest_size);
+        rle_compress_bounds(source_size));
 }
 
 template <>
-size_t runLengthEncoding<UInt32>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+size_t runLengthEncoding<UInt32>(const char * source, UInt32 source_size, char * dest)
 {
     return rle32_byte_compress(
         reinterpret_cast<const unsigned char *>(source),
         source_size,
         reinterpret_cast<unsigned char *>(dest),
-        dest_size);
+        rle_compress_bounds(source_size));
 }
 
 template <>
-size_t runLengthEncoding<UInt64>(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
+size_t runLengthEncoding<UInt64>(const char * source, UInt32 source_size, char * dest)
 {
     return rle64_byte_packed_compress(
         reinterpret_cast<const unsigned char *>(source),
         source_size,
         reinterpret_cast<unsigned char *>(dest),
-        dest_size);
+        rle_compress_bounds(source_size));
 }
 
 template <>
@@ -452,7 +452,7 @@ UInt32 runLengthEncodingBounds(UInt32 source_size)
 }
 
 template <std::integral T>
-size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest, UInt32 /*dest_size*/)
+size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest)
 {
     const auto * typed_source = reinterpret_cast<const T *>(source);
     auto * dest_start = dest;
@@ -484,10 +484,10 @@ size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest, U
     return dest - dest_start;
 }
 
-template size_t runLengthEncoding<UInt8>(const char *, UInt32, char *, UInt32);
-template size_t runLengthEncoding<UInt16>(const char *, UInt32, char *, UInt32);
-template size_t runLengthEncoding<UInt32>(const char *, UInt32, char *, UInt32);
-template size_t runLengthEncoding<UInt64>(const char *, UInt32, char *, UInt32);
+template size_t runLengthEncoding<UInt8>(const char *, UInt32, char *);
+template size_t runLengthEncoding<UInt16>(const char *, UInt32, char *);
+template size_t runLengthEncoding<UInt32>(const char *, UInt32, char *);
+template size_t runLengthEncoding<UInt64>(const char *, UInt32, char *);
 
 template <std::integral T>
 void runLengthDecoding(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
