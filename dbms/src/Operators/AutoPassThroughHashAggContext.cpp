@@ -24,7 +24,6 @@ void AutoPassThroughHashAggContext::onBlockAuto(Block & block)
 {
     RUNTIME_CHECK_MSG(!already_start_to_get_data, "Shouldn't insert into HashMap if already start to get data");
 
-    forceState();
     agg_process_info->resetBlock(block);
     switch (state)
     {

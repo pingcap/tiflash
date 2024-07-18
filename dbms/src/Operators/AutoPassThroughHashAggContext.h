@@ -85,11 +85,17 @@ public:
     template <bool force_streaming>
     void onBlock(Block & block)
     {
-        statistics.update(state, block.rows());
         if constexpr (force_streaming)
+        {
+            statistics.update(State::PassThrough, block.rows());
             onBlockForceStreaming(block);
+        }
         else
+        {
+            forceState();
+            statistics.update(state, block.rows());
             onBlockAuto(block);
+        }
     }
 
     Block getData();

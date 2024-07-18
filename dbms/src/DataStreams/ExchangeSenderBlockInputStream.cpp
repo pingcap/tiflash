@@ -19,6 +19,7 @@ namespace DB
 Block ExchangeSenderBlockInputStream::readImpl()
 {
     Block block = children.back()->read();
+    LOG_DEBUG(log, "gjt debug sender bytes: {}, structure: {}", block.bytes(), block.dumpStructure());
     if (block)
     {
         total_rows += block.rows();
