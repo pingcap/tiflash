@@ -143,7 +143,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     using TS = std::make_signed_t<T>;
     std::vector<T> deltas;
     UInt8 delta_for_width = sizeof(T) * 8;
-    TS min_delta = std::numeric_limits<TS>::min();
+    TS min_delta = std::numeric_limits<TS>::max();
     if (needAnalyzeDelta<T>())
     {
         // Check CONSTANT_DELTA
