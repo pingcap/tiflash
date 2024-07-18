@@ -56,22 +56,22 @@ ColumnPtr genPassThroughColumnForCount(const AggregateDescription & desc, const 
         return count_agg_func_res;
 
     const ColumnWithTypeAndName & argument_column = child_block.getByPosition(desc.arguments[0]);
-    if (argument_column.type->isNullable())
-    {
-        const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
-        auto nullmap = col_nullable->getNullMapColumnPtr()->cloneFullColumn();
-        return ColumnNullable::create(std::move(count_agg_func_res), std::move(nullmap));
-    }
     // if (argument_column.type->isNullable())
     // {
     //     const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
-    //     auto & datas = count_agg_func_res->getData();
-    //     for (size_t i = 0; i < child_block.rows(); ++i)
-    //     {
-    //         if (col_nullable->isNullAt(i))
-    //             datas[i] = 0;
-    //     }
+    //     auto nullmap = col_nullable->getNullMapColumnPtr()->cloneFullColumn();
+    //     return ColumnNullable::create(std::move(count_agg_func_res), std::move(nullmap));
     // }
+    if (argument_column.type->isNullable())
+    {
+        const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
+        auto & datas = count_agg_func_res->getData();
+        for (size_t i = 0; i < child_block.rows(); ++i)
+        {
+            if (col_nullable->isNullAt(i))
+                datas[i] = 0;
+        }
+    }
     return count_agg_func_res;
 }
 
@@ -99,24 +99,30 @@ ColumnPtr genPassThroughColumnForSumDecimal(const AggregateDescription & desc, c
     }
     RUNTIME_CHECK(in_col_ptr);
 
-    const typename ColumnDecimal<FromDecimalType>::Container & in_datas = in_col_ptr->getData();
-    const auto scale = in_col_ptr->getScale();
-
-    auto out_col = ColumnDecimal<ToDecimalType>::create(0, scale);
-    auto & out_datas = out_col->getData();
-    out_datas.reserve(in_datas.size());
-
-    for (size_t i = 0; i < in_datas.size(); ++i)
+    if constexpr (std::is_same_v<FromDecimalType, ToDecimalType>)
     {
-        out_datas.push_back(static_cast<ToDecimalType>(in_datas[i]));
+        return argument_column.column;
     }
-
-    if constexpr (nullable)
+    else
     {
-        auto nullmap = col_nullable_ptr->getNullMapColumnPtr()->cloneFullColumn();
-        return ColumnNullable::create(std::move(out_col), std::move(nullmap));
+        const typename ColumnDecimal<FromDecimalType>::Container & in_datas = in_col_ptr->getData();
+        const auto scale = in_col_ptr->getScale();
+
+        auto out_col = ColumnDecimal<ToDecimalType>::create(0, scale);
+        auto & out_datas = out_col->getData();
+        out_datas.reserve(in_datas.size());
+
+        for (size_t i = 0; i < in_datas.size(); ++i)
+        {
+            out_datas.push_back(static_cast<ToDecimalType>(in_datas[i]));
+        }
+        if constexpr (nullable)
+        {
+            auto nullmap = col_nullable_ptr->getNullMapColumnPtr()->cloneFullColumn();
+            return ColumnNullable::create(std::move(out_col), std::move(nullmap));
+        }
+        return out_col;
     }
-    return out_col;
 }
 
 // todo macro same with genPassThroughColumnForSumDecimal

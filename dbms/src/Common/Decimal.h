@@ -154,7 +154,7 @@ struct DivDecimalInferer
 
 struct SumDecimalInferer
 {
-    static constexpr PrecType decimal_longlong_digits = 22;
+    static constexpr PrecType decimal_longlong_digits = 1;
     static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale)
     {
         return {std::min(prec + decimal_longlong_digits, decimal_max_prec), scale};
