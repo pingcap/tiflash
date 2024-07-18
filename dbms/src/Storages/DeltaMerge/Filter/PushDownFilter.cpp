@@ -238,10 +238,17 @@ bool PredicateFilter::transformBlock(
     const String & filter_column_name,
     Block & block,
     IColumn::Filter & filter_result,
-    bool return_filter)
+    bool return_filter,
+    bool all_match)
 {
     if (extra_cast)
         extra_cast->execute(block);
+
+    if (all_match)
+    {
+        filter_result.resize(0); //All
+        return true;
+    }
 
     FilterPtr f = nullptr;
     if (filter_trans.transform(block, f, return_filter))

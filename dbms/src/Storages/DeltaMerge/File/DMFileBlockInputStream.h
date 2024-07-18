@@ -72,7 +72,7 @@ public:
     Block read(FilterPtr & res_filter, bool return_filter) override;
 
 private:
-    bool filterBlock(Block & block, FilterPtr & res_filter, bool return_filter);
+    bool filterBlock(Block & block, FilterPtr & res_filter, bool return_filter, bool all_match);
 
     friend class tests::DMFileMetaV2Test;
     DMFileReader reader;

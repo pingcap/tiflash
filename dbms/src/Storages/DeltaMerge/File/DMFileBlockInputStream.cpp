@@ -128,13 +128,13 @@ Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
         return {};
 
     auto [block, all_match] = reader.read();
-    if (filter_trans && !all_match)
+    if (filter_trans)
     {
         RUNTIME_CHECK(return_filter);
         // filterBlock should always return true where return_filter is true
-        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter, all_match));
     }
-    else // !filter_trans || all_match
+    else
     {
         res_filter = nullptr;
     }
@@ -148,9 +148,9 @@ Block DMFileBlockInputStream::readWithFilter(const IColumn::Filter & filter, Fil
     {
         RUNTIME_CHECK(return_filter);
         // filterBlock should always return true where return_filter is true.
-        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter, all_match));
     }
-    else // !filter_trans || all_match
+    else
     {
         res_filter = nullptr;
     }
@@ -159,7 +159,7 @@ Block DMFileBlockInputStream::readWithFilter(const IColumn::Filter & filter, Fil
 
 // If some/all rows are passed, return true.
 // If none rows is passed, return false.
-bool DMFileBlockInputStream::filterBlock(Block & block, FilterPtr & res_filter, bool return_filter)
+bool DMFileBlockInputStream::filterBlock(Block & block, FilterPtr & res_filter, bool return_filter, bool all_match)
 {
     if (!block)
         return true;
@@ -171,7 +171,8 @@ bool DMFileBlockInputStream::filterBlock(Block & block, FilterPtr & res_filter, 
         filter_column_name,
         block,
         filter_result,
-        return_filter);
+        return_filter,
+        all_match);
     if (res && return_filter)
         res_filter = filter_result.empty() ? nullptr : &filter_result;
     return res;

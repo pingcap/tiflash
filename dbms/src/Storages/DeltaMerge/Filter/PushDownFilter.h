@@ -72,7 +72,8 @@ public:
         [[maybe_unused]] const String & filter_column_name,
         Block & block,
         IColumn::Filter & filter_result,
-        bool return_filter);
+        bool return_filter,
+        bool all_match = false);
 
     static std::pair<PredicateFilterPtr, std::unordered_map<ColumnID, DataTypePtr>> build(
         const ColumnDefines & filter_columns,
