@@ -174,6 +174,7 @@ public:
         size_t sz = key_columns.size();
         vec.resize(sz);
         fixed_size.resize(sz);
+        fixed_size_sum = 0;
         for (size_t i = 0; i < sz; ++i)
         {
             vec[i] = key_columns[i]->getRawData().data;
