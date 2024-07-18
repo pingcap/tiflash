@@ -32,7 +32,7 @@ namespace DB::Compression
 /// Constant encoding
 
 template <std::integral T>
-size_t constantEncoding(T constant, char * dest)
+inline size_t constantEncoding(T constant, char * dest)
 {
     unalignedStore<T>(dest, constant);
     return sizeof(T);
@@ -58,7 +58,7 @@ void constantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 
 /// Constant delta encoding
 
 template <std::integral T>
-size_t constantDeltaEncoding(T first_value, T constant_delta, char * dest)
+inline size_t constantDeltaEncoding(T first_value, T constant_delta, char * dest)
 {
     unalignedStore<T>(dest, first_value);
     dest += sizeof(T);
@@ -189,7 +189,7 @@ void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_
 /// Delta encoding
 
 template <std::integral T>
-void deltaEncoding(const T * source, UInt32 count, T * dest)
+inline void deltaEncoding(const T * source, UInt32 count, T * dest)
 {
     T prev = 0;
     for (UInt32 i = 0; i < count; ++i)
