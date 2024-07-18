@@ -51,7 +51,9 @@ Block ExpressionBlockInputStream<selective>::readImpl()
     // }
     // else
     // {
+    Stopwatch watch;
         expression->execute(res);
+        LOG_INFO(log, "gjt debug expression block input stream: {}", watch.elapsed());
     // }
     return res;
 }
