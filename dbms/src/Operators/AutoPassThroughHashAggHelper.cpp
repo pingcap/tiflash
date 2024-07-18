@@ -36,6 +36,7 @@ ColumnPtr genPassThroughColumnByCopy(
     const String & src_col_name,
     const Block & child_block)
 {
+    LOG_DEBUG(Logger::get(), "gjt debug genPassThroughColumnByCopy");
     // todo maybe add debug log
     auto res = child_block.getByName(src_col_name);
     RUNTIME_CHECK(required_col_type->getTypeId() == res.type->getTypeId());
@@ -48,6 +49,7 @@ ColumnPtr genPassThroughColumnByCopy(
 // todo template nullable
 ColumnPtr genPassThroughColumnForCount(const AggregateDescription & desc, const Block & child_block)
 {
+    LOG_DEBUG(Logger::get(), "gjt debug genPassThroughColumnForCount");
     RUNTIME_CHECK(desc.arguments.size() <= 1);
 
     // todo template arg num
@@ -82,6 +84,7 @@ ColumnPtr genPassThroughColumnForCount(const AggregateDescription & desc, const 
 template <typename FromDecimalType, typename ToDecimalType, bool nullable>
 ColumnPtr genPassThroughColumnForSumDecimal(const AggregateDescription & desc, const Block & child_block)
 {
+    LOG_DEBUG(Logger::get(), "gjt debug genPassThroughColumnForSumDecimal");
     RUNTIME_CHECK(desc.arguments.size() == 1);
 
     const auto & argument_column = child_block.getByPosition(desc.arguments[0]);
@@ -129,6 +132,7 @@ ColumnPtr genPassThroughColumnForSumDecimal(const AggregateDescription & desc, c
 template <typename FromNumberType, typename ToNumberType, bool nullable>
 ColumnPtr genPassThroughColumnForSumNumber(const AggregateDescription & desc, const Block & child_block)
 {
+    LOG_DEBUG(Logger::get(), "gjt debug genPassThroughColumnForSumNumber");
     RUNTIME_CHECK(desc.arguments.size() == 1);
 
     const auto & argument_column = child_block.getByPosition(desc.arguments[0]);
@@ -185,12 +189,18 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
 
     RUNTIME_CHECK(agg_desc.argument_names.size() == 1);
 
+    LOG_DEBUG(Logger::get(), "gjt debug chooseGeneratorForSum arg from: {}, arg to: {}, from: {}, to: {}",
+            arg_from_type->getName(), arg_to_type->getName(),
+            from_type->getName(), to_type->getName());
     if ((arg_from_type->isNullable() == arg_to_type->isNullable()) && (from_type->getTypeId() == to_type->getTypeId()))
+    {
+        LOG_DEBUG(Logger::get(), "gjt debug chooseGeneratorForSum 1");
         return std::bind(
             genPassThroughColumnByCopy,
             required_column.type,
             agg_desc.argument_names[0],
             std::placeholders::_1); // NOLINT
+    }
 
 #define FOR_DECIMAL_TYPES_INNER(M_outer_type, M) \
     M(M_outer_type, Decimal32)                   \
