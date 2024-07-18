@@ -3357,7 +3357,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStreamPushDown(
 
     const auto & rest_columns_to_read = filter->restColumns();
     RUNTIME_CHECK(rest_columns_to_read != nullptr);
-    const auto & rest_predicate_filter = filter->rest_filter;
+    const auto & push_down_rest_predicate_filter = filter->push_down_rest_filter ? filter->rest_filter : nullptr;
     // construct stream for the rest columns
     SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -3368,7 +3368,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStreamPushDown(
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::Query,
-        rest_predicate_filter,
+        push_down_rest_predicate_filter,
         is_fast_scan,
         enable_del_clean_read);
     SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
@@ -3377,7 +3377,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStreamPushDown(
         rest_columns_to_read,
         this->rowkey_range,
         ReadTag::Query,
-        rest_predicate_filter);
+        push_down_rest_predicate_filter);
     SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
         *rest_columns_to_read,
         rest_column_stable_stream,
@@ -3385,14 +3385,19 @@ BlockInputStreamPtr Segment::getLateMaterializationStreamPushDown(
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
-    // construct late materialization stream
-    return std::make_shared<LateMaterializationBlockInputStream>(
+    BlockInputStreamPtr lm_stream = std::make_shared<LateMaterializationBlockInputStream>(
         columns_to_read,
         filter->lm_filter->filter_column_name,
         filter_column_stream,
         rest_column_stream,
         bitmap_filter,
         dm_context.tracing_id);
+
+    if (!filter->push_down_rest_filter && filter->rest_filter)
+    {
+        lm_stream = filter->rest_filter->buildFilterInputStream(lm_stream, true);
+    }
+    return lm_stream;
 }
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const

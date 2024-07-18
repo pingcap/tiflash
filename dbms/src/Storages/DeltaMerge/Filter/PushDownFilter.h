@@ -59,9 +59,7 @@ public:
     FilterTransformAction getFilterTransformAction(Block && header) const
     {
         if (extra_cast)
-        {
             extra_cast->execute(header);
-        }
         return FilterTransformAction{header, before_where, filter_column_name};
     }
 
@@ -69,7 +67,7 @@ public:
         ExpressionActionsPtr & extra_cast,
         FilterTransformAction & filter_trans,
         ExpressionActions & project,
-        [[maybe_unused]] const String & filter_column_name,
+        const String & filter_column_name,
         Block & block,
         IColumn::Filter & filter_result,
         bool return_filter,
@@ -105,12 +103,14 @@ public:
         const RSOperatorPtr & rs_operator_,
         const PredicateFilterPtr & lm_filter_,
         const PredicateFilterPtr & rest_filter_,
+        const bool push_down_rest_filter_,
         const ColumnDefinesPtr & lm_columns_,
         const ColumnDefinesPtr & rest_columns_,
         const ColumnDefinesPtr & casted_columns_)
         : rs_operator(rs_operator_)
         , lm_filter(lm_filter_)
         , rest_filter(rest_filter_)
+        , push_down_rest_filter(push_down_rest_filter_)
         , lm_columns(lm_columns_)
         , rest_columns(rest_columns_)
         , casted_columns(casted_columns_)
@@ -144,12 +144,13 @@ public:
 
     static PushDownFilterPtr build(const RSOperatorPtr & rs_operator)
     {
-        return std::make_shared<PushDownFilter>(rs_operator, nullptr, nullptr, nullptr, nullptr, nullptr);
+        return std::make_shared<PushDownFilter>(rs_operator, nullptr, nullptr, false, nullptr, nullptr, nullptr);
     }
 
     RSOperatorPtr rs_operator;
     PredicateFilterPtr lm_filter;
     PredicateFilterPtr rest_filter;
+    bool push_down_rest_filter;
 
 private:
     ColumnDefinesPtr lm_columns;

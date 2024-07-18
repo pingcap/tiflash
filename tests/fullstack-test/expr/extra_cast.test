@@ -44,5 +44,12 @@ mysql> set tidb_isolation_read_engines='tiflash'; select a, b, second(c) from te
 | 00:00:00.123456 | 100:00:00.123456 |         0 |
 +-----------------+------------------+-----------+
 
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, second(c) from test.t where a > '00:00:16.505456' and microsecond(a) = microsecond(b);
++-----------------+------------------+-----------+
+| a               | b                | second(c) |
++-----------------+------------------+-----------+
+| 00:00:16.506456 | 100:00:16.506456 |        16 |
++-----------------+------------------+-----------+
+
 mysql> drop table test.t;
 

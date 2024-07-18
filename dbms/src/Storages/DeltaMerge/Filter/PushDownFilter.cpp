@@ -229,6 +229,13 @@ ColumnDefinesPtr buildCastedColumns(
     return casted_columns;
 }
 
+bool containsAllFilterColumns(const ColumnDefines & columns, const ColumnDefines & filter_columns)
+{
+    for (const auto & filter_col : filter_columns)
+        if (!getColumnDefineNoExcept(columns, filter_col.id))
+            return false;
+    return true;
+}
 } // namespace
 
 bool PredicateFilter::transformBlock(
@@ -389,15 +396,18 @@ PushDownFilterPtr PushDownFilter::build(
                                    : std::make_shared<ColumnDefines>(table_scan_columns_to_read);
     PredicateFilterPtr rest_filter;
     std::unordered_map<ColumnID, DataTypePtr> rest_casted_columns;
+    bool push_down_rest_filter = false;
     if (::DB::pushDownAllFilters(context.getSettingsRef().force_push_down_all_filters_to_scan, keep_order)
         && !rest_filter_exprs.empty())
     {
         auto rest_filter_columns
             = getFilterColumns(table_scan_column_infos, rest_filter_exprs, table_scan_columns_to_read);
+        push_down_rest_filter = containsAllFilterColumns(*rest_columns, *rest_filter_columns);
+        const auto & input_columns = push_down_rest_filter ? *rest_columns : table_scan_columns_to_read;
 
         std::tie(rest_filter, rest_casted_columns) = PredicateFilter::build(
-            /*filter_columns*/ *rest_filter_columns,
-            /*input_columns*/ *rest_columns, // Will read rest_columns together
+            *rest_filter_columns,
+            input_columns,
             table_scan_column_infos,
             rest_filter_exprs,
             table_scan_columns_to_read,
@@ -405,11 +415,17 @@ PushDownFilterPtr PushDownFilter::build(
             tracing_logger->getChild("Rest"));
     }
     auto casted_columns = buildCastedColumns(table_scan_columns_to_read, lm_casted_columns, rest_casted_columns);
-    LOG_DEBUG(tracing_logger, "columns_to_read: {} => {}", table_scan_columns_to_read, *casted_columns);
+    LOG_DEBUG(
+        tracing_logger,
+        "columns_to_read: {} => {}, push_down_rest_filter: {}",
+        table_scan_columns_to_read,
+        *casted_columns,
+        push_down_rest_filter);
     return std::make_shared<PushDownFilter>(
         rs_operator,
         lm_filter,
         rest_filter,
+        push_down_rest_filter,
         lm_columns,
         rest_columns,
         casted_columns);
