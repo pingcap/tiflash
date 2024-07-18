@@ -199,4 +199,6 @@ add_subdirectory(simdjson)
 
 add_subdirectory(fastpforlib)
 
-add_subdirectory(hypersonic-rle-kit-cmake)
+if (ARCH_AMD64)
+    add_subdirectory(hypersonic-rle-kit-cmake)
+endif ()

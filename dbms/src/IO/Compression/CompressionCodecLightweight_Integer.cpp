@@ -18,7 +18,6 @@
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
 #include <lz4.h>
-#include <rle.h>
 
 
 namespace DB
@@ -71,8 +70,10 @@ void CompressionCodecLightweight::IntegerCompressContext::update(size_t uncompre
     }
     // Since analyze CONSTANT is extremely fast, so it will not be counted in the round.
     if (mode != IntegerMode::CONSTANT)
+    {
         ++compress_count;
-    resetIfNeed();
+        resetIfNeed();
+    }
 }
 
 // Every ROUND_COUNT times as a round.
@@ -247,7 +248,7 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     }
     case IntegerMode::RunLength:
     {
-        UInt32 max_dest_size = rle_compress_bounds(source_size);
+        UInt32 max_dest_size = Compression::runLengthEncodingBounds(source_size);
         compressed_size += Compression::runLengthEncoding<T>(source, source_size, dest, max_dest_size);
         break;
     }

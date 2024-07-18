@@ -293,6 +293,13 @@ void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
 
 /// Run-length encoding
 
+#if defined(__x86_64__) || defined(__x86_64) || defined(__amd64) || defined(__amd64__)
+
+UInt32 runLengthEncodingBounds(UInt32 source_size)
+{
+    return rle_compress_bounds(source_size);
+}
+
 #if defined(__AVX2__)
 
 template <>
@@ -432,5 +439,96 @@ void runLengthDecoding<UInt64>(const char * source, UInt32 source_size, char * d
         dest_size);
     memcpy(dest, unsigned_dest, dest_size);
 }
+
+#else
+
+UInt32 runLengthEncodingBounds(UInt32 source_size)
+{
+    return LZ4_COMPRESSBOUND(source_size);
+}
+
+template <std::integral T>
+size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest, UInt32 /*dest_size*/)
+{
+    const auto * typed_source = reinterpret_cast<const T *>(source);
+    auto * dest_start = dest;
+    auto source_count = source_size / sizeof(T);
+    if (source_count == 0)
+        return 0;
+    auto prev = typed_source[0];
+    unalignedStore<T>(dest, prev);
+    dest += sizeof(T);
+    UInt8 count = 1;
+    for (UInt32 i = 1; i < source_count; ++i)
+    {
+        if (typed_source[i] != prev || count == std::numeric_limits<UInt8>::max())
+        {
+            unalignedStore<UInt8>(dest, count);
+            dest += sizeof(UInt8);
+            prev = typed_source[i];
+            count = 1;
+            unalignedStore<T>(dest, prev);
+            dest += sizeof(T);
+        }
+        else
+        {
+            ++count;
+        }
+    }
+    unalignedStore<UInt8>(dest, count);
+    dest += sizeof(UInt8);
+    return dest - dest_start;
+}
+
+template size_t runLengthEncoding<UInt8>(const char *, UInt32, char *, UInt32);
+template size_t runLengthEncoding<UInt16>(const char *, UInt32, char *, UInt32);
+template size_t runLengthEncoding<UInt32>(const char *, UInt32, char *, UInt32);
+template size_t runLengthEncoding<UInt64>(const char *, UInt32, char *, UInt32);
+
+template <std::integral T>
+void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    if (unlikely(source_size % RunLengthPairLength<T> != 0))
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot use RunLength decoding, data size {} is not aligned to {}",
+            source_size,
+            RunLengthPairLength<T>);
+
+    const char * dest_end = dest + dest_size;
+    for (UInt32 i = 0; i < source_size / RunLengthPairLength<T>; ++i)
+    {
+        T value = unalignedLoad<T>(src);
+        src += sizeof(T);
+        auto count = unalignedLoad<UInt8>(src);
+        src += sizeof(UInt8);
+        if (unlikely(dest + count * sizeof(T) > dest_end))
+            throw Exception(
+                ErrorCodes::CANNOT_DECOMPRESS,
+                "Cannot use RunLength decoding, data is too large, count={} elem_byte={}",
+                count,
+                sizeof(T));
+        if constexpr (std::is_same_v<T, UInt8> || std::is_same_v<T, Int8>)
+        {
+            memset(dest, value, count);
+            dest += count * sizeof(T);
+        }
+        else
+        {
+            for (UInt32 j = 0; j < count; ++j)
+            {
+                unalignedStore<T>(dest, value);
+                dest += sizeof(T);
+            }
+        }
+    }
+}
+
+template void runLengthDecoding<UInt8>(const char *, UInt32, char *, UInt32);
+template void runLengthDecoding<UInt16>(const char *, UInt32, char *, UInt32);
+template void runLengthDecoding<UInt32>(const char *, UInt32, char *, UInt32);
+template void runLengthDecoding<UInt64>(const char *, UInt32, char *, UInt32);
+
+#endif
 
 } // namespace DB::Compression

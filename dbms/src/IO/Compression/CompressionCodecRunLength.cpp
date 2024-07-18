@@ -16,7 +16,6 @@
 #include <IO/Compression/CompressionCodecRunLength.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/EncodingUtil.h>
-#include <rle.h>
 
 #include <magic_enum.hpp>
 
@@ -42,7 +41,7 @@ UInt8 CompressionCodecRunLength::getMethodByte() const
 UInt32 CompressionCodecRunLength::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
     // 1 byte for data type, and the rest for the compressed data
-    return 1 + rle_compress_bounds(uncompressed_size);
+    return 1 + Compression::runLengthEncodingBounds(uncompressed_size);
 }
 
 UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 source_size, char * dest) const
@@ -50,7 +49,7 @@ UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 sou
     dest[0] = magic_enum::enum_integer(data_type);
     dest += 1;
 
-    auto dest_size = rle_compress_bounds(source_size);
+    auto dest_size = Compression::runLengthEncodingBounds(source_size);
 
     switch (data_type)
     {

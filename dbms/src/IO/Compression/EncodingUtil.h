@@ -91,9 +91,9 @@ void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UI
 template <std::integral T>
 using RunLengthPair = std::pair<T, UInt8>;
 template <std::integral T>
-using RunLengthPairs = std::vector<RunLengthPair<T>>;
-template <std::integral T>
 static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
+
+UInt32 runLengthEncodingBounds(UInt32 source_size);
 
 template <std::integral T>
 size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);
@@ -105,10 +105,18 @@ template <std::integral T>
 size_t estimateRunLengthDecodedByteSize(const T * values, UInt32 count)
 {
     size_t estimate_rle_size = Compression::RunLengthPairLength<T>;
+    UInt8 num_of_value = 1;
     for (size_t i = 1; i < count; ++i)
     {
-        if (values[i] != values[i - 1])
+        if (values[i] != values[i - 1] || num_of_value == std::numeric_limits<UInt8>::max())
+        {
             estimate_rle_size += Compression::RunLengthPairLength<T>;
+            num_of_value = 1;
+        }
+        else
+        {
+            ++num_of_value;
+        }
     }
     return estimate_rle_size;
 }
