@@ -77,7 +77,7 @@ private:
     struct DeltaFORState
     {
         using TS = typename std::make_signed_t<T>;
-        std::vector<TS> deltas;
+        std::vector<T> deltas;
         TS min_delta_value;
         UInt8 bit_width;
     };

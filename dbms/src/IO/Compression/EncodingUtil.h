@@ -127,15 +127,11 @@ template <std::integral T>
 void subtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 
 template <std::integral T>
-UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference);
-
-template <std::integral T, bool skip_subtract_frame_of_reference = false>
-size_t FOREncoding(std::vector<T> & values, T frame_of_reference, UInt8 width, char * dest)
+size_t FOREncoding(T * values, UInt32 count, T frame_of_reference, UInt8 width, char * dest)
 {
-    assert(!values.empty()); // caller must ensure input is not empty
+    assert(count != 0); // caller must ensure input is not empty
 
-    if constexpr (!skip_subtract_frame_of_reference)
-        subtractFrameOfReference(values.data(), frame_of_reference, values.size());
+    subtractFrameOfReference(values, frame_of_reference, count);
     // store frame of reference
     unalignedStore<T>(dest, frame_of_reference);
     dest += sizeof(T);
@@ -145,9 +141,9 @@ size_t FOREncoding(std::vector<T> & values, T frame_of_reference, UInt8 width, c
     // if width == 0, skip bitpacking
     if (width == 0)
         return sizeof(T) + sizeof(UInt8);
-    auto required_size = BitpackingPrimitives::getRequiredSize(values.size(), width);
+    auto required_size = BitpackingPrimitives::getRequiredSize(count, width);
     // after applying frame of reference, all values are bigger than 0.
-    BitpackingPrimitives::packBuffer(reinterpret_cast<unsigned char *>(dest), values.data(), values.size(), width);
+    BitpackingPrimitives::packBuffer(reinterpret_cast<unsigned char *>(dest), values, count, width);
     return sizeof(T) + sizeof(UInt8) + required_size;
 }
 
@@ -231,14 +227,14 @@ void ordinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest,
     assert(source_size >= sizeof(T));
     assert(dest_size >= sizeof(T));
 
-    using TS = typename std::make_signed_t<T>;
     // copy first value to dest
     memcpy(dest, src, sizeof(T));
     if (unlikely(source_size == sizeof(T)))
         return;
     // decode deltas
-    FORDecoding<TS>(src + sizeof(T), source_size - sizeof(T), dest + sizeof(T), dest_size - sizeof(T));
-    ordinaryDeltaDecoding<T>(dest, dest_size, dest);
+    FORDecoding<T>(src + sizeof(T), source_size - sizeof(T), dest + sizeof(T), dest_size - sizeof(T));
+    using TS = typename std::make_signed<T>::type;
+    ordinaryDeltaDecoding<TS>(dest, dest_size, dest);
 }
 
 template <std::integral T>

@@ -105,6 +105,7 @@ bool CompressionCodecLightweight::IntegerCompressContext::needAnalyzeDelta() con
 template <std::integral T>
 constexpr bool CompressionCodecLightweight::IntegerCompressContext::needAnalyzeFOR()
 {
+    // The performance of FOR is not good for UInt16, so we do not use FOR for UInt16.
     return !std::is_same_v<T, UInt16>;
 }
 
@@ -140,7 +141,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     }
 
     using TS = std::make_signed_t<T>;
-    std::vector<TS> deltas;
+    std::vector<T> deltas;
     UInt8 delta_for_width = sizeof(T) * 8;
     TS min_delta = std::numeric_limits<TS>::min();
     if (needAnalyzeDelta<T>())
@@ -150,13 +151,15 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
         // If values.size() == 1, mode will be CONSTANT
         // so values.size() must be greater than 1 here and deltas must be non empty.
         deltas.reserve(values.size() - 1);
+        TS max_delta = std::numeric_limits<TS>::min();
         for (size_t i = 1; i < values.size(); ++i)
         {
-            deltas.push_back(values[i] - values[i - 1]);
+            TS delta = static_cast<TS>(values[i]) - static_cast<TS>(values[i - 1]);
+            min_delta = std::min(min_delta, delta);
+            max_delta = std::max(max_delta, delta);
+            deltas.push_back(delta);
         }
-        auto minmax_delta = std::minmax_element(deltas.cbegin(), deltas.cend());
-        min_delta = *minmax_delta.first;
-        if (min_delta == *minmax_delta.second)
+        if (min_delta == max_delta)
         {
             state = static_cast<T>(min_delta);
             mode = IntegerMode::CONSTANT_DELTA;
@@ -166,7 +169,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
         // DELTA_FOR
         if constexpr (needAnalyzeFOR<T>())
         {
-            delta_for_width = Compression::FOREncodingWidth(deltas, min_delta);
+            delta_for_width = BitpackingPrimitives::minimumBitWidth<T, false>(static_cast<T>(max_delta - min_delta));
         }
     }
 
@@ -254,7 +257,12 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     case IntegerMode::FOR:
     {
         FORState for_state = std::get<1>(state);
-        compressed_size += Compression::FOREncoding(for_state.values, for_state.min_value, for_state.bit_width, dest);
+        compressed_size += Compression::FOREncoding(
+            for_state.values.data(),
+            for_state.values.size(),
+            for_state.min_value,
+            for_state.bit_width,
+            dest);
         break;
     }
     case IntegerMode::DELTA_FOR:
@@ -263,9 +271,10 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
         unalignedStore<T>(dest, values[0]);
         dest += sizeof(T);
         compressed_size += sizeof(T);
-        compressed_size += Compression::FOREncoding<typename std::make_signed_t<T>, true>(
-            delta_for_state.deltas,
-            delta_for_state.min_delta_value,
+        compressed_size += Compression::FOREncoding(
+            delta_for_state.deltas.data(),
+            delta_for_state.deltas.size(),
+            static_cast<T>(delta_for_state.min_delta_value),
             delta_for_state.bit_width,
             dest);
         break;

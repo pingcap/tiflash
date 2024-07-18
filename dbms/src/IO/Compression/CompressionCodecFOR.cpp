@@ -60,9 +60,11 @@ UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 source_size, c
     if unlikely (count == 0)
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress empty data");
     std::vector<T> values(source, source + count);
-    T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
-    UInt8 width = DB::Compression::FOREncodingWidth(values, frame_of_reference);
-    return DB::Compression::FOREncoding<T, std::is_signed_v<T>>(values, frame_of_reference, width, dest);
+    auto minmax = std::minmax_element(values.cbegin(), values.cend());
+    T frame_of_reference = *minmax.first;
+    T max_value = *minmax.second;
+    UInt8 width = BitpackingPrimitives::minimumBitWidth<T>(max_value - frame_of_reference);
+    return DB::Compression::FOREncoding(values.data(), values.size(), frame_of_reference, width, dest);
 }
 
 UInt32 CompressionCodecFOR::doCompressData(const char * source, UInt32 source_size, char * dest) const
