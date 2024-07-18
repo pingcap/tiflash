@@ -43,16 +43,16 @@ Block ExpressionBlockInputStream<selective>::readImpl()
     if (!res)
         return res;
 
-    if constexpr (selective)
-    {
-        auto ori_info = res.info;
+    // if constexpr (selective)
+    // {
+    //     auto ori_info = res.info;
+    //     expression->execute(res);
+    //     res.info = ori_info;
+    // }
+    // else
+    // {
         expression->execute(res);
-        res.info = ori_info;
-    }
-    else
-    {
-        expression->execute(res);
-    }
+    // }
     return res;
 }
 
