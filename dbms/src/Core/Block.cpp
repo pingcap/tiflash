@@ -544,11 +544,7 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
     size_t num_rows = blocks.front().rows();
     for (const auto & block : blocks)
     {
-        RUNTIME_CHECK_MSG(
-            block.rows() == num_rows,
-            "Cannot hstack blocks with different number of rows: {} vs {}",
-            block.rows(),
-            num_rows);
+        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot hstack blocks with different number of rows");
         for (const auto & elem : block)
         {
             if (likely(res.has(elem.name)))
