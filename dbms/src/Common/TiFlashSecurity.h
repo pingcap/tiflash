@@ -112,7 +112,7 @@ public:
         if (config.has("security.cert_allowed_cn") && has_tls_config)
         {
             String verify_cns = config.getString("security.cert_allowed_cn");
-            parseAllowedCN(verify_cns);
+            allowed_common_names = parseAllowedCN(verify_cns);
         }
 
         // Mostly options name are combined with "_", keep this style
