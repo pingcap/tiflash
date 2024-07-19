@@ -23,6 +23,7 @@ struct PageStorageMemorySummary
     static inline std::atomic_int64_t uni_page_id_bytes{0};
     static inline std::atomic_int64_t versioned_entry_or_delete_bytes{0};
     static inline std::atomic_int64_t versioned_entry_or_delete_count{0};
+    static inline std::atomic_int64_t universal_write_count{0};
 };
 
 } // namespace DB::PS

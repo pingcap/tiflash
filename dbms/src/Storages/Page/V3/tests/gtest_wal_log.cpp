@@ -858,4 +858,5 @@ TEST(LogFileRWTest2, ManuallySync)
         ASSERT_EQ(scratch, payload);
     }
 }
+
 } // namespace DB::PS::V3::tests
