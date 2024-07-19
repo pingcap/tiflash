@@ -78,6 +78,7 @@ bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::isWritable() const
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
+    RUNTIME_CHECK(!block.info.selective);
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
