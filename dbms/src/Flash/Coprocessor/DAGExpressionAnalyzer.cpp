@@ -1632,16 +1632,16 @@ NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
         = isCastRequiredForRootFinalProjection(schema, output_offsets);
     assert(need_append_type_cast_vec.size() == output_offsets.size());
 
-    // if (need_append_timezone_cast || need_append_type_cast)
-    // {
-    //     // after appendCastForRootFinalProjection, source_columns has been modified.
-    //     appendCastForRootFinalProjection(
-    //         actions,
-    //         schema,
-    //         output_offsets,
-    //         need_append_timezone_cast,
-    //         need_append_type_cast_vec);
-    // }
+    if (need_append_timezone_cast || need_append_type_cast)
+    {
+        // after appendCastForRootFinalProjection, source_columns has been modified.
+        appendCastForRootFinalProjection(
+            actions,
+            schema,
+            output_offsets,
+            need_append_timezone_cast,
+            need_append_type_cast_vec);
+    }
 
     // generate project aliases from source_columns.
     return genRootFinalProjectAliases(column_prefix, output_offsets);
