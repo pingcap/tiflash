@@ -14,7 +14,7 @@
 
 option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ON)
 # TODO: Make ENABLE_JEMALLOC_PROF default value to ON after https://github.com/pingcap/tics/issues/3236 get fixed.
-option (ENABLE_JEMALLOC_PROF "Set to ON to enable jemalloc profiling" OFF)
+option (ENABLE_JEMALLOC_PROF "Set to ON to enable jemalloc profiling" ON)
 option (USE_INTERNAL_JEMALLOC_LIBRARY "Set to FALSE to use system jemalloc library instead of bundled" ${NOT_UNBUNDLED})
 
 if (ENABLE_JEMALLOC AND (CMAKE_BUILD_TYPE_UC STREQUAL "ASAN" OR CMAKE_BUILD_TYPE_UC STREQUAL "UBSAN" OR CMAKE_BUILD_TYPE_UC STREQUAL "TSAN"))
