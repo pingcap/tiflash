@@ -110,27 +110,63 @@ void ColumnNullable::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    auto s = size();
+    updateWeakHash32Impl<false>(hash, collator, sort_key_container, {});
+}
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+void ColumnNullable::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    updateWeakHash32Impl<true>(hash, collator, sort_key_container, selective);
+}
+
+template <bool selective_block>
+void ColumnNullable::updateWeakHash32Impl(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    size_t rows;
+    if constexpr (selective_block)
+    {
+        rows = selective.size();
+    }
+    else
+    {
+        rows = size();
+    }
+
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        rows);
 
     WeakHash32 old_hash = hash;
-    nested_column->updateWeakHash32(hash, collator, sort_key_container);
+    if constexpr (selective_block)
+        nested_column->updateWeakHash32(hash, collator, sort_key_container, selective);
+    else
+        nested_column->updateWeakHash32(hash, collator, sort_key_container);
 
     const auto & null_map_data = getNullMapData();
-    auto & hash_data = hash.getData();
-    auto & old_hash_data = old_hash.getData();
+    UInt32 * hash_data = hash.getData().data();
+    UInt32 * old_hash_data = old_hash.getData().data();
 
-    /// Use old data for nulls.
-    for (size_t row = 0; row < s; ++row)
+    for (size_t i = 0; i < rows; ++i)
+    {
+        size_t row = i;
+        if constexpr (selective_block)
+            row = selective[i];
+
         if (null_map_data[row])
-            hash_data[row] = old_hash_data[row];
+            *hash_data = *old_hash_data;
+
+        ++hash_data;
+        ++old_hash_data;
+    }
 }
 
 MutableColumnPtr ColumnNullable::cloneResized(size_t new_size) const
