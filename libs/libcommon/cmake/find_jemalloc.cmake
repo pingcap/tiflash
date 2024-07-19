@@ -13,7 +13,9 @@
 # limitations under the License.
 
 option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ON)
-# TODO: Make ENABLE_JEMALLOC_PROF default value to ON after https://github.com/pingcap/tics/issues/3236 get fixed.
+# 1. The deadlock mentioned in https://github.com/pingcap/tics/issues/3236 is not related to ENABLE_JEMALLOC_PROF.
+# 2. It is also expected to be eliminated even if the heap profiling is activated, with a newer version of pprof-rs.
+# TODO: Enable continuous heap profiling after we make sure statement 2.
 option (ENABLE_JEMALLOC_PROF "Set to ON to enable jemalloc profiling" ON)
 option (USE_INTERNAL_JEMALLOC_LIBRARY "Set to FALSE to use system jemalloc library instead of bundled" ${NOT_UNBUNDLED})
 
