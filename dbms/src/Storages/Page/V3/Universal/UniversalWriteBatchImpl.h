@@ -290,7 +290,6 @@ public:
         , remote_lock_disabled(rhs.remote_lock_disabled)
     {
         PS::PageStorageMemorySummary::universal_write_count.fetch_sub(writes.size());
-        PS::PageStorageMemorySummary::universal_write_count.fetch_add(rhs.writes.size());
         writes = std::move(rhs.writes);
     }
 
