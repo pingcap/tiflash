@@ -34,7 +34,7 @@ namespace DB
 class CompressionCodecLightweight : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecLightweight(CompressionDataType data_type_);
+    explicit CompressionCodecLightweight(CompressionDataType data_type_, int level_);
 
     UInt8 getMethodByte() const override;
 
@@ -89,7 +89,9 @@ private:
     class IntegerCompressContext
     {
     public:
-        IntegerCompressContext() = default;
+        explicit IntegerCompressContext(int round_count_)
+            : round_count(round_count_)
+        {}
 
         template <std::integral T>
         void analyze(std::span<const T> & values, IntegerState<T> & state);
@@ -112,13 +114,13 @@ private:
         void resetIfNeed();
 
     private:
-        // Every ROUND_COUNT blocks as a round, decide whether to analyze the mode.
-        static constexpr size_t ROUND_COUNT = 5;
         // The compression ratio of LZ4 for TPCH's integer data is about 3.5~4.0
         // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
         static constexpr size_t ESRTIMATE_LZ4_COMPRESSION_RATIO = 4;
 
-        size_t compress_count = 0;
+        // Every round_count blocks as a round, decide whether to analyze the mode.
+        const int round_count;
+        int compress_count = 0;
         bool used_lz4 = false;
         bool used_constant_delta = false;
         bool used_delta_for = false;

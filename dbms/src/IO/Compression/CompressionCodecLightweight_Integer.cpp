@@ -86,7 +86,7 @@ bool CompressionCodecLightweight::IntegerCompressContext::needAnalyze() const
 
 void CompressionCodecLightweight::IntegerCompressContext::resetIfNeed()
 {
-    if (compress_count >= ROUND_COUNT)
+    if (compress_count >= round_count)
     {
         compress_count = 0;
         used_lz4 = false;

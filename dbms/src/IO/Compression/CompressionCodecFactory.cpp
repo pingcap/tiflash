@@ -148,7 +148,7 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
     switch (setting.method_byte)
     {
     case CompressionMethodByte::Lightweight:
-        return std::make_unique<CompressionCodecLightweight>(setting.data_type);
+        return std::make_unique<CompressionCodecLightweight>(setting.data_type, setting.level);
     case CompressionMethodByte::DeltaFOR:
         return getStaticCodec<CompressionCodecDeltaFOR>(setting);
     case CompressionMethodByte::RunLength:

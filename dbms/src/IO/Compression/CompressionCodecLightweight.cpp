@@ -31,8 +31,9 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-CompressionCodecLightweight::CompressionCodecLightweight(CompressionDataType data_type_)
-    : data_type(data_type_)
+CompressionCodecLightweight::CompressionCodecLightweight(CompressionDataType data_type_, int level_)
+    : ctx(level_)
+    , data_type(data_type_)
 {}
 
 UInt8 CompressionCodecLightweight::getMethodByte() const
