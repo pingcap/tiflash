@@ -31,12 +31,12 @@ namespace DB
 // 2. For nullable argument: if original value is not null, init first_row result as its original value, Otherwise init it as Null.
 // So copy column is enough for first_row.
 ColumnPtr genPassThroughColumnByCopy(
-    const DataTypePtr & required_col_type,
+    const TypeIndex & required_type_id,
     const String & src_col_name,
     const Block & child_block)
 {
     auto res = child_block.getByName(src_col_name);
-    RUNTIME_CHECK(required_col_type->getTypeId() == res.type->getTypeId());
+    RUNTIME_CHECK(required_type_id == res.type->getTypeId());
     return res.column;
 }
 
@@ -44,13 +44,13 @@ ColumnPtr genPassThroughColumnByCopy(
 // For nullable argument: init count result as 1 if row is not null, otherwise init it as zero.
 // NOTE: empty_input_as_null is not consider, because will not use AutoPassHashAgg if group by key is zero.
 template <bool nullable, bool empty_argument>
-ColumnPtr genPassThroughColumnForCount(const AggregateDescription & desc, const Block & child_block)
+ColumnPtr genPassThroughColumnForCount(size_t arg_index, const Block & child_block)
 {
     auto count_agg_func_res = ColumnVector<UInt64>::create(child_block.rows(), 1);
     if constexpr (empty_argument || !nullable)
         return count_agg_func_res;
 
-    const ColumnWithTypeAndName & argument_column = child_block.getByPosition(desc.arguments[0]);
+    const ColumnWithTypeAndName & argument_column = child_block.getByPosition(arg_index);
     const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
     RUNTIME_CHECK(col_nullable);
     auto & datas = count_agg_func_res->getData();
@@ -66,9 +66,9 @@ ColumnPtr genPassThroughColumnForCount(const AggregateDescription & desc, const 
 // For nullable column: if original value is not null, init sum result as its original value. Otherwise init it as Null.
 // NOTE: Also needs to handle type cast. For example arg type is decimal(15, 2), result type will be decimal(15+22, 2)
 template <typename FromDecimalType, typename ToDecimalType, bool nullable>
-ColumnPtr genPassThroughColumnForSumDecimal(const AggregateDescription & desc, const Block & child_block)
+ColumnPtr genPassThroughColumnForSumDecimal(size_t arg_index, const Block & child_block)
 {
-    const auto & argument_column = child_block.getByPosition(desc.arguments[0]);
+    const auto & argument_column = child_block.getByPosition(arg_index);
     const ColumnDecimal<FromDecimalType> * in_col_ptr = nullptr;
     const ColumnNullable * col_nullable_ptr = nullptr;
     if constexpr (nullable)
@@ -110,9 +110,9 @@ ColumnPtr genPassThroughColumnForSumDecimal(const AggregateDescription & desc, c
 }
 
 template <typename FromNumberType, typename ToNumberType, bool nullable>
-ColumnPtr genPassThroughColumnForSumNumber(const AggregateDescription & desc, const Block & child_block)
+ColumnPtr genPassThroughColumnForSumNumber(size_t arg_index, const Block & child_block)
 {
-    const auto & argument_column = child_block.getByPosition(desc.arguments[0]);
+    const auto & argument_column = child_block.getByPosition(arg_index);
     const ColumnVector<FromNumberType> * in_col_ptr = nullptr;
     const ColumnNullable * col_nullable_ptr = nullptr;
     if constexpr (nullable)
@@ -176,8 +176,9 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
         to_type->getName());
     if ((arg_from_type->isNullable() == arg_to_type->isNullable()) && (from_type->getTypeId() == to_type->getTypeId()))
     {
-        return [&](const Block & block) {
-            return genPassThroughColumnByCopy(required_column.type, agg_desc.argument_names[0], block);
+        return [col_typeid = required_column.type->getTypeId(),
+                col_name = agg_desc.argument_names[0]](const Block & block) {
+            return genPassThroughColumnByCopy(col_typeid, col_name, block);
         };
     }
 
@@ -187,22 +188,25 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
     M(M_outer_type, Decimal128)                  \
     M(M_outer_type, Decimal256)
 
-#define DISPATCH_DECIMAL_INNER(FROM_NATIVE_TYPE, TO_NATIVE_TYPE)                                                       \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (checkDataType<DataTypeDecimal<TO_NATIVE_TYPE>>(to_type.get()))                                             \
-        {                                                                                                              \
-            if (arg_from_type->isNullable())                                                                           \
-                return [&](const Block & block) {                                                                      \
-                    return genPassThroughColumnForSumDecimal<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, true>(agg_desc, block); \
-                };                                                                                                     \
-            else                                                                                                       \
-                return [&](const Block & block) {                                                                      \
-                    return genPassThroughColumnForSumDecimal<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, false>(                 \
-                        agg_desc,                                                                                      \
-                        block);                                                                                        \
-                };                                                                                                     \
-        }                                                                                                              \
+#define DISPATCH_DECIMAL_INNER(FROM_NATIVE_TYPE, TO_NATIVE_TYPE)                                       \
+    do                                                                                                 \
+    {                                                                                                  \
+        if (checkDataType<DataTypeDecimal<TO_NATIVE_TYPE>>(to_type.get()))                             \
+        {                                                                                              \
+            size_t col_index = agg_desc.arguments[0];                                                  \
+            if (arg_from_type->isNullable())                                                           \
+                return [col_index](const Block & block) {                                              \
+                    return genPassThroughColumnForSumDecimal<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, true>(  \
+                        col_index,                                                                     \
+                        block);                                                                        \
+                };                                                                                     \
+            else                                                                                       \
+                return [col_index](const Block & block) {                                              \
+                    return genPassThroughColumnForSumDecimal<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, false>( \
+                        col_index,                                                                     \
+                        block);                                                                        \
+                };                                                                                     \
+        }                                                                                              \
     } while (0);
 
 #define INNER_Decimal32 FOR_DECIMAL_TYPES_INNER(Decimal32, DISPATCH_DECIMAL_INNER)
@@ -253,13 +257,16 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
     {                                                                                                                  \
         if (checkDataType<DataTypeNumber<TO_NATIVE_TYPE>>(to_type.get()))                                              \
         {                                                                                                              \
+            size_t col_index = agg_desc.arguments[0];                                                                  \
             if (arg_from_type->isNullable())                                                                           \
-                return [&](const Block & block) {                                                                      \
-                    return genPassThroughColumnForSumNumber<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, true>(agg_desc, block);  \
+                return [col_index](const Block & block) {                                                              \
+                    return genPassThroughColumnForSumNumber<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, true>(col_index, block); \
                 };                                                                                                     \
             else                                                                                                       \
-                return [&](const Block & block) {                                                                      \
-                    return genPassThroughColumnForSumNumber<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, false>(agg_desc, block); \
+                return [col_index](const Block & block) {                                                              \
+                    return genPassThroughColumnForSumNumber<FROM_NATIVE_TYPE, TO_NATIVE_TYPE, false>(                  \
+                        col_index,                                                                                     \
+                        block);                                                                                        \
                 };                                                                                                     \
         }                                                                                                              \
     } while (0);
@@ -355,9 +362,10 @@ std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
         const auto & required_column = required_header.getByPosition(col_idx);
         if (child_header.has(required_column.name))
         {
-            results.push_back([&](const Block & block) {
-                return genPassThroughColumnByCopy(required_column.type, required_column.name, block);
-            });
+            results.push_back(
+                [col_typeid = required_column.type->getTypeId(), col_name = required_column.name](const Block & block) {
+                    return genPassThroughColumnByCopy(col_typeid, col_name, block);
+                });
             continue;
         }
 
@@ -387,23 +395,23 @@ std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
                     // because it will be transformed to count() to avoid the cost of convertToFullColumn.
                     RUNTIME_CHECK(desc.arguments.size() <= 1);
                     if (desc.arguments.empty())
-                        results.push_back([&](const Block & block) {
-                            return genPassThroughColumnForCount<false, true>(desc, block);
-                        });
+                        results.push_back(
+                            [](const Block & block) { return genPassThroughColumnForCount<false, true>(0, block); });
                     else if (child_header.getByPosition(desc.arguments[0]).type->isNullable())
-                        results.push_back([&](const Block & block) {
-                            return genPassThroughColumnForCount<true, false>(desc, block);
+                        results.push_back([col_index = desc.arguments[0]](const Block & block) {
+                            return genPassThroughColumnForCount<true, false>(col_index, block);
                         });
                     else
-                        results.push_back([&](const Block & block) {
-                            return genPassThroughColumnForCount<false, false>(desc, block);
+                        results.push_back([col_index = desc.arguments[0]](const Block & block) {
+                            return genPassThroughColumnForCount<false, false>(col_index, block);
                         });
                 }
                 else if (func_name.find("first_row") != std::string::npos)
                 {
                     RUNTIME_CHECK(desc.argument_names.size() == 1);
-                    results.push_back([&](const Block & block) {
-                        return genPassThroughColumnByCopy(required_column.type, desc.argument_names[0], block);
+                    results.push_back([col_typeid = required_column.type->getTypeId(),
+                                       col_name = desc.argument_names[0]](const Block & block) {
+                        return genPassThroughColumnByCopy(col_typeid, col_name, block);
                     });
                 }
                 else

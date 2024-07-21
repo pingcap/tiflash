@@ -512,20 +512,5 @@ try
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, autoPassThroughAgg)
-try
-{
-    auto request = context.scan("test_db", "test_table_1")
-                       .aggregation(
-                           {Max(col("s1"))},
-                           {col("s2"), col("s3")},
-                           0,
-                           std::make_shared<AutoPassThroughSwitcher>(true, ::tipb::TiFlashPreAggMode::Auto))
-                       .exchangeSender(tipb::PassThrough)
-                       .build(context);
-    runAndAssert(request, 10);
-    runAndAssert(request, 1);
-}
-CATCH
 } // namespace tests
 } // namespace DB

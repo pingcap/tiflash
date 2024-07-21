@@ -1794,30 +1794,28 @@ try
         // Expect the columns result is same with non-auto_pass_through hashagg.
         WRAP_FOR_SERVER_TEST_BEGIN
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, start test auto pass");
-        // todo
         std::vector<String> expected_strings = {
-            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
-  table_scan_0 | {<0, String>, <1, Longlong>}
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>)}
+  table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
 )",
-            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
-  table_scan_0 | {<0, String>, <1, Longlong>}
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>)}
+  table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
 )",
-            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
-  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
+ aggregation_1 | group_by: {<11, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
 )",
-            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
- aggregation_1 | group_by: {<2, String>}, agg_func: {first_row(<0, String>), sum(<1, Longlong>)}
-  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, String>}
+            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
+ aggregation_1 | group_by: {<11, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
 )"};
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
             context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, switcher),
             expected_strings,
             res_no_pass_through);
         WRAP_FOR_SERVER_TEST_END
-        LOG_DEBUG(Logger::get(), "gjt debug end");
     }
 }
 CATCH

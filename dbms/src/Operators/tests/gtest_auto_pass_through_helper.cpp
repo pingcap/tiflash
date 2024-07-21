@@ -120,7 +120,11 @@ try
         header.push_back(ColumnWithTypeAndName(desc.function->getReturnType(), desc.column_name));
     }
 
-    auto generators = setupAutoPassThroughColumnGenerator(Block(header), Block(child_header), agg_descs);
+    auto generators = setupAutoPassThroughColumnGenerator(
+        Block(header),
+        Block(child_header),
+        agg_descs,
+        Logger::get("gtest AutoPassThroughHashAggHelper"));
 
     const size_t block_size = 8192;
     Block child_block;
