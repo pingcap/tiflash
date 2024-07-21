@@ -171,10 +171,10 @@ TMTContext::TMTContext(
 
 void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
 {
-    kvstore->fetchProxyConfig(proxy_helper);
     if (!raftproxy_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
         && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        kvstore->fetchProxyConfig(proxy_helper);
         if (kvstore->getProxyConfigSummay().valid)
         {
             LOG_INFO(

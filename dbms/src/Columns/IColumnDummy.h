@@ -94,8 +94,7 @@ public:
     void updateHashWithValues(IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &) const override {}
 
     void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override {}
-    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
-        const override
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective &) const override
     {}
 
     void insertFrom(const IColumn &, size_t) override { ++s; }
@@ -151,14 +150,14 @@ public:
         return scatterImplForDummyColumn(num_columns, selector);
     }
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
         const override
     {
         RUNTIME_CHECK_MSG(
-            selective->size() == selector.size(),
+            selective.size() == selector.size(),
             "Size of selector({}) doesn't match size of column({}).",
             selector.size(),
-            selective->size());
+            selective.size());
         return scatterImplForDummyColumn(num_columns, selector);
     }
 
@@ -185,14 +184,13 @@ public:
         scatterToImplForDummyColumn(columns, selector);
     }
 
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
-        const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
     {
         RUNTIME_CHECK_MSG(
-            selective->size() == selector.size(),
+            selective.size() == selector.size(),
             "size of selector({}) doesn't match size of column({})",
             selector.size(),
-            selective->size());
+            selective.size());
         scatterToImplForDummyColumn(columns, selector);
     }
 

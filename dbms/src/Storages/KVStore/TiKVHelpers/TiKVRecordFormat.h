@@ -61,6 +61,7 @@ static const char SHORT_VALUE_PREFIX = 'v';
 static const char MIN_COMMIT_TS_PREFIX = 'c';
 static const char FOR_UPDATE_TS_PREFIX = 'f';
 static const char TXN_SIZE_PREFIX = 't';
+static const char IS_TXN_FILE_PREFIX = 'T';
 static const char ASYNC_COMMIT_PREFIX = 'a';
 static const char ROLLBACK_TS_PREFIX = 'r';
 static const char FLAG_OVERLAPPED_ROLLBACK = 'R';

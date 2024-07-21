@@ -133,7 +133,7 @@ public:
     }
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
         const override;
     void updateWeakHash32Impl(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const;
 
@@ -154,12 +154,12 @@ public:
     }
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
         const override;
     MutableColumns scatterImplForColumnConst(ColumnIndex num_columns, const Selector & selector) const;
 
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective)
         const override;
     void scatterToImplForColumnConst(ScatterColumns & columns, const Selector & selector) const;
     void gather(ColumnGathererStream &) override

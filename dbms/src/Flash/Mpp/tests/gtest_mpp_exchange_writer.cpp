@@ -1005,7 +1005,7 @@ try
 
             auto selective = std::make_shared<std::vector<UInt64>>(generateRandomSelective(rows, selective_rows));
             WeakHash32 hash_selective_block(selective->size());
-            column.column->updateWeakHash32(hash_selective_block, collator, sort_key_container, selective);
+            column.column->updateWeakHash32(hash_selective_block, collator, sort_key_container, *selective);
 
             ASSERT_EQ(selective->size(), hash_selective_block.getData().size());
             for (size_t i = 0; i < selective->size(); ++i)
@@ -1074,16 +1074,10 @@ try
         if (test_scatter_to)
         {
             init_scatter_columns(scatter_columns_selective_block, column);
-            column.column->scatterTo(
-                scatter_columns_selective_block,
-                selector_selective,
-                std::make_shared<std::vector<UInt64>>(selective));
+            column.column->scatterTo(scatter_columns_selective_block, selector_selective, selective);
         }
         else
-            scatter_columns_selective_block = column.column->scatter(
-                num_columns,
-                selector_selective,
-                std::make_shared<std::vector<UInt64>>(selective));
+            scatter_columns_selective_block = column.column->scatter(num_columns, selector_selective, selective);
 
         scatter_func_data_checker(
             selective,

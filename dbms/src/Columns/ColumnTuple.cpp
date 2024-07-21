@@ -205,9 +205,9 @@ void ColumnTuple::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
-    const size_t rows = selective_ptr->size();
+    const size_t rows = selective.size();
 
     RUNTIME_CHECK_MSG(
         hash.getData().size() == rows,
@@ -216,7 +216,7 @@ void ColumnTuple::updateWeakHash32(
         rows);
 
     for (const auto & column : columns)
-        column->updateWeakHash32(hash, collator, sort_key_container, selective_ptr);
+        column->updateWeakHash32(hash, collator, sort_key_container, selective);
 }
 
 void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t length)
@@ -264,13 +264,13 @@ ColumnPtr ColumnTuple::replicateRange(size_t start_row, size_t end_row, const IC
 
 MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
-    return scatterImplForColumnTuple<false>(num_columns, selector, nullptr);
+    return scatterImplForColumnTuple<false>(num_columns, selector, {});
 }
 
 MutableColumns ColumnTuple::scatter(
     ColumnIndex num_columns,
     const Selector & selector,
-    const BlockSelectivePtr & selective) const
+    const BlockSelective & selective) const
 {
     return scatterImplForColumnTuple<true>(num_columns, selector, selective);
 }
@@ -279,7 +279,7 @@ template <bool selective_block>
 MutableColumns ColumnTuple::scatterImplForColumnTuple(
     ColumnIndex num_columns,
     const Selector & selector,
-    const BlockSelectivePtr & selective) const
+    const BlockSelective & selective) const
 {
     const size_t tuple_size = columns.size();
     std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
@@ -308,13 +308,13 @@ MutableColumns ColumnTuple::scatterImplForColumnTuple(
 
 void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const
 {
-    scatterToImplForColumnTuple<false>(scatterColumns, selector, nullptr);
+    scatterToImplForColumnTuple<false>(scatterColumns, selector, {});
 }
 
 void ColumnTuple::scatterTo(
     ScatterColumns & scatterColumns,
     const Selector & selector,
-    const BlockSelectivePtr & selective) const
+    const BlockSelective & selective) const
 {
     scatterToImplForColumnTuple<true>(scatterColumns, selector, selective);
 }
@@ -323,7 +323,7 @@ template <bool selective_block>
 void ColumnTuple::scatterToImplForColumnTuple(
     ScatterColumns & scatterColumns,
     const Selector & selector,
-    const BlockSelectivePtr & selective) const
+    const BlockSelective & selective) const
 {
     const size_t tuple_size = columns.size();
     ColumnIndex scattered_num_columns = scatterColumns.size();

@@ -321,7 +321,7 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
         const override;
 
     size_t byteSize() const override { return data.size() * sizeof(data[0]); }
@@ -376,7 +376,7 @@ public:
     MutableColumns scatter(
         IColumn::ColumnIndex num_columns,
         const IColumn::Selector & selector,
-        const BlockSelectivePtr & selective) const override
+        const BlockSelective & selective) const override
     {
         return this->template scatterImpl<Self>(num_columns, selector, selective);
     }
@@ -388,7 +388,7 @@ public:
     void scatterTo(
         IColumn::ScatterColumns & columns,
         const IColumn::Selector & selector,
-        const BlockSelectivePtr & selective) const override
+        const BlockSelective & selective) const override
     {
         this->template scatterToImpl<Self>(columns, selector, selective);
     }
@@ -411,8 +411,8 @@ public:
 
     T & getElement(size_t n) { return data[n]; }
 
-    template <bool selective>
-    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
+    template <bool selective_block>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const;
 
 protected:
     Container data;

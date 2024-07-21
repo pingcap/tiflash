@@ -38,7 +38,7 @@ public:
         WeakHash32::Container * hash_data;
         String sort_key_container;
         TiDB::TiDBCollatorPtr collator;
-        BlockSelectivePtr selective_ptr;
+        const BlockSelective * selective_ptr;
     };
 
 private:
@@ -282,11 +282,8 @@ public:
     void updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(
-        WeakHash32 & hash,
-        const TiDB::TiDBCollatorPtr &,
-        String &,
-        const BlockSelectivePtr & selective) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
@@ -347,7 +344,7 @@ public:
         return scatterImpl<ColumnString>(num_columns, selector);
     }
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelectivePtr & selective)
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
         const override
     {
         return scatterImpl<ColumnString>(num_columns, selector, selective);
@@ -358,8 +355,7 @@ public:
         scatterToImpl<ColumnString>(columns, selector);
     }
 
-    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
-        const override
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
     {
         scatterToImpl<ColumnString>(columns, selector, selective);
     }

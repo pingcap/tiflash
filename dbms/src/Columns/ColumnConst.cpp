@@ -97,9 +97,9 @@ MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & se
 MutableColumns ColumnConst::scatter(
     ColumnIndex num_columns,
     const Selector & selector,
-    const BlockSelectivePtr & selective) const
+    const BlockSelective & selective) const
 {
-    const auto selective_rows = selective->size();
+    const auto selective_rows = selective.size();
     RUNTIME_CHECK_MSG(
         selective_rows == selector.size(),
         "Size of selector ({}) doesn't match size of selective column ({})",
@@ -130,10 +130,9 @@ void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector)
     scatterToImplForColumnConst(columns, selector);
 }
 
-void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective)
-    const
+void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const
 {
-    const auto selective_rows = selective->size();
+    const auto selective_rows = selective.size();
     RUNTIME_CHECK_MSG(
         selective_rows == selector.size(),
         "Size of selector ({}) doesn't match size of column ({})",
@@ -176,9 +175,9 @@ void ColumnConst::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
-    const size_t rows = selective_ptr->size();
+    const size_t rows = selective.size();
     RUNTIME_CHECK_MSG(
         hash.getData().size() == rows,
         "size of WeakHash32({}) doesn't match size of column({})",

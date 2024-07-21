@@ -56,9 +56,9 @@ public:
     ScatterColumns scatter(
         IColumn::ColumnIndex num_columns,
         const IColumn::Selector & selector,
-        const BlockSelectivePtr & selective) const override;
+        const BlockSelective & selective) const override;
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
-    void scatterTo(ScatterColumns &, const Selector &, const BlockSelectivePtr &) const override;
+    void scatterTo(ScatterColumns &, const Selector &, const BlockSelective &) const override;
 
     void getExtremes(Field &, Field &) const override {}
 
@@ -135,8 +135,7 @@ public:
         throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
-        const override
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective &) const override
     {
         throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

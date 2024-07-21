@@ -490,7 +490,7 @@ void updateWeakHash32NoCollator(const std::string_view & view, size_t idx, Colum
 }
 
 using LoopColumnWithHashInfoFunc = void(const std::string_view &, size_t, ColumnString::WeakHash32Info &);
-template <bool selective>
+template <bool selective_block>
 FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
     const ColumnString::Chars_t & a_data,
     const IColumn::Offsets & a_offsets,
@@ -498,7 +498,7 @@ FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
     LoopColumnWithHashInfoFunc && func)
 {
     size_t rows;
-    if constexpr (selective)
+    if constexpr (selective_block)
     {
         RUNTIME_CHECK(info.selective_ptr);
         rows = info.selective_ptr->size();
@@ -517,7 +517,7 @@ FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
     for (size_t i = 0; i < rows; ++i)
     {
         size_t row = i;
-        if constexpr (selective)
+        if constexpr (selective_block)
             row = (*info.selective_ptr)[i];
 
         size_t a_prev_offset = 0;
@@ -582,13 +582,13 @@ void ColumnString::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
     WeakHash32Info info{
         .hash_data = &hash.getData(),
         .sort_key_container = sort_key_container,
         .collator = collator,
-        .selective_ptr = selective_ptr,
+        .selective_ptr = &selective,
     };
     updateWeakHash32Impl(info, LoopOneColumnWithHashInfo<true>);
 }

@@ -261,8 +261,7 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const
         = 0;
-    virtual void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelectivePtr &)
-        const
+    virtual void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective &) const
         = 0;
 
     void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
@@ -334,10 +333,8 @@ public:
     using ScatterColumns = std::vector<MutablePtr>;
     using Selector = PaddedPODArray<ColumnIndex>;
     virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
-    virtual ScatterColumns scatter(
-        ColumnIndex num_columns,
-        const Selector & selector,
-        const BlockSelectivePtr & selective) const
+    virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const
         = 0;
 
     void initializeScatterColumns(ScatterColumns & columns, ColumnIndex num_columns, size_t num_rows) const
@@ -355,8 +352,7 @@ public:
 
     /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
     virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;
-    virtual void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective_ptr)
-        const
+    virtual void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const
         = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
@@ -521,9 +517,9 @@ protected:
     std::vector<MutablePtr> scatterImpl(
         ColumnIndex num_columns,
         const Selector & selector,
-        const BlockSelectivePtr & selective) const
+        const BlockSelective & selective) const
     {
-        const auto selective_rows = selective->size();
+        const auto selective_rows = selective.size();
 
         RUNTIME_CHECK_MSG(
             selective_rows == selector.size(),
@@ -535,7 +531,7 @@ protected:
         initializeScatterColumns(columns, num_columns, selective_rows);
 
         for (size_t i = 0; i < selective_rows; ++i)
-            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, (*selective)[i]);
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, selective[i]);
 
         return columns;
     }
@@ -556,9 +552,9 @@ protected:
     }
 
     template <typename Derived>
-    void scatterToImpl(ScatterColumns & columns, const Selector & selector, const BlockSelectivePtr & selective) const
+    void scatterToImpl(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const
     {
-        const auto selective_rows = selective->size();
+        const auto selective_rows = selective.size();
 
         RUNTIME_CHECK_MSG(
             selective_rows == selector.size(),
@@ -567,7 +563,7 @@ protected:
             selective_rows);
 
         for (size_t i = 0; i < selective_rows; ++i)
-            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, (*selective)[i]);
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, selective[i]);
     }
 };
 

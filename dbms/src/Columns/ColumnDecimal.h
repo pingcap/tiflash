@@ -149,11 +149,8 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateWeakHash32(
-        WeakHash32 & hash,
-        const TiDB::TiDBCollatorPtr &,
-        String &,
-        const BlockSelectivePtr & selective_ptr) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;
 
@@ -195,7 +192,7 @@ public:
     MutableColumns scatter(
         IColumn::ColumnIndex num_columns,
         const IColumn::Selector & selector,
-        const BlockSelectivePtr & selective) const override
+        const BlockSelective & selective) const override
     {
         return this->template scatterImpl<Self>(num_columns, selector, selective);
     }
@@ -207,7 +204,7 @@ public:
     void scatterTo(
         IColumn::ScatterColumns & columns,
         const IColumn::Selector & selector,
-        const BlockSelectivePtr & selective) const override
+        const BlockSelective & selective) const override
     {
         return this->template scatterToImpl<Self>(columns, selector, selective);
     }
@@ -256,8 +253,8 @@ protected:
             });
     }
 
-    template <bool selective>
-    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const;
+    template <bool selective_block>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const;
 };
 
 template <typename T>

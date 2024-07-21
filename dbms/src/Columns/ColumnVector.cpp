@@ -72,7 +72,7 @@ void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, co
 template <typename T>
 void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    updateWeakHash32Impl<false>(hash, nullptr);
+    updateWeakHash32Impl<false>(hash, {});
 }
 
 template <typename T>
@@ -80,20 +80,19 @@ void ColumnVector<T>::updateWeakHash32(
     WeakHash32 & hash,
     const TiDB::TiDBCollatorPtr &,
     String &,
-    const BlockSelectivePtr & selective_ptr) const
+    const BlockSelective & selective) const
 {
-    updateWeakHash32Impl<true>(hash, selective_ptr);
+    updateWeakHash32Impl<true>(hash, selective);
 }
 
 template <typename T>
-template <bool selective>
-void ColumnVector<T>::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelectivePtr & selective_ptr) const
+template <bool selective_block>
+void ColumnVector<T>::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const
 {
     size_t rows;
-    if constexpr (selective)
+    if constexpr (selective_block)
     {
-        RUNTIME_CHECK(selective_ptr);
-        rows = selective_ptr->size();
+        rows = selective.size();
     }
     else
     {
@@ -112,8 +111,8 @@ void ColumnVector<T>::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelecti
     for (size_t i = 0; i < rows; ++i)
     {
         size_t row = i;
-        if constexpr (selective)
-            row = (*selective_ptr)[i];
+        if constexpr (selective_block)
+            row = selective[i];
 
         if constexpr (is_fit_register<T>)
             *hash_data = intHashCRC32(*(begin + row), *hash_data);
