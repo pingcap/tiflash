@@ -54,26 +54,21 @@ ColumnPtr genPassThroughColumnForCount(const AggregateDescription & desc, const 
 
     // todo template arg num
     auto count_agg_func_res = ColumnVector<UInt64>::create(child_block.rows(), 1);
-    if (desc.arguments.empty())
-        return count_agg_func_res;
+    // if (desc.arguments.empty())
+    //     return count_agg_func_res;
 
-    const ColumnWithTypeAndName & argument_column = child_block.getByPosition(desc.arguments[0]);
+    // todo fixme
+    // const ColumnWithTypeAndName & argument_column = child_block.getByPosition(desc.arguments[0]);
     // if (argument_column.type->isNullable())
     // {
     //     const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
-    //     auto nullmap = col_nullable->getNullMapColumnPtr()->cloneFullColumn();
-    //     return ColumnNullable::create(std::move(count_agg_func_res), std::move(nullmap));
+    //     auto & datas = count_agg_func_res->getData();
+    //     for (size_t i = 0; i < child_block.rows(); ++i)
+    //     {
+    //         if (col_nullable->isNullAt(i))
+    //             datas[i] = 0;
+    //     }
     // }
-    if (argument_column.type->isNullable())
-    {
-        const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
-        auto & datas = count_agg_func_res->getData();
-        for (size_t i = 0; i < child_block.rows(); ++i)
-        {
-            if (col_nullable->isNullAt(i))
-                datas[i] = 0;
-        }
-    }
     return count_agg_func_res;
 }
 
