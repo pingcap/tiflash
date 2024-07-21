@@ -91,8 +91,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             fine_grained_shuffle.batch_size,
             compression_mode,
             context.getSettingsRef().batch_send_min_limit_compression,
-            log->identifier(),
-            /*is_async=*/false);
+            log->identifier());
         stream
             = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);

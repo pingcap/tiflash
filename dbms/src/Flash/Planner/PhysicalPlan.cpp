@@ -138,8 +138,8 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         // auto pass through hashagg is only for hash partition, because:
         // 1. It's only for 1st hash agg, so it's normally hash partition.
         // 2. For 1st hash agg without key(exchange type will be PassThrough), TiDB will not generate auto pass hash agg.
-        RUNTIME_CHECK(
-            !(after_auto_pass_through_hashagg && (executor->exchange_sender().tp() != ::tipb::ExchangeType::Hash)));
+        if (after_auto_pass_through_hashagg)
+            RUNTIME_CHECK(executor->exchange_sender().tp() == ::tipb::ExchangeType::Hash);
         buildFinalProjection(fmt::format("{}_", executor_id), true, after_auto_pass_through_hashagg);
         if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));

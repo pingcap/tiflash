@@ -120,7 +120,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     {
         auto writer
             = std::make_shared<AsyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
-        return buildMPPExchangeWriter<decltype(writer)>(
+        return buildMPPExchangeWriter(
             writer,
             partition_col_ids,
             partition_col_collators,
@@ -138,7 +138,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     {
         auto writer
             = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
-        return buildMPPExchangeWriter<decltype(writer)>(
+        return buildMPPExchangeWriter(
             writer,
             partition_col_ids,
             partition_col_collators,

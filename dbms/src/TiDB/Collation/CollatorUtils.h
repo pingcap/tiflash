@@ -14,8 +14,6 @@
 
 #pragma once
 
-#include <Core/BlockInfo.h>
-#include <TiDB/Collation/Collator.h>
 #include <TiDB/Collation/CollatorCompare.h>
 
 namespace DB
@@ -64,39 +62,6 @@ FLATTEN_INLINE static inline void LoopOneColumn(const Chars & a_data, const Offs
 
         // Remove last zero byte.
         func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i);
-        a_prev_offset = a_offsets[i];
-    }
-}
-
-
-// Used when updating hash for column.
-struct WeakHash32Info
-{
-    // Current updating hash data position.
-    UInt32 * hash_data;
-    String sort_key_container;
-    TiDB::TiDBCollatorPtr collator;
-    BlockSelectivePtr selective_ptr;
-};
-
-// Loop one column and invoke callback for each pair.
-// Remove last zero byte.
-template <typename Chars, typename Offsets, typename Func>
-FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
-    const Chars & a_data,
-    const Offsets & a_offsets,
-    size_t size,
-    WeakHash32Info & info,
-    const Func & func)
-{
-    uint64_t a_prev_offset = 0;
-
-    for (size_t i = 0; i < size; ++i)
-    {
-        auto a_size = a_offsets[i] - a_prev_offset;
-
-        // Remove last zero byte.
-        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
         a_prev_offset = a_offsets[i];
     }
 }

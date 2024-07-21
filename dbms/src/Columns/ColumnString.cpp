@@ -15,10 +15,8 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
-#include <Common/Logger.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <TiDB/Collation/CollatorUtils.h>
-#include <common/logger_useful.h>
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
