@@ -28,7 +28,7 @@ namespace DB
 {
 struct AggregateFunctionCountData
 {
-    Int64 count = 0;
+    UInt64 count = 0;
 };
 
 namespace ErrorCodes
@@ -45,7 +45,7 @@ class AggregateFunctionCount final
 public:
     String getName() const override { return "count"; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeInt64>(); }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn **, size_t, Arena *) const override
     {
@@ -108,11 +108,11 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        static_cast<ColumnInt64 &>(to).getData().push_back(data(place).count);
+        static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
     /// May be used for optimization.
-    void addDelta(AggregateDataPtr __restrict place, Int64 x) const { data(place).count += x; }
+    void addDelta(AggregateDataPtr __restrict place, UInt64 x) const { data(place).count += x; }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
@@ -133,7 +133,7 @@ public:
 
     String getName() const override { return "count"; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeInt64>(); }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
@@ -157,7 +157,7 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        static_cast<ColumnInt64 &>(to).getData().push_back(data(place).count);
+        static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
@@ -190,7 +190,7 @@ public:
 
     String getName() const override { return "count"; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeInt64>(); }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
@@ -218,7 +218,7 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        static_cast<ColumnInt64 &>(to).getData().push_back(data(place).count);
+        static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

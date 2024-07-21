@@ -30,12 +30,10 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
     if (!block)
     {
-        LOG_DEBUG(log, "gjt debug ExchangeSenderSinOp empty block");
         writer->flush();
         return OperatorStatus::FINISHED;
     }
 
-    LOG_DEBUG(log, "gjt debug ExchangeSenderSinOp writeImpl block: {}", block.dumpStructure());
     total_rows += block.rows();
     writer->write(block);
     return OperatorStatus::NEED_INPUT;

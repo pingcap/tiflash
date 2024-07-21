@@ -101,18 +101,8 @@ Block AutoPassThroughHashAggContext::getData()
     // merging_buckets still can be nullptr when HashMap is empty.
     if (merging_buckets)
     {
-        auto block = merging_buckets->getData(/*concurrency_index=*/0);
-        if (block)
-        {
-            LOG_DEBUG(log, "gjt debug getData block: {}", block.dumpStructure());
-        }
-        else
-        {
-            LOG_DEBUG(log, "gjt debug getData got merging buckets but empty block");
-        }
-        return block;
+        return merging_buckets->getData(/*concurrency_index=*/0);
     }
-    LOG_DEBUG(log, "gjt debug getData empty block");
     return {};
 }
 

@@ -43,18 +43,16 @@ Block ExpressionBlockInputStream<selective>::readImpl()
     if (!res)
         return res;
 
-    // if constexpr (selective)
-    // {
-    //     auto ori_info = res.info;
-    //     expression->execute(res);
-    //     res.info = ori_info;
-    // }
-    // else
-    // {
-    Stopwatch watch;
+    if constexpr (selective)
+    {
+        auto ori_info = res.info;
         expression->execute(res);
-        LOG_INFO(log, "gjt debug expression block input stream: {}", watch.elapsed());
-    // }
+        res.info = ori_info;
+    }
+    else
+    {
+        expression->execute(res);
+    }
     return res;
 }
 

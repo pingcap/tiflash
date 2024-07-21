@@ -22,16 +22,16 @@ OperatorStatus ExpressionTransformOp<selective>::transformImpl(Block & block)
 {
     if (likely(block))
     {
-        // if constexpr (selective)
-        // {
-        //     auto ori_info = block.info;
-        //     expression->execute(block);
-        //     block.info = ori_info;
-        // }
-        // else
-        // {
+        if constexpr (selective)
+        {
+            auto ori_info = block.info;
             expression->execute(block);
-        // }
+            block.info = ori_info;
+        }
+        else
+        {
+            expression->execute(block);
+        }
     }
     return OperatorStatus::HAS_OUTPUT;
 }

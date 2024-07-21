@@ -87,13 +87,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
 
     auto expr_after_agg_actions
         = analyzer.appendCopyColumnAfterAgg(aggregated_columns, key_ref_agg_func, agg_func_ref_key);
-    // analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
-    const auto & tmp_actions = expr_after_agg_actions->getActions();
-    for (size_t i = 0; i < tmp_actions.size(); ++i)
-    {
-        const auto & action = tmp_actions[i];
-        LOG_DEBUG(Logger::get(executor_id), "gjt debug actions after agg, i: {}, action: {}", i, action.toString());
-    }
+    analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
     auto schema = PhysicalPlanHelper::addSchemaProjectAction(expr_after_agg_actions, analyzer.getCurrentInputColumns());
 

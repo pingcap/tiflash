@@ -76,7 +76,7 @@ public:
 
         auto header = aggregator->getHeader(/*final=*/true);
         const auto & aggregate_descriptions = aggregator->getParams().aggregates;
-        column_generators = setupAutoPassThroughColumnGenerator(header, child_header_, aggregate_descriptions);
+        column_generators = setupAutoPassThroughColumnGenerator(header, child_header_, aggregate_descriptions, log);
         RUNTIME_CHECK(header.columns() == column_generators.size());
     }
 
@@ -105,14 +105,6 @@ public:
     Block popPassThroughBuffer()
     {
         Block res = pass_through_block_buffer.front();
-        if (res)
-        {
-            LOG_DEBUG(log, "gjt debug getData block: {}", res.dumpStructure());
-        }
-        else
-        {
-            LOG_DEBUG(log, "gjt debug getData got merging buckets but empty block");
-        }
         pass_through_block_buffer.pop_front();
         return res;
     }
