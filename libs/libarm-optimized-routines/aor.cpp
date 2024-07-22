@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,12 +32,14 @@ extern "C" __attribute__((visibility("default"))) void * memset(void * dst, int 
     return inline_memset(dst, c, size);
 }
 
-extern "C" __attribute__((visibility("default"))) void * memchr(const void * src, int c, size_t size)
+extern "C++" __attribute__((visibility("default"))) const void * memchr(const void * src, int c, size_t size) noexcept(
+    true)
 {
     return inline_memchr(src, c, size);
 }
 
-extern "C" __attribute__((visibility("default"))) void * memrchr(const void * src, int c, size_t size)
+extern "C++" __attribute__((visibility("default"))) const void * memrchr(const void * src, int c, size_t size) noexcept(
+    true)
 {
     return inline_memrchr(src, c, size);
 }
@@ -47,54 +49,47 @@ extern "C" __attribute__((visibility("default"))) int memcmp(const void * src1, 
     return inline_memcmp(src1, src2, size);
 }
 
-extern "C" __attribute__((visibility("default"))) inline char * strcpy(
-    char * __restrict dst_,
-    const char * __restrict src_)
+extern "C" __attribute__((visibility("default"))) char * strcpy(char * __restrict dst_, const char * __restrict src_)
 {
     return inline_strcpy(dst_, src_);
 }
 
-extern "C" __attribute__((visibility("default"))) inline char * stpcpy(
-    char * __restrict dst_,
-    const char * __restrict src_)
+extern "C" __attribute__((visibility("default"))) char * stpcpy(char * __restrict dst_, const char * __restrict src_)
 {
     return inline_stpcpy(dst_, src_);
 }
 
-extern "C" __attribute__((visibility("default"))) inline int strcmp(const char * src1_, const char * src2_)
+extern "C" __attribute__((visibility("default"))) int strcmp(const char * src1_, const char * src2_)
 {
     return inline_strcmp(src1_, src2_);
 }
 
-extern "C" __attribute__((visibility("default"))) inline char * strchr(const char * src_, int c)
+extern "C++" __attribute__((visibility("default"))) const char * strchr(const char * src_, int c) noexcept(true)
 {
     return inline_strchr(src_, c);
 }
 
-extern "C" __attribute__((visibility("default"))) inline char * strrchr(const char * src_, int c)
+extern "C++" __attribute__((visibility("default"))) const char * strrchr(const char * src_, int c) noexcept(true)
 {
     return inline_strrchr(src_, c);
 }
 
-extern "C" __attribute__((visibility("default"))) inline char * strchrnul(const char * src_, int c)
+extern "C++" __attribute__((visibility("default"))) const char * strchrnul(const char * src_, int c) noexcept(true)
 {
     return inline_strchrnul(src_, c);
 }
 
-extern "C" __attribute__((visibility("default"))) inline size_t strlen(const char * src_)
+extern "C" __attribute__((visibility("default"))) size_t strlen(const char * src_)
 {
     return inline_strlen(src_);
 }
 
-extern "C" __attribute__((visibility("default"))) inline size_t strnlen(const char * src_, size_t size)
+extern "C" __attribute__((visibility("default"))) size_t strnlen(const char * src_, size_t size)
 {
     return inline_strnlen(src_, size);
 }
 
-extern "C" __attribute__((visibility("default"))) inline int strncmp(
-    const char * src1_,
-    const char * src2_,
-    size_t size)
+extern "C" __attribute__((visibility("default"))) int strncmp(const char * src1_, const char * src2_, size_t size)
 {
     return inline_strncmp(src1_, src2_, size);
 }
