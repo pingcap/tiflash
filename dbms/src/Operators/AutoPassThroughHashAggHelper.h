@@ -22,13 +22,9 @@ namespace DB
 using AutoPassThroughColumnGenerator = std::function<ColumnPtr(const Block & child_block)>;
 
 // For each required agg func that doesn't exist in child_header, return a column generator.
-// There are three kinds:
-// 1. Column generator for sum.
-// 2. Column generator for count.
-// 3. Column generator for first_row.
-// 4. Column generator for other funcs.
-// For example sum(c1), the generator will cast c1 to return type of sum func and return as result.
-// Also it will consider nullable.
+// For sum(c1), the generator will cast c1 to return type of sum func and return as result.
+// For count(c1), the generator will consider nullable.
+// For first_row/min/max, the generator will return original column directly.
 std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
     const Block & required_header,
     const Block & child_header,

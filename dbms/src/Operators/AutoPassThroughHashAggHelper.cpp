@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnNothing.h>
 #include <Columns/ColumnNullable.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -26,7 +28,7 @@
 
 namespace DB
 {
-// first_row and sum whose return type is same with argument type will use this generator:
+// first_row/min/max and sum whose return type is same with argument type will use this generator:
 // 1. For not-null argument: init first_row result as its original value.
 // 2. For nullable argument: if original value is not null, init first_row result as its original value, Otherwise init it as Null.
 // So copy column is enough for first_row.
@@ -38,6 +40,11 @@ ColumnPtr genPassThroughColumnByCopy(
     auto res = child_block.getByName(src_col_name);
     RUNTIME_CHECK(required_type_id == res.type->getTypeId());
     return res.column;
+}
+
+ColumnPtr genPassThroughColumnForCountNothing(const Block & child_block)
+{
+    return ColumnVector<UInt64>::create(child_block.rows(), 0);
 }
 
 // For not-null argument: init count result as 1.
@@ -62,6 +69,13 @@ ColumnPtr genPassThroughColumnForCount(size_t arg_index, const Block & child_blo
     return count_agg_func_res;
 }
 
+ColumnPtr genPassThroughColumnForNothing(const Block & child_block)
+{
+    auto nullmap = ColumnVector<UInt8>::create(child_block.rows(), 1);
+    auto nested_col = ColumnNothing::create(child_block.rows());
+    return ColumnNullable::create(std::move(nested_col), std::move(nullmap));
+}
+
 // For not-null argument: init sum result as its original value.
 // For nullable column: if original value is not null, init sum result as its original value. Otherwise init it as Null.
 // NOTE: Also needs to handle type cast. For example arg type is decimal(15, 2), result type will be decimal(15+22, 2)
@@ -71,59 +85,67 @@ ColumnPtr genPassThroughColumnForSumDecimal(size_t arg_index, const Block & chil
     const auto & argument_column = child_block.getByPosition(arg_index);
     const ColumnDecimal<FromDecimalType> * in_col_ptr = nullptr;
     const ColumnNullable * col_nullable_ptr = nullptr;
+    ColumnPtr nested_col = nullptr;
     if constexpr (nullable)
     {
         col_nullable_ptr = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
         RUNTIME_CHECK(col_nullable_ptr);
-        in_col_ptr = checkAndGetColumn<ColumnDecimal<FromDecimalType>>(col_nullable_ptr->getNestedColumnPtr().get());
+        nested_col = col_nullable_ptr->getNestedColumnPtr();
+        if (nested_col->isColumnConst())
+            nested_col = nested_col->convertToFullColumnIfConst();
+        in_col_ptr = checkAndGetColumn<ColumnDecimal<FromDecimalType>>(nested_col.get());
     }
     else
     {
-        in_col_ptr = checkAndGetColumn<ColumnDecimal<FromDecimalType>>(argument_column.column.get());
+        nested_col = argument_column.column;
+        if (argument_column.column->isColumnConst())
+            nested_col = nested_col->convertToFullColumnIfConst();
+        in_col_ptr = checkAndGetColumn<ColumnDecimal<FromDecimalType>>(nested_col.get());
     }
     RUNTIME_CHECK(in_col_ptr);
 
-    if constexpr (std::is_same_v<FromDecimalType, ToDecimalType>)
-    {
-        return argument_column.column;
-    }
-    else
-    {
-        const typename ColumnDecimal<FromDecimalType>::Container & in_datas = in_col_ptr->getData();
-        const auto scale = in_col_ptr->getScale();
+    const typename ColumnDecimal<FromDecimalType>::Container & in_datas = in_col_ptr->getData();
+    const auto scale = in_col_ptr->getScale();
 
-        auto out_col = ColumnDecimal<ToDecimalType>::create(0, scale);
-        auto & out_datas = out_col->getData();
-        out_datas.reserve(in_datas.size());
+    auto out_col = ColumnDecimal<ToDecimalType>::create(0, scale);
+    auto & out_datas = out_col->getData();
+    out_datas.reserve(in_datas.size());
 
-        for (size_t i = 0; i < in_datas.size(); ++i)
-        {
-            out_datas.push_back(static_cast<ToDecimalType>(in_datas[i]));
-        }
-        if constexpr (nullable)
-        {
-            auto nullmap = col_nullable_ptr->getNullMapColumnPtr()->cloneFullColumn();
-            return ColumnNullable::create(std::move(out_col), std::move(nullmap));
-        }
-        return out_col;
+    for (size_t i = 0; i < in_datas.size(); ++i)
+    {
+        out_datas.push_back(static_cast<ToDecimalType>(in_datas[i]));
     }
+    if constexpr (nullable)
+    {
+        auto nullmap = col_nullable_ptr->getNullMapColumnPtr()->cloneFullColumn();
+        return ColumnNullable::create(std::move(out_col), std::move(nullmap));
+    }
+    return out_col;
 }
 
+// todo macro
 template <typename FromNumberType, typename ToNumberType, bool nullable>
 ColumnPtr genPassThroughColumnForSumNumber(size_t arg_index, const Block & child_block)
 {
     const auto & argument_column = child_block.getByPosition(arg_index);
     const ColumnVector<FromNumberType> * in_col_ptr = nullptr;
     const ColumnNullable * col_nullable_ptr = nullptr;
+    ColumnPtr nested_col = nullptr;
     if constexpr (nullable)
     {
         col_nullable_ptr = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
         RUNTIME_CHECK(col_nullable_ptr);
-        in_col_ptr = checkAndGetColumn<ColumnVector<FromNumberType>>(col_nullable_ptr->getNestedColumnPtr().get());
+        nested_col = col_nullable_ptr->getNestedColumnPtr();
+        if (nested_col->isColumnConst())
+            nested_col = nested_col->convertToFullColumnIfConst();
+        in_col_ptr = checkAndGetColumn<ColumnVector<FromNumberType>>(nested_col.get());
     }
     else
     {
-        in_col_ptr = checkAndGetColumn<ColumnVector<FromNumberType>>(argument_column.column.get());
+        nested_col = argument_column.column;
+        if (nested_col->isColumnConst())
+            nested_col = nested_col->convertToFullColumnIfConst();
+        in_col_ptr = checkAndGetColumn<ColumnVector<FromNumberType>>(nested_col.get());
     }
     RUNTIME_CHECK(in_col_ptr);
 
@@ -146,12 +168,7 @@ ColumnPtr genPassThroughColumnForSumNumber(size_t arg_index, const Block & child
     return out_col;
 }
 
-AutoPassThroughColumnGenerator chooseGeneratorForSum(
-    const AggregateDescription & agg_desc,
-    const ColumnWithTypeAndName & required_column,
-    const DataTypePtr & arg_from_type,
-    const DataTypePtr & arg_to_type,
-    LoggerPtr log)
+std::pair<DataTypePtr, DataTypePtr> getNestDataType(const DataTypePtr & arg_from_type, const DataTypePtr & arg_to_type)
 {
     DataTypePtr from_type;
     DataTypePtr to_type;
@@ -164,16 +181,17 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
         to_type = arg_to_type_ptr->getNestedType();
     else
         to_type = arg_to_type;
+    return {from_type, to_type};
+}
 
-    RUNTIME_CHECK(agg_desc.argument_names.size() == 1);
-
-    LOG_DEBUG(
-        log,
-        "chooseGeneratorForSum arg from: {}, arg to: {}, from: {}, to: {}",
-        arg_from_type->getName(),
-        arg_to_type->getName(),
-        from_type->getName(),
-        to_type->getName());
+AutoPassThroughColumnGenerator chooseGeneratorForSum(
+    const AggregateDescription & agg_desc,
+    const ColumnWithTypeAndName & required_column,
+    const DataTypePtr & arg_from_type,
+    const DataTypePtr & arg_to_type)
+{
+    RUNTIME_CHECK(agg_desc.argument_names.size() == 1 && agg_desc.arguments.size() == 1);
+    auto [from_type, to_type] = getNestDataType(arg_from_type, arg_to_type);
     if ((arg_from_type->isNullable() == arg_to_type->isNullable()) && (from_type->getTypeId() == to_type->getTypeId()))
     {
         return [col_typeid = required_column.type->getTypeId(),
@@ -326,6 +344,42 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
         arg_to_type->getName()));
 }
 
+AutoPassThroughColumnGenerator chooseGeneratorForCount(
+    const AggregateDescription & agg_desc,
+    const Block & child_header)
+{
+    RUNTIME_CHECK(agg_desc.argument_names.size() <= 1 && agg_desc.arguments.size() <= 1);
+    // Argument size can be zero fro count(not null column),
+    // because it will be transformed to count() to avoid the cost of convertToFullColumn.
+    if (agg_desc.arguments.empty())
+    {
+        return [](const Block & block) {
+            return genPassThroughColumnForCount<false, true>(0, block);
+        };
+    }
+
+    const DataTypePtr & from_type = child_header.getByPosition(agg_desc.arguments[0]).type;
+    if (from_type->isNullable() && from_type->onlyNull())
+    {
+        return [](const Block & block) {
+            return genPassThroughColumnForCountNothing(block);
+        };
+    }
+
+    const size_t col_index = agg_desc.arguments[0];
+    const auto & arg_type = child_header.getByPosition(col_index).type;
+    if (arg_type->isNullable())
+    {
+        return [col_index](const Block & block) {
+            return genPassThroughColumnForCount<true, false>(col_index, block);
+        };
+    }
+
+    return [col_index](const Block & block) {
+        return genPassThroughColumnForCount<false, false>(col_index, block);
+    };
+}
+
 ColumnPtr genPassThroughColumnGeneric(const AggregateDescription & desc, const Block & child_block)
 {
     auto new_col = desc.function->getReturnType()->createColumn();
@@ -369,61 +423,70 @@ std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
             continue;
         }
 
-        bool agg_func_col_found = false;
+        AutoPassThroughColumnGenerator generator = nullptr;
         for (const auto & desc : aggregate_descriptions)
         {
             if (desc.column_name == required_column.name)
             {
                 const String func_name = desc.function->getName();
+                if (desc.arguments.size() == 1)
+                    LOG_DEBUG(
+                        log,
+                        "setup agg func result generator. func: {}, from type: {}, to type: {}",
+                        func_name,
+                        child_header.getByPosition(desc.arguments[0]).type->getName(),
+                        desc.function->getReturnType()->getName());
+                else
+                    LOG_DEBUG(
+                        log,
+                        "setup agg func result generator. func: {}, to type: {}",
+                        func_name,
+                        desc.function->getReturnType()->getName());
+
                 ColumnPtr new_col;
-                // todo col_name has extra space ending
-                // todo make sure it's lowercase
-                if (func_name.find("sum") != std::string::npos)
+                if (func_name == "nothing")
+                {
+                    generator = [](const Block & block) {
+                        return genPassThroughColumnForNothing(block);
+                    };
+                }
+                else if (func_name.find("sum") != std::string::npos)
                 {
                     RUNTIME_CHECK(desc.arguments.size() == 1);
                     RUNTIME_CHECK(required_column.type->getTypeId() == desc.function->getReturnType()->getTypeId());
-                    results.push_back(chooseGeneratorForSum(
+                    generator = chooseGeneratorForSum(
                         desc,
                         required_column,
                         child_header.getByPosition(desc.arguments[0]).type,
-                        desc.function->getReturnType(),
-                        log));
+                        desc.function->getReturnType());
                 }
                 else if (func_name.find("count") != std::string::npos)
                 {
-                    // Argument size can be zero fro count(not null column),
-                    // because it will be transformed to count() to avoid the cost of convertToFullColumn.
-                    RUNTIME_CHECK(desc.arguments.size() <= 1);
-                    if (desc.arguments.empty())
-                        results.push_back(
-                            [](const Block & block) { return genPassThroughColumnForCount<false, true>(0, block); });
-                    else if (child_header.getByPosition(desc.arguments[0]).type->isNullable())
-                        results.push_back([col_index = desc.arguments[0]](const Block & block) {
-                            return genPassThroughColumnForCount<true, false>(col_index, block);
-                        });
-                    else
-                        results.push_back([col_index = desc.arguments[0]](const Block & block) {
-                            return genPassThroughColumnForCount<false, false>(col_index, block);
-                        });
+                    generator = chooseGeneratorForCount(desc, child_header);
                 }
-                else if (func_name.find("first_row") != std::string::npos)
+                else if (
+                    func_name.find("first_row") != std::string::npos || func_name.find("min") != std::string::npos
+                    || func_name.find("max") != std::string::npos)
                 {
                     RUNTIME_CHECK(desc.argument_names.size() == 1);
-                    results.push_back([col_typeid = required_column.type->getTypeId(),
-                                       col_name = desc.argument_names[0]](const Block & block) {
+                    generator = [col_typeid = required_column.type->getTypeId(),
+                                 col_name = desc.argument_names[0]](const Block & block) {
                         return genPassThroughColumnByCopy(col_typeid, col_name, block);
-                    });
+                    };
                 }
                 else
                 {
-                    results.push_back([&](const Block & block) { return genPassThroughColumnGeneric(desc, block); });
+                    generator = [&](const Block & block) {
+                        return genPassThroughColumnGeneric(desc, block);
+                    };
                 }
-                agg_func_col_found = true;
+
+                results.push_back(generator);
                 break;
             }
         }
         RUNTIME_CHECK_MSG(
-            agg_func_col_found,
+            generator,
             "cannot find required column({}) from aggregate descriptions",
             required_column.name);
     }

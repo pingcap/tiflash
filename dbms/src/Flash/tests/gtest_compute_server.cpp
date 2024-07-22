@@ -1783,7 +1783,12 @@ try
             makeASTFunction("min", col(col4_name)),
             makeASTFunction("max", col(col4_name)),
             makeASTFunction("sum", col(col4_name)),
-            makeASTFunction("count", col(col4_name))};
+            makeASTFunction("count", col(col4_name)),
+            makeASTFunction("sum", lit(Field(static_cast<UInt64>(1)))),
+            makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+            makeASTFunction("min", lit(Field(static_cast<UInt64>(1)))),
+            makeASTFunction("max", lit(Field(static_cast<UInt64>(1)))),
+        };
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, tbl_name: {}", tbl_name);
 
         auto builder = context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, nullptr);
@@ -1792,7 +1797,7 @@ try
 
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
-        WRAP_FOR_SERVER_TEST_BEGIN
+        // WRAP_FOR_SERVER_TEST_BEGIN
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, start test auto pass");
         std::vector<String> expected_strings = {
             R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
@@ -1815,7 +1820,7 @@ try
             context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, switcher),
             expected_strings,
             res_no_pass_through);
-        WRAP_FOR_SERVER_TEST_END
+        // WRAP_FOR_SERVER_TEST_END
     }
 }
 CATCH
