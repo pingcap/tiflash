@@ -277,8 +277,8 @@ public:
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const { return db_name; }
-    const String & getTableName() const { return table_name; }
+    String getDatabaseName() const { return table_meta.lockShared()->db_name; }
+    String getTableName() const { return table_meta.lockShared()->table_name; }
 
     void rename(String new_path, String new_database_name, String new_table_name);
 
@@ -796,8 +796,14 @@ public:
     Settings settings;
     StoragePoolPtr storage_pool;
 
-    String db_name;
-    String table_name;
+    struct TableMeta
+    {
+        String db_name;
+        String table_name;
+    };
+    SharedMutexProtected<TableMeta> table_meta;
+    // String db_name;
+    // String table_name;
 
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;
@@ -838,7 +844,7 @@ public:
     mutable std::shared_mutex read_write_mutex;
 
     LoggerPtr log;
-}; // namespace DM
+};
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
