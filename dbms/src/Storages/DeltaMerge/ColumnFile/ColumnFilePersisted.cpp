@@ -23,9 +23,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/Page/Page.h>
 
-namespace DB
-{
-namespace DM
+
+namespace DB::DM
 {
 void serializeSchema(WriteBuffer & buf, const Block & schema)
 {
@@ -74,16 +73,26 @@ void serializeColumn(
     CompressionMethod compression_method,
     Int64 compression_level)
 {
-    auto compression_setting = CompressionSetting::create<>(compression_method, compression_level, *type);
-    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_setting));
+    std::unique_ptr<CompressedWriteBuffer<>> compressed;
+    if (compression_method == CompressionMethod::Lightweight)
+    {
+        // Do not use lightweight compression in ColumnFile whose write performance is the bottleneck.
+        compressed = std::make_unique<CompressedWriteBuffer<>>(buf, CompressionSettings(CompressionMethod::LZ4));
+    }
+    else
+    {
+        compressed = std::make_unique<CompressedWriteBuffer<>>(
+            buf,
+            CompressionSettings(compression_method, compression_level));
+    }
     type->serializeBinaryBulkWithMultipleStreams(
         column,
-        [&](const IDataType::SubstreamPath &) { return &compressed; },
+        [&](const IDataType::SubstreamPath &) { return compressed.get(); },
         offset,
         limit,
         true,
         {});
-    compressed.next();
+    compressed->next();
 }
 
 void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows)
@@ -176,5 +185,4 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     }
     return column_files;
 }
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -50,6 +50,8 @@ int CompressionSetting::getDefaultLevel(CompressionMethod method)
     case CompressionMethod::QPL:
         return 1;
 #endif
+    case CompressionMethod::Lightweight:
+        return 3;
     default:
         return -1;
     }
