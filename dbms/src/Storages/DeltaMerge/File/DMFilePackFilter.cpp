@@ -22,7 +22,10 @@ namespace DB::DM
 void DMFilePackFilter::init(ReadTag read_tag)
 {
     Stopwatch watch;
-    SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
+    SCOPE_EXIT({
+        if (scan_context)
+            scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed();
+    });
     size_t pack_count = dmfile->getPacks();
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
