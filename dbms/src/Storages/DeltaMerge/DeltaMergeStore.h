@@ -277,8 +277,17 @@ public:
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    String getDatabaseName() const { return table_meta.lockShared()->db_name; }
-    String getTableName() const { return table_meta.lockShared()->table_name; }
+    struct TableMeta
+    {
+        String db_name;
+        String table_name;
+    };
+    TableMeta getTableMeta() const
+    {
+        auto meta = table_meta.lockShared();
+        return TableMeta{meta->db_name, meta->table_name};
+    }
+    String getIdent() const { return fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id); }
 
     void rename(String new_path, String new_database_name, String new_table_name);
 
@@ -796,14 +805,7 @@ public:
     Settings settings;
     StoragePoolPtr storage_pool;
 
-    struct TableMeta
-    {
-        String db_name;
-        String table_name;
-    };
     SharedMutexProtected<TableMeta> table_meta;
-    // String db_name;
-    // String table_name;
 
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;
