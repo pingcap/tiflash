@@ -32,13 +32,22 @@ public:
     }
 };
 
-#define WRAP_FOR_JOIN_TEST_BEGIN                   \
-    std::vector<bool> pipeline_bools{false, true}; \
-    for (auto enable_pipeline : pipeline_bools)    \
-    {                                              \
-        enablePipeline(enable_pipeline);
+#define WRAP_FOR_JOIN_TEST_BEGIN                          \
+    std::vector<bool> pipeline_bools{false, true};        \
+    for (auto enable_pipeline : pipeline_bools)           \
+    {                                                     \
+        enablePipeline(enable_pipeline);                  \
+        if (enable_pipeline)                              \
+        {                                                 \
+            for (auto enable_join_v2 : {"false", "true"}) \
+            {                                             \
+                context.context->setSetting("enable_hash_join_v2", enable_join_v2);
 
-#define WRAP_FOR_JOIN_TEST_END }
+
+#define WRAP_FOR_JOIN_TEST_END \
+    }                          \
+    }                          \
+    }
 
 TEST_F(JoinExecutorTestRunner, SimpleJoin)
 try
@@ -2512,18 +2521,44 @@ try
         {50},
         {50},
         {50}};
+    context.context->setSetting("enable_hash_join_v2", "false");
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        WRAP_FOR_JOIN_TEST_BEGIN
+        for (auto enable_pipeline : {false, true})
+        {
+            enablePipeline(enable_pipeline);
+            auto blocks = getExecuteStreamsReturnBlocks(request);
+            ASSERT_EQ(expect[i].size(), blocks.size());
+            for (size_t j = 0; j < blocks.size(); ++j)
+            {
+                ASSERT_EQ(expect[i][j], blocks[j].rows());
+            }
+            ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
+        }
+    }
+
+    context.context->setSetting("enable_hash_join_v2", "true");
+    enablePipeline(true);
+    std::vector<std::vector<size_t>> expect_v2{
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
+            {7, 7, 7, 7, 7, 7, 7, 1},
+            {25, 25},
+            {49, 1},
+            {50},
+            {50},
+            {50}};
+    for (size_t i = 0; i < block_sizes.size(); ++i)
+    {
+        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
         auto blocks = getExecuteStreamsReturnBlocks(request);
-        ASSERT_EQ(expect[i].size(), blocks.size());
+        ASSERT_EQ(expect_v2[i].size(), blocks.size());
         for (size_t j = 0; j < blocks.size(); ++j)
         {
-            ASSERT_EQ(expect[i][j], blocks[j].rows());
+            ASSERT_EQ(expect_v2[i][j], blocks[j].rows());
         }
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
-        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
