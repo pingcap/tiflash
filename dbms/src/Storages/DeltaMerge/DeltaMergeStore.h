@@ -37,6 +37,7 @@
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
+#include <Storages/TableNameMeta.h>
 #include <TiDB/Schema/TiDB.h>
 
 #include <queue>
@@ -277,15 +278,10 @@ public:
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    struct TableMeta
-    {
-        String db_name;
-        String table_name;
-    };
-    TableMeta getTableMeta() const
+    TableNameMeta getTableMeta() const
     {
         auto meta = table_meta.lockShared();
-        return TableMeta{meta->db_name, meta->table_name};
+        return TableNameMeta{meta->db_name, meta->table_name};
     }
     String getIdent() const { return fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id); }
 
@@ -805,7 +801,7 @@ public:
     Settings settings;
     StoragePoolPtr storage_pool;
 
-    SharedMutexProtected<TableMeta> table_meta;
+    SharedMutexProtected<TableNameMeta> table_meta;
 
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;
