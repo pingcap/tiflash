@@ -210,7 +210,7 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, extra_cast, log->identifier());
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
         });
     }
@@ -225,7 +225,7 @@ void StorageDisaggregated::extraCast(
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(
-                std::make_unique<ExpressionTransformOp<false>>(exec_context, log->identifier(), extra_cast));
+                std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
         });
     }
 }

@@ -64,15 +64,13 @@ void executeExpression(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log,
-    const String & extra_info = "",
-    bool after_auto_pass_through_hashagg = false);
+    const String & extra_info = "");
 
 void executeExpression(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const ExpressionActionsPtr & expr_actions,
-    const LoggerPtr & log,
-    bool after_auto_pass_through_hashagg = false);
+    const LoggerPtr & log);
 
 void orderStreams(
     DAGPipeline & pipeline,

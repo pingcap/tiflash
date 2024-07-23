@@ -255,7 +255,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     // Because the streams of expr_after_agg will provide the correct ProfileInfo.
     // See #3804.
     RUNTIME_CHECK(expr_after_agg && !expr_after_agg->getActions().empty());
-    executeExpression(pipeline, expr_after_agg, log, "expr after aggregation", auto_pass_through_switcher.enable());
+    executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
 void PhysicalAggregation::buildPipelineExecGroupImpl(
@@ -351,7 +351,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
             auto_pass_through_switcher.enable()));
     }
 
-    executeExpression(exec_context, group_builder, expr_after_agg, log, auto_pass_through_switcher.enable());
+    executeExpression(exec_context, group_builder, expr_after_agg, log);
 }
 
 void PhysicalAggregation::buildPipeline(

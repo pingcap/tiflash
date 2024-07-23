@@ -26,7 +26,6 @@ class ExpressionActions;
   * For example: hits * 2 + 3, url LIKE '%yandex%'
   * The expression processes each row independently of the others.
   */
-template <bool selective = false>
 class ExpressionBlockInputStream : public IProfilingBlockInputStream
 {
 private:

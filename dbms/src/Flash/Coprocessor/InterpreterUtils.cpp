@@ -163,25 +163,14 @@ void executeExpression(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log,
-    const String & extra_info,
-    bool after_auto_pass_through_hashagg)
+    const String & extra_info)
 {
     if (expr_actions && !expr_actions->getActions().empty())
     {
-        if (after_auto_pass_through_hashagg)
-        {
-            pipeline.transform([&](auto & stream) {
-                stream = std::make_shared<ExpressionBlockInputStream<true>>(stream, expr_actions, log->identifier());
-                stream->setExtraInfo(extra_info);
-            });
-        }
-        else
-        {
-            pipeline.transform([&](auto & stream) {
-                stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, expr_actions, log->identifier());
-                stream->setExtraInfo(extra_info);
-            });
-        }
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, expr_actions, log->identifier());
+            stream->setExtraInfo(extra_info);
+        });
     }
 }
 
@@ -189,25 +178,14 @@ void executeExpression(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const ExpressionActionsPtr & expr_actions,
-    const LoggerPtr & log,
-    bool after_auto_pass_through_hashagg)
+    const LoggerPtr & log)
 {
     if (expr_actions && !expr_actions->getActions().empty())
     {
-        if (after_auto_pass_through_hashagg)
-        {
-            group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(
-                    std::make_unique<ExpressionTransformOp<true>>(exec_context, log->identifier(), expr_actions));
-            });
-        }
-        else
-        {
-            group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(
-                    std::make_unique<ExpressionTransformOp<false>>(exec_context, log->identifier(), expr_actions));
-            });
-        }
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(
+                std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), expr_actions));
+        });
     }
 }
 
@@ -473,7 +451,7 @@ void executePushedDownFilter(
         // todo link runtime filter
         stream->setExtraInfo("push down filter");
         // after filter, do project action to keep the schema of local streams and remote streams the same.
-        stream = std::make_shared<ExpressionBlockInputStream<false>>(stream, project_after_where, log->identifier());
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
         stream->setExtraInfo("projection after push down filter");
     }
 }
@@ -500,7 +478,7 @@ void executePushedDownFilter(
             filter_column_name));
         // after filter, do project action to keep the schema of local transforms and remote transforms the same.
         builder.appendTransformOp(
-            std::make_unique<ExpressionTransformOp<false>>(exec_context, log->identifier(), project_after_where));
+            std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), project_after_where));
     }
 }
 

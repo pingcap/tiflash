@@ -3186,10 +3186,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             dm_context.tracing_id);
         if (filter->extra_cast)
         {
-            stream = std::make_shared<ExpressionBlockInputStream<false>>(
-                stream,
-                filter->extra_cast,
-                dm_context.tracing_id);
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast, dm_context.tracing_id);
             stream->setExtraInfo("cast after tableScan");
         }
         stream = std::make_shared<FilterBlockInputStream>(
@@ -3198,10 +3195,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             filter->filter_column_name,
             dm_context.tracing_id);
         stream->setExtraInfo("push down filter");
-        stream = std::make_shared<ExpressionBlockInputStream<false>>(
-            stream,
-            filter->project_after_where,
-            dm_context.tracing_id);
+        stream
+            = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
         stream->setExtraInfo("project after where");
         return stream;
     }
@@ -3216,7 +3211,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     // construct extra cast stream if needed
     if (filter->extra_cast)
     {
-        filter_column_stream = std::make_shared<ExpressionBlockInputStream<false>>(
+        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(
             filter_column_stream,
             filter->extra_cast,
             dm_context.tracing_id);

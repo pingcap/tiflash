@@ -104,7 +104,6 @@ public:
         };
 
         sum_not_null_desc = AggregateDescription{
-            // todo sum sumWithOverflow?
             .function = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_decimal}),
             .parameters = {},
             .arguments = {1},
@@ -113,7 +112,6 @@ public:
         };
 
         sum_nullable_desc = AggregateDescription{
-            // todo sum sumWithOverflow?
             .function = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_decimal_nullable}),
             .parameters = {},
             .arguments = {1},
@@ -125,7 +123,6 @@ public:
         child_nullable_header
             = Block({{data_type_int64_nullable, col_int64_name}, {data_type_decimal_nullable, col_decimal_name}});
 
-        // todo sum or sumWithOverflow
         auto sum_agg_func = AggregateFunctionFactory::instance().get(*context, "sum", {data_type_decimal});
         sum_not_null_header = Block({
             {sum_agg_func->getReturnType(), "out_col"},
@@ -192,23 +189,23 @@ DEFINE_GENERIC_BENCH(generic_count_nullable, count_nullable_desc, nullable_block
 DEFINE_GENERIC_BENCH(generic_sum_notnull, sum_not_null_desc, blocks)
 DEFINE_GENERIC_BENCH(generic_sum_nullable, sum_nullable_desc, nullable_blocks)
 
-#define DEFINE_FAST_BENCH(NAME, DESC, HEADER, CHILD_HEADER, BLOCKS)                          \
-    BENCHMARK_DEFINE_F(BenchAutoPassThroughColumnGenerator, NAME)(benchmark::State & state)  \
-    try                                                                                      \
-    {                                                                                        \
-        auto generators = setupAutoPassThroughColumnGenerator(HEADER, CHILD_HEADER, {DESC}); \
-        assert(generators.size() == 1);                                                      \
-        for (const auto & _ : state)                                                         \
-        {                                                                                    \
-            std::vector<ColumnPtr> out_cols;                                                 \
-            out_cols.reserve(BenchAutoPassThroughColumnGenerator::BLOCKS.size());            \
-            for (const auto & block : BenchAutoPassThroughColumnGenerator::BLOCKS)           \
-            {                                                                                \
-                out_cols.push_back(generators[0](block));                                    \
-            }                                                                                \
-        }                                                                                    \
-    }                                                                                        \
-    CATCH                                                                                    \
+#define DEFINE_FAST_BENCH(NAME, DESC, HEADER, CHILD_HEADER, BLOCKS)                                         \
+    BENCHMARK_DEFINE_F(BenchAutoPassThroughColumnGenerator, NAME)(benchmark::State & state)                 \
+    try                                                                                                     \
+    {                                                                                                       \
+        auto generators = setupAutoPassThroughColumnGenerator(HEADER, CHILD_HEADER, {DESC}, Logger::get()); \
+        assert(generators.size() == 1);                                                                     \
+        for (const auto & _ : state)                                                                        \
+        {                                                                                                   \
+            std::vector<ColumnPtr> out_cols;                                                                \
+            out_cols.reserve(BenchAutoPassThroughColumnGenerator::BLOCKS.size());                           \
+            for (const auto & block : BenchAutoPassThroughColumnGenerator::BLOCKS)                          \
+            {                                                                                               \
+                out_cols.push_back(generators[0](block));                                                   \
+            }                                                                                               \
+        }                                                                                                   \
+    }                                                                                                       \
+    CATCH                                                                                                   \
     BENCHMARK_REGISTER_F(BenchAutoPassThroughColumnGenerator, NAME);
 
 DEFINE_FAST_BENCH(fast_count_notnull, count_not_null_desc, count_not_null_header, child_not_null_header, blocks)

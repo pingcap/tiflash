@@ -17,12 +17,11 @@
 
 namespace DB
 {
-template <bool selective>
-OperatorStatus ExpressionTransformOp<selective>::transformImpl(Block & block)
+OperatorStatus ExpressionTransformOp::transformImpl(Block & block)
 {
     if (likely(block))
     {
-        if constexpr (selective)
+        if (block.info.selective)
         {
             auto ori_info = block.info;
             expression->execute(block);
@@ -36,12 +35,9 @@ OperatorStatus ExpressionTransformOp<selective>::transformImpl(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-template <bool selective>
-void ExpressionTransformOp<selective>::transformHeaderImpl(Block & header_)
+void ExpressionTransformOp::transformHeaderImpl(Block & header_)
 {
     expression->execute(header_);
 }
 
-template class ExpressionTransformOp<true>;
-template class ExpressionTransformOp<false>;
 } // namespace DB

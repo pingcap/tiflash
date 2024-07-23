@@ -767,7 +767,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         agg_process_info.start_row += agg_size;
 
         // For key8, assume all rows are hit. No need to do state switch for auto pass through hashagg.
-        // Because HashMap of key8 is small.
+        // Because HashMap of key8 is basically a vector of size 256.
         if constexpr (collect_hit_rate)
             agg_process_info.hit_row_cnt = agg_size;
 

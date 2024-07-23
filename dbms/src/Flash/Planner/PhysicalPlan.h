@@ -52,7 +52,7 @@ private:
 
     void build(const tipb::Executor * executor);
 
-    void buildFinalProjection(const String & column_prefix, bool is_root, bool after_auto_pass_through_hashagg);
+    void buildFinalProjection(const String & column_prefix, bool is_root);
 
     PhysicalPlanNodePtr popBack();
 

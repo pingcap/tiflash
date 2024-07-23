@@ -140,7 +140,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         // 2. For 1st hash agg without key(exchange type will be PassThrough), TiDB will not generate auto pass hash agg.
         if (after_auto_pass_through_hashagg)
             RUNTIME_CHECK(executor->exchange_sender().tp() == ::tipb::ExchangeType::Hash);
-        buildFinalProjection(fmt::format("{}_", executor_id), true, after_auto_pass_through_hashagg);
+        buildFinalProjection(fmt::format("{}_", executor_id), true);
         if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
@@ -213,10 +213,10 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         GET_METRIC(tiflash_coprocessor_executor_count, type_join).Increment();
         /// Both sides of the join need to have non-root-final-projection to ensure that
         /// there are no duplicate columns in the blocks on the build and probe sides.
-        buildFinalProjection(fmt::format("{}_r_", executor_id), false, false);
+        buildFinalProjection(fmt::format("{}_r_", executor_id), false);
         auto right = popBack();
 
-        buildFinalProjection(fmt::format("{}_l_", executor_id), false, false);
+        buildFinalProjection(fmt::format("{}_l_", executor_id), false);
         auto left = popBack();
 
         pushBack(PhysicalJoin::build(
@@ -248,26 +248,18 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     }
 }
 
-void PhysicalPlan::buildFinalProjection(
-    const String & column_prefix,
-    bool is_root,
-    bool after_auto_pass_through_hashagg)
+void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_root)
 {
-    const auto & final_projection = is_root ? PhysicalProjection::buildRootFinal(
-                                        context,
-                                        log,
-                                        dagContext().output_field_types,
-                                        dagContext().output_offsets,
-                                        column_prefix,
-                                        dagContext().keep_session_timezone_info,
-                                        after_auto_pass_through_hashagg,
-                                        popBack())
-                                            : PhysicalProjection::buildNonRootFinal(
-                                                context,
-                                                log,
-                                                column_prefix,
-                                                after_auto_pass_through_hashagg,
-                                                popBack());
+    const auto & final_projection = is_root
+        ? PhysicalProjection::buildRootFinal(
+            context,
+            log,
+            dagContext().output_field_types,
+            dagContext().output_offsets,
+            column_prefix,
+            dagContext().keep_session_timezone_info,
+            popBack())
+        : PhysicalProjection::buildNonRootFinal(context, log, column_prefix, popBack());
     pushBack(final_projection);
 }
 
@@ -299,7 +291,7 @@ void PhysicalPlan::addRootFinalProjectionIfNeed()
     if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
     {
         pushBack(root_node);
-        buildFinalProjection(fmt::format("{}_", root_node->execId()), true, false);
+        buildFinalProjection(fmt::format("{}_", root_node->execId()), true);
         root_node = popBack();
     }
 }
