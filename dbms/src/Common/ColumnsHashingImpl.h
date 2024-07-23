@@ -59,24 +59,24 @@ struct LastElementCache<Data, false>
 template <typename Mapped>
 class EmplaceResultImpl
 {
-    Mapped * value;
-    Mapped * cached_value;
+    Mapped & value;
+    Mapped & cached_value;
     bool inserted;
 
 public:
-    EmplaceResultImpl(Mapped * value_, Mapped * cached_value_, bool inserted_)
+    EmplaceResultImpl(Mapped & value_, Mapped & cached_value_, bool inserted_)
         : value(value_)
         , cached_value(cached_value_)
         , inserted(inserted_)
     {}
 
     bool isInserted() const { return inserted; }
-    auto & getMapped() const { return *value; }
+    auto & getMapped() const { return value; }
 
     void setMapped(const Mapped & mapped)
     {
-        *value = mapped;
-        *cached_value = mapped;
+        cached_value = mapped;
+        value = mapped;
     }
 };
 
@@ -187,7 +187,7 @@ protected:
             if (cache.found && cache.check(keyHolderGetKey(key_holder)))
             {
                 if constexpr (has_mapped)
-                    return EmplaceResult(&cache.value.second, &cache.value.second, false);
+                    return EmplaceResult(cache.value.second, cache.value.second, false);
                 else
                     return EmplaceResult(false);
             }
@@ -227,7 +227,7 @@ protected:
         }
 
         if constexpr (has_mapped)
-            return EmplaceResult(&it->getMapped(), cached, inserted);
+            return EmplaceResult(it->getMapped(), *cached, inserted);
         else
             return EmplaceResult(inserted);
     }

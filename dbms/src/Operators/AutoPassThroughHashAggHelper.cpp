@@ -37,7 +37,7 @@ ColumnPtr genPassThroughColumnByCopy(
     const String & src_col_name,
     const Block & child_block)
 {
-    auto res = child_block.getByName(src_col_name);
+    const auto & res = child_block.getByName(src_col_name);
     RUNTIME_CHECK(required_type_id == res.type->getTypeId());
     return res.column;
 }

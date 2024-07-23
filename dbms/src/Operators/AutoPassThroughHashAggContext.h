@@ -222,9 +222,5 @@ private:
     std::vector<AutoPassThroughColumnGenerator> column_generators;
 };
 
-ColumnPtr getPassThroughColumnForSum(const AggregateDescription & desc, const Block & block);
-ColumnPtr getPassThroughColumnForCount(const AggregateDescription & desc, const Block & block);
-ColumnPtr getPassThroughColumnGeneric(const AggregateDescription & desc, const Block & block, Arena & arena);
-
 using AutoPassThroughHashAggContextPtr = std::shared_ptr<AutoPassThroughHashAggContext>;
 } // namespace DB
