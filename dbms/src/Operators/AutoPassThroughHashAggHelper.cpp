@@ -212,7 +212,7 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
 #define DISPATCH_DECIMAL_INNER(FROM_NATIVE_TYPE, TO_NATIVE_TYPE)                                       \
     do                                                                                                 \
     {                                                                                                  \
-        if (checkDataType<DataTypeDecimal<TO_NATIVE_TYPE>>(to_type.get()))                             \
+        if (checkDataType<DataTypeDecimal<TO_NATIVE_TYPE>>(to_type.get())) /* NOLINT */                \
         {                                                                                              \
             size_t col_index = agg_desc.arguments[0];                                                  \
             if (arg_from_type->isNullable())                                                           \
@@ -235,13 +235,13 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
 #define INNER_Decimal128 FOR_DECIMAL_TYPES_INNER(Decimal128, DISPATCH_DECIMAL_INNER)
 #define INNER_Decimal256 FOR_DECIMAL_TYPES_INNER(Decimal256, DISPATCH_DECIMAL_INNER)
 
-#define DISPATCH_DECIMAL_OUTER(FROM_NATIVE_TYPE)                               \
-    do                                                                         \
-    {                                                                          \
-        if (checkDataType<DataTypeDecimal<FROM_NATIVE_TYPE>>(from_type.get())) \
-        {                                                                      \
-            INNER_##FROM_NATIVE_TYPE                                           \
-        }                                                                      \
+#define DISPATCH_DECIMAL_OUTER(FROM_NATIVE_TYPE)                                            \
+    do                                                                                      \
+    {                                                                                       \
+        if (checkDataType<DataTypeDecimal<FROM_NATIVE_TYPE>>(from_type.get())) /* NOLINT */ \
+        {                                                                                   \
+            INNER_##FROM_NATIVE_TYPE                                                        \
+        }                                                                                   \
     } while (0);
 
 #define FOR_DECIMAL_TYPES_OUTER(M) \
@@ -276,7 +276,7 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
 #define DISPATCH_NUMBER_INNER(FROM_NATIVE_TYPE, TO_NATIVE_TYPE)                                                        \
     do                                                                                                                 \
     {                                                                                                                  \
-        if (checkDataType<DataTypeNumber<TO_NATIVE_TYPE>>(to_type.get()))                                              \
+        if (checkDataType<DataTypeNumber<TO_NATIVE_TYPE>>(to_type.get())) /* NOLINT */                                 \
         {                                                                                                              \
             size_t col_index = agg_desc.arguments[0];                                                                  \
             if (arg_from_type->isNullable())                                                                           \
@@ -303,13 +303,13 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
 #define INNER_Float32 FOR_NUMBER_TYPES_INNER(Float32, DISPATCH_NUMBER_INNER)
 #define INNER_Float64 FOR_NUMBER_TYPES_INNER(Float64, DISPATCH_NUMBER_INNER)
 
-#define DISPATCH_NUMBER_OUTER(FROM_NATIVE_TYPE)                               \
-    do                                                                        \
-    {                                                                         \
-        if (checkDataType<DataTypeNumber<FROM_NATIVE_TYPE>>(from_type.get())) \
-        {                                                                     \
-            INNER_##FROM_NATIVE_TYPE                                          \
-        }                                                                     \
+#define DISPATCH_NUMBER_OUTER(FROM_NATIVE_TYPE)                                            \
+    do                                                                                     \
+    {                                                                                      \
+        if (checkDataType<DataTypeNumber<FROM_NATIVE_TYPE>>(from_type.get())) /* NOLINT */ \
+        {                                                                                  \
+            INNER_##FROM_NATIVE_TYPE                                                       \
+        }                                                                                  \
     } while (0);
 
 #define FOR_NUMBER_TYPES_OUTER(M) \
