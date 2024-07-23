@@ -770,6 +770,8 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         // Because HashMap of key8 is small.
         if constexpr (collect_hit_rate)
             agg_process_info.hit_row_cnt = agg_size;
+
+        // Because all rows are hit, so state will not switch to Selective.
         if constexpr (only_lookup)
             RUNTIME_CHECK_MSG(false, "Aggregator only_lookup should be false for AggregationMethod_key8");
         return;

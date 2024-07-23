@@ -57,18 +57,19 @@ ColumnPtr genPassThroughColumnForCount(size_t arg_index, const Block & child_blo
     if constexpr (empty_argument || !nullable)
         return count_agg_func_res;
 
-    const ColumnWithTypeAndName & argument_column = child_block.getByPosition(arg_index);
-    const auto * col_nullable = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
-    RUNTIME_CHECK(col_nullable);
+    const auto & argument_column = child_block.getByPosition(arg_index).column;
+    RUNTIME_CHECK(argument_column->isColumnNullable());
     auto & datas = count_agg_func_res->getData();
     for (size_t i = 0; i < child_block.rows(); ++i)
     {
-        if (col_nullable->isNullAt(i))
+        if (argument_column->isNullAt(i))
             datas[i] = 0;
     }
     return count_agg_func_res;
 }
 
+// sum(null)/min(null)/max(null) will use this.
+// Just return Nullable(ColumnNothing)
 ColumnPtr genPassThroughColumnForNothing(const Block & child_block)
 {
     auto nullmap = ColumnVector<UInt8>::create(child_block.rows(), 1);
@@ -191,6 +192,8 @@ AutoPassThroughColumnGenerator chooseGeneratorForSum(
     const DataTypePtr & arg_to_type)
 {
     RUNTIME_CHECK(agg_desc.argument_names.size() == 1 && agg_desc.arguments.size() == 1);
+    // Agg func should be AggregateFunctionNothing.
+    RUNTIME_CHECK(!arg_from_type->onlyNull());
     auto [from_type, to_type] = getNestDataType(arg_from_type, arg_to_type);
     if ((arg_from_type->isNullable() == arg_to_type->isNullable()) && (from_type->getTypeId() == to_type->getTypeId()))
     {
@@ -359,7 +362,7 @@ AutoPassThroughColumnGenerator chooseGeneratorForCount(
     }
 
     const DataTypePtr & from_type = child_header.getByPosition(agg_desc.arguments[0]).type;
-    if (from_type->isNullable() && from_type->onlyNull())
+    if (from_type->onlyNull())
     {
         return [](const Block & block) {
             return genPassThroughColumnForCountNothing(block);
@@ -391,8 +394,6 @@ ColumnPtr genPassThroughColumnGeneric(const AggregateDescription & desc, const B
     argument_columns.reserve(child_block.columns());
     for (auto arg_col_idx : desc.arguments)
         argument_columns.push_back(child_block.getByPosition(arg_col_idx).column.get());
-
-    RUNTIME_CHECK(!argument_columns.empty());
 
     for (size_t row_idx = 0; row_idx < child_block.rows(); ++row_idx)
     {

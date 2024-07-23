@@ -47,7 +47,6 @@ struct AutoPassThroughSwitcher
     ::tipb::TiFlashPreAggMode mode;
 };
 
-// todo how about multiple threads?
 class AutoPassThroughHashAggContext
 {
 public:

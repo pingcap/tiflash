@@ -189,7 +189,6 @@ public:
     {
         void init(MockDAGRequestContext & context)
         {
-            // todo check if works
             context.context->getSettingsRef().max_block_size = block_size;
 
             if (inited)
@@ -311,7 +310,7 @@ public:
                 "sum",
                 aggregate_descriptions,
                 aggregated_columns,
-                /*empty_input_as_null*/ false, // todo?
+                /*empty_input_as_null*/ false,
                 *context.context);
 
             AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
@@ -525,6 +524,7 @@ public:
         const String col1_name = "repo_name";
         const String col2_name = "commit_num";
         // todo: col3 is used to test decimal type, but execute test framework doesn't support decimal for now.
+        // So it's not used for now.
         const String col3_name = "quantity_num";
         const String col4_name = "status";
         const String db_name = "test_db";
@@ -1746,10 +1746,6 @@ try
 }
 CATCH
 
-// todo using func in DAGExpressionAnalyzer
-// todo add test for params.aggregates_size == 0
-// todo add case for different agg func/different group by key of different type
-// todo for medium workload, same data in different block instead in one block
 // todo add case to cover two level hashmap; spill
 // Using different workload(low/high/medium ndv) to run auto_pass_through hashagg,
 // which cover logic of interpretion, execution and exchange.
@@ -1771,7 +1767,7 @@ try
         const String col2_name = auto_pass_through_test_data.col2_name;
         const String col4_name = auto_pass_through_test_data.col4_name;
 
-        // todo group array.
+        // todo other agg funcs.
         MockAstVec agg_func_asts{
             makeASTFunction("first_row", col(col1_name)),
             makeASTFunction("first_row", col(col2_name)),
@@ -1797,30 +1793,30 @@ try
 
         // 2-staged Aggregation.
         // Expect the columns result is same with non-auto_pass_through hashagg.
-        // WRAP_FOR_SERVER_TEST_BEGIN
+        WRAP_FOR_SERVER_TEST_BEGIN
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, start test auto pass");
         std::vector<String> expected_strings = {
-            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>)}
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>), sum(<UInt64_1, Tiny>), count(<UInt64_1, Tiny>), min(<UInt64_1, Tiny>), max(<UInt64_1, Tiny>)}
   table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
 )",
-            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>)}
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>), sum(<UInt64_1, Tiny>), count(<UInt64_1, Tiny>), min(<UInt64_1, Tiny>), max(<UInt64_1, Tiny>)}
   table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
 )",
-            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
- aggregation_1 | group_by: {<11, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>)}
-  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
+            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_1 | group_by: {<15, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>), sum(<11, Longlong>), sum(<12, Longlong>), min(<13, Longlong>), max(<14, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
 )",
-            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
- aggregation_1 | group_by: {<11, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>)}
-  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, String>}
+            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_1 | group_by: {<15, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>), sum(<11, Longlong>), sum(<12, Longlong>), min(<13, Longlong>), max(<14, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
 )"};
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
             context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, switcher),
             expected_strings,
             res_no_pass_through);
-        // WRAP_FOR_SERVER_TEST_END
+        WRAP_FOR_SERVER_TEST_END
     }
 }
 CATCH
