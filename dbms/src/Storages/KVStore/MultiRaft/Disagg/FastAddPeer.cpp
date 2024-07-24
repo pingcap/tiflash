@@ -307,6 +307,15 @@ FastAddPeerRes FastAddPeerImplWrite(
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region, tmt);
+    if (!storage) {
+        LOG_WARNING(
+            log,
+            "FAP failed because the table can not be found, region_id={} keyspace_id={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
+        return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
+    }
     UNUSED(schema_snap);
     RUNTIME_CHECK_MSG(storage->engineType() == TiDB::StorageEngine::DT, "ingest into unsupported storage engine");
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
