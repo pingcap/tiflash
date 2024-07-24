@@ -42,9 +42,13 @@ Block ExpressionBlockInputStream::readImpl()
 
     if (res.info.selective)
     {
+        const auto ori_rows = res.rows();
         auto ori_info = res.info;
         expression->execute(res);
         res.info = ori_info;
+        // When block.info.selective is not null, the expression action should be cast/project.
+        // So the rows should not change.
+        RUNTIME_CHECK(ori_rows == res.rows());
     }
     else
     {

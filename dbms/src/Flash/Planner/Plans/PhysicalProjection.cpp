@@ -45,6 +45,7 @@ PhysicalPlanNodePtr PhysicalProjection::build(
         const auto & col = project_actions->getSampleBlock().getByName(expr_name);
         schema.emplace_back(col.name, col.type);
     }
+
     auto physical_projection = std::make_shared<PhysicalProjection>(
         executor_id,
         schema,

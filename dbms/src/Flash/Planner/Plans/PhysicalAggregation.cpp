@@ -119,6 +119,10 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
 
 void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
+    // Agg cannot be both auto pass through and fine grained shuffle at the same time.
+    // Fine grained shuffle is for 2nd agg, auto pass through is for 1st agg.
+    RUNTIME_CHECK(!(fine_grained_shuffle.enable() && auto_pass_through_switcher.enable()));
+
     child->buildBlockInputStream(pipeline, context, max_streams);
 
     executeExpression(pipeline, before_agg_actions, log, "before aggregation");
@@ -149,10 +153,6 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 
     if (fine_grained_shuffle.enable())
     {
-        // Agg cannot be both auto pass through and fine grained shuffle at ;he same time.
-        // Fine grained shuffle is for 2nd agg, auto pass through is for 1st agg.
-        RUNTIME_CHECK(!auto_pass_through_switcher.enable());
-
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
             && pipeline.hasMoreThanOneStream())
@@ -201,7 +201,10 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         }
         else
         {
-            throw Exception("unexpected auto_pass_through_switcher");
+            throw Exception(fmt::format(
+                "unexpected auto_pass_through_switcher: {}, {}",
+                auto_pass_through_switcher.has_set,
+                auto_pass_through_switcher.mode));
         }
     }
     else if (pipeline.streams.size() > 1)
@@ -264,9 +267,9 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     Context & context,
     size_t /*concurrency*/)
 {
-    // For non fine grained shuffle, PhysicalAggregation will be broken into AggregateBuild and AggregateConvergent.
-    // So only fine grained shuffle is considered here.
-    // For auto pass through, it's only true for 1st agg, and fine grained shuffle is only true for 2nd agg.
+    // When got here, one of fine_grained_shuffle and auto_pass_through must be true.
+    // Because for non fine grained shuffle, AggregateBuild and AggregateConvergent will be used to build aggregation.
+    // Also auto pass through hashagg use PhysicalAggregation to build. But they cannot be true at the same time.
     RUNTIME_CHECK(fine_grained_shuffle.enable() != auto_pass_through_switcher.enable());
 
     // Auto pass through hashagg doesn't handle empty_result_for_aggregation_by_empty_set.

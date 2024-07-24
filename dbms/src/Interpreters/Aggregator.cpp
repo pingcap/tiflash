@@ -725,8 +725,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
                 if constexpr (only_lookup)
                 {
-                    auto & emplace_result = emplace_result_hold.value();
-                    if (!emplace_result.isFound())
+                    if (!emplace_result_hold.value().isFound())
                         agg_process_info.not_found_rows.push_back(i);
                 }
                 else

@@ -23,9 +23,11 @@ OperatorStatus ExpressionTransformOp::transformImpl(Block & block)
     {
         if (block.info.selective)
         {
+            const auto ori_rows = block.rows();
             auto ori_info = block.info;
             expression->execute(block);
             block.info = ori_info;
+            RUNTIME_CHECK(ori_rows == block.rows());
         }
         else
         {
