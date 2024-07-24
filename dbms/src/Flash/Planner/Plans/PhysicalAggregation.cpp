@@ -201,10 +201,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         }
         else
         {
-            throw Exception(fmt::format(
-                "unexpected auto_pass_through_switcher: {}, {}",
-                auto_pass_through_switcher.has_set,
-                auto_pass_through_switcher.mode));
+            throw Exception("unexpected auto_pass_through_switcher");
         }
     }
     else if (pipeline.streams.size() > 1)
