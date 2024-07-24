@@ -16,6 +16,7 @@
 #include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 #include <magic_enum.hpp>
@@ -126,7 +127,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     const String & tracing_id,
     bool enable_read_thread_,
     Int64 num_streams_,
-    const String & res_group_name_)
+    const ScanContextPtr & scan_context_)
     : pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     , extra_table_id_index(extra_table_id_index_)
@@ -137,6 +138,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , read_mode(read_mode_)
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
+    , q(scan_context_)
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
@@ -148,7 +150,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
-    , res_group_name(res_group_name_)
+    , res_group_name(scan_context_->resource_group_name)
 {
     if (tasks_wrapper.empty())
     {

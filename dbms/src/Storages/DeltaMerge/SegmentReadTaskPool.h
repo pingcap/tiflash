@@ -118,7 +118,7 @@ public:
         const String & tracing_id,
         bool enable_read_thread_,
         Int64 num_streams_,
-        const String & res_group_name_);
+        const ScanContextPtr & scan_context_);
 
     ~SegmentReadTaskPool() override
     {
@@ -172,6 +172,7 @@ public:
     void setException(const DB::Exception & e);
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
+    void start() { q.start(); }
 
     void registerTask(TaskPtr && task) override { q.registerPipeTask(std::move(task)); }
 
@@ -180,8 +181,6 @@ public:
 
     // The memory tracker of MPPTask.
     const MemoryTrackerPtr mem_tracker;
-
-    ColumnDefines & getColumnToRead() { return columns_to_read; }
 
     void appendRSOperator(RSOperatorPtr & new_filter) const
     {

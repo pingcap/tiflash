@@ -543,6 +543,8 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
 
     if (enable_read_thread)
     {
+        auto it = context.getDAGContext()->scan_context_map.find(table_scan.getTableScanExecutorID());
+        RUNTIME_CHECK(it != context.getDAGContext()->scan_context_map.end(), table_scan.getTableScanExecutorID());
         return std::make_shared<DM::SegmentReadTaskPool>(
             extra_table_id_index,
             *column_defines,
@@ -555,7 +557,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             executor_id,
             /*enable_read_thread*/ true,
             num_streams,
-            context.getDAGContext()->getResourceGroupName());
+            it->second);
     }
     else
     {

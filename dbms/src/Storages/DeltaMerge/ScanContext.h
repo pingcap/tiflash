@@ -86,6 +86,8 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
+    std::atomic<uint64_t> block_queue_empty_ns{0};
+
     const String resource_group_name;
 
     explicit ScanContext(const String & name = "")
@@ -124,6 +126,8 @@ public:
         build_bitmap_time_ns = tiflash_scan_context_pb.total_build_bitmap_ms() * 1000000;
         num_stale_read = tiflash_scan_context_pb.stale_read_regions();
         build_inputstream_time_ns = tiflash_scan_context_pb.total_build_inputstream_ms() * 1000000;
+
+        // TODO: block_queue_empty_ns
 
         setStreamCost(
             tiflash_scan_context_pb.min_local_stream_ms() * 1000000,
@@ -173,6 +177,8 @@ public:
         tiflash_scan_context_pb.set_min_remote_stream_ms(remote_min_stream_cost_ns / 1000000);
         tiflash_scan_context_pb.set_max_remote_stream_ms(remote_max_stream_cost_ns / 1000000);
 
+        // TODO: block_queue_empty_ns
+
         serializeRegionNumOfInstance(tiflash_scan_context_pb);
 
         return tiflash_scan_context_pb;
@@ -217,6 +223,10 @@ public:
 
         num_stale_read += other.num_stale_read;
 
+        block_queue_empty_ns = std::max(
+            block_queue_empty_ns.load(std::memory_order_relaxed),
+            other.block_queue_empty_ns.load(std::memory_order_relaxed));
+
         mergeStreamCost(
             other.local_min_stream_cost_ns,
             other.local_max_stream_cost_ns,
@@ -258,6 +268,8 @@ public:
         build_bitmap_time_ns += other.total_build_bitmap_ms() * 1000000;
         num_stale_read += other.stale_read_regions();
         build_inputstream_time_ns += other.total_build_inputstream_ms() * 1000000;
+
+        // TODO: block_queue_empty_ns
 
         mergeStreamCost(
             other.min_local_stream_ms() * 1000000,

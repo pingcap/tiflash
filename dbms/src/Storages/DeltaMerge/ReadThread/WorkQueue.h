@@ -14,13 +14,13 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <stdint.h>
 
 #include <cassert>
 #include <condition_variable>
 #include <mutex>
 #include <queue>
-
 namespace DB::DM
 {
 template <typename T>
@@ -36,9 +36,32 @@ class WorkQueue
     bool done;
     std::size_t max_size;
 
-    std::size_t peak_queue_size;
-    int64_t pop_times;
-    int64_t pop_empty_times;
+    std::size_t peak_queue_size = 0;
+    int64_t pop_times = 0;
+    int64_t pop_empty_times = 0;
+
+    Stopwatch empty_watch;
+    ScanContextPtr scan_context;
+
+    // Check queue from non-empty to empty.
+    void checkPopEmpty()
+    {
+        if (scan_context && queue.empty() && !done)
+        {
+            empty_watch.start();
+        }
+    }
+
+    // Check queue from empty to non-empty.
+    void checkPushEmpty()
+    {
+        if (scan_context && queue.empty())
+        {
+            scan_context->block_queue_empty_ns += empty_watch.elapsed();
+            empty_watch.reset();
+        }
+    }
+
     // Must have lock to call this function
     bool full() const
     {
@@ -56,13 +79,15 @@ public:
    *
    * @param maxSize The maximum allowed size of the work queue.
    */
-    explicit WorkQueue(std::size_t maxSize = 0)
+    explicit WorkQueue(const ScanContextPtr & scan_context_ = nullptr, std::size_t maxSize = 0)
         : done(false)
         , max_size(maxSize)
-        , peak_queue_size(0)
-        , pop_times(0)
-        , pop_empty_times(0)
-    {}
+        , scan_context(scan_context_)
+    {
+        // Stop watching because the query may waiting for scheduling and
+        // the table scanning not started yet.
+        empty_watch.reset();
+    }
 
     void registerPipeTask(TaskPtr && task)
     {
@@ -90,7 +115,7 @@ public:
     bool push(U && item, size_t * size)
     {
         {
-            std::unique_lock<std::mutex> lock(mu);
+            std::unique_lock lock(mu);
             while (full() && !done)
             {
                 writer_cv.wait(lock);
@@ -99,6 +124,7 @@ public:
             {
                 return false;
             }
+            checkPushEmpty();
             queue.push(std::forward<U>(item));
             peak_queue_size = std::max(queue.size(), peak_queue_size);
             if (size != nullptr)
@@ -122,7 +148,7 @@ public:
     bool pop(T & item)
     {
         {
-            std::unique_lock<std::mutex> lock(mu);
+            std::unique_lock lock(mu);
             ++pop_times;
             while (queue.empty() && !done)
             {
@@ -136,6 +162,7 @@ public:
             }
             item = std::move(queue.front());
             queue.pop();
+            checkPopEmpty();
         }
         writer_cv.notify_one();
         return true;
@@ -169,6 +196,7 @@ public:
             }
             item = std::move(queue.front());
             queue.pop();
+            checkPopEmpty();
         }
         writer_cv.notify_one();
         return true;
@@ -207,7 +235,7 @@ public:
     /// Blocks until `finish()` has been called (but the queue may not be empty).
     void waitUntilFinished()
     {
-        std::unique_lock<std::mutex> lock(mu);
+        std::unique_lock lock(mu);
         while (!done)
         {
             finish_cv.wait(lock);
@@ -222,7 +250,13 @@ public:
 
     std::tuple<int64_t, int64_t, size_t> getStat() const
     {
-        return std::tuple<int64_t, int64_t, size_t>{pop_times, pop_empty_times, peak_queue_size};
+        return std::make_tuple(pop_times, pop_empty_times, peak_queue_size);
+    }
+
+    void start()
+    {
+        std::lock_guard lock(mu);
+        checkPopEmpty();
     }
 };
 } // namespace DB::DM

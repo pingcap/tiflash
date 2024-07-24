@@ -145,6 +145,7 @@ String ScanContext::toJson() const
     json->set("local_max_stream_cost_ms", fmt::format("{:.3f}ms", local_max_stream_cost_ns / NS_TO_MS_SCALE));
     json->set("remote_min_stream_cost_ms", fmt::format("{:.3f}ms", remote_min_stream_cost_ns / NS_TO_MS_SCALE));
     json->set("remote_max_stream_cost_ms", fmt::format("{:.3f}ms", remote_max_stream_cost_ns / NS_TO_MS_SCALE));
+    json->set("block_queue_empty_ms", fmt::format("{:.3f}ms", block_queue_empty_ns / NS_TO_MS_SCALE));
 
     auto to_json_object = [](const String & id, uint64_t num) {
         Poco::JSON::Object::Ptr json = new Poco::JSON::Object();

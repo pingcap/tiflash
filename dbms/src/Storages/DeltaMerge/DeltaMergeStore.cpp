@@ -1010,7 +1010,7 @@ BlockInputStreams DeltaMergeStore::readRaw(
         req_info,
         enable_read_thread,
         final_num_stream,
-        dm_context->scan_context->resource_group_name);
+        dm_context->scan_context);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1114,7 +1114,7 @@ void DeltaMergeStore::readRaw(
         req_info,
         enable_read_thread,
         final_num_stream,
-        dm_context->scan_context->resource_group_name);
+        dm_context->scan_context);
 
     if (enable_read_thread)
     {
@@ -1239,7 +1239,7 @@ BlockInputStreams DeltaMergeStore::read(
         log_tracing_id,
         enable_read_thread,
         final_num_stream,
-        dm_context->scan_context->resource_group_name);
+        dm_context->scan_context);
     dm_context->scan_context->read_mode = read_mode;
 
     BlockInputStreams res;
@@ -1350,7 +1350,7 @@ void DeltaMergeStore::read(
         log_tracing_id,
         enable_read_thread,
         final_num_stream,
-        dm_context->scan_context->resource_group_name);
+        dm_context->scan_context);
     dm_context->scan_context->read_mode = read_mode;
 
     if (enable_read_thread)
