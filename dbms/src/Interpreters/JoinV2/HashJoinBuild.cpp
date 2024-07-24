@@ -92,8 +92,10 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         }
     }
 
-    RowPtrs tmp_row_ptrs;
-    tmp_row_ptrs.resize(rows);
+#ifndef NDEBUG
+    RowPtrs check_row_ptrs;
+    check_row_ptrs.resize(rows);
+#endif
 
     for (size_t i = 0; i < rows; ++i)
     {
@@ -125,7 +127,10 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         size_t part_num = getHJBuildPartitionNum(wd.hashes[i]);
         wd.row_ptrs[i] = partition_column_row[part_num].data.data() + wd.partition_row_sizes[part_num];
         assert((reinterpret_cast<uintptr_t>(wd.row_ptrs[i]) & (ROW_ALIGN - 1)) == 0);
-        tmp_row_ptrs[i] = wd.row_ptrs[i];
+
+#ifndef NDEBUG
+        check_row_ptrs[i] = wd.row_ptrs[i];
+#endif
 
         wd.partition_row_sizes[part_num] += wd.row_sizes[i];
         partition_column_row[part_num].offsets.push_back(wd.partition_row_sizes[part_num]);
@@ -142,7 +147,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
 
     if (!row_layout.other_required_column_indexes.empty())
     {
-        constexpr size_t step = 128;
+        constexpr size_t step = 64;
         for (size_t i = 0; i < rows; i += step)
         {
             size_t start = i;
@@ -157,10 +162,12 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         }
     }
 
+#ifndef NDEBUG
     for (size_t i = 0; i < rows; ++i)
     {
-        assert(wd.row_ptrs[i] <= tmp_row_ptrs[i] + wd.row_sizes[i]);
+        assert(wd.row_ptrs[i] <= check_row_ptrs[i] + wd.row_sizes[i]);
     }
+#endif
 
     for (size_t i = 0; i < part_count; ++i)
     {

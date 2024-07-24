@@ -392,9 +392,10 @@ bool HashJoin::finishOneBuild(size_t stream_index)
 {
     LOG_INFO(
         log,
-        "{} insert block to row containers cost {}ms",
+        "{} insert block to row containers cost {}ms, row count {}",
         stream_index,
-        build_workers_data[stream_index].build_time);
+        build_workers_data[stream_index].build_time,
+        build_workers_data[stream_index].row_count);
     if (active_build_worker.fetch_sub(1) == 1)
     {
         workAfterBuildFinish();
