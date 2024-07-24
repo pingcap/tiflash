@@ -50,7 +50,8 @@ void ColumnFileBig::calculateStat(const DMContext & dm_context)
         dm_context.global_context.getFileProvider(),
         dm_context.getReadLimiter(),
         dm_context.scan_context,
-        /*tracing_id*/ dm_context.tracing_id);
+        /*tracing_id*/ dm_context.tracing_id,
+        ReadTag::Internal);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
