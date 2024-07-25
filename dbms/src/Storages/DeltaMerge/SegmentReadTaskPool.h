@@ -172,7 +172,6 @@ public:
     void setException(const DB::Exception & e);
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
-    void start() { q.start(); }
 
     void registerTask(TaskPtr && task) override { q.registerPipeTask(std::move(task)); }
 

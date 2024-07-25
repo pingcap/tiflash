@@ -40,7 +40,6 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
-    pool->start(); // Start metrics
     // To avoid schedule from always failing to acquire the pending_mtx.
     std::lock_guard lock(add_mtx);
     submitPendingPool(pool);

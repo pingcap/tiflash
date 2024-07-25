@@ -40,25 +40,33 @@ class WorkQueue
     int64_t pop_times = 0;
     int64_t pop_empty_times = 0;
 
-    Stopwatch empty_watch;
+    int64_t waitting_count = 0; // The number of waitting tasks.
+    Stopwatch waitting_watch; // Count the duration that any task is waitting.
     ScanContextPtr scan_context;
 
-    // Check queue from non-empty to empty.
-    void checkPopEmpty()
+    void registerWaitting()
     {
-        if (scan_context && queue.empty() && !done)
-        {
-            empty_watch.start();
-        }
+        if (unlikely(!scan_context))
+            return;
+
+        if (waitting_count == 0)
+            waitting_watch.start();
+        ++waitting_count;
     }
 
-    // Check queue from empty to non-empty.
-    void checkPushEmpty()
+    void notifyWaitting()
     {
-        if (scan_context && queue.empty())
+        if (unlikely(!scan_context))
+            return;
+
+        if (waitting_count > 0)
         {
-            scan_context->block_queue_empty_ns += empty_watch.elapsed();
-            empty_watch.reset();
+            --waitting_count;
+            if (waitting_count == 0)
+            {
+                scan_context->block_queue_empty_ns += waitting_watch.elapsed();
+                waitting_watch.reset();
+            }
         }
     }
 
@@ -96,6 +104,7 @@ public:
             if (queue.empty() && !done)
             {
                 pipe_cv.registerTask(std::move(task));
+                registerWaitting();
                 return;
             }
         }
@@ -133,6 +142,7 @@ public:
             }
         }
         pipe_cv.notifyOne();
+        notifyWaitting();
         reader_cv.notify_one();
         return true;
     }
@@ -251,12 +261,6 @@ public:
     std::tuple<int64_t, int64_t, size_t> getStat() const
     {
         return std::make_tuple(pop_times, pop_empty_times, peak_queue_size);
-    }
-
-    void start()
-    {
-        std::lock_guard lock(mu);
-        checkPopEmpty();
     }
 };
 } // namespace DB::DM
