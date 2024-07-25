@@ -26,11 +26,13 @@ struct HashJoinSettings
         , probe_enable_prefetch_threshold(settings.join_v2_probe_enable_prefetch_threshold)
         , probe_prefetch_step(settings.join_v2_probe_prefetch_step)
         , probe_insert_batch_size(settings.join_v2_probe_insert_batch_size)
+        , enable_tagged_pointer(settings.join_v2_enable_tagged_pointer)
     {}
     const size_t max_block_size;
     const size_t probe_enable_prefetch_threshold;
     const size_t probe_prefetch_step;
     const size_t probe_insert_batch_size;
+    const bool enable_tagged_pointer;
 };
 
 } // namespace DB

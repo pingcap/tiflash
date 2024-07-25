@@ -101,7 +101,7 @@ void JoinProbeContext::prepareForHashProbe(
 
 #define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
 class JoinProbeBlockHelper
 {
 public:
@@ -242,8 +242,8 @@ private:
     MutableColumns & added_columns;
 };
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockInner()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockInner()
 {
     auto & key_getter = *static_cast<typename KeyGetter::Type *>(context.key_getter.get());
     size_t current_offset = 0;
@@ -258,12 +258,28 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
             continue;
         }
         const auto & key = key_getter.getJoinKey(idx);
+        size_t hash = static_cast<HashValueType>(Hash()(key));
+        UInt16 hash_tag = hash & ROW_PTR_TAG_MASK;
         if likely (ptr == nullptr)
         {
-            size_t hash = static_cast<HashValueType>(Hash()(key));
             ptr = pointer_table.getHeadPointer(hash);
+            if (ptr == nullptr)
+            {
+                offsets_to_replicate[idx] = current_offset;
+                continue;
+            }
+            if constexpr (tagged_pointer)
+            {
+                if (!containOtherTag(ptr, hash_tag))
+                {
+                    ptr = nullptr;
+                    offsets_to_replicate[idx] = current_offset;
+                    continue;
+                }
+                ptr = removeRowPtrTag(ptr);
+            }
         }
-        while (ptr)
+        while (true)
         {
             const auto & key2 = key_getter.deserializeJoinKey(ptr + row_layout.key_offset);
             ///TODO: string compare needs hash value.
@@ -274,14 +290,38 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
                 if unlikely (current_offset >= settings.max_block_size)
                     break;
             }
-            ptr = row_layout.getNextRowPtr<Inner>(ptr);
+            ptr = row_layout.getNextRowPtr(ptr);
+            if (ptr == nullptr)
+                break;
+            if constexpr (tagged_pointer)
+            {
+                if (!containOtherTag(ptr, hash_tag))
+                {
+                    ptr = nullptr;
+                    break;
+                }
+                ptr = removeRowPtrTag(ptr);
+            }
         }
         offsets_to_replicate[idx] = current_offset;
         if unlikely (ptr != nullptr)
         {
-            ptr = row_layout.getNextRowPtr<Inner>(ptr);
+            ptr = row_layout.getNextRowPtr(ptr);
             if (ptr == nullptr)
                 ++idx;
+            else
+            {
+                if constexpr (tagged_pointer)
+                {
+                    if (!containOtherTag(ptr, hash_tag))
+                    {
+                        ptr = nullptr;
+                        ++idx;
+                    }
+                    else
+                        ptr = removeRowPtrTag(ptr);
+                }
+            }
             break;
         }
     }
@@ -289,8 +329,8 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
     FillNullMap(current_offset);
 }
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockInnerPrefetch()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockInnerPrefetch()
 {
     auto & key_getter = *static_cast<typename KeyGetter::Type *>(context.key_getter.get());
     auto & selective_offsets = wd.selective_offsets;
@@ -306,11 +346,27 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
         if (state->stage == ProbePrefetchStage::FindNext)
         {
             RowPtr ptr = state->ptr;
-            RowPtr next_ptr = row_layout.getNextRowPtr<Inner>(ptr);
+            RowPtr next_ptr = row_layout.getNextRowPtr(ptr);
             if (next_ptr)
             {
-                state->ptr = next_ptr;
-                PREFETCH_READ(next_ptr + row_layout.next_pointer_offset);
+                bool forward = true;
+                if constexpr (tagged_pointer)
+                {
+                    if (containOtherTag(next_ptr, state->hash_tag))
+                    {
+                        next_ptr = removeRowPtrTag(next_ptr);
+                    }
+                    else
+                    {
+                        next_ptr = nullptr;
+                        forward = false;
+                    }
+                }
+                if (forward)
+                {
+                    state->ptr = next_ptr;
+                    PREFETCH_READ(next_ptr + row_layout.next_pointer_offset);
+                }
             }
 
             const auto & key = key_getter.getJoinKeyWithBufferHint(state->index);
@@ -337,11 +393,22 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
             RowPtr ptr = state->pointer_ptr->load(std::memory_order_relaxed);
             if (ptr)
             {
-                PREFETCH_READ(ptr + row_layout.next_pointer_offset);
-                state->ptr = ptr;
-                state->stage = ProbePrefetchStage::FindNext;
-                ++k;
-                continue;
+                bool forward = true;
+                if constexpr (tagged_pointer)
+                {
+                    if (containOtherTag(ptr, state->hash_tag))
+                        ptr = removeRowPtrTag(ptr);
+                    else
+                        forward = false;
+                }
+                if (forward)
+                {
+                    PREFETCH_READ(ptr + row_layout.next_pointer_offset);
+                    state->ptr = ptr;
+                    state->stage = ProbePrefetchStage::FindNext;
+                    ++k;
+                    continue;
+                }
             }
 
             state->stage = ProbePrefetchStage::None;
@@ -372,6 +439,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
         state->pointer_ptr = pointer_table.getPointerTable() + bucket;
         PREFETCH_READ(state->pointer_ptr);
 
+        state->hash_tag = hash & ROW_PTR_TAG_MASK;
         state->index = idx;
         state->stage = ProbePrefetchStage::FindHeader;
         ++active_states;
@@ -383,62 +451,66 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinP
     FillNullMap(current_offset);
 }
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockLeftOuter()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockLeftOuter()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockLeftOuterPrefetch()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockLeftOuterPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockSemi()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockSemi()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockSemiPrefetch()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockSemiPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockAnti()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockAnti()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockAntiPrefetch()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockAntiPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
 template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightOuter()
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockRightOuter()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
 template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightOuterPrefetch()
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockRightOuterPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
 template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightSemi()
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockRightSemi()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
 template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightSemiPrefetch()
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockRightSemiPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
 template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightAnti()
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockRightAnti()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
 template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockRightAntiPrefetch()
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockRightAntiPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool key_all_raw>
-void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw>::joinProbeBlockImpl()
+template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
+void JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged_pointer>::joinProbeBlockImpl()
 {
 #define CALL(JoinType)                        \
     if (pointer_table.enableProbePrefetch())  \
@@ -500,48 +572,60 @@ void joinProbeBlock(
     case HashJoinKeyMethod::Cross:
         break;
 
-#define CALL(KeyGetter, has_null_map, key_all_row)              \
-    JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_row>( \
-        context,                                                \
-        wd,                                                     \
-        method,                                                 \
-        kind,                                                   \
-        non_equal_conditions,                                   \
-        settings,                                               \
-        pointer_table,                                          \
-        row_layout,                                             \
-        added_columns)                                          \
+#define CALL(KeyGetter, has_null_map, key_all_row, tagged_pointer)              \
+    JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_row, tagged_pointer>( \
+        context,                                                                \
+        wd,                                                                     \
+        method,                                                                 \
+        kind,                                                                   \
+        non_equal_conditions,                                                   \
+        settings,                                                               \
+        pointer_table,                                                          \
+        row_layout,                                                             \
+        added_columns)                                                          \
         .joinProbeBlockImpl();
+
+#define CALL3(KeyGetter, has_null_map, key_all_row)        \
+    if (pointer_table.enableTaggedPointer())               \
+    {                                                      \
+        CALL(KeyGetter, has_null_map, key_all_row, true);  \
+    }                                                      \
+    else                                                   \
+    {                                                      \
+        CALL(KeyGetter, has_null_map, key_all_row, false); \
+    }
+
+#define CALL2(KeyGetter, has_null_map)         \
+    if (row_layout.key_all_raw_required)       \
+    {                                          \
+        CALL3(KeyGetter, has_null_map, true);  \
+    }                                          \
+    else                                       \
+    {                                          \
+        CALL3(KeyGetter, has_null_map, false); \
+    }
+
+#define CALL1(KeyGetter)         \
+    if (context.null_map)        \
+    {                            \
+        CALL2(KeyGetter, true);  \
+    }                            \
+    else                         \
+    {                            \
+        CALL2(KeyGetter, false); \
+    }
 
 #define M(METHOD)                                                                          \
     case HashJoinKeyMethod::METHOD:                                                        \
         using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
-        if (context.null_map)                                                              \
-        {                                                                                  \
-            if (row_layout.key_all_raw_required)                                           \
-            {                                                                              \
-                CALL(KeyGetterType##METHOD, true, true);                                   \
-            }                                                                              \
-            else                                                                           \
-            {                                                                              \
-                CALL(KeyGetterType##METHOD, true, false);                                  \
-            }                                                                              \
-        }                                                                                  \
-        else                                                                               \
-        {                                                                                  \
-            if (row_layout.key_all_raw_required)                                           \
-            {                                                                              \
-                CALL(KeyGetterType##METHOD, false, true);                                  \
-            }                                                                              \
-            else                                                                           \
-            {                                                                              \
-                CALL(KeyGetterType##METHOD, false, false);                                 \
-            }                                                                              \
-        }                                                                                  \
+        CALL1(KeyGetterType##METHOD);                                                      \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M
 
+#undef CALL1
+#undef CALL2
+#undef CALL3
 #undef CALL
 
     default:

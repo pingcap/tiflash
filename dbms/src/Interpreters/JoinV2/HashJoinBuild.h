@@ -57,6 +57,8 @@ struct alignas(ABSL_CACHELINE_SIZE) JoinBuildWorkerData
     size_t build_pointer_table_size = 0;
 
     ssize_t build_pointer_table_iter = -1;
+
+    bool enable_tagged_pointer = true;
 };
 
 void insertBlockToRowContainers(

@@ -92,19 +92,46 @@ struct HashJoinRowLayout
     size_t other_column_fixed_size = 0;
     bool key_all_raw_required;
 
-    template <ASTTableJoin::Kind KIND>
-    ALWAYS_INLINE inline RowPtr getNextRowPtr(const RowPtr ptr) const
+    ALWAYS_INLINE RowPtr getNextRowPtr(const RowPtr ptr) const
     {
-        using enum ASTTableJoin::Kind;
-        if constexpr (KIND == RightOuter || KIND == RightSemi || KIND == RightAnti)
-        {
-            auto * next
-                = reinterpret_cast<std::atomic<RowPtr> *>(ptr + next_pointer_offset)->load(std::memory_order_relaxed);
-            return reinterpret_cast<RowPtr>(
-                reinterpret_cast<uintptr_t>(next) & (~static_cast<uintptr_t>(ROW_ALIGN - 1)));
-        }
         return unalignedLoad<RowPtr>(ptr + next_pointer_offset);
     }
 };
+
+constexpr size_t ROW_PTR_TAG_BITS = 16;
+constexpr size_t ROW_PTR_TAG_MASK = (1 << ROW_PTR_TAG_BITS) - 1;
+
+inline UInt16 getRowPtrTag(RowPtr ptr)
+{
+    static_assert(sizeof(RowPtr) == 8);
+    auto address = reinterpret_cast<uintptr_t>(ptr);
+    return address >> (64 - ROW_PTR_TAG_BITS);
+}
+
+inline bool isRowPtrTagZero(RowPtr ptr)
+{
+    return getRowPtrTag(ptr) == 0;
+}
+
+inline RowPtr removeRowPtrTag(RowPtr ptr)
+{
+    auto address = reinterpret_cast<uintptr_t>(ptr);
+    address &= (1ULL << (64 - ROW_PTR_TAG_BITS)) - 1;
+    return reinterpret_cast<RowPtr>(address);
+}
+
+inline RowPtr addRowPtrTag(RowPtr ptr, UInt16 tag)
+{
+    static_assert(sizeof(uintptr_t) == 8);
+    auto address = reinterpret_cast<uintptr_t>(ptr);
+    address |= static_cast<uintptr_t>(tag) << (64 - ROW_PTR_TAG_BITS);
+    return reinterpret_cast<RowPtr>(address);
+}
+
+inline bool containOtherTag(RowPtr ptr, UInt16 other_tag)
+{
+    UInt16 tag = getRowPtrTag(ptr);
+    return (tag | other_tag) == tag;
+}
 
 } // namespace DB

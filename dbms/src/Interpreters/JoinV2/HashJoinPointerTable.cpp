@@ -18,7 +18,7 @@
 namespace DB
 {
 
-void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshold [[maybe_unused]])
+void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshold, bool enable_tagged_pointer_)
 {
     pointer_table_size = pointerTableCapacity(row_count);
     if (pointer_table_size > (1ULL << 32))
@@ -35,10 +35,25 @@ void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshol
 
     pointer_table = reinterpret_cast<std::atomic<RowPtr> *>(
         alloc.alloc(pointer_table_size * sizeof(std::atomic<RowPtr>), sizeof(std::atomic<RowPtr>)));
+
+    enable_tagged_pointer = enable_tagged_pointer_;
 }
 
 template <typename HashValueType>
 bool HashJoinPointerTable::build(
+    const HashJoinRowLayout & row_layout,
+    JoinBuildWorkerData & wd,
+    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
+    size_t max_build_size)
+{
+    if (enable_tagged_pointer)
+        return buildImpl<HashValueType, true>(row_layout, wd, multi_row_containers, max_build_size);
+    else
+        return buildImpl<HashValueType, false>(row_layout, wd, multi_row_containers, max_build_size);
+}
+
+template <typename HashValueType, bool tagged_pointer>
+bool HashJoinPointerTable::buildImpl(
     const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & wd,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
@@ -81,15 +96,27 @@ bool HashJoinPointerTable::build(
         {
             RowPtr row_ptr = container->getRowPtr(i);
             assert((reinterpret_cast<uintptr_t>(row_ptr) & (ROW_ALIGN - 1)) == 0);
+            if constexpr (tagged_pointer)
+                assert(isRowPtrTagZero(row_ptr));
 
             auto hash = unalignedLoad<HashValueType>(row_ptr);
             size_t bucket = getBucketNum(hash);
             RowPtr head;
+            RowPtr new_head;
             do
             {
                 head = pointer_table[bucket].load(std::memory_order_relaxed);
                 unalignedStore<RowPtr>(row_ptr + row_layout.next_pointer_offset, head);
-            } while (!std::atomic_compare_exchange_weak(&pointer_table[bucket], &head, row_ptr));
+                if constexpr (tagged_pointer)
+                {
+                    UInt16 tag = getRowPtrTag(head) | (hash & ROW_PTR_TAG_MASK);
+                    new_head = addRowPtrTag(row_ptr, tag);
+                }
+                else
+                {
+                    new_head = row_ptr;
+                }
+            } while (!std::atomic_compare_exchange_weak(&pointer_table[bucket], &head, new_head));
         }
 
         if (build_size >= max_build_size)

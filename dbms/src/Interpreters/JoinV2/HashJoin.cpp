@@ -416,17 +416,23 @@ void HashJoin::workAfterBuildFinish()
     for (size_t i = 0; i < build_concurrency; ++i)
         all_build_row_count += build_workers_data[i].row_count;
 
+    bool enable_tagged_pointer = settings.enable_tagged_pointer;
+    for (size_t i = 0; i < build_concurrency; ++i)
+        enable_tagged_pointer &= build_workers_data[i].enable_tagged_pointer;
+
     Stopwatch watch;
-    pointer_table.init(all_build_row_count, settings.probe_enable_prefetch_threshold);
+    pointer_table.init(all_build_row_count, settings.probe_enable_prefetch_threshold, enable_tagged_pointer);
 
     LOG_INFO(
         log,
-        "allocate pointer table cost {}ms, rows {}, pointer table size {}, added column num {}, enable prefetch {}",
+        "allocate pointer table cost {}ms, rows {}, pointer table size {}, added column num {}, enable prefetch {}, "
+        "enable tagged pointer {}",
         watch.elapsedMilliseconds(),
         all_build_row_count,
         pointer_table.getPointerTableSize(),
         right_sample_block_pruned.columns(),
-        pointer_table.enableProbePrefetch());
+        pointer_table.enableProbePrefetch(),
+        pointer_table.enableTaggedPointer());
 }
 
 bool HashJoin::buildPointerTable(size_t stream_index)

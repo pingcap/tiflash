@@ -66,6 +66,7 @@ struct ProbePrefetchState
 {
     ProbePrefetchStage stage = ProbePrefetchStage::None;
     bool is_matched = false;
+    UInt16 hash_tag;
     size_t index;
     union
     {

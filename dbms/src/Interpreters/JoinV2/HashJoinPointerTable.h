@@ -33,7 +33,7 @@ public:
 
     static size_t pointerTableCapacity(size_t count) { return std::max(roundUpToPowerOfTwoOrZero(count * 2), 1 << 10); }
 
-    void init(size_t row_count, size_t probe_prefetch_threshold);
+    void init(size_t row_count, size_t probe_prefetch_threshold, bool enable_tagged_pointer_);
 
     template <typename HashValueType>
     bool build(
@@ -50,6 +50,7 @@ public:
     size_t getPointerTableSize() const { return pointer_table_size; }
 
     bool enableProbePrefetch() const { return enable_probe_prefetch; }
+    bool enableTaggedPointer() const { return enable_tagged_pointer; }
 
     RowPtr getHeadPointer(size_t hash) const
     {
@@ -59,12 +60,21 @@ public:
     std::atomic<RowPtr> * getPointerTable() const { return pointer_table; }
 
 private:
+    template <typename HashValueType, bool tagged_pointer>
+    bool buildImpl(
+        const HashJoinRowLayout & row_layout,
+        JoinBuildWorkerData & wd,
+        std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
+        size_t max_build_size);
+
+private:
     size_t pointer_table_size = 0;
     size_t pointer_table_size_degree = 0;
     size_t pointer_table_size_mask = 0;
     std::atomic<RowPtr> * pointer_table = nullptr;
     Allocator<true> alloc;
     bool enable_probe_prefetch = false;
+    bool enable_tagged_pointer = false;
 
     std::mutex build_scan_table_lock;
     size_t build_table_index = 0;
