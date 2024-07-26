@@ -19,6 +19,7 @@
 #pragma GCC diagnostic pop
 #include <Poco/UUIDGenerator.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <common/likely.h>
 
 #include <magic_enum.hpp>
 
@@ -92,6 +93,28 @@ void ScanContext::mergeStreamCost(
         remote_max_stream_cost_ns = remote_max_ns;
 }
 
+void ScanContext::setTableScanWaittingTime(const std::vector<UInt64> & waitting_times)
+{
+    if (unlikely(waitting_times.empty()))
+        return;
+
+    auto [min, max] = std::minmax_element(waitting_times.cbegin(), waitting_times.cend());
+    table_scan_waitting_min_ns = *min;
+    table_scan_waitting_max_ns = *max;
+    table_scan_waitting_avg_ns
+        = std::accumulate(waitting_times.cbegin(), waitting_times.cend(), 0) / waitting_times.size();
+}
+
+void ScanContext::mergeTableScanWaittingTime(uint64_t min_ns, uint64_t max_ns, uint64_t avg_ns)
+{
+    if (table_scan_waitting_min_ns == 0 || min_ns < table_scan_waitting_min_ns)
+        table_scan_waitting_min_ns = min_ns;
+    if (max_ns > table_scan_waitting_max_ns)
+        table_scan_waitting_max_ns = max_ns;
+    if (avg_ns > 0)
+        table_scan_waitting_avg_ns = (table_scan_waitting_avg_ns + avg_ns) / 2;
+}
+
 String ScanContext::toJson() const
 {
     static constexpr double NS_TO_MS_SCALE = 1'000'000.0;
@@ -145,7 +168,10 @@ String ScanContext::toJson() const
     json->set("local_max_stream_cost_ms", fmt::format("{:.3f}ms", local_max_stream_cost_ns / NS_TO_MS_SCALE));
     json->set("remote_min_stream_cost_ms", fmt::format("{:.3f}ms", remote_min_stream_cost_ns / NS_TO_MS_SCALE));
     json->set("remote_max_stream_cost_ms", fmt::format("{:.3f}ms", remote_max_stream_cost_ns / NS_TO_MS_SCALE));
-    json->set("block_queue_empty_ms", fmt::format("{:.3f}ms", block_queue_empty_ns / NS_TO_MS_SCALE));
+    json->set("table_scan_waitting_min_ms", fmt::format("{:.3f}ms", table_scan_waitting_min_ns / NS_TO_MS_SCALE));
+    json->set("table_scan_waitting_max_ms", fmt::format("{:.3f}ms", table_scan_waitting_max_ns / NS_TO_MS_SCALE));
+    json->set("table_scan_waitting_avg_ms", fmt::format("{:.3f}ms", table_scan_waitting_avg_ns / NS_TO_MS_SCALE));
+
 
     auto to_json_object = [](const String & id, uint64_t num) {
         Poco::JSON::Object::Ptr json = new Poco::JSON::Object();

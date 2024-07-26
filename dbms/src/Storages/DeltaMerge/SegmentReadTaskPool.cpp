@@ -138,7 +138,6 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , read_mode(read_mode_)
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
-    , q(scan_context_)
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
@@ -151,6 +150,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
     , res_group_name(scan_context_->resource_group_name)
+    , scan_context(scan_context_)
 {
     if (tasks_wrapper.empty())
     {
@@ -395,6 +395,11 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
     ru_is_exhausted = checkIsRUExhausted(res_group_name);
     last_time_check_ru = ms;
     return ru_is_exhausted;
+}
+
+void SegmentReadTaskPool::setTableScanWaittingTime()
+{
+    std::call_once(flag_set_waitting_time, [&]() { scan_context->setTableScanWaittingTime(q.getTaskWaittingTimes()); });
 }
 
 } // namespace DB::DM

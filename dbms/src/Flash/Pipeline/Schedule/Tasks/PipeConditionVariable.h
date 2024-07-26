@@ -37,7 +37,7 @@ public:
         metrics.Increment();
     }
 
-    inline void notifyOne()
+    inline void notifyOne(Task ** return_task = nullptr)
     {
         TaskPtr task;
         {
@@ -48,6 +48,9 @@ public:
             tasks.pop_front();
         }
         assert(task);
+        // In ReadThread/WorkQueue, we use the address of task as a identify of some metrics.
+        if (return_task)
+            *return_task = task.get();
         notifyTaskDirectly(std::move(task));
 
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);

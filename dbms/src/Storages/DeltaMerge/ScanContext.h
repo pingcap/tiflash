@@ -86,8 +86,6 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
-    std::atomic<uint64_t> block_queue_empty_ns{0};
-
     const String resource_group_name;
 
     explicit ScanContext(const String & name = "")
@@ -127,8 +125,6 @@ public:
         num_stale_read = tiflash_scan_context_pb.stale_read_regions();
         build_inputstream_time_ns = tiflash_scan_context_pb.total_build_inputstream_ms() * 1000000;
 
-        // TODO: block_queue_empty_ns
-
         setStreamCost(
             tiflash_scan_context_pb.min_local_stream_ms() * 1000000,
             tiflash_scan_context_pb.max_local_stream_ms() * 1000000,
@@ -136,6 +132,8 @@ public:
             tiflash_scan_context_pb.max_remote_stream_ms() * 1000000);
 
         deserializeRegionNumberOfInstance(tiflash_scan_context_pb);
+
+        // TODO: table_scan_waitting_*
     }
 
     tipb::TiFlashScanContext serialize()
@@ -177,9 +175,9 @@ public:
         tiflash_scan_context_pb.set_min_remote_stream_ms(remote_min_stream_cost_ns / 1000000);
         tiflash_scan_context_pb.set_max_remote_stream_ms(remote_max_stream_cost_ns / 1000000);
 
-        // TODO: block_queue_empty_ns
-
         serializeRegionNumOfInstance(tiflash_scan_context_pb);
+
+        // TODO: table_scan_waitting_*
 
         return tiflash_scan_context_pb;
     }
@@ -223,10 +221,6 @@ public:
 
         num_stale_read += other.num_stale_read;
 
-        block_queue_empty_ns = std::max(
-            block_queue_empty_ns.load(std::memory_order_relaxed),
-            other.block_queue_empty_ns.load(std::memory_order_relaxed));
-
         mergeStreamCost(
             other.local_min_stream_cost_ns,
             other.local_max_stream_cost_ns,
@@ -234,6 +228,11 @@ public:
             other.remote_max_stream_cost_ns);
 
         mergeRegionNumberOfInstance(other);
+
+        mergeTableScanWaittingTime(
+            other.table_scan_waitting_min_ns,
+            other.table_scan_waitting_max_ns,
+            other.table_scan_waitting_avg_ns);
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -269,8 +268,6 @@ public:
         num_stale_read += other.stale_read_regions();
         build_inputstream_time_ns += other.total_build_inputstream_ms() * 1000000;
 
-        // TODO: block_queue_empty_ns
-
         mergeStreamCost(
             other.min_local_stream_ms() * 1000000,
             other.max_local_stream_ms() * 1000000,
@@ -278,12 +275,16 @@ public:
             other.max_remote_stream_ms() * 1000000);
 
         mergeRegionNumberOfInstance(other);
+
+        // TODO: table_scan_waitting_*
     }
 
     String toJson() const;
 
     void setRegionNumOfCurrentInstance(uint64_t region_num);
     void setStreamCost(uint64_t local_min_ns, uint64_t local_max_ns, uint64_t remote_min_ns, uint64_t remote_max_ns);
+
+    void setTableScanWaittingTime(const std::vector<uint64_t> & waitting_times);
 
     static void initCurrentInstanceId(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 
@@ -293,6 +294,7 @@ private:
     void mergeRegionNumberOfInstance(const ScanContext & other);
     void mergeRegionNumberOfInstance(const tipb::TiFlashScanContext & other);
     void mergeStreamCost(uint64_t local_min_ns, uint64_t local_max_ns, uint64_t remote_min_ns, uint64_t remote_max_ns);
+    void mergeTableScanWaittingTime(uint64_t min_ns, uint64_t max_ns, uint64_t avg_ns);
 
     // instance_id -> number of regions.
     // `region_num_of_instance` is accessed by a single thread.
@@ -304,6 +306,10 @@ private:
     uint64_t local_max_stream_cost_ns{0};
     uint64_t remote_min_stream_cost_ns{0};
     uint64_t remote_max_stream_cost_ns{0};
+
+    uint64_t table_scan_waitting_min_ns{0};
+    uint64_t table_scan_waitting_max_ns{0};
+    uint64_t table_scan_waitting_avg_ns{0};
 
     // `current_instance_id` is a identification of this store.
     // It only used to identify which store generated the ScanContext object.

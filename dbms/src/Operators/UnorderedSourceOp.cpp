@@ -97,4 +97,9 @@ void UnorderedSourceOp::operatePrefixImpl()
         }
     });
 }
+
+void UnorderedSourceOp::operateSuffixImpl()
+{
+    task_pool->setTableScanWaittingTime();
+}
 } // namespace DB

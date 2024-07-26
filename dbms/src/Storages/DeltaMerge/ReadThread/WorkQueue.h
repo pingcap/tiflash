@@ -23,11 +23,30 @@
 #include <queue>
 namespace DB::DM
 {
+
+class WaittingProfiler
+{
+public:
+    void start() { sw.start(); }
+
+    void stop()
+    {
+        waitting_ns += sw.elapsed();
+        sw.reset();
+    }
+
+    UInt64 getWaittingTime() const { return waitting_ns; }
+
+private:
+    Stopwatch sw;
+    UInt64 waitting_ns;
+};
+
 template <typename T>
 class WorkQueue
 {
     // Protects all member variable access
-    std::mutex mu;
+    mutable std::mutex mu;
     std::condition_variable reader_cv;
     std::condition_variable writer_cv;
     std::condition_variable finish_cv;
@@ -40,34 +59,29 @@ class WorkQueue
     int64_t pop_times = 0;
     int64_t pop_empty_times = 0;
 
-    int64_t waitting_count = 0; // The number of waitting tasks.
-    Stopwatch waitting_watch; // Count the duration that any task is waitting.
-    ScanContextPtr scan_context;
+    std::unordered_map<Task *, WaittingProfiler> task_waitting_profilers;
 
-    void registerWaitting()
+    void registerWaitting(Task * task)
     {
-        if (unlikely(!scan_context))
+        if (unlikely(!task))
             return;
-
-        if (waitting_count == 0)
-            waitting_watch.start();
-        ++waitting_count;
+        auto & profiler = task_waitting_profilers[task];
+        profiler.start();
     }
 
-    void notifyWaitting()
+    void notifyWaitting(Task * task)
     {
-        if (unlikely(!scan_context))
+        if (unlikely(!task))
             return;
+        auto it = task_waitting_profilers.find(task);
+        if (likely(it == task_waitting_profilers.end()))
+            it->second.stop();
+    }
 
-        if (waitting_count > 0)
-        {
-            --waitting_count;
-            if (waitting_count == 0)
-            {
-                scan_context->block_queue_empty_ns += waitting_watch.elapsed();
-                waitting_watch.reset();
-            }
-        }
+    void stopAllWaitting()
+    {
+        for (auto & [task, profiler] : task_waitting_profilers)
+            profiler.stop();
     }
 
     // Must have lock to call this function
@@ -87,15 +101,10 @@ public:
    *
    * @param maxSize The maximum allowed size of the work queue.
    */
-    explicit WorkQueue(const ScanContextPtr & scan_context_ = nullptr, std::size_t maxSize = 0)
+    explicit WorkQueue(std::size_t maxSize = 0)
         : done(false)
         , max_size(maxSize)
-        , scan_context(scan_context_)
-    {
-        // Stop watching because the query may waiting for scheduling and
-        // the table scanning not started yet.
-        empty_watch.reset();
-    }
+    {}
 
     void registerPipeTask(TaskPtr && task)
     {
@@ -103,8 +112,8 @@ public:
             std::lock_guard lock(mu);
             if (queue.empty() && !done)
             {
+                registerWaitting(task.get());
                 pipe_cv.registerTask(std::move(task));
-                registerWaitting();
                 return;
             }
         }
@@ -133,7 +142,6 @@ public:
             {
                 return false;
             }
-            checkPushEmpty();
             queue.push(std::forward<U>(item));
             peak_queue_size = std::max(queue.size(), peak_queue_size);
             if (size != nullptr)
@@ -141,8 +149,9 @@ public:
                 *size = queue.size();
             }
         }
-        pipe_cv.notifyOne();
-        notifyWaitting();
+        Task * task = nullptr;
+        pipe_cv.notifyOne(&task);
+        notifyWaitting(task);
         reader_cv.notify_one();
         return true;
     }
@@ -172,7 +181,6 @@ public:
             }
             item = std::move(queue.front());
             queue.pop();
-            checkPopEmpty();
         }
         writer_cv.notify_one();
         return true;
@@ -206,7 +214,6 @@ public:
             }
             item = std::move(queue.front());
             queue.pop();
-            checkPopEmpty();
         }
         writer_cv.notify_one();
         return true;
@@ -236,6 +243,7 @@ public:
             std::lock_guard lock(mu);
             assert(!done);
             done = true;
+            stopAllWaitting();
         }
         pipe_cv.notifyAll();
         reader_cv.notify_all();
@@ -252,7 +260,7 @@ public:
         }
     }
 
-    size_t size()
+    size_t size() const
     {
         std::lock_guard lock(mu);
         return queue.size();
@@ -260,7 +268,18 @@ public:
 
     std::tuple<int64_t, int64_t, size_t> getStat() const
     {
+        std::lock_guard lock(mu);
         return std::make_tuple(pop_times, pop_empty_times, peak_queue_size);
+    }
+
+    std::vector<UInt64> getTaskWaittingTimes() const
+    {
+        std::lock_guard lock(mu);
+        std::vector<UInt64> waitting_times;
+        waitting_times.reserve(task_waitting_profilers.size());
+        for (const auto & [task, profiler] : task_waitting_profilers)
+            waitting_times.push_back(profiler.getWaittingTime());
+        return waitting_times;
     }
 };
 } // namespace DB::DM

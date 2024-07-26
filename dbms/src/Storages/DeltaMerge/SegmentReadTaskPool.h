@@ -200,6 +200,8 @@ public:
 
     const LoggerPtr & getLogger() const { return log; }
 
+    void setTableScanWaittingTime();
+
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
@@ -237,6 +239,9 @@ private:
     const Int64 active_segment_limit;
 
     const String res_group_name;
+    ScanContextPtr scan_context;
+    std::once_flag flag_set_waitting_time;
+
     std::mutex ru_mu;
     std::atomic<Int64> last_time_check_ru = 0;
     std::atomic<bool> ru_is_exhausted = false;
