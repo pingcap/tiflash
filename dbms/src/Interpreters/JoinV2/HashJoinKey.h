@@ -69,6 +69,8 @@ public:
         vec = reinterpret_cast<const T *>(key_columns[0]->getRawData().data);
     }
 
+    static constexpr bool isJoinKeyTypeReference() { return false; }
+
     ALWAYS_INLINE T getJoinKey(size_t row) { return vec[row]; }
     ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return vec[row]; }
 
@@ -82,6 +84,8 @@ public:
         memcpy(&t, pos, sizeof(T));
         return t;
     }
+
+    static constexpr bool joinKeyCompareHashFirst() { return false; }
 
     ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
 
@@ -111,6 +115,8 @@ public:
 
         RUNTIME_ASSERT(fixed_size_sum <= sizeof(T));
     }
+
+    static constexpr bool isJoinKeyTypeReference() { return false; }
 
     ALWAYS_INLINE T getJoinKey(size_t row)
     {
@@ -155,6 +161,8 @@ public:
         return key;
     }
 
+    static constexpr bool joinKeyCompareHashFirst() { return false; }
+
     ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
 
 private:
@@ -166,7 +174,7 @@ private:
 class HashJoinKeysFixedOther
 {
 public:
-    using KeyType = const char *;
+    using KeyType = StringRef;
     explicit HashJoinKeysFixedOther(const TiDB::TiDBCollators &) {}
 
     void reset(const ColumnRawPtrs & key_columns)
@@ -184,6 +192,8 @@ public:
         key_buffer.resize(fixed_size_sum);
     }
 
+    static constexpr bool isJoinKeyTypeReference() { return true; }
+
     ALWAYS_INLINE KeyType getJoinKey(size_t row)
     {
         size_t sz = vec.size();
@@ -193,20 +203,22 @@ public:
             memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
             offset += fixed_size[i];
         }
-        return key_buffer.data();
+        return StringRef(key_buffer.data(), fixed_size_sum);
     }
 
     ALWAYS_INLINE KeyType getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
     ALWAYS_INLINE size_t getJoinKeySize(KeyType) { return fixed_size_sum; }
 
-    ALWAYS_INLINE void serializeJoinKey(KeyType s, UInt8 * pos) { memcpy(pos, s, fixed_size_sum); }
+    ALWAYS_INLINE void serializeJoinKey(KeyType s, UInt8 * pos) { memcpy(pos, s.data, fixed_size_sum); }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos) { return reinterpret_cast<KeyType>(pos); }
+    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos) { return StringRef(pos, fixed_size_sum); }
+
+    static constexpr bool joinKeyCompareHashFirst() { return true; }
 
     ALWAYS_INLINE bool joinKeyIsEqual(KeyType key1, KeyType key2)
     {
-        return mem_utils::IsStrEqualWithSameSize(key1, key2, fixed_size_sum);
+        return mem_utils::IsStrEqualWithSameSize(key1.data, key2.data, fixed_size_sum);
     }
 
 private:
@@ -225,6 +237,8 @@ public:
     explicit HashJoinKeyStringBin(const TiDB::TiDBCollators &) {}
 
     void reset(const ColumnRawPtrs & key_columns) { column_string = assert_cast<const ColumnString *>(key_columns[0]); }
+
+    static constexpr bool isJoinKeyTypeReference() { return true; }
 
     ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
@@ -251,6 +265,8 @@ public:
         return s;
     }
 
+    static constexpr bool joinKeyCompareHashFirst() { return true; }
+
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
 private:
@@ -272,6 +288,8 @@ public:
         column_string = assert_cast<const ColumnString *>(key_columns[0]);
         buffer_initialized = false;
     }
+
+    static constexpr bool isJoinKeyTypeReference() { return true; }
 
     ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
@@ -316,6 +334,8 @@ public:
         return s;
     }
 
+    static constexpr bool joinKeyCompareHashFirst() { return true; }
+
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
 private:
@@ -346,6 +366,8 @@ public:
         pool.rollback(last_key_size);
         last_key_size = 0;
     }
+
+    static constexpr bool isJoinKeyTypeReference() { return true; }
 
     ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
@@ -391,6 +413,8 @@ public:
         s.data = reinterpret_cast<const char *>(pos + sizeof(size_t));
         return s;
     }
+
+    static constexpr bool joinKeyCompareHashFirst() { return true; }
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 

@@ -56,29 +56,10 @@ struct JoinProbeContext
         const TiDB::TiDBCollators & collators);
 };
 
-enum class ProbePrefetchStage : UInt8
-{
-    None,
-    FindHeader,
-    FindNext,
-};
-struct ProbePrefetchState
-{
-    ProbePrefetchStage stage = ProbePrefetchStage::None;
-    bool is_matched = false;
-    UInt16 hash_tag;
-    size_t index;
-    union
-    {
-        RowPtr ptr;
-        std::atomic<RowPtr> * pointer_ptr;
-    };
-};
-
 struct alignas(ABSL_CACHELINE_SIZE) JoinProbeWorkerData
 {
     size_t prefetch_iter = 0;
-    std::vector<ProbePrefetchState> prefetch_states;
+    std::unique_ptr<void, std::function<void(void *)>> prefetch_states;
 
     IColumn::Offsets selective_offsets;
     IColumn::Offsets offsets_to_replicate;

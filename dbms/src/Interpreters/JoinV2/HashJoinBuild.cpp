@@ -85,11 +85,12 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     {
         if (wd.partition_row_count[i] > 0)
         {
-            partition_column_row[i].data.resize(wd.partition_row_sizes[i], ROW_ALIGN);
-            wd.enable_tagged_pointer &= isRowPtrTagZero(&partition_column_row[i].data.front());
-            wd.enable_tagged_pointer &= isRowPtrTagZero(&partition_column_row[i].data.back());
+            auto & container = partition_column_row[i];
+            container.data.resize(wd.partition_row_sizes[i], ROW_ALIGN);
+            wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data());
+            wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data() + wd.partition_row_sizes[i]);
 
-            partition_column_row[i].offsets.reserve(wd.partition_row_count[i]);
+            container.offsets.reserve(wd.partition_row_count[i]);
             wd.partition_row_sizes[i] = 0;
             wd.row_count += wd.partition_row_count[i];
         }
