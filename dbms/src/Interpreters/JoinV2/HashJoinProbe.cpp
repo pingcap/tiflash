@@ -118,6 +118,8 @@ struct ProbePrefetchState<KeyGetter, true>
     using KeyType = typename KeyGetterType::KeyType;
     using HashValueType = typename KeyGetter::HashValueType;
 
+    ProbePrefetchState() = default;
+
     ProbePrefetchStage stage = ProbePrefetchStage::None;
     bool is_matched = false;
     UInt16 hash_tag;
@@ -139,17 +141,19 @@ struct ProbePrefetchState<KeyGetter, false>
     using KeyType = typename KeyGetterType::KeyType;
     using HashValueType = typename KeyGetter::HashValueType;
 
+    ProbePrefetchState() = default;
+
     ProbePrefetchStage stage = ProbePrefetchStage::None;
     bool is_matched = false;
     UInt16 hash_tag;
     HashValueType hash;
-    KeyType key;
     size_t index;
     union
     {
         RowPtr ptr;
         std::atomic<RowPtr> * pointer_ptr;
     };
+    KeyType key;
 
     ALWAYS_INLINE KeyType getJoinKey(KeyGetterType &) { return key; }
 };
