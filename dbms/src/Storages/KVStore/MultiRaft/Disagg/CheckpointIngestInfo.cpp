@@ -217,7 +217,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
     {
         LOG_INFO(
             log,
-            "No found storage in clean stale FAP data region_id={} keyspace_id={} table_id={}",
+            "No found storage in clean stale FAP data region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -241,7 +241,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
 
     LOG_INFO(
         log,
-        "Finish clean stale FAP data region_id={} keyspace_id={} table_id={}",
+        "Finish clean stale FAP data region_id={} keyspace={} table_id={}",
         region_id,
         keyspace_id,
         table_id);

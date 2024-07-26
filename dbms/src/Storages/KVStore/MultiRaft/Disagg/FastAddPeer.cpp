@@ -313,7 +313,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_WARNING(
             log,
-            "FAP failed because the table can not be found, region_id={} keyspace_id={} table_id={}",
+            "FAP failed because the table can not be found, region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -332,7 +332,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(
             log,
-            "FAP is canceled before write, region_id={} keyspace_id={} table_id={}",
+            "FAP is canceled before write, region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -372,7 +372,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(
             log,
-            "FAP is canceled after write segments, region_id={} keyspace_id={} table_id={}",
+            "FAP is canceled after write segments, region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -407,7 +407,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(
             log,
-            "FAP is canceled after write raft log, region_id={} keyspace_id={} table_id={}",
+            "FAP is canceled after write raft log, region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -417,7 +417,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     }
     LOG_DEBUG(
         log,
-        "Finish write FAP snapshot, region_id={} keyspace_id={} table_id={}",
+        "Finish write FAP snapshot, region_id={} keyspace={} table_id={}",
         region_id,
         keyspace_id,
         table_id);

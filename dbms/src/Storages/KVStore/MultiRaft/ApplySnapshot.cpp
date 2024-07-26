@@ -190,7 +190,7 @@ void KVStore::onSnapshot(
                         LOG_INFO(
                             log,
                             "clear old range before apply snapshot, region_id={} old_range={} new_range={} "
-                            "keyspace_id={} table_id={}",
+                            "keyspace={} table_id={}",
                             region_id,
                             old_key_range.toDebugString(),
                             new_key_range.toDebugString(),
