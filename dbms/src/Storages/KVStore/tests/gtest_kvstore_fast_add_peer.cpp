@@ -950,7 +950,8 @@ try
     auto & storages = tmt.getStorages();
     storages.remove(keyspace_id, table_id);
     // Will generate and persist some information in local ps, which will not be uploaded.
-    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    auto res = FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    ASSERT_EQ(res.status, FastAddPeerStatus::BadData);
 }
 CATCH
 
