@@ -37,6 +37,7 @@
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
+#include <Storages/TableNameMeta.h>
 #include <TiDB/Schema/TiDB.h>
 
 #include <queue>
@@ -277,8 +278,12 @@ public:
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const { return db_name; }
-    const String & getTableName() const { return table_name; }
+    TableNameMeta getTableMeta() const
+    {
+        auto meta = table_meta.lockShared();
+        return TableNameMeta{meta->db_name, meta->table_name};
+    }
+    String getIdent() const { return fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id); }
 
     void rename(String new_path, String new_database_name, String new_table_name);
 
@@ -796,8 +801,7 @@ public:
     Settings settings;
     StoragePoolPtr storage_pool;
 
-    String db_name;
-    String table_name;
+    SharedMutexProtected<TableNameMeta> table_meta;
 
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;
@@ -838,7 +842,7 @@ public:
     mutable std::shared_mutex read_write_mutex;
 
     LoggerPtr log;
-}; // namespace DM
+};
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 

@@ -925,6 +925,41 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTestFAP, TableNotFound)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    RegionPtr kv_region = std::get<1>(mock_data);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = global_context.getTMTContext();
+    uint64_t region_id = 1;
+
+    auto keyspace_id = kv_region->getKeyspaceID();
+    auto table_id = kv_region->getMappedTableID();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(region_id, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
+
+    // Mock that the storage instance have been dropped
+    auto & storages = tmt.getStorages();
+    storages.remove(keyspace_id, table_id);
+    auto res = FastAddPeerImplWrite(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333,
+        std::move(mock_data),
+        0);
+    ASSERT_EQ(res.status, FastAddPeerStatus::BadData);
+}
+CATCH
 
 } // namespace tests
 } // namespace DB
