@@ -399,7 +399,11 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
 
 void SegmentReadTaskPool::setTableScanWaittingTime()
 {
-    std::call_once(flag_set_waitting_time, [&]() { scan_context->setTableScanWaittingTime(q.getTaskWaittingTimes()); });
+    std::call_once(flag_set_waitting_time, [&]() {
+        auto waitting_times = q.getTaskWaittingTimes();
+        LOG_DEBUG(log, "waitting_times={}", waitting_times);
+        scan_context->setTableScanWaittingTime(waitting_times);
+    });
 }
 
 } // namespace DB::DM
