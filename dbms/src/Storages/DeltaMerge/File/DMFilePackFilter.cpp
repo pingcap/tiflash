@@ -19,7 +19,7 @@
 namespace DB::DM
 {
 
-void DMFilePackFilter::init()
+void DMFilePackFilter::init(ReadTag read_tag)
 {
     Stopwatch watch;
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
@@ -85,9 +85,18 @@ void DMFilePackFilter::init()
     auto [none_count, some_count, all_count] = countPackRes();
     auto after_filter = some_count + all_count;
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
-    scan_context->rs_pack_filter_none += none_count;
-    scan_context->rs_pack_filter_some += some_count;
-    scan_context->rs_pack_filter_all += all_count;
+    // In table scanning, DMFilePackFilter of a DMFile may be created several times:
+    // 1. When building MVCC bitmap (ReadTag::MVCC).
+    // 2. When building LM filter stream (ReadTag::LM).
+    // 3. When building stream of other columns (ReadTag::Query).
+    // Only need to count the filter result once.
+    // TODO: We can create DMFilePackFilter at the beginning and pass it to the stages described above.
+    if (read_tag == ReadTag::Query)
+    {
+        scan_context->rs_pack_filter_none += none_count;
+        scan_context->rs_pack_filter_some += some_count;
+        scan_context->rs_pack_filter_all += all_count;
+    }
 
     Float64 filter_rate = 0.0;
     if (after_read_packs != 0)
@@ -98,7 +107,7 @@ void DMFilePackFilter::init()
     LOG_DEBUG(
         log,
         "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
-        ", read_packs: {}, pack_count: {}, none_count: {}, some_count: {}, all_count: {}",
+        ", read_packs: {}, pack_count: {}, none_count: {}, some_count: {}, all_count: {}, read_tag: {}",
         ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
         after_pk,
         after_read_packs,
@@ -108,7 +117,8 @@ void DMFilePackFilter::init()
         pack_count,
         none_count,
         some_count,
-        all_count);
+        all_count,
+        magic_enum::enum_name(read_tag));
 }
 
 std::tuple<UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() const
