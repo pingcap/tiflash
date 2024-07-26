@@ -308,7 +308,7 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
-    const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region, tmt);
+    const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region_id, keyspace_id, table_id, tmt);
     if (!storage)
     {
         LOG_WARNING(

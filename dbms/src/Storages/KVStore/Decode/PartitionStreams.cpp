@@ -510,20 +510,18 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 // - Check whether the StorageDeltaMerge is nullptr or not before you accessing to it.
 // - You should hold the `TableLockHolder` when you're accessing to the IStorage instance.
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
+AtomicGetStorageSchema(RegionID region_id, KeyspaceID keyspace_id, TableID table_id, TMTContext & tmt)
 {
     TableLockHolder drop_lock = nullptr;
     std::shared_ptr<StorageDeltaMerge> dm_storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
-    auto keyspace_id = region->getKeyspaceID();
-    auto table_id = region->getMappedTableID();
     LOG_DEBUG(
         Logger::get("AtomicGetStorageSchema"),
-        "Get schema, keyspace={} table_id={} region_id={}",
+        "Get schema, region_id={} keyspace={} table_id={}",
+        region_id,
         keyspace_id,
-        table_id,
-        region->id());
+        table_id);
     auto & context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
@@ -552,12 +550,12 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         auto schema_sync_cost = watch.elapsedMilliseconds();
         LOG_INFO(
             Logger::get("AtomicGetStorageSchema"),
-            "sync schema cost {} ms, sync_schema_ok={} keyspace={} table_id={} region_id={}",
+            "sync schema cost {} ms, sync_schema_ok={} region_id={} keyspace={} table_id={}",
             schema_sync_cost,
             sync_schema_ok,
+            region_id,
             keyspace_id,
-            table_id,
-            region->id());
+            table_id);
 
         // try get with `force_decode == true`
         atomic_get(true);
