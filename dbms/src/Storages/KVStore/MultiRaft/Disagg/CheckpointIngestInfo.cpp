@@ -239,12 +239,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
         });
     wn_ps->write(std::move(wb));
 
-    LOG_INFO(
-        log,
-        "Finish clean stale FAP data region_id={} keyspace={} table_id={}",
-        region_id,
-        keyspace_id,
-        table_id);
+    LOG_INFO(log, "Finish clean stale FAP data region_id={} keyspace={} table_id={}", region_id, keyspace_id, table_id);
 }
 
 bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id)

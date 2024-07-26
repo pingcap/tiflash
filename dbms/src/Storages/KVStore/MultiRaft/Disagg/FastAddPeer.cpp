@@ -415,12 +415,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
-    LOG_DEBUG(
-        log,
-        "Finish write FAP snapshot, region_id={} keyspace={} table_id={}",
-        region_id,
-        keyspace_id,
-        table_id);
+    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={} keyspace={} table_id={}", region_id, keyspace_id, table_id);
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
         apply_state.SerializeAsString(),
