@@ -947,6 +947,7 @@ try
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
 
+    // Mock that the storage instance have been dropped
     auto & storages = tmt.getStorages();
     storages.remove(keyspace_id, table_id);
     // Will generate and persist some information in local ps, which will not be uploaded.
