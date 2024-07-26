@@ -345,6 +345,12 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
             const auto this_bytes = this_seg->getEstimatedBytes();
             if (accumulated_rows + this_rows >= max_total_rows || accumulated_bytes + this_bytes >= max_total_bytes)
                 break;
+#if defined(THREAD_SANITIZER)
+            // Limit the segments to be merge less than 30, or thread sanitizer will fail
+            // https://github.com/pingcap/tiflash/issues/9257
+            if (results.size() > 30)
+                break;
+#endif
             results.emplace_back(this_seg);
             accumulated_rows += this_rows;
             accumulated_bytes += this_bytes;
