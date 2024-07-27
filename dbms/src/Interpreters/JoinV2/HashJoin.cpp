@@ -309,7 +309,7 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
     build_workers_data.resize(build_concurrency);
     for (size_t i = 0; i < build_concurrency; ++i)
         build_workers_data[i].key_getter = createHashJoinKeyGetter(method, collators);
-    for (size_t i = 0; i < HJ_BUILD_PARTITION_COUNT + 1; ++i)
+    for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT + 1; ++i)
         multi_row_containers.emplace_back(std::make_unique<MultipleRowContainer>());
 }
 
@@ -421,7 +421,11 @@ void HashJoin::workAfterBuildFinish()
         enable_tagged_pointer &= build_workers_data[i].enable_tagged_pointer;
 
     Stopwatch watch;
-    pointer_table.init(all_build_row_count, settings.probe_enable_prefetch_threshold, enable_tagged_pointer);
+    pointer_table.init(
+        all_build_row_count,
+        getHashValueByteSize(method),
+        settings.probe_enable_prefetch_threshold,
+        enable_tagged_pointer);
 
     LOG_INFO(
         log,

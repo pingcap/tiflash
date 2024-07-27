@@ -45,7 +45,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     wd.row_ptrs.clear();
     wd.row_ptrs.resize_fill(rows, nullptr);
     /// The last partition is used to hold rows with null join key.
-    constexpr size_t part_count = HJ_BUILD_PARTITION_COUNT + 1;
+    constexpr size_t part_count = JOIN_BUILD_PARTITION_COUNT + 1;
     wd.partition_row_sizes.clear();
     wd.partition_row_sizes.resize_fill(part_count, 0);
     wd.partition_row_count.clear();
@@ -75,7 +75,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         wd.row_sizes[i] += sizeof(HashValueType) + sizeof(RowPtr) + key_getter.getJoinKeySize(key);
         wd.row_sizes[i] = alignRowSize(wd.row_sizes[i]);
         wd.hashes[i] = static_cast<HashValueType>(Hash()(key));
-        size_t part_num = getHJBuildPartitionNum(wd.hashes[i]);
+        size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[i]);
         wd.partition_row_sizes[part_num] += wd.row_sizes[i];
         ++wd.partition_row_count[part_num];
     }
@@ -128,7 +128,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             continue;
         }
 
-        size_t part_num = getHJBuildPartitionNum(wd.hashes[i]);
+        size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[i]);
         wd.row_ptrs[i] = partition_column_row[part_num].data.data() + wd.partition_row_sizes[part_num];
         assert((reinterpret_cast<uintptr_t>(wd.row_ptrs[i]) & (ROW_ALIGN - 1)) == 0);
 

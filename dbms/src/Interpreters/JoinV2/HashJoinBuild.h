@@ -28,13 +28,16 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 } // namespace ErrorCodes
 
 
-constexpr size_t HJ_BUILD_PARTITION_SHIFT = 5;
-constexpr size_t HJ_BUILD_PARTITION_COUNT = 1 << HJ_BUILD_PARTITION_SHIFT;
+constexpr size_t JOIN_BUILD_PARTITION_BITS = 5;
+constexpr size_t JOIN_BUILD_PARTITION_COUNT = 1 << JOIN_BUILD_PARTITION_BITS;
 
-inline size_t getHJBuildPartitionNum(size_t hash)
+template <typename HashValueType>
+inline size_t getJoinBuildPartitionNum(HashValueType hash)
 {
-    constexpr size_t partition_mask = (HJ_BUILD_PARTITION_COUNT - 1) << (32 - HJ_BUILD_PARTITION_SHIFT);
-    return (hash & partition_mask) >> (32 - HJ_BUILD_PARTITION_SHIFT);
+    constexpr size_t hash_value_bits = sizeof(HashValueType) * 8;
+    static_assert(hash_value_bits >= JOIN_BUILD_PARTITION_BITS);
+    constexpr size_t partition_mask = (JOIN_BUILD_PARTITION_COUNT - 1) << (hash_value_bits - JOIN_BUILD_PARTITION_BITS);
+    return (hash & partition_mask) >> (hash_value_bits - JOIN_BUILD_PARTITION_BITS);
 }
 
 struct alignas(ABSL_CACHELINE_SIZE) JoinBuildWorkerData

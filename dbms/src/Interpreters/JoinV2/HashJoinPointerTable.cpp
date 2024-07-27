@@ -18,22 +18,28 @@
 namespace DB
 {
 
-void HashJoinPointerTable::init(size_t row_count, size_t probe_prefetch_threshold, bool enable_tagged_pointer_)
+void HashJoinPointerTable::init(
+    size_t row_count,
+    size_t hash_value_bytes,
+    size_t probe_prefetch_threshold,
+    bool enable_tagged_pointer_)
 {
+    hash_value_bits = hash_value_bytes * 8;
     pointer_table_size = pointerTableCapacity(row_count);
-    if (pointer_table_size > (1ULL << 32))
-        pointer_table_size = 1ULL << 32;
+    /// Pointer table size cannot exceed the number that the hash value's byte number can express.
+    pointer_table_size = std::min(pointer_table_size, 1ULL << hash_value_bits);
+    /// It also cannot exceed 2^32 to avoid memory allocation error.
+    pointer_table_size = std::min(pointer_table_size, 1ULL << 32);
 
     RUNTIME_ASSERT(isPowerOfTwo(pointer_table_size));
     pointer_table_size_degree = log2(pointer_table_size);
-    RUNTIME_ASSERT(1ULL << pointer_table_size_degree == pointer_table_size);
-    RUNTIME_ASSERT(pointer_table_size_degree <= 32);
+    RUNTIME_ASSERT((1ULL << pointer_table_size_degree) == pointer_table_size);
 
     enable_probe_prefetch = pointer_table_size >= probe_prefetch_threshold;
 
-    pointer_table_size_mask = (pointer_table_size - 1) << (32 - pointer_table_size_degree);
+    pointer_table_size_mask = (pointer_table_size - 1) << (hash_value_bits - pointer_table_size_degree);
 
-    pointer_table = reinterpret_cast<std::atomic<RowPtr> *>(
+    pointer_table = static_cast<std::atomic<RowPtr> *>(
         alloc.alloc(pointer_table_size * sizeof(std::atomic<RowPtr>), sizeof(std::atomic<RowPtr>)));
 
     enable_tagged_pointer = enable_tagged_pointer_;
@@ -71,14 +77,14 @@ bool HashJoinPointerTable::buildImpl(
         {
             {
                 std::unique_lock lock(build_scan_table_lock);
-                for (size_t i = 0; i < HJ_BUILD_PARTITION_COUNT; ++i)
+                for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT; ++i)
                 {
-                    build_table_index = (build_table_index + i) % HJ_BUILD_PARTITION_COUNT;
+                    build_table_index = (build_table_index + i) % JOIN_BUILD_PARTITION_COUNT;
                     container = multi_row_containers[build_table_index]->getNext();
                     if (container != nullptr)
                     {
                         wd.build_pointer_table_iter = build_table_index;
-                        build_table_index = (build_table_index + 1) % HJ_BUILD_PARTITION_COUNT;
+                        build_table_index = (build_table_index + 1) % JOIN_BUILD_PARTITION_COUNT;
                         break;
                     }
                 }

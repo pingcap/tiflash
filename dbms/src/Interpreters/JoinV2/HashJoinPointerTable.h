@@ -26,14 +26,14 @@ public:
     ~HashJoinPointerTable()
     {
         if (pointer_table != nullptr)
-            alloc.free(reinterpret_cast<void *>(pointer_table), pointer_table_size * sizeof(std::atomic<RowPtr>));
+            alloc.free(pointer_table, pointer_table_size * sizeof(std::atomic<RowPtr>));
     }
 
     DISALLOW_COPY_AND_MOVE(HashJoinPointerTable);
 
     static size_t pointerTableCapacity(size_t count) { return std::max(roundUpToPowerOfTwoOrZero(count * 2), 1 << 10); }
 
-    void init(size_t row_count, size_t probe_prefetch_threshold, bool enable_tagged_pointer_);
+    void init(size_t row_count, size_t hash_value_bytes, size_t probe_prefetch_threshold, bool enable_tagged_pointer_);
 
     template <typename HashValueType>
     bool build(
@@ -44,7 +44,7 @@ public:
 
     size_t getBucketNum(size_t hash) const
     {
-        return (hash & pointer_table_size_mask) >> (32 - pointer_table_size_degree);
+        return (hash & pointer_table_size_mask) >> (hash_value_bits - pointer_table_size_degree);
     }
 
     size_t getPointerTableSize() const { return pointer_table_size; }
@@ -68,6 +68,7 @@ private:
         size_t max_build_size);
 
 private:
+    size_t hash_value_bits;
     size_t pointer_table_size = 0;
     size_t pointer_table_size_degree = 0;
     size_t pointer_table_size_mask = 0;
