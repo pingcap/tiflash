@@ -28,7 +28,7 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 } // namespace ErrorCodes
 
 
-constexpr size_t HJ_BUILD_PARTITION_SHIFT = 4;
+constexpr size_t HJ_BUILD_PARTITION_SHIFT = 5;
 constexpr size_t HJ_BUILD_PARTITION_COUNT = 1 << HJ_BUILD_PARTITION_SHIFT;
 
 inline size_t getHJBuildPartitionNum(size_t hash)
