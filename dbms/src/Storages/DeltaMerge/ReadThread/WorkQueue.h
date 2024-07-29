@@ -53,7 +53,7 @@ class WorkQueue
     static void reportPopLatency(UInt64 push_timestamp_ns)
     {
         auto latency_ns = clock_gettime_ns_adjusted(push_timestamp_ns) - push_timestamp_ns;
-        GET_METRIC(tiflash_read_thread_internal_us, type_block_queue_pop_latency).Observe(latency_ns / 1000);
+        GET_METRIC(tiflash_read_thread_internal_us, type_block_queue_pop_latency).Observe(latency_ns / 1000.0);
     }
 
 public:
