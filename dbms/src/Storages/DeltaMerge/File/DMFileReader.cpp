@@ -131,7 +131,7 @@ size_t DMFileReader::skipNextBlock()
     }
 
     // move forward next_pack_id and next_row_offset
-    const size_t read_rows = getReadRows();
+    const auto [read_rows, rs_result] = getReadRows();
     if (read_rows == 0)
         return 0;
 
@@ -142,7 +142,7 @@ size_t DMFileReader::skipNextBlock()
 
 // Get the number of rows to read in the next block
 // Move forward next_pack_id and next_row_offset
-size_t DMFileReader::getReadRows()
+std::pair<size_t, RSResult> DMFileReader::getReadRows()
 {
     const auto & pack_res = pack_filter.getPackResConst();
     const size_t start_pack_id = next_pack_id;
@@ -151,16 +151,23 @@ size_t DMFileReader::getReadRows()
     const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
     const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
-    for (; next_pack_id < pack_res.size() && isUse(pack_res[next_pack_id]) && read_rows < rows_threshold_per_read;
-         ++next_pack_id)
+    auto last_pack_res = RSResult::Unknown;
+    auto can_read = [&](size_t pack_id) {
+        return read_rows < rows_threshold_per_read && next_pack_id - start_pack_id < read_pack_limit
+            && isUse(pack_res[pack_id])
+            // If last_pack_res == RSResult::Unknown, it is the first pack.
+            // Else return continuous `RSResult::All` or `not RSResult::All`.
+            && (last_pack_res == RSResult::Unknown || allMatch(last_pack_res) == allMatch(pack_res[pack_id]));
+    };
+    for (; next_pack_id < pack_res.size() && can_read(next_pack_id); ++next_pack_id)
     {
-        if (next_pack_id - start_pack_id >= read_pack_limit)
-            break;
+        last_pack_res
+            = last_pack_res == RSResult::Unknown ? pack_res[next_pack_id] : last_pack_res && pack_res[next_pack_id];
         read_rows += pack_stats[next_pack_id].rows;
     }
-
+    RUNTIME_CHECK(read_rows == 0 || isUse(last_pack_res));
     next_row_offset += read_rows;
-    return read_rows;
+    return {read_rows, last_pack_res};
 }
 
 Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
@@ -179,7 +186,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
     size_t start_row_offset = next_row_offset;
     size_t start_pack_id = next_pack_id;
-    const size_t read_rows = getReadRows();
+    const auto [read_rows, rs_result] = getReadRows();
     RUNTIME_CHECK(read_rows == filter.size(), read_rows, filter.size());
     size_t last_pack_id = next_pack_id;
     {
@@ -269,6 +276,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
     Block res = getHeader().cloneWithColumns(std::move(columns));
     res.setStartOffset(start_row_offset);
+    res.setRSResult(rs_result);
     return res;
 }
 
@@ -290,7 +298,7 @@ Block DMFileReader::read()
 
     size_t start_pack_id = next_pack_id;
     size_t start_row_offset = next_row_offset;
-    const size_t read_rows = getReadRows();
+    const auto [read_rows, rs_result] = getReadRows();
     if (read_rows == 0)
         return {};
     addScannedRows(read_rows);
@@ -397,6 +405,7 @@ Block DMFileReader::read()
 
     Block res(std::move(columns));
     res.setStartOffset(start_row_offset);
+    res.setRSResult(rs_result);
     return res;
 }
 

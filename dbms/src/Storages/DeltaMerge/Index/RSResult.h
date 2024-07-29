@@ -14,18 +14,10 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Common/Exception.h>
 
 namespace DB::DM
 {
-struct Attr
-{
-    String col_name;
-    ColId col_id;
-    DataTypePtr type;
-};
-using Attrs = std::vector<Attr>;
-
 enum class RSResult : UInt8
 {
     Unknown = 0, // Not checked yet
@@ -104,4 +96,10 @@ ALWAYS_INLINE inline bool isUse(RSResult res) noexcept
 {
     return res != RSResult::None && res != RSResult::NoneNull;
 }
+
+ALWAYS_INLINE inline bool allMatch(RSResult res) noexcept
+{
+    return res == RSResult::All;
+}
+
 } // namespace DB::DM
