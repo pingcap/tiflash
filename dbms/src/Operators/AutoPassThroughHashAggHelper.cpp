@@ -60,9 +60,10 @@ ColumnPtr genPassThroughColumnForCount(size_t arg_index, const Block & child_blo
     const auto & argument_column = child_block.getByPosition(arg_index).column;
     RUNTIME_CHECK(argument_column->isColumnNullable());
     auto & datas = count_agg_func_res->getData();
+    const auto & nullmap = static_cast<const ColumnNullable &>(*argument_column).getNullMapData();
     for (size_t i = 0; i < child_block.rows(); ++i)
     {
-        if (argument_column->isNullAt(i))
+        if (nullmap[i] != 0)
             datas[i] = 0;
     }
     return count_agg_func_res;
@@ -92,17 +93,16 @@ ColumnPtr genPassThroughColumnForSumDecimal(size_t arg_index, const Block & chil
         col_nullable_ptr = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
         RUNTIME_CHECK(col_nullable_ptr);
         nested_col = col_nullable_ptr->getNestedColumnPtr();
-        if (nested_col->isColumnConst())
-            nested_col = nested_col->convertToFullColumnIfConst();
-        in_col_ptr = checkAndGetColumn<ColumnDecimal<FromDecimalType>>(nested_col.get());
     }
     else
     {
         nested_col = argument_column.column;
-        if (argument_column.column->isColumnConst())
-            nested_col = nested_col->convertToFullColumnIfConst();
-        in_col_ptr = checkAndGetColumn<ColumnDecimal<FromDecimalType>>(nested_col.get());
     }
+
+    if (argument_column.column->isColumnConst())
+        nested_col = nested_col->convertToFullColumnIfConst();
+
+    in_col_ptr = checkAndGetColumn<ColumnDecimal<FromDecimalType>>(nested_col.get());
     RUNTIME_CHECK(in_col_ptr);
 
     const typename ColumnDecimal<FromDecimalType>::Container & in_datas = in_col_ptr->getData();
@@ -137,17 +137,16 @@ ColumnPtr genPassThroughColumnForSumNumber(size_t arg_index, const Block & child
         col_nullable_ptr = checkAndGetColumn<ColumnNullable>(argument_column.column.get());
         RUNTIME_CHECK(col_nullable_ptr);
         nested_col = col_nullable_ptr->getNestedColumnPtr();
-        if (nested_col->isColumnConst())
-            nested_col = nested_col->convertToFullColumnIfConst();
-        in_col_ptr = checkAndGetColumn<ColumnVector<FromNumberType>>(nested_col.get());
     }
     else
     {
         nested_col = argument_column.column;
-        if (nested_col->isColumnConst())
-            nested_col = nested_col->convertToFullColumnIfConst();
-        in_col_ptr = checkAndGetColumn<ColumnVector<FromNumberType>>(nested_col.get());
     }
+
+    if (nested_col->isColumnConst())
+        nested_col = nested_col->convertToFullColumnIfConst();
+
+    in_col_ptr = checkAndGetColumn<ColumnVector<FromNumberType>>(nested_col.get());
     RUNTIME_CHECK(in_col_ptr);
 
     const typename ColumnVector<FromNumberType>::Container & in_datas = in_col_ptr->getData();
@@ -451,7 +450,7 @@ std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
                         return genPassThroughColumnForNothing(block);
                     };
                 }
-                else if (func_name.find("sum") != std::string::npos)
+                else if (func_name == "sum")
                 {
                     RUNTIME_CHECK(desc.arguments.size() == 1);
                     RUNTIME_CHECK(required_column.type->getTypeId() == desc.function->getReturnType()->getTypeId());
@@ -461,13 +460,11 @@ std::vector<AutoPassThroughColumnGenerator> setupAutoPassThroughColumnGenerator(
                         child_header.getByPosition(desc.arguments[0]).type,
                         desc.function->getReturnType());
                 }
-                else if (func_name.find("count") != std::string::npos)
+                else if (func_name == "count")
                 {
                     generator = chooseGeneratorForCount(desc, child_header);
                 }
-                else if (
-                    func_name.find("first_row") != std::string::npos || func_name.find("min") != std::string::npos
-                    || func_name.find("max") != std::string::npos)
+                else if (func_name == "first_row" || func_name == "min" || func_name == "max")
                 {
                     RUNTIME_CHECK(desc.argument_names.size() == 1);
                     generator = [col_typeid = required_column.type->getTypeId(),
