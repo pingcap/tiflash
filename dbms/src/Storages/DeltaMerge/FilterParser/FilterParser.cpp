@@ -270,7 +270,7 @@ RSOperatorPtr parseTiExpr(
                 break;
             }
             if (const auto & child = expr.children(0); likely(isFunctionExpr(child)))
-                return createNot(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
+                return createNot(parseTiExpr(child, scan_column_infos, creator, timezone_info, log));
             reason = "child of logical not is not function";
             break;
         }
@@ -385,7 +385,7 @@ RSOperatorPtr FilterParser::parseRFInExpr(
     {
         if (!isColumnExpr(target_expr) || !target_attr)
         {
-            return createUnsupported(target_expr.ShortDebugString(), "rf target expr is not column expr", false);
+            return createUnsupported(target_expr.ShortDebugString(), "rf target expr is not column expr");
         }
         const auto & attr = *target_attr;
         if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
