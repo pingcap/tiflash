@@ -49,7 +49,7 @@ public:
     void finishAppendVar(UInt32 size);
 
 private:
-    bool isFixed() const { return fixed_size != VAR_SIZE; };
+    bool isFixed() const { return fixed_size != VAR_SIZE; }
 
     void appendNullBitMap(bool value);
 
