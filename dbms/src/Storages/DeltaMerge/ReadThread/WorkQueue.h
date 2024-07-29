@@ -30,7 +30,13 @@ class WorkQueue
     std::condition_variable reader_cv;
     std::condition_variable writer_cv;
     std::condition_variable finish_cv;
+<<<<<<< HEAD
     std::queue<T> queue;
+=======
+    PipeConditionVariable pipe_cv;
+    // <value, push_timestamp_ns>
+    std::queue<std::pair<T, UInt64>> queue;
+>>>>>>> 954f147701 (Storages: Add Block pop-up latency metrics (#9260))
     bool done;
     std::size_t max_size;
 
@@ -45,6 +51,12 @@ class WorkQueue
             return false;
         }
         return queue.size() >= max_size;
+    }
+
+    static void reportPopLatency(UInt64 push_timestamp_ns)
+    {
+        auto latency_ns = clock_gettime_ns_adjusted(push_timestamp_ns) - push_timestamp_ns;
+        GET_METRIC(tiflash_read_thread_internal_us, type_block_queue_pop_latency).Observe(latency_ns / 1000.0);
     }
 
 public:
@@ -83,7 +95,7 @@ public:
             {
                 return false;
             }
-            queue.push(std::forward<U>(item));
+            queue.push(std::make_pair(std::forward<U>(item), clock_gettime_ns()));
             peak_queue_size = std::max(queue.size(), peak_queue_size);
             if (size != nullptr)
             {
@@ -104,6 +116,7 @@ public:
    */
     bool pop(T & item)
     {
+        UInt64 push_timestamp_ns = 0;
         {
             std::unique_lock<std::mutex> lock(mu);
             ++pop_times;
@@ -117,10 +130,12 @@ public:
                 assert(done);
                 return false;
             }
-            item = std::move(queue.front());
+            item = std::move(queue.front().first);
+            push_timestamp_ns = queue.front().second;
             queue.pop();
         }
         writer_cv.notify_one();
+        reportPopLatency(push_timestamp_ns);
         return true;
     }
 
@@ -135,6 +150,7 @@ public:
    */
     bool tryPop(T & item)
     {
+        UInt64 push_timestamp_ns = 0;
         {
             std::unique_lock<std::mutex> lock(mu);
             ++pop_times;
@@ -150,10 +166,12 @@ public:
                     return false;
                 }
             }
-            item = std::move(queue.front());
+            item = std::move(queue.front().first);
+            push_timestamp_ns = queue.front().second;
             queue.pop();
         }
         writer_cv.notify_one();
+        reportPopLatency(push_timestamp_ns);
         return true;
     }
 
