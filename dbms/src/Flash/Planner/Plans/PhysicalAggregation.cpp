@@ -41,7 +41,6 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     const LoggerPtr & log,
     const tipb::Aggregation & aggregation,
     const FineGrainedShuffle & fine_grained_shuffle,
-    bool & auto_pass_through_agg_flag,
     const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
@@ -97,7 +96,6 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         LOG_DEBUG(log, "switch off auto pass through because agg keys_size is zero");
         auto_pass_through_switcher.mode = ::tipb::TiFlashPreAggMode::ForcePreAgg;
     }
-    auto_pass_through_agg_flag = auto_pass_through_switcher.enable();
 
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,

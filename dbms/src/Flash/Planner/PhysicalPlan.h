@@ -71,7 +71,5 @@ private:
     Context & context;
 
     LoggerPtr log;
-
-    bool after_auto_pass_through_hashagg = false;
 };
 } // namespace DB

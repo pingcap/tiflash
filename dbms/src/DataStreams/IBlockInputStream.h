@@ -188,6 +188,8 @@ public:
 
     virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
 
+    virtual bool canHandleSelectiveBlock() const { return false; }
+
 protected:
     virtual uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) { return 0; }
 

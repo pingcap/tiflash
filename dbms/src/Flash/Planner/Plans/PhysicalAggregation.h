@@ -31,7 +31,6 @@ public:
         const LoggerPtr & log,
         const tipb::Aggregation & aggregation,
         const FineGrainedShuffle & fine_grained_shuffle,
-        bool & auto_pass_through_agg_flag,
         const PhysicalPlanNodePtr & child);
 
     PhysicalAggregation(
