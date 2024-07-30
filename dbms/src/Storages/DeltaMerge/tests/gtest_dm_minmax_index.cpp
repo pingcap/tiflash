@@ -2254,7 +2254,7 @@ try
         return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
     const auto op
-        = DB::DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, create_attr_by_column_id, Logger::get());
+        = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, create_attr_by_column_id, Logger::get());
     ASSERT_EQ(
         op->toDebugString(),
         "{\"op\":\"and\",\"children\":[{\"op\":\"in\",\"col\":\"b\",\"value\":\"[\"1\",\"2\"]},{\"op\":\"unsupported\","
