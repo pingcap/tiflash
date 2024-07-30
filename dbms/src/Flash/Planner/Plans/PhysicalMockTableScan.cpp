@@ -177,6 +177,31 @@ const String & PhysicalMockTableScan::getFilterConditionsId() const
 
 Int64 PhysicalMockTableScan::getLogicalTableID() const
 {
+<<<<<<< HEAD
     return table_id;
+=======
+    for (const auto & local_stream : mock_streams)
+    {
+        if (auto * p_stream = dynamic_cast<DM::UnorderedInputStream *>(local_stream.get()))
+        {
+            auto runtime_filter_list = getRuntimeFilterList(context);
+            // todo config max wait time
+            p_stream->setRuntimeFilterInfo(runtime_filter_list, rf_max_wait_time_ms);
+        }
+    }
+>>>>>>> be98d2d17 (Storages: Fix obtaining incorrect column information when there are virtual columns in the query (#9189) (#9206))
+}
+
+RuntimeFilteList PhysicalMockTableScan::getRuntimeFilterList(Context & context)
+{
+    auto mock_column_infos = context.mockStorage()->getTableSchemaForDeltaMerge(table_id);
+    auto column_infos = mockColumnInfosToTiDBColumnInfos(mock_column_infos);
+    auto column_defines = context.mockStorage()->getStoreColumnDefines(table_id);
+    auto rfs = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
+    for (auto & rf : rfs)
+    {
+        rf->setTargetAttr(column_infos, column_defines);
+    }
+    return rfs;
 }
 } // namespace DB

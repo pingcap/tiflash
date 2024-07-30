@@ -706,7 +706,6 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
 }
 
 DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & query_info,
-                                                     const ColumnDefines & columns_to_read,
                                                      const Context & context,
                                                      const LoggerPtr & tracing_logger)
 {
@@ -729,7 +728,7 @@ DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & que
                 // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
                 return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
             };
-            rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
+            rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, dag_query->source_columns, std::move(create_attr_by_column_id), log);
         }
         if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
             LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
@@ -821,11 +820,13 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
         if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
         {
             NamesWithAliases project_cols;
-            for (size_t i = 0; i < columns_to_read.size(); ++i)
+            for (size_t i = 0; i < table_scan_column_info.size(); ++i)
             {
-                if (filter_col_id_set.contains(columns_to_read[i].id))
+                if (filter_col_id_set.contains(table_scan_column_info[i].id))
                 {
-                    project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
+                    auto it = columns_to_read_map.find(table_scan_column_info[i].id);
+                    RUNTIME_CHECK(it != columns_to_read_map.end(), table_scan_column_info[i].id);
+                    project_cols.emplace_back(casted_columns[i], it->second.name);
                 }
             }
             actions->add(ExpressionAction::project(project_cols));
@@ -871,8 +872,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
                                                              const LoggerPtr & tracing_logger)
 {
     // build rough set operator
-    DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, columns_to_read, context, tracing_logger);
-
+    const DM::RSOperatorPtr rs_operator = buildRSOperator(dag_query, context, tracing_logger);
     // build push down filter
     const auto & pushed_down_filters = query_info.dag_query != nullptr ? query_info.dag_query->pushed_down_filters : google::protobuf::RepeatedPtrField<tipb::Expr>{};
     const auto & columns_to_read_info = query_info.dag_query != nullptr ? query_info.dag_query->source_columns : ColumnInfos{};

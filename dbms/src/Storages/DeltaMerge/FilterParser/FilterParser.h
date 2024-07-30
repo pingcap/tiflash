@@ -47,7 +47,7 @@ public:
     using AttrCreatorByColumnID = std::function<Attr(const DB::ColumnID)>;
     static RSOperatorPtr parseDAGQuery(
         const DAGQueryInfo & dag_info,
-        const ColumnDefines & columns_to_read,
+        const ColumnInfos & scan_column_infos,
         AttrCreatorByColumnID && creator,
         const LoggerPtr & log);
 

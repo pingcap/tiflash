@@ -105,8 +105,15 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
 
-    auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
+    auto rs_operator
+        = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
+    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
+        rs_operator,
+        table_info.columns,
+        pushed_down_filters,
+        columns_to_read,
+        *ctx,
+        log);
     return push_down_filter;
 }
 
