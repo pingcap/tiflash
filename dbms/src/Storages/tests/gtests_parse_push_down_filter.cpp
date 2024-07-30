@@ -113,7 +113,7 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     };
 
     auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
+        = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
     auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
         rs_operator,
         table_info.columns,
