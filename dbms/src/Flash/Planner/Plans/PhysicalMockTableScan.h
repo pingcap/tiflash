@@ -16,7 +16,6 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/FilterConditions.h>
-#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
@@ -70,8 +69,6 @@ public:
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
-
-    RuntimeFilteList getRuntimeFilterList(Context & context);
 
 private:
     FilterConditions filter_conditions;

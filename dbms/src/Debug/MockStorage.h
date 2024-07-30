@@ -17,13 +17,13 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Operators/Operator.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
 
 #include <atomic>
 #include <memory>
 #include <unordered_map>
-
 namespace DB
 {
 class StorageDeltaMerge;

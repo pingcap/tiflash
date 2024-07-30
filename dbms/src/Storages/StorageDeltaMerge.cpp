@@ -728,7 +728,7 @@ DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & que
                 // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
                 return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
             };
-            rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, dag_query->source_columns, std::move(create_attr_by_column_id), log);
+            rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, query_info.dag_query->source_columns, std::move(create_attr_by_column_id), log);
         }
         if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
             LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
@@ -872,7 +872,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
                                                              const LoggerPtr & tracing_logger)
 {
     // build rough set operator
-    const DM::RSOperatorPtr rs_operator = buildRSOperator(dag_query, context, tracing_logger);
+    const DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, context, tracing_logger);
     // build push down filter
     const auto & pushed_down_filters = query_info.dag_query != nullptr ? query_info.dag_query->pushed_down_filters : google::protobuf::RepeatedPtrField<tipb::Expr>{};
     const auto & columns_to_read_info = query_info.dag_query != nullptr ? query_info.dag_query->source_columns : ColumnInfos{};

@@ -237,7 +237,7 @@ private:
     void shutdownImpl();
 
     DM::RSOperatorPtr buildRSOperator(
-        const std::unique_ptr<DAGQueryInfo> & dag_query,
+        const SelectQueryInfo & query_info,
         const Context & context,
         const LoggerPtr & tracing_logger);
     /// Get filters from query to construct rough set operation and push down filters.

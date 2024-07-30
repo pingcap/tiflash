@@ -87,7 +87,7 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnInfos & s
     if (column_index < 0 || column_index >= static_cast<Int64>(scan_column_infos.size()))
     {
         throw TiFlashException("Column index out of bound: " + DB::toString(column_index) + ", should in [0,"
-                                   + DB::toString(columns_to_read.size()) + ")",
+                                   + DB::toString(scan_column_infos.size()) + ")",
                                Errors::Coprocessor::BadRequest);
     }
     return scan_column_infos[column_index].id;
