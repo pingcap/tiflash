@@ -269,7 +269,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
 
     // Auto pass through hashagg doesn't handle empty_result_for_aggregation_by_empty_set.
     // Also tidb shouldn't generate this kind plan because all data is aggregated into one row if keys_size == 0.
-    RUNTIME_CHECK(fine_grained_shuffle.enabled() || (auto_pass_through_switcher.enabled() && !aggregation_keys.empty()));
+    RUNTIME_CHECK(
+        fine_grained_shuffle.enabled() || (auto_pass_through_switcher.enabled() && !aggregation_keys.empty()));
 
     executeExpression(exec_context, group_builder, before_agg_actions, log);
 

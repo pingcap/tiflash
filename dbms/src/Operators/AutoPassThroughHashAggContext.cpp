@@ -111,7 +111,11 @@ void AutoPassThroughHashAggContext::trySwitchFromInitState()
     const auto & ht = many_data[0];
     if (ht->bytesCount() > INIT_STATE_HASHMAP_THRESHOLD)
     {
-        LOG_DEBUG(log, "init state transfer to adjust state, hash map bytes: {}, rows: {}", ht->bytesCount(), ht->size());
+        LOG_DEBUG(
+            log,
+            "init state transfer to adjust state, hash map bytes: {}, rows: {}",
+            ht->bytesCount(),
+            ht->size());
         state = State::Adjust;
     }
 }
@@ -157,11 +161,11 @@ void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
     if (state_processed_rows >= other_state_row_limit)
     {
         LOG_DEBUG(
-                log,
-                "other state back to adjust state: state: {}, processed: {}, limit: {}",
-                magic_enum::enum_name(state),
-                state_processed_rows,
-                other_state_row_limit);
+            log,
+            "other state back to adjust state: state: {}, processed: {}, limit: {}",
+            magic_enum::enum_name(state),
+            state_processed_rows,
+            other_state_row_limit);
 
         state = State::Adjust;
         state_processed_rows = 0;
