@@ -193,6 +193,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     Stopwatch watch;
     std::unordered_map<StoreID, UInt64> checked_seq_map;
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+    RUNTIME_CHECK(fap_ctx != nullptr);
+    RUNTIME_CHECK(fap_ctx->tasks_trace != nullptr);
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
 
     // Get candidate stores.
@@ -306,7 +308,17 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
-    const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region, tmt);
+    const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region_id, keyspace_id, table_id, tmt);
+    if (!storage)
+    {
+        LOG_WARNING(
+            log,
+            "FAP failed because the table can not be found, region_id={} keyspace={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
+        return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
+    }
     UNUSED(schema_snap);
     RUNTIME_CHECK_MSG(storage->engineType() == TiDB::StorageEngine::DT, "ingest into unsupported storage engine");
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
@@ -320,7 +332,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(
             log,
-            "FAP is canceled before write, region_id={} keyspace_id={} table_id={}",
+            "FAP is canceled before write, region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -360,7 +372,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(
             log,
-            "FAP is canceled after write segments, region_id={} keyspace_id={} table_id={}",
+            "FAP is canceled after write segments, region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -373,6 +385,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     // Currently, FAP only handle when the peer is newly created in this store.
     // TODO(fap) However, Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
     UniversalWriteBatch wb;
+    RUNTIME_CHECK(checkpoint_info->temp_ps != nullptr);
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
     raft_data_reader.traverseRemoteRaftLogForRegion(
         region_id,
@@ -387,13 +400,14 @@ FastAddPeerRes FastAddPeerImplWrite(
         });
     GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_raft).Observe(watch.elapsedSecondsFromLastTime());
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
+    RUNTIME_CHECK(wn_ps != nullptr);
     wn_ps->write(std::move(wb));
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
     if (cancel_handle->isCanceled())
     {
         LOG_INFO(
             log,
-            "FAP is canceled after write raft log, region_id={} keyspace_id={} table_id={}",
+            "FAP is canceled after write raft log, region_id={} keyspace={} table_id={}",
             region_id,
             keyspace_id,
             table_id);
@@ -401,12 +415,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
-    LOG_DEBUG(
-        log,
-        "Finish write FAP snapshot, region_id={} keyspace_id={} table_id={}",
-        region_id,
-        keyspace_id,
-        table_id);
+    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={} keyspace={} table_id={}", region_id, keyspace_id, table_id);
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
         apply_state.SerializeAsString(),

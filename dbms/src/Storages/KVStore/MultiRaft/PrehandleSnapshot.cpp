@@ -659,7 +659,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     });
 
     PrehandleResult prehandle_result;
-    TableID physical_table_id = InvalidTableID;
+    TableID physical_table_id = new_region->getMappedTableID();
 
     auto region_id = new_region->id();
     auto prehandle_task = prehandling_trace.registerTask(region_id);
@@ -671,7 +671,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstone.
-            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            const auto [table_drop_lock, storage, schema_snap]
+                = AtomicGetStorageSchema(region_id, keyspace_id, physical_table_id, tmt);
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
@@ -688,7 +689,6 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     /* ignore_cache= */ false,
                     context.getSettingsRef().safe_point_update_interval_seconds);
             }
-            physical_table_id = storage->getTableInfo().id;
 
             auto opt = DM::SSTFilesToBlockInputStreamOpts{
                 .log_prefix = fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id),
