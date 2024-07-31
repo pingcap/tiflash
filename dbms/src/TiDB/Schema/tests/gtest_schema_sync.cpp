@@ -29,12 +29,16 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/defines.h>
+#include <common/types.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
 namespace FailPoints
 {
 extern const char exception_before_rename_table_old_meta_removed[];
+extern const char force_schema_sync_too_old_schema[];
 extern const char force_context_path[];
 } // namespace FailPoints
 namespace tests
@@ -328,6 +332,111 @@ try
     refreshSchema();
     auto part1_tbl = mustGetSyncedTable(part1_id);
     ASSERT_EQ(part1_tbl->isTombstone(), true);
+}
+CATCH
+
+TEST_F(SchemaSyncTest, DropTableTombstoneTSCase1)
+try
+{
+    // tiflash/issues/9227
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col_1", typeFromString("String")},
+        {"col_2", typeFromString("Int64")},
+    });
+
+    /*auto db_id =*/MockTiDB::instance().newDataBase(db_name);
+    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
+
+    refreshSchema();
+    {
+        auto storage = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(storage->getTombstone(), 0);
+    }
+
+    // drop the table
+    LOG_INFO(Logger::get(), "mock drop table at tidb");
+    MockTiDB::instance().dropTable(global_ctx, db_name, tbl_name, /*drop_regions*/ true);
+    refreshSchema();
+    UInt64 tombstone_ts_before_sync_all = 0;
+    {
+        // the table should mark as tombstone != 0
+        auto storage = mustGetSyncedTable(logical_table_id);
+        tombstone_ts_before_sync_all = storage->getTombstone();
+        ASSERT_NE(tombstone_ts_before_sync_all, 0);
+    }
+    LOG_INFO(Logger::get(), "mock drop table at tidb done");
+
+    LOG_INFO(Logger::get(), "mock tiflash sync all schema");
+    FailPointHelper::enableFailPoint(FailPoints::force_schema_sync_too_old_schema);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_schema_sync_too_old_schema);
+    });
+    MockTiDB::instance().newDataBase(db_name + "_copy");
+    refreshSchema();
+    {
+        // the table should mark as tombstone != 0
+        auto storage = mustGetSyncedTable(logical_table_id);
+        ASSERT_NE(storage->getTombstone(), 0);
+        // the tombstone_ts should not changed
+        ASSERT_EQ(storage->getTombstone(), tombstone_ts_before_sync_all);
+    }
+}
+CATCH
+
+TEST_F(SchemaSyncTest, DropTableTombstoneTSCase2)
+try
+{
+    // tiflash/issues/9227
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col_1", typeFromString("String")},
+        {"col_2", typeFromString("Int64")},
+    });
+
+    /*auto db_id =*/MockTiDB::instance().newDataBase(db_name);
+    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
+
+    refreshSchema();
+    {
+        auto storage = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(storage->getTombstone(), 0);
+    }
+
+    // drop the table during sync all schema
+    LOG_INFO(Logger::get(), "mock tiflash sync all schema");
+    MockTiDB::instance().dropTable(global_ctx, db_name, tbl_name, /*drop_regions*/ true);
+    FailPointHelper::enableFailPoint(FailPoints::force_schema_sync_too_old_schema);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_schema_sync_too_old_schema);
+    });
+    refreshSchema();
+    UInt64 tombstone_ts_by_sync_all = 0;
+    {
+        // the table should mark as tombstone != 0
+        auto storage = mustGetSyncedTable(logical_table_id);
+        tombstone_ts_by_sync_all = storage->getTombstone();
+        ASSERT_NE(tombstone_ts_by_sync_all, 0);
+    }
+
+    // trigger sync all schema again, the tombstone_ts should not change
+    MockTiDB::instance().newDataBase(db_name + "_copy");
+    refreshSchema();
+    {
+        // the table should mark as tombstone != 0
+        auto storage = mustGetSyncedTable(logical_table_id);
+        ASSERT_NE(storage->getTombstone(), 0);
+        // the tombstone_ts should not changed
+        ASSERT_EQ(storage->getTombstone(), tombstone_ts_by_sync_all);
+    }
 }
 CATCH
 
