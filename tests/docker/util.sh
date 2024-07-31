@@ -94,9 +94,9 @@ function set_branch() {
   # XYZ_BRANCH: pd/tikv/tidb hash, default to `master`
   # BRANCH:     hash short cut, default to `master`
   if [ -n "$BRANCH" ]; then
-    [ -z "$PD_BRANCH" ] && export PD_BRANCH="master"
-    [ -z "$TIKV_BRANCH" ] && export TIKV_BRANCH="master"
-    [ -z "$TIDB_BRANCH" ] && export TIDB_BRANCH="master"
+    [ -z "$PD_BRANCH" ] && export PD_BRANCH="$BRANCH"
+    [ -z "$TIKV_BRANCH" ] && export TIKV_BRANCH="$BRANCH"
+    [ -z "$TIDB_BRANCH" ] && export TIDB_BRANCH="$BRANCH"
   fi
   echo "use branch \`${BRANCH-master}\` for ci test"
 }
