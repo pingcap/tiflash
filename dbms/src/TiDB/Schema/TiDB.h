@@ -155,6 +155,7 @@ enum ColumnFlag
     M(VectorFloat32, 20) \
     M(Max, 250)
 
+// Defined in pingcap/tidb pkg/util/codec/codec.go
 enum CodecFlag
 {
 #ifdef M

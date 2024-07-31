@@ -1114,15 +1114,13 @@ size_t ColumnArray::encodeIntoDatumData(size_t element_idx, WriteBuffer & writer
 {
     RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
 
-    size_t encoded_size = 0;
-
     RUNTIME_CHECK(checkAndGetColumn<ColumnVector<Float32>>(&getData()));
     RUNTIME_CHECK(getData().isFixedAndContiguous());
 
     auto n = static_cast<UInt32>(sizeAt(element_idx));
 
     writeIntBinary(n, writer);
-    encoded_size += sizeof(UInt32);
+    size_t encoded_size = sizeof(UInt32);
 
     auto data = getDataAt(element_idx);
     RUNTIME_CHECK(data.size == n * sizeof(Float32));

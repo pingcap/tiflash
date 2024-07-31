@@ -496,9 +496,9 @@ void flashColToArrowCol(
         const auto * data_type = checkAndGetDataType<DataTypeArray>(type);
         if (!data_type || data_type->getNestedType()->getTypeId() != TypeIndex::Float32)
             throw TiFlashException(
-                "Type un-matched during arrow encode, target col type is array<float32> and source column type is "
-                    + type->getName(),
-                Errors::Coprocessor::Internal);
+                Errors::Coprocessor::Internal,
+                "Type un-matched during arrow encode, target col type is array<float32> and source column type is {}",
+                type->getName());
         if (tidb_column_info.hasNotNullFlag())
             flashArrayFloat32ColToArrowCol<false>(dag_column, col, start_index, end_index);
         else
@@ -582,9 +582,9 @@ const char * arrowArrayFloat32ColToFlashCol(
     const auto * data_type = checkAndGetDataType<DataTypeArray>(&*col.type);
     if (!data_type || data_type->getNestedType()->getTypeId() != TypeIndex::Float32)
         throw TiFlashException(
-            "Type un-matched during arrow decode, target col type is array<float32> and source column type is "
-                + col.type->getName(),
-            Errors::Coprocessor::Internal);
+            Errors::Coprocessor::Internal,
+            "Type un-matched during arrow decode, target col type is array<float32> and source column type is {}",
+            col.type->getName());
 
     for (UInt32 i = 0; i < length; i++)
     {

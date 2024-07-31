@@ -44,11 +44,12 @@ public:
     void encodeColumn(WriteBuffer & ss);
     void clear();
 
-    std::unique_ptr<WriteBufferFromOwnString> data;
-    void finishAppendFixed();
+    // FIXME: expose for ColumnArray::encodeIntoDatumData, find a better way to implement it.
     void finishAppendVar(UInt32 size);
-
+    // WriteBufferFromOwnString is not moveable.
+    std::unique_ptr<WriteBufferFromOwnString> data;
 private:
+    void finishAppendFixed();
     bool isFixed() const { return fixed_size != VAR_SIZE; }
 
     void appendNullBitMap(bool value);
@@ -57,7 +58,6 @@ private:
     UInt32 null_cnt;
     std::vector<UInt8> null_bitmap;
     std::vector<Int64> var_offsets;
-    // WriteBufferFromOwnString is not moveable.
 
     std::string default_value;
     UInt64 current_data_size;
