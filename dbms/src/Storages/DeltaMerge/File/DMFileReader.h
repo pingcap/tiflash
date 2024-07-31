@@ -125,6 +125,9 @@ private:
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
 
+    void initAllMatchBlockInfo();
+    size_t getReadPackLimit(size_t start_pack_id);
+
     DMFilePtr dmfile;
     ColumnDefines read_columns;
     ColumnReadStreamMap column_streams;
@@ -170,6 +173,9 @@ private:
 
     // DataSharing
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
+
+    // <start_pack, pack_count>
+    std::queue<std::pair<size_t, size_t>> all_match_block_infos;
 };
 
 } // namespace DB::DM
