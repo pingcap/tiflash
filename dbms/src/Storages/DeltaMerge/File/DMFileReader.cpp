@@ -73,7 +73,7 @@ DMFileReader::DMFileReader(
     , column_cache(column_cache_)
     , scan_context(scan_context_)
     , read_tag(read_tag_)
-    , min_rows_per_read(max_rows_per_read_ / 4)
+    , min_rows_per_read(max_rows_per_read_ / 2)
     , max_rows_per_read(max_rows_per_read_)
     , max_sharing_column_bytes(max_sharing_column_bytes_)
     , file_provider(file_provider_)
@@ -156,8 +156,8 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     auto can_read = [&](size_t pack_id) {
         return read_rows < max_rows_per_read && next_pack_id - start_pack_id < read_pack_limit
             && isUse(pack_res[pack_id])
-            // Read small block many times may hurt performance.
-            // Read continuous `RSResult::All` or `not RSResult::All` if block is large enough.
+            // Read too many small blocks may hurt performance.
+            // Read continuous `RSResult::All` or `not RSResult::All` if block is large enough (>= min_rows_per_read).
             && (read_rows < min_rows_per_read || allMatch(last_pack_res) == allMatch(pack_res[pack_id]));
     };
     for (; next_pack_id < pack_res.size() && can_read(next_pack_id); ++next_pack_id)
@@ -168,6 +168,10 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     }
     RUNTIME_CHECK(read_rows == 0 || isUse(last_pack_res));
     next_row_offset += read_rows;
+    if (read_tag == ReadTag::Query && allMatch(last_pack_res))
+    {
+        scan_context->rs_dmfile_read_with_all += next_pack_id - start_pack_id;
+    }
     return {read_rows, last_pack_res};
 }
 
