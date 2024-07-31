@@ -48,6 +48,7 @@ public:
     void finishAppendVar(UInt32 size);
     // WriteBufferFromOwnString is not moveable.
     std::unique_ptr<WriteBufferFromOwnString> data;
+
 private:
     void finishAppendFixed();
     bool isFixed() const { return fixed_size != VAR_SIZE; }
