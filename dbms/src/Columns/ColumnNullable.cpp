@@ -206,7 +206,7 @@ void ColumnNullable::get(size_t n, Field & res) const
 
 StringRef ColumnNullable::getDataAt(size_t n) const
 {
-    if (!isNullAt(n))
+    if (likely(!isNullAt(n)))
         return getNestedColumn().getDataAt(n);
 
     throw Exception(

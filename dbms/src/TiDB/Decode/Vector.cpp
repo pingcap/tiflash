@@ -33,19 +33,17 @@ VectorFloat32Ref::VectorFloat32Ref(const Float32 * elements, size_t n)
 {
     for (size_t i = 0; i < n; ++i)
     {
-        if (std::isnan(elements[i]))
+        if (unlikely(std::isnan(elements[i])))
             throw Exception("NaN not allowed in vector", ErrorCodes::BAD_ARGUMENTS);
-        if (std::isinf(elements[i]))
+        if (unlikely(std::isinf(elements[i])))
             throw Exception("infinite value not allowed in vector", ErrorCodes::BAD_ARGUMENTS);
     }
 }
 
 void VectorFloat32Ref::checkDims(VectorFloat32Ref b) const
 {
-    if (size() != b.size())
-        throw Exception(
-            fmt::format("vectors have different dimensions: {} and {}", size(), b.size()),
-            ErrorCodes::BAD_ARGUMENTS);
+    if (unlikely(size() != b.size()))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "vectors have different dimensions: {} and {}", size(), b.size());
 }
 
 Float64 VectorFloat32Ref::l2SquaredDistance(VectorFloat32Ref b) const
@@ -101,19 +99,12 @@ Float64 VectorFloat32Ref::cosineDistance(VectorFloat32Ref b) const
 
     if (std::isnan(similarity))
     {
-        // Divide by zero
+        // When norma or normb is zero, distance is zero, and similarity is NaN.
+        // similarity can not be Inf in this case.
         return std::nan("");
     }
 
-    if (similarity > 1.0)
-    {
-        similarity = 1.0;
-    }
-    else if (similarity < -1.0)
-    {
-        similarity = -1.0;
-    }
-
+    similarity = std::clamp(similarity, -1.0, 1.0);
     return 1.0 - similarity;
 }
 
@@ -165,12 +156,7 @@ std::strong_ordering VectorFloat32Ref::operator<=>(const VectorFloat32Ref & b) c
         else if (va[i] > vb[i])
             return std::strong_ordering::greater;
     }
-    if (la < lb)
-        return std::strong_ordering::less;
-    else if (la > lb)
-        return std::strong_ordering::greater;
-    else
-        return std::strong_ordering::equal;
+    return la <=> lb;
 }
 
 String VectorFloat32Ref::toString() const
