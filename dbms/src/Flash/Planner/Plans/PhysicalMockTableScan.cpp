@@ -179,5 +179,4 @@ Int64 PhysicalMockTableScan::getLogicalTableID() const
 {
     return table_id;
 }
-
 } // namespace DB

@@ -17,7 +17,6 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Operators/Operator.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
 
@@ -117,7 +116,6 @@ public:
 
     TableInfo getTableInfo(const String & name);
     TableInfo getTableInfoForDeltaMerge(const String & name);
-    DM::ColumnDefines getStoreColumnDefines(Int64 table_id);
 
     size_t getTableScanConcurrencyHint(const TiDBTableScan & table_scan);
 

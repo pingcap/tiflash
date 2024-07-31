@@ -463,11 +463,6 @@ TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
     return table_infos_for_delta_merge[name];
 }
 
-DM::ColumnDefines MockStorage::getStoreColumnDefines(Int64 table_id)
-{
-    return storage_delta_merge_map[table_id]->getStoreColumnDefines();
-}
-
 ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)
 {
     ColumnID col_id = 0;

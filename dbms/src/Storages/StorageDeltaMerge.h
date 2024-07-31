@@ -34,7 +34,6 @@ namespace DB
 {
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
-class MockStorage;
 
 namespace DM
 {
@@ -308,8 +307,6 @@ private:
     Context & global_context;
 
     LoggerPtr log;
-
-    friend class MockStorage;
 };
 
 
