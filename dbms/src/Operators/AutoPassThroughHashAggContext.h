@@ -35,7 +35,7 @@ struct AutoPassThroughSwitcher
         , mode(mode_)
     {}
 
-    bool enable() const { return has_set && !forcePreAgg(); }
+    bool enabled() const { return has_set && !forcePreAgg(); }
 
     bool forcePreAgg() const { return mode == ::tipb::TiFlashPreAggMode::ForcePreAgg; }
 
