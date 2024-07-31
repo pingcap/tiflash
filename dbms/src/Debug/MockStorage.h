@@ -23,6 +23,7 @@
 #include <atomic>
 #include <memory>
 #include <unordered_map>
+
 namespace DB
 {
 class StorageDeltaMerge;
