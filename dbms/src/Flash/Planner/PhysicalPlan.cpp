@@ -313,10 +313,20 @@ String PhysicalPlan::toString() const
     return PhysicalPlanVisitor::visitToString(root_node);
 }
 
+void recursiveSetBlockInputStreamParent(BlockInputStreamPtr self, BlockInputStreamPtr parent)
+{
+    for (auto & child : self->getChildren())
+    {
+        recursiveSetBlockInputStreamParent(child, self);
+    }
+    self->setParent(parent);
+}
+
 void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     RUNTIME_CHECK(root_node);
     root_node->buildBlockInputStream(pipeline, context, max_streams);
+    pipeline.transform([](auto & stream) { recursiveSetBlockInputStreamParent(stream, nullptr); });
 }
 
 PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_context, Context & context)

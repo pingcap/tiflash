@@ -190,6 +190,10 @@ public:
 
     virtual bool canHandleSelectiveBlock() const { return false; }
 
+    void setParent(const BlockInputStreamPtr & parent_) { parent = parent_; }
+
+    BlockInputStreams getChildren() { return children; }
+
 protected:
     virtual uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) { return 0; }
 
@@ -225,6 +229,8 @@ protected:
     // flags to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
     bool thread_cnt_collected = false;
     bool cpu_time_ns_collected = false;
+
+    std::shared_ptr<const IBlockInputStream> parent = nullptr;
 
 private:
     TableLockHolders table_locks;
