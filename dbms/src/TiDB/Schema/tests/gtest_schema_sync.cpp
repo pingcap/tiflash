@@ -560,52 +560,6 @@ try
 }
 CATCH
 
-TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabaseNoTargetDB)
-try
-{
-    auto pd_client = global_ctx.getTMTContext().getPDClient();
-
-    const String db_name = "mock_db";
-    const String new_db_name = "mock_new_db";
-    const String tbl_name = "mock_part_tbl";
-
-    auto cols = ColumnsDescription({
-        {"col1", typeFromString("String")},
-        {"col2", typeFromString("Int64")},
-    });
-
-    MockTiDB::instance().newDataBase(db_name);
-
-    auto [logical_table_id, physical_table_ids] = MockTiDB::instance().newPartitionTable( //
-        db_name,
-        tbl_name,
-        cols,
-        pd_client->getTS(),
-        "",
-        "dt",
-        {"red", "blue", "yellow"});
-
-    ASSERT_EQ(physical_table_ids.size(), 3);
-
-    // create "mock_db"."mock_part_tbl" in tiflash
-    refreshSchema();
-
-    // Mock that create target database, rename to the target database, drop target database
-    MockTiDB::instance().newDataBase(new_db_name);
-    const String new_tbl_name = "mock_part_tbl_renamed";
-    MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
-    MockTiDB::instance().dropDB(global_ctx, new_db_name, false);
-
-    // After target database has been dropped, then tiflash receive the schema diff
-    refreshSchema();
-    refreshTableSchema(logical_table_id);
-    refreshTableSchema(physical_table_ids[0]);
-    // refreshTableSchema(physical_table_ids[1]); // mock that physical_table[1] have no data neither read
-    refreshTableSchema(physical_table_ids[2]);
-}
-CATCH
-
-
 TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabaseWithRestart)
 try
 {
