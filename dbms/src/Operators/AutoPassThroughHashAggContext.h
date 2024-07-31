@@ -141,8 +141,8 @@ private:
     void forceState();
     static void makeFullSelective(Block & block);
 
-    static constexpr float PassThroughRateLimit = 0.2;
-    static constexpr float PreHashAggRateLimit = 0.9;
+    static constexpr double PassThroughRateLimit = 0.2;
+    static constexpr double PreHashAggRateLimit = 0.9;
 
     State state;
     // Make sure data variants after aggregator because it needs aggregator in dtor.

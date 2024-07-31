@@ -127,7 +127,7 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
     if (adjust_processed_rows < adjust_row_limit)
         return;
 
-    float hit_rate = static_cast<double>(adjust_hit_rows) / adjust_processed_rows;
+    double hit_rate = static_cast<double>(adjust_hit_rows) / adjust_processed_rows;
     RUNTIME_CHECK(std::isnormal(hit_rate) || hit_rate == 0.0);
     if (hit_rate >= PreHashAggRateLimit)
     {
