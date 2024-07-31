@@ -137,6 +137,7 @@ enum ColumnFlag
 
 // Codec flags.
 // In format: TiDB codec flag, int value.
+// Defined in pingcap/tidb pkg/util/codec/codec.go
 #ifdef M
 #error "Please undefine macro M first."
 #endif
@@ -155,7 +156,6 @@ enum ColumnFlag
     M(VectorFloat32, 20) \
     M(Max, 250)
 
-// Defined in pingcap/tidb pkg/util/codec/codec.go
 enum CodecFlag
 {
 #ifdef M
