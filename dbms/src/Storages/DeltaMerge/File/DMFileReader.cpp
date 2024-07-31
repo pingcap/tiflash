@@ -164,6 +164,8 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     }
     RUNTIME_CHECK(read_rows == 0 || isUse(last_pack_res));
     next_row_offset += read_rows;
+    if (read_tag == ReadTag::Query && allMatch(last_pack_res))
+        scan_context->rs_dmfile_read_with_all += count;
     return {read_rows, last_pack_res};
 }
 
@@ -737,11 +739,7 @@ void DMFileReader::initAllMatchBlockInfo()
         }
         auto [count, rows] = get_all_match_block(i);
         if (rows >= min_rows_per_read)
-        {
             all_match_block_infos.emplace(i, count);
-            if (read_tag == ReadTag::Query)
-                scan_context->rs_dmfile_read_with_all += count;
-        }
         i += count;
     }
 }
