@@ -167,6 +167,12 @@ void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
             state_processed_rows,
             other_state_row_limit);
 
+        if (state == State::PassThrough)
+        {
+            // Adopt a more aggressive strategy for pass through to avoid meaningless probing the hashmap in the adjust state.
+            other_state_row_limit = std::min(100 * 65535, other_state_row_limit * 2);
+        }
+
         state = State::Adjust;
         state_processed_rows = 0;
     }
