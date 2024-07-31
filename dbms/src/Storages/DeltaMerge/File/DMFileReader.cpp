@@ -165,7 +165,7 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     RUNTIME_CHECK(read_rows == 0 || isUse(last_pack_res));
     next_row_offset += read_rows;
     if (read_tag == ReadTag::Query && allMatch(last_pack_res))
-        scan_context->rs_dmfile_read_with_all += count;
+        scan_context->rs_dmfile_read_with_all += next_pack_id - start_pack_id;
     return {read_rows, last_pack_res};
 }
 
