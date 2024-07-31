@@ -108,21 +108,18 @@ Block AutoPassThroughHashAggContext::getData()
 
 void AutoPassThroughHashAggContext::trySwitchFromInitState()
 {
-    if (many_data[0]->bytesCount() > INIT_STATE_HASHMAP_THRESHOLD)
+    const auto & ht = many_data[0];
+    if (ht->bytesCount() > INIT_STATE_HASHMAP_THRESHOLD)
+    {
+        LOG_DEBUG(log, "init state transfer to adjust state, hash map bytes: {}, rows: {}", ht->bytesCount(), ht->size());
         state = State::Adjust;
+    }
 }
 
 void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, size_t hit_rows)
 {
     adjust_processed_rows += total_rows;
     adjust_hit_rows += hit_rows;
-
-    LOG_DEBUG(
-        log,
-        "adjust state info: processed: {}, hit: {}, limit: {}",
-        adjust_processed_rows,
-        adjust_hit_rows,
-        adjust_row_limit);
 
     if (adjust_processed_rows < adjust_row_limit)
         return;
@@ -142,6 +139,14 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
         state = State::Selective;
     }
 
+    LOG_DEBUG(
+        log,
+        "adjust state info transfer to other state. state: {}, processed: {}, hit: {}, limit: {}",
+        magic_enum::enum_name(state),
+        adjust_processed_rows,
+        adjust_hit_rows,
+        adjust_row_limit);
+
     adjust_processed_rows = 0;
     adjust_hit_rows = 0;
 }
@@ -149,14 +154,15 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
 void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 {
     state_processed_rows += block_rows;
-    LOG_DEBUG(
-        log,
-        "other state info: state: {}, processed: {}, limit: {}",
-        magic_enum::enum_name(state),
-        state_processed_rows,
-        other_state_row_limit);
     if (state_processed_rows >= other_state_row_limit)
     {
+        LOG_DEBUG(
+                log,
+                "other state back to adjust state: state: {}, processed: {}, limit: {}",
+                magic_enum::enum_name(state),
+                state_processed_rows,
+                other_state_row_limit);
+
         state = State::Adjust;
         state_processed_rows = 0;
     }
