@@ -53,7 +53,7 @@ DMFileReader::DMFileReader(
     size_t max_read_buffer_size,
     const FileProviderPtr & file_provider_,
     const ReadLimiterPtr & read_limiter,
-    size_t rows_threshold_per_read_,
+    size_t max_rows_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
     size_t max_sharing_column_bytes_,
@@ -73,7 +73,8 @@ DMFileReader::DMFileReader(
     , column_cache(column_cache_)
     , scan_context(scan_context_)
     , read_tag(read_tag_)
-    , rows_threshold_per_read(rows_threshold_per_read_)
+    , min_rows_per_read(max_rows_per_read_ / 4)
+    , max_rows_per_read(max_rows_per_read_)
     , max_sharing_column_bytes(max_sharing_column_bytes_)
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
@@ -153,11 +154,11 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     size_t read_rows = 0;
     auto last_pack_res = RSResult::Unknown;
     auto can_read = [&](size_t pack_id) {
-        return read_rows < rows_threshold_per_read && next_pack_id - start_pack_id < read_pack_limit
+        return read_rows < max_rows_per_read && next_pack_id - start_pack_id < read_pack_limit
             && isUse(pack_res[pack_id])
-            // If last_pack_res == RSResult::Unknown, it is the first pack.
-            // Else return continuous `RSResult::All` or `not RSResult::All`.
-            && (last_pack_res == RSResult::Unknown || allMatch(last_pack_res) == allMatch(pack_res[pack_id]));
+            // Read small block many times may hurt performance.
+            // Read continuous `RSResult::All` or `not RSResult::All` if block is large enough.
+            && (read_rows < min_rows_per_read || allMatch(last_pack_res) == allMatch(pack_res[pack_id]));
     };
     for (; next_pack_id < pack_res.size() && can_read(next_pack_id); ++next_pack_id)
     {

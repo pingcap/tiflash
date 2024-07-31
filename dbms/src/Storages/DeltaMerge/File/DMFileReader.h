@@ -59,7 +59,7 @@ public:
         size_t max_read_buffer_size,
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter,
-        size_t rows_threshold_per_read_,
+        size_t max_rows_per_read_,
         bool read_one_pack_every_time_,
         const String & tracing_id_,
         size_t max_sharing_column_bytes_,
@@ -157,7 +157,8 @@ private:
     const ScanContextPtr scan_context;
     const ReadTag read_tag;
 
-    const size_t rows_threshold_per_read;
+    const size_t min_rows_per_read;
+    const size_t max_rows_per_read;
     const size_t max_sharing_column_bytes;
 
     size_t next_pack_id = 0;
