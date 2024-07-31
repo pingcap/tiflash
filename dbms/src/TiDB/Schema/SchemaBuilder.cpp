@@ -1199,7 +1199,7 @@ void SchemaBuilder<Getter, NameMapper>::ensureLocalDatabaseExist(
     const String & database_mapped_name,
     std::string_view action)
 {
-    if (context.isDatabaseExist(database_mapped_name))
+    if (likely(context.isDatabaseExist(database_mapped_name)))
         return;
 
     LOG_WARNING(
