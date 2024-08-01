@@ -176,6 +176,11 @@ public:
 
     size_t encodeIntoDatumData(size_t element_idx, WriteBuffer & writer) const;
 
+    size_t ALWAYS_INLINE sizeAt(size_t i) const
+    {
+        return i == 0 ? getOffsets()[0] : (getOffsets()[i] - getOffsets()[i - 1]);
+    }
+
 private:
     ColumnPtr data;
     ColumnPtr offsets;

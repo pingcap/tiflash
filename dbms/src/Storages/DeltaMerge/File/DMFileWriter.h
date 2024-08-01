@@ -56,17 +56,17 @@ public:
             bool do_index,
             TiDB::VectorIndexInfoPtr do_vector_index)
             : plain_file(ChecksumWriteBufferBuilder::build(
-                  dmfile->getConfiguration().has_value(),
-                  file_provider,
-                  dmfile->colDataPath(file_base_name),
-                  dmfile->encryptionDataPath(file_base_name),
-                  false,
-                  write_limiter_,
-                  detail::getAlgorithmOrNone(*dmfile),
-                  detail::getFrameSizeOrDefault(*dmfile),
-                  /*flags*/ -1,
-                  /*mode*/ 0666,
-                  max_compress_block_size))
+                dmfile->getConfiguration().has_value(),
+                file_provider,
+                dmfile->colDataPath(file_base_name),
+                dmfile->encryptionDataPath(file_base_name),
+                false,
+                write_limiter_,
+                detail::getAlgorithmOrNone(*dmfile),
+                detail::getFrameSizeOrDefault(*dmfile),
+                /*flags*/ -1,
+                /*mode*/ 0666,
+                max_compress_block_size))
             , compressed_buf(CompressedWriteBuffer<>::build(
                   *plain_file,
                   compression_settings,

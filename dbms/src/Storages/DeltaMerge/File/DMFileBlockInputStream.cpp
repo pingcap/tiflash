@@ -234,7 +234,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build2(
         tracing_id,
         enable_read_thread,
         scan_context,
-        ReadTag::Internal);
+        ReadTag::Query);
 
     DMFileWithVectorIndexBlockInputStreamPtr reader = DMFileWithVectorIndexBlockInputStream::create(
         ann_query_info,

@@ -33,6 +33,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 
 namespace DB::DM
 {
+class DMFileWithVectorIndexBlockInputStream;
 namespace tests
 {
 class DMFileTest;
@@ -40,10 +41,6 @@ class DMFileMetaV2Test;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
 
-class DMFileWithVectorIndexBlockInputStream;
-
-using DMFilePtr = std::shared_ptr<DMFile>;
-using DMFiles = std::vector<DMFilePtr>;
 
 class DMFile : private boost::noncopyable
 {

@@ -37,11 +37,8 @@ public:
         RUNTIME_CHECK(filter_offset + filter_size <= filter->size(), filter_offset, filter_size, filter->size());
     }
 
-    inline bool get(UInt32 n) const
-    {
-        RUNTIME_CHECK(n < filter_size);
-        return filter->get(filter_offset + n);
-    }
+    // Caller should ensure n in [0, size).
+    inline bool get(UInt32 n) const { return filter->get(filter_offset + n); }
 
     inline bool operator[](UInt32 n) const { return get(n); }
 
@@ -49,19 +46,7 @@ public:
 
     inline UInt32 offset() const { return filter_offset; }
 
-    String toDebugString() const
-    {
-        String s(size(), '1');
-        for (UInt32 i = 0; i < size(); i++)
-        {
-            if (!get(i))
-            {
-                s[i] = '0';
-            }
-        }
-        return s;
-    }
-
+    // FIXME: This function is not efficient, will be removed in the future.
     // Return how many valid rows.
     size_t count() const
     {

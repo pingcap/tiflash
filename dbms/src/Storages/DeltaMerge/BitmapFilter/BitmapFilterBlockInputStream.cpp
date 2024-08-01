@@ -72,15 +72,6 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter)
             block.setStartOffset(block.startOffset() + stable_rows);
         }
 
-        String block_filter_value;
-        if (block_filter)
-        {
-            for (size_t i = 0; i < block_filter->size(); ++i)
-            {
-                block_filter_value += (*block_filter)[i] ? "1" : "0";
-            }
-        }
-
         filter.resize(block.rows());
         bool all_match = bitmap_filter->get(filter, block.startOffset(), block.rows());
 
@@ -93,8 +84,7 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter)
         }
         else
         {
-            RUNTIME_CHECK(filter.size() >= block_filter->size());
-
+            RUNTIME_CHECK(filter.size() == block_filter->size(), filter.size(), block_filter->size());
             if (!all_match)
             {
                 // We have a `block_filter`, and have a bitmap filter in `filter`.
@@ -104,18 +94,15 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter)
                     filter.end(),
                     block_filter->begin(),
                     filter.begin(),
-                    [](UInt8 a, UInt8 b) { return static_cast<UInt8>(a && b); });
+                    [](UInt8 a, UInt8 b) { return a && b; });
+                res_filter = &filter;
             }
             else
             {
                 // We only have a `block_filter`.
-                // filter ← block_filter.
-                std::copy( //
-                    block_filter->begin(),
-                    block_filter->end(),
-                    filter.begin());
+                // res_filter ← block_filter.
+                res_filter = block_filter;
             }
-            res_filter = &filter;
         }
     }
     return block;

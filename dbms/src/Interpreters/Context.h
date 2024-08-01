@@ -238,8 +238,8 @@ public:
     /// Compute and set actual user settings, client_info.current_user should be set
     void calculateUserSettings();
 
-    ClientInfo & getClientInfo() { return client_info; };
-    const ClientInfo & getClientInfo() const { return client_info; };
+    ClientInfo & getClientInfo() { return client_info; }
+    const ClientInfo & getClientInfo() const { return client_info; }
 
     void setQuota(
         const String & name,
@@ -510,8 +510,8 @@ public:
 
     SharedQueriesPtr getSharedQueries();
 
-    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
-    TimezoneInfo & getTimezoneInfo() { return timezone_info; };
+    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; }
+    TimezoneInfo & getTimezoneInfo() { return timezone_info; }
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;

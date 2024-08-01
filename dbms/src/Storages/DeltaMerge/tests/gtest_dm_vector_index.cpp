@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
@@ -100,7 +101,7 @@ public:
         TiFlashStorageTestBasic::reload();
 
         *path_pool = db_context->getPathPool().withTable("test", "t1", false);
-        dm_context = std::make_unique<DMContext>(
+        dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,
@@ -117,16 +118,16 @@ public:
         auto file_id = dm_file->fileId();
         auto page_id = dm_file->pageId();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFile::ReadMetaMode::all());
+        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFileMeta::ReadMode::all());
     }
 
     Context & dbContext() { return *db_context; }
 
 protected:
-    std::unique_ptr<DMContext> dm_context{};
+    std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::shared_ptr<StoragePathPool> path_pool{};
-    std::shared_ptr<StoragePool> storage_pool{};
+    std::shared_ptr<StoragePathPool> path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
 
 protected:
     String parent_path;
@@ -140,7 +141,7 @@ protected:
     // So we test it independently.
     bool test_only_vec_column = false;
 
-    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns)
+    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns) const
     {
         if (!test_only_vec_column)
             return columns;
@@ -804,7 +805,7 @@ protected:
     bool test_only_vec_column = false;
     int pack_size = 10;
 
-    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns)
+    ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns) const
     {
         if (!test_only_vec_column)
             return columns;

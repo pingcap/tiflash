@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
@@ -206,7 +207,7 @@ private:
     // Rough set filter
     RSOperatorPtr rs_filter;
     // packs filter (filter by pack index)
-    IdSetPtr read_packs{};
+    IdSetPtr read_packs;
     MarkCachePtr mark_cache;
     MinMaxIndexCachePtr index_cache;
     // column cache

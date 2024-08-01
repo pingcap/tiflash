@@ -14,7 +14,6 @@
 
 #include <Storages/DeltaMerge/File/VectorColumnFromIndexReader.h>
 
-#include <ext/scope_guard.h>
 
 namespace DB::DM
 {
