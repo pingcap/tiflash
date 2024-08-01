@@ -312,10 +312,10 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
 std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
     const DMContextPtr & context,
-    const SegmentPtr & baseSegment)
+    const SegmentPtr & base_segment)
 {
     // Last segment cannot be merged.
-    if (baseSegment->getRowKeyRange().isEndInfinite())
+    if (base_segment->getRowKeyRange().isEndInfinite())
         return {};
 
     // We only merge small segments into a larger one.
@@ -329,15 +329,15 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
     {
         std::shared_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(lock, baseSegment))
+        if (!isSegmentValid(lock, base_segment))
             return {};
 
         results.reserve(4); // In most cases we will only find <= 4 segments to merge.
-        results.emplace_back(baseSegment);
-        auto accumulated_rows = baseSegment->getEstimatedRows();
-        auto accumulated_bytes = baseSegment->getEstimatedBytes();
+        results.emplace_back(base_segment);
+        auto accumulated_rows = base_segment->getEstimatedRows();
+        auto accumulated_bytes = base_segment->getEstimatedBytes();
 
-        auto it = segments.upper_bound(baseSegment->getRowKeyRange().getEnd());
+        auto it = segments.upper_bound(base_segment->getRowKeyRange().getEnd());
         while (it != segments.end())
         {
             const auto & this_seg = it->second;
@@ -345,6 +345,12 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
             const auto this_bytes = this_seg->getEstimatedBytes();
             if (accumulated_rows + this_rows >= max_total_rows || accumulated_bytes + this_bytes >= max_total_bytes)
                 break;
+#if defined(THREAD_SANITIZER)
+            // Limit the segments to be merged less than 30, or thread sanitizer will fail
+            // https://github.com/pingcap/tiflash/issues/9257
+            if (results.size() > 30)
+                break;
+#endif
             results.emplace_back(this_seg);
             accumulated_rows += this_rows;
             accumulated_bytes += this_bytes;
