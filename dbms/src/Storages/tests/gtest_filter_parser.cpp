@@ -32,7 +32,6 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
-#include <optional>
 #include <regex>
 
 namespace DB
