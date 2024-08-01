@@ -313,11 +313,11 @@ String PhysicalPlan::toString() const
     return PhysicalPlanVisitor::visitToString(root_node);
 }
 
-void recursiveSetBlockInputStreamParent(BlockInputStreamPtr self, BlockInputStreamPtr parent)
+void recursiveSetBlockInputStreamParent(BlockInputStreamPtr self, const IBlockInputStream * parent)
 {
     for (auto & child : self->getChildren())
     {
-        recursiveSetBlockInputStreamParent(child, self);
+        recursiveSetBlockInputStreamParent(child, self.get());
     }
     self->setParent(parent);
 }

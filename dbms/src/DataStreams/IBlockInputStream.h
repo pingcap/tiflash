@@ -190,7 +190,7 @@ public:
 
     virtual bool canHandleSelectiveBlock() const { return false; }
 
-    void setParent(const BlockInputStreamPtr & parent_) { parent = parent_; }
+    void setParent(const IBlockInputStream * parent_) { parent = parent_; }
 
     BlockInputStreams getChildren() { return children; }
 
@@ -230,7 +230,8 @@ protected:
     bool thread_cnt_collected = false;
     bool cpu_time_ns_collected = false;
 
-    std::shared_ptr<const IBlockInputStream> parent = nullptr;
+    // To avoid cyclic references, shared_ptr was not used.
+    const IBlockInputStream * parent = nullptr;
 
 private:
     TableLockHolders table_locks;
