@@ -46,7 +46,7 @@ btrie_create()
     tree->free  = NULL;
     tree->start = NULL;
     tree->size  = 0;
-    memset_s(tree->pools, 0, sizeof(btrie_t *) * BTRIE_MAX_PAGES);
+    memset_s(tree->pools, sizeof(char *) * BTRIE_MAX_PAGES, 0, sizeof(btrie_t *) * BTRIE_MAX_PAGES);
     tree->len = 0;
 
     tree->root = btrie_alloc(tree);

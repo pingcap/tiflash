@@ -285,7 +285,7 @@ static int cpuid_basic_identify(struct cpu_raw_data_t* raw, struct cpu_id_t* dat
 		brandstr[48] = 0;
 		i = 0;
 		while (brandstr[i] == ' ') i++;
-		strncpy_s(data->brand_str, brandstr + i, sizeof(data->brand_str));
+		strncpy_s(data->brand_str, BRAND_STR_MAX, brandstr + i, sizeof(data->brand_str));
 		data->brand_str[48] = 0;
 	}
 	load_features_common(raw, data);
