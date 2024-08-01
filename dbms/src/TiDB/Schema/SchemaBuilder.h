@@ -59,7 +59,13 @@ private:
     /// Parameter db_name should be mapped.
     void applyDropSchema(const String & db_name);
 
+<<<<<<< HEAD
     void applyRecoverSchema(DatabaseID database_id);
+=======
+    bool applyCreateDatabase(DatabaseID database_id);
+    void applyCreateDatabaseByInfo(const TiDB::DBInfoPtr & db_info);
+    void ensureLocalDatabaseExist(DatabaseID database_id, const String & database_mapped_name, std::string_view action);
+>>>>>>> 45eb5079cd (ddl: Fix rename come after database has been dropped (#9274))
 
     bool applyCreateSchema(DatabaseID schema_id);
 
