@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/TiDBColumn.h>
 #include <IO/Operators.h>
+#include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -116,6 +119,19 @@ void TiDBColumn::append(const TiDBEnum & ti_enum)
     data->write(ti_enum.name.data, ti_enum.name.size);
     size += ti_enum.name.size;
     finishAppendVar(size);
+}
+
+void TiDBColumn::appendVectorF32(UInt32 num_elem, StringRef elem_bytes)
+{
+    writeIntBinary(num_elem, *data);
+    size_t encoded_size = sizeof(UInt32);
+
+    RUNTIME_CHECK(elem_bytes.size == num_elem * sizeof(Float32));
+    data->write(elem_bytes.data, elem_bytes.size);
+    encoded_size += elem_bytes.size;
+
+    RUNTIME_CHECK(encoded_size > 0);
+    finishAppendVar(encoded_size);
 }
 
 void TiDBColumn::append(const TiDBBit & bit)

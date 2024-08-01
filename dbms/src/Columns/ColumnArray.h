@@ -175,6 +175,7 @@ public:
     void insertFromDatumData(const char * data, size_t length) override;
 
     size_t encodeIntoDatumData(size_t element_idx, WriteBuffer & writer) const;
+    std::pair<UInt32, StringRef> getElementRef(size_t element_idx) const;
 
 private:
     ColumnPtr data;

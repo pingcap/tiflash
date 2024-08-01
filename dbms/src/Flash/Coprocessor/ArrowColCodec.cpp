@@ -304,6 +304,12 @@ void flashArrayFloat32ColToArrowCol(
     // We only unwrap the NULLABLE() part.
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
     const auto * flash_col = checkAndGetColumn<ColumnArray>(nested_col);
+
+    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
+
+    RUNTIME_CHECK(checkAndGetColumn<ColumnVector<Float32>>(&flash_col->getData()));
+    RUNTIME_CHECK(flash_col->getData().isFixedAndContiguous());
+
     for (size_t i = start_index; i < end_index; i++)
     {
         // todo check if we can convert flash_col to DAG col directly since the internal representation is almost the same
@@ -316,9 +322,8 @@ void flashArrayFloat32ColToArrowCol(
             }
         }
 
-        auto encoded_size = flash_col->encodeIntoDatumData(i, *dag_column.data);
-        RUNTIME_CHECK(encoded_size > 0);
-        dag_column.finishAppendVar(encoded_size);
+        auto [num_elems, elem_bytes] = flash_col->getElementRef(i);
+        dag_column.appendVectorF32(num_elems, elem_bytes);
     }
 }
 

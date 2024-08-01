@@ -1110,6 +1110,11 @@ void ColumnArray::insertFromDatumData(const char * data, size_t length)
     insertData(data, precise_data_size);
 }
 
+std::pair<UInt32, StringRef> ColumnArray::getElementRef(size_t element_idx) const
+{
+    return {static_cast<UInt32>(sizeAt(element_idx)), getDataAt(element_idx)};
+}
+
 size_t ColumnArray::encodeIntoDatumData(size_t element_idx, WriteBuffer & writer) const
 {
     RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
