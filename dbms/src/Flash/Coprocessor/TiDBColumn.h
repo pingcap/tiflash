@@ -41,19 +41,19 @@ public:
     void append(const TiDBDecimal & decimal);
     void append(const TiDBBit & bit);
     void append(const TiDBEnum & ti_enum);
+    void appendVectorF32(UInt32 num_elem, StringRef elem_bytes);
     void encodeColumn(WriteBuffer & ss);
     void clear();
 
-    // FIXME: expose for ColumnArray::encodeIntoDatumData, find a better way to implement it.
-    void finishAppendVar(UInt32 size);
-    // WriteBufferFromOwnString is not moveable.
-    std::unique_ptr<WriteBufferFromOwnString> data;
-
 private:
+    void finishAppendVar(UInt32 size);
     void finishAppendFixed();
     bool isFixed() const { return fixed_size != VAR_SIZE; }
 
     void appendNullBitMap(bool value);
+
+    // WriteBufferFromOwnString is not moveable.
+    std::unique_ptr<WriteBufferFromOwnString> data;
 
     UInt32 length;
     UInt32 null_cnt;

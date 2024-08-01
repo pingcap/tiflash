@@ -56,6 +56,7 @@ using DB::Timestamp;
 // Column types.
 // In format:
 // TiDB type, int value, codec flag, CH type.
+// The int value is defined in pingcap/tidb pkg/parser/mysql/type.go
 #ifdef M
 #error "Please undefine macro M first."
 #endif
