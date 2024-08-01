@@ -48,7 +48,7 @@ Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_fil
         return {};
 
     // all rows in block are not filtered out, simply do nothing.
-    if (!block_filter)
+    if (!block_filter) // NOLINT
         return block;
 
     // some rows should be filtered according to `block_filter`:
