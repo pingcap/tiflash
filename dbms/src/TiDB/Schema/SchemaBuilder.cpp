@@ -1215,7 +1215,7 @@ void SchemaBuilder<Getter, NameMapper>::ensureLocalDatabaseExist(
     TiDB::DBInfoPtr database_info = std::make_shared<TiDB::DBInfo>();
     database_info->id = database_id;
     database_info->keyspace_id = keyspace_id;
-    database_info->name = database_mapped_name; // use the mapped name because we done known the actual name
+    database_info->name = database_mapped_name; // use the mapped name because we don't known the actual name
     database_info->charset = "utf8mb4"; // default value
     database_info->collate = "utf8mb4_bin"; // default value
     database_info->state = TiDB::StateNone; // special state
