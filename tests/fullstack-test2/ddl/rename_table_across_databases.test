@@ -147,3 +147,4 @@ mysql> alter table test_new.part5 add column c1 int;
 mysql> drop database if exists test_new;
 # raft command comes after target db dropped, no crashes
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __refresh_schemas()
