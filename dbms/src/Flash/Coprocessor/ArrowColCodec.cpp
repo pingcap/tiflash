@@ -305,8 +305,6 @@ void flashArrayFloat32ColToArrowCol(
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
     const auto * flash_col = checkAndGetColumn<ColumnArray>(nested_col);
 
-    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
-
     RUNTIME_CHECK(checkAndGetColumn<ColumnVector<Float32>>(&flash_col->getData()));
     RUNTIME_CHECK(flash_col->getData().isFixedAndContiguous());
 

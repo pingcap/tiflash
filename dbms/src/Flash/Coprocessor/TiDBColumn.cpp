@@ -123,7 +123,7 @@ void TiDBColumn::append(const TiDBEnum & ti_enum)
 
 void TiDBColumn::appendVectorF32(UInt32 num_elem, StringRef elem_bytes)
 {
-    writeIntBinary(num_elem, *data);
+    encodeLittleEndian<UInt32>(num_elem, *data);
     size_t encoded_size = sizeof(UInt32);
 
     RUNTIME_CHECK(elem_bytes.size == num_elem * sizeof(Float32));

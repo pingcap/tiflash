@@ -1115,25 +1115,4 @@ std::pair<UInt32, StringRef> ColumnArray::getElementRef(size_t element_idx) cons
     return {static_cast<UInt32>(sizeAt(element_idx)), getDataAt(element_idx)};
 }
 
-size_t ColumnArray::encodeIntoDatumData(size_t element_idx, WriteBuffer & writer) const
-{
-    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
-
-    RUNTIME_CHECK(checkAndGetColumn<ColumnVector<Float32>>(&getData()));
-    RUNTIME_CHECK(getData().isFixedAndContiguous());
-
-    auto n = static_cast<UInt32>(sizeAt(element_idx));
-
-    writeIntBinary(n, writer);
-    size_t encoded_size = sizeof(UInt32);
-
-    auto data = getDataAt(element_idx);
-    RUNTIME_CHECK(data.size == n * sizeof(Float32));
-    writer.write(data.data, data.size);
-    encoded_size += data.size;
-
-    return encoded_size;
-}
-
-
 } // namespace DB
