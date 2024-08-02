@@ -145,7 +145,7 @@ protected:
 
 private:
     /* Check the range */
-    bool checkSpace(UInt64 offset, size_t size) const;
+    bool isInvalidRange(UInt64 offset, size_t size) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
