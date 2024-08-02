@@ -1120,6 +1120,53 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, EmptyPage)
+try
+{
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 9), PageEntryV3{.file_id = 551, .size = 0, .offset = 0x15376});
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), PageEntryV3{.file_id = 551, .size = 15, .offset = 0x15373});
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 100), PageEntryV3{.file_id = 551, .size = 0, .offset = 0x0});
+        edit.put(
+            buildV3Id(TEST_NAMESPACE_ID, 101),
+            PageEntryV3{.file_id = 552, .size = BLOBFILE_LIMIT_SIZE, .offset = 0x0});
+        dir->apply(std::move(edit));
+    }
+
+    auto s0 = dir->createSnapshot();
+    auto edit = dir->dumpSnapshotToEdit(s0);
+    auto restore_from_edit = [](const PageEntriesEdit & edit, BlobStats & stats) {
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        PageDirectoryFactory<u128::FactoryTrait> factory;
+        auto d
+            = factory.setBlobStats(stats).createFromEditForTest(getCurrentTestName(), provider, delegator, deseri_edit);
+        return d;
+    };
+
+    {
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        auto config = BlobConfig{};
+        BlobStats stats(log, delegator, config);
+        {
+            std::lock_guard lock(stats.lock_stats);
+            stats.createStatNotChecking(551, BLOBFILE_LIMIT_SIZE, lock);
+            stats.createStatNotChecking(552, BLOBFILE_LIMIT_SIZE, lock);
+        }
+        auto restored_dir = restore_from_edit(edit, stats);
+        auto snap = restored_dir->createSnapshot();
+        ASSERT_EQ(getEntry(restored_dir, 9, snap).offset, 0x15376);
+        ASSERT_EQ(getEntry(restored_dir, 10, snap).offset, 0x15373);
+        ASSERT_EQ(getEntry(restored_dir, 100, snap).offset, 0x0);
+        ASSERT_EQ(getEntry(restored_dir, 101, snap).offset, 0x0);
+    }
+}
+CATCH
+
 class PageDirectoryGCTest : public PageDirectoryTest
 {
 };
