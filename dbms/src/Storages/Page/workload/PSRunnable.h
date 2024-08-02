@@ -106,12 +106,14 @@ public:
 
     void write(const RandomPageId & r);
 
+    UInt32 id() const { return index; }
+
 protected:
     virtual RandomPageId genRandomPageId();
 
 protected:
     PSPtr ps;
-    DB::UInt32 index = 0;
+    const DB::UInt32 index = 0;
     std::mt19937 gen;
     DB::PageIdU64 max_page_id = MAX_PAGE_ID_DEFAULT;
     std::unique_ptr<char[]> memory;
@@ -154,7 +156,7 @@ protected:
     size_t batch_buffer_nums = 100;
     size_t batch_buffer_limit = 0;
 
-    DB::PageFieldSizes data_sizes = {};
+    DB::PageFieldSizes data_sizes;
 };
 
 // PSWindowsWriter can better simulate the user's workload in cooperation with PSWindowsReader

@@ -96,7 +96,6 @@ DB::ReadBufferPtr PSWriter::getRandomData()
 
 void PSWriter::setBufferSizeRange(size_t min, size_t max)
 {
-    RUNTIME_CHECK(min >= 1);
     RUNTIME_CHECK(max >= min);
     buffer_size_min = min;
     buffer_size_max = max;
