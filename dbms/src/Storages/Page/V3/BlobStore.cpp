@@ -36,7 +36,6 @@
 #include <fiu.h>
 
 #include <ext/scope_guard.h>
-#include <iterator>
 #include <magic_enum.hpp>
 #include <unordered_map>
 
@@ -1014,6 +1013,7 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
             // Unexpected behavior but do no harm
             LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, entry);
             Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
+            page.data = std::string_view(nullptr, 0);
             page_map.emplace(Trait::PageIdTrait::getPageMapKey(page_id_v3), page);
         }
         return page_map;
@@ -1101,6 +1101,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
         // Unexpected behavior but do no harm
         LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, entry);
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
+        page.data = std::string_view(nullptr, 0);
         return page;
     }
 
