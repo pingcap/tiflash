@@ -1012,7 +1012,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
         for (const auto & [page_id_v3, entry] : entries)
         {
             // Unexpected behavior but do no harm
-            LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, entry);
             Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
             page.data = std::string_view(nullptr, 0);
             page_map.emplace(Trait::PageIdTrait::getPageMapKey(page_id_v3), page);
@@ -1100,7 +1099,6 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     if (buf_size == 0)
     {
         // Unexpected behavior but do no harm
-        LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, entry);
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
         page.data = std::string_view(nullptr, 0);
         return page;
