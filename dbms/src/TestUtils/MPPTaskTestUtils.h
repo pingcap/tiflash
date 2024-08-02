@@ -83,7 +83,21 @@ public:
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
     std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
+<<<<<<< HEAD
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+=======
+    std::vector<QueryTask> prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties);
+
+    static void setCancelTest();
+
+    /// Keep stream not deconstructed until cancelGather invoked outside, so that the deconstruction progress won't block
+    static ColumnsWithTypeAndName executeProblematicMPPTasks(
+        QueryTasks & tasks,
+        const DAGProperties & properties,
+        BlockInputStreamPtr & stream);
+    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties);
+    ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
+>>>>>>> bccc345b8a (Not call abortMPPGather when mpp task met error (#7969))
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
 
