@@ -26,16 +26,14 @@
 #include <IO/FileProvider/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MutableSupport.h>
@@ -723,6 +721,11 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
         return;
     }
 
+    // There could be a chance that the target database has been dropped in TiKV before
+    // TiFlash accepts the "create database" schema diff. We need to ensure the local
+    // database exist before executing renaming.
+    const auto action = fmt::format("applyRenamePhysicalTable-table_id={}", new_table_info.id);
+    ensureLocalDatabaseExist(new_database_id, new_mapped_db_name, action);
     const auto old_mapped_tbl_name = storage->getTableName();
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_table).Increment();
     LOG_INFO(
@@ -1167,27 +1170,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     // in TiDB, then TiFlash may not create the IDatabase instance. Make sure we can access
     // to the IDatabase when creating IStorage.
     const auto database_mapped_name = name_mapper.mapDatabaseName(database_id, keyspace_id);
-    if (!context.isDatabaseExist(database_mapped_name))
-    {
-        LOG_WARNING(
-            log,
-            "database instance is not exist (applyCreateStorageInstance), may has been dropped, create a database "
-            "with fake DatabaseInfo for it, database_id={} database_name={} action={}",
-            database_id,
-            database_mapped_name,
-            action);
-        // The database is dropped in TiKV and we can not fetch it. Generate a fake
-        // DatabaseInfo for it. It is OK because the DatabaseInfo will be updated
-        // when the database is `FLASHBACK`.
-        TiDB::DBInfoPtr database_info = std::make_shared<TiDB::DBInfo>();
-        database_info->id = database_id;
-        database_info->keyspace_id = keyspace_id;
-        database_info->name = database_mapped_name; // use the mapped name because we done known the actual name
-        database_info->charset = "utf8mb4"; // default value
-        database_info->collate = "utf8mb4_bin"; // default value
-        database_info->state = TiDB::StateNone; // special state
-        applyCreateDatabaseByInfo(database_info);
-    }
+    ensureLocalDatabaseExist(database_id, database_mapped_name, action);
 
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);
@@ -1203,13 +1186,41 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     interpreter.execute();
     LOG_INFO(
         log,
-        "Creat table {} end, database_id={} table_id={} action={}",
+        "Create table {} end, database_id={} table_id={} action={}",
         name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
         database_id,
         table_info->id,
         action);
 }
 
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::ensureLocalDatabaseExist(
+    DatabaseID database_id,
+    const String & database_mapped_name,
+    std::string_view action)
+{
+    if (likely(context.isDatabaseExist(database_mapped_name)))
+        return;
+
+    LOG_WARNING(
+        log,
+        "database instance is not exist, may has been dropped, create a database "
+        "with fake DatabaseInfo for it, database_id={} database_name={} action={}",
+        database_id,
+        database_mapped_name,
+        action);
+    // The database is dropped in TiKV and we can not fetch it. Generate a fake
+    // DatabaseInfo for it. It is OK because the DatabaseInfo will be updated
+    // when the database is `FLASHBACK`.
+    TiDB::DBInfoPtr database_info = std::make_shared<TiDB::DBInfo>();
+    database_info->id = database_id;
+    database_info->keyspace_id = keyspace_id;
+    database_info->name = database_mapped_name; // use the mapped name because we don't known the actual name
+    database_info->charset = "utf8mb4"; // default value
+    database_info->collate = "utf8mb4_bin"; // default value
+    database_info->state = TiDB::StateNone; // special state
+    applyCreateDatabaseByInfo(database_info);
+}
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(
@@ -1773,5 +1784,4 @@ template struct SchemaBuilder<SchemaGetter, SchemaNameMapper>;
 template struct SchemaBuilder<MockSchemaGetter, MockSchemaNameMapper>;
 // unit test
 template struct SchemaBuilder<MockSchemaGetter, SchemaNameMapper>;
-// end namespace
 } // namespace DB
