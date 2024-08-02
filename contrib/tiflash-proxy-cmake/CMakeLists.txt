@@ -22,7 +22,19 @@ endif()
 
 set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
 set(_TIFLASH_PROXY_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/${_TIFLASH_PROXY_BUILD_PROFILE}/${CMAKE_SHARED_LIBRARY_PREFIX}tiflash_proxy${CMAKE_SHARED_LIBRARY_SUFFIX}")
-file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")
+file(GLOB_RECURSE _TIFLASH_PROXY_SRCS
+    "${_TIFLASH_PROXY_SOURCE_DIR}/src/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/tests/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/raftstore-proxy-main/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/raftstore-proxy/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/proxy_tests/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/proxy_components/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/components/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/cmd/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/gen-proxy-ffi/*"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock"
+    "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.toml"
+)
 
 # Build in the build directory instead of the default source directory
 set(TIFLASH_RUST_ENV "CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}" ${TIFLASH_RUST_ENV})

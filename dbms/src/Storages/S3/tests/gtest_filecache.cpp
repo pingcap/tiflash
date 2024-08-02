@@ -113,6 +113,14 @@ protected:
         ASSERT_EQ(r, 0);
         LOG_DEBUG(log, "write fname={} size={} done, cost={}s", key, size, sw.elapsedSeconds());
     }
+
+    void writeS3FileWithSize(const S3Filename & s3_dir, std::string_view file_name, size_t size)
+    {
+        std::vector<UInt8> data;
+        data.resize(size);
+        writeFile(fmt::format("{}/{}", s3_dir.toFullKey(), file_name), '0', size, WriteSettings{});
+    }
+
     struct ObjectInfo
     {
         String key;
@@ -635,18 +643,18 @@ TEST_F(FileCacheTest, Space)
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level};
     FileCache file_cache(capacity_metrics, cache_config);
     auto dt_cache_capacity = cache_config.getDTFileCapacity();
-    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity - 1024, /*try_evict*/ false));
-    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 512, /*try_evict*/ false));
-    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 256, /*try_evict*/ false));
-    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 256, /*try_evict*/ false));
-    ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, /*try_evict*/ false));
+    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity - 1024, FileCache::EvictMode::NoEvict));
+    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 512, FileCache::EvictMode::NoEvict));
+    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 256, FileCache::EvictMode::NoEvict));
+    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 256, FileCache::EvictMode::NoEvict));
+    ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
     ASSERT_FALSE(file_cache.finalizeReservedSize(FileType::Meta, /*reserved_size*/ 512, /*content_length*/ 513));
     ASSERT_TRUE(file_cache.finalizeReservedSize(FileType::Meta, /*reserved_size*/ 512, /*content_length*/ 511));
-    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 1, /*try_evict*/ false));
-    ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, /*try_evict*/ false));
+    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
+    ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
     file_cache.releaseSpace(dt_cache_capacity);
-    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity, /*try_evict*/ false));
-    ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, /*try_evict*/ false));
+    ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity, FileCache::EvictMode::NoEvict));
+    ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
 }
 
 TEST_F(FileCacheTest, LRUFileTable)
@@ -870,5 +878,137 @@ try
     ASSERT_EQ(released_size, file_cache.cache_capacity);
 }
 CATCH
+
+
+TEST_F(FileCacheTest, ForceEvict)
+try
+{
+    // Generate multiple files for each different file-types.
+    struct ObjDesc
+    {
+        String name;
+        size_t size;
+    };
+    const std::vector<ObjDesc> objects = {
+        {.name = "1.meta", .size = 10},
+        {.name = "1.idx", .size = 1},
+        {.name = "2.idx", .size = 2},
+        {.name = "1.mrk", .size = 3},
+        {.name = "2.meta", .size = 5},
+        {.name = "3.meta", .size = 20},
+        {.name = "2.mrk", .size = 10},
+        {.name = "4.meta", .size = 3},
+        {.name = "4.idx", .size = 10},
+        {.name = "4.mrk", .size = 7},
+        {.name = "3.mrk", .size = 1},
+        {.name = "3.idx", .size = 5},
+    };
+
+    const auto s3_dir = S3Filename::fromTableID(0, 0, 1);
+    for (const auto & obj : objects)
+        writeS3FileWithSize(s3_dir, obj.name, obj.size);
+
+    // Create a large enough cache
+    auto cache_dir = fmt::format("{}/force_evict_1", tmp_dir);
+    auto cache_config = StorageRemoteCacheConfig{
+        .dir = cache_dir,
+        .capacity = 100,
+        .dtfile_level = 100,
+        .delta_rate = 0,
+        .reserved_rate = 0,
+    };
+    FileCache file_cache(capacity_metrics, cache_config);
+
+    ASSERT_EQ(file_cache.getAll().size(), 0);
+
+    // Put everything in cache
+    for (const auto & obj : objects)
+    {
+        auto full_path = fmt::format("{}/{}", s3_dir.toFullKey(), obj.name);
+        auto s3_fname = S3FilenameView::fromKey(full_path);
+        auto guard = file_cache.downloadFileForLocalRead(s3_fname, obj.size);
+        ASSERT_NE(guard, nullptr);
+    }
+
+    ASSERT_EQ(file_cache.getAll().size(), 12);
+
+    // Ensure the LRU order is correct.
+    for (const auto & obj : objects)
+    {
+        auto full_path = fmt::format("{}/{}", s3_dir.toFullKey(), obj.name);
+        auto s3_fname = S3FilenameView::fromKey(full_path);
+        ASSERT_TRUE(file_cache.getOrWait(s3_fname, obj.size));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Avoid possible same lastAccessTime.
+    }
+
+    ASSERT_EQ(file_cache.getAll().size(), 12);
+
+    auto cache_not_contains = [&](const String & file) {
+        const auto all = file_cache.getAll();
+        for (const auto & file_seg : all)
+            if (file_seg->getLocalFileName().contains(file))
+                return false;
+        return true;
+    };
+    ASSERT_FALSE(cache_not_contains("1.meta"));
+
+    // Now, we want space=5, should evict:
+    // {.name = "1.meta", .size = 10},
+    auto evicted = file_cache.forceEvict(5);
+    ASSERT_EQ(evicted, 10);
+
+    ASSERT_EQ(file_cache.getAll().size(), 11);
+    ASSERT_TRUE(cache_not_contains("1.meta"));
+
+    // Evict 5 space again, should evict:
+    // {.name = "1.idx", .size = 1},
+    // {.name = "2.idx", .size = 2},
+    // {.name = "1.mrk", .size = 3},
+    evicted = file_cache.forceEvict(5);
+    ASSERT_EQ(evicted, 6);
+
+    ASSERT_EQ(file_cache.getAll().size(), 8);
+    ASSERT_TRUE(cache_not_contains("1.idx"));
+    ASSERT_TRUE(cache_not_contains("2.idx"));
+    ASSERT_TRUE(cache_not_contains("1.mrk"));
+
+    // Evict 0
+    evicted = file_cache.forceEvict(0);
+    ASSERT_EQ(evicted, 0);
+
+    ASSERT_EQ(file_cache.getAll().size(), 8);
+
+    // Evict 1, should evict:
+    // {.name = "2.meta", .size = 5},
+    evicted = file_cache.forceEvict(1);
+    ASSERT_EQ(evicted, 5);
+
+    ASSERT_EQ(file_cache.getAll().size(), 7);
+    ASSERT_TRUE(cache_not_contains("2.meta"));
+
+    // Use get(), it should not evict anything.
+    {
+        auto full_path = fmt::format("{}/not_exist", s3_dir.toFullKey());
+        ASSERT_FALSE(file_cache.get(S3FilenameView::fromKey(full_path), 999));
+        ASSERT_EQ(file_cache.getAll().size(), 7);
+    }
+
+    // Use getOrWait(), it should force evict everything and then fail.
+    {
+        auto full_path = fmt::format("{}/not_exist", s3_dir.toFullKey());
+        try
+        {
+            file_cache.getOrWait(S3FilenameView::fromKey(full_path), 999);
+            FAIL();
+        }
+        catch (Exception & e)
+        {
+            ASSERT_TRUE(e.message().contains("Cannot reserve 999 space for object"));
+        }
+        ASSERT_EQ(file_cache.getAll().size(), 0);
+    }
+}
+CATCH
+
 
 } // namespace DB::tests::S3
