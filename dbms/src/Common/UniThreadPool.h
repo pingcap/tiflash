@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <thread>
 
 namespace DB

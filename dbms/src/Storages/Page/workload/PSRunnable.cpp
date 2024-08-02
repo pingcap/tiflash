@@ -29,6 +29,7 @@
 
 #include <mutex>
 #include <random>
+#include <thread>
 
 namespace DB::PS::tests
 {
@@ -100,8 +101,7 @@ void PSWriter::setBufferSizeRange(size_t min, size_t max)
     buffer_size_min = min;
     buffer_size_max = max;
 
-    if (buffer_size_max - buffer_size_min >= 4096)
-        LOG_WARNING(logger, "The result maybe not stable, min_size={} max_size={}", min, max);
+    LOG_INFO(logger, "writer_{} set min={} max={}", id(), min, max);
 }
 
 void PSWriter::write(const RandomPageId & r)
@@ -114,11 +114,16 @@ void PSWriter::write(const RandomPageId & r)
         wb.delPage(id);
     ps->write(std::move(wb));
 
+    if (write_delay)
+    {
+        std::this_thread::sleep_for(write_delay.value());
+    }
+
     pages_used += 1;
     bytes_used += buff_ptr->buffer().size();
 
     // verbose logging for debug
-    // LOG_TRACE(logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
+    // LOG_TRACE(logger, "write done, id={} page_id={} remove={}", index, r.page_id, r.page_id_to_remove);
 
     global_stat->commit(r);
 }
@@ -182,11 +187,16 @@ bool PSCommonWriter::runImpl()
 
     ps->write(std::move(wb));
 
+    if (write_delay)
+    {
+        std::this_thread::sleep_for(write_delay.value());
+    }
+
     pages_used += page_write;
     bytes_used += bytes_write;
 
     // verbose logging for debug
-    // LOG_TRACE(logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
+    // LOG_TRACE(logger, "write done, id={} page_id={} remove={}", index, r.page_id, r.page_id_to_remove);
     global_stat->commit(r);
     bool keep_running = (batch_buffer_limit == 0 || bytes_used < batch_buffer_limit);
     return keep_running;

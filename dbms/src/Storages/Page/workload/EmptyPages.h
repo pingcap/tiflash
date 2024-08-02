@@ -16,6 +16,7 @@
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <Storages/Page/workload/PSWorkload.h>
 
+#include <chrono>
 #include <magic_enum.hpp>
 
 namespace DB::PS::tests
@@ -40,6 +41,7 @@ public:
         DB::PageStorageConfig config;
 
         initPageStorage(config, name());
+        initPages(MAX_PAGE_ID_DEFAULT);
 
         startBackgroundTimer();
 
@@ -48,24 +50,26 @@ public:
         {
             stop_watch.start();
             const auto num_writers = options.num_writers;
-            startWriter<PSWindowWriter>(num_writers, [&](std::shared_ptr<PSWindowWriter> writer) {
-                if (writer->id() == 0) {
+            startWriter<PSCommonWriter>(num_writers, [&](std::shared_ptr<PSCommonWriter> writer) {
+                if (writer->id() == 0)
+                {
                     writer->setBatchBufferNums(1);
+                    // empty pages
                     writer->setBufferSizeRange(0, 0);
-                    writer->setNormalDistributionSigma(250);
+                    // slow down writing empty page
+                    writer->setWriteDelay(std::chrono::milliseconds(50));
                 }
                 else
                 {
                     writer->setBatchBufferNums(1);
-                    writer->setBufferSizeRange(0, options.avg_page_size * 2);
-                    writer->setNormalDistributionSigma(250);
+                    // small pages
+                    writer->setBufferSizeRange(0, 25);
                 }
             });
 
-            startReader<PSWindowReader>(options.num_readers, [](std::shared_ptr<PSWindowReader> reader) {
+            startReader<PSReader>(options.num_readers, [](std::shared_ptr<PSReader> reader) {
                 reader->setReadPageNums(5);
                 reader->setReadDelay(0);
-                reader->setNormalDistributionSigma(250);
             });
 
             pool.joinAll();
@@ -80,6 +84,9 @@ public:
                 magic_enum::enum_name(StressEnvStatus::getInstance().getStat()));
             return;
         }
+
+        stop();
+        ps.reset();
 
         // restart
         LOG_INFO(Logger::get(), "Reopen the PageStorage instance");
