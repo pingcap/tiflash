@@ -391,13 +391,20 @@ TEST_F(BlobStoreStatsTest, StatWithEmptyBlob)
     ASSERT_EQ(offset, 0);
 
     offset = stat->getPosFromStat(0, stat->lock()); // empty
-    ASSERT_EQ(offset, 10);
+    ASSERT_EQ(offset, 0); // empty page always "stored" to the beginning of the space
+    offset = stat->getPosFromStat(0, stat->lock()); // empty
+    ASSERT_EQ(offset, 0); // empty page always "stored" to the beginning of the space
+    offset = stat->getPosFromStat(0, stat->lock()); // empty
+    ASSERT_EQ(offset, 0); // empty page always "stored" to the beginning of the space
 
     offset = stat->getPosFromStat(20, stat->lock());
     ASSERT_EQ(offset, 10);
 
     offset = stat->getPosFromStat(100, stat->lock());
     ASSERT_EQ(offset, 30);
+
+    offset = stat->getPosFromStat(0, stat->lock()); // empty
+    ASSERT_EQ(offset, 0); // empty page always "stored" to the beginning of the space
 
     ASSERT_EQ(stat->sm_total_size, 10 + 20 + 100);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 100);
@@ -419,9 +426,8 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     BlobStats stats(logger, delegator, config);
 
     {
-        std::lock_guard lock(stats.lock_stats);
         BlobFileId file_id = 10;
-        BlobStats::BlobStatPtr stat = stats.createStat(file_id, config.file_limit_size, lock);
+        BlobStats::BlobStatPtr stat = stats.createStat(file_id, config.file_limit_size, stats.lock());
         auto offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1, stat->lock());
         ASSERT_EQ(offset, 0);
         stats.cur_max_id = file_id;

@@ -20,6 +20,7 @@
 
 #include <ext/shared_ptr_helper.h>
 #include <map>
+#include <tuple>
 
 namespace DB
 {
@@ -222,8 +223,15 @@ protected:
         return true;
     }
 
+    // return value is <insert_offset, max_cap, is_expansion>
     std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) override
     {
+        if (unlikely(size == 0))
+        {
+            // The returned `max_cap` is 0 under this case, user should not use it.
+            return std::make_tuple(0, 0, false);
+        }
+
         if (unlikely(free_map.empty()))
         {
             LOG_ERROR(Logger::get(), "Current space map is full");

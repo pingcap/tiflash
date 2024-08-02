@@ -82,7 +82,7 @@ public:
      * If such span is found.
      * It will mark that span to be used and also return a hint of the max capacity available in this SpaceMap. 
      * 
-     * return value is <insert_offset, max_cap>:
+     * return value is <insert_offset, max_cap, is_expansion>:
      *  insert_offset: start offset for the inserted space
      *  max_cap: A hint of the largest available space this SpaceMap can hold. 
      *  is_expansion: Whether it is an expansion span

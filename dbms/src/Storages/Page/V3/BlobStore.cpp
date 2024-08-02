@@ -729,6 +729,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
     Stopwatch watch;
     BlobStatPtr stat;
 
+    // TODO: make this lambda as a function of BlobStats to simplify code
     auto lock_stat = [size, this, &stat, &page_type]() NO_THREAD_SAFETY_ANALYSIS {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
