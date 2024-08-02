@@ -57,7 +57,7 @@ public:
         if (child)
             return child->roughCheck(start_pack, pack_count, param);
         else
-            return RSResults(pack_count, RSResult::Unknown);
+            return RSResults(pack_count, RSResult::Some);
     }
 };
 

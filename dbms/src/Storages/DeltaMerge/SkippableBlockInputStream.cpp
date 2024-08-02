@@ -122,13 +122,13 @@ Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn
 }
 
 template <bool need_row_id>
-Block ConcatSkippableBlockInputStream<need_row_id>::read()
+Block ConcatSkippableBlockInputStream<need_row_id>::read(FilterPtr & res_filter, bool return_filter)
 {
     Block res;
 
     while (current_stream != children.end())
     {
-        res = (*current_stream)->read();
+        res = (*current_stream)->read(res_filter, return_filter);
 
         if (res)
         {
