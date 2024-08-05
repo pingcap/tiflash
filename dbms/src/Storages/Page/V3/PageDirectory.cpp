@@ -1955,7 +1955,7 @@ std::pair<typename PageDirectory<Trait>::GcEntriesMap, PageSize> PageDirectory<T
 
     LOG_INFO(
         log,
-        "Get entries by blob ids done [rewrite_ref_page_num={}] [total_page_size={}] [total_page_nums={}]", //
+        "Get entries by blob ids done, rewrite_ref_page_num={} total_page_size={} total_page_nums={}", //
         num_ref_id_rewrite,
         total_page_size, //
         total_page_nums);
@@ -2089,7 +2089,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
                     {
                         LOG_WARNING(
                             log,
-                            "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
+                            "Meet a stale snapshot, create_thread={} tracing_id={} seq={} alive_time={:.3f}",
                             snap->create_thread,
                             snap->tracing_id,
                             snap->sequence,
@@ -2242,7 +2242,7 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
         }
     }
 
-    LOG_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
+    LOG_INFO(log, "Dumped snapshot to edits, sequence={} edit_size={}", snap->sequence, edit.size());
     return edit;
 }
 
