@@ -176,6 +176,7 @@ public:
                 mem_tracker,
                 nullptr,
                 nullptr,
+                nullptr,
                 resource_group_name);
         }
         return all_contexts;
@@ -378,6 +379,7 @@ TEST_F(TestResourceControlQueue, BasicTest)
             mem_tracker,
             nullptr,
             nullptr,
+            nullptr,
             group_name);
 
         for (int j = 0; j < task_num_per_resource_group; ++j)
@@ -413,6 +415,7 @@ TEST_F(TestResourceControlQueue, BasicTimeoutTest)
         mem_tracker,
         nullptr,
         nullptr,
+        nullptr,
         group_name);
 
     auto task = std::make_unique<SimpleTask>(*exec_context);
@@ -441,7 +444,8 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     TaskSchedulerConfig config{thread_num, thread_num};
     TaskScheduler task_scheduler(config);
 
-    PipelineExecutorContext exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, rg_name);
+    PipelineExecutorContext
+        exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, rg_name);
 
     auto task = std::make_unique<SimpleTask>(exec_context);
     // This task should use 5*100ms cpu_time.

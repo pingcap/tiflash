@@ -48,7 +48,7 @@ ExecTaskStatus StreamRestoreTask::tryFlush()
         t_block.clear();
         return ExecTaskStatus::IO_IN;
     case MPMCQueueResult::FULL:
-        setNotifyFuture(sink);
+        setNotifyFuture(sink.get());
         return ExecTaskStatus::WAIT_FOR_NOTIFY;
     case MPMCQueueResult::CANCELLED:
         return ExecTaskStatus::CANCELLED;

@@ -48,19 +48,18 @@ protected:
 
     OperatorStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
-
 private:
     Block popFromBlockQueue();
+
+    void recordDecodeDetail(const DecodeDetail & decode_detail, size_t index, const String & req_info);
+
+    void handleError(const ExchangeReceiverResult & result) const;
 
 private:
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     uint64_t total_rows{};
     std::queue<Block> block_queue;
-
-    ReceivedMessagePtr recv_msg = nullptr;
-    ReceiveStatus receive_status = ReceiveStatus::empty;
 
     size_t stream_id;
 
