@@ -80,9 +80,9 @@ public:
     size_t skipNextBlock();
 
     /// Read specified rows.
-    Block readWithFilter(const IColumn::Filter & filter);
+    std::pair<Block, bool> readWithFilter(const IColumn::Filter & filter);
 
-    Block read();
+    std::pair<Block, bool> read();
     std::string path() const
     {
         // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
@@ -96,7 +96,7 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    size_t getReadRows();
+    std::tuple<size_t, bool> getReadRows();
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,

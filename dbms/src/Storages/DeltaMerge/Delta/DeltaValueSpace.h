@@ -31,10 +31,10 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageDefinesBase.h>
-
 
 namespace DB::DM
 {
@@ -489,13 +489,20 @@ private:
     bool persisted_files_done = false;
     size_t read_rows = 0;
 
+    ExpressionActionsPtr extra_cast;
+    std::optional<FilterTransformAction> filter_trans;
+    ExpressionActionsPtr project_after_where;
+    String filter_column_name;
+    IColumn::Filter filter_result;
+
 public:
     DeltaValueInputStream(
         const DMContext & context_,
         const DeltaSnapshotPtr & delta_snap_,
         const ColumnDefinesPtr & col_defs_,
         const RowKeyRange & segment_range_,
-        ReadTag read_tag_)
+        ReadTag read_tag_,
+        const PredicateFilterPtr & filter_ = nullptr)
         : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_, read_tag_)
         , persisted_files_input_stream(
               context_,
@@ -503,6 +510,12 @@ public:
               col_defs_,
               segment_range_,
               read_tag_)
+        , extra_cast(filter_ ? filter_->extra_cast : nullptr)
+        , filter_trans(
+              filter_ ? std::optional(filter_->getFilterTransformAction(persisted_files_input_stream.getHeader()))
+                      : std::nullopt)
+        , project_after_where(filter_ ? filter_->project_after_where : nullptr)
+        , filter_column_name(filter_ ? filter_->filter_column_name : "")
     {}
 
     String getName() const override { return "DeltaValue"; }
@@ -537,7 +550,7 @@ public:
         }
     }
 
-    Block readWithFilter(const IColumn::Filter & filter) override
+    Block readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter) override
     {
         auto block = read();
         if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
@@ -547,17 +560,45 @@ public:
                 col.column = col.column->filter(filter, passed_count);
             }
         }
+        if (filter_trans)
+        {
+            RUNTIME_CHECK(return_filter);
+            // filterBlock should always return true where return_filter is true.
+            RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+        }
+        else
+        {
+            res_filter = nullptr;
+        }
         return block;
     }
 
     Block read() override
     {
-        auto block = doRead();
-        block.setStartOffset(read_rows);
-        read_rows += block.rows();
+        FilterPtr filter_ignored;
+        return read(filter_ignored, false);
+    }
+
+    Block read(FilterPtr & res_filter, bool return_filter) override
+    {
+        if (filter_trans && filter_trans->alwaysFalse())
+            return {};
+
+        auto block = readAndSetOffset();
+        if (filter_trans)
+        {
+            RUNTIME_CHECK(return_filter);
+            // filterBlock should always return true where return_filter is true
+            RUNTIME_CHECK(filterBlock(block, res_filter, return_filter));
+        }
+        else
+        {
+            res_filter = nullptr;
+        }
         return block;
     }
 
+private:
     // Read block from old to new.
     Block doRead()
     {
@@ -572,6 +613,34 @@ public:
             persisted_files_done = true;
             return mem_table_input_stream.read();
         }
+    }
+
+    Block readAndSetOffset()
+    {
+        auto block = doRead();
+        block.setStartOffset(read_rows);
+        read_rows += block.rows();
+        return block;
+    }
+
+    // If some/all rows are passed, return true.
+    // If none rows is passed, return false.
+    bool filterBlock(Block & block, FilterPtr & res_filter, bool return_filter)
+    {
+        if (!block)
+            return true;
+
+        auto res = PredicateFilter::transformBlock(
+            extra_cast,
+            *filter_trans,
+            *project_after_where,
+            filter_column_name,
+            block,
+            filter_result,
+            return_filter);
+        if (res && return_filter)
+            res_filter = filter_result.empty() ? nullptr : &filter_result;
+        return res;
     }
 };
 

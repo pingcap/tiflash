@@ -96,14 +96,17 @@ size_t ConcatSkippableBlockInputStream<need_row_id>::skipNextBlock()
 }
 
 template <bool need_row_id>
-Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn::Filter & filter)
+Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(
+    const IColumn::Filter & filter,
+    FilterPtr & res_filter,
+    bool return_filter)
 {
     Block res;
 
     while (current_stream != children.end())
     {
         auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
-        res = skippable_stream->readWithFilter(filter);
+        res = skippable_stream->readWithFilter(filter, res_filter, return_filter);
 
         if (res)
         {
@@ -148,6 +151,34 @@ Block ConcatSkippableBlockInputStream<need_row_id>::read()
         }
     }
 
+    return res;
+}
+
+template <bool need_row_id>
+Block ConcatSkippableBlockInputStream<need_row_id>::read(FilterPtr & res_filter, bool return_filter)
+{
+    Block res;
+    while (current_stream != children.end())
+    {
+        res = (*current_stream)->read(res_filter, return_filter);
+
+        if (res)
+        {
+            res.setStartOffset(res.startOffset() + precede_stream_rows);
+            if constexpr (need_row_id)
+            {
+                res.setSegmentRowIdCol(createSegmentRowIdCol(res.startOffset(), res.rows()));
+            }
+            addReadBytes(res.bytes());
+            break;
+        }
+        else
+        {
+            (*current_stream)->readSuffix();
+            precede_stream_rows += rows[current_stream - children.begin()];
+            ++current_stream;
+        }
+    }
     return res;
 }
 

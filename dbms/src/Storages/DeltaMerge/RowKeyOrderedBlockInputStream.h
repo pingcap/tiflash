@@ -53,9 +53,9 @@ public:
 
     size_t skipNextBlock() override { return skipBlock(stable, delta); }
 
-    Block readWithFilter(const IColumn::Filter & filter) override
+    Block readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter) override
     {
-        auto [block, from_delta] = readBlockWithFilter(stable, delta, filter);
+        auto [block, from_delta] = readBlockWithFilter(stable, delta, filter, res_filter, return_filter);
         if (block)
         {
             if (from_delta)
@@ -69,6 +69,19 @@ public:
     Block read() override
     {
         auto [block, from_delta] = readBlock(stable, delta);
+        if (block)
+        {
+            if (from_delta)
+            {
+                block.setStartOffset(block.startOffset() + stable_rows);
+            }
+        }
+        return block;
+    }
+
+    Block read(FilterPtr & res_filter, bool return_filter) override
+    {
+        auto [block, from_delta] = readBlock(stable, delta, res_filter, return_filter);
         if (block)
         {
             if (from_delta)

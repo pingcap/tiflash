@@ -26,6 +26,11 @@ namespace DB::DM
   * the block and a flag indicating whether the block is from the delta.
   */
 std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
+std::pair<Block, bool> readBlock(
+    SkippableBlockInputStreamPtr & stable,
+    SkippableBlockInputStreamPtr & delta,
+    FilterPtr & res_filter,
+    bool return_filter);
 
 /** Skip the next block.
   * Return the number of rows of the next block.
@@ -41,5 +46,7 @@ size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStrea
 std::pair<Block, bool> readBlockWithFilter(
     SkippableBlockInputStreamPtr & stable,
     SkippableBlockInputStreamPtr & delta,
-    const IColumn::Filter & filter);
+    const IColumn::Filter & filter,
+    FilterPtr & res_filter,
+    bool return_filter);
 } // namespace DB::DM

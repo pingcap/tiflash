@@ -31,9 +31,13 @@ inline static constexpr size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_data_sharing_)
+    DMFileBlockInputStream(DMFileReader && reader_, bool enable_data_sharing_, const PredicateFilterPtr & filter_)
         : reader(std::move(reader_))
         , enable_data_sharing(enable_data_sharing_)
+        , extra_cast(filter_ ? filter_->extra_cast : nullptr)
+        , filter_trans(filter_ ? std::optional(filter_->getFilterTransformAction(reader.getHeader())) : std::nullopt)
+        , project_after_where(filter_ ? filter_->project_after_where : nullptr)
+        , filter_column_name(filter_ ? filter_->filter_column_name : "")
     {
         if (enable_data_sharing)
         {
@@ -57,14 +61,29 @@ public:
 
     size_t skipNextBlock() override { return reader.skipNextBlock(); }
 
-    Block read() override { return reader.read(); }
+    Block read() override
+    {
+        FilterPtr filter_ignored;
+        return read(filter_ignored, false);
+    }
 
-    Block readWithFilter(const IColumn::Filter & filter) override { return reader.readWithFilter(filter); }
+    Block readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter) override;
+
+    Block read(FilterPtr & res_filter, bool return_filter) override;
 
 private:
+    bool filterBlock(Block & block, FilterPtr & res_filter, bool return_filter, bool all_match);
+
     friend class tests::DMFileMetaV2Test;
     DMFileReader reader;
     const bool enable_data_sharing;
+
+    ExpressionActionsPtr extra_cast;
+    std::optional<FilterTransformAction> filter_trans;
+    ExpressionActionsPtr project_after_where;
+    String filter_column_name;
+
+    IColumn::Filter filter_result;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
@@ -155,6 +174,12 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & setFilter(const PredicateFilterPtr & filter_)
+    {
+        filter = filter_;
+        return *this;
+    }
+
 private:
     // These methods are called by the ctor
 
@@ -194,6 +219,7 @@ private:
     size_t max_sharing_column_bytes_for_all = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
+    PredicateFilterPtr filter;
 };
 
 /**

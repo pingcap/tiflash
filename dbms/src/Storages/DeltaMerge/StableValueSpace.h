@@ -18,11 +18,11 @@
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage_fwd.h>
-
 namespace DB
 {
 namespace DM
@@ -203,14 +203,14 @@ public:
          * Rows from packs that are not included in the segment range will be also counted in.
          * Note: Out-of-range rows may be produced by logical split.
          */
-        size_t getDMFilesRows() const { return stable->getDMFilesRows(); };
+        size_t getDMFilesRows() const { return stable->getDMFilesRows(); }
 
         /**
          * Return the total size of the data of the underlying DTFiles.
          * Rows from packs that are not included in the segment range will be also counted in.
          * Note: Out-of-range rows may be produced by logical split.
          */
-        size_t getDMFilesBytes() const { return stable->getDMFilesBytes(); };
+        size_t getDMFilesBytes() const { return stable->getDMFilesBytes(); }
 
         ColumnCachePtrs & getColumnCaches() { return column_caches; }
 
@@ -226,11 +226,12 @@ public:
             const DMContext & context, //
             const ColumnDefines & read_columns,
             const RowKeyRanges & rowkey_ranges,
-            const RSOperatorPtr & filter,
+            const RSOperatorPtr & rs_filter,
             UInt64 max_data_version,
             size_t expected_block_size,
             bool enable_handle_clean_read,
             ReadTag read_tag,
+            const PredicateFilterPtr & filter = nullptr,
             bool is_fast_scan = false,
             bool enable_del_clean_read = false,
             const std::vector<IdSetPtr> & read_packs = {},

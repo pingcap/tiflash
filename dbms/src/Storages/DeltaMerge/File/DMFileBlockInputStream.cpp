@@ -93,7 +93,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         scan_context,
         read_tag);
 
-    return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0);
+    return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0, filter);
 }
 
 DMFileBlockInputStreamPtr createSimpleBlockInputStream(
@@ -120,6 +120,62 @@ DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(c
     max_read_buffer_size = settings.max_read_buffer_size;
     max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
     return *this;
+}
+
+Block DMFileBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
+{
+    if (filter_trans && filter_trans->alwaysFalse())
+        return {};
+
+    auto [block, all_match] = reader.read();
+    if (filter_trans)
+    {
+        RUNTIME_CHECK(return_filter);
+        // filterBlock should always return true where return_filter is true
+        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter, all_match));
+    }
+    else
+    {
+        res_filter = nullptr;
+    }
+    return block;
+}
+
+Block DMFileBlockInputStream::readWithFilter(const IColumn::Filter & filter, FilterPtr & res_filter, bool return_filter)
+{
+    auto [block, all_match] = reader.readWithFilter(filter);
+    if (filter_trans)
+    {
+        RUNTIME_CHECK(return_filter);
+        // filterBlock should always return true where return_filter is true.
+        RUNTIME_CHECK(filterBlock(block, res_filter, return_filter, all_match));
+    }
+    else
+    {
+        res_filter = nullptr;
+    }
+    return block;
+}
+
+// If some/all rows are passed, return true.
+// If none rows is passed, return false.
+bool DMFileBlockInputStream::filterBlock(Block & block, FilterPtr & res_filter, bool return_filter, bool all_match)
+{
+    if (!block)
+        return true;
+
+    auto res = PredicateFilter::transformBlock(
+        extra_cast,
+        *filter_trans,
+        *project_after_where,
+        filter_column_name,
+        block,
+        filter_result,
+        return_filter,
+        all_match);
+    if (res && return_filter)
+        res_filter = filter_result.empty() ? nullptr : &filter_result;
+    return res;
 }
 
 } // namespace DB::DM
