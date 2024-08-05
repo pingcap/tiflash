@@ -71,8 +71,8 @@ public:
 
     static constexpr bool isJoinKeyTypeReference() { return false; }
 
-    ALWAYS_INLINE T getJoinKey(size_t row) { return vec[row]; }
-    ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return vec[row]; }
+    ALWAYS_INLINE T getJoinKey(size_t row) { return unalignedLoad<T>(vec + row); }
+    ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return unalignedLoad<T>(vec + row); }
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
