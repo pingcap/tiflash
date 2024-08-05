@@ -925,15 +925,9 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
                     throw Exception(
                         ErrorCodes::CHECKSUM_DOESNT_MATCH,
                         "Reading with fields meet checksum not match "
-<<<<<<< HEAD
-                        "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                        "[field_index={}] [field_offset={}] [field_size={}] "
-                        "[entry={}] [file={}]",
-=======
                         "page_id={} expected=0x{:X} actual=0x{:X} "
                         "field_index={} field_offset={} field_size={} "
                         "entry={}",
->>>>>>> dc20fe919f (PageStorage: Fix empty page cause TiFlash failed to start (#9283))
                         page_id_v3,
                         expect_checksum,
                         field_checksum,
@@ -1036,17 +1030,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
                 throw Exception(
-<<<<<<< HEAD
-                    fmt::format(
-                        "Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                        "[entry={}] [file={}]",
-                        page_id_v3,
-                        entry.checksum,
-                        checksum,
-                        entry,
-                        blob_file->getPath()),
-                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
-=======
                     ErrorCodes::CHECKSUM_DOESNT_MATCH,
                     "Reading with entries meet checksum not match page_id={} expected=0x{:X} actual=0x{:X} "
                     "entry={}",
@@ -1054,7 +1037,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
                     entry.checksum,
                     checksum,
                     entry);
->>>>>>> dc20fe919f (PageStorage: Fix empty page cause TiFlash failed to start (#9283))
             }
         }
 
