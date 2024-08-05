@@ -946,7 +946,7 @@ try
     auto cache_not_contains = [&](const String & file) {
         const auto all = file_cache.getAll();
         for (const auto & file_seg : all)
-            if (file_seg->getLocalFileName().contains(file))
+            if (file_seg->getLocalFileName().find(file) != std::string::npos)
                 return false;
         return true;
     };
@@ -1003,7 +1003,7 @@ try
         }
         catch (Exception & e)
         {
-            ASSERT_TRUE(e.message().contains("Cannot reserve 999 space for object"));
+            ASSERT_TRUE(e.message().find("Cannot reserve 999 space for object") != std::string::npos);
         }
         ASSERT_EQ(file_cache.getAll().size(), 0);
     }
