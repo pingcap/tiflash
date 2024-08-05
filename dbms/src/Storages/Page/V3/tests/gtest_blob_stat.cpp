@@ -426,10 +426,6 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     BlobStats stats(logger, delegator, config);
 
     {
-<<<<<<< HEAD
-        auto lock = stats.lock();
-=======
->>>>>>> dc20fe919f (PageStorage: Fix empty page cause TiFlash failed to start (#9283))
         BlobFileId file_id = 10;
         BlobStats::BlobStatPtr stat = stats.createStat(file_id, config.file_limit_size, stats.lock());
         auto offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1, stat->lock());

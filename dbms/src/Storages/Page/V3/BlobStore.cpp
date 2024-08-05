@@ -728,12 +728,8 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
     Stopwatch watch;
     BlobStatPtr stat;
 
-<<<<<<< HEAD
-    auto lock_stat = [size, this, &stat, &page_type]() {
-=======
     // TODO: make this lambda as a function of BlobStats to simplify code
-    auto lock_stat = [size, this, &stat, &page_type]() NO_THREAD_SAFETY_ANALYSIS {
->>>>>>> dc20fe919f (PageStorage: Fix empty page cause TiFlash failed to start (#9283))
+    auto lock_stat = [size, this, &stat, &page_type]() {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
         std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, page_type, lock_stats);
@@ -927,15 +923,9 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
                     throw Exception(
                         ErrorCodes::CHECKSUM_DOESNT_MATCH,
                         "Reading with fields meet checksum not match "
-<<<<<<< HEAD
-                        "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                        "[field_index={}] [field_offset={}] [field_size={}] "
-                        "[entry={}] [file={}]",
-=======
                         "page_id={} expected=0x{:X} actual=0x{:X} "
                         "field_index={} field_offset={} field_size={} "
                         "entry={}",
->>>>>>> dc20fe919f (PageStorage: Fix empty page cause TiFlash failed to start (#9283))
                         page_id_v3,
                         expect_checksum,
                         field_checksum,
@@ -1038,17 +1028,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
                 throw Exception(
-<<<<<<< HEAD
-                    fmt::format(
-                        "Reading with entries meet checksum not match [page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                        "[entry={}] [file={}]",
-                        page_id_v3,
-                        entry.checksum,
-                        checksum,
-                        entry,
-                        blob_file->getPath()),
-                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
-=======
                     ErrorCodes::CHECKSUM_DOESNT_MATCH,
                     "Reading with entries meet checksum not match page_id={} expected=0x{:X} actual=0x{:X} "
                     "entry={}",
@@ -1056,7 +1035,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(
                     entry.checksum,
                     checksum,
                     entry);
->>>>>>> dc20fe919f (PageStorage: Fix empty page cause TiFlash failed to start (#9283))
             }
         }
 

@@ -1699,7 +1699,7 @@ try
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 4);
         // remove the non-empty entries
-        blob_store.removeEntries({records[0].entry, records[2].entry});
+        blob_store.remove({records[0].entry, records[2].entry});
 
         /// try to read the empty pages after the blob_file get removed, no exception should happen
         // read-1-entry
