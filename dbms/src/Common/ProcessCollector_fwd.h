@@ -14,25 +14,9 @@
 
 #pragma once
 
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-struct ProcessMetricsInfo
+namespace DB
 {
-    uint64_t cpu_total;
-    uint64_t vsize;
-    uint64_t rss;
-    uint64_t rss_anon;
-    uint64_t rss_file;
-    uint64_t rss_shared;
-    int64_t start_time;
-};
 
-ProcessMetricsInfo get_process_metrics();
+class ProcessCollector;
 
-#ifdef __cplusplus
 }
-#endif

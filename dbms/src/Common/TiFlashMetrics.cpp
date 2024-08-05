@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/ProcessCollector.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
 #include <common/defines.h>
@@ -27,6 +28,8 @@ TiFlashMetrics & TiFlashMetrics::instance()
 
 TiFlashMetrics::TiFlashMetrics()
 {
+    process_collector = std::make_shared<ProcessCollector>();
+
     registered_profile_events.reserve(ProfileEvents::end());
     for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
@@ -200,6 +203,11 @@ void TiFlashMetrics::registerStorageThreadMemory(const std::string & k)
                 &registered_storage_thread_memory_usage_family->Add({{"type", prefix}}));
         }
     }
+}
+
+void TiFlashMetrics::setProvideProxyProcessMetrics(bool v)
+{
+    process_collector->include_proxy_metrics = v;
 }
 
 } // namespace DB

@@ -20,6 +20,7 @@ add_custom_command(OUTPUT ${_PROCESS_METRICS_LIBRARY}
         COMMENT "Building process_metrics"
         COMMAND cargo build --release --target-dir ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
+        USES_TERMINAL
         WORKING_DIRECTORY ${_PROCESS_METRICS_SOURCE_DIR}
         DEPENDS "${_PROCESS_METRICS_SRCS}"
         "${_PROCESS_METRICS_HEADERS}"

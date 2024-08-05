@@ -14,6 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/FunctionTimerTask.h>
+#include <Common/ProcessCollector.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
@@ -207,6 +208,11 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
 
+    bool should_provide_proxy_metrics
+        = (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+           && context.getSharedContextDisagg()->use_autoscaler);
+    tiflash_metrics.setProvideProxyProcessMetrics(should_provide_proxy_metrics);
+
     // Interval to collect `ProfileEvents::Event`/`CurrentMetrics::Metric`/`AsynchronousMetrics`
     // When push mode is enabled, it also define the interval that Prometheus client push to pushgateway.
     metrics_interval = conf.getInt(status_metrics_interval, 15);
@@ -245,11 +251,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
             const auto & labels = prometheus::Gateway::GetInstanceLabel(getInstanceValue(conf));
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
-                && context.getSharedContextDisagg()->use_autoscaler)
-            {
-                gateway->RegisterCollectable(tiflash_metrics.cn_process_collector);
-            }
+            gateway->RegisterCollectable(tiflash_metrics.process_collector);
 
             LOG_INFO(log, "Enable prometheus push mode; interval = {}; addr = {}", metrics_interval, metrics_addr);
         }
@@ -268,12 +270,9 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
             addr = listen_host + ":" + metrics_port;
         if (context.getSecurityConfig()->hasTlsConfig() && !conf.getBool(status_disable_metrics_tls, false))
         {
-            std::vector<std::weak_ptr<prometheus::Collectable>> collectables{tiflash_metrics.registry};
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
-                && context.getSharedContextDisagg()->use_autoscaler)
-            {
-                collectables.push_back(tiflash_metrics.cn_process_collector);
-            }
+            std::vector<std::weak_ptr<prometheus::Collectable>> collectables{
+                tiflash_metrics.registry,
+                tiflash_metrics.process_collector};
             server = getHTTPServer(context, collectables, addr);
             server->start();
             LOG_INFO(
@@ -286,11 +285,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
         {
             exposer = std::make_shared<prometheus::Exposer>(addr);
             exposer->RegisterCollectable(tiflash_metrics.registry);
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
-                && context.getSharedContextDisagg()->use_autoscaler)
-            {
-                exposer->RegisterCollectable(tiflash_metrics.cn_process_collector);
-            }
+            exposer->RegisterCollectable(tiflash_metrics.process_collector);
             LOG_INFO(
                 log,
                 "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}",

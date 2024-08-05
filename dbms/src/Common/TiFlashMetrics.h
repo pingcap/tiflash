@@ -16,7 +16,7 @@
 
 #include <Common/ComputeLabelHolder.h>
 #include <Common/Exception.h>
-#include <Common/ProcessCollector.h>
+#include <Common/ProcessCollector_fwd.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
 #include <common/types.h>
@@ -1089,6 +1089,7 @@ struct MetricFamily
         return *(resource_group_metrics_map[resource_group_name][idx]);
     }
 
+
 private:
     void addMetricsForResourceGroup(const String & resource_group_name)
     {
@@ -1143,6 +1144,7 @@ public:
     double getStorageThreadMemory(MemoryAllocType type, const std::string & k);
     void registerProxyThreadMemory(const std::string & k);
     void registerStorageThreadMemory(const std::string & k);
+    void setProvideProxyProcessMetrics(bool v);
 
 private:
     TiFlashMetrics();
@@ -1157,10 +1159,7 @@ private:
     static constexpr auto storages_thread_memory_usage = "tiflash_storages_thread_memory_usage";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
-    // Here we add a ProcessCollector to collect cpu/rss/vsize/start_time information.
-    // Normally, these metrics will be collected by tiflash-proxy,
-    // but in disaggregated compute mode with AutoScaler, tiflash-proxy will not start, so tiflash will collect these metrics itself.
-    std::shared_ptr<ProcessCollector> cn_process_collector = std::make_shared<ProcessCollector>();
+    std::shared_ptr<ProcessCollector> process_collector;
 
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
