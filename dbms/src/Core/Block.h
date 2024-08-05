@@ -18,12 +18,12 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 
 #include <initializer_list>
 #include <list>
 #include <map>
 #include <vector>
-
 
 namespace DB
 {
@@ -51,6 +51,8 @@ private:
     // `segment_row_id_col` is a virtual column that represents the records' row id in the corresponding segment.
     // Only used for calculating MVCC-bitmap-filter.
     ColumnPtr segment_row_id_col;
+
+    DM::RSResult rs_result = DM::RSResult::Some;
 
 public:
     BlockInfo info;
@@ -162,6 +164,9 @@ public:
     UInt64 startOffset() const { return start_offset; }
     void setSegmentRowIdCol(ColumnPtr && col) { segment_row_id_col = col; }
     ColumnPtr segmentRowIdCol() const { return segment_row_id_col; }
+
+    void setRSResult(DM::RSResult r) { rs_result = r; }
+    DM::RSResult getRSResult() const { return rs_result; }
 
 private:
     void eraseImpl(size_t position);

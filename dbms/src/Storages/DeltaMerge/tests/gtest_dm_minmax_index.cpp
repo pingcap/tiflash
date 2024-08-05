@@ -2052,7 +2052,7 @@ try
     // make a euqal filter, check equal with 1
     auto filter = createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
 
-    ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::SomeNull);
 }
 CATCH
 
@@ -2087,32 +2087,32 @@ try
     {
         // make a in filter, check in (NULL)
         auto filter = createIn(attr("Nullable(Int64)"), {Field()});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::NoneNull);
     }
     {
         // make a in filter, check in (NULL, 1)
         auto filter = createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::SomeNull);
     }
     {
         // make a in filter, check in (3)
         auto filter = createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::NoneNull);
     }
     {
         // make a not in filter, check not in (NULL)
         auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field()}));
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::AllNull);
     }
     {
         // make a not in filter, check not in (NULL, 1)
         auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))}));
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::SomeNull);
     }
     {
         // make a not in filter, check not in (3)
         auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))}));
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::AllNull);
     }
 }
 CATCH
@@ -2264,6 +2264,24 @@ try
 }
 CATCH
 
+namespace
+{
+// Only support Int64.
+template <typename T>
+MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const std::vector<T> & cases)
+{
+    auto minmax_index = std::make_shared<MinMaxIndex>(col_type);
+    for (const auto & c : cases)
+    {
+        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+    return minmax_index;
+}
+} // namespace
+
 TEST_F(MinMaxIndexTest, CheckIsNull)
 try
 {
@@ -2286,14 +2304,7 @@ try
     };
 
     auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
-    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
-    for (const auto & c : cases)
-    {
-        ASSERT_EQ(c.column_data.size(), c.del_mark.size());
-        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
-        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
-        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
-    }
+    auto minmax_index = createMinMaxIndex(*col_type, cases);
 
     auto actual_results = minmax_index->checkIsNull(0, cases.size());
     for (size_t i = 0; i < cases.size(); ++i)
@@ -2304,6 +2315,131 @@ try
             i,
             magic_enum::enum_name(actual_results[i]),
             magic_enum::enum_name(c.result));
+    }
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckIn)
+try
+{
+    struct CheckInTestCase
+    {
+        std::vector<std::optional<Int64>> column_data;
+        std::vector<UInt64> del_mark;
+    };
+    struct ValuesAndResults
+    {
+        std::vector<Int64> values;
+        RSResults results;
+    };
+    std::vector<CheckInTestCase> cases = {
+        {
+            .column_data = {1, 2, 3, 4, std::nullopt},
+            .del_mark = {0, 0, 0, 0, 0},
+        },
+        {
+            .column_data = {6, 7, 8, 9, 10},
+            .del_mark = {0, 0, 0, 0, 0},
+        },
+        {
+            .column_data = {std::nullopt, std::nullopt},
+            .del_mark = {0, 0},
+        },
+        {
+            .column_data = {1, 2, 3, 4, std::nullopt},
+            .del_mark = {0, 0, 0, 0, 1},
+        },
+        {
+            .column_data = {6, 7, 8, 9, 10},
+            .del_mark = {0, 0, 0, 1, 0},
+        },
+        {
+            .column_data = {std::nullopt, std::nullopt},
+            .del_mark = {1, 0},
+        },
+        {
+            .column_data = {std::nullopt, std::nullopt},
+            .del_mark = {1, 1},
+        },
+        {
+            .column_data = {1, 2, 3, 4},
+            .del_mark = {1, 1, 1, 1},
+        },
+        {
+            .column_data = {1, 1},
+            .del_mark = {0, 0},
+        },
+        {
+            .column_data = {1, 1, std::nullopt},
+            .del_mark = {0, 0, 0},
+        },
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .values = {1, 2, 3, 4, 5, 6},
+            .results = {
+                RSResult::SomeNull,  // Should be AllNull, but not support now
+                RSResult::Some,
+                RSResult::SomeNull,  // Meet the compatibility check
+                RSResult::Some,  // Should be All, but not support now
+                RSResult::Some,
+                RSResult::SomeNull,  // Meet the compatibility check
+                RSResult::SomeNull,  // Meet the compatibility check
+                RSResult::SomeNull,  // Meet the compatibility check
+                RSResult::All,   // Minimum value equals to maximum value
+                RSResult::AllNull,
+            },
+        },
+        {
+            .values = {100},
+            .results = {
+            RSResult::NoneNull,
+            RSResult::None,
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::None,
+            RSResult::None,
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::None,
+            RSResult::NoneNull,
+            },
+        },
+        {
+            .values = {0},
+            .results = {
+            RSResult::NoneNull,
+            RSResult::None,
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::None,
+            RSResult::None,
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::None,
+            RSResult::NoneNull,
+            },
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, cases);
+    for (const auto & [values, expected_results] : params)
+    {
+        ASSERT_EQ(expected_results.size(), cases.size());
+        auto actual_results
+            = minmax_index->checkIn(0, cases.size(), std::vector<Field>(values.cbegin(), values.cend()), col_type);
+        for (size_t j = 0; j < cases.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "column_data={}, del_mark={}, values={}, actual={} expected={}",
+                cases[j].column_data,
+                cases[j].del_mark,
+                values,
+                magic_enum::enum_name(actual_results[j]),
+                magic_enum::enum_name(expected_results[j]));
+        }
     }
 }
 CATCH
