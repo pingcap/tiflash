@@ -43,7 +43,7 @@ protected:
         return [ranges, range_size](size_t idx, UInt64 start, UInt64 end) -> bool {
             return idx < range_size && ranges[idx].start == start && ranges[idx].end == end;
         };
-    };
+    }
 };
 
 TEST_P(SpaceMapTest, InitAndDestory)
@@ -59,6 +59,13 @@ TEST_P(SpaceMapTest, MarkUnmark)
 
     Range ranges[] = {{.start = 0, .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges, 1), 1));
+
+    ASSERT_TRUE(smap->markUsed(0, 100));
+    ASSERT_TRUE(smap->markUsed(0, 0));
+    ASSERT_TRUE(smap->markUsed(100, 0));
+    ASSERT_TRUE(smap->markFree(0, 100));
+    // Now off-by-1 will return false but no exception
+    ASSERT_FALSE(smap->markUsed(0, 101));
 
     ASSERT_TRUE(smap->markUsed(50, 1));
     ASSERT_FALSE(smap->markUsed(50, 1));
@@ -440,6 +447,23 @@ TEST_P(SpaceMapTest, EmptyBlob)
     ASSERT_EQ(sizes.second, 10);
 }
 
+TEST_P(SpaceMapTest, Fragmentation)
+{
+    auto smap = SpaceMap::createSpaceMap(SpaceMap::SMAP64_STD_MAP, 0, 100);
+    // add an empty page
+    ASSERT_TRUE(smap->markUsed(60, 0));
+    auto sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 0);
+    ASSERT_EQ(sizes.second, 0);
+    ASSERT_EQ(smap->getUsedBoundary(), 0); // used boundary won't contain the empty page
+
+    // add [50, 70), should success
+    ASSERT_TRUE(smap->markUsed(50, 20));
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 70);
+    ASSERT_EQ(sizes.second, 20);
+    ASSERT_EQ(smap->getUsedBoundary(), 70);
+}
 
 INSTANTIATE_TEST_CASE_P(Type, SpaceMapTest, testing::Values(SpaceMap::SMAP64_STD_MAP));
 
