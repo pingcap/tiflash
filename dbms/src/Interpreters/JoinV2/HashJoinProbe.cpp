@@ -31,6 +31,7 @@ bool JoinProbeContext::isCurrentProbeFinished() const
 void JoinProbeContext::resetBlock(Block & block_)
 {
     block = block_;
+    orignal_block = block_;
     rows = block.rows();
     start_row_idx = 0;
     current_probe_row_ptr = nullptr;

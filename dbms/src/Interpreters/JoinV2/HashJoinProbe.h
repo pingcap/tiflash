@@ -30,6 +30,8 @@ namespace DB
 struct JoinProbeContext
 {
     Block block;
+    /// original_block ensures that the reference counts for the key columns are never zero.
+    Block orignal_block;
     size_t rows;
     size_t start_row_idx = 0;
     size_t prefetch_active_states = 0;
