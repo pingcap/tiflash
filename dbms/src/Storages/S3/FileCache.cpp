@@ -390,15 +390,19 @@ bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode ev
 // Distinguish cache priority according to file type. The larger the file type, the lower the priority.
 // First, try to evict files which not be used recently with the same type. => Try to evict old files.
 // Second, try to evict files with lower priority. => Try to evict lower priority files.
+// Finally, evict files with higher priority, if space is still not sufficient. Higher priority files
+// are usually smaller. If we don't evict them, it is very possible that cache is full of these higher
+// priority small files and we can't effectively cache any lower-priority large files.
 std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for)
 {
     std::vector<FileType> evict_types;
     evict_types.push_back(evict_for); // First, try evict with the same file type.
     constexpr auto all_file_types = magic_enum::enum_values<FileType>(); // all_file_types are sorted by enum value.
     // Second, try evict from the lower proirity file type.
-    for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types) && *itr > evict_for; ++itr)
+    for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
     {
-        evict_types.push_back(*itr);
+        if (*itr != evict_for)
+            evict_types.push_back(*itr);
     }
     return evict_types;
 }
