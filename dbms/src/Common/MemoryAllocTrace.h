@@ -15,8 +15,28 @@
 #pragma once
 
 #include <tuple>
+#include <common/types.h>
+#include <common/defines.h>
 
 namespace DB
 {
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr();
+
+struct ThreadStackAllocTracker {
+    ThreadStackAllocTracker();
+
+    void begin();
+    std::pair<uint64_t, uint64_t> end();
+    void report();
+
+    std::string threadName() const;
+private:
+    uint64_t * alloc_ptr = nullptr;
+    uint64_t * dealloc_ptr = nullptr;
+    UInt64 total_alloc = 0;
+    UInt64 total_dealloc = 0;
+    UInt64 begin_alloc = 0;
+    UInt64 begin_dealloc = 0;
+};
+
 } // namespace DB

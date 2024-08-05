@@ -24,6 +24,7 @@
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/StorageEngineType.h>
+#include <Common/MemoryAllocTrace.h>
 
 #include <condition_variable>
 #include <magic_enum.hpp>
