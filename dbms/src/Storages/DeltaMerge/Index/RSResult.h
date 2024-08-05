@@ -67,6 +67,10 @@ inline RSResult addNull(RSResult v)
 inline RSResult operator||(RSResult v0, RSResult v1)
 {
     RUNTIME_CHECK(v0 != RSResult::Unknown && v1 != RSResult::Unknown);
+
+    if (v0 == RSResult::All || v1 == RSResult::All)
+        return RSResult::All;
+
     auto [t0, b0] = removeNull(v0);
     auto [t1, b1] = removeNull(v1);
     auto result = RSResult::None;
@@ -74,7 +78,6 @@ inline RSResult operator||(RSResult v0, RSResult v1)
         result = RSResult::All;
     else if (t0 == RSResult::Some || t1 == RSResult::Some)
         result = RSResult::Some;
-
     return (b0 || b1) ? addNull(result) : result;
 }
 
