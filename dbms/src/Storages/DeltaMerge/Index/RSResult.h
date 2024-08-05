@@ -68,7 +68,7 @@ ALWAYS_INLINE inline RSResult addNull(RSResult v) noexcept
     }
 }
 
-// For safety reasons, the logical operations of RSResult will always keep null if null has occurred before
+// For safety reasons, the logical operations of RSResult will always keep null if null has occurred.
 ALWAYS_INLINE inline RSResult operator!(RSResult v)
 {
     switch (v)
