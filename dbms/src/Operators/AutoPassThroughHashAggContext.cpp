@@ -83,7 +83,7 @@ void AutoPassThroughHashAggContext::onBlockForceStreaming(Block & block)
 
 void AutoPassThroughHashAggContext::forceState()
 {
-    if (already_get_data_from_hash_table)
+    if (many_data[0]->need_spill || already_get_data_from_hash_table)
         state = State::PassThrough;
 }
 
