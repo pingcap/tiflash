@@ -191,6 +191,7 @@ public:
     virtual bool canHandleSelectiveBlock() const { return false; }
 
     void setParent(const IBlockInputStream * parent_) { parent = parent_; }
+    const IBlockInputStream * getParent() const { return parent; }
 
     BlockInputStreams getChildren() { return children; }
 

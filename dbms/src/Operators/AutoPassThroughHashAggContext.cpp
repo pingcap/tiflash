@@ -22,8 +22,6 @@ namespace DB
 {
 void AutoPassThroughHashAggContext::onBlockAuto(Block & block)
 {
-    RUNTIME_CHECK_MSG(!already_start_to_get_data, "Shouldn't insert into HashMap if already start to get data");
-
     agg_process_info->resetBlock(block);
     switch (state)
     {
@@ -72,6 +70,8 @@ void AutoPassThroughHashAggContext::onBlockAuto(Block & block)
         __builtin_unreachable();
     }
     };
+    // allBlockDataHandled() will return false if HashTable resize when need_spill is true, which will not happen.
+    // Because when need_spill is set, all blocks will be pass through, so HashTable got no chance to resize.
     RUNTIME_CHECK(agg_process_info->allBlockDataHandled());
 }
 
@@ -83,17 +83,36 @@ void AutoPassThroughHashAggContext::onBlockForceStreaming(Block & block)
 
 void AutoPassThroughHashAggContext::forceState()
 {
-    if (many_data[0]->need_spill)
+    if (already_get_data_from_hash_table)
         state = State::PassThrough;
 }
 
-Block AutoPassThroughHashAggContext::getData()
+Block AutoPassThroughHashAggContext::tryGetDataInAdvance()
 {
-    if unlikely (!already_start_to_get_data)
+    Block res;
+    if (many_data[0]->need_spill && ((res = getDataFromHashTable())))
+    {
+        LOG_DEBUG(log, "start to get block from hashtable in advance because need to spill");
+        RUNTIME_CHECK(res);
+        return res;
+    }
+
+    if (!pass_through_block_buffer.empty())
+    {
+        res = pass_through_block_buffer.front();
+        RUNTIME_CHECK(res);
+        pass_through_block_buffer.pop_front();
+    }
+    return res;
+}
+
+Block AutoPassThroughHashAggContext::getDataFromHashTable()
+{
+    if unlikely (!already_get_data_from_hash_table)
     {
         // No need to handle situation when agg keys_size is zero.
         // Shouldn't use auto pass through hashagg in that case.
-        already_start_to_get_data = true;
+        already_get_data_from_hash_table = true;
         RUNTIME_CHECK(!merging_buckets);
         merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, /*final=*/true, /*max_threads=*/1);
     }

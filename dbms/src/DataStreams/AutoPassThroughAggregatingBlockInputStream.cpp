@@ -33,15 +33,16 @@ Block AutoPassThroughAggregatingBlockInputStream<force_streaming>::readImpl()
             break;
         }
 
-        if (!auto_pass_through_context->passThroughBufferEmpty())
-            return auto_pass_through_context->popPassThroughBuffer();
+        if (auto res = auto_pass_through_context->tryGetDataInAdvance())
+            return res;
     }
 
     assert(build_done);
-    if (!auto_pass_through_context->passThroughBufferEmpty())
-        return auto_pass_through_context->popPassThroughBuffer();
 
-    return auto_pass_through_context->getData();
+    if (auto res = auto_pass_through_context->tryGetDataInAdvance())
+        return res;
+
+    return auto_pass_through_context->getDataFromHashTable();
 }
 
 } // namespace DB

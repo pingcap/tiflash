@@ -315,6 +315,9 @@ String PhysicalPlan::toString() const
 
 void recursiveSetBlockInputStreamParent(BlockInputStreamPtr self, const IBlockInputStream * parent)
 {
+    if (self->getParent() != nullptr)
+        return;
+
     for (auto & child : self->getChildren())
     {
         recursiveSetBlockInputStreamParent(child, self.get());

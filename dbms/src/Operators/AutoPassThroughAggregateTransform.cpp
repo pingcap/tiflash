@@ -32,15 +32,12 @@ OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::transformImpl
         else
             auto_pass_through_context->onBlock<force_streaming>(block);
 
-        if (!auto_pass_through_context->passThroughBufferEmpty())
-        {
-            block = auto_pass_through_context->popPassThroughBuffer();
+        if ((block = auto_pass_through_context->tryGetDataInAdvance()))
             return OperatorStatus::HAS_OUTPUT;
-        }
 
-        if unlikely (!block)
+        if unlikely (status == Status::hash_map_done)
         {
-            block = auto_pass_through_context->getData();
+            block = auto_pass_through_context->getDataFromHashTable();
             return OperatorStatus::HAS_OUTPUT;
         }
 
@@ -56,11 +53,8 @@ OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::transformImpl
 template <bool force_streaming>
 OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::tryOutputImpl(Block & block)
 {
-    if (!auto_pass_through_context->passThroughBufferEmpty())
-    {
-        block = auto_pass_through_context->popPassThroughBuffer();
+    if ((block = auto_pass_through_context->tryGetDataInAdvance()))
         return OperatorStatus::HAS_OUTPUT;
-    }
 
     switch (status)
     {
@@ -70,7 +64,7 @@ OperatorStatus AutoPassThroughAggregateTransform<force_streaming>::tryOutputImpl
     }
     case Status::hash_map_done:
     {
-        block = auto_pass_through_context->getData();
+        block = auto_pass_through_context->getDataFromHashTable();
         return OperatorStatus::HAS_OUTPUT;
     }
     default:

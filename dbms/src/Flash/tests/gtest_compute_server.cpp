@@ -189,7 +189,24 @@ public:
     {
         void init(MockDAGRequestContext & context)
         {
-            context.context->getSettingsRef().max_block_size = block_size;
+            const ::testing::TestInfo * test_info = ::testing::UnitTest::GetInstance()->current_test_info();
+
+            if (test_info)
+            {
+                std::string test_case_name = test_info->name();
+                if (test_case_name == "autoPassThroughIntegrationTest")
+                {
+                    LOG_DEBUG(Logger::get(), "autoPassThroughIntegrationTest spill config setup");
+                    context.context->getSettingsRef().max_block_size = 800;
+                    context.context->getSettingsRef().group_by_two_level_threshold = 1;
+                    context.context->getSettingsRef().group_by_two_level_threshold_bytes = 1;
+                    context.context->getSettingsRef().max_bytes_before_external_group_by = 100;
+                }
+                else if (test_case_name == "stateSwitchMediumNDV")
+                {
+                    context.context->getSettingsRef().max_block_size = block_size;
+                }
+            }
 
             if (inited)
                 return;
@@ -1746,7 +1763,6 @@ try
 }
 CATCH
 
-// todo add case to cover two level hashmap; spill
 // Using different workload(low/high/medium ndv) to run auto_pass_through hashagg,
 // which cover logic of interpretion, execution and exchange.
 TEST_F(ComputeServerRunner, autoPassThroughIntegrationTest)

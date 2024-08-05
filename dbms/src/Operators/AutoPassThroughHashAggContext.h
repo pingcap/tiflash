@@ -70,7 +70,6 @@ public:
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
         many_data[0] = std::make_shared<AggregatedDataVariants>();
         agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
-        RUNTIME_CHECK(adjust_row_limit > 1024 && other_state_row_limit > 1024);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
 
         auto header = aggregator->getHeader(/*final=*/true);
@@ -97,19 +96,12 @@ public:
         }
     }
 
-    Block getData();
-
-    bool passThroughBufferEmpty() const { return pass_through_block_buffer.empty(); }
-
-    Block popPassThroughBuffer()
-    {
-        Block res = pass_through_block_buffer.front();
-        pass_through_block_buffer.pop_front();
-        return res;
-    }
+    Block tryGetDataInAdvance();
+    Block getDataFromHashTable();
 
     Block getHeader() { return aggregator->getHeader(/*final=*/true); }
 
+    // TODO: Stop insert new rows into HashTable when start converting HashTable to two level
     enum class State
     {
         Init,
@@ -141,6 +133,13 @@ private:
     void forceState();
     static void makeFullSelective(Block & block);
 
+    Block popPassThroughBuffer()
+    {
+        Block res = pass_through_block_buffer.front();
+        pass_through_block_buffer.pop_front();
+        return res;
+    }
+
     static constexpr double PassThroughRateLimit = 0.2;
     static constexpr double PreHashAggRateLimit = 0.9;
 
@@ -157,7 +156,10 @@ private:
     size_t state_processed_rows = 0;
 
     BlocksList pass_through_block_buffer{};
-    bool already_start_to_get_data = false;
+    // True when:
+    // 1. HashTable needs to spill. So we need to pass through all blocks from HashTable.
+    // 2. All children blocks are handled and we start to return blocks.
+    bool already_get_data_from_hash_table = false;
     MergingBucketsPtr merging_buckets = nullptr;
 
     struct Statistics
