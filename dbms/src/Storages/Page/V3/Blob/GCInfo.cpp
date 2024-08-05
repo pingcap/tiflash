@@ -33,7 +33,7 @@ struct fmt::formatter<DB::PS::V3::BlobFileGCInfo>
     template <typename FormatContext>
     auto format(const DB::PS::V3::BlobFileGCInfo & i, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "<id:{} rate:{:.2f}>", i.blob_id, i.valid_rate);
+        return fmt::format_to(ctx.out(), "<blob_id={} rate={:.2f}>", i.blob_id, i.valid_rate);
     }
 };
 template <>
@@ -53,7 +53,7 @@ struct fmt::formatter<DB::PS::V3::BlobFileTruncateInfo>
     {
         return format_to(
             ctx.out(),
-            "<id:{} origin:{} truncate:{} rate:{:.2f}>",
+            "<blob_id={} origin={} truncate={} rate={:.2f}>",
             i.blob_id,
             i.origin_size,
             i.truncated_size,
@@ -86,7 +86,7 @@ String BlobStoreGCInfo::toTypeString(const Type type_index) const
     if (blob_gc_info[type_index].empty())
         return fmt::format("{{{}: [null]}}", magic_enum::enum_name(type_index));
 
-    // e.g. {FullGC: [<id:4 rate:0.16>]}}
+    // e.g. {FullGC: [<blob_id=4 rate=0.16>]}
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("{{{}: [", magic_enum::enum_name(type_index))
         .joinStr(
@@ -103,6 +103,7 @@ String BlobStoreGCInfo::toTypeTruncateString(const Type type_index) const
     if (blob_gc_truncate_info.empty())
         return fmt::format("{{{}: [null]}}", magic_enum::enum_name(type_index));
 
+    // e.g. {Truncated: [<blob_id=221 origin=0 truncate=0 rate=0.00>]}
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("{{{}: [", magic_enum::enum_name(type_index))
         .joinStr(
