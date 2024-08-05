@@ -51,7 +51,7 @@ public:
     OptionalCheckpointInfo checkpoint_info;
 
     // The offset to the beginning of specify field.
-    PageFieldOffsetChecksums field_offsets;
+    PageFieldOffsetChecksums field_offsets{};
 
 public:
     PageSize getTotalSize() const { return size + padded_size; }
@@ -60,48 +60,54 @@ public:
 
     size_t getFieldSize(size_t index) const
     {
-        RUNTIME_CHECK_MSG(
-            index < field_offsets.size(),
-            "Try to getFieldData of PageEntry [blob_id={}] with invalid [index={}] [fields size={}]",
-            file_id,
-            index,
-            field_offsets.size());
-        if (index != field_offsets.size() - 1)
+        if (unlikely(index >= field_offsets.size()))
+            throw Exception(
+                fmt::format(
+                    "Try to getFieldData of PageEntry [blob_id={}] with invalid [index={}] [fields size={}]",
+                    file_id,
+                    index,
+                    field_offsets.size()),
+                ErrorCodes::LOGICAL_ERROR);
+        else if (index == field_offsets.size() - 1)
         {
-            return field_offsets[index + 1].first - field_offsets[index].first;
-        }
-        if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
-        {
-            // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
-            return checkpoint_info.data_location.size_in_file - field_offsets.back().first;
+            if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
+            {
+                // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
+                return checkpoint_info.data_location.size_in_file - field_offsets.back().first;
+            }
+            else
+            {
+                return size - field_offsets.back().first;
+            }
         }
         else
-        {
-            return size - field_offsets.back().first;
-        }
+            return field_offsets[index + 1].first - field_offsets[index].first;
     }
 
     // Return field{index} offsets: [begin, end) of page data.
     std::pair<size_t, size_t> getFieldOffsets(size_t index) const
     {
-        RUNTIME_CHECK_MSG(
-            index < field_offsets.size(),
-            "Try to getFieldOffsets with invalid index [index={}] [fields_size={}]",
-            index,
-            field_offsets.size());
-        if (index != field_offsets.size() - 1)
+        if (unlikely(index >= field_offsets.size()))
+            throw Exception(
+                fmt::format(
+                    "Try to getFieldOffsets with invalid index [index={}] [fields_size={}]",
+                    index,
+                    field_offsets.size()),
+                ErrorCodes::LOGICAL_ERROR);
+        else if (index == field_offsets.size() - 1)
         {
-            return {field_offsets[index].first, field_offsets[index + 1].first};
-        }
-        if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
-        {
-            // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
-            return {field_offsets.back().first, checkpoint_info.data_location.size_in_file};
+            if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
+            {
+                // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
+                return {field_offsets.back().first, checkpoint_info.data_location.size_in_file};
+            }
+            else
+            {
+                return {field_offsets.back().first, size};
+            }
         }
         else
-        {
-            return {field_offsets.back().first, size};
-        }
+            return {field_offsets[index].first, field_offsets[index + 1].first};
     }
 };
 using PageEntriesV3 = std::vector<PageEntryV3>;
