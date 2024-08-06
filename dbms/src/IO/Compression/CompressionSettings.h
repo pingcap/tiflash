@@ -101,7 +101,7 @@ struct CompressionSettings
         : settings(settings_)
     {}
 
-    explicit CompressionSettings(const CompressionSetting & setting)
+    explicit CompressionSettings(CompressionSetting setting)
         : settings(1, std::move(setting))
     {}
 
