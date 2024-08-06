@@ -95,6 +95,8 @@ inline std::pair<size_t, size_t> minmax(
 // If the minimum value is null, this minmax index is generated before v6.4.0.
 // For compatibility, the filter result of the corresponding pack should be Some,
 // and the upper layer will read the pack data to perform the filter calculation.
+//
+// TODO: avoid hitting this compatibility check when all the fields of a pack are null or deleted.
 ALWAYS_INLINE bool minIsNull(const DB::ColumnUInt8 & null_map, size_t i)
 {
     return null_map.getElement(i * 2);

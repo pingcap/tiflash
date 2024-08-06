@@ -2367,12 +2367,12 @@ try
             .results = {
                 RSResult::SomeNull,  // checkIn can return All only when min value equals to max value
                 RSResult::Some,
-                RSResult::SomeNull,  // Meet the compatibility check
+                RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
                 RSResult::Some,  // checkIn can return All only when min value equals to max value
                 RSResult::Some,
-                RSResult::SomeNull,  // Meet the compatibility check
-                RSResult::SomeNull,  // Meet the compatibility check
-                RSResult::SomeNull,  // Meet the compatibility check
+                RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
                 RSResult::All,   // checkIn can return All only when min value equals to max value
                 RSResult::AllNull, // checkIn can return All only when min value equals to max value
             },
@@ -2382,12 +2382,12 @@ try
             .results = {
             RSResult::NoneNull,
             RSResult::None,
-            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
             RSResult::None,
             RSResult::None,
-            RSResult::SomeNull,  // Meet the compatibility check
-            RSResult::SomeNull,  // Meet the compatibility check
-            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
             RSResult::None,
             RSResult::NoneNull,
             },
@@ -2397,12 +2397,12 @@ try
             .results = {
             RSResult::NoneNull,
             RSResult::None,
-            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
             RSResult::None,
             RSResult::None,
-            RSResult::SomeNull,  // Meet the compatibility check
-            RSResult::SomeNull,  // Meet the compatibility check
-            RSResult::SomeNull,  // Meet the compatibility check
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
             RSResult::None,
             RSResult::NoneNull,
             },
@@ -2421,7 +2421,8 @@ try
         for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
         {
             ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
-                "column_data={}, del_mark={}, values={}, actual={} expected={}",
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
                 min_max_check_test_data[j].column_data,
                 min_max_check_test_data[j].del_mark,
                 values,
@@ -2432,4 +2433,237 @@ try
 }
 CATCH
 
+TEST_F(MinMaxIndexTest, CheckCmp_Equal)
+try
+{
+    struct ValuesAndResults
+    {
+        Int64 value; // select ... = value
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .value = 1,
+            .results = {
+                RSResult::SomeNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::Some,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::AllNull,
+            },
+        },
+        {
+            .value = 5,
+            .results = {
+                RSResult::NoneNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        }
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    for (const auto & [value, expected_results] : params)
+    {
+        auto actual_results
+            = minmax_index->checkCmp<RoughCheck::CheckEqual>(0, min_max_check_test_data.size(), value, col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
+                value,
+                magic_enum::enum_name(actual_results[j]),
+                magic_enum::enum_name(expected_results[j]));
+        }
+    }
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckCmp_Greater)
+try
+{
+    struct ValuesAndResults
+    {
+        Int64 value; // select ... > value
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .value = 0,
+            .results = {
+                RSResult::AllNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::AllNull,
+            },
+        },
+        {
+            .value = 5,
+            .results = {
+                RSResult::NoneNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+        {
+            .value = 11,
+            .results = {
+                RSResult::NoneNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    for (const auto & [value, expected_results] : params)
+    {
+        auto actual_results
+            = minmax_index->checkCmp<RoughCheck::CheckGreater>(0, min_max_check_test_data.size(), value, col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
+                value,
+                magic_enum::enum_name(actual_results[j]),
+                magic_enum::enum_name(expected_results[j]));
+        }
+    }
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckCmp_GreaterEqual)
+try
+{
+    struct ValuesAndResults
+    {
+        Int64 value; // select ... >= value
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .value = 1,
+            .results = {
+				RSResult::AllNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::AllNull,
+            },
+        },
+        {
+            .value = 2,
+            .results = {
+				RSResult::SomeNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::Some,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+        {
+            .value = 10,
+            .results = {
+				RSResult::NoneNull,
+                RSResult::Some,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::Some,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+        {
+            .value = 11,
+            .results = {
+				RSResult::NoneNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    for (const auto & [value, expected_results] : params)
+    {
+        auto actual_results
+            = minmax_index->checkCmp<RoughCheck::CheckGreaterEqual>(0, min_max_check_test_data.size(), value, col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
+                value,
+                magic_enum::enum_name(actual_results[j]),
+                magic_enum::enum_name(expected_results[j]));
+        }
+    }
+}
+CATCH
 } // namespace DB::DM::tests
