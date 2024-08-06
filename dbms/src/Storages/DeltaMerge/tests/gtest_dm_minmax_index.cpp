@@ -1160,7 +1160,7 @@ RSOperatorPtr generateRSOperator(MinMaxTestDatatype data_type, MinMaxTestOperato
         throw Exception("Unknown filter operator type");
     }
 }
-}
+} // namespace
 
 TEST_F(MinMaxIndexTest, Equal)
 try
@@ -2249,7 +2249,7 @@ namespace
 {
 // Only support Int64 for testing.
 template <typename T>
-MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const std::vector<T> & cases)
+MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const T & cases)
 {
     auto minmax_index = std::make_shared<MinMaxIndex>(col_type);
     for (const auto & c : cases)
@@ -2300,60 +2300,65 @@ try
 }
 CATCH
 
+namespace
+{
+struct MinMaxCheckTestData
+{
+    std::vector<std::optional<Int64>> column_data;
+    std::vector<UInt64> del_mark;
+};
+
+const auto min_max_check_test_data = std::array{
+    MinMaxCheckTestData{
+        .column_data = {1, 2, 3, 4, std::nullopt},
+        .del_mark = {0, 0, 0, 0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {6, 7, 8, 9, 10},
+        .del_mark = {0, 0, 0, 0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {std::nullopt, std::nullopt},
+        .del_mark = {0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 2, 3, 4, std::nullopt},
+        .del_mark = {0, 0, 0, 0, 1},
+    },
+    MinMaxCheckTestData{
+        .column_data = {6, 7, 8, 9, 10},
+        .del_mark = {0, 0, 0, 1, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {std::nullopt, std::nullopt},
+        .del_mark = {1, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {std::nullopt, std::nullopt},
+        .del_mark = {1, 1},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 2, 3, 4},
+        .del_mark = {1, 1, 1, 1},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 1},
+        .del_mark = {0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 1, std::nullopt},
+        .del_mark = {0, 0, 0},
+    },
+};
+} // namespace
+
 TEST_F(MinMaxIndexTest, CheckIn)
 try
 {
-    struct CheckInTestData
-    {
-        std::vector<std::optional<Int64>> column_data;
-        std::vector<UInt64> del_mark;
-    };
     struct ValuesAndResults
     {
         std::vector<Int64> values; // select ... in (values)
-        RSResults results; // Result of each test data
-    };
-    std::vector<CheckInTestData> test_data = {
-        {
-            .column_data = {1, 2, 3, 4, std::nullopt},
-            .del_mark = {0, 0, 0, 0, 0},
-        },
-        {
-            .column_data = {6, 7, 8, 9, 10},
-            .del_mark = {0, 0, 0, 0, 0},
-        },
-        {
-            .column_data = {std::nullopt, std::nullopt},
-            .del_mark = {0, 0},
-        },
-        {
-            .column_data = {1, 2, 3, 4, std::nullopt},
-            .del_mark = {0, 0, 0, 0, 1},
-        },
-        {
-            .column_data = {6, 7, 8, 9, 10},
-            .del_mark = {0, 0, 0, 1, 0},
-        },
-        {
-            .column_data = {std::nullopt, std::nullopt},
-            .del_mark = {1, 0},
-        },
-        {
-            .column_data = {std::nullopt, std::nullopt},
-            .del_mark = {1, 1},
-        },
-        {
-            .column_data = {1, 2, 3, 4},
-            .del_mark = {1, 1, 1, 1},
-        },
-        {
-            .column_data = {1, 1},
-            .del_mark = {0, 0},
-        },
-        {
-            .column_data = {1, 1, std::nullopt},
-            .del_mark = {0, 0, 0},
-        },
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
     };
 
     std::vector<ValuesAndResults> params = {
@@ -2405,18 +2410,20 @@ try
     };
 
     auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
-    auto minmax_index = createMinMaxIndex(*col_type, test_data);
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
     for (const auto & [values, expected_results] : params)
     {
-        ASSERT_EQ(expected_results.size(), test_data.size());
-        auto actual_results
-            = minmax_index->checkIn(0, test_data.size(), std::vector<Field>(values.cbegin(), values.cend()), col_type);
-        for (size_t j = 0; j < test_data.size(); ++j)
+        auto actual_results = minmax_index->checkIn(
+            0,
+            min_max_check_test_data.size(),
+            std::vector<Field>(values.cbegin(), values.cend()),
+            col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
         {
             ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
                 "column_data={}, del_mark={}, values={}, actual={} expected={}",
-                test_data[j].column_data,
-                test_data[j].del_mark,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
                 values,
                 magic_enum::enum_name(actual_results[j]),
                 magic_enum::enum_name(expected_results[j]));
