@@ -39,9 +39,6 @@
 namespace DB::DM::tests
 {
 
-static const ColId DEFAULT_COL_ID = 0;
-static const String DEFAULT_COL_NAME = "2020-09-26";
-
 class MinMaxIndexTest : public ::testing::Test
 {
 protected:
@@ -60,6 +57,11 @@ protected:
     // a ptr to context, we can reload context with different settings if need.
     ContextPtr context;
 };
+
+namespace
+{
+static constexpr ColId DEFAULT_COL_ID = 0;
+static const String DEFAULT_COL_NAME = "2020-09-26";
 
 Attr attr(String type)
 {
@@ -144,19 +146,6 @@ bool checkMatch(
     store->drop();
 
     return rows != 0;
-}
-
-bool checkMatch(
-    const String & test_case,
-    Context & context,
-    const String & type,
-    const String & value,
-    const RSOperatorPtr & filter)
-{
-    // The first three values are pk, version and del_mark.
-    // For del_mark, 1 means deleted.
-    CSVTuples tuples = {{"0", "0", "0", value}};
-    return checkMatch(test_case, context, type, tuples, filter);
 }
 
 bool checkDelMatch(
@@ -1170,6 +1159,7 @@ RSOperatorPtr generateRSOperator(MinMaxTestDatatype data_type, MinMaxTestOperato
     default:
         throw Exception("Unknown filter operator type");
     }
+}
 }
 
 TEST_F(MinMaxIndexTest, Equal)
@@ -2257,7 +2247,7 @@ CATCH
 
 namespace
 {
-// Only support Int64.
+// Only support Int64 for testing.
 template <typename T>
 MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const std::vector<T> & cases)
 {
@@ -2313,17 +2303,17 @@ CATCH
 TEST_F(MinMaxIndexTest, CheckIn)
 try
 {
-    struct CheckInTestCase
+    struct CheckInTestData
     {
         std::vector<std::optional<Int64>> column_data;
         std::vector<UInt64> del_mark;
     };
     struct ValuesAndResults
     {
-        std::vector<Int64> values;
-        RSResults results;
+        std::vector<Int64> values; // select ... in (values)
+        RSResults results; // Result of each test data
     };
-    std::vector<CheckInTestCase> cases = {
+    std::vector<CheckInTestData> test_data = {
         {
             .column_data = {1, 2, 3, 4, std::nullopt},
             .del_mark = {0, 0, 0, 0, 0},
@@ -2370,16 +2360,16 @@ try
         {
             .values = {1, 2, 3, 4, 5, 6},
             .results = {
-                RSResult::SomeNull,  // Should be AllNull, but not support now
+                RSResult::SomeNull,  // checkIn can return All only when min value equals to max value
                 RSResult::Some,
                 RSResult::SomeNull,  // Meet the compatibility check
-                RSResult::Some,  // Should be All, but not support now
+                RSResult::Some,  // checkIn can return All only when min value equals to max value
                 RSResult::Some,
                 RSResult::SomeNull,  // Meet the compatibility check
                 RSResult::SomeNull,  // Meet the compatibility check
                 RSResult::SomeNull,  // Meet the compatibility check
-                RSResult::All,   // Minimum value equals to maximum value
-                RSResult::AllNull,
+                RSResult::All,   // checkIn can return All only when min value equals to max value
+                RSResult::AllNull, // checkIn can return All only when min value equals to max value
             },
         },
         {
@@ -2415,18 +2405,18 @@ try
     };
 
     auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
-    auto minmax_index = createMinMaxIndex(*col_type, cases);
+    auto minmax_index = createMinMaxIndex(*col_type, test_data);
     for (const auto & [values, expected_results] : params)
     {
-        ASSERT_EQ(expected_results.size(), cases.size());
+        ASSERT_EQ(expected_results.size(), test_data.size());
         auto actual_results
-            = minmax_index->checkIn(0, cases.size(), std::vector<Field>(values.cbegin(), values.cend()), col_type);
-        for (size_t j = 0; j < cases.size(); ++j)
+            = minmax_index->checkIn(0, test_data.size(), std::vector<Field>(values.cbegin(), values.cend()), col_type);
+        for (size_t j = 0; j < test_data.size(); ++j)
         {
             ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
                 "column_data={}, del_mark={}, values={}, actual={} expected={}",
-                cases[j].column_data,
-                cases[j].del_mark,
+                test_data[j].column_data,
+                test_data[j].del_mark,
                 values,
                 magic_enum::enum_name(actual_results[j]),
                 magic_enum::enum_name(expected_results[j]));
