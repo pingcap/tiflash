@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecLightweight.h>
+#include <IO/Compression/EncodingUtil.h>
 #include <common/likely.h>
 #include <lz4.h>
 
@@ -43,7 +44,8 @@ UInt8 CompressionCodecLightweight::getMethodByte() const
 UInt32 CompressionCodecLightweight::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
     // 1 byte for bytes_size, 1 byte for mode, and the rest for compressed data
-    return 1 + 1 + LZ4_COMPRESSBOUND(uncompressed_size);
+    return 1 + 1
+        + std::max(LZ4_COMPRESSBOUND(uncompressed_size), Compression::runLengthEncodingBounds(uncompressed_size));
 }
 
 CompressionCodecLightweight::~CompressionCodecLightweight()

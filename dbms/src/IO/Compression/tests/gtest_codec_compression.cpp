@@ -510,6 +510,42 @@ auto MinMaxGenerator = []() {
     };
 };
 
+template <typename T>
+struct RepeatGenerator
+{
+    explicit RepeatGenerator(T seed = 0, size_t min_repeat_count = 1, size_t max_repeat_count = 16)
+        : random_engine(static_cast<std::uint_fast32_t>(seed))
+        , value_distribution(std::numeric_limits<T>::min(), std::numeric_limits<T>::max())
+        , repeat_distribution(min_repeat_count, max_repeat_count)
+    {
+        generate_next_value();
+    }
+
+    template <typename U>
+    U operator()(U)
+    {
+        if (repeat_count == 0)
+        {
+            generate_next_value();
+        }
+        --repeat_count;
+        return current_value;
+    }
+
+private:
+    void generate_next_value()
+    {
+        current_value = value_distribution(random_engine);
+        repeat_count = repeat_distribution(random_engine);
+    }
+
+    std::default_random_engine random_engine;
+    std::uniform_int_distribution<T> value_distribution;
+    std::uniform_int_distribution<size_t> repeat_distribution;
+    T current_value;
+    size_t repeat_count = 0;
+};
+
 // Makes many sequences with generator, first sequence length is 0, second is 1..., third is 2 up to `sequences_count`.
 template <typename T, typename Generator>
 std::vector<CodecTestSequence> generatePyramidOfSequences(
@@ -682,6 +718,17 @@ INSTANTIATE_TEST_CASE_P(
             generateSeq<UInt16>(G(RandomGenerator<UInt16>(0))),
             generateSeq<UInt32>(G(RandomGenerator<UInt32>(0, 0, 1000'000'000))),
             generateSeq<UInt64>(G(RandomGenerator<UInt64>(0, 0, 1000'000'000))))));
+
+INSTANTIATE_TEST_CASE_P(
+    RepeatInt,
+    CodecTest,
+    ::testing::Combine(
+        IntegerCodecsToTest,
+        ::testing::Values(
+            generateSeq<UInt8>(G(RepeatGenerator<UInt8>(0))),
+            generateSeq<UInt16>(G(RepeatGenerator<UInt16>(0))),
+            generateSeq<UInt32>(G(RepeatGenerator<UInt32>(0))),
+            generateSeq<UInt64>(G(RepeatGenerator<UInt64>(0))))));
 
 // INSTANTIATE_TEST_CASE_P(
 //     RandomishInt,

@@ -185,7 +185,7 @@ target_no_warning(benchmark thread-safety-analysis)
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
 if (NOT (OS_DARWIN AND ARCH_AARCH64))
     add_subdirectory(cpu_features)
-endif()
+endif ()
 
 if (ARCH_AARCH64 AND OS_LINUX)
     add_subdirectory(arm-optimized-routines-cmake)
@@ -198,3 +198,7 @@ add_subdirectory(aws-cmake)
 add_subdirectory(simdjson)
 
 add_subdirectory(fastpforlib)
+
+if (ARCH_AMD64)
+    add_subdirectory(hypersonic-rle-kit-cmake)
+endif ()

@@ -202,6 +202,10 @@ target_link_libraries (tiflash_common_io
     fastpforlib
 )
 
+if (ARCH_AMD64)
+    target_link_libraries (tiflash_common_io PUBLIC hypersonic-rle)
+endif ()
+
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
