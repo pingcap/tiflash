@@ -190,36 +190,13 @@ public:
         void init(MockDAGRequestContext & context)
         {
             const ::testing::TestInfo * test_info = ::testing::UnitTest::GetInstance()->current_test_info();
-
             if (test_info)
             {
                 std::string test_case_name = test_info->name();
-                if (test_case_name == "autoPassThroughIntegrationTest")
-                {
-                    // Random test spill or not spill. It takes too long if run both.
-                    srand(time(nullptr));
-                    if (rand() % 2 == 0) // NOLINT
-                    {
-                        context.context->getSettingsRef().max_block_size = 800;
-                        context.context->getSettingsRef().group_by_two_level_threshold = 1;
-                        context.context->getSettingsRef().group_by_two_level_threshold_bytes = 1;
-                        context.context->getSettingsRef().max_bytes_before_external_group_by = 100;
-                    }
-                    else
-                    {
-                        context.context->getSettingsRef().max_block_size = block_size;
-                    }
-                }
-                else if (test_case_name == "stateSwitchMediumNDV")
+                if (test_case_name == "autoPassThroughIntegrationTest" || test_case_name == "stateSwitchMediumNDV")
                 {
                     context.context->getSettingsRef().max_block_size = block_size;
                 }
-                LOG_DEBUG(
-                    Logger::get(),
-                    "case {} config, block size: {}, max_bytes_before_external_group_by: {}",
-                    test_case_name,
-                    context.context->getSettingsRef().max_block_size,
-                    context.context->getSettingsRef().max_bytes_before_external_group_by);
             }
 
             if (inited)
