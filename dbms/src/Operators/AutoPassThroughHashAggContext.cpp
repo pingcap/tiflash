@@ -22,6 +22,8 @@ namespace DB
 {
 void AutoPassThroughHashAggContext::onBlockAuto(Block & block)
 {
+    // If need_spill or already_get_data_from_hash_table is true, should not insert new data into HashTable.
+    RUNTIME_CHECK(state == State::PassThrough || (!many_data[0]->need_spill && !already_get_data_from_hash_table));
     agg_process_info->resetBlock(block);
     switch (state)
     {
@@ -92,7 +94,7 @@ Block AutoPassThroughHashAggContext::tryGetDataInAdvance()
     Block res;
     if (many_data[0]->need_spill && ((res = getDataFromHashTable())))
     {
-        LOG_DEBUG(log, "start to get block from hashtable in advance because need to spill");
+        LOG_TRACE(log, "start to get block from hashtable in advance because need to spill");
         RUNTIME_CHECK(res);
         return res;
     }
