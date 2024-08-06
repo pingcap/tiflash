@@ -72,8 +72,8 @@ void AutoPassThroughHashAggContext::onBlockAuto(Block & block)
         __builtin_unreachable();
     }
     };
-    // allBlockDataHandled() will return false if HashTable resize when need_spill is true, which will not happen.
-    // Because when need_spill is set, all blocks will be pass through, so HashTable got no chance to resize.
+    // allBlockDataHandled() will return false if HashTable resize when callback is set.
+    // But for auto pass through, resize callback will not be set.
     RUNTIME_CHECK(agg_process_info->allBlockDataHandled());
 }
 
