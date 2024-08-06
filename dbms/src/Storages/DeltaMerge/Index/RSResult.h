@@ -93,6 +93,12 @@ ALWAYS_INLINE inline RSResult operator!(RSResult v)
 ALWAYS_INLINE inline RSResult operator||(RSResult v0, RSResult v1)
 {
     RUNTIME_CHECK(v0 != RSResult::Unknown && v1 != RSResult::Unknown);
+
+    // According to https://dev.mysql.com/doc/refman/8.4/en/logical-operators.html#operator_or,
+    // the result of `1 || 0/1/NULL` is 1.
+    if (v0 == RSResult::All || v1 == RSResult::All)
+        return RSResult::All;
+
     auto [t0, has_null0] = removeNull(v0);
     auto [t1, has_null1] = removeNull(v1);
     auto result = RSResult::None;
@@ -107,6 +113,12 @@ ALWAYS_INLINE inline RSResult operator||(RSResult v0, RSResult v1)
 ALWAYS_INLINE inline RSResult operator&&(RSResult v0, RSResult v1)
 {
     RUNTIME_CHECK(v0 != RSResult::Unknown && v1 != RSResult::Unknown);
+
+    // According to https://dev.mysql.com/doc/refman/8.4/en/logical-operators.html#operator_and,
+    // the result of `0 && NULL` is NULL. So the following logic is invalid:
+    // if (v0 == RSResult::None || v1 == RSResult::None)
+    //     return RSResult::None;
+
     auto [t0, has_null0] = removeNull(v0);
     auto [t1, has_null1] = removeNull(v1);
     auto result = RSResult::Some;
