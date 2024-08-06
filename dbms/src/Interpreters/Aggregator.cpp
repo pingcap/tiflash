@@ -159,7 +159,9 @@ size_t AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(Type type)
 
 void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
 {
-    if (aggregator)
+    // For auto pass through hashagg, no spill should happen. So no need to set callback.
+    // Also it's complicated to handle situation when Aggregator didn't process all rows at once.
+    if (aggregator && !aggregator->is_auto_pass_through)
     {
         auto agg_spill_context = aggregator->agg_spill_context;
         if (agg_spill_context->isSpillEnabled() && agg_spill_context->isInAutoSpillMode())
@@ -284,10 +286,12 @@ Aggregator::Aggregator(
     const Params & params_,
     const String & req_id,
     size_t concurrency,
-    const RegisterOperatorSpillContext & register_operator_spill_context)
+    const RegisterOperatorSpillContext & register_operator_spill_context,
+    bool is_auto_pass_through_)
     : params(params_)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
+    , is_auto_pass_through(is_auto_pass_through_)
 {
     aggregate_functions.resize(params.aggregates_size);
     for (size_t i = 0; i < params.aggregates_size; ++i)

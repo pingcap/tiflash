@@ -1267,7 +1267,8 @@ public:
         const Params & params_,
         const String & req_id,
         size_t concurrency,
-        const RegisterOperatorSpillContext & register_operator_spill_context);
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        bool is_auto_pass_through_ = false);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
@@ -1426,6 +1427,8 @@ protected:
           */
     size_t group_by_two_level_threshold = 0;
     size_t group_by_two_level_threshold_bytes = 0;
+
+    const bool is_auto_pass_through;
 
     /// For external aggregation.
     AggSpillContextPtr agg_spill_context;

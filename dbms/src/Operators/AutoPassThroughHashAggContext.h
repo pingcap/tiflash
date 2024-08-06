@@ -65,7 +65,7 @@ public:
         , row_limit_unit(row_limit_unit_)
         , log(Logger::get(req_id_))
     {
-        aggregator = std::make_unique<Aggregator>(params_, req_id_, 1, nullptr);
+        aggregator = std::make_unique<Aggregator>(params_, req_id_, 1, nullptr, /*is_auto_pass_through=*/true);
         aggregator->setCancellationHook(hook);
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
         many_data[0] = std::make_shared<AggregatedDataVariants>();
