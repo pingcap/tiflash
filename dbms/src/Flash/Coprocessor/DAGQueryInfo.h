@@ -47,6 +47,7 @@ struct DAGQueryInfo
     const ColumnInfos & source_columns;
     // filters in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters;
+    // filters for approximate nearest neighbor (ann) vector search
     const tipb::ANNQueryInfo & ann_query_info;
     // filters have been push down to storage engine in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters;

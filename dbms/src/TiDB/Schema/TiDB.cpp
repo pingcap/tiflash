@@ -479,7 +479,7 @@ try
 
         vector_index->dimension = vector_index_json->getValue<UInt64>("dimension");
         RUNTIME_CHECK(vector_index->dimension > 0);
-        RUNTIME_CHECK(vector_index->dimension <= 16000); // Just a protection
+        RUNTIME_CHECK(vector_index->dimension <= 16383); // Just a protection
 
         auto distance_metric
             = magic_enum::enum_cast<DistanceMetric>(vector_index_json->getValue<String>("distance_metric"));
