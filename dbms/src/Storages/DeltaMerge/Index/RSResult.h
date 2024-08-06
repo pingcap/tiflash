@@ -29,9 +29,9 @@ using Attrs = std::vector<Attr>;
 enum class RSResult : UInt8
 {
     Unknown = 0, // Not checked yet
-    Some = 1, // Some values meet requirements, need to read and perform filtering
-    None = 2, // No value meets requirements, no need to read
-    All = 3, // All values meet requirements, need to read and no need perform filtering
+    Some = 1, // Some values meet requirements and NOT has null, need to read and perform filtering
+    None = 2, // No value meets requirements and NOT has null, no need to read
+    All = 3, // All values meet requirements NOT has null, need to read and no need perform filtering
     SomeNull = 4, // Some values meet requirements and has null, need to read and perform filtering
     NoneNull = 5, // No value meets requirements and has null, no need to read
     AllNull = 6, // All values meet requirements and has null, need to read and perform filtering
@@ -68,7 +68,6 @@ ALWAYS_INLINE inline RSResult addNull(RSResult v) noexcept
     }
 }
 
-// For safety reasons, the logical operations of RSResult will always keep null if null has occurred.
 ALWAYS_INLINE inline RSResult operator!(RSResult v)
 {
     switch (v)
