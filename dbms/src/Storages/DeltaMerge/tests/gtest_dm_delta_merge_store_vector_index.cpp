@@ -230,12 +230,15 @@ try
             store->is_common_handle,
             store->rowkey_column_size);
     }
+    LOG_INFO(Logger::get(), "left_segment_range={}", left_segment_range.toDebugString());
 
     // check stable index has built for all segments
     waitStableIndexReady();
+    LOG_INFO(Logger::get(), "waitStableIndexReady done");
 
     // read from store
     {
+        SCOPED_TRACE("read from store");
         read(
             left_segment_range,
             EMPTY_FILTER,
@@ -250,6 +253,7 @@ try
     {
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
+        SCOPED_TRACE("read with ANN query, {2.0}");
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
@@ -260,10 +264,11 @@ try
     {
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
+        SCOPED_TRACE("read with ANN query, {122.1}");
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(left_segment_range, filter, createVecFloat32Column<Array>({})); // FIXME: should be 63.0
+        read(left_segment_range, filter, createVecFloat32Column<Array>({{63.0}}));
     }
 
     // merge segment
@@ -276,6 +281,7 @@ try
 
     // read from store
     {
+        SCOPED_TRACE("read from store");
         read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
     }
 
@@ -283,6 +289,7 @@ try
     {
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
+        SCOPED_TRACE("read with ANN query, {2.0}");
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
@@ -293,6 +300,7 @@ try
     {
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
+        SCOPED_TRACE("read with ANN query, {122.1}");
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
