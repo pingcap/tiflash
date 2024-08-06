@@ -1,4 +1,4 @@
 CompileFlags:
-  Add: 
+  Add:
     - -ferror-limit=0
     - -Wno-vla-cxx-extension

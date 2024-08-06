@@ -198,7 +198,3 @@ add_subdirectory(aws-cmake)
 add_subdirectory(simdjson)
 
 add_subdirectory(fastpforlib)
-
-if (ARCH_AMD64)
-    add_subdirectory(hypersonic-rle-kit-cmake)
-endif ()

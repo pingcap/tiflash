@@ -114,7 +114,7 @@ bool CompressionCodecLightweight::IntegerCompressContext::needAnalyzeRunLength()
     return compress_count == 0 || used_rle;
 }
 
-template <std::integral T>
+template <typename T>
 void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<const T> & values, IntegerState<T> & state)
 {
     if (values.empty())
@@ -173,11 +173,19 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
         }
     }
 
-    // Check RunLength
-    size_t estimate_rle_size = std::numeric_limits<size_t>::max();
+    // RunLength
+    Compression::RunLengthPairs<T> rle;
     if (needAnalyzeRunLength())
     {
-        estimate_rle_size = Compression::estimateRunLengthDecodedByteSize(values.data(), values.size());
+        rle.reserve(values.size());
+        rle.emplace_back(values[0], 1);
+        for (size_t i = 1; i < values.size(); ++i)
+        {
+            if (values[i] != values[i - 1] || rle.back().second == std::numeric_limits<UInt8>::max())
+                rle.emplace_back(values[i], 1);
+            else
+                ++rle.back().second;
+        }
     }
 
     size_t estimate_lz_size = values.size() * sizeof(T) / ESRTIMATE_LZ4_COMPRESSION_RATIO;
@@ -191,9 +199,10 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     static constexpr auto DFOR_EXTRA_BYTES = sizeof(T) + sizeof(UInt8) + sizeof(T);
     size_t delta_for_size = BitpackingPrimitives::getRequiredSize(deltas.size(), delta_for_width) + DFOR_EXTRA_BYTES;
 
-    if (needAnalyzeRunLength() && estimate_rle_size < delta_for_size && estimate_rle_size < for_size
-        && estimate_rle_size < estimate_lz_size)
+    size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::runLengthPairsByteSize(rle);
+    if (needAnalyzeRunLength() && rle_size < delta_for_size && rle_size < for_size && rle_size < estimate_lz_size)
     {
+        state = std::move(rle);
         mode = IntegerMode::RunLength;
     }
     else if (needAnalyzeFOR<T>() && for_size < delta_for_size && for_size < estimate_lz_size)
@@ -213,7 +222,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     }
 }
 
-template <std::integral T>
+template <typename T>
 size_t CompressionCodecLightweight::compressDataForInteger(const char * source, UInt32 source_size, char * dest) const
 {
     const auto bytes_size = static_cast<UInt8>(data_type);
@@ -251,12 +260,12 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     }
     case IntegerMode::RunLength:
     {
-        compressed_size += Compression::runLengthEncoding<T>(source, source_size, dest);
+        compressed_size += Compression::runLengthEncoding<T>(std::get<1>(state), dest);
         break;
     }
     case IntegerMode::FOR:
     {
-        FORState for_state = std::get<1>(state);
+        FORState for_state = std::get<2>(state);
         compressed_size += Compression::FOREncoding(
             for_state.values.data(),
             for_state.values.size(),
@@ -267,7 +276,7 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     }
     case IntegerMode::DELTA_FOR:
     {
-        DeltaFORState delta_for_state = std::get<2>(state);
+        DeltaFORState delta_for_state = std::get<3>(state);
         unalignedStore<T>(dest, values[0]);
         dest += sizeof(T);
         compressed_size += sizeof(T);
@@ -305,7 +314,7 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     return compressed_size;
 }
 
-template <std::integral T>
+template <typename T>
 void CompressionCodecLightweight::decompressDataForInteger(
     const char * source,
     UInt32 source_size,

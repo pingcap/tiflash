@@ -62,10 +62,13 @@ private:
     };
 
     // Constant or ConstantDelta
-    template <std::integral T>
+    template <typename T>
     using ConstantState = T;
 
-    template <std::integral T>
+    template <typename T>
+    using RunLengthState = std::vector<std::pair<T, UInt8>>;
+
+    template <typename T>
     struct FORState
     {
         std::vector<T> values;
@@ -73,7 +76,7 @@ private:
         UInt8 bit_width;
     };
 
-    template <std::integral T>
+    template <typename T>
     struct DeltaFORState
     {
         using TS = typename std::make_signed_t<T>;
@@ -83,8 +86,8 @@ private:
     };
 
     // State is a union of different states for different modes
-    template <std::integral T>
-    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
+    template <typename T>
+    using IntegerState = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
 
     class IntegerCompressContext
     {
@@ -93,7 +96,7 @@ private:
             : round_count(round_count_)
         {}
 
-        template <std::integral T>
+        template <typename T>
         void analyze(std::span<const T> & values, IntegerState<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
@@ -127,10 +130,10 @@ private:
         bool used_rle = false;
     };
 
-    template <std::integral T>
+    template <typename T>
     size_t compressDataForInteger(const char * source, UInt32 source_size, char * dest) const;
 
-    template <std::integral T>
+    template <typename T>
     void decompressDataForInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size) const;
 
     /// Non-integer data

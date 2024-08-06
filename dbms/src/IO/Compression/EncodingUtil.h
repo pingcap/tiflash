@@ -91,34 +91,66 @@ void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UI
 template <std::integral T>
 using RunLengthPair = std::pair<T, UInt8>;
 template <std::integral T>
+using RunLengthPairs = std::vector<RunLengthPair<T>>;
+template <std::integral T>
 static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
 
-UInt32 runLengthEncodingBounds(UInt32 source_size);
-
 template <std::integral T>
-size_t runLengthEncoding(const char * source, UInt32 source_size, char * dest);
-
-template <std::integral T>
-void runLengthDecoding(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);
-
-template <std::integral T>
-size_t estimateRunLengthDecodedByteSize(const T * values, UInt32 count)
+size_t runLengthPairsByteSize(const RunLengthPairs<T> & rle)
 {
-    size_t estimate_rle_size = Compression::RunLengthPairLength<T>;
-    UInt8 num_of_value = 1;
-    for (size_t i = 1; i < count; ++i)
+    return rle.size() * RunLengthPairLength<T>;
+}
+
+template <std::integral T>
+size_t runLengthEncoding(const RunLengthPairs<T> & rle, char * dest)
+{
+    for (const auto & [value, count] : rle)
     {
-        if (values[i] != values[i - 1] || num_of_value == std::numeric_limits<UInt8>::max())
+        unalignedStore<T>(dest, value);
+        dest += sizeof(T);
+        unalignedStore<UInt8>(dest, count);
+        dest += sizeof(UInt8);
+    }
+    return rle.size() * RunLengthPairLength<T>;
+}
+
+template <std::integral T>
+void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    if (unlikely(source_size % RunLengthPairLength<T> != 0))
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot use RunLength decoding, data size {} is not aligned to {}",
+            source_size,
+            RunLengthPairLength<T>);
+
+    const char * dest_end = dest + dest_size;
+    for (UInt32 i = 0; i < source_size / RunLengthPairLength<T>; ++i)
+    {
+        T value = unalignedLoad<T>(src);
+        src += sizeof(T);
+        auto count = unalignedLoad<UInt8>(src);
+        src += sizeof(UInt8);
+        if (unlikely(dest + count * sizeof(T) > dest_end))
+            throw Exception(
+                ErrorCodes::CANNOT_DECOMPRESS,
+                "Cannot use RunLength decoding, data is too large, count={} elem_byte={}",
+                count,
+                sizeof(T));
+        if constexpr (std::is_same_v<T, UInt8> || std::is_same_v<T, Int8>)
         {
-            estimate_rle_size += Compression::RunLengthPairLength<T>;
-            num_of_value = 1;
+            memset(dest, value, count);
+            dest += count * sizeof(T);
         }
         else
         {
-            ++num_of_value;
+            for (UInt32 j = 0; j < count; ++j)
+            {
+                unalignedStore<T>(dest, value);
+                dest += sizeof(T);
+            }
         }
     }
-    return estimate_rle_size;
 }
 
 /// Frame of Reference encoding

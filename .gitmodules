@@ -146,6 +146,3 @@
 [submodule "contrib/not_null"]
 	path = contrib/not_null
 	url = https://github.com/bitwizeshift/not_null.git
-[submodule "contrib/hypersonic-rle-kit"]
-	path = contrib/hypersonic-rle-kit
-	url = https://github.com/rainerzufalldererste/hypersonic-rle-kit.git
