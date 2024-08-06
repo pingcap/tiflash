@@ -44,12 +44,7 @@ static const String DEFAULT_COL_NAME = "2020-09-26";
 
 class MinMaxIndexTest : public ::testing::Test
 {
-public:
-    MinMaxIndexTest() = default;
-
 protected:
-    static void SetUpTestCase() {}
-
     void SetUp() override
     {
         context = DMTestEnv::getContext();
@@ -77,7 +72,7 @@ Attr pkAttr()
     return Attr{col.name, col.id, col.type};
 }
 
-
+// Check if the data in `block_tuples` match `filter`.
 bool checkMatch(
     const String & test_case,
     Context & context,
@@ -241,24 +236,24 @@ Decimal64 getDecimal64(String s)
     return expected_default_value;
 }
 
-#define Int64_Match_DATA (100)
-#define Int64_Greater_DATA (10000)
-#define Int64_Smaller_DATA (-1)
+static constexpr Int64 Int64_Match_DATA = 100;
+static constexpr Int64 Int64_Greater_DATA = 10000;
+static constexpr Int64 Int64_Smaller_DATA = -1;
 
-#define Date_Match_DATA ("2020-09-27")
-#define Date_Greater_DATA ("2022-09-27")
-#define Date_Smaller_DATA ("1997-09-27")
+static const String Date_Match_DATA = "2020-09-27";
+static const String Date_Greater_DATA = "2022-09-27";
+static const String Date_Smaller_DATA = "1997-09-27";
 
-#define DateTime_Match_DATA ("2020-01-01 05:00:01")
-#define DateTime_Greater_DATA ("2022-01-01 05:00:01")
-#define DateTime_Smaller_DATA ("1997-01-01 05:00:01")
+static const String DateTime_Match_DATA = "2020-01-01 05:00:01";
+static const String DateTime_Greater_DATA = "2022-01-01 05:00:01";
+static const String DateTime_Smaller_DATA = "1997-01-01 05:00:01";
 
-#define MyDateTime_Match_DATE ("2020-09-27")
-#define MyDateTime_Greater_DATE ("2022-09-27")
-#define MyDateTime_Smaller_DATE ("1997-09-27")
+static const String MyDateTime_Match_DATE = "2020-09-27";
+static const String MyDateTime_Greater_DATE = "2022-09-27";
+static const String MyDateTime_Smaller_DATE = "1997-09-27";
 
-#define Decimal_Match_DATA ("100.25566")
-#define Decimal_UnMatch_DATA ("100.25500")
+static const String Decimal_Match_DATA = "100.25566";
+static const String Decimal_UnMatch_DATA = "100.25500";
 
 std::pair<String, CSVTuples> generateTypeValue(MinMaxTestDatatype data_type, bool has_null)
 {
@@ -278,55 +273,51 @@ std::pair<String, CSVTuples> generateTypeValue(MinMaxTestDatatype data_type, boo
     }
     case Test_Date:
     {
-        return {"Date", {{"0", "0", "0", DB::toString(Date_Match_DATA)}}};
+        return {"Date", {{"0", "0", "0", Date_Match_DATA}}};
     }
     case Test_Nullable_Date:
     {
         if (has_null)
         {
-            return {"Nullable(Date)", {{"0", "0", "0", DB::toString(Date_Match_DATA)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(Date)", {{"0", "0", "0", Date_Match_DATA}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(Date)", {{"0", "0", "0", DB::toString(Date_Match_DATA)}}};
+        return {"Nullable(Date)", {{"0", "0", "0", Date_Match_DATA}}};
     }
     case Test_DateTime:
     {
-        return {"DateTime", {{"0", "0", "0", DB::toString(DateTime_Match_DATA)}}};
+        return {"DateTime", {{"0", "0", "0", DateTime_Match_DATA}}};
     }
     case Test_Nullable_DateTime:
     {
         if (has_null)
         {
-            return {"Nullable(DateTime)", {{"0", "0", "0", DB::toString(DateTime_Match_DATA)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(DateTime)", {{"0", "0", "0", DateTime_Match_DATA}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(DateTime)", {{"0", "0", "0", DB::toString(DateTime_Match_DATA)}}};
+        return {"Nullable(DateTime)", {{"0", "0", "0", DateTime_Match_DATA}}};
     }
     case Test_MyDateTime:
     {
-        return {"MyDateTime", {{"0", "0", "0", DB::toString(MyDateTime_Match_DATE)}}};
+        return {"MyDateTime", {{"0", "0", "0", MyDateTime_Match_DATE}}};
     }
     case Test_Nullable_MyDateTime:
     {
         if (has_null)
         {
-            return {
-                "Nullable(MyDateTime)",
-                {{"0", "0", "0", DB::toString(MyDateTime_Match_DATE)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(MyDateTime)", {{"0", "0", "0", MyDateTime_Match_DATE}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(MyDateTime)", {{"0", "0", "0", DB::toString(MyDateTime_Match_DATE)}}};
+        return {"Nullable(MyDateTime)", {{"0", "0", "0", MyDateTime_Match_DATE}}};
     }
     case Test_Decimal64:
     {
-        return {"Decimal(20, 5)", {{"0", "0", "0", DB::toString(Decimal_Match_DATA)}}};
+        return {"Decimal(20, 5)", {{"0", "0", "0", Decimal_Match_DATA}}};
     }
     case Test_Nullable_Decimal64:
     {
         if (has_null)
         {
-            return {
-                "Nullable(Decimal(20, 5))",
-                {{"0", "0", "0", DB::toString(Decimal_Match_DATA)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(Decimal(20, 5))", {{"0", "0", "0", Decimal_Match_DATA}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(Decimal(20, 5))", {{"0", "0", "0", DB::toString(Decimal_Match_DATA)}}};
+        return {"Nullable(Decimal(20, 5))", {{"0", "0", "0", Decimal_Match_DATA}}};
     }
     default:
         throw Exception("Unknown data type");
@@ -341,66 +332,66 @@ RSOperatorPtr generateEqualOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createEqual(attr("Int64"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createEqual(attr("Int64"), Field(Int64_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createEqual(attr("Int64"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createEqual(attr("Nullable(Int64)"), Field(Int64_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createEqual(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createEqual(attr("Date"), Field(static_cast<String> Date_Match_DATA));
+            return createEqual(attr("Date"), Field(Date_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createEqual(attr("Date"), Field(Date_Smaller_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA));
+            return createEqual(attr("Nullable(Date)"), Field(Date_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createEqual(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createEqual(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA));
+            return createEqual(attr("DateTime"), Field(DateTime_Match_DATA));
         }
         else
         {
-            return createEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createEqual(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA));
+            return createEqual(attr("Nullable(DateTime)"), Field(DateTime_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createEqual(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_MyDateTime:
@@ -468,66 +459,66 @@ RSOperatorPtr generateInOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createIn(attr("Int64"), {Field(static_cast<Int64> Int64_Match_DATA)});
+            return createIn(attr("Int64"), {Field(Int64_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Int64"), {Field(static_cast<Int64> Int64_Smaller_DATA)});
+            return createIn(attr("Int64"), {Field(Int64_Smaller_DATA)});
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64> Int64_Match_DATA)});
+            return createIn(attr("Nullable(Int64)"), {Field(Int64_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64> Int64_Smaller_DATA)});
+            return createIn(attr("Nullable(Int64)"), {Field(Int64_Smaller_DATA)});
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createIn(attr("Date"), {Field(static_cast<String> Date_Match_DATA)});
+            return createIn(attr("Date"), {Field(Date_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Date"), {Field(static_cast<String> Date_Smaller_DATA)});
+            return createIn(attr("Date"), {Field(Date_Smaller_DATA)});
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(Date)"), {Field(static_cast<String> Date_Match_DATA)});
+            return createIn(attr("Nullable(Date)"), {Field(Date_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(Date)"), {Field(static_cast<String> Date_Smaller_DATA)});
+            return createIn(attr("Nullable(Date)"), {Field(Date_Smaller_DATA)});
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createIn(attr("DateTime"), {Field(static_cast<String> DateTime_Match_DATA)});
+            return createIn(attr("DateTime"), {Field(DateTime_Match_DATA)});
         }
         else
         {
-            return createIn(attr("DateTime"), {Field(static_cast<String> DateTime_Smaller_DATA)});
+            return createIn(attr("DateTime"), {Field(DateTime_Smaller_DATA)});
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(DateTime)"), {Field(static_cast<String> DateTime_Match_DATA)});
+            return createIn(attr("Nullable(DateTime)"), {Field(DateTime_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(DateTime)"), {Field(static_cast<String> DateTime_Smaller_DATA)});
+            return createIn(attr("Nullable(DateTime)"), {Field(DateTime_Smaller_DATA)});
         }
     }
     case Test_MyDateTime:
@@ -595,66 +586,66 @@ RSOperatorPtr generateGreaterOperator(MinMaxTestDatatype data_type, bool is_matc
     {
         if (is_match)
         {
-            return createGreater(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreater(attr("Int64"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Int64"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createGreater(attr("Int64"), Field(Int64_Match_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreater(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createGreater(attr("Nullable(Int64)"), Field(Int64_Match_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createGreater(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreater(attr("Date"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Date"), Field(static_cast<String> Date_Match_DATA));
+            return createGreater(attr("Date"), Field(Date_Match_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreater(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA));
+            return createGreater(attr("Nullable(Date)"), Field(Date_Match_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createGreater(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreater(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA));
+            return createGreater(attr("DateTime"), Field(DateTime_Match_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreater(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA));
+            return createGreater(attr("Nullable(DateTime)"), Field(DateTime_Match_DATA));
         }
     }
     case Test_MyDateTime:
@@ -722,66 +713,66 @@ RSOperatorPtr generateGreaterEqualOperator(MinMaxTestDatatype data_type, bool is
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreaterEqual(attr("Int64"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Int64"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createGreaterEqual(attr("Int64"), Field(Int64_Greater_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreaterEqual(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createGreaterEqual(attr("Nullable(Int64)"), Field(Int64_Greater_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreaterEqual(attr("Date"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Date"), Field(static_cast<String> Date_Greater_DATA));
+            return createGreaterEqual(attr("Date"), Field(Date_Greater_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreaterEqual(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA));
+            return createGreaterEqual(attr("Nullable(Date)"), Field(Date_Greater_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreaterEqual(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createGreaterEqual(attr("DateTime"), Field(DateTime_Greater_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreaterEqual(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createGreaterEqual(attr("Nullable(DateTime)"), Field(DateTime_Greater_DATA));
         }
     }
     case Test_MyDateTime:
@@ -849,66 +840,66 @@ RSOperatorPtr generateLessOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createLess(attr("Int64"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLess(attr("Int64"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Int64"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createLess(attr("Int64"), Field(Int64_Match_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLess(attr("Nullable(Int64)"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createLess(attr("Nullable(Int64)"), Field(Int64_Match_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createLess(attr("Date"), Field(static_cast<String> Date_Greater_DATA));
+            return createLess(attr("Date"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Date"), Field(static_cast<String> Date_Match_DATA));
+            return createLess(attr("Date"), Field(Date_Match_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA));
+            return createLess(attr("Nullable(Date)"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA));
+            return createLess(attr("Nullable(Date)"), Field(Date_Match_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createLess(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLess(attr("DateTime"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLess(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA));
+            return createLess(attr("DateTime"), Field(DateTime_Match_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLess(attr("Nullable(DateTime)"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA));
+            return createLess(attr("Nullable(DateTime)"), Field(DateTime_Match_DATA));
         }
     }
     case Test_MyDateTime:
@@ -976,66 +967,66 @@ RSOperatorPtr generateLessEqualOperator(MinMaxTestDatatype data_type, bool is_ma
     {
         if (is_match)
         {
-            return createLessEqual(attr("Int64"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLessEqual(attr("Int64"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createLessEqual(attr("Int64"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLessEqual(attr("Nullable(Int64)"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createLessEqual(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Date"), Field(static_cast<String> Date_Greater_DATA));
+            return createLessEqual(attr("Date"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createLessEqual(attr("Date"), Field(Date_Smaller_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA));
+            return createLessEqual(attr("Nullable(Date)"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createLessEqual(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createLessEqual(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLessEqual(attr("DateTime"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createLessEqual(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLessEqual(attr("Nullable(DateTime)"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createLessEqual(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_MyDateTime:
