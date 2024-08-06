@@ -193,7 +193,14 @@ public:
             if (test_info)
             {
                 std::string test_case_name = test_info->name();
-                if (test_case_name == "autoPassThroughIntegrationTest" || test_case_name == "stateSwitchMediumNDV")
+                if (test_case_name == "autoPassThroughIntegrationTestSpill")
+                {
+                    context.context->getSettingsRef().max_block_size = 800;
+                    context.context->getSettingsRef().max_bytes_before_external_group_by = 100;
+                    context.context->getSettingsRef().group_by_two_level_threshold = 1;
+                    context.context->getSettingsRef().group_by_two_level_threshold_bytes = 1;
+                }
+                else if (test_case_name == "stateSwitchMediumNDV" || test_case_name == "autoPassThroughIntegrationTest")
                 {
                     context.context->getSettingsRef().max_block_size = block_size;
                 }
@@ -251,6 +258,41 @@ public:
                 {db_name, nullable_medium_ndv_tbl_name},
                 nullable_column_infos,
                 medium_ndv_block.getColumnsWithTypeAndName());
+
+            expected_strings = {
+                R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>), sum(<UInt64_1, Tiny>), count(<UInt64_1, Tiny>), min(<UInt64_1, Tiny>), max(<UInt64_1, Tiny>)}
+  table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
+)",
+                R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>), sum(<UInt64_1, Tiny>), count(<UInt64_1, Tiny>), min(<UInt64_1, Tiny>), max(<UInt64_1, Tiny>)}
+  table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
+)",
+                R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_1 | group_by: {<15, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>), sum(<11, Longlong>), sum(<12, Longlong>), min(<13, Longlong>), max(<14, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+)",
+                R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+ aggregation_1 | group_by: {<15, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>), sum(<11, Longlong>), sum(<12, Longlong>), min(<13, Longlong>), max(<14, Longlong>)}
+  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
+)"};
+            agg_func_asts = MockAstVec{
+                makeASTFunction("first_row", col(col1_name)),
+                makeASTFunction("first_row", col(col2_name)),
+                makeASTFunction("min", col(col2_name)),
+                makeASTFunction("max", col(col2_name)),
+                makeASTFunction("sum", col(col2_name)),
+                makeASTFunction("count", col(col2_name)),
+                makeASTFunction("first_row", col(col4_name)),
+                makeASTFunction("min", col(col4_name)),
+                makeASTFunction("max", col(col4_name)),
+                makeASTFunction("sum", col(col4_name)),
+                makeASTFunction("count", col(col4_name)),
+                makeASTFunction("sum", lit(Field(static_cast<UInt64>(1)))),
+                makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+                makeASTFunction("min", lit(Field(static_cast<UInt64>(1)))),
+                makeASTFunction("max", lit(Field(static_cast<UInt64>(1)))),
+            };
         }
 
         static void appendAggDescription(
@@ -562,6 +604,9 @@ public:
         Block random_block;
 
         bool inited = false;
+
+        std::vector<String> expected_strings;
+        MockAstVec agg_func_asts;
     };
 
     AutoPassThroughTestData auto_pass_through_test_data;
@@ -1754,6 +1799,37 @@ try
 }
 CATCH
 
+// Using high ndv workload to test spilling.
+// Related spilling config has setup in AutoPassThroughTestData::init().
+TEST_F(ComputeServerRunner, autoPassThroughIntegrationTestSpill)
+try
+{
+    const String db_name = auto_pass_through_test_data.db_name;
+    const String tbl_name = auto_pass_through_test_data.high_ndv_tbl_name;
+
+    auto builder = context.scan(db_name, tbl_name)
+                       .aggregation(
+                           auto_pass_through_test_data.agg_func_asts,
+                           {col(auto_pass_through_test_data.col1_name)},
+                           0,
+                           nullptr);
+    startServers(2);
+    auto res_no_pass_through = getResultBlocks(context, builder, serverNum());
+
+    WRAP_FOR_SERVER_TEST_BEGIN
+    ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+        context.scan(db_name, tbl_name)
+            .aggregation(
+                auto_pass_through_test_data.agg_func_asts,
+                {col(auto_pass_through_test_data.col1_name)},
+                0,
+                switcher),
+        auto_pass_through_test_data.expected_strings,
+        res_no_pass_through);
+    WRAP_FOR_SERVER_TEST_END
+}
+CATCH
+
 // Using different workload(low/high/medium ndv) to run auto_pass_through hashagg,
 // which cover logic of interpretion, execution and exchange.
 TEST_F(ComputeServerRunner, autoPassThroughIntegrationTest)
@@ -1774,27 +1850,10 @@ try
         const String col2_name = auto_pass_through_test_data.col2_name;
         const String col4_name = auto_pass_through_test_data.col4_name;
 
-        // todo other agg funcs.
-        MockAstVec agg_func_asts{
-            makeASTFunction("first_row", col(col1_name)),
-            makeASTFunction("first_row", col(col2_name)),
-            makeASTFunction("min", col(col2_name)),
-            makeASTFunction("max", col(col2_name)),
-            makeASTFunction("sum", col(col2_name)),
-            makeASTFunction("count", col(col2_name)),
-            makeASTFunction("first_row", col(col4_name)),
-            makeASTFunction("min", col(col4_name)),
-            makeASTFunction("max", col(col4_name)),
-            makeASTFunction("sum", col(col4_name)),
-            makeASTFunction("count", col(col4_name)),
-            makeASTFunction("sum", lit(Field(static_cast<UInt64>(1)))),
-            makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
-            makeASTFunction("min", lit(Field(static_cast<UInt64>(1)))),
-            makeASTFunction("max", lit(Field(static_cast<UInt64>(1)))),
-        };
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, tbl_name: {}", tbl_name);
 
-        auto builder = context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, nullptr);
+        auto builder = context.scan(db_name, tbl_name)
+                           .aggregation(auto_pass_through_test_data.agg_func_asts, {col(col1_name)}, 0, nullptr);
         startServers(2);
         auto res_no_pass_through = getResultBlocks(context, builder, serverNum());
 
@@ -1802,26 +1861,10 @@ try
         // Expect the columns result is same with non-auto_pass_through hashagg.
         WRAP_FOR_SERVER_TEST_BEGIN
         LOG_DEBUG(Logger::get(), "TestAutoPassThroughAggContext iteration, start test auto pass");
-        std::vector<String> expected_strings = {
-            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>), sum(<UInt64_1, Tiny>), count(<UInt64_1, Tiny>), min(<UInt64_1, Tiny>), max(<UInt64_1, Tiny>)}
-  table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
-)",
-            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
- aggregation_3 | group_by: {<0, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<1, Longlong>), max(<1, Longlong>), sum(<1, Longlong>), count(<1, Longlong>), first_row(<2, Tiny>), min(<2, Tiny>), max(<2, Tiny>), sum(<2, Tiny>), count(<2, Tiny>), sum(<UInt64_1, Tiny>), count(<UInt64_1, Tiny>), min(<UInt64_1, Tiny>), max(<UInt64_1, Tiny>)}
-  table_scan_0 | {<0, String>, <1, Longlong>, <2, Tiny>}
-)",
-            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
- aggregation_1 | group_by: {<15, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>), sum(<11, Longlong>), sum(<12, Longlong>), min(<13, Longlong>), max(<14, Longlong>)}
-  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
-)",
-            R"(exchange_sender_2 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
- aggregation_1 | group_by: {<15, String>}, agg_func: {first_row(<0, String>), first_row(<1, Longlong>), min(<2, Longlong>), max(<3, Longlong>), sum(<4, Longlong>), sum(<5, Longlong>), first_row(<6, Tiny>), min(<7, Tiny>), max(<8, Tiny>), sum(<9, Tiny>), sum(<10, Longlong>), sum(<11, Longlong>), sum(<12, Longlong>), min(<13, Longlong>), max(<14, Longlong>)}
-  exchange_receiver_5 | type:PassThrough, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
-)"};
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-            context.scan(db_name, tbl_name).aggregation(agg_func_asts, {col(col1_name)}, 0, switcher),
-            expected_strings,
+            context.scan(db_name, tbl_name)
+                .aggregation(auto_pass_through_test_data.agg_func_asts, {col(col1_name)}, 0, switcher),
+            auto_pass_through_test_data.expected_strings,
             res_no_pass_through);
         WRAP_FOR_SERVER_TEST_END
     }
