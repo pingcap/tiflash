@@ -329,6 +329,7 @@ void SegmentReadTask::fetchPages()
     {
         return;
     }
+    // Stable-only segment.
     if (extra_remote_info->remote_page_ids.empty() && !needFetchMemTableSet())
     {
         LOG_DEBUG(read_snapshot->log, "Neither ColumnFileTiny or ColumnFileInMemory need to be fetched from WN.");
@@ -337,7 +338,6 @@ void SegmentReadTask::fetchPages()
 
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
-        // This metric is per-segment.
         GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_worker_fetch_page)
             .Observe(watch_work.elapsedSeconds());
     });
@@ -542,10 +542,7 @@ static void checkPageID(
 
 void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest & request)
 {
-    // No page and memtable need to be fetched.
-    if (request.page_ids_size() == 0 && !needFetchMemTableSet())
-        return;
-
+    // No matter all delta data is cached or not, call FetchDisaggPages to release snapshot in WN.
     const auto * cluster = dm_context->global_context.getTMTContext().getKVCluster();
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(
         cluster->rpc_client,
@@ -564,6 +561,13 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
         }
     });
 
+    // All delta data is cached.
+    if (request.page_ids_size() == 0 && !needFetchMemTableSet())
+    {
+        finishPagesPacketStream(stream_resp);
+        return;
+    }
+
     doFetchPagesImpl(
         [&stream_resp, this](disaggregated::PagesPacket & packet) {
             if (stream_resp->Read(&packet))
@@ -572,15 +576,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
             }
             else
             {
-                auto status = stream_resp->Finish();
-                stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
-                RUNTIME_CHECK_MSG(
-                    status.ok(),
-                    "Failed to fetch all pages for {}, status={}, message={}, wn_address={}",
-                    *this,
-                    static_cast<int>(status.error_code()),
-                    status.error_message(),
-                    extra_remote_info->store_address);
+                finishPagesPacketStream(stream_resp);
                 return false;
             }
         },
@@ -770,4 +766,45 @@ GlobalSegmentID SegmentReadTask::getGlobalSegmentID() const
     };
 }
 
+void SegmentReadTask::finishPagesPacketStream(
+    std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream_resp)
+{
+    if unlikely (stream_resp == nullptr)
+        return;
+
+    auto status = stream_resp->Finish();
+    stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
+    RUNTIME_CHECK_MSG(
+        status.ok(),
+        "Failed to fetch all pages for {}, status={}, message={}, wn_address={}",
+        *this,
+        static_cast<int>(status.error_code()),
+        status.error_message(),
+        extra_remote_info->store_address);
+}
+
+bool SegmentReadTask::hasColumnFileToFetch() const
+{
+    auto need_to_fetch = [](const ColumnFilePtr & cf) {
+        // Has ColumnFileMemory to fetch
+        if (auto * mem = cf->tryToInMemoryFile(); mem)
+            return true;
+        // Has ColumnFileTiny to fetch
+        if (auto * tiny = cf->tryToTinyFile(); tiny)
+            return true;
+
+        // ColumnFileDeleteRange and ColumnFileBig do not need to fetch
+        return false;
+    };
+
+    const auto & mem_cfs = read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
+    if (std::any_of(mem_cfs.cbegin(), mem_cfs.cend(), need_to_fetch))
+        return true;
+
+    const auto & persisted_cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
+    if (std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch))
+        return true;
+
+    return false;
+}
 } // namespace DB::DM

@@ -105,6 +105,13 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
         response->add_tables(
             Serializer::serializePhysicalTable(snap, task_id, mem_tracker_wrapper, need_mem_data).SerializeAsString());
     });
+
+    // Release SegmentReadTasks that do not have pages (including memtable) to fetch
+    // because these tasks will never call FetchDisaggPages to release the snapshots.
+    auto to_release_tasks = snap->releaseNoNeedFetchTasks();
+    if (!to_release_tasks.empty())
+        LOG_INFO(log, "Release no need fetch tasks: count={} segments={}", to_release_tasks.size(), to_release_tasks);
+    snaps->unregisterSnapshotIfEmpty(task_id);
 }
 
 } // namespace DB
