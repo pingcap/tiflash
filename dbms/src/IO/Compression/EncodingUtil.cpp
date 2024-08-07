@@ -93,6 +93,8 @@ template char * writeSameValueMultipleTime<UInt16>(UInt16, UInt32, char *);
 template char * writeSameValueMultipleTime<UInt32>(UInt32, UInt32, char *);
 template char * writeSameValueMultipleTime<UInt64>(UInt64, UInt32, char *);
 
+/// Constant encoding
+
 template <std::integral T>
 void constantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
@@ -110,6 +112,8 @@ template void constantDecoding<UInt8>(const char *, UInt32, char *, UInt32);
 template void constantDecoding<UInt16>(const char *, UInt32, char *, UInt32);
 template void constantDecoding<UInt32>(const char *, UInt32, char *, UInt32);
 template void constantDecoding<UInt64>(const char *, UInt32, char *, UInt32);
+
+/// ConstantDelta encoding
 
 template <std::integral T>
 void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
@@ -135,6 +139,8 @@ template void constantDeltaDecoding<UInt16>(const char *, UInt32, char *, UInt32
 template void constantDeltaDecoding<UInt32>(const char *, UInt32, char *, UInt32);
 template void constantDeltaDecoding<UInt64>(const char *, UInt32, char *, UInt32);
 
+/// Delta encoding
+
 template <std::integral T>
 void deltaEncoding(const T * source, UInt32 count, T * dest)
 {
@@ -151,6 +157,8 @@ template void deltaEncoding<Int8>(const Int8 *, UInt32, Int8 *);
 template void deltaEncoding<Int16>(const Int16 *, UInt32, Int16 *);
 template void deltaEncoding<Int32>(const Int32 *, UInt32, Int32 *);
 template void deltaEncoding<Int64>(const Int64 *, UInt32, Int64 *);
+
+/// Delta + FrameOfReference encoding
 
 template <std::integral T>
 void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
@@ -393,6 +401,69 @@ void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
         required_size - TYPE_BYTE_SIZE);
     deltaDecoding<Int64>(tmp_buffer, dest_size, dest);
 }
+
+/// Run-length encoding
+
+template <std::integral T>
+size_t runLengthEncodedApproximateSize(const T * source, UInt32 source_size)
+{
+    T prev_value = source[0];
+    size_t pair_count = 1;
+
+    for (UInt32 i = 1; i < source_size; ++i)
+    {
+        T value = source[i];
+        if (prev_value != value)
+        {
+            ++pair_count;
+            prev_value = value;
+        }
+    }
+    return pair_count * RunLengthPairLength<T>;
+}
+
+template size_t runLengthEncodedApproximateSize<UInt8>(const UInt8 *, UInt32);
+template size_t runLengthEncodedApproximateSize<UInt16>(const UInt16 *, UInt32);
+template size_t runLengthEncodedApproximateSize<UInt32>(const UInt32 *, UInt32);
+template size_t runLengthEncodedApproximateSize<UInt64>(const UInt64 *, UInt32);
+
+template <std::integral T>
+size_t runLengthEncoding(const T * source, UInt32 source_size, char * dest)
+{
+    T prev_value = source[0];
+    memcpy(dest, source, sizeof(T));
+    dest += sizeof(T);
+
+    std::vector<UInt8> counts;
+    counts.reserve(source_size);
+    UInt8 count = 1;
+
+    for (UInt32 i = 1; i < source_size; ++i)
+    {
+        T value = source[i];
+        if (prev_value == value && count < std::numeric_limits<UInt8>::max())
+        {
+            ++count;
+        }
+        else
+        {
+            counts.push_back(count);
+            unalignedStore<T>(dest, value);
+            dest += sizeof(T);
+            prev_value = value;
+            count = 1;
+        }
+    }
+    counts.push_back(count);
+
+    memcpy(dest, counts.data(), counts.size());
+    return counts.size() * RunLengthPairLength<T>;
+}
+
+template size_t runLengthEncoding<UInt8>(const UInt8 *, UInt32, char *);
+template size_t runLengthEncoding<UInt16>(const UInt16 *, UInt32, char *);
+template size_t runLengthEncoding<UInt32>(const UInt32 *, UInt32, char *);
+template size_t runLengthEncoding<UInt64>(const UInt64 *, UInt32, char *);
 
 template <std::integral T>
 void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
