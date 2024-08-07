@@ -198,3 +198,5 @@ add_subdirectory(aws-cmake)
 add_subdirectory(simdjson)
 
 add_subdirectory(fastpforlib)
+
+add_subdirectory(usearch-cmake)

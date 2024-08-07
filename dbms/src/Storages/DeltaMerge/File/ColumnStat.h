@@ -41,6 +41,8 @@ struct ColumnStat
     size_t array_sizes_bytes = 0;
     size_t array_sizes_mark_bytes = 0;
 
+    std::optional<dtpb::ColumnVectorIndexInfo> vector_index = std::nullopt;
+
     dtpb::ColumnStat toProto() const
     {
         dtpb::ColumnStat stat;
@@ -55,6 +57,10 @@ struct ColumnStat
         stat.set_index_bytes(index_bytes);
         stat.set_array_sizes_bytes(array_sizes_bytes);
         stat.set_array_sizes_mark_bytes(array_sizes_mark_bytes);
+
+        if (vector_index.has_value())
+            stat.mutable_vector_index()->CopyFrom(vector_index.value());
+
         return stat;
     }
 
@@ -71,6 +77,9 @@ struct ColumnStat
         index_bytes = proto.index_bytes();
         array_sizes_bytes = proto.array_sizes_bytes();
         array_sizes_mark_bytes = proto.array_sizes_mark_bytes();
+
+        if (proto.has_vector_index())
+            vector_index = proto.vector_index();
     }
 
     // @deprecated. New fields should be added via protobuf. Use `toProto` instead

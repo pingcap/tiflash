@@ -132,6 +132,7 @@ try
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
+        tipb::ANNQueryInfo{},
         pushed_down_filters, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
@@ -687,6 +688,7 @@ try
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
+        tipb::ANNQueryInfo{},
         pushed_down_filters, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
@@ -805,6 +807,7 @@ try
         const std::vector<int> runtime_filter_ids;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filters,
+            tipb::ANNQueryInfo{},
             pushed_down_filters, // Not care now
             source_columns, // Not care now
             runtime_filter_ids,

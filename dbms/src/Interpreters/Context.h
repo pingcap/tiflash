@@ -107,6 +107,7 @@ enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
+class VectorIndexCache;
 class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
@@ -237,8 +238,8 @@ public:
     /// Compute and set actual user settings, client_info.current_user should be set
     void calculateUserSettings();
 
-    ClientInfo & getClientInfo() { return client_info; };
-    const ClientInfo & getClientInfo() const { return client_info; };
+    ClientInfo & getClientInfo() { return client_info; }
+    const ClientInfo & getClientInfo() const { return client_info; }
 
     void setQuota(
         const String & name,
@@ -391,6 +392,10 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
+    void setVectorIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
+    void dropVectorIndexCache() const;
+
     bool isDeltaIndexLimited() const;
     void setDeltaIndexManager(size_t cache_size_in_bytes);
     std::shared_ptr<DM::DeltaIndexManager> getDeltaIndexManager() const;
@@ -505,8 +510,8 @@ public:
 
     SharedQueriesPtr getSharedQueries();
 
-    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
-    TimezoneInfo & getTimezoneInfo() { return timezone_info; };
+    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; }
+    TimezoneInfo & getTimezoneInfo() { return timezone_info; }
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;

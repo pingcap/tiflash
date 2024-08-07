@@ -54,6 +54,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -148,6 +149,7 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
+    mutable DM::VectorIndexCachePtr vector_index_cache;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
     ViewDependencies view_dependencies; /// Current dependencies
@@ -1384,6 +1386,28 @@ void Context::dropMinMaxIndexCache() const
     auto lock = getLock();
     if (shared->minmax_index_cache)
         shared->minmax_index_cache->reset();
+}
+
+void Context::setVectorIndexCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    RUNTIME_CHECK(!shared->vector_index_cache);
+
+    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_size_in_bytes);
+}
+
+DM::VectorIndexCachePtr Context::getVectorIndexCache() const
+{
+    auto lock = getLock();
+    return shared->vector_index_cache;
+}
+
+void Context::dropVectorIndexCache() const
+{
+    auto lock = getLock();
+    if (shared->vector_index_cache)
+        shared->vector_index_cache->reset();
 }
 
 bool Context::isDeltaIndexLimited() const

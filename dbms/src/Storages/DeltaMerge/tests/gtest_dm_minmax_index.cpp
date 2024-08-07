@@ -2242,6 +2242,7 @@ try
     ColumnInfos column_infos = {a, b};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
+        tipb::ANNQueryInfo{},
         pushed_down_filters, // Not care now
         column_infos,
         std::vector<int>{},

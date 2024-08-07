@@ -37,7 +37,34 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
 
 Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
-    auto [block, from_delta] = readBlock(stable, delta);
+    if (return_filter)
+        return readImpl(res_filter);
+
+    // The caller want a filtered resut, so let's filter by ourselves.
+
+    FilterPtr block_filter;
+    auto block = readImpl(block_filter);
+    if (!block)
+        return {};
+
+    // all rows in block are not filtered out, simply do nothing.
+    if (!block_filter) // NOLINT
+        return block;
+
+    // some rows should be filtered according to `block_filter`:
+    size_t passed_count = countBytesInFilter(*block_filter);
+    for (auto & col : block)
+    {
+        col.column = col.column->filter(*block_filter, passed_count);
+    }
+    return block;
+}
+
+Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter)
+{
+    FilterPtr block_filter = nullptr;
+    auto [block, from_delta] = readBlockWithReturnFilter(stable, delta, block_filter);
+
     if (block)
     {
         if (from_delta)
@@ -47,24 +74,35 @@ Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_fil
 
         filter.resize(block.rows());
         bool all_match = bitmap_filter->get(filter, block.startOffset(), block.rows());
-        if (!all_match)
+
+        if (!block_filter)
         {
-            if (return_filter)
+            if (all_match)
+                res_filter = nullptr;
+            else
+                res_filter = &filter;
+        }
+        else
+        {
+            RUNTIME_CHECK(filter.size() == block_filter->size(), filter.size(), block_filter->size());
+            if (!all_match)
             {
+                // We have a `block_filter`, and have a bitmap filter in `filter`.
+                // filter ← filter & block_filter.
+                std::transform( //
+                    filter.begin(),
+                    filter.end(),
+                    block_filter->begin(),
+                    filter.begin(),
+                    [](UInt8 a, UInt8 b) { return a && b; });
                 res_filter = &filter;
             }
             else
             {
-                size_t passed_count = countBytesInFilter(filter);
-                for (auto & col : block)
-                {
-                    col.column = col.column->filter(filter, passed_count);
-                }
+                // We only have a `block_filter`.
+                // res_filter ← block_filter.
+                res_filter = block_filter;
             }
-        }
-        else
-        {
-            res_filter = nullptr;
         }
     }
     return block;

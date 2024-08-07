@@ -21,11 +21,19 @@ namespace DB::DM
 
 /** Read the next block.
   * Read from the stable first, then read from the delta.
-  * 
+  *
   * Return: <Block, from_delta>
   * the block and a flag indicating whether the block is from the delta.
   */
 std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
+
+/**
+ * Like readBlock, but it forces the underlying stream to return the filter if any.
+ */
+std::pair<Block, bool> readBlockWithReturnFilter(
+    SkippableBlockInputStreamPtr & stable,
+    SkippableBlockInputStreamPtr & delta,
+    FilterPtr & filter);
 
 /** Skip the next block.
   * Return the number of rows of the next block.
@@ -34,7 +42,7 @@ size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStrea
 
 /** Read the next block with filter.
   * Read from the stable first, then read from the delta.
-  * 
+  *
   * Return: <Block, from_delta>
   * The block containing only the rows that pass the filter and a flag indicating whether the block is from the delta.
   */

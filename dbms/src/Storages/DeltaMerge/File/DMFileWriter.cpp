@@ -16,6 +16,7 @@
 #include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/S3/S3Common.h>
 
 #ifndef NDEBUG
@@ -59,11 +60,14 @@ DMFileWriter::DMFileWriter(
 
     for (auto & cd : write_columns)
     {
+        if (cd.vector_index)
+            RUNTIME_CHECK(VectorIndex::isSupportedType(*cd.type));
+
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
-        addStreams(cd.id, cd.type, do_index);
+        addStreams(cd.id, cd.type, do_index, cd.vector_index);
         dmfile->meta->getColumnStats().emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
 }
@@ -97,12 +101,11 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
     }
 }
 
-void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
+void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index, TiDB::VectorIndexInfoPtr do_vector_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        bool substream_do_index
-            = do_index && !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
+        bool substream_can_index = !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
         auto stream = std::make_unique<Stream>(
             dmfile,
             stream_name,
@@ -111,7 +114,8 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            substream_do_index);
+            do_index && substream_can_index,
+            (do_vector_index && substream_can_index) ? do_vector_index : nullptr);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -202,6 +206,9 @@ void DMFileWriter::writeColumn(
                     (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
 
+            if (stream->vector_index)
+                stream->vector_index->addBlock(column, del_mark);
+
             /// There could already be enough data to compress into the new block.
             if (stream->compressed_buf->offset() >= options.min_compress_block_size)
                 stream->compressed_buf->next();
@@ -264,7 +271,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
 #endif
-
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
@@ -315,6 +321,38 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 stream->minmaxes->write(*type, *buffer);
 
                 col_stat.index_bytes = buffer->getMaterializedBytes();
+
+                MergedSubFileInfo info{
+                    fname,
+                    merged_file.file_info.number,
+                    merged_file.file_info.size,
+                    col_stat.index_bytes};
+                dmfile_meta->merged_sub_file_infos[fname] = info;
+
+                merged_file.file_info.size += col_stat.index_bytes;
+                buffer->next();
+            }
+
+            if (stream->vector_index && !is_empty_file)
+            {
+                dmfile_meta->checkMergedFile(merged_file, file_provider, write_limiter);
+
+                auto fname = colIndexFileName(stream_name);
+
+                auto buffer = ChecksumWriteBufferBuilder::build(
+                    merged_file.buffer,
+                    dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    dmfile->getConfiguration()->getChecksumFrameLength());
+
+                stream->vector_index->serializeBinary(*buffer);
+
+                col_stat.index_bytes = buffer->getMaterializedBytes();
+
+                // Memorize what kind of vector index it is, so that we can correctly restore it when reading.
+                col_stat.vector_index = dtpb::ColumnVectorIndexInfo{};
+                col_stat.vector_index->set_index_kind(String(magic_enum::enum_name(stream->vector_index->kind)));
+                col_stat.vector_index->set_distance_metric(
+                    String(magic_enum::enum_name(stream->vector_index->distance_metric)));
 
                 MergedSubFileInfo info{
                     fname,
@@ -415,6 +453,11 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     examine_buffer_size(*buf, *this->file_provider);
                 }
 #endif
+            }
+
+            if (stream->vector_index)
+            {
+                RUNTIME_CHECK_MSG(false, "Vector index is not compatible with V1 and V2 format");
             }
         }
     };

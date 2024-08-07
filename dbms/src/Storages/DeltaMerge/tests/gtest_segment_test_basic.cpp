@@ -349,7 +349,7 @@ std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_i
     return {start_key, end_key};
 }
 
-Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted)
 {
     RUNTIME_CHECK(start_key <= end_key);
     if (end_key == start_key)
@@ -367,6 +367,11 @@ Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool i
         1,
         true,
         is_deleted);
+}
+
+Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+{
+    return prepareWriteBlockImpl(start_key, end_key, is_deleted);
 }
 
 Block sortvstackBlocks(std::vector<Block> && blocks)
@@ -830,6 +835,7 @@ SegmentPtr SegmentTestBasic::reload(
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(
                                 is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
                                                   : pre_define_columns;
+    prepareColumns(cols);
     setColumns(cols);
 
     // Always return the first segment

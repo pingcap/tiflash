@@ -49,6 +49,13 @@ message ChecksumConfig {
     repeated ChecksumDebugInfo debug_info = 5;
 }
 
+// Note: This message does not contain all fields of VectorIndexInfo,
+// because this message is only used for reading the vector index carried with the column.
+message ColumnVectorIndexInfo {
+    optional string index_kind = 1;
+    optional string distance_metric = 2;
+}
+
 message ColumnStat {
     optional int64 col_id = 1;
     optional string type_name = 2;
@@ -61,6 +68,9 @@ message ColumnStat {
     optional uint64 index_bytes = 9;
     optional uint64 array_sizes_bytes = 10;
     optional uint64 array_sizes_mark_bytes = 11;
+
+    // TODO(vector-index) Support multiple vector index on the same column
+    optional ColumnVectorIndexInfo vector_index = 101;
 }
 
 message ColumnStats {

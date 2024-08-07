@@ -69,7 +69,7 @@ public:
     Block read() override { return {}; }
 
 private:
-    ColumnDefines read_columns{};
+    ColumnDefines read_columns;
 };
 
 template <bool need_row_id = false>
@@ -93,7 +93,13 @@ public:
 
     Block readWithFilter(const IColumn::Filter & filter) override;
 
-    Block read() override;
+    Block read() override
+    {
+        FilterPtr filter = nullptr;
+        return read(filter, false);
+    }
+
+    Block read(FilterPtr & res_filter, bool return_filter) override;
 
 private:
     ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit);

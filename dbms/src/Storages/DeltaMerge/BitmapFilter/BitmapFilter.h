@@ -34,6 +34,8 @@ public:
     void set(UInt32 start, UInt32 limit, bool value = true);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+    // Caller should ensure n in [0, size).
+    inline bool get(UInt32 n) const { return filter[n]; }
     // filter[start, satrt+limit) & f -> f
     void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
@@ -41,6 +43,9 @@ public:
 
     String toDebugString() const;
     size_t count() const;
+    inline size_t size() const { return filter.size(); }
+
+    friend class BitmapFilterView;
 
 private:
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);
