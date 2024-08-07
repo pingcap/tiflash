@@ -23,12 +23,6 @@
 namespace DB
 {
 
-class VectorDistanceSIMDFeatures
-{
-public:
-    static std::vector<std::string> get();
-};
-
 class VectorFloat32Ref
 {
 public:

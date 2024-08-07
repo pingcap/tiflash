@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Logger.h>
-#include <Storages/DeltaMerge/Index/VectorIndexHNSW/SIMDFeatures.h>
-#include <Storages/DeltaMerge/Index/VectorIndexHNSW/USearch.h>
-#include <common/logger_useful.h>
+#include <VectorFeatures/SIMDFeatures.h>
+#include <VectorFeatures/USearch.h>
+#include <fmt/format.h>
 
 namespace DB::DM
 {
