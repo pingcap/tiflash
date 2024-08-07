@@ -22,6 +22,8 @@
 namespace DB::DM
 {
 
+class BitmapFilterView;
+
 class BitmapFilter
 {
 public:
@@ -50,6 +52,8 @@ private:
 
     std::vector<bool> filter;
     bool all_match;
+
+    friend class BitmapFilterView;
 };
 
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
