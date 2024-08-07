@@ -23,7 +23,7 @@ struct RSIndex
 {
     DataTypePtr type;
     MinMaxIndexPtr minmax;
-    VectorIndexPtr vector; // TODO: Actually this is not a rough index. We put it here for convenience.
+    VectorIndexPtr vector; // TODO(vector-index): Actually this is not a rough index. We put it here for convenience.
 
     RSIndex(const DataTypePtr & type_, const MinMaxIndexPtr & minmax_)
         : type(type_)

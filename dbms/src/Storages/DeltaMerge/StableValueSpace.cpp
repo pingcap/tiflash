@@ -557,7 +557,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
             last_rows += stable->files[i]->getRows();
         }
 
-        streams.push_back(builder.build2(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        streams.push_back(builder.tryBuildWithVectorIndex(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }
     if (need_row_id)

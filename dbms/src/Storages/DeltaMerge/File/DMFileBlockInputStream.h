@@ -101,7 +101,7 @@ public:
     // 2. ANNQueryInfo is available in the RSFilter
     // 3. The vector column mentioned by ANNQueryInfo is in the read_columns
     // 4. The vector column mentioned by ANNQueryInfo exists vector index file
-    SkippableBlockInputStreamPtr build2(
+    SkippableBlockInputStreamPtr tryBuildWithVectorIndex(
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns,
         const RowKeyRanges & rowkey_ranges,

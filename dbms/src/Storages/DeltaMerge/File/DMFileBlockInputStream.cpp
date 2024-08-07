@@ -129,7 +129,7 @@ DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(c
     return *this;
 }
 
-SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build2(
+SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIndex(
     const DMFilePtr & dmfile,
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
@@ -142,7 +142,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build2(
     if (rs_filter == nullptr)
         return fallback();
 
-    // Fast Scan and Clean Read does not affect our behavior. (TODO: Confirm?)
+    // Fast Scan and Clean Read does not affect our behavior. (TODO(vector-index): Confirm?)
     // if (is_fast_scan || enable_del_clean_read || enable_handle_clean_read)
     //    return fallback();
 

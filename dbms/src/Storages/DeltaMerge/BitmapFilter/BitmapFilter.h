@@ -47,6 +47,8 @@ public:
     size_t count() const;
     inline size_t size() const { return filter.size(); }
 
+    friend class BitmapFilterView;
+
 private:
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);
 

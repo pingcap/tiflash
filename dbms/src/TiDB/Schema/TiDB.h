@@ -204,7 +204,7 @@ struct ColumnInfo
     SchemaState state = StateNone;
     String comment;
 
-    // TODO: This index will be moved to the table level later
+    // TODO(vector-index): This index will be moved to the table level later
     VectorIndexInfoPtr vector_index = nullptr;
 
 #ifdef M

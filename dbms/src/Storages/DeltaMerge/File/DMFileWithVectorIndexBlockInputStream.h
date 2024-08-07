@@ -389,7 +389,7 @@ private:
                 read_limiter);
             buffer.seek(offset);
 
-            // TODO: Read from file directly?
+            // TODO(vector-index): Read from file directly?
             String raw_data;
             raw_data.resize(data_size);
             buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
@@ -418,7 +418,7 @@ private:
 
         if (vec_index_cache)
         {
-            // TODO: Is cache key valid on Compute Node for different Write Nodes?
+            // TODO(vector-index): Is cache key valid on Compute Node for different Write Nodes?
             vec_index = vec_index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load_vector_index);
         }
         else
@@ -574,7 +574,7 @@ private:
     const ReadLimiterPtr read_limiter;
     const ScanContextPtr scan_context;
     const VectorIndexCachePtr vec_index_cache;
-    const BitmapFilterView valid_rows; // TODO: Currently this does not support ColumnFileBig
+    const BitmapFilterView valid_rows; // TODO(vector-index): Currently this does not support ColumnFileBig
 
     Block header; // Filled in constructor;
 

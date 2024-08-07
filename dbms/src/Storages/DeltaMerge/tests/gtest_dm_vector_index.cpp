@@ -208,7 +208,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -233,7 +233,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -258,7 +258,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -286,7 +286,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -311,7 +311,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -336,7 +336,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -361,7 +361,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -395,7 +395,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -420,7 +420,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -455,7 +455,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(3, true), 0, 3))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -517,7 +517,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(6, true), 0, 6))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -542,7 +542,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(6, true), 0, 6))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -567,7 +567,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(6, true), 0, 6))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -595,7 +595,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 6))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -665,7 +665,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
-                          .build2(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
+                          .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             createColumnNames(),
@@ -679,7 +679,7 @@ try
         builder = DMFileBlockInputStreamBuilder(dbContext());
         stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                      .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
-                     .build2(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
+                     .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             createColumnNames(),
@@ -708,7 +708,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
-                          .build2(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
+                          .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             createColumnNames(),

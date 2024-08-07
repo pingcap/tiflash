@@ -20,7 +20,7 @@
 
 namespace DB::ErrorCodes
 {
-extern const int INCORRECT_QUERY;
+extern const int BAD_ARGUMENTS;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
@@ -51,12 +51,12 @@ VectorIndexPtr VectorIndex::create(const TiDB::VectorIndexInfo & index_info)
             return std::make_shared<VectorIndexHNSW<unum::usearch::metric_kind_t::cos_k>>(index_info.dimension);
         default:
             throw Exception(
-                ErrorCodes::INCORRECT_QUERY,
+                ErrorCodes::BAD_ARGUMENTS,
                 "Unsupported vector index distance metric {}",
                 index_info.distance_metric);
         }
     default:
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unsupported vector index {}", index_info.kind);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported vector index {}", index_info.kind);
     }
 }
 
@@ -75,13 +75,10 @@ VectorIndexPtr VectorIndex::load(TiDB::VectorIndexKind kind, TiDB::DistanceMetri
         case TiDB::DistanceMetric::COSINE:
             return VectorIndexHNSW<unum::usearch::metric_kind_t::cos_k>::deserializeBinary(istr);
         default:
-            throw Exception(
-                ErrorCodes::INCORRECT_QUERY,
-                "Unsupported vector index distance metric {}",
-                distance_metric);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported vector index distance metric {}", distance_metric);
         }
     default:
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unsupported vector index {}", kind);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported vector index {}", kind);
     }
 }
 

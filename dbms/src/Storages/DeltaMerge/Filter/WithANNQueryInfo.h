@@ -20,9 +20,8 @@
 namespace DB::DM
 {
 
-// HACK: We reused existing RSOperator path to pass ANNQueryInfo.
-// This is for minimizing changed files in the Serverless.
-// When we port back the implementation to open-source version, we should extract the ANNQueryInfo out.
+// TODO(vector-index): find a more elegant way for passing ANNQueryInfo down for
+// building `DMFileWithVectorIndexBlockInputStream`
 class WithANNQueryInfo : public RSOperator
 {
 public:

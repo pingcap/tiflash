@@ -108,7 +108,7 @@ void VectorColumnFromIndexReader::read(MutableColumnPtr & column, size_t start_p
             }
             RUNTIME_CHECK(filled_result_rows == offset_in_pack);
 
-            // TODO: We could fill multiple rows if rowid is continuous.
+            // TODO(vector-index): We could fill multiple rows if rowid is continuous.
             VectorIndex::Key rowid = pack_start_rowid[pack_id] + offset_in_pack;
             index->get(rowid, value);
             column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
