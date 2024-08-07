@@ -21,12 +21,12 @@ Therefore, `AutoPassThroughHashAgg` is proposed as an adaptive HashAgg that dyna
 ### Core State Switch
 The 1st hashagg will follow the state transition diagram below, with each state having the following meanings:
 1. `Init`: The initial state, where it remains as long as the HashMap is smaller than a specific value(to make sure the HashMap can fit in the L2 cache). In this state, the incoming Block is inserted into the HashMap for pre-aggregation.
-2. `Adjust`: In this state, the Block is inserted into the HashMap while probing and recording the degree of aggregation for the Block.
+2. `Adjust`: In this state, the Block is inserted into the HashMap while probing and recording the degree of aggregation for the Block. It will switch to `PreAgg` or `PassThrough`.
 3. `PreAgg`: In this state, the Block is inserted into the HashMap. This state lasts for N rows(see code for N) before switching back to the `Adjust` state.
 4. `PassThrough`: In this state, the Block is directly put into the memory buffer. This state lasts for M rows(see code for M) before switching back to the `Adjust` state.
 5. `Selective`: For rows which can hit the HashMap, the aggregation function is calculated directly. For rows can't hit, they are put into the pass through buffer. So in this state, the HashMap does not grow.
 
-![auto_pass_through_state](./imgs/auto_pass_through_state.png)
+![auto_pass_through_state](./images/auto_pass_through_state.png)
 
 All the above logic will be encapsulated within the `AutoPassThroughHashAggContext` class, which will be called by the executor related class.
 
