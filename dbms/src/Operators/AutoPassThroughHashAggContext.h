@@ -66,7 +66,8 @@ public:
         , max_dynamic_row_limit(row_limit_unit_ * MAX_DYNAMIC_UNIT_LIMIT)
         , log(Logger::get(req_id_))
     {
-        aggregator = std::make_unique<Aggregator>(params_, req_id_, /*concurrency=*/1, nullptr, /*is_auto_pass_through=*/true);
+        aggregator
+            = std::make_unique<Aggregator>(params_, req_id_, /*concurrency=*/1, nullptr, /*is_auto_pass_through=*/true);
         aggregator->setCancellationHook(hook);
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);

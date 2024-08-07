@@ -185,21 +185,21 @@ void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 
     switch (state)
     {
-        case State::PassThrough:
-        case State::Selective:
-        {
-            row_limit = dynamic_row_limit;
-            break;
-        }
-        case State::PreHashAgg:
-        {
-            row_limit = normal_row_limit;
-            break;
-        }
-        default:
-        {
-            throw Exception(fmt::format("unexpected state: {}", magic_enum::enum_name(state)));
-        }
+    case State::PassThrough:
+    case State::Selective:
+    {
+        row_limit = dynamic_row_limit;
+        break;
+    }
+    case State::PreHashAgg:
+    {
+        row_limit = normal_row_limit;
+        break;
+    }
+    default:
+    {
+        throw Exception(fmt::format("unexpected state: {}", magic_enum::enum_name(state)));
+    }
     }
 
     if (state_processed_rows < row_limit)
