@@ -30,14 +30,12 @@
 #include <Storages/PathPool.h>
 
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
-namespace DM
+namespace DB::DM
 {
 void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, const DMContext * dm_context)
 {
@@ -557,7 +555,11 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
             last_rows += stable->files[i]->getRows();
         }
 
-        streams.push_back(builder.tryBuildWithVectorIndex(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        streams.push_back(builder.tryBuildWithVectorIndex( //
+            stable->files[i],
+            read_columns,
+            rowkey_ranges,
+            context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }
     if (need_row_id)
@@ -730,5 +732,4 @@ size_t StableValueSpace::avgRowBytes(const ColumnDefines & read_columns)
     return avg_bytes;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
