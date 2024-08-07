@@ -22,10 +22,10 @@ namespace DB::Compression
 {
 
 template <std::integral T>
-void writeSameValueMultipleTime(T value, UInt32 count, char * dest)
+char * writeSameValueMultipleTime(T value, UInt32 count, char * dest)
 {
     if (unlikely(count == 0))
-        return;
+        return dest;
     if constexpr (sizeof(T) == 1)
     {
         memset(dest, value, count);
@@ -36,19 +36,21 @@ void writeSameValueMultipleTime(T value, UInt32 count, char * dest)
         UInt32 j = 0;
 #if defined(__AVX2__)
         // avx2
-        __m256i value_avx2 = _mm256_set1_epi16(value);
         while (j + sizeof(__m256i) / sizeof(T) <= count)
         {
             if constexpr (sizeof(T) == 2)
             {
+                auto value_avx2 = _mm256_set1_epi16(value);
                 _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
             }
             else if constexpr (sizeof(T) == 4)
             {
+                auto value_avx2 = _mm256_set1_epi32(value);
                 _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
             }
             else if constexpr (sizeof(T) == 8)
             {
+                auto value_avx2 = _mm256_set1_epi64x(value);
                 _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
             }
             j += sizeof(__m256i) / sizeof(T);
@@ -56,19 +58,21 @@ void writeSameValueMultipleTime(T value, UInt32 count, char * dest)
         }
 #endif
         // sse
-        __m128i value_sse = _mm_set1_epi16(value);
         while (j + sizeof(__m128i) / sizeof(T) <= count)
         {
             if constexpr (sizeof(T) == 2)
             {
+                auto value_sse = _mm_set1_epi16(value);
                 _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
             }
             else if constexpr (sizeof(T) == 4)
             {
+                auto value_sse = _mm_set1_epi32(value);
                 _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
             }
             else if constexpr (sizeof(T) == 8)
             {
+                auto value_sse = _mm_set1_epi64x(value);
                 _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
             }
             j += sizeof(__m128i) / sizeof(T);
@@ -81,12 +85,13 @@ void writeSameValueMultipleTime(T value, UInt32 count, char * dest)
             dest += sizeof(T);
         }
     }
+    return dest;
 }
 
-template void writeSameValueMultipleTime<UInt8>(UInt8, UInt32, char *);
-template void writeSameValueMultipleTime<UInt16>(UInt16, UInt32, char *);
-template void writeSameValueMultipleTime<UInt32>(UInt32, UInt32, char *);
-template void writeSameValueMultipleTime<UInt64>(UInt64, UInt32, char *);
+template char * writeSameValueMultipleTime<UInt8>(UInt8, UInt32, char *);
+template char * writeSameValueMultipleTime<UInt16>(UInt16, UInt32, char *);
+template char * writeSameValueMultipleTime<UInt32>(UInt32, UInt32, char *);
+template char * writeSameValueMultipleTime<UInt64>(UInt64, UInt32, char *);
 
 template <std::integral T>
 void constantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
@@ -413,7 +418,7 @@ void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
                 value,
                 count,
                 sizeof(T));
-        writeSameValueMultipleTime(value, count, dest);
+        dest = writeSameValueMultipleTime(value, count, dest);
     }
 }
 

@@ -30,7 +30,7 @@ namespace DB::Compression
 {
 
 template <std::integral T>
-void writeSameValueMultipleTime(T value, UInt32 count, char * dest);
+char * writeSameValueMultipleTime(T value, UInt32 count, char * dest);
 
 /// Constant encoding
 
