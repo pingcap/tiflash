@@ -18,7 +18,7 @@
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/tests/CodecTestSequence.h>
 #include <Poco/File.h>
 #include <benchmark/benchmark.h>
