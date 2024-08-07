@@ -312,10 +312,10 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
 std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
     const DMContextPtr & context,
-    const SegmentPtr & baseSegment)
+    const SegmentPtr & base_segment)
 {
     // Last segment cannot be merged.
-    if (baseSegment->getRowKeyRange().isEndInfinite())
+    if (base_segment->getRowKeyRange().isEndInfinite())
         return {};
 
     // We only merge small segments into a larger one.
@@ -329,15 +329,15 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
     {
         std::shared_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(lock, baseSegment))
+        if (!isSegmentValid(lock, base_segment))
             return {};
 
         results.reserve(4); // In most cases we will only find <= 4 segments to merge.
-        results.emplace_back(baseSegment);
-        auto accumulated_rows = baseSegment->getEstimatedRows();
-        auto accumulated_bytes = baseSegment->getEstimatedBytes();
+        results.emplace_back(base_segment);
+        auto accumulated_rows = base_segment->getEstimatedRows();
+        auto accumulated_bytes = base_segment->getEstimatedBytes();
 
-        auto it = segments.upper_bound(baseSegment->getRowKeyRange().getEnd());
+        auto it = segments.upper_bound(base_segment->getRowKeyRange().getEnd());
         while (it != segments.end())
         {
             const auto & this_seg = it->second;
@@ -345,6 +345,12 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
             const auto this_bytes = this_seg->getEstimatedBytes();
             if (accumulated_rows + this_rows >= max_total_rows || accumulated_bytes + this_bytes >= max_total_bytes)
                 break;
+#if defined(THREAD_SANITIZER)
+            // Limit the segments to be merged less than 30, or thread sanitizer will fail
+            // https://github.com/pingcap/tiflash/issues/9257
+            if (results.size() > 30)
+                break;
+#endif
             results.emplace_back(this_seg);
             accumulated_rows += this_rows;
             accumulated_bytes += this_bytes;
@@ -700,11 +706,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto segment_bytes = segment->getEstimatedBytes();
     if (segment_rows >= dm_context->segment_limit_rows || segment_bytes >= dm_context->segment_limit_bytes)
     {
-        LOG_TRACE(
-            log,
-            "GC - Merge skipped because current segment is not small, segment={} table={}",
-            segment->simpleInfo(),
-            table_name);
+        LOG_TRACE(log, "GC - Merge skipped because current segment is not small, segment={}", segment->simpleInfo());
         return {};
     }
 
@@ -713,13 +715,12 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     {
         LOG_TRACE(
             log,
-            "GC - Merge skipped because cannot find adjacent segments to merge, segment={} table={}",
-            segment->simpleInfo(),
-            table_name);
+            "GC - Merge skipped because cannot find adjacent segments to merge, segment={}",
+            segment->simpleInfo());
         return {};
     }
 
-    LOG_INFO(log, "GC - Trigger Merge, segment={} table={}", segment->simpleInfo(), table_name);
+    LOG_INFO(log, "GC - Trigger Merge, segment={}", segment->simpleInfo());
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
@@ -743,11 +744,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(
         // The segment we just retrieved may be dropped from the map. Let's verify it again before creating a snapshot.
         if (!isSegmentValid(lock, segment))
         {
-            LOG_TRACE(
-                log,
-                "GC - Skip checking MergeDelta because not valid, segment={} table={}",
-                segment->simpleInfo(),
-                table_name);
+            LOG_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={}", segment->simpleInfo());
             return {};
         }
 
@@ -755,11 +752,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(
             = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
         if (!segment_snap)
         {
-            LOG_TRACE(
-                log,
-                "GC - Skip checking MergeDelta because snapshot failed, segment={} table={}",
-                segment->simpleInfo(),
-                table_name);
+            LOG_TRACE(log, "GC - Skip checking MergeDelta because snapshot failed, segment={}", segment->simpleInfo());
             return {};
         }
     }
@@ -828,26 +821,24 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(
 
     if (!should_compact)
     {
-        LOG_TRACE(log, "GC - MergeDelta skipped, segment={} table={}", segment->simpleInfo(), table_name);
+        LOG_TRACE(log, "GC - MergeDelta skipped, segment={}", segment->simpleInfo());
         return {};
     }
 
     LOG_INFO(
         log,
-        "GC - Trigger MergeDelta, compact_reason={} segment={} table={}",
+        "GC - Trigger MergeDelta, compact_reason={} segment={}",
         GC::toString(compact_reason),
-        segment->simpleInfo(),
-        table_name);
+        segment->simpleInfo());
     auto new_segment = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::BackgroundGCThread, segment_snap);
 
     if (!new_segment)
     {
         LOG_DEBUG(
             log,
-            "GC - MergeDelta aborted, compact_reason={} segment={} table={}",
+            "GC - MergeDelta aborted, compact_reason={} segment={}",
             GC::toString(compact_reason),
-            segment->simpleInfo(),
-            table_name);
+            segment->simpleInfo());
         return {};
     }
 
@@ -877,8 +868,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
     LOG_TRACE(
         log,
-        "GC on table start, table={} check_key={} options={} gc_safe_point={} max_gc_limit={}",
-        table_name,
+        "GC on table start, check_key={} options={} gc_safe_point={} max_gc_limit={}",
         next_gc_check_key.toDebugString(),
         gc_options.toString(),
         gc_safe_point,
@@ -937,7 +927,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
 
             if (!new_seg)
             {
-                LOG_TRACE(log, "GC - Skipped segment, segment={} table={}", segment->simpleInfo(), table_name);
+                LOG_TRACE(log, "GC - Skipped segment, segment={}", segment->simpleInfo());
                 continue;
             }
 
@@ -945,7 +935,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
         }
         catch (Exception & e)
         {
-            e.addMessage(fmt::format("Error while GC segment, segment={} table={}", segment->info(), table_name));
+            e.addMessage(
+                fmt::format("Error while GC segment, segment={} log_ident={}", segment->info(), log->identifier()));
             e.rethrow();
         }
     }

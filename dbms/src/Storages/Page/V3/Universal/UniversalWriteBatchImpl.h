@@ -28,6 +28,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace tests
+{
+class UniPageStorageIdTest;
+}
+
 class UniversalWriteBatch : private boost::noncopyable
 {
 private:
@@ -266,6 +271,7 @@ public:
     void merge(UniversalWriteBatch & rhs)
     {
         writes.reserve(writes.size() + rhs.writes.size());
+        PS::PageStorageMemorySummary::universal_write_count.fetch_add(rhs.writes.size());
         for (const auto & r : rhs.writes)
         {
             writes.emplace_back(r);
@@ -276,6 +282,7 @@ public:
 
     [[clang::reinitializes]] void clear()
     {
+        PS::PageStorageMemorySummary::universal_write_count.fetch_sub(writes.size());
         Writes tmp;
         writes.swap(tmp);
         total_data_size = 0;
@@ -301,6 +308,9 @@ public:
         std::swap(has_writes_from_remote, o.has_writes_from_remote);
         std::swap(remote_lock_disabled, o.remote_lock_disabled);
     }
+
+private:
+    friend class UniPageStorageIdTest;
 
 private:
     String prefix;
