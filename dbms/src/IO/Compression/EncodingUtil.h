@@ -29,6 +29,9 @@ extern const int CANNOT_DECOMPRESS;
 namespace DB::Compression
 {
 
+template <std::integral T>
+void writeSameValueMultipleTime(T value, UInt32 count, char * dest);
+
 /// Constant encoding
 
 template <std::integral T>
@@ -39,21 +42,7 @@ inline size_t constantEncoding(T constant, char * dest)
 }
 
 template <std::integral T>
-void constantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
-{
-    if (unlikely(source_size < sizeof(T)))
-        throw Exception(
-            ErrorCodes::CANNOT_DECOMPRESS,
-            "Cannot use Constant decoding, data size {} is too small",
-            source_size);
-
-    T constant = unalignedLoad<T>(src);
-    for (size_t i = 0; i < dest_size / sizeof(T); ++i)
-    {
-        unalignedStore<T>(dest, constant);
-        dest += sizeof(T);
-    }
-}
+void constantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size);
 
 /// Constant delta encoding
 
@@ -67,23 +56,7 @@ inline size_t constantDeltaEncoding(T first_value, T constant_delta, char * dest
 }
 
 template <std::integral T>
-void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
-{
-    if (unlikely(source_size < sizeof(T) + sizeof(T)))
-        throw Exception(
-            ErrorCodes::CANNOT_DECOMPRESS,
-            "Cannot use ConstantDelta decoding, data size {} is too small",
-            source_size);
-
-    T first_value = unalignedLoad<T>(src);
-    T constant_delta = unalignedLoad<T>(src + sizeof(T));
-    for (size_t i = 0; i < dest_size / sizeof(T); ++i)
-    {
-        unalignedStore<T>(dest, first_value);
-        first_value += constant_delta;
-        dest += sizeof(T);
-    }
-}
+void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size);
 
 /// Run-length encoding
 
@@ -115,43 +88,7 @@ size_t runLengthEncoding(const RunLengthPairs<T> & rle, char * dest)
 }
 
 template <std::integral T>
-void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
-{
-    if (unlikely(source_size % RunLengthPairLength<T> != 0))
-        throw Exception(
-            ErrorCodes::CANNOT_DECOMPRESS,
-            "Cannot use RunLength decoding, data size {} is not aligned to {}",
-            source_size,
-            RunLengthPairLength<T>);
-
-    const char * dest_end = dest + dest_size;
-    for (UInt32 i = 0; i < source_size / RunLengthPairLength<T>; ++i)
-    {
-        T value = unalignedLoad<T>(src);
-        src += sizeof(T);
-        auto count = unalignedLoad<UInt8>(src);
-        src += sizeof(UInt8);
-        if (unlikely(dest + count * sizeof(T) > dest_end))
-            throw Exception(
-                ErrorCodes::CANNOT_DECOMPRESS,
-                "Cannot use RunLength decoding, data is too large, count={} elem_byte={}",
-                count,
-                sizeof(T));
-        if constexpr (std::is_same_v<T, UInt8> || std::is_same_v<T, Int8>)
-        {
-            memset(dest, value, count);
-            dest += count * sizeof(T);
-        }
-        else
-        {
-            for (UInt32 j = 0; j < count; ++j)
-            {
-                unalignedStore<T>(dest, value);
-                dest += sizeof(T);
-            }
-        }
-    }
-}
+void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size);
 
 /// Frame of Reference encoding
 
@@ -221,16 +158,7 @@ void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_
 /// Delta encoding
 
 template <std::integral T>
-inline void deltaEncoding(const T * source, UInt32 count, T * dest)
-{
-    T prev = 0;
-    for (UInt32 i = 0; i < count; ++i)
-    {
-        T curr = source[i];
-        dest[i] = curr - prev;
-        prev = curr;
-    }
-}
+void deltaEncoding(const T * source, UInt32 count, T * dest);
 
 template <std::integral T>
 void ordinaryDeltaDecoding(const char * source, UInt32 source_size, char * dest)

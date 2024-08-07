@@ -22,6 +22,132 @@ namespace DB::Compression
 {
 
 template <std::integral T>
+void writeSameValueMultipleTime(T value, UInt32 count, char * dest)
+{
+    if (unlikely(count == 0))
+        return;
+    if constexpr (sizeof(T) == 1)
+    {
+        memset(dest, value, count);
+        dest += count;
+    }
+    else
+    {
+        UInt32 j = 0;
+#if defined(__AVX2__)
+        // avx2
+        __m256i value_avx2 = _mm256_set1_epi16(value);
+        while (j + sizeof(__m256i) / sizeof(T) <= count)
+        {
+            if constexpr (sizeof(T) == 2)
+            {
+                _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
+            }
+            else if constexpr (sizeof(T) == 4)
+            {
+                _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
+            }
+            else if constexpr (sizeof(T) == 8)
+            {
+                _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
+            }
+            j += sizeof(__m256i) / sizeof(T);
+            dest += sizeof(__m256i);
+        }
+#endif
+        // sse
+        __m128i value_sse = _mm_set1_epi16(value);
+        while (j + sizeof(__m128i) / sizeof(T) <= count)
+        {
+            if constexpr (sizeof(T) == 2)
+            {
+                _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
+            }
+            else if constexpr (sizeof(T) == 4)
+            {
+                _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
+            }
+            else if constexpr (sizeof(T) == 8)
+            {
+                _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
+            }
+            j += sizeof(__m128i) / sizeof(T);
+            dest += sizeof(__m128i);
+        }
+        // scalar
+        for (; j < count; ++j)
+        {
+            unalignedStore<T>(dest, value);
+            dest += sizeof(T);
+        }
+    }
+}
+
+template void writeSameValueMultipleTime<UInt8>(UInt8, UInt32, char *);
+template void writeSameValueMultipleTime<UInt16>(UInt16, UInt32, char *);
+template void writeSameValueMultipleTime<UInt32>(UInt32, UInt32, char *);
+template void writeSameValueMultipleTime<UInt64>(UInt64, UInt32, char *);
+
+template <std::integral T>
+void constantDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    if (unlikely(source_size < sizeof(T)))
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot use Constant decoding, data size {} is too small",
+            source_size);
+
+    T constant = unalignedLoad<T>(src);
+    writeSameValueMultipleTime<T>(constant, dest_size / sizeof(T), dest);
+}
+
+template void constantDecoding<UInt8>(const char *, UInt32, char *, UInt32);
+template void constantDecoding<UInt16>(const char *, UInt32, char *, UInt32);
+template void constantDecoding<UInt32>(const char *, UInt32, char *, UInt32);
+template void constantDecoding<UInt64>(const char *, UInt32, char *, UInt32);
+
+template <std::integral T>
+void constantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    if (unlikely(source_size < sizeof(T) + sizeof(T)))
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot use ConstantDelta decoding, data size {} is too small",
+            source_size);
+
+    T first_value = unalignedLoad<T>(src);
+    T constant_delta = unalignedLoad<T>(src + sizeof(T));
+    for (size_t i = 0; i < dest_size / sizeof(T); ++i)
+    {
+        unalignedStore<T>(dest, first_value);
+        first_value += constant_delta;
+        dest += sizeof(T);
+    }
+}
+
+template void constantDeltaDecoding<UInt8>(const char *, UInt32, char *, UInt32);
+template void constantDeltaDecoding<UInt16>(const char *, UInt32, char *, UInt32);
+template void constantDeltaDecoding<UInt32>(const char *, UInt32, char *, UInt32);
+template void constantDeltaDecoding<UInt64>(const char *, UInt32, char *, UInt32);
+
+template <std::integral T>
+void deltaEncoding(const T * source, UInt32 count, T * dest)
+{
+    T prev = 0;
+    for (UInt32 i = 0; i < count; ++i)
+    {
+        T curr = source[i];
+        dest[i] = curr - prev;
+        prev = curr;
+    }
+}
+
+template void deltaEncoding<Int8>(const Int8 *, UInt32, Int8 *);
+template void deltaEncoding<Int16>(const Int16 *, UInt32, Int16 *);
+template void deltaEncoding<Int32>(const Int32 *, UInt32, Int32 *);
+template void deltaEncoding<Int64>(const Int64 *, UInt32, Int64 *);
+
+template <std::integral T>
 void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
 {
     if (frame_of_reference == 0)
@@ -262,5 +388,38 @@ void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
         required_size - TYPE_BYTE_SIZE);
     deltaDecoding<Int64>(tmp_buffer, dest_size, dest);
 }
+
+template <std::integral T>
+void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+{
+    if (unlikely(source_size % RunLengthPairLength<T> != 0))
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot use RunLength decoding, data size {} is not aligned to {}",
+            source_size,
+            RunLengthPairLength<T>);
+
+    const char * dest_end = dest + dest_size;
+    for (UInt32 i = 0; i < source_size / RunLengthPairLength<T>; ++i)
+    {
+        T value = unalignedLoad<T>(src);
+        src += sizeof(T);
+        auto count = unalignedLoad<UInt8>(src);
+        src += sizeof(UInt8);
+        if (unlikely(dest + count * sizeof(T) > dest_end))
+            throw Exception(
+                ErrorCodes::CANNOT_DECOMPRESS,
+                "Cannot use RunLength decoding, data is too large, value={}, count={} elem_byte={}",
+                value,
+                count,
+                sizeof(T));
+        writeSameValueMultipleTime(value, count, dest);
+    }
+}
+
+template void runLengthDecoding<UInt8>(const char *, UInt32, char *, UInt32);
+template void runLengthDecoding<UInt16>(const char *, UInt32, char *, UInt32);
+template void runLengthDecoding<UInt32>(const char *, UInt32, char *, UInt32);
+template void runLengthDecoding<UInt64>(const char *, UInt32, char *, UInt32);
 
 } // namespace DB::Compression
