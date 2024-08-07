@@ -117,6 +117,8 @@ Block AutoPassThroughHashAggContext::getDataFromHashTable()
         already_get_data_from_hash_table = true;
         RUNTIME_CHECK(!merging_buckets);
         merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, /*final=*/true, /*max_threads=*/1);
+
+        aggregator->getAggSpillContext()->finishSpillableStage();
     }
 
     // merging_buckets still can be nullptr when HashMap is empty.

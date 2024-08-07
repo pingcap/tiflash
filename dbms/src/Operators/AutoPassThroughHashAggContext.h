@@ -69,9 +69,10 @@ public:
         aggregator = std::make_unique<Aggregator>(params_, req_id_, /*concurrency=*/1, nullptr, /*is_auto_pass_through=*/true);
         aggregator->setCancellationHook(hook);
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
+        RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
+
         many_data[0] = std::make_shared<AggregatedDataVariants>();
         agg_process_info = std::make_unique<Aggregator::AggProcessInfo>(aggregator.get());
-        RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
 
         auto header = aggregator->getHeader(/*final=*/true);
         const auto & aggregate_descriptions = aggregator->getParams().aggregates;
