@@ -19,6 +19,9 @@
 #include <common/types.h>
 #include <common/unaligned.h>
 
+#include <cstring>
+#include <vector>
+
 
 namespace DB::ErrorCodes
 {
@@ -68,23 +71,57 @@ using RunLengthPairs = std::vector<RunLengthPair<T>>;
 template <std::integral T>
 static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
 
+// Return the approximate size of the run-length encoded data. The actual size may be larger.
 template <std::integral T>
-size_t runLengthPairsByteSize(const RunLengthPairs<T> & rle)
+size_t runLengthEncodedApproximateSize(const T * source, UInt32 source_size)
 {
-    return rle.size() * RunLengthPairLength<T>;
+    T prev_value = source[0];
+    size_t pair_count = 1;
+
+    for (UInt32 i = 1; i < source_size; ++i)
+    {
+        T value = source[i];
+        if (prev_value != value)
+        {
+            ++pair_count;
+            prev_value = value;
+        }
+    }
+    return pair_count * RunLengthPairLength<T>;
 }
 
+// [val1, val2, val3, ..., valn, cnt1, cnt2, ..., cntn]
 template <std::integral T>
-size_t runLengthEncoding(const RunLengthPairs<T> & rle, char * dest)
+size_t runLengthEncoding(const T * source, UInt32 source_size, char * dest)
 {
-    for (const auto & [value, count] : rle)
+    T prev_value = source[0];
+    memcpy(dest, source, sizeof(T));
+    dest += sizeof(T);
+
+    std::vector<UInt8> counts;
+    counts.reserve(source_size);
+    UInt8 count = 1;
+
+    for (UInt32 i = 1; i < source_size; ++i)
     {
-        unalignedStore<T>(dest, value);
-        dest += sizeof(T);
-        unalignedStore<UInt8>(dest, count);
-        dest += sizeof(UInt8);
+        T value = source[i];
+        if (prev_value == value && count < std::numeric_limits<UInt8>::max())
+        {
+            ++count;
+        }
+        else
+        {
+            counts.push_back(count);
+            unalignedStore<T>(dest, value);
+            dest += sizeof(T);
+            prev_value = value;
+            count = 1;
+        }
     }
-    return rle.size() * RunLengthPairLength<T>;
+    counts.push_back(count);
+
+    memcpy(dest, counts.data(), counts.size());
+    return counts.size() * RunLengthPairLength<T>;
 }
 
 template <std::integral T>

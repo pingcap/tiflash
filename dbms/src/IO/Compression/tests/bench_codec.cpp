@@ -292,5 +292,25 @@ BENCH_SINGLE_READ_METHOD_GENERATOR_TYPE(
     CompressionMethodByte::RunLength,
     tests::RepeatGenerator<UInt64>(0),
     UInt64)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt8,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt8>(0),
+    UInt8)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt16,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt16>(0),
+    UInt16)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt32,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt32>(0),
+    UInt32)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt64,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt64>(0),
+    UInt64)
 
 } // namespace DB::bench

@@ -66,9 +66,6 @@ private:
     using ConstantState = T;
 
     template <typename T>
-    using RunLengthState = std::vector<std::pair<T, UInt8>>;
-
-    template <typename T>
     struct FORState
     {
         std::vector<T> values;
@@ -87,7 +84,7 @@ private:
 
     // State is a union of different states for different modes
     template <typename T>
-    using IntegerState = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
+    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
 
     class IntegerCompressContext
     {
@@ -117,10 +114,6 @@ private:
         void resetIfNeed();
 
     private:
-        // The compression ratio of LZ4 for TPCH's integer data is about 3.5~4.0
-        // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
-        static constexpr size_t ESRTIMATE_LZ4_COMPRESSION_RATIO = 4;
-
         // Every round_count blocks as a round, decide whether to analyze the mode.
         const int round_count;
         int compress_count = 0;

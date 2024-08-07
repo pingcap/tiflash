@@ -404,13 +404,16 @@ void runLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32
             source_size,
             RunLengthPairLength<T>);
 
+    const auto pair_count = source_size / RunLengthPairLength<T>;
+    const char * count_src = src + pair_count * sizeof(T);
+
     const char * dest_end = dest + dest_size;
-    for (UInt32 i = 0; i < source_size / RunLengthPairLength<T>; ++i)
+    for (UInt32 i = 0; i < pair_count; ++i)
     {
         T value = unalignedLoad<T>(src);
         src += sizeof(T);
-        auto count = unalignedLoad<UInt8>(src);
-        src += sizeof(UInt8);
+        auto count = unalignedLoad<UInt8>(count_src);
+        count_src += sizeof(UInt8);
         if (unlikely(dest + count * sizeof(T) > dest_end))
             throw Exception(
                 ErrorCodes::CANNOT_DECOMPRESS,

@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/Compression/CompressionCodecLZ4.h>
 #include <IO/Compression/CompressionCodecLightweight.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
@@ -174,21 +175,9 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     }
 
     // RunLength
-    Compression::RunLengthPairs<T> rle;
-    if (needAnalyzeRunLength())
-    {
-        rle.reserve(values.size());
-        rle.emplace_back(values[0], 1);
-        for (size_t i = 1; i < values.size(); ++i)
-        {
-            if (values[i] != values[i - 1] || rle.back().second == std::numeric_limits<UInt8>::max())
-                rle.emplace_back(values[i], 1);
-            else
-                ++rle.back().second;
-        }
-    }
+    size_t estimate_rle_size = Compression::runLengthEncodedApproximateSize(values.data(), values.size());
 
-    size_t estimate_lz_size = values.size() * sizeof(T) / ESRTIMATE_LZ4_COMPRESSION_RATIO;
+    size_t estimate_lz_size = values.size() * sizeof(T) / CompressionCodecLZ4::ESRTIMATE_INTEGER_COMPRESSION_RATIO;
 
     UInt8 for_width = BitpackingPrimitives::minimumBitWidth<T>(max_value - min_value);
     // min_delta, and 1 byte for width, and the rest for compressed data
@@ -199,10 +188,9 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     static constexpr auto DFOR_EXTRA_BYTES = sizeof(T) + sizeof(UInt8) + sizeof(T);
     size_t delta_for_size = BitpackingPrimitives::getRequiredSize(deltas.size(), delta_for_width) + DFOR_EXTRA_BYTES;
 
-    size_t rle_size = rle.empty() ? std::numeric_limits<size_t>::max() : Compression::runLengthPairsByteSize(rle);
-    if (needAnalyzeRunLength() && rle_size < delta_for_size && rle_size < for_size && rle_size < estimate_lz_size)
+    if (needAnalyzeRunLength() && estimate_rle_size < delta_for_size && estimate_rle_size < for_size
+        && estimate_rle_size < estimate_lz_size)
     {
-        state = std::move(rle);
         mode = IntegerMode::RunLength;
     }
     else if (needAnalyzeFOR<T>() && for_size < delta_for_size && for_size < estimate_lz_size)
@@ -260,12 +248,12 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     }
     case IntegerMode::RunLength:
     {
-        compressed_size += Compression::runLengthEncoding<T>(std::get<1>(state), dest);
+        compressed_size += Compression::runLengthEncoding<T>(values.data(), values.size(), dest);
         break;
     }
     case IntegerMode::FOR:
     {
-        FORState for_state = std::get<2>(state);
+        FORState for_state = std::get<1>(state);
         compressed_size += Compression::FOREncoding(
             for_state.values.data(),
             for_state.values.size(),
@@ -276,7 +264,7 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     }
     case IntegerMode::DELTA_FOR:
     {
-        DeltaFORState delta_for_state = std::get<3>(state);
+        DeltaFORState delta_for_state = std::get<2>(state);
         unalignedStore<T>(dest, values[0]);
         dest += sizeof(T);
         compressed_size += sizeof(T);
