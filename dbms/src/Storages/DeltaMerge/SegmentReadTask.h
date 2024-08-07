@@ -106,6 +106,9 @@ public:
         return input_stream;
     }
 
+    // WN calls hasColumnFileToFetch to check whether a SegmentReadTask need to fetch column files from it
+    bool hasColumnFileToFetch() const;
+
     String toString() const;
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -145,6 +148,8 @@ public:
         ReadMode read_mode,
         size_t expected_block_size);
 
+    void finishPagesPacketStream(std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream);
+
     BlockInputStreamPtr input_stream;
 };
 
@@ -162,7 +167,7 @@ struct fmt::formatter<DB::DM::SegmentReadTask>
     auto format(const DB::DM::SegmentReadTask & t, FormatContext & ctx) const
     {
         return fmt::format_to(ctx.out(), "{}", t.toString());
-    };
+    }
 };
 
 template <>
