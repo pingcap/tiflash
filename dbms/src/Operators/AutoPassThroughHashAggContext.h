@@ -56,16 +56,17 @@ public:
         Aggregator::CancellationHook && hook,
         const String & req_id_,
         UInt64 row_limit_unit_,
-        UInt64 adjust_state_unit_num = 1,
-        UInt64 other_state_unit_num = 5)
+        UInt64 normal_unit_num_ = DEF_NORMAL_UNIT_NUM,
+        UInt64 dynamic_unit_num_ = DEF_DYNAMIC_UNIT_NUM)
         : state(State::Init)
         , many_data(std::vector<AggregatedDataVariantsPtr>(1, nullptr))
-        , adjust_row_limit(row_limit_unit_ * adjust_state_unit_num)
-        , other_state_row_limit(row_limit_unit_ * other_state_unit_num)
+        , normal_row_limit(row_limit_unit_ * normal_unit_num_)
+        , dynamic_row_limit(row_limit_unit_ * dynamic_unit_num_)
         , row_limit_unit(row_limit_unit_)
+        , max_dynamic_row_limit(row_limit_unit_ * MAX_DYNAMIC_UNIT_LIMIT)
         , log(Logger::get(req_id_))
     {
-        aggregator = std::make_unique<Aggregator>(params_, req_id_, 1, nullptr, /*is_auto_pass_through=*/true);
+        aggregator = std::make_unique<Aggregator>(params_, req_id_, /*concurrency=*/1, nullptr, /*is_auto_pass_through=*/true);
         aggregator->setCancellationHook(hook);
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
         many_data[0] = std::make_shared<AggregatedDataVariants>();
@@ -113,11 +114,10 @@ public:
 
     State getCurState() const { return state; }
 
-    size_t getAdjustRowLimit() const { return adjust_row_limit; }
-    size_t getOtherStateRowLimit() const { return other_state_row_limit; }
-
-    void updateOtherStateRowLimitUnitNum(UInt64 u) { other_state_row_limit = row_limit_unit * u; }
-    void updateAdjustStateRowLimitUnitNum(UInt64 u) { adjust_row_limit = row_limit_unit * u; }
+    size_t getAdjustRowLimit() const { return normal_row_limit; }
+    size_t getDynamicRowLimit() const { return dynamic_row_limit; }
+    void updateDynamicRowLimitUnitNum(UInt64 u) { dynamic_row_limit = row_limit_unit * u; }
+    void updateAdjustStateRowLimitUnitNum(UInt64 u) { normal_row_limit = row_limit_unit * u; }
 
 private:
     void onBlockAuto(Block & block);
@@ -212,13 +212,19 @@ private:
     };
     Statistics statistics;
 
-    size_t adjust_row_limit;
-    size_t other_state_row_limit;
+    // Row limit for adjust and preagg state. It's fixed(PS: gtest may change it).
+    size_t normal_row_limit;
+    // Row limit for selective and pass through. It will get larger in runtime.
+    size_t dynamic_row_limit;
     size_t row_limit_unit;
+    const size_t max_dynamic_row_limit;
 
     LoggerPtr log;
 
     static constexpr size_t INIT_STATE_HASHMAP_THRESHOLD = 2 * 1024 * 1024;
+    static constexpr size_t MAX_DYNAMIC_UNIT_LIMIT = 100;
+    static constexpr size_t DEF_NORMAL_UNIT_NUM = 1;
+    static constexpr size_t DEF_DYNAMIC_UNIT_NUM = 5;
 
     std::vector<AutoPassThroughColumnGenerator> column_generators;
 };

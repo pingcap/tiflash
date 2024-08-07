@@ -146,7 +146,7 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
     adjust_processed_rows += total_rows;
     adjust_hit_rows += hit_rows;
 
-    if (adjust_processed_rows < adjust_row_limit)
+    if (adjust_processed_rows < normal_row_limit)
         return;
 
     double hit_rate = static_cast<double>(adjust_hit_rows) / adjust_processed_rows;
@@ -170,7 +170,7 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
         magic_enum::enum_name(state),
         adjust_processed_rows,
         adjust_hit_rows,
-        adjust_row_limit);
+        normal_row_limit);
 
     adjust_processed_rows = 0;
     adjust_hit_rows = 0;
@@ -179,24 +179,46 @@ void AutoPassThroughHashAggContext::trySwitchFromAdjustState(size_t total_rows, 
 void AutoPassThroughHashAggContext::trySwitchBackAdjustState(size_t block_rows)
 {
     state_processed_rows += block_rows;
-    if (state_processed_rows >= other_state_row_limit)
+    size_t row_limit = 0;
+
+    switch (state)
     {
-        LOG_DEBUG(
-            log,
-            "other state back to adjust state: state: {}, processed: {}, limit: {}",
-            magic_enum::enum_name(state),
-            state_processed_rows,
-            other_state_row_limit);
-
-        if (state == State::PassThrough)
+        case State::PassThrough:
+        case State::Selective:
         {
-            // Adopt a more aggressive strategy for pass through to avoid meaningless probing the hashmap in the adjust state.
-            other_state_row_limit = std::min(100 * 65535, other_state_row_limit * 2);
+            row_limit = dynamic_row_limit;
+            break;
         }
-
-        state = State::Adjust;
-        state_processed_rows = 0;
+        case State::PreHashAgg:
+        {
+            row_limit = normal_row_limit;
+            break;
+        }
+        default:
+        {
+            throw Exception(fmt::format("unexpected state: {}", magic_enum::enum_name(state)));
+        }
     }
+
+    if (state_processed_rows < row_limit)
+        return;
+
+    if (state == State::PassThrough || state == State::Selective)
+    {
+        // Adopt a more aggressive strategy for pass through to avoid meaningless probing the hashmap in the adjust state.
+        dynamic_row_limit = std::min(max_dynamic_row_limit, dynamic_row_limit * 2);
+    }
+
+    LOG_DEBUG(
+        log,
+        "other state back to adjust state: state: {}, processed: {}, limit: {}, new limit: {}",
+        magic_enum::enum_name(state),
+        state_processed_rows,
+        row_limit,
+        dynamic_row_limit);
+
+    state = State::Adjust;
+    state_processed_rows = 0;
 }
 
 void AutoPassThroughHashAggContext::pushPassThroughBuffer(const Block & block)

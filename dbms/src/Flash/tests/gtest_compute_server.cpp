@@ -219,7 +219,7 @@ public:
             auto_pass_through_context = buildAutoPassHashAggThroughContext(context);
             // 1 block for adjust state, 3 blocks for other state
             auto_pass_through_context->updateAdjustStateRowLimitUnitNum(3);
-            auto_pass_through_context->updateOtherStateRowLimitUnitNum(3);
+            auto_pass_through_context->updateDynamicRowLimitUnitNum(3);
 
             std::tie(low_ndv_blocks, low_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 10);
             std::tie(high_ndv_blocks, high_ndv_block) = buildBlocks(/*block_num*/ 20, /*distinct_num*/ 20 * block_size);
@@ -1891,7 +1891,6 @@ try
     }
     LOG_DEBUG(log, "ComputeServerRunner.stateSwitchMediumNDV init_consumed_block: {}", init_consumed_block);
 
-    const auto state_processed_row_limit = auto_pass_through_context->getOtherStateRowLimit();
     const auto adjust_state_rows_limit = auto_pass_through_context->getAdjustRowLimit();
 
     size_t state_processed_rows = 0;
@@ -1925,6 +1924,7 @@ try
         {
             auto block = medium_ndv_blocks.front();
             medium_ndv_blocks.pop_front();
+            const auto state_processed_row_limit = auto_pass_through_context->getDynamicRowLimit();
             auto_pass_through_context->onBlock<false>(block);
             state_processed_rows += block.rows();
             LOG_DEBUG(
