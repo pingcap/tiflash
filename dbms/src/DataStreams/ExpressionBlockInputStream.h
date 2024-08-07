@@ -41,6 +41,8 @@ public:
     String getName() const override { return NAME; }
     Block getHeader() const override;
 
+    bool canHandleSelectiveBlock() const override { return true; }
+
 protected:
     Block readImpl() override;
 

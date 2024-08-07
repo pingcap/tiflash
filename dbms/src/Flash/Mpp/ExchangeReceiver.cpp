@@ -322,7 +322,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     : exc_log(Logger::get(req_id, executor_id))
     , rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
-    , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
+    , enable_fine_grained_shuffle_flag(fineGrainedShuffleEnabled(fine_grained_shuffle_stream_count_))
     , output_stream_count(
           enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(getMaxBufferSize(source_num, settings.recv_queue_size))
