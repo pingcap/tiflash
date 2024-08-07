@@ -70,7 +70,7 @@ struct fmt::formatter<DB::PS::V3::CPDataDumpStats>
     template <typename FormatContext>
     auto format(const DB::PS::V3::CPDataDumpStats & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        auto it = format_to(
+        auto it = fmt::format_to(
             ctx.out(),
             "CPDataDumpStats{{"
             "incremental_data_bytes={} compact_data_bytes={}"
@@ -87,12 +87,12 @@ struct fmt::formatter<DB::PS::V3::CPDataDumpStats>
             value.num_ref_pages,
             value.num_delete_records,
             value.num_other_records);
-        it = format_to(it, " types[");
+        it = fmt::format_to(it, " types[");
         for (size_t i = 0; i < static_cast<size_t>(DB::StorageType::_MAX_STORAGE_TYPE_); ++i)
         {
             if (i != 0)
-                it = format_to(it, " ");
-            it = format_to(
+                it = fmt::format_to(it, " ");
+            it = fmt::format_to(
                 it,
                 "{{type={} keys={} bytes={}}}",
                 magic_enum::enum_name(static_cast<DB::StorageType>(i)),

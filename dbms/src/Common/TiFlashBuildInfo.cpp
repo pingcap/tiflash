@@ -14,8 +14,8 @@
 
 #include <Common/config.h>
 #include <Common/config_version.h>
-#include <Storages/DeltaMerge/Index/VectorIndexHNSW/SIMDFeatures.h>
-#include <TiDB/Decode/Vector.h>
+#include <VectorFeatures/DistanceSIMDFeatures.h>
+#include <VectorFeatures/SIMDFeatures.h>
 #include <common/config_common.h>
 #include <fmt/core.h>
 #include <fmt/format.h>

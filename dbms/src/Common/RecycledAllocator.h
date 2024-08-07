@@ -32,7 +32,7 @@ public:
 
     std::shared_ptr<char> createMemoryReference(char * addr, size_t size)
     {
-        return std::shared_ptr<char>(addr, [=](char * a) { arena.free(a, size); });
+        return std::shared_ptr<char>(addr, [=, this](char * a) { arena.free(a, size); });
     }
 
 private:

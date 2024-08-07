@@ -35,7 +35,7 @@ endif ()
 target_include_directories (daemon PUBLIC include)
 target_include_directories (daemon PRIVATE ${TiFlash_SOURCE_DIR}/libs/libpocoext/include)
 
-target_link_libraries (daemon tiflash_common_io tiflash_common_config grpc grpc++ ${EXECINFO_LIBRARY})
+target_link_libraries (daemon tiflash_vector_features tiflash_common_io tiflash_common_config grpc grpc++ ${EXECINFO_LIBRARY})
 if (ENABLE_TESTS)
     add_subdirectory (src/tests EXCLUDE_FROM_ALL)
 endif ()
