@@ -27,11 +27,24 @@ Planner::Planner(Context & context_)
     , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
+void recursiveSetBlockInputStreamParent(BlockInputStreamPtr self, const IBlockInputStream * parent)
+{
+    if (self->getParent() != nullptr)
+        return;
+
+    for (auto & child : self->getChildren())
+    {
+        recursiveSetBlockInputStreamParent(child, self.get());
+    }
+    self->setParent(parent);
+}
+
 BlockInputStreamPtr Planner::execute()
 {
     DAGPipeline pipeline;
     executeImpl(pipeline);
     executeCreatingSets(pipeline, context, max_streams, log);
+    pipeline.transform([](auto & stream) { recursiveSetBlockInputStreamParent(stream, nullptr); });
     return pipeline.firstStream();
 }
 
