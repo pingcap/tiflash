@@ -36,6 +36,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 |                 20221010101010.123 |
 +------------------------------------+
 
+mysql> drop table if exists test.t2;
 mysql> create table test.t2(d decimal(11, 4));
 mysql> alter table test.t2 set tiflash replica 1;
 mysql> insert into test.t2 values(-0.741);
@@ -47,3 +48,15 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +--------------------+
 |                 -1 |
 +--------------------+
+
+mysql> drop table if exists test.t2;
+mysql> create table t2 (c1 int not null, c2 int not null, primary key(c1) CLUSTERED);
+mysql> alter table t2 set tiflash replica 1;
+mysql> insert into t2 (c1,c2) values (1486109909, -1113200806);
+func> wait_table test t2
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select c2, c1, cast( (c2 / cast(c1 as signed)) as decimal) as c2 from t2;
++-------------+------------+------+
+| c2          | c1         | c2   |
++-------------+------------+------+
+| -1113200806 | 1486109909 |   -1 |
++-------------+------------+------+
