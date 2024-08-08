@@ -120,4 +120,12 @@ std::vector<UInt8> CompressionCodecMultiple::getCodecsBytesFromData(const char *
     return result;
 }
 
+bool CompressionCodecMultiple::isCompression() const
+{
+    bool is_compression = false;
+    for (const auto & codec : codecs)
+        is_compression |= codec->isCompression();
+    return is_compression;
+}
+
 } // namespace DB

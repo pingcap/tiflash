@@ -69,12 +69,13 @@ UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 s
     case CompressionDataType::Float32:
     case CompressionDataType::Float64:
     case CompressionDataType::String:
+    case CompressionDataType::Unknown:
         return 1 + compressDataForNonInteger(source, source_size, dest);
     default:
         throw Exception(
             ErrorCodes::CANNOT_COMPRESS,
             "Cannot compress lightweight codec data. Invalid data type {}",
-            magic_enum::enum_name(data_type));
+            magic_enum::enum_integer(data_type));
     }
 }
 
@@ -118,13 +119,14 @@ void CompressionCodecLightweight::doDecompressData(
     case CompressionDataType::Float32:
     case CompressionDataType::Float64:
     case CompressionDataType::String:
+    case CompressionDataType::Unknown:
         decompressDataForNonInteger(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot decompress lightweight codec data. Invalid data type {}",
-            static_cast<int>(data_type.value()));
+            magic_enum::enum_integer(data_type.value()));
     }
 }
 
