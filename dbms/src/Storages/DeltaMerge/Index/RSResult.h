@@ -14,123 +14,91 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <common/types.h>
+#include <fmt/format.h>
+
+#include <magic_enum.hpp>
 
 namespace DB::DM
 {
-struct Attr
+class RSResult;
+}
+namespace fmt
 {
-    String col_name;
-    ColId col_id;
-    DataTypePtr type;
-};
-using Attrs = std::vector<Attr>;
+template <>
+struct formatter<DB::DM::RSResult>;
+}
 
-enum class RSResult : UInt8
+namespace DB::DM
 {
-    Unknown = 0, // Not checked yet
-    Some = 1, // Some values meet requirements and NOT has null, need to read and perform filtering
-    None = 2, // No value meets requirements and NOT has null, no need to read
-    All = 3, // All values meet requirements NOT has null, need to read and no need perform filtering
-    SomeNull = 4, // Some values meet requirements and has null, need to read and perform filtering
-    NoneNull = 5, // No value meets requirements and has null, no need to read
-    AllNull = 6, // All values meet requirements and has null, need to read and perform filtering
+
+class RSResult
+{
+private:
+    enum class ValueResult : UInt8
+    {
+        Some = 1, // Some values meet requirements and NOT has null, need to read and perform filtering
+        None = 2, // No value meets requirements and NOT has null, no need to read
+        All = 3, // All values meet requirements NOT has null, need to read and no need perform filtering
+    };
+
+    static ValueResult logicalNot(ValueResult v) noexcept;
+    static ValueResult logicalAnd(ValueResult v0, ValueResult v1) noexcept;
+    static ValueResult logicalOr(ValueResult v0, ValueResult v1) noexcept;
+
+    // Deleting or privating constructors, so that cannot create invalid objects.
+    // Use the static member variables below.
+    RSResult() = delete;
+    RSResult(ValueResult v_, bool has_null_)
+        : v(v_)
+        , has_null(has_null_)
+    {}
+
+    friend struct fmt::formatter<DB::DM::RSResult>;
+
+    ValueResult v;
+    bool has_null;
+
+public:
+    bool isUse() const noexcept { return v != ValueResult::None; }
+
+    bool allMatch() const noexcept { return *this == RSResult::All; }
+
+    void setHasNull() noexcept { has_null = true; }
+
+    RSResult operator!() const noexcept { return RSResult(logicalNot(v), has_null); }
+
+    RSResult operator&&(RSResult r) const noexcept { return RSResult(logicalAnd(v, r.v), has_null || r.has_null); }
+
+    RSResult operator||(RSResult r) const noexcept
+    {
+        // Because the result of `1 || 1/0/NULL` is always 1.
+        if (allMatch() || r.allMatch())
+            return RSResult(ValueResult::All, false);
+        return RSResult(logicalOr(v, r.v), has_null || r.has_null);
+    }
+
+    bool operator==(RSResult r) const noexcept { return v == r.v && has_null == r.has_null; }
+
+    static const RSResult Some;
+    static const RSResult None;
+    static const RSResult All;
+    static const RSResult SomeNull;
+    static const RSResult NoneNull;
+    static const RSResult AllNull;
 };
+
 using RSResults = std::vector<RSResult>;
-
-ALWAYS_INLINE inline std::pair<RSResult, bool> removeNull(RSResult v) noexcept
-{
-    switch (v)
-    {
-    case RSResult::SomeNull:
-        return {RSResult::Some, true};
-    case RSResult::NoneNull:
-        return {RSResult::None, true};
-    case RSResult::AllNull:
-        return {RSResult::All, true};
-    default:
-        return {v, false};
-    }
-}
-
-ALWAYS_INLINE inline RSResult addNull(RSResult v) noexcept
-{
-    switch (v)
-    {
-    case RSResult::Some:
-        return RSResult::SomeNull;
-    case RSResult::None:
-        return RSResult::NoneNull;
-    case RSResult::All:
-        return RSResult::AllNull;
-    default:
-        return v;
-    }
-}
-
-ALWAYS_INLINE inline RSResult operator!(RSResult v)
-{
-    switch (v)
-    {
-    case RSResult::Some:
-        return RSResult::Some;
-    case RSResult::None:
-        return RSResult::All;
-    case RSResult::All:
-        return RSResult::None;
-    case RSResult::SomeNull:
-        return RSResult::SomeNull;
-    case RSResult::NoneNull:
-        return RSResult::AllNull;
-    case RSResult::AllNull:
-        return RSResult::NoneNull;
-    default:
-        throw Exception("Unknow RSResult: {}", static_cast<UInt8>(v));
-    }
-}
-
-ALWAYS_INLINE inline RSResult operator||(RSResult v0, RSResult v1)
-{
-    RUNTIME_CHECK(v0 != RSResult::Unknown && v1 != RSResult::Unknown);
-
-    // According to https://dev.mysql.com/doc/refman/8.4/en/logical-operators.html#operator_or,
-    // the result of `1 || 0/1/NULL` is 1.
-    if (v0 == RSResult::All || v1 == RSResult::All)
-        return RSResult::All;
-
-    auto [t0, has_null0] = removeNull(v0);
-    auto [t1, has_null1] = removeNull(v1);
-    auto result = RSResult::None;
-    if (t0 == RSResult::All || t1 == RSResult::All)
-        result = RSResult::All;
-    else if (t0 == RSResult::Some || t1 == RSResult::Some)
-        result = RSResult::Some;
-
-    return (has_null0 || has_null1) ? addNull(result) : result;
-}
-
-ALWAYS_INLINE inline RSResult operator&&(RSResult v0, RSResult v1)
-{
-    RUNTIME_CHECK(v0 != RSResult::Unknown && v1 != RSResult::Unknown);
-
-    // According to https://dev.mysql.com/doc/refman/8.4/en/logical-operators.html#operator_and,
-    // the result of `0 && NULL` is NULL. So the following logic is invalid:
-    // if (v0 == RSResult::None || v1 == RSResult::None)
-    //     return RSResult::None;
-
-    auto [t0, has_null0] = removeNull(v0);
-    auto [t1, has_null1] = removeNull(v1);
-    auto result = RSResult::Some;
-    if (t0 == RSResult::None || t1 == RSResult::None)
-        result = RSResult::None;
-    if (t0 == RSResult::All && t1 == RSResult::All)
-        result = RSResult::All;
-
-    return (has_null0 || has_null1) ? addNull(result) : result;
-}
-
-ALWAYS_INLINE inline bool isUse(RSResult res) noexcept
-{
-    return res != RSResult::None && res != RSResult::NoneNull;
-}
 } // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DM::RSResult>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::RSResult r, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}{}", magic_enum::enum_name(r.v), r.has_null ? "Null" : "");
+    }
+};

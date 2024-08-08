@@ -106,7 +106,7 @@ public:
         const auto & pack_stats = dmfile->getPackStats();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (isUse(pack_res[i]))
+            if (pack_res[i].isUse())
             {
                 rows += pack_stats[i].rows;
                 bytes += pack_stats[i].bytes;

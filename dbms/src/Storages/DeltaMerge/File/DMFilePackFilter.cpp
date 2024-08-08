@@ -132,32 +132,23 @@ std::tuple<UInt64, UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() cons
     UInt64 all_null_count = 0;
     for (auto res : pack_res)
     {
-        switch (res)
-        {
-        case RSResult::None:
-        case RSResult::NoneNull:
+        if (res == RSResult::None || res == RSResult::NoneNull)
             ++none_count;
-            break;
-        case RSResult::Some:
-        case RSResult::SomeNull:
+        else if (res == RSResult::Some || res == RSResult::SomeNull)
             ++some_count;
-            break;
-        case RSResult::All:
+        else if (res == RSResult::All)
             ++all_count;
-            break;
-        case RSResult::AllNull:
+        else if (res == RSResult::AllNull)
             ++all_null_count;
-            break;
-        default:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is invalid", static_cast<Int32>(res));
-        }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is invalid", res);
     }
     return {none_count, some_count, all_count, all_null_count};
 }
 
 UInt64 DMFilePackFilter::countUsePack() const
 {
-    return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return isUse(res); });
+    return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return res.isUse(); });
 }
 
 void DMFilePackFilter::loadIndex(

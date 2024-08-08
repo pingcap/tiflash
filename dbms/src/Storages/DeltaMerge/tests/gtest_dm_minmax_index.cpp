@@ -33,7 +33,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
-#include <magic_enum.hpp>
 #include <memory>
 
 namespace DB::DM::tests
@@ -2291,11 +2290,8 @@ try
     for (size_t i = 0; i < cases.size(); ++i)
     {
         const auto & c = cases[i];
-        ASSERT_EQ(actual_results[i], c.result) << fmt::format(
-            "i={} actual={} expected={}",
-            i,
-            magic_enum::enum_name(actual_results[i]),
-            magic_enum::enum_name(c.result));
+        ASSERT_EQ(actual_results[i], c.result)
+            << fmt::format("i={} actual={} expected={}", i, actual_results[i], c.result);
     }
 }
 CATCH
@@ -2426,8 +2422,8 @@ try
                 min_max_check_test_data[j].column_data,
                 min_max_check_test_data[j].del_mark,
                 values,
-                magic_enum::enum_name(actual_results[j]),
-                magic_enum::enum_name(expected_results[j]));
+                actual_results[j],
+                expected_results[j]);
         }
     }
 }
@@ -2489,8 +2485,8 @@ try
                 min_max_check_test_data[j].column_data,
                 min_max_check_test_data[j].del_mark,
                 value,
-                magic_enum::enum_name(actual_results[j]),
-                magic_enum::enum_name(expected_results[j]));
+                actual_results[j],
+                expected_results[j]);
         }
     }
 }
@@ -2567,8 +2563,8 @@ try
                 min_max_check_test_data[j].column_data,
                 min_max_check_test_data[j].del_mark,
                 value,
-                magic_enum::enum_name(actual_results[j]),
-                magic_enum::enum_name(expected_results[j]));
+                actual_results[j],
+                expected_results[j]);
         }
     }
 }
@@ -2660,8 +2656,8 @@ try
                 min_max_check_test_data[j].column_data,
                 min_max_check_test_data[j].del_mark,
                 value,
-                magic_enum::enum_name(actual_results[j]),
-                magic_enum::enum_name(expected_results[j]));
+                actual_results[j],
+                expected_results[j]);
         }
     }
 }

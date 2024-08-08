@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <gtest/gtest.h>
-
 #include <Storages/DeltaMerge/Index/RSResult.h>
+#include <gtest/gtest.h>
 
 namespace DB::DM::tests
 {
@@ -82,14 +81,14 @@ TEST(RSResultTest, Or)
     ASSERT_EQ(RSResult::Some || RSResult::SomeNull, RSResult::SomeNull);
     ASSERT_EQ(RSResult::Some || RSResult::NoneNull, RSResult::SomeNull);
     ASSERT_EQ(RSResult::Some || RSResult::AllNull, RSResult::AllNull);
-    
+
     ASSERT_EQ(RSResult::None || RSResult::Some, RSResult::Some);
     ASSERT_EQ(RSResult::None || RSResult::None, RSResult::None);
     ASSERT_EQ(RSResult::None || RSResult::All, RSResult::All);
     ASSERT_EQ(RSResult::None || RSResult::SomeNull, RSResult::SomeNull);
     ASSERT_EQ(RSResult::None || RSResult::NoneNull, RSResult::NoneNull);
     ASSERT_EQ(RSResult::None || RSResult::AllNull, RSResult::AllNull);
-    
+
     ASSERT_EQ(RSResult::All || RSResult::Some, RSResult::All);
     ASSERT_EQ(RSResult::All || RSResult::None, RSResult::All);
     ASSERT_EQ(RSResult::All || RSResult::All, RSResult::All);
@@ -118,4 +117,4 @@ TEST(RSResultTest, Or)
     ASSERT_EQ(RSResult::AllNull || RSResult::NoneNull, RSResult::AllNull);
     ASSERT_EQ(RSResult::AllNull || RSResult::AllNull, RSResult::AllNull);
 }
-}
+} // namespace DB::DM::tests

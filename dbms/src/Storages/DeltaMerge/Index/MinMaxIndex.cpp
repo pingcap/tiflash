@@ -603,6 +603,8 @@ RSResults MinMaxIndex::checkIsNull(size_t start_pack, size_t pack_count)
 
 RSResult MinMaxIndex::addNullIfHasNull(RSResult value_result, size_t i) const
 {
-    return has_null_marks[i] ? addNull(value_result) : value_result;
+    if (has_null_marks[i])
+        value_result.setHasNull();
+    return value_result;
 }
 } // namespace DB::DM
