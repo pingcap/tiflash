@@ -140,8 +140,6 @@ std::tuple<UInt64, UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() cons
             ++all_count;
         else if (res == RSResult::AllNull)
             ++all_null_count;
-        else
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is invalid", res);
     }
     return {none_count, some_count, all_count, all_null_count};
 }
