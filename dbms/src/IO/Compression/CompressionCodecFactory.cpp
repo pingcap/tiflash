@@ -71,7 +71,7 @@ template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>(const CompressionSetting & setting)
 {
     static constexpr auto MAX_LZ4_MAP_SIZE = 10;
-    static std::unordered_map<int, CompressionCodecPtr> lz4_map;
+    static std::unordered_map<int, CompressionCodecPtr> lz4_map(MAX_LZ4_MAP_SIZE);
     auto it = lz4_map.find(setting.level);
     if (it != lz4_map.end())
         return it->second;
