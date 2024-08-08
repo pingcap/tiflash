@@ -143,6 +143,8 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         return getStaticCodec<CompressionCodecLZ4>(setting);
     if (setting.method_byte == CompressionMethodByte::ZSTD)
         return getStaticCodec<CompressionCodecZSTD>(setting);
+    if (setting.method_byte == CompressionMethodByte::NONE)
+        return getStaticCodec<CompressionCodecNone>(setting);
 
 #if USE_QPL
     if (setting.method_byte == CompressionMethodByte::QPL)
@@ -169,8 +171,6 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         return getStaticCodec<CompressionCodecRunLength>(setting);
     case CompressionMethodByte::FOR:
         return getStaticCodec<CompressionCodecFOR>(setting);
-    case CompressionMethodByte::NONE:
-        return getStaticCodec<CompressionCodecNone>(setting);
     default:
         throw Exception(
             ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
@@ -185,6 +185,7 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSettings & 
     CompressionCodecPtr codec = (settings.settings.size() > 1)
         ? std::make_unique<CompressionCodecMultiple>(createCodecs(settings))
         : create(settings.settings.front());
+    RUNTIME_CHECK(codec);
 #ifndef DBMS_PUBLIC_GTEST
     RUNTIME_CHECK(codec->isCompression());
 #endif
