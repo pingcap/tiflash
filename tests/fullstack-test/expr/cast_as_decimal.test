@@ -35,3 +35,14 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +------------------------------------+
 |                 20221010101010.123 |
 +------------------------------------+
+
+mysql> create table test.t2(d decimal(11, 4));
+mysql> alter table test.t2 set tiflash replica 1;
+mysql> insert into test.t2 values(-0.741);
+mysql> alter table test.t2 set tiflash replica 1;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; SELECT cast(d as decimal) from t2;
++--------------------+
+| cast(d as decimal) |
++--------------------+
+|                 -1 |
++--------------------+
