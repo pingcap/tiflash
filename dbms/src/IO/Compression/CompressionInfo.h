@@ -80,4 +80,9 @@ enum class CompressionDataType : UInt8
     String = 11,
 };
 
+inline bool isInteger(CompressionDataType type)
+{
+    return type >= CompressionDataType::Int8 && type <= CompressionDataType::Int64;
+}
+
 } // namespace DB

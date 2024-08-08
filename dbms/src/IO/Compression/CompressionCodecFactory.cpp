@@ -12,9 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <IO/Compression/CompressionCodecDeltaFOR.h>
+#include <IO/Compression/CompressionCodecFOR.h>
 #include <IO/Compression/CompressionCodecFactory.h>
+#include <IO/Compression/CompressionCodecLZ4.h>
+#include <IO/Compression/CompressionCodecLightweight.h>
+#include <IO/Compression/CompressionCodecMultiple.h>
+#include <IO/Compression/CompressionCodecNone.h>
+#include <IO/Compression/CompressionCodecRunLength.h>
+#include <IO/Compression/CompressionCodecZSTD.h>
 
-#include <memory>
+#if USE_QPL
+#include <IO/Compression/CompressionCodecDeflateQpl.h>
+#endif
 
 
 namespace DB
@@ -61,7 +71,7 @@ template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>(const CompressionSetting & setting)
 {
     static constexpr auto MAX_LZ4_MAP_SIZE = 10;
-    static std::unordered_map<int, CompressionCodecPtr> lz4_map;
+    static std::unordered_map<int, CompressionCodecPtr> lz4_map(MAX_LZ4_MAP_SIZE);
     auto it = lz4_map.find(setting.level);
     if (it != lz4_map.end())
         return it->second;
@@ -133,32 +143,34 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         return getStaticCodec<CompressionCodecLZ4>(setting);
     if (setting.method_byte == CompressionMethodByte::ZSTD)
         return getStaticCodec<CompressionCodecZSTD>(setting);
+    if (setting.method_byte == CompressionMethodByte::NONE)
+        return getStaticCodec<CompressionCodecNone>(setting);
 
 #if USE_QPL
     if (setting.method_byte == CompressionMethodByte::QPL)
         return getStaticCodec<CompressionCodecDeflateQpl>(setting);
 #endif
 
-    // For non-integral types, we always use LZ4 now.
     if constexpr (!IS_DECOMPRESS)
     {
-        if (setting.data_type == CompressionDataType::String || setting.data_type == CompressionDataType::Float32
-            || setting.data_type == CompressionDataType::Float64 || setting.data_type == CompressionDataType::Unknown)
+        // If method_byte is Lightweight, use LZ4 codec for non-integral types
+        // If method_byte is DeltaFOR/RunLength/FOR, since we do not support use these methods independently, so there must be another codec, use it directly.
+        if (!isInteger(setting.data_type) && setting.method_byte == CompressionMethodByte::Lightweight)
             return getStaticCodec<CompressionCodecLZ4>(setting);
+        else if (!isInteger(setting.data_type))
+            return nullptr;
     }
 
     switch (setting.method_byte)
     {
     case CompressionMethodByte::Lightweight:
-        return std::make_shared<CompressionCodecLightweight>(setting.data_type);
+        return std::make_unique<CompressionCodecLightweight>(setting.data_type);
     case CompressionMethodByte::DeltaFOR:
         return getStaticCodec<CompressionCodecDeltaFOR>(setting);
     case CompressionMethodByte::RunLength:
         return getStaticCodec<CompressionCodecRunLength>(setting);
     case CompressionMethodByte::FOR:
         return getStaticCodec<CompressionCodecFOR>(setting);
-    case CompressionMethodByte::NONE:
-        return getStaticCodec<CompressionCodecNone>(setting);
     default:
         throw Exception(
             ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
@@ -170,8 +182,14 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
 CompressionCodecPtr CompressionCodecFactory::create(const CompressionSettings & settings)
 {
     RUNTIME_CHECK(!settings.settings.empty());
-    return settings.settings.size() > 1 ? std::make_shared<CompressionCodecMultiple>(createCodecs(settings))
-                                        : create(settings.settings.front());
+    CompressionCodecPtr codec = (settings.settings.size() > 1)
+        ? std::make_unique<CompressionCodecMultiple>(createCodecs(settings))
+        : create(settings.settings.front());
+    RUNTIME_CHECK(codec);
+#ifndef DBMS_PUBLIC_GTEST
+    RUNTIME_CHECK(codec->isCompression());
+#endif
+    return codec;
 }
 
 CompressionCodecPtr CompressionCodecFactory::createForDecompress(UInt8 method_byte)
@@ -187,7 +205,8 @@ Codecs CompressionCodecFactory::createCodecs(const CompressionSettings & setting
     codecs.reserve(settings.settings.size());
     for (const auto & setting : settings.settings)
     {
-        codecs.push_back(create(setting));
+        if (auto codec = create(setting); codec)
+            codecs.push_back(std::move(codec));
     }
     return codecs;
 }
