@@ -14,21 +14,9 @@
 
 #pragma once
 
-#include <Common/config.h>
-#include <IO/Compression/CompressionCodecDeltaFOR.h>
-#include <IO/Compression/CompressionCodecFOR.h>
-#include <IO/Compression/CompressionCodecLZ4.h>
-#include <IO/Compression/CompressionCodecLightweight.h>
-#include <IO/Compression/CompressionCodecMultiple.h>
-#include <IO/Compression/CompressionCodecNone.h>
-#include <IO/Compression/CompressionCodecRunLength.h>
-#include <IO/Compression/CompressionCodecZSTD.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/ICompressionCodec.h>
 
-#if USE_QPL
-#include <IO/Compression/CompressionCodecDeflateQpl.h>
-#endif
 
 namespace DB
 {
@@ -44,6 +32,7 @@ public:
     static CompressionCodecPtr create(const CompressionSetting & setting);
 
     // Create codec for compressing/decompressing data with specified settings.
+    // The returned codec must be compressable.
     static CompressionCodecPtr create(const CompressionSettings & settings);
 
     // Create codec for decompressing data with specified method byte.

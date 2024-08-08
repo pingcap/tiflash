@@ -58,6 +58,8 @@ public:
     /// Read method byte from compressed source
     static UInt8 readMethod(const char * source);
 
+    virtual bool isCompression() const = 0;
+
 protected:
     /// Return size of compressed data without header
     virtual UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const { return uncompressed_size; }
