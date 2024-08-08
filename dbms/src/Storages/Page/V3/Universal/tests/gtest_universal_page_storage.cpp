@@ -619,6 +619,50 @@ TEST(UniPageStorageIdTest, UniversalWriteBatchMemory)
         ASSERT_EQ(PageStorageMemorySummary::universal_write_count.load(), 1);
     }
     ASSERT_EQ(PageStorageMemorySummary::universal_write_count.load(), 0);
+    {
+        UniversalWriteBatch wb;
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 0),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
+        UniversalWriteBatch wb2;
+        wb2.merge(wb);
+        ASSERT_EQ(PageStorageMemorySummary::universal_write_count.load(), 2);
+    }
+    {
+        UniversalWriteBatch wb;
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 0),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
+        wb.clear();
+        ASSERT_EQ(PageStorageMemorySummary::universal_write_count.load(), 0);
+    }
+    {
+        UniversalWriteBatch wb;
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 0),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
+        ASSERT_EQ(PageStorageMemorySummary::universal_write_count.load(), 1);
+        UniversalWriteBatch wb2;
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 1),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 2),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
+        ASSERT_EQ(PageStorageMemorySummary::universal_write_count.load(), 3);
+        wb.swap(wb2);
+        ASSERT_EQ(PageStorageMemorySummary::universal_write_count.load(), 3);
+    }
 }
 
 } // namespace PS::universal::tests

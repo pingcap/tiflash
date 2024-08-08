@@ -307,7 +307,9 @@ ninja gtests_libcommon
 There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
 
 ```shell
-LSAN_OPTIONS=suppressions=test/sanitize/asan.suppression
+LSAN_OPTIONS="suppressions=tests/sanitize/asan.suppression" ./dbms/gtests_dbms ...
+# or
+TSAN_OPTIONS="suppressions=tests/sanitize/tsan.suppression" ./dbms/gtests_dbms ...
 ```
 
 ## Run Integration Tests

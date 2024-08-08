@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,6 +99,10 @@ struct CompressionSettings
 
     explicit CompressionSettings(const std::vector<CompressionSetting> & settings_)
         : settings(settings_)
+    {}
+
+    explicit CompressionSettings(CompressionSetting setting)
+        : settings(1, std::move(setting))
     {}
 
     std::vector<CompressionSetting> settings;

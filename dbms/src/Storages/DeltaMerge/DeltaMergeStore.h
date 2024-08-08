@@ -505,7 +505,7 @@ public:
      *   It is ensured that there are at least 2 elements in the returned vector.
      * When there is no mergeable segment, the returned vector will be empty.
      */
-    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
+    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & base_segment);
 
     /// Apply schema change on `table_columns`
     void applySchemaChanges(TableInfo & table_info);

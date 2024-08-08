@@ -72,6 +72,7 @@ private:
 
     bool applyCreateDatabase(DatabaseID database_id);
     void applyCreateDatabaseByInfo(const TiDB::DBInfoPtr & db_info);
+    void ensureLocalDatabaseExist(DatabaseID database_id, const String & database_mapped_name, std::string_view action);
 
     void applyRecoverDatabase(DatabaseID database_id);
 
