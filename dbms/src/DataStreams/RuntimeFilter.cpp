@@ -213,7 +213,7 @@ void RuntimeFilter::setTargetAttr(
     target_attr = DM::FilterParser::createAttr(target_expr, scan_column_infos, table_column_defines);
 }
 
-DM::RSOperatorPtr RuntimeFilter::parseToRSOperator()
+DM::RSOperatorPtr RuntimeFilter::parseToRSOperator() const
 {
     switch (rf_type)
     {
