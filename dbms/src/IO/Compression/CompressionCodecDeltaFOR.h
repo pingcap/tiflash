@@ -29,6 +29,8 @@ public:
     // ordinaryDecompress is only used for benchmark comparison.
     static void ordinaryDecompress(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size);
 
+    bool isCompression() const override { return false; }
+
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif

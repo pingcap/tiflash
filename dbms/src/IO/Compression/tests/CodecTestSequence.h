@@ -16,7 +16,7 @@
 
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
-#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
 
 #include <magic_enum.hpp>

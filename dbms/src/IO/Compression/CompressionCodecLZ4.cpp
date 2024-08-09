@@ -72,10 +72,4 @@ CompressionCodecLZ4HC::CompressionCodecLZ4HC(int level_)
     : CompressionCodecLZ4(level_)
 {}
 
-
-CompressionCodecPtr getCompressionCodecLZ4(int level)
-{
-    return std::make_unique<CompressionCodecLZ4HC>(level);
-}
-
 } // namespace DB

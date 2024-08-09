@@ -18,7 +18,7 @@
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/tests/CodecTestSequence.h>
 #include <Poco/File.h>
 #include <benchmark/benchmark.h>
@@ -271,5 +271,46 @@ static void multipleRead(benchmark::State & state)
 
 BENCH_MULTIPLE_WRITE(CodecMultipleWrite)
 BENCH_MULTIPLE_READ(CodecMultipleRead)
+
+BENCH_SINGLE_READ_METHOD_GENERATOR_TYPE(
+    RunLengthReadUInt8,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt8>(0),
+    UInt8)
+BENCH_SINGLE_READ_METHOD_GENERATOR_TYPE(
+    RunLengthReadUInt16,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt16>(0),
+    UInt16)
+BENCH_SINGLE_READ_METHOD_GENERATOR_TYPE(
+    RunLengthReadUInt32,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt32>(0),
+    UInt32)
+BENCH_SINGLE_READ_METHOD_GENERATOR_TYPE(
+    RunLengthReadUInt64,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt64>(0),
+    UInt64)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt8,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt8>(0),
+    UInt8)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt16,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt16>(0),
+    UInt16)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt32,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt32>(0),
+    UInt32)
+BENCH_SINGLE_WRITE_METHOD_GENERATOR_TYPE(
+    RunLengthWriteUInt64,
+    CompressionMethodByte::RunLength,
+    tests::RepeatGenerator<UInt64>(0),
+    UInt64)
 
 } // namespace DB::bench

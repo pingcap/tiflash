@@ -68,6 +68,7 @@ enum class CompressionMethodByte : UInt8
 
 enum class CompressionDataType : UInt8
 {
+    Unknown = 0,
     // These enum values are used to represent the number of bytes of the type
     Int8 = 1, // Int8/UInt8
     Int16 = 2, // Int16/UInt16
@@ -78,5 +79,10 @@ enum class CompressionDataType : UInt8
     Float64 = 10,
     String = 11,
 };
+
+inline bool isInteger(CompressionDataType type)
+{
+    return type >= CompressionDataType::Int8 && type <= CompressionDataType::Int64;
+}
 
 } // namespace DB

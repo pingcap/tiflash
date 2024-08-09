@@ -19,12 +19,19 @@
 namespace DB
 {
 
+class CompressionCodecFactory;
+
 class CompressionCodecLZ4 : public ICompressionCodec
 {
 public:
+    // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
+    static constexpr size_t ESTIMATE_INTEGER_COMPRESSION_RATIO = 4;
+
     explicit CompressionCodecLZ4(int level_);
 
     UInt8 getMethodByte() const override;
+
+    bool isCompression() const override { return true; }
 
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
@@ -37,6 +44,7 @@ private:
 
 protected:
     const int level;
+    friend class CompressionCodecFactory;
 };
 
 
