@@ -790,15 +790,9 @@ bool SegmentReadTask::hasColumnFileToFetch() const
         // ColumnFileDeleteRange and ColumnFileBig do not need to fetch.
         return cf->isInMemoryFile() || cf->isTinyFile();
     };
-
     const auto & mem_cfs = read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
-    if (std::any_of(mem_cfs.cbegin(), mem_cfs.cend(), need_to_fetch))
-        return true;
-
     const auto & persisted_cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
-    if (std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch))
-        return true;
-
-    return false;
+    return std::any_of(mem_cfs.cbegin(), mem_cfs.cend(), need_to_fetch)
+        || std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch);
 }
 } // namespace DB::DM
