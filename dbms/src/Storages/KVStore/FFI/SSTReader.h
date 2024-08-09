@@ -35,7 +35,6 @@ public:
     virtual void seek(BaseBuffView && view) const = 0;
     virtual void seekToFirst() const = 0;
     virtual void seekToLast() const = 0;
-    virtual size_t getSplitId() const = 0;
 
     virtual ~SSTReader() = default;
 };
@@ -54,15 +53,13 @@ public:
     void seek(BaseBuffView && view) const override;
     void seekToFirst() const override;
     void seekToLast() const override;
-    size_t getSplitId() const override;
 
     DISALLOW_COPY_AND_MOVE(MonoSSTReader);
     MonoSSTReader(
         const TiFlashRaftProxyHelper * proxy_helper_,
         SSTView view,
         RegionRangeFilter range_,
-        size_t split_id_,
-        size_t region_id_);
+        const LoggerPtr & log_);
     ~MonoSSTReader() override;
 
 private:
@@ -72,9 +69,7 @@ private:
     RegionRangeFilter range;
     SSTFormatKind kind;
     mutable bool tail_checked;
-    size_t split_id;
-    size_t region_id;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 /// MultiSSTReader helps when there are multiple sst files in a column family.
@@ -89,7 +84,7 @@ class MultiSSTReader : public SSTReader
 {
 public:
     using Initer
-        = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E, RegionRangeFilter, size_t, size_t)>;
+        = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E, RegionRangeFilter, const LoggerPtr &)>;
 
     DISALLOW_COPY_AND_MOVE(MultiSSTReader);
 
@@ -148,7 +143,6 @@ public:
         }
         return mono->seekToLast();
     }
-    size_t getSplitId() const override { return split_id; }
 
     // Switch to next mono reader if current SST is drained,
     // and we have a next sst file to read.
@@ -164,14 +158,12 @@ public:
             // and it will be dropped as MultiSSTReader is dropped.
             LOG_INFO(
                 log,
-                "Open sst file {}, range={} sst_idx={} sst_tot={} split_id={} region_id={}",
+                "Open sst file {}, range={} sst_idx={} sst_tot={}",
                 buffToStrView(args[sst_idx].path),
                 range->toDebugString(),
                 sst_idx,
-                args.size(),
-                split_id,
-                region_id);
-            mono = initer(proxy_helper, args[sst_idx], range, split_id, region_id);
+                args.size());
+            mono = initer(proxy_helper, args[sst_idx], range, log);
         }
     }
 
@@ -181,9 +173,7 @@ public:
         Initer initer_,
         std::vector<E> args_,
         LoggerPtr log_,
-        RegionRangeFilter range_,
-        size_t split_id_,
-        size_t region_id_)
+        RegionRangeFilter range_)
         : log(log_)
         , proxy_helper(proxy_helper_)
         , type(type_)
@@ -191,19 +181,15 @@ public:
         , args(args_)
         , sst_idx(0)
         , range(range_)
-        , split_id(split_id_)
-        , region_id(region_id_)
     {
         assert(args.size() > 0);
         LOG_INFO(
             log,
-            "Open sst file first {}, range={} sst_tot={} split_id={} region_id={}",
+            "Open sst file first {}, range={} sst_tot={}",
             buffToStrView(args[sst_idx].path),
             range->toDebugString(),
-            args.size(),
-            split_id,
-            region_id);
-        mono = initer(proxy_helper, args[sst_idx], range, split_id, region_id);
+            args.size());
+        mono = initer(proxy_helper, args[sst_idx], range, log);
     }
 
     ~MultiSSTReader() override
@@ -222,8 +208,6 @@ private:
     std::vector<E> args;
     size_t sst_idx;
     RegionRangeFilter range;
-    const size_t split_id;
-    const size_t region_id;
 };
 
 } // namespace DB
