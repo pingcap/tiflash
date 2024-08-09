@@ -786,15 +786,9 @@ void SegmentReadTask::finishPagesPacketStream(
 bool SegmentReadTask::hasColumnFileToFetch() const
 {
     auto need_to_fetch = [](const ColumnFilePtr & cf) {
-        // Has ColumnFileMemory to fetch
-        if (auto * mem = cf->tryToInMemoryFile(); mem)
-            return true;
-        // Has ColumnFileTiny to fetch
-        if (auto * tiny = cf->tryToTinyFile(); tiny)
-            return true;
-
-        // ColumnFileDeleteRange and ColumnFileBig do not need to fetch
-        return false;
+        // Only ColumnFileMemory and ColumnFileTiny need too fetch.
+        // ColumnFileDeleteRange and ColumnFileBig do not need to fetch.
+        return cf->isInMemoryFile() || cf->isTinyFile();
     };
 
     const auto & mem_cfs = read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
