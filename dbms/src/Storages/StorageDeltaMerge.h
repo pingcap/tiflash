@@ -34,6 +34,7 @@ namespace DB
 {
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+
 namespace DM
 {
 struct RowKeyRange;
@@ -234,10 +235,10 @@ private:
     bool dataDirExist();
     void shutdownImpl();
 
-    DM::RSOperatorPtr buildRSOperator(const SelectQueryInfo & query_info,
-                                      const DM::ColumnDefines & columns_to_read,
-                                      const Context & context,
-                                      const LoggerPtr & tracing_logger);
+    DM::RSOperatorPtr buildRSOperator(
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
     /// Get filters from query to construct rough set operation and push down filters.
     DM::PushDownFilterPtr parsePushDownFilter(const SelectQueryInfo & query_info,
                                               const DM::ColumnDefines & columns_to_read,
