@@ -57,6 +57,7 @@ char * writeSameValueMultipleTime(T value, UInt32 count, char * dest)
             dest += sizeof(__m256i);
         }
 #endif
+#if defined(__SSE2__)
         // sse
         while (j + sizeof(__m128i) / sizeof(T) <= count)
         {
@@ -78,6 +79,7 @@ char * writeSameValueMultipleTime(T value, UInt32 count, char * dest)
             j += sizeof(__m128i) / sizeof(T);
             dest += sizeof(__m128i);
         }
+#endif
         // scalar
         for (; j < count; ++j)
         {
