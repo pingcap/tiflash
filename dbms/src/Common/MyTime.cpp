@@ -259,7 +259,29 @@ std::tuple<int, String, String, String, String> getTimeZone(const String & liter
 // TODO: make unified helper
 bool isPunctuation(char c)
 {
+<<<<<<< HEAD
     return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
+=======
+    auto [tz_idx, tz_sign, tz_hour, tz_sep, tz_minute] = getTimeZone(format);
+    int end = format.length() - 1;
+    if (tz_idx != -1)
+    {
+        end = tz_idx - 1;
+    }
+    int idx = -1;
+    for (int i = end; i >= 0; i--)
+    {
+        if (format[i] != '+' && format[i] != '-' && isPunctuation(format[i]))
+        {
+            if (format[i] == '.')
+            {
+                idx = i;
+            }
+            break;
+        }
+    }
+    return idx;
+>>>>>>> 7b17f5b39e (Fix the wrong result bug when casting string as datetime with time zone or illegal chars (#9255))
 }
 
 std::tuple<std::vector<String>, String, bool, String, String, String, String> splitDatetime(String format)
@@ -561,7 +583,217 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     return day <= getLastDay(year, month);
 }
 
+<<<<<<< HEAD
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
+=======
+bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32)
+{
+    return true;
+}
+
+UInt64 addSeconds(UInt64 t, Int64 delta)
+{
+    // todo support zero date
+    if (t == 0)
+    {
+        return t;
+    }
+    MyDateTime my_time(t);
+    Int64 current_second = my_time.hour * MyTimeBase::SECOND_IN_ONE_HOUR
+        + my_time.minute * MyTimeBase::SECOND_IN_ONE_MINUTE + my_time.second;
+    current_second += delta;
+    if (current_second >= 0)
+    {
+        Int64 days = current_second / MyTimeBase::SECOND_IN_ONE_DAY;
+        current_second = current_second % MyTimeBase::SECOND_IN_ONE_DAY;
+        if (days != 0)
+            addDays(my_time, days);
+    }
+    else
+    {
+        Int64 days = (-current_second) / MyTimeBase::SECOND_IN_ONE_DAY;
+        if ((-current_second) % MyTimeBase::SECOND_IN_ONE_DAY != 0)
+        {
+            days++;
+        }
+        current_second += days * MyTimeBase::SECOND_IN_ONE_DAY;
+        addDays(my_time, -days);
+    }
+    my_time.hour = current_second / MyTimeBase::SECOND_IN_ONE_HOUR;
+    my_time.minute = (current_second % MyTimeBase::SECOND_IN_ONE_HOUR) / MyTimeBase::SECOND_IN_ONE_MINUTE;
+    my_time.second = current_second % MyTimeBase::SECOND_IN_ONE_MINUTE;
+    return my_time.toPackedUInt();
+}
+
+// Return true if the time is invalid.
+inline bool getDatetime(const Int64 & num, MyDateTime & result)
+{
+    UInt64 ymd = num / 1000000;
+    UInt64 hms = num - ymd * 1000000;
+
+    UInt64 year = ymd / 10000;
+    ymd %= 10000;
+    UInt64 month = ymd / 100;
+    UInt64 day = ymd % 100;
+
+    UInt64 hour = hms / 10000;
+    hms %= 10000;
+    UInt64 minute = hms / 100;
+    UInt64 second = hms % 100;
+
+    if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
+    {
+        return true;
+    }
+    return !result.isValid(true, false);
+}
+
+// Convert a integer number to DateTime and return true if the result is NULL.
+// If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
+// This function may throw exception.
+inline bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDate)
+{
+    MyDateTime datetime(0);
+    if (number == 0)
+    {
+        if (allowZeroDate)
+        {
+            result = datetime;
+            return false;
+        }
+        return true;
+    }
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return getDatetime(number, result);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        return true;
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 20000000) * 1000000;
+        return getDatetime(number, result);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        return true;
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return getDatetime(number, result);
+    }
+
+    // check hour/min/second
+    if (number <= 99991231)
+    {
+        number *= 1000000;
+        return getDatetime(number, result);
+    }
+
+    // check MMDDHHMMSS
+    if (number < 101000000)
+    {
+        return true;
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return getDatetime(number, result);
+    }
+
+    // check YYYYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        return true;
+    }
+
+    // check YYMMDDHHMMSS
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return getDatetime(number, result);
+    }
+
+    return getDatetime(number, result);
+}
+
+// returns frac, overflow, matched. eg., "999" fsp=2 will overflow.
+std::tuple<UInt32, bool, bool> parseFrac(const std::string_view str, int8_t fsp)
+{
+    if (str.empty())
+    {
+        return {0, false, true};
+    }
+    if (fsp == -1)
+    {
+        fsp = 6;
+    }
+    if (fsp < 0 || fsp > 6)
+    {
+        return {0, false, false};
+    }
+    try
+    {
+        int end_pos = static_cast<size_t>(fsp) >= str.size() ? str.size() : (fsp + 1);
+        UInt32 tmp = 0;
+        int size = 0;
+        for (int i = 0; i < end_pos; ++i)
+        {
+            if (auto c = str[i]; c >= '0' && c <= '9')
+            {
+                tmp = tmp * 10 + c - '0';
+                size++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (fsp >= size)
+        {
+            return {tmp * std::pow(10, 6 - size), false, true};
+        }
+
+        tmp = (tmp + 5) / 10;
+        if (tmp >= std::pow(10, fsp))
+        {
+            // overflow
+            return {0, true, true};
+        }
+        // Get the final frac, with 6 digit number
+        //  1236 round 3 -> 124 -> 124000
+        //  0312 round 2 -> 3 -> 30000
+        //  999 round 2 -> 100 -> overflow
+        return {tmp * std::pow(10, 6 - fsp), false, true};
+    }
+    catch (std::exception & e)
+    {
+        return {0, false, false};
+    }
+}
+
+// isFloat is true means that the input string is float format like "1212.111"
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(
+    const String & str,
+    int8_t fsp,
+    CheckTimeFunc checkTimeFunc,
+    bool isFloat)
+>>>>>>> 7b17f5b39e (Fix the wrong result bug when casting string as datetime with time zone or illegal chars (#9255))
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
