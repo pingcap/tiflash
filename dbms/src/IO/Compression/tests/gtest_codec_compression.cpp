@@ -152,7 +152,7 @@ CompressionCodecPtr makeCodec(const CompressionMethodByte method_byte, UInt8 typ
 {
     CompressionSetting setting(method_byte);
     setting.data_type = magic_enum::enum_cast<CompressionDataType>(type_byte).value();
-    return CompressionFactory::create(setting);
+    return CompressionCodecFactory::create(setting);
 }
 
 void testTranscoding(ICompressionCodec & codec, const CodecTestSequence & test_sequence)
@@ -173,7 +173,7 @@ void testTranscoding(ICompressionCodec & codec, const CodecTestSequence & test_s
     ASSERT_EQ(method_byte, codec.getMethodByte());
 
     PODArray<char> decoded(source_data.size());
-    const auto decode_codec = CompressionFactory::createForDecompress(method_byte);
+    const auto decode_codec = CompressionCodecFactory::createForDecompress(method_byte);
 
     const auto decoded_size = decode_codec->readDecompressedBlockSize(encoded.data());
     decode_codec->decompress(encoded.data(), static_cast<UInt32>(encoded.size()), decoded.data(), decoded_size);

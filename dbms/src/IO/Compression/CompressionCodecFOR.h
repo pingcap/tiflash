@@ -34,6 +34,8 @@ public:
 
     UInt8 getMethodByte() const override;
 
+    bool isCompression() const override { return false; }
+
     template <std::integral T>
     static UInt32 compressData(const T * source, UInt32 source_size, char * dest);
 
