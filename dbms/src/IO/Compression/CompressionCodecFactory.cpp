@@ -22,6 +22,8 @@
 #include <IO/Compression/CompressionCodecRunLength.h>
 #include <IO/Compression/CompressionCodecZSTD.h>
 
+#include <magic_enum.hpp>
+
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
 #endif
@@ -56,7 +58,14 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec(const CompressionSet
         return codec;
     }
     default:
+#ifndef NDEBUG
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Invalid static codec data type {}",
+            magic_enum::enum_integer(setting.data_type));
+#else
         __builtin_unreachable();
+#endif
     }
 }
 
@@ -132,7 +141,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecDefl
 #endif
 
 
-template <bool IS_DECOMPRESS>
+template <bool IS_COMPRESS>
 CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & setting)
 {
     // LZ4 and LZ4HC have the same format, the difference is only in compression.
@@ -151,14 +160,19 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         return getStaticCodec<CompressionCodecDeflateQpl>(setting);
 #endif
 
-    if constexpr (!IS_DECOMPRESS)
+    if constexpr (IS_COMPRESS)
     {
         // If method_byte is Lightweight, use LZ4 codec for non-integral types
-        // If method_byte is DeltaFOR/RunLength/FOR, since we do not support use these methods independently, so there must be another codec, use it directly.
-        if (!isInteger(setting.data_type) && setting.method_byte == CompressionMethodByte::Lightweight)
-            return getStaticCodec<CompressionCodecLZ4>(setting);
-        else if (!isInteger(setting.data_type))
-            return nullptr;
+        // If method_byte is DeltaFOR/RunLength/FOR, since we do not support use these methods independently,
+        // there must be another codec to compress data. Use that compress codec directly.
+        if (!isInteger(setting.data_type))
+        {
+            if (setting.method_byte == CompressionMethodByte::Lightweight)
+                return getStaticCodec<CompressionCodecLZ4>(setting);
+            else
+                return nullptr;
+        }
+        // else fallthrough
     }
 
     switch (setting.method_byte)
@@ -196,7 +210,7 @@ CompressionCodecPtr CompressionCodecFactory::createForDecompress(UInt8 method_by
 {
     CompressionSetting setting(static_cast<CompressionMethodByte>(method_byte));
     setting.data_type = CompressionDataType::Int8;
-    return create</*IS_DECOMPRESS*/ true>(setting);
+    return create</*IS_COMPRESS*/ false>(setting);
 }
 
 Codecs CompressionCodecFactory::createCodecs(const CompressionSettings & settings)

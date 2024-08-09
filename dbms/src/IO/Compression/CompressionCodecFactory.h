@@ -28,7 +28,7 @@ extern const int UNKNOWN_COMPRESSION_METHOD;
 class CompressionCodecFactory
 {
 public:
-    template <bool IS_DECOMPRESS = false>
+    template <bool IS_COMPRESS = true>
     static CompressionCodecPtr create(const CompressionSetting & setting);
 
     // Create codec for compressing/decompressing data with specified settings.
