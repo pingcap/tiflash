@@ -1316,7 +1316,7 @@ public:
 
         bool only_lookup = false;
         size_t hit_row_cnt = 0;
-        std::vector<size_t> not_found_rows;
+        std::vector<UInt64> not_found_rows;
 
         void prepareForAgg();
         bool allBlockDataHandled() const
