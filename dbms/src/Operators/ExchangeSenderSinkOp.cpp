@@ -39,14 +39,28 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
     return OperatorStatus::NEED_INPUT;
 }
 
+OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
+{
+    auto res = writer->waitForWritable();
+    switch (res)
+    {
+    case WaitResult::Ready:
+        return OperatorStatus::NEED_INPUT;
+    case WaitResult::WaitForPolling:
+        return OperatorStatus::WAITING;
+    case WaitResult::WaitForNotify:
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    }
+}
+
 OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
-    return writer->isWritable() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
+    return waitForWriter();
 }
 
 OperatorStatus ExchangeSenderSinkOp::awaitImpl()
 {
-    return writer->isWritable() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
+    return waitForWriter();
 }
 
 } // namespace DB

@@ -42,6 +42,9 @@ struct LocalRequestHandler
 
     bool isWritable() const { return msg_queue->isWritable(); }
 
+    void registerPipeReadTask(TaskPtr && task) const { msg_queue->registerPipeReadTask(std::move(task)); }
+    void registerPipeWriteTask(TaskPtr && task) const { msg_queue->registerPipeWriteTask(std::move(task)); }
+
     void writeDone(bool meet_error, const String & local_err_msg) const
     {
         notify_write_done(meet_error, local_err_msg);
