@@ -952,12 +952,18 @@ struct TiDBConvertToDecimal
         }
         else if (v_scale > scale)
         {
+<<<<<<< HEAD
             context.getDAGContext()->handleTruncateError("cast decimal as decimal");
             const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
+=======
+            const bool neg = (value < 0);
+            const bool need_to_round = ((neg ? -value : value) % scale_mul) >= (scale_mul / 2);
+            auto old_value = value;
+>>>>>>> 0861ee62af (fix cast to decimal wrong sign (#9300))
             value /= scale_mul;
             if (need_to_round)
             {
-                if (value < 0)
+                if (neg)
                     --value;
                 else
                     ++value;
