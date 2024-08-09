@@ -55,19 +55,20 @@ private:
     enum class IntegerMode : UInt8
     {
         Invalid = 0,
-        CONSTANT = 1, // all values are the same
-        CONSTANT_DELTA = 2, // the difference between two adjacent values is the same
+        Constant = 1, // all values are the same
+        ConstantDelta = 2, // the difference between two adjacent values is the same
         RunLength = 3, // the same value appears multiple times
         FOR = 4, // Frame of Reference encoding
-        DELTA_FOR = 5, // delta encoding and then FOR encoding
+        DeltaFOR = 5, // delta encoding and then FOR encoding
         LZ4 = 6, // the above modes are not suitable, use LZ4 instead
+        DeltaLZ4 = 7, // delta encoding and then LZ4
     };
 
     // Constant or ConstantDelta
-    template <typename T>
+    template <std::integral T>
     using ConstantState = T;
 
-    template <typename T>
+    template <std::integral T>
     struct FORState
     {
         std::vector<T> values;
@@ -75,7 +76,7 @@ private:
         UInt8 bit_width;
     };
 
-    template <typename T>
+    template <std::integral T>
     struct DeltaFORState
     {
         using TS = typename std::make_signed_t<T>;
@@ -84,9 +85,15 @@ private:
         UInt8 bit_width;
     };
 
+    template <std::integral T>
+    struct DeltaLZ4State
+    {
+        std::vector<T> deltas;
+    };
+
     // State is a union of different states for different modes
-    template <typename T>
-    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
+    template <std::integral T>
+    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>, DeltaLZ4State<T>>;
 
     class IntegerCompressContext
     {
@@ -95,7 +102,7 @@ private:
             : round_count(round_count_)
         {}
 
-        template <typename T>
+        template <std::integral T>
         void analyze(std::span<const T> & values, IntegerState<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
@@ -123,12 +130,13 @@ private:
         bool used_constant_delta = false;
         bool used_delta_for = false;
         bool used_rle = false;
+        bool used_delta_lz4 = false;
     };
 
-    template <typename T>
+    template <std::integral T>
     size_t compressDataForInteger(const char * source, UInt32 source_size, char * dest) const;
 
-    template <typename T>
+    template <std::integral T>
     void decompressDataForInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size) const;
 
     /// Non-integer data

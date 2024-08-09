@@ -268,6 +268,9 @@ void deltaDecoding(const char * source, UInt32 source_size, char * dest)
     ordinaryDeltaDecoding<T>(source, source_size, dest);
 }
 
+template void deltaDecoding<Int8>(const char *, UInt32, char *);
+template void deltaDecoding<Int16>(const char *, UInt32, char *);
+
 #if defined(__AVX2__)
 
 /**
@@ -276,7 +279,7 @@ void deltaDecoding(const char * source, UInt32 source_size, char * dest)
  */
 
 template <>
-void deltaDecoding<Int32>(const char * __restrict__ raw_source, UInt32 raw_source_size, char * __restrict__ raw_dest)
+void deltaDecoding<Int32>(const char * raw_source, UInt32 raw_source_size, char * raw_dest)
 {
     const auto * source = reinterpret_cast<const Int32 *>(raw_source);
     auto source_size = raw_source_size / sizeof(Int32);
@@ -300,7 +303,7 @@ void deltaDecoding<Int32>(const char * __restrict__ raw_source, UInt32 raw_sourc
 }
 
 template <>
-void deltaDecoding<Int64>(const char * __restrict__ raw_source, UInt32 raw_source_size, char * __restrict__ raw_dest)
+void deltaDecoding<Int64>(const char * raw_source, UInt32 raw_source_size, char * raw_dest)
 {
     const auto * source = reinterpret_cast<const Int64 *>(raw_source);
     auto source_size = raw_source_size / sizeof(Int64);
@@ -332,6 +335,11 @@ void deltaDecoding<Int64>(const char * __restrict__ raw_source, UInt32 raw_sourc
         dest[i] = lastprev;
     }
 }
+
+#else
+
+template void deltaDecoding<Int32>(const char *, UInt32, char *);
+template void deltaDecoding<Int64>(const char *, UInt32, char *);
 
 #endif
 

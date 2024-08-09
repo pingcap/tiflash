@@ -48,10 +48,10 @@ void CompressionCodecLightweight::IntegerCompressContext::update(size_t uncompre
     }
     switch (mode)
     {
-    case IntegerMode::CONSTANT:
+    case IntegerMode::Constant:
         GET_METRIC(tiflash_storage_pack_compression_algorithm_count, type_constant).Increment();
         break;
-    case IntegerMode::CONSTANT_DELTA:
+    case IntegerMode::ConstantDelta:
         GET_METRIC(tiflash_storage_pack_compression_algorithm_count, type_constant_delta).Increment();
         used_constant_delta = true;
         break;
@@ -62,15 +62,23 @@ void CompressionCodecLightweight::IntegerCompressContext::update(size_t uncompre
     case IntegerMode::FOR:
         GET_METRIC(tiflash_storage_pack_compression_algorithm_count, type_for).Increment();
         break;
-    case IntegerMode::DELTA_FOR:
+    case IntegerMode::DeltaFOR:
         GET_METRIC(tiflash_storage_pack_compression_algorithm_count, type_delta_for).Increment();
         used_delta_for = true;
+        break;
+    case IntegerMode::DeltaLZ4:
+        GET_METRIC(tiflash_storage_pack_compression_algorithm_count, type_delta_lz4).Increment();
+        // Only when the compression ratio is greater than ESTIMATE_INTEGER_COMPRESSION_RATIO, set used_delta_lz4 to true.
+        if ((uncompressed_size / compressed_size) > CompressionCodecLZ4::ESTIMATE_INTEGER_COMPRESSION_RATIO)
+            used_delta_lz4 = true;
+        else
+            used_lz4 = true;
         break;
     default:
         break;
     }
     // Since analyze CONSTANT is extremely fast, so it will not be counted in the round.
-    if (mode != IntegerMode::CONSTANT)
+    if (mode != IntegerMode::Constant)
     {
         ++compress_count;
         resetIfNeed();
@@ -94,13 +102,15 @@ void CompressionCodecLightweight::IntegerCompressContext::resetIfNeed()
         used_constant_delta = false;
         used_delta_for = false;
         used_rle = false;
+        used_delta_lz4 = false;
     }
 }
 
 template <std::integral T>
 bool CompressionCodecLightweight::IntegerCompressContext::needAnalyzeDelta() const
 {
-    return !std::is_same_v<T, UInt8> && (compress_count == 0 || used_constant_delta || used_delta_for);
+    return !std::is_same_v<T, UInt8>
+        && (compress_count == 0 || used_constant_delta || used_delta_for || used_delta_lz4);
 }
 
 template <std::integral T>
@@ -115,7 +125,7 @@ bool CompressionCodecLightweight::IntegerCompressContext::needAnalyzeRunLength()
     return compress_count == 0 || used_rle;
 }
 
-template <typename T>
+template <std::integral T>
 void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<const T> & values, IntegerState<T> & state)
 {
     if (values.empty())
@@ -137,7 +147,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     if (min_value == max_value)
     {
         state = min_value;
-        mode = IntegerMode::CONSTANT;
+        mode = IntegerMode::Constant;
         return;
     }
 
@@ -163,7 +173,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
         if (min_delta == max_delta)
         {
             state = static_cast<T>(min_delta);
-            mode = IntegerMode::CONSTANT_DELTA;
+            mode = IntegerMode::ConstantDelta;
             return;
         }
 
@@ -177,7 +187,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     // RunLength
     size_t estimate_rle_size = Compression::runLengthEncodedApproximateSize(values.data(), values.size());
 
-    size_t estimate_lz_size = values.size() * sizeof(T) / CompressionCodecLZ4::ESRTIMATE_INTEGER_COMPRESSION_RATIO;
+    size_t estimate_lz_size = values.size() * sizeof(T) / CompressionCodecLZ4::ESTIMATE_INTEGER_COMPRESSION_RATIO;
 
     UInt8 for_width = BitpackingPrimitives::minimumBitWidth<T>(max_value - min_value);
     // min_delta, and 1 byte for width, and the rest for compressed data
@@ -202,7 +212,13 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     else if (needAnalyzeDelta<T>() && delta_for_size < estimate_lz_size)
     {
         state = DeltaFORState<T>{std::move(deltas), min_delta, delta_for_width};
-        mode = IntegerMode::DELTA_FOR;
+        mode = IntegerMode::DeltaFOR;
+    }
+    else if (needAnalyzeDelta<T>() && delta_for_width < for_width)
+    {
+        // If has analyzed delta and delta_for_width < for_width, but delta_for_size >= estimate_lz_size, try DeltaLZ4
+        state = DeltaLZ4State<T>{std::move(deltas)};
+        mode = IntegerMode::DeltaLZ4;
     }
     else
     {
@@ -210,7 +226,7 @@ void CompressionCodecLightweight::IntegerCompressContext::analyze(std::span<cons
     }
 }
 
-template <typename T>
+template <std::integral T>
 size_t CompressionCodecLightweight::compressDataForInteger(const char * source, UInt32 source_size, char * dest) const
 {
     const auto bytes_size = static_cast<UInt8>(data_type);
@@ -236,12 +252,12 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     size_t compressed_size = 1;
     switch (ctx.mode)
     {
-    case IntegerMode::CONSTANT:
+    case IntegerMode::Constant:
     {
         compressed_size += Compression::constantEncoding(std::get<0>(state), dest);
         break;
     }
-    case IntegerMode::CONSTANT_DELTA:
+    case IntegerMode::ConstantDelta:
     {
         compressed_size += Compression::constantDeltaEncoding(values[0], std::get<0>(state), dest);
         break;
@@ -262,7 +278,7 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
             dest);
         break;
     }
-    case IntegerMode::DELTA_FOR:
+    case IntegerMode::DeltaFOR:
     {
         DeltaFORState delta_for_state = std::get<2>(state);
         unalignedStore<T>(dest, values[0]);
@@ -274,6 +290,23 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
             static_cast<T>(delta_for_state.min_delta_value),
             delta_for_state.bit_width,
             dest);
+        break;
+    }
+    case IntegerMode::DeltaLZ4:
+    {
+        DeltaLZ4State delta_lz4_state = std::get<3>(state);
+        unalignedStore<T>(dest, values[0]);
+        dest += sizeof(T);
+        compressed_size += sizeof(T);
+        auto success = LZ4_compress_fast(
+            reinterpret_cast<const char *>(delta_lz4_state.deltas.data()),
+            dest,
+            delta_lz4_state.deltas.size() * sizeof(T),
+            LZ4_COMPRESSBOUND(delta_lz4_state.deltas.size() * sizeof(T)),
+            CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
+        if (unlikely(!success))
+            throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
+        compressed_size += success;
         break;
     }
     case IntegerMode::LZ4:
@@ -302,7 +335,7 @@ size_t CompressionCodecLightweight::compressDataForInteger(const char * source, 
     return compressed_size;
 }
 
-template <typename T>
+template <std::integral T>
 void CompressionCodecLightweight::decompressDataForInteger(
     const char * source,
     UInt32 source_size,
@@ -321,10 +354,10 @@ void CompressionCodecLightweight::decompressDataForInteger(
     source_size -= sizeof(UInt8);
     switch (mode)
     {
-    case IntegerMode::CONSTANT:
+    case IntegerMode::Constant:
         Compression::constantDecoding<T>(source, source_size, dest, output_size);
         break;
-    case IntegerMode::CONSTANT_DELTA:
+    case IntegerMode::ConstantDelta:
         Compression::constantDeltaDecoding<T>(source, source_size, dest, output_size);
         break;
     case IntegerMode::RunLength:
@@ -333,9 +366,23 @@ void CompressionCodecLightweight::decompressDataForInteger(
     case IntegerMode::FOR:
         Compression::FORDecoding<T>(source, source_size, dest, output_size);
         break;
-    case IntegerMode::DELTA_FOR:
+    case IntegerMode::DeltaFOR:
         Compression::deltaFORDecoding<T>(source, source_size, dest, output_size);
         break;
+    case IntegerMode::DeltaLZ4:
+    {
+        // Copy the first value
+        memcpy(dest, source, sizeof(T));
+        source += sizeof(T);
+        source_size -= sizeof(T);
+        // Decompress the rest
+        if (unlikely(LZ4_decompress_safe(source, &dest[sizeof(T)], source_size, output_size - sizeof(T)) < 0))
+            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
+        // Delta decoding
+        using TS = std::make_signed_t<T>;
+        Compression::deltaDecoding<TS>(dest, output_size, dest);
+        break;
+    }
     case IntegerMode::LZ4:
         if (unlikely(LZ4_decompress_safe(source, dest, source_size, output_size) < 0))
             throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
