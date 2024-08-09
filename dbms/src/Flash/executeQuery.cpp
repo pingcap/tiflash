@@ -113,6 +113,8 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 
     prepareForExecute(context);
 
+    dag_context.switchToStreamMode();
+
     /// query level memory tracker
     auto memory_tracker = prepareQueryLevelMemoryTracker(context, dag_context, internal);
 
@@ -129,8 +131,6 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
     }
     if (likely(!internal))
         logQueryPipeline(logger, res);
-
-    dag_context.switchToStreamMode();
     return std::make_unique<DataStreamExecutor>(memory_tracker, context, logger->identifier(), res);
 }
 
@@ -147,6 +147,8 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
         "It is necessary to restart the TiFlash node.");
 
     prepareForExecute(context);
+
+    dag_context.switchToPipelineMode();
 
     /// query level memory tracker
     auto memory_tracker = prepareQueryLevelMemoryTracker(context, dag_context, internal);
@@ -172,7 +174,6 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     }
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
-    dag_context.switchToPipelineMode();
     return {std::move(executor)};
 }
 } // namespace

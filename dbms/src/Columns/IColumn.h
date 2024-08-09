@@ -145,7 +145,9 @@ public:
 
     /// Appends disjunctive elements from other column with the same type.
     /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertDisjunctFrom(ConstColumnXXX, ...)
-    virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+    using Offset = UInt64;
+    using Offsets = PaddedPODArray<Offset>;
+    virtual void insertDisjunctFrom(const IColumn & src, const Offsets & position_vec) = 0;
 
     /// Appends one field multiple times. Can be optimized in inherited classes.
     virtual void insertMany(const Field & field, size_t length)
@@ -227,6 +229,27 @@ public:
       */
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
+
+    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const
+    {
+        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual void serializeToPos(
+        PaddedPODArray<UInt8 *> & /* pos */,
+        size_t /* start */,
+        size_t /* end */,
+        bool /* has_null */) const
+    {
+        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & /* pos */)
+    {
+        throw Exception(
+            "Method deserializeAndInsertFromPos is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
@@ -318,9 +341,6 @@ public:
     /** Copies each element according offsets parameter.
       * (i-th element should be copied offsets[i] - offsets[i - 1] times.)
       */
-    using Offset = UInt64;
-    using Offsets = PaddedPODArray<Offset>;
-
     virtual Ptr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const = 0;
 
     Ptr replicate(const Offsets & offsets) const { return replicateRange(0, offsets.size(), offsets); }

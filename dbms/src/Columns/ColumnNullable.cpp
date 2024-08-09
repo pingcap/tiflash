@@ -258,6 +258,24 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
     return pos;
 }
 
+void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    getNullMapColumn().countSerializeByteSize(byte_size);
+    getNestedColumn().countSerializeByteSize(byte_size);
+}
+
+void ColumnNullable::serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const
+{
+    getNullMapColumn().serializeToPos(pos, start, end, has_null);
+    getNestedColumn().serializeToPos(pos, start, end, has_null);
+}
+
+void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos)
+{
+    getNullMapColumn().deserializeAndInsertFromPos(pos);
+    getNestedColumn().deserializeAndInsertFromPos(pos);
+}
+
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
     const auto & nullable_col = static_cast<const ColumnNullable &>(src);
@@ -294,7 +312,7 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnNullable::insertDisjunctFrom(const IColumn & src, const Offsets & position_vec)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
     getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);

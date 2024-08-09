@@ -75,12 +75,19 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+
+    void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override;
+
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos) override;
+
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src, size_t n) override;
     void insertManyFrom(const IColumn & src, size_t n, size_t length) override;
-    void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) override;
+    void insertDisjunctFrom(const IColumn & src, const Offsets & position_vec) override;
 
     void insertDefault() override
     {
