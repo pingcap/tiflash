@@ -424,7 +424,6 @@ try
     }
 
     // read with snapshot
-    // auto sp = SyncPointCtl::enableInScope("after_PageDirectory::updateLocalCacheForRemotePages_persist_wal");
     FAIL_POINT_PAUSE(FailPoints::pause_before_page_dir_update_local_cache);
     auto th_read0 = std::async([&]() {
         auto snap0 = page_storage->getSnapshot("read0");
@@ -440,13 +439,10 @@ try
         ASSERT_EQ("nahida opened her eyes", String(page.data.begin(), page.data.size()));
         LOG_DEBUG(log, "th_read1 finished");
     });
-    // sp.waitAndPause();
     LOG_DEBUG(log, "concurrent read block before update");
 
     FailPointHelper::disableFailPoint(FailPoints::pause_before_page_dir_update_local_cache);
-    // sp.next();
     th_read0.get();
-    // sp.next();
     th_read1.get();
     LOG_DEBUG(log, "there must be one read thread update fail");
 

@@ -1804,7 +1804,6 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
         r.version = PageVersion(seq, 0);
     }
     wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
-    SYNC_FOR("after_PageDirectory::updateLocalCacheForRemotePages_persist_wal");
     typename PageDirectory<Trait>::PageEntries ignored_entries;
     {
         std::unique_lock table_lock(table_rw_mutex);
