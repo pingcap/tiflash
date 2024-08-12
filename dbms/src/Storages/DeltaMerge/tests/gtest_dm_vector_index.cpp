@@ -546,7 +546,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(5, true), 0, 5))
-                          .build2(
+                          .tryBuildWithVectorIndex(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
