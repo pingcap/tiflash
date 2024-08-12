@@ -15,11 +15,7 @@
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecRunLength.h>
 #include <IO/Compression/CompressionInfo.h>
-#include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
-#include <IO/Compression/ICompressionCodec.h>
-#include <common/unaligned.h>
-#include <lz4.h>
 
 #include <magic_enum.hpp>
 
@@ -44,13 +40,15 @@ UInt8 CompressionCodecRunLength::getMethodByte() const
 
 UInt32 CompressionCodecRunLength::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
-    // If the data is not compressible as run-length encoding, we will compress it as LZ4.
-    // 1 byte for data type, and the rest for LZ4 compressed data.
-    return 1 + LZ4_COMPRESSBOUND(uncompressed_size);
+    // 1 byte for data type, and the rest for run-length encoded data
+    const auto byte_size = magic_enum::enum_integer(data_type);
+    return 1 + uncompressed_size / byte_size * (byte_size + 1);
 }
 
+namespace
+{
 template <typename T>
-UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UInt32 source_size, char * dest) const
+UInt32 compressDataForInteger(const char * source, UInt32 source_size, char * dest)
 {
     constexpr auto bytes_size = sizeof(T);
     if unlikely (source_size % bytes_size != 0)
@@ -71,49 +69,27 @@ UInt32 CompressionCodecRunLength::compressDataForInteger(const char * source, UI
             ++rle_vec.back().second;
     }
 
-    if (DB::Compression::runLengthPairsByteSize<T>(rle_vec) >= source_size)
-    {
-        // treat as string
-        dest[0] = magic_enum::enum_integer(CompressionDataType::String);
-        dest += 1;
-        auto success = LZ4_compress_fast(
-            source,
-            dest,
-            source_size,
-            LZ4_COMPRESSBOUND(source_size),
-            CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-        if (unlikely(!success))
-            throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
-        return 1 + success;
-    }
-
-    dest[0] = magic_enum::enum_integer(data_type);
-    dest += 1;
-    return 1 + DB::Compression::runLengthEncoding<T>(rle_vec, dest);
+    return DB::Compression::runLengthEncoding<T>(rle_vec, dest);
 }
+} // namespace
 
 UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
+    dest[0] = magic_enum::enum_integer(data_type);
+    dest += 1;
+
     switch (data_type)
     {
     case CompressionDataType::Int8:
-        return compressDataForInteger<UInt8>(source, source_size, dest);
+        return 1 + compressDataForInteger<UInt8>(source, source_size, dest);
     case CompressionDataType::Int16:
-        return compressDataForInteger<UInt16>(source, source_size, dest);
+        return 1 + compressDataForInteger<UInt16>(source, source_size, dest);
     case CompressionDataType::Int32:
-        return compressDataForInteger<UInt32>(source, source_size, dest);
+        return 1 + compressDataForInteger<UInt32>(source, source_size, dest);
     case CompressionDataType::Int64:
-        return compressDataForInteger<UInt64>(source, source_size, dest);
+        return 1 + compressDataForInteger<UInt64>(source, source_size, dest);
     default:
-        auto success = LZ4_compress_fast(
-            source,
-            dest,
-            source_size,
-            LZ4_COMPRESSBOUND(source_size),
-            CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-        if (unlikely(!success))
-            throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
-        return 1 + success;
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Unsupported data type: {}", magic_enum::enum_name(data_type));
     }
 }
 
@@ -150,9 +126,10 @@ void CompressionCodecRunLength::doDecompressData(
         DB::Compression::runLengthDecoding<UInt64>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     default:
-        if (unlikely(LZ4_decompress_safe(&source[1], dest, source_size - 1, uncompressed_size) < 0))
-            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
-        break;
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Unsupported data type: {}",
+            magic_enum::enum_name(data_type.value()));
     }
 }
 

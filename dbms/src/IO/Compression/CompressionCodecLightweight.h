@@ -38,6 +38,8 @@ public:
 
     UInt8 getMethodByte() const override;
 
+    bool isCompression() const override { return true; }
+
     ~CompressionCodecLightweight() override;
 
 protected:

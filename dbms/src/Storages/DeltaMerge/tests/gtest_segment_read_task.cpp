@@ -206,7 +206,7 @@ public:
             /*store_address*/ "127.0.0.1",
             store->keyspace_id,
             store->physical_table_id);
-    };
+    }
 
     void initReadNodePageCacheIfUninitialized()
     {
@@ -353,7 +353,7 @@ public:
             sub_files_cn.serializeToBuffer(wb_cn);
             ASSERT_EQ(wb_wn.str(), wb_cn.str());
         }
-    };
+    }
 
 
     void basicMemTableSet()
@@ -678,6 +678,8 @@ try
         store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
+    auto fp_guard = disableFlushCache();
+
     // cf mem
     {
         auto block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
@@ -817,6 +819,7 @@ try
     auto table_column_defines = DMTestEnv::getDefaultColumns();
     store = reload(table_column_defines);
 
+    auto fp_guard = disableFlushCache();
     {
         auto block = DMTestEnv::prepareSimpleWriteBlock(
             0,
