@@ -23,6 +23,8 @@
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <TiDB/Schema/VectorIndex.h>
+
+
 namespace DB::DM
 {
 
