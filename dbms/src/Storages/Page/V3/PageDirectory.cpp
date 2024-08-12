@@ -337,7 +337,21 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        RUNTIME_CHECK_MSG(last_iter != entries.end() && last_iter->second.isEntry(), "{}", toDebugString());
+        if unlikely (last_iter != entries.end() && last_iter->second.isEntry())
+        {
+            FmtBuffer buf;
+            for (const auto & e : entries)
+            {
+                buf.fmtAppend("{}|", e);
+            }
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "this={}, entries={}, ver={}, entry={}",
+                toDebugString(),
+                buf.toString(),
+                ver,
+                entry);
+        }
         auto & ori_entry = last_iter->second.entry.value();
         RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
@@ -1797,34 +1811,47 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
 
         for (const auto & r : edit.getRecords())
         {
-            auto id_to_resolve = r.page_id;
-            auto sequence_to_resolve = seq;
-            while (true)
+            try
             {
-                auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
-                assert(iter != mvcc_table_directory.end());
-                auto & version_list = iter->second;
-                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(
-                    sequence_to_resolve,
-                    /*ignore_delete=*/id_to_resolve != r.page_id,
-                    nullptr);
-                if (resolve_state == ResolveResult::TO_NORMAL)
+                auto id_to_resolve = r.page_id;
+                auto sequence_to_resolve = seq;
+                while (true)
                 {
-                    if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                    auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
+                    assert(iter != mvcc_table_directory.end());
+                    auto & version_list = iter->second;
+                    auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(
+                        sequence_to_resolve,
+                        /*ignore_delete=*/id_to_resolve != r.page_id,
+                        nullptr);
+                    if (resolve_state == ResolveResult::TO_NORMAL)
                     {
-                        ignored_entries.push_back(r.entry);
+                        if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                        {
+                            ignored_entries.push_back(r.entry);
+                        }
+                        break;
                     }
-                    break;
+                    else if (resolve_state == ResolveResult::TO_REF)
+                    {
+                        id_to_resolve = next_id_to_resolve;
+                        sequence_to_resolve = next_ver_to_resolve.sequence;
+                    }
+                    else
+                    {
+                        RUNTIME_CHECK(false);
+                    }
                 }
-                else if (resolve_state == ResolveResult::TO_REF)
-                {
-                    id_to_resolve = next_id_to_resolve;
-                    sequence_to_resolve = next_ver_to_resolve.sequence;
-                }
-                else
-                {
-                    RUNTIME_CHECK(false);
-                }
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage(fmt::format(
+                    " type={}, page_id={}, ver={}, seq={}",
+                    magic_enum::enum_name(r.type),
+                    r.page_id,
+                    r.version,
+                    seq));
+                throw e;
             }
         }
     }
