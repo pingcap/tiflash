@@ -41,7 +41,7 @@ protected:
     }
 
 public:
-    TestStreamingWriter() {}
+    TestStreamingWriter() = default;
 
     // Return 10 Int64 column.
     static std::vector<tipb::FieldType> makeFields()
@@ -93,7 +93,7 @@ struct MockStreamWriter
     {}
 
     void write(tipb::SelectResponse & response) { checker(response); }
-    bool isWritable() const { throw Exception("Unsupport async write"); }
+    static bool isWritable() { throw Exception("Unsupport async write"); }
 
 private:
     MockStreamWriterChecker checker;
