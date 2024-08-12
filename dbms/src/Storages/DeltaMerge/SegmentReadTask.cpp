@@ -329,7 +329,7 @@ void SegmentReadTask::fetchPages()
     {
         return;
     }
-    // Stable-only segment.
+    // Don't need to fetch ColumnFileTiny and ColumnFileInMemory.
     if (extra_remote_info->remote_page_ids.empty() && !needFetchMemTableSet())
     {
         LOG_DEBUG(read_snapshot->log, "Neither ColumnFileTiny or ColumnFileInMemory need to be fetched from WN.");
@@ -516,6 +516,10 @@ void SegmentReadTask::checkMemTableSetReady() const
 bool SegmentReadTask::needFetchMemTableSet() const
 {
     // Check if any object of ColumnFileInMemory does not contain data.
+    // In v7.5, data of ColumnFileInMemory will be returned by EstablishDisaggTask,
+    // so cf_in_mem->getCache() will NOT be null after deserializeSegment.
+    // Since 8.1, data of ColumnFileInMemory need to fetch by calling `FetchDisaggPages`,
+    // cf_in_mem->getCache() will be null after deserializeSegment.
     for (const auto & cf : read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles())
     {
         if (auto * cf_in_mem = cf->tryToInMemoryFile(); cf_in_mem)
