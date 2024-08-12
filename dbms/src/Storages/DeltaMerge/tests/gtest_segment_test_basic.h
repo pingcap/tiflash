@@ -143,6 +143,10 @@ protected:
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
+    virtual Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted);
+
+    virtual void prepareColumns(const ColumnDefinesPtr &) {}
+
     /**
      * Reload a new DMContext according to latest storage status.
      * For example, if you have changed the settings, you should grab a new DMContext.

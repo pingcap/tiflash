@@ -146,3 +146,6 @@
 [submodule "contrib/not_null"]
 	path = contrib/not_null
 	url = https://github.com/bitwizeshift/not_null.git
+[submodule "contrib/usearch"]
+	path = contrib/usearch
+	url = https://github.com/unum-cloud/usearch.git

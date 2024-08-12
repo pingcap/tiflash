@@ -176,16 +176,16 @@ public:
 
     std::pair<UInt32, StringRef> getElementRef(size_t element_idx) const;
 
-private:
-    ColumnPtr data;
-    ColumnPtr offsets;
-
-    size_t ALWAYS_INLINE offsetAt(size_t i) const { return i == 0 ? 0 : getOffsets()[i - 1]; }
     size_t ALWAYS_INLINE sizeAt(size_t i) const
     {
         return i == 0 ? getOffsets()[0] : (getOffsets()[i] - getOffsets()[i - 1]);
     }
 
+private:
+    ColumnPtr data;
+    ColumnPtr offsets;
+
+    size_t ALWAYS_INLINE offsetAt(size_t i) const { return i == 0 ? 0 : getOffsets()[i - 1]; }
 
     /// Multiply values if the nested column is ColumnVector<T>.
     template <typename T>

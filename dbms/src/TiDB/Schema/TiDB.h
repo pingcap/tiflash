@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <tipb/schema.pb.h>
 
 #include <optional>
@@ -203,6 +204,9 @@ struct ColumnInfo
     std::vector<std::pair<std::string, Int16>> elems;
     SchemaState state = StateNone;
     String comment;
+
+    // TODO(vector-index): This index will be moved to the table level later
+    VectorIndexInfoPtr vector_index = nullptr;
 
 #ifdef M
 #error "Please undefine macro M first."

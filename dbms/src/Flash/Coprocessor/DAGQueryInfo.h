@@ -17,6 +17,7 @@
 #include <Interpreters/TimezoneInfo.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <google/protobuf/repeated_ptr_field.h>
+#include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
 
@@ -28,6 +29,7 @@ struct DAGQueryInfo
 {
     DAGQueryInfo(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters_,
+        const tipb::ANNQueryInfo & ann_query_info_,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_,
         const ColumnInfos & source_columns_,
         const std::vector<int> & runtime_filter_ids_,
@@ -35,6 +37,7 @@ struct DAGQueryInfo
         const TimezoneInfo & timezone_info_)
         : source_columns(source_columns_)
         , filters(filters_)
+        , ann_query_info(ann_query_info_)
         , pushed_down_filters(pushed_down_filters_)
         , runtime_filter_ids(runtime_filter_ids_)
         , rf_max_wait_time_ms(rf_max_wait_time_ms_)
@@ -44,6 +47,8 @@ struct DAGQueryInfo
     const ColumnInfos & source_columns;
     // filters in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters;
+    // filters for approximate nearest neighbor (ann) vector search
+    const tipb::ANNQueryInfo & ann_query_info;
     // filters have been push down to storage engine in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters;
 
