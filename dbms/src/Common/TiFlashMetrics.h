@@ -867,7 +867,24 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_read_thread_internal_us,                                                                                              \
       "Durations of read thread internal components",                                                                               \
       Histogram,                                                                                                                    \
-      F(type_block_queue_pop_latency, {{"type", "block_queue_pop_latency"}}, ExpBuckets{1, 2, 20}))
+      F(type_block_queue_pop_latency, {{"type", "block_queue_pop_latency"}}, ExpBuckets{1, 2, 20}))                                 \
+    M(tiflash_storage_pack_compression_algorithm_count,                                                                             \
+      "The count of the compression algorithm used by each data part",                                                              \
+      Counter,                                                                                                                      \
+      F(type_constant, {"type", "constant"}),                                                                                       \
+      F(type_constant_delta, {"type", "constant_delta"}),                                                                           \
+      F(type_runlength, {"type", "runlength"}),                                                                                     \
+      F(type_for, {"type", "for"}),                                                                                                 \
+      F(type_delta_for, {"type", "delta_for"}),                                                                                     \
+      F(type_lz4, {"type", "lz4"}),                                                                                                 \
+      F(type_delta_lz4, {"type", "delta_lz4"}))                                                                                     \
+    M(tiflash_storage_pack_compression_bytes,                                                                                       \
+      "The uncompression/compression bytes of lz4 and lightweight",                                                                 \
+      Counter,                                                                                                                      \
+      F(type_lz4_compressed_bytes, {"type", "lz4_compressed_bytes"}),                                                               \
+      F(type_lz4_uncompressed_bytes, {"type", "lz4_uncompressed_bytes"}),                                                           \
+      F(type_lightweight_compressed_bytes, {"type", "lightweight_compressed_bytes"}),                                               \
+      F(type_lightweight_uncompressed_bytes, {"type", "lightweight_uncompressed_bytes"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

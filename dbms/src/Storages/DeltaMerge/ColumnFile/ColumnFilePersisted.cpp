@@ -101,15 +101,26 @@ void serializeColumn(
     CompressionMethod compression_method,
     Int64 compression_level)
 {
-    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
+    std::unique_ptr<CompressedWriteBuffer<>> compressed;
+    if (compression_method == CompressionMethod::Lightweight)
+    {
+        // Do not use lightweight compression in ColumnFile whose write performance is the bottleneck.
+        compressed = std::make_unique<CompressedWriteBuffer<>>(buf, CompressionSettings(CompressionMethod::LZ4));
+    }
+    else
+    {
+        compressed = std::make_unique<CompressedWriteBuffer<>>(
+            buf,
+            CompressionSettings(compression_method, compression_level));
+    }
     type->serializeBinaryBulkWithMultipleStreams(
         column,
-        [&](const IDataType::SubstreamPath &) { return &compressed; },
+        [&](const IDataType::SubstreamPath &) { return compressed.get(); },
         offset,
         limit,
         true,
         {});
-    compressed.next();
+    compressed->next();
 }
 
 void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows)
