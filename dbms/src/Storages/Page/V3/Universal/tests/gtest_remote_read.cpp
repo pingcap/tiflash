@@ -279,6 +279,90 @@ try
 }
 CATCH
 
+TEST_P(UniPageStorageRemoteReadTest, WriteReadGCWithRestart)
+try
+{
+    const String test_page_id = "aaabbb";
+    /// Prepare data on remote store
+    auto writer = PS::V3::CPFilesWriter::create({
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
+        .data_source = PS::V3::CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
+    });
+
+    writer->writePrefix({
+        .writer = {},
+        .sequence = 5,
+        .last_sequence = 3,
+    });
+    {
+        auto edits = PS::V3::universal::PageEntriesEdit{};
+        edits.appendRecord(
+            {.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = test_page_id, .entry = {.size = 22, .offset = 10}});
+        writer->writeEditsAndApplyCheckpointInfo(edits);
+    }
+    auto data_paths = writer->writeSuffix();
+    writer.reset();
+    for (const auto & data_path : data_paths)
+    {
+        uploadFile(data_path);
+    }
+    uploadFile(manifest_file_path);
+
+    /// Put remote page into local
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_reader = PS::V3::CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
+    manifest_reader->readPrefix();
+    PS::V3::CheckpointProto::StringsInternMap im;
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        auto r = edits_r->getRecords();
+        ASSERT_EQ(1, r.size());
+
+        UniversalWriteBatch wb;
+        wb.disableRemoteLock();
+        wb.putRemotePage(
+            r[0].page_id,
+            0,
+            r[0].entry.size,
+            r[0].entry.checkpoint_info.data_location,
+            std::move(r[0].entry.field_offsets));
+        page_storage->write(std::move(wb));
+    }
+
+    // generate snapshot for reading
+    auto snap0 = page_storage->getSnapshot("read");
+
+    // Delete the page before reading from snapshot
+    {
+        UniversalWriteBatch wb;
+        wb.disableRemoteLock();
+        wb.delPage(test_page_id);
+        page_storage->write(std::move(wb));
+    }
+
+    // read with snapshot
+    {
+        auto page = page_storage->read(test_page_id, nullptr, snap0);
+        ASSERT_TRUE(page.isValid());
+        ASSERT_EQ("nahida opened her eyes", String(page.data.begin(), page.data.size()));
+    }
+
+    // Mock restart
+    reload();
+
+    {
+        // ensure the page is deleted as expected
+        auto page = page_storage->read(test_page_id, nullptr, nullptr, false);
+        ASSERT_FALSE(page.isValid());
+    }
+}
+CATCH
+
 TEST_P(UniPageStorageRemoteReadTest, WriteReadWithRef)
 try
 {
@@ -613,6 +697,7 @@ CATCH
 INSTANTIATE_TEST_CASE_P(
     UniPageStorageRemote,
     UniPageStorageRemoteReadTest,
+    // <is_encrypted, is_keyspace_encrypted>
     testing::Values(std::make_pair(false, false), std::make_pair(true, false), std::make_pair(true, true)));
 
 } // namespace DB::PS::universal::tests

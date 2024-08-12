@@ -347,10 +347,14 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
 
         auto & ori_entry = last_iter->second.entry.value();
         RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
+
+        // maybe another thread has in-place update the local blob location, ignored
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
         }
+
+        // update the entry in-place
         ori_entry.file_id = entry.file_id;
         ori_entry.size = entry.size;
         ori_entry.offset = entry.offset;
@@ -1821,6 +1825,11 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
                     {
                         if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
                         {
+                            // The entry is not valid for updating the version_list.
+                            // Caller shuold notice these part of "ignored_entries" and release
+                            // the space allocated for these invalid entries.
+                            // For the information persisted in WAL, it should be ignored when
+                            // restoring from disk.
                             ignored_entries.push_back(r.entry);
                         }
                         break;
