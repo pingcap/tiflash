@@ -60,7 +60,7 @@ int CompressionSetting::getDefaultLevel(CompressionMethod method)
 template <typename T>
 CompressionSetting CompressionSetting::create(T method, int level, const IDataType & type)
 {
-    // Nullable type will be treated as String.
+    // Nullable type will be treated as Unknown
     CompressionSetting setting(method);
     if (type.isValueRepresentedByInteger())
     {
@@ -74,6 +74,9 @@ CompressionSetting CompressionSetting::create(T method, int level, const IDataTy
         setting.data_type = CompressionDataType::Float32;
     else if (type.isFloatingPoint() && type.getSizeOfValueInMemory() == 8)
         setting.data_type = CompressionDataType::Float64;
+    // TODO: support String
+    // else if (type.isStringOrFixedString())
+    //     setting.data_type = CompressionDataType::String;
     else
         setting.data_type = CompressionDataType::Unknown;
     setting.level = level;

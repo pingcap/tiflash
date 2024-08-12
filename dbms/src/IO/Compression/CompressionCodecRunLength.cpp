@@ -54,6 +54,9 @@ UInt32 compressDataForInteger(const char * source, UInt32 source_size, char * de
     if unlikely (source_size % bytes_size != 0)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
 
+    const auto * typed_source = reinterpret_cast<const T *>(source);
+    const auto source_count = source_size / bytes_size;
+
     return DB::Compression::runLengthEncoding<T>(typed_source, source_count, dest);
 }
 } // namespace
