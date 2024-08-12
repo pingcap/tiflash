@@ -51,7 +51,7 @@ public:
     size_t memoryUsage() const override { return index->memory_usage(); }
 
     std::vector<Key> search( //
-        const ANNQueryInfoPtr & queryInfo,
+        const ANNQueryInfoPtr & query_info,
         const RowFilter & valid_rows,
         SearchStatistics & statistics) const override;
 

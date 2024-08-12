@@ -64,8 +64,9 @@ public:
 
     virtual size_t memoryUsage() const = 0;
 
+    // Invalid rows in `valid_rows` will be discared when applying the search
     virtual std::vector<Key> search( //
-        const ANNQueryInfoPtr & queryInfo,
+        const ANNQueryInfoPtr & query_info,
         const RowFilter & valid_rows,
         SearchStatistics & statistics) const
         = 0;

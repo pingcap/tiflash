@@ -131,7 +131,12 @@ void VectorIndexHNSW<Metric>::addBlock(const IColumn & column, const ColumnVecto
         RUNTIME_CHECK(data.size == dimensions * sizeof(Float32));
 
         if (auto rc = index->add(row_offset, reinterpret_cast<const Float32 *>(data.data)); !rc)
-            throw Exception(ErrorCodes::INCORRECT_DATA, rc.error.release());
+            throw Exception(
+                ErrorCodes::INCORRECT_DATA,
+                "Failed to add vector to HNSW index, i={} row_offset={} error={}",
+                i,
+                row_offset,
+                rc.error.release());
     }
 }
 
@@ -165,12 +170,12 @@ VectorIndexPtr VectorIndexHNSW<Metric>::deserializeBinary(ReadBuffer & istr)
 
 template <unum::usearch::metric_kind_t Metric>
 std::vector<VectorIndex::Key> VectorIndexHNSW<Metric>::search(
-    const ANNQueryInfoPtr & queryInfo,
+    const ANNQueryInfoPtr & query_info,
     const RowFilter & valid_rows,
     SearchStatistics & statistics) const
 {
-    RUNTIME_CHECK(queryInfo->ref_vec_f32().size() >= sizeof(UInt32));
-    auto query_vec_size = readLittleEndian<UInt32>(queryInfo->ref_vec_f32().data());
+    RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32));
+    auto query_vec_size = readLittleEndian<UInt32>(query_info->ref_vec_f32().data());
     if (query_vec_size != dimensions)
         throw Exception(
             ErrorCodes::INCORRECT_QUERY,
@@ -178,17 +183,18 @@ std::vector<VectorIndex::Key> VectorIndexHNSW<Metric>::search(
             query_vec_size,
             dimensions);
 
-    RUNTIME_CHECK(queryInfo->ref_vec_f32().size() >= sizeof(UInt32) + query_vec_size * sizeof(Float32));
+    RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32) + query_vec_size * sizeof(Float32));
 
-    if (queryInfo->distance_metric() != toTiDBQueryDistanceMetric(Metric))
+    if (query_info->distance_metric() != toTiDBQueryDistanceMetric(Metric))
         throw Exception(
             ErrorCodes::INCORRECT_QUERY,
             "Query distance metric {} does not match index distance metric {}",
-            tipb::ANNQueryDistanceMetric_Name(queryInfo->distance_metric()),
+            tipb::ANNQueryDistanceMetric_Name(query_info->distance_metric()),
             tipb::ANNQueryDistanceMetric_Name(toTiDBQueryDistanceMetric(Metric)));
 
     RUNTIME_CHECK(index != nullptr);
 
+    // The non-valid rows should be discarded by this lambda
     auto predicate
         = [&valid_rows, &statistics](typename USearchIndexWithSerialization<Metric>::member_cref_t const & member) {
               statistics.visited_nodes++;
@@ -197,10 +203,10 @@ std::vector<VectorIndex::Key> VectorIndexHNSW<Metric>::search(
               return valid_rows[member.key];
           };
 
-    // TODO: Support efSearch.
+    // TODO(vector-index): Support efSearch.
     auto result = index->search( //
-        reinterpret_cast<const Float32 *>(queryInfo->ref_vec_f32().data() + sizeof(UInt32)),
-        queryInfo->top_k(),
+        reinterpret_cast<const Float32 *>(query_info->ref_vec_f32().data() + sizeof(UInt32)),
+        query_info->top_k(),
         predicate);
     std::vector<Key> keys(result.size());
     result.dump_to(keys.data());

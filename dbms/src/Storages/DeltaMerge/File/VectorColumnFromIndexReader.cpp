@@ -58,6 +58,7 @@ MutableColumnPtr VectorColumnFromIndexReader::calcResultsByPack(
             results_it++;
         }
 
+        // insert <pack_id, [offset0, offset1, ...]>
         column->insertData(
             reinterpret_cast<const char *>(offsets_in_pack.data()),
             offsets_in_pack.size() * sizeof(UInt32));
