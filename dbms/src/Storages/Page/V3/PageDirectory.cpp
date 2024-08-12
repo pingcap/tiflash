@@ -337,7 +337,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        if unlikely (last_iter != entries.end() && last_iter->second.isEntry())
+        if unlikely (last_iter == entries.end() || !last_iter->second.isEntry())
         {
             FmtBuffer buf;
             for (const auto & e : entries)
