@@ -220,7 +220,6 @@ private:
 struct EntryOrDelete
 {
     MultiVersionRefCount being_ref_count;
-    std::optional<PageEntryV3> entry;
 
     EntryOrDelete(const EntryOrDelete & other)
         : being_ref_count(other.being_ref_count)
@@ -230,6 +229,9 @@ struct EntryOrDelete
         if (entry)
             PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_add(sizeof(PageEntryV3));
     }
+    EntryOrDelete(EntryOrDelete && other) = default;
+    EntryOrDelete & operator=(EntryOrDelete && other) = delete;
+    const EntryOrDelete & operator=(const EntryOrDelete & other) = delete;
     EntryOrDelete() { PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1); }
     EntryOrDelete(std::optional<PageEntryV3> entry_)
         : entry(std::move(entry_))
@@ -269,6 +271,19 @@ struct EntryOrDelete
 
     bool isDelete() const { return !entry.has_value(); }
     bool isEntry() const { return entry.has_value(); }
+
+    template <typename F>
+    void accessInner(F f) {
+        f(entry);
+    }
+    template <typename F>
+    void accessEntry(F f) {
+        f(entry.value());
+    }
+    const std::optional<PageEntryV3> getInner() const { return entry; }
+    const PageEntryV3 getEntry() const { return entry.value(); }
+private:
+    std::optional<PageEntryV3> entry;
 };
 
 using PageLock = std::lock_guard<std::mutex>;
@@ -705,7 +720,7 @@ struct fmt::formatter<DB::PS::V3::EntryOrDelete>
             ctx.out(),
             "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
             entry.isDelete(),
-            entry.entry,
+            entry.getEntry(),
             entry.being_ref_count.getLatestRefCount());
     }
 };
