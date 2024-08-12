@@ -77,12 +77,12 @@ template CompressionCodecPtr CompressionCodecFactory::getStaticCodec<Compression
 template CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecRunLength>(
     const CompressionSetting & setting);
 
-std::shared_mutex lz4_mutex;
 
 template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>(const CompressionSetting & setting)
 {
     static constexpr auto MAX_LZ4_MAP_SIZE = 10;
+    static std::shared_mutex lz4_mutex;
     static std::unordered_map<int, CompressionCodecPtr> lz4_map(MAX_LZ4_MAP_SIZE);
     {
         std::shared_lock lock(lz4_mutex);
@@ -93,16 +93,15 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>
     std::unique_lock lock(lz4_mutex);
     if (lz4_map.size() >= MAX_LZ4_MAP_SIZE)
         lz4_map.clear();
-    lz4_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4>(setting.level));
-    return lz4_map[setting.level];
+    auto [it, inserted] = lz4_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4>(setting.level));
+    return it->second;
 }
-
-std::shared_mutex lz4hc_mutex;
 
 template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4HC>(const CompressionSetting & setting)
 {
     static constexpr auto MAX_LZ4HC_MAP_SIZE = 10;
+    static std::shared_mutex lz4hc_mutex;
     static std::unordered_map<int, CompressionCodecPtr> lz4hc_map;
     {
         std::shared_lock lock(lz4hc_mutex);
@@ -113,8 +112,8 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4H
     std::unique_lock lock(lz4hc_mutex);
     if (lz4hc_map.size() >= MAX_LZ4HC_MAP_SIZE)
         lz4hc_map.clear();
-    lz4hc_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4HC>(setting.level));
-    return lz4hc_map[setting.level];
+    auto [it, inserted] = lz4hc_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4HC>(setting.level));
+    return it->second;
 }
 
 template <>
