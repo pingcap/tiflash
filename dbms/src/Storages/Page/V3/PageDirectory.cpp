@@ -67,6 +67,7 @@ namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
 extern const char pause_before_full_gc_prepare[];
+extern const char pause_before_page_dir_update_local_cache[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -1795,6 +1796,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
     const DB::PageStorageSnapshotPtr & snap_,
     const WriteLimiterPtr & write_limiter)
 {
+    FAIL_POINT_PAUSE(FailPoints::pause_before_page_dir_update_local_cache);
     std::unique_lock apply_lock(apply_mutex);
     auto seq = toConcreteSnapshot(snap_)->sequence;
     for (auto & r : edit.getMutRecords())
@@ -1802,6 +1804,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
         r.version = PageVersion(seq, 0);
     }
     wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
+    SYNC_FOR("after_PageDirectory::updateLocalCacheForRemotePages_persist_wal");
     typename PageDirectory<Trait>::PageEntries ignored_entries;
     {
         std::unique_lock table_lock(table_rw_mutex);
