@@ -11,20 +11,20 @@
 * [Unresolved Questions](#unresolved-questions)
 
 ## Introduction
-The HashAgg pushed down to TiFlash can be a one-stage, two-stage, or three-stage. For two-stage and three-stage aggregations, the 1st hashagg is used for pre-aggregation to reduce the amount of data that needs to be shuffled.
+The HashAgg pushed down to TiFlash can be a plan of one-stage, two-stage or three-stage. For two-stage and three-stage, the 1st stage aggregation is used for pre-aggregation to reduce the amount of data that needs to be shuffled.
 
-However, the optimizer cannot always choose the most suitable plan based on statistics. For example, it is common to encounter cases where two-stage HashAgg is used for datasets with high NDV, resulting in poor pre-aggregation effects in the 1st hashagg.
+However, the optimizer cannot always choose the most suitable plan based on statistics. For example, it is common to encounter cases where two-stage HashAgg is used for datasets with high NDV, resulting in poor pre-aggregation effects in the 1st stage aggregation.
 
-Therefore, `AutoPassThroughHashAgg` is proposed as an adaptive HashAgg that dynamically determines at runtime whether the 1st hashagg needs to perform pre-aggregation or not.
+Therefore, `AutoPassThroughHashAgg` is proposed as an adaptive method that dynamically determines at runtime whether the 1st stage aggregation needs to perform pre-aggregation or not.
 
 ## Detailed Design
 ### Core State Switch
-The 1st hashagg will follow the state transition diagram below, with each state having the following meanings:
+The 1st stage aggregation will follow the state transition diagram below, with each state having the following meanings:
 1. `Init`: The initial state, where it remains as long as the HashMap is smaller than a specific value(to make sure the HashMap can fit in the L2 cache). In this state, the incoming Block is inserted into the HashMap for pre-aggregation.
-2. `Adjust`: In this state, the Block is inserted into the HashMap while probing and recording the degree of aggregation for the Block. It will switch to `PreAgg` or `PassThrough`.
+2. `Adjust`: In this state, the Block is inserted into the HashMap while probing and recording the degree of aggregation for the Block. It will switch to `Selective`, `PreAgg` or `PassThrough` by checking the degree of aggregation.
 3. `PreAgg`: In this state, the Block is inserted into the HashMap. This state lasts for N rows(see code for N) before switching back to the `Adjust` state.
 4. `PassThrough`: In this state, the Block is directly put into the memory buffer. This state lasts for M rows(see code for M) before switching back to the `Adjust` state.
-5. `Selective`: For rows which can hit the HashMap, the aggregation function is calculated directly. For rows can't hit, they are put into the pass through buffer. So in this state, the HashMap does not grow.
+5. `Selective`: For rows which can hit the HashMap, the aggregation function is calculated directly. For rows can't hit, they are put into the pass through buffer. So in this state, the HashMap does not grow. Also this state lasts for M rows(same M as `PassThrough` state) before switching back to the `Adjust` state.
 
 ![auto_pass_through_state](./images/auto_pass_through_state.png)
 
