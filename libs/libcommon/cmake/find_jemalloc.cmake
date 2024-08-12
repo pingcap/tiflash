@@ -12,15 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    set(ENABLE_JEMALLOC_DEFAULT 1)
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-    set(ENABLE_JEMALLOC_DEFAULT 0)
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    set(ENABLE_JEMALLOC_DEFAULT 0)
-endif()
-
-option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ${ENABLE_JEMALLOC_DEFAULT})
+option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ON)
 # 1. The deadlock mentioned in https://github.com/pingcap/tics/issues/3236 is not related to ENABLE_JEMALLOC_PROF.
 # 2. It is also expected to be eliminated even if the heap profiling is activated, with a newer version of pprof-rs.
 # TODO: Enable continuous heap profiling after we make sure statement 2.
