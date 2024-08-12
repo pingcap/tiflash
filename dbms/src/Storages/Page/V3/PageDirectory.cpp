@@ -86,7 +86,7 @@ namespace PS::V3
 template <typename Trait>
 PageLock VersionedPageEntries<Trait>::acquireLock() const NO_THREAD_SAFETY_ANALYSIS
 {
-    return std::lock_guard(m);
+    return std::lock_guard{m};
 }
 
 template <typename Trait>
