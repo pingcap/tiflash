@@ -64,10 +64,11 @@ UInt32 compressData(const char * source, UInt32 source_size, char * dest)
     using TS = typename std::make_signed<T>::type;
     // view source as signed integers so that delta will be smaller
     DB::Compression::deltaEncoding<TS>(reinterpret_cast<const TS *>(source), count, reinterpret_cast<TS *>(dest));
-    auto for_size = DB::CompressionCodecFOR::compressData<T>(
-        reinterpret_cast<T *>(dest + bytes_size),
-        source_size - bytes_size,
-        dest + bytes_size);
+    // do ZigZag encoding on deltas to make deltas as positive integers
+    auto * deltas = reinterpret_cast<T *>(dest + bytes_size);
+    DB::Compression::zigZagEncoding<T>(deltas, count - 1, deltas);
+    // compress deltas using FOR
+    auto for_size = DB::CompressionCodecFOR::compressData<T>(deltas, source_size - bytes_size, dest + bytes_size);
     return bytes_size + for_size;
 }
 

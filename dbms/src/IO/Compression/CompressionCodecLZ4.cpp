@@ -25,8 +25,6 @@ namespace ErrorCodes
 {
 extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
-extern const int ILLEGAL_SYNTAX_FOR_CODEC_TYPE;
-extern const int ILLEGAL_CODEC_PARAMETER;
 } // namespace ErrorCodes
 
 CompressionCodecLZ4::CompressionCodecLZ4(int level_)

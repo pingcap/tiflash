@@ -61,7 +61,6 @@ private:
         FOR = 4, // Frame of Reference encoding
         DeltaFOR = 5, // delta encoding and then FOR encoding
         LZ4 = 6, // the above modes are not suitable, use LZ4 instead
-        DeltaLZ4 = 7, // delta encoding and then LZ4
     };
 
     // Constant or ConstantDelta
@@ -79,21 +78,14 @@ private:
     template <std::integral T>
     struct DeltaFORState
     {
-        using TS = typename std::make_signed_t<T>;
         std::vector<T> deltas;
-        TS min_delta_value;
+        T min_delta_value;
         UInt8 bit_width;
-    };
-
-    template <std::integral T>
-    struct DeltaLZ4State
-    {
-        std::vector<T> deltas;
     };
 
     // State is a union of different states for different modes
     template <std::integral T>
-    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>, DeltaLZ4State<T>>;
+    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
 
     class IntegerCompressContext
     {
@@ -130,7 +122,6 @@ private:
         bool used_constant_delta = false;
         bool used_delta_for = false;
         bool used_rle = false;
-        bool used_delta_lz4 = false;
     };
 
     template <std::integral T>

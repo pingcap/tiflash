@@ -51,3 +51,4 @@ ignore_databases = "system,default"
 [profiles]
 [profiles.default]
 dt_compression_method = "Lightweight"
+dt_compression_level = 3

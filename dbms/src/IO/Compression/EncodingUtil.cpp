@@ -381,6 +381,8 @@ void deltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest,
         source_size - TYPE_BYTE_SIZE,
         tmp_buffer + TYPE_BYTE_SIZE,
         required_size - TYPE_BYTE_SIZE);
+    auto * deltas = reinterpret_cast<UInt32 *>(tmp_buffer + TYPE_BYTE_SIZE);
+    zigZagDecoding<UInt32>(deltas, deltas_count, deltas);
     deltaDecoding<Int32>(tmp_buffer, dest_size, dest);
 }
 
@@ -409,6 +411,8 @@ void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
         source_size - TYPE_BYTE_SIZE,
         tmp_buffer + TYPE_BYTE_SIZE,
         required_size - TYPE_BYTE_SIZE);
+    auto * deltas = reinterpret_cast<UInt64 *>(tmp_buffer + TYPE_BYTE_SIZE);
+    zigZagDecoding<UInt64>(deltas, deltas_count, deltas);
     deltaDecoding<Int64>(tmp_buffer, dest_size, dest);
 }
 
@@ -510,5 +514,35 @@ template void runLengthDecoding<UInt8>(const char *, UInt32, char *, UInt32);
 template void runLengthDecoding<UInt16>(const char *, UInt32, char *, UInt32);
 template void runLengthDecoding<UInt32>(const char *, UInt32, char *, UInt32);
 template void runLengthDecoding<UInt64>(const char *, UInt32, char *, UInt32);
+
+/// ZigZag encoding
+
+template <std::integral T>
+void zigZagEncoding(const T * source, UInt32 count, T * dest)
+{
+    using TS = typename std::make_signed<T>::type;
+    for (UInt32 i = 0; i < count; ++i)
+    {
+        TS value = source[i];
+        dest[i] = (value << 1) ^ (value >> (sizeof(T) * 8 - 1));
+    }
+}
+
+template void zigZagEncoding<UInt8>(const UInt8 *, UInt32, UInt8 *);
+template void zigZagEncoding<UInt16>(const UInt16 *, UInt32, UInt16 *);
+template void zigZagEncoding<UInt32>(const UInt32 *, UInt32, UInt32 *);
+template void zigZagEncoding<UInt64>(const UInt64 *, UInt32, UInt64 *);
+
+template <std::integral T>
+void zigZagDecoding(const T * source, UInt32 count, T * dest)
+{
+    for (UInt32 i = 0; i < count; ++i)
+        dest[i] = (source[i] >> 1) ^ (-(source[i] & 1));
+}
+
+template void zigZagDecoding<UInt8>(const UInt8 *, UInt32, UInt8 *);
+template void zigZagDecoding<UInt16>(const UInt16 *, UInt32, UInt16 *);
+template void zigZagDecoding<UInt32>(const UInt32 *, UInt32, UInt32 *);
+template void zigZagDecoding<UInt64>(const UInt64 *, UInt32, UInt64 *);
 
 } // namespace DB::Compression

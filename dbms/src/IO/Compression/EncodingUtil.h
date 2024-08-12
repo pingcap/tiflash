@@ -147,6 +147,14 @@ void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_
     applyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
 }
 
+/// ZigZag encoding
+
+template <std::integral T>
+void zigZagEncoding(const T * source, UInt32 count, T * dest);
+
+template <std::integral T>
+void zigZagDecoding(const T * source, UInt32 count, T * dest);
+
 /// Delta encoding
 
 template <std::integral T>
@@ -183,8 +191,12 @@ void ordinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest,
     memcpy(dest, src, sizeof(T));
     if (unlikely(source_size == sizeof(T)))
         return;
-    // decode deltas
+    // FOR decode deltas
     FORDecoding<T>(src + sizeof(T), source_size - sizeof(T), dest + sizeof(T), dest_size - sizeof(T));
+    // ZigZag decode deltas
+    auto * deltas = reinterpret_cast<T *>(dest + sizeof(T));
+    zigZagDecoding<T>(deltas, (dest_size - sizeof(T)) / sizeof(T), deltas);
+    // delta decode
     using TS = typename std::make_signed<T>::type;
     ordinaryDeltaDecoding<TS>(dest, dest_size, dest);
 }

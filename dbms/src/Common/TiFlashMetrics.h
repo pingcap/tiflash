@@ -876,8 +876,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_runlength, {"type", "runlength"}),                                                                                     \
       F(type_for, {"type", "for"}),                                                                                                 \
       F(type_delta_for, {"type", "delta_for"}),                                                                                     \
-      F(type_lz4, {"type", "lz4"}),                                                                                                 \
-      F(type_delta_lz4, {"type", "delta_lz4"}))                                                                                     \
+      F(type_lz4, {"type", "lz4"}))                                                                                                 \
     M(tiflash_storage_pack_compression_bytes,                                                                                       \
       "The uncompression/compression bytes of lz4 and lightweight",                                                                 \
       Counter,                                                                                                                      \
