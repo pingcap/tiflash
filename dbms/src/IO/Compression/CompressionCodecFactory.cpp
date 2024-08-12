@@ -22,6 +22,9 @@
 #include <IO/Compression/CompressionCodecRunLength.h>
 #include <IO/Compression/CompressionCodecZSTD.h>
 
+#include <magic_enum.hpp>
+#include <shared_mutex>
+
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
 #endif
@@ -56,7 +59,14 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec(const CompressionSet
         return codec;
     }
     default:
+#ifndef NDEBUG
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Invalid static codec data type {}",
+            magic_enum::enum_integer(setting.data_type));
+#else
         __builtin_unreachable();
+#endif
     }
 }
 
@@ -71,28 +81,38 @@ template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>(const CompressionSetting & setting)
 {
     static constexpr auto MAX_LZ4_MAP_SIZE = 10;
+    static std::shared_mutex lz4_mutex;
     static std::unordered_map<int, CompressionCodecPtr> lz4_map(MAX_LZ4_MAP_SIZE);
-    auto it = lz4_map.find(setting.level);
-    if (it != lz4_map.end())
-        return it->second;
+    {
+        std::shared_lock lock(lz4_mutex);
+        auto it = lz4_map.find(setting.level);
+        if (it != lz4_map.end())
+            return it->second;
+    }
+    std::unique_lock lock(lz4_mutex);
     if (lz4_map.size() >= MAX_LZ4_MAP_SIZE)
         lz4_map.clear();
-    lz4_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4>(setting.level));
-    return lz4_map[setting.level];
+    auto [it, inserted] = lz4_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4>(setting.level));
+    return it->second;
 }
 
 template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4HC>(const CompressionSetting & setting)
 {
     static constexpr auto MAX_LZ4HC_MAP_SIZE = 10;
+    static std::shared_mutex lz4hc_mutex;
     static std::unordered_map<int, CompressionCodecPtr> lz4hc_map;
-    auto it = lz4hc_map.find(setting.level);
-    if (it != lz4hc_map.end())
-        return it->second;
+    {
+        std::shared_lock lock(lz4hc_mutex);
+        auto it = lz4hc_map.find(setting.level);
+        if (it != lz4hc_map.end())
+            return it->second;
+    }
+    std::unique_lock lock(lz4hc_mutex);
     if (lz4hc_map.size() >= MAX_LZ4HC_MAP_SIZE)
         lz4hc_map.clear();
-    lz4hc_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4HC>(setting.level));
-    return lz4hc_map[setting.level];
+    auto [it, inserted] = lz4hc_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4HC>(setting.level));
+    return it->second;
 }
 
 template <>
@@ -131,8 +151,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecDefl
 }
 #endif
 
-
-template <bool IS_DECOMPRESS>
+template <bool IS_COMPRESS>
 CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & setting)
 {
     // LZ4 and LZ4HC have the same format, the difference is only in compression.
@@ -151,14 +170,19 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         return getStaticCodec<CompressionCodecDeflateQpl>(setting);
 #endif
 
-    if constexpr (!IS_DECOMPRESS)
+    if constexpr (IS_COMPRESS)
     {
         // If method_byte is Lightweight, use LZ4 codec for non-integral types
-        // If method_byte is DeltaFOR/RunLength/FOR, since we do not support use these methods independently, so there must be another codec, use it directly.
-        if (!isInteger(setting.data_type) && setting.method_byte == CompressionMethodByte::Lightweight)
-            return getStaticCodec<CompressionCodecLZ4>(setting);
-        else if (!isInteger(setting.data_type))
-            return nullptr;
+        // If method_byte is DeltaFOR/RunLength/FOR, since we do not support use these methods independently,
+        // there must be another codec to compress data. Use that compress codec directly.
+        if (!isInteger(setting.data_type))
+        {
+            if (setting.method_byte == CompressionMethodByte::Lightweight)
+                return getStaticCodec<CompressionCodecLZ4>(setting);
+            else
+                return nullptr;
+        }
+        // else fallthrough
     }
 
     switch (setting.method_byte)
@@ -196,7 +220,7 @@ CompressionCodecPtr CompressionCodecFactory::createForDecompress(UInt8 method_by
 {
     CompressionSetting setting(static_cast<CompressionMethodByte>(method_byte));
     setting.data_type = CompressionDataType::Int8;
-    return create</*IS_DECOMPRESS*/ true>(setting);
+    return create</*IS_COMPRESS*/ false>(setting);
 }
 
 Codecs CompressionCodecFactory::createCodecs(const CompressionSettings & settings)
@@ -208,6 +232,7 @@ Codecs CompressionCodecFactory::createCodecs(const CompressionSettings & setting
         if (auto codec = create(setting); codec)
             codecs.push_back(std::move(codec));
     }
+    assert(!codecs.empty());
     return codecs;
 }
 

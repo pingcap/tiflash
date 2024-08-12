@@ -19,7 +19,6 @@
 #include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/EncodingUtil.h>
 #include <common/likely.h>
-#include <common/unaligned.h>
 
 #include <magic_enum.hpp>
 

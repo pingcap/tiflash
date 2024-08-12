@@ -29,6 +29,8 @@ public:
 
     UInt8 getMethodByte() const override;
 
+    bool isCompression() const override { return true; }
+
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
     bool isCompression() const override { return true; }

@@ -101,6 +101,7 @@ class CompressionCodecDeflateQpl final : public ICompressionCodec
 public:
     CompressionCodecDeflateQpl();
     UInt8 getMethodByte() const override;
+    bool isCompression() const override { return true; }
 
     bool isCompression() const override { return true; }
 

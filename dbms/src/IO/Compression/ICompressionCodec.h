@@ -18,6 +18,7 @@
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
+#include <memory>
 
 
 namespace DB

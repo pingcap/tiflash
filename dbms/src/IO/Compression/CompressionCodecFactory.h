@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ extern const int UNKNOWN_COMPRESSION_METHOD;
 class CompressionCodecFactory
 {
 public:
-    template <bool IS_DECOMPRESS = false>
+    template <bool IS_COMPRESS = true>
     static CompressionCodecPtr create(const CompressionSetting & setting);
 
     // Create codec for compressing/decompressing data with specified settings.

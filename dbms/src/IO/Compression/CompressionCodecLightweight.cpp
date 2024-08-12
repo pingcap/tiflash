@@ -69,7 +69,7 @@ UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 s
         throw Exception(
             ErrorCodes::CANNOT_COMPRESS,
             "Cannot compress lightweight codec data. Invalid data type {}",
-            magic_enum::enum_name(data_type));
+            magic_enum::enum_integer(data_type));
     }
 }
 
@@ -120,7 +120,7 @@ void CompressionCodecLightweight::doDecompressData(
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Cannot decompress lightweight codec data. Invalid data type {}",
-            static_cast<int>(data_type.value()));
+            magic_enum::enum_integer(data_type.value()));
     }
 }
 
