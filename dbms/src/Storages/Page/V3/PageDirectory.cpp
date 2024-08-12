@@ -337,21 +337,14 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        if unlikely (last_iter == entries.end() || !last_iter->second.isEntry())
-        {
-            FmtBuffer buf;
-            for (const auto & e : entries)
-            {
-                buf.fmtAppend("{}|", e);
-            }
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "this={}, entries={}, ver={}, entry={}",
-                toDebugString(),
-                buf.toString(),
-                ver,
-                entry);
-        }
+        RUNTIME_CHECK_MSG(
+            last_iter != entries.end() && last_iter->second.isEntry(),
+            "this={}, entries={}, ver={}, entry={}",
+            toDebugString(),
+            entries,
+            ver,
+            entry);
+
         auto & ori_entry = last_iter->second.entry.value();
         RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
