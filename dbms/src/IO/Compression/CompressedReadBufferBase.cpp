@@ -16,7 +16,7 @@
 #include <IO/Buffer/BufferWithOwnMemory.h>
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
-#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionMethod.h>
 #include <IO/WriteHelpers.h>
 #include <city.h>
@@ -39,7 +39,7 @@ static void readHeaderAndGetCodec(const char * compressed_buffer, CompressionCod
 
     if (!codec)
     {
-        codec = CompressionFactory::createForDecompress(method_byte);
+        codec = CompressionCodecFactory::createForDecompress(method_byte);
     }
     else if (codec->getMethodByte() != method_byte)
     {
