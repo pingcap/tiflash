@@ -1828,7 +1828,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
                         if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
                         {
                             // The entry is not valid for updating the version_list.
-                            // Caller shuold notice these part of "ignored_entries" and release
+                            // Caller should notice these part of "ignored_entries" and release
                             // the space allocated for these invalid entries.
                             // For the information persisted in WAL, it should be ignored when
                             // restoring from disk.
