@@ -107,7 +107,7 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     });
 
     // Release SegmentReadTasks that do not have ColumnFileTiny and ColumnFileInMemory
-    // because these tasks will never call FetchDisaggPages to release the snapshots.
+    // because these tasks will never call FetchDisaggPages.
     auto to_release_tasks = snap->releaseNoNeedFetchTasks();
     if (!to_release_tasks.empty())
         LOG_INFO(log, "Release no need fetch tasks: count={} segments={}", to_release_tasks.size(), to_release_tasks);
