@@ -76,7 +76,7 @@ public:
     bool contains(const Key & key)
     {
         std::lock_guard cache_lock(mutex);
-        return cells.find(key) != cells.end();
+        return cells.contains(key);
     }
 
     void set(const Key & key, const MappedPtr & mapped)
