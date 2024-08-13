@@ -77,10 +77,8 @@ public:
 
     virtual ~VectorIndexViewer() = default;
 
-    virtual std::vector<Key> search( //
-        const ANNQueryInfoPtr & queryInfo,
-        const RowFilter & valid_rows) const
-        = 0;
+    // Invalid rows in `valid_rows` will be discared when applying the search
+    virtual std::vector<Key> search(const ANNQueryInfoPtr & queryInfo, const RowFilter & valid_rows) const = 0;
 
     // Get the value (i.e. vector content) of a Key.
     virtual void get(Key key, std::vector<Float32> & out) const = 0;

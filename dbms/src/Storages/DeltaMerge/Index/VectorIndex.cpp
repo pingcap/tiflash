@@ -23,7 +23,6 @@
 
 namespace DB::ErrorCodes
 {
-extern const int INCORRECT_QUERY;
 extern const int BAD_ARGUMENTS;
 } // namespace DB::ErrorCodes
 

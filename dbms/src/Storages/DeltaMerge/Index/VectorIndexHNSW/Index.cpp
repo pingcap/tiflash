@@ -103,7 +103,12 @@ void VectorIndexHNSWBuilder::addBlock(const IColumn & column, const ColumnVector
         RUNTIME_CHECK(data.size == definition->dimension * sizeof(Float32));
 
         if (auto rc = index.add(row_offset, reinterpret_cast<const Float32 *>(data.data)); !rc)
-            throw Exception(ErrorCodes::INCORRECT_DATA, rc.error.release());
+            throw Exception(
+                ErrorCodes::INCORRECT_DATA,
+                "Failed to add vector to HNSW index, i={} row_offset={} error={}",
+                i,
+                row_offset,
+                rc.error.release());
     }
 }
 
