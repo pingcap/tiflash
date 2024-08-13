@@ -179,13 +179,13 @@
     },
     {
       "name": "tsan",
-      "displayName": "Build dbms ThreadSanitizer tests",
+      "displayName": "Build dbms Thread Sanitizer tests",
       "configurePreset": "tsan",
       "targets": ["gtests_dbms"]
     },
     {
       "name": "tsan-all",
-      "displayName": "Build all ThreadSanitizer tests",
+      "displayName": "Build all Thread Sanitizer tests",
       "configurePreset": "tsan",
       "targets": ["gtests_dbms, gtests_libdaemon, gtests_libcommon"]
     },
@@ -283,7 +283,7 @@
     },
     {
       "name": "tsan-tests",
-      "displayName": "Build dbms ThreadSanitizer tests workflow",
+      "displayName": "Build dbms Thread Sanitizer tests workflow",
       "steps": [
         {
           "type": "configure",
@@ -297,7 +297,7 @@
     },
     {
       "name": "tsan-tests-all",
-      "displayName": "Build all ThreadSanitizer tests workflow",
+      "displayName": "Build all Thread Sanitizer tests workflow",
       "steps": [
         {
           "type": "configure",
