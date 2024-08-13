@@ -65,6 +65,7 @@ MutableColumnPtr VectorColumnFromIndexReader::calcResultsByPack(
             results_it++;
         }
 
+        // insert <pack_id, [offset0, offset1, ...]>
         column->insertData(
             reinterpret_cast<const char *>(offsets_in_pack.data()),
             offsets_in_pack.size() * sizeof(UInt32));
@@ -114,7 +115,7 @@ void VectorColumnFromIndexReader::read(MutableColumnPtr & column, size_t start_p
             }
             RUNTIME_CHECK(filled_result_rows == offset_in_pack);
 
-            // TODO: We could fill multiple rows if rowid is continuous.
+            // TODO(vector-index): We could fill multiple rows if rowid is continuous.
             VectorIndexViewer::Key rowid = pack_start_rowid[pack_id] + offset_in_pack;
             index->get(rowid, value);
             column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
