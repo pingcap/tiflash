@@ -31,12 +31,7 @@
 
 namespace DB
 {
-<<<<<<< HEAD
 using SyncPagePacketWriter = grpc::ServerWriter<disaggregated::PagesPacket>;
-=======
-
-struct Settings;
->>>>>>> c6fcddfcaa (Disagg: Fix the issue that lifetime of read-snapshots in WN may be longer than expected (#9297))
 
 class WNFetchPagesStreamWriter;
 using WNFetchPagesStreamWriterPtr = std::unique_ptr<WNFetchPagesStreamWriter>;
