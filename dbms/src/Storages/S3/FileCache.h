@@ -253,7 +253,7 @@ public:
         const std::optional<UInt64> & filesize = std::nullopt);
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
-    void fgDownload(std::unique_lock<std::mutex> & cache_lock, const String & s3_key, FileSegmentPtr & file_seg);
+    void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void download(const String & s3_key, FileSegmentPtr & file_seg);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg);
 

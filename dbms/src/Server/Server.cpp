@@ -1439,6 +1439,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
+    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
     size_t vec_index_cache_entities = config().getUInt64("vec_index_cache_entities", 1000);
     if (vec_index_cache_entities)
         global_context->setVectorIndexCache(vec_index_cache_entities);

@@ -62,8 +62,9 @@ message ColumnStat {
     optional uint64 array_sizes_bytes = 10;
     optional uint64 array_sizes_mark_bytes = 11;
 
+    reserved 101; // used before
     // TODO(vector-index) Support multiple vector index on the same column
-    optional VectorIndexFileProps vector_index = 101;
+    optional VectorIndexFileProps vector_index = 102;
 }
 
 message ColumnStats {
