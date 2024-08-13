@@ -472,21 +472,23 @@ try
     if (vector_index_json)
     {
         tipb::VectorIndexKind kind = tipb::VectorIndexKind::INVALID_INDEX_KIND;
+        auto kind_field = vector_index_json->getValue<String>("kind");
         auto ok = tipb::VectorIndexKind_Parse( //
-            vector_index_json->getValue<String>("kind"),
+            kind_field,
             &kind);
-        RUNTIME_CHECK(ok);
+        RUNTIME_CHECK_MSG(ok, "invalid kind of vector index, {}", kind_field);
         RUNTIME_CHECK(kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
 
         auto dimension = vector_index_json->getValue<UInt64>("dimension");
         RUNTIME_CHECK(dimension > 0);
-        RUNTIME_CHECK(dimension <= 16000); // Just a protection
+        RUNTIME_CHECK(dimension <= 16383); // Just a protection
 
         tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
+        auto distance_metric_field = vector_index_json->getValue<String>("distance_metric");
         ok = tipb::VectorDistanceMetric_Parse( //
-            vector_index_json->getValue<String>("distance_metric"),
+            distance_metric_field,
             &distance_metric);
-        RUNTIME_CHECK(ok);
+        RUNTIME_CHECK_MSG(ok, "invalid distance_metric of vector index, {}", distance_metric_field);
         RUNTIME_CHECK(distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
         vector_index = std::make_shared<const VectorIndexDefinition>(VectorIndexDefinition{
