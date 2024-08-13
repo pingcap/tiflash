@@ -499,7 +499,7 @@ TEST_F(UniPageStorageTest, Scan)
 
     {
         auto start = UniversalPageIdFormat::toFullPageId(region_prefix, 15);
-        auto end = "";
+        const auto * end = "";
         size_t count = 0;
         auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
             UNUSED(page);
@@ -555,7 +555,7 @@ TEST(UniPageStorageIdTest, UniversalPageId)
     }
 
     {
-        auto u_id = "z";
+        const auto * u_id = "z";
         ASSERT_EQ(UniversalPageIdFormat::getU64ID(u_id), 0);
         ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "z");
     }
