@@ -56,6 +56,9 @@ struct SegmentReadTask
     void mergeRanges() { ranges = DM::tryMergeRanges(std::move(ranges), 1); }
 
     static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
+
+    // WN calls hasColumnFileToFetch to check whether a SegmentReadTask need to fetch column files from it
+    bool hasColumnFileToFetch() const;
 };
 
 class BlockStat

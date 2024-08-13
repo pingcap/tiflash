@@ -81,6 +81,8 @@ public:
 
     bool empty() const;
 
+    SegmentReadTasks releaseNoNeedFetchTasks();
+
     DISALLOW_COPY(DisaggReadSnapshot);
 
 private:
@@ -103,6 +105,8 @@ public:
         std::shared_lock read_lock(mtx);
         return tasks.empty();
     }
+
+    void releaseNoNeedFetchTasks(SegmentReadTasks & to_release_tasks);
 
     DISALLOW_COPY(DisaggPhysicalTableReadSnapshot);
 

@@ -94,6 +94,12 @@ disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
 
 RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
 {
+    if (seg_task->meta.delta_tinycf_page_ids.empty())
+    {
+        // No page need to be fetched or guarded.
+        return seg_task;
+    }
+
     MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
@@ -170,10 +176,7 @@ void RNWorkerFetchPages::doFetchPages(
     const RNReadSegmentTaskPtr & seg_task,
     const disaggregated::FetchDisaggPagesRequest & request)
 {
-    // No page need to be fetched.
-    if (request.page_ids_size() == 0)
-        return;
-
+    // No matter all delta data is cached or not, call FetchDisaggPages to release snapshot in WN.
     Stopwatch sw_total;
     Stopwatch watch_rpc{CLOCK_MONOTONIC_COARSE};
     bool rpc_is_observed = false;
@@ -194,6 +197,10 @@ void RNWorkerFetchPages::doFetchPages(
         // TODO: Not sure whether we really need this. Maybe RAII is already there?
         stream_resp->Finish();
     });
+
+    // All delta data is cached.
+    if (request.page_ids_size() == 0)
+        return;
 
     // Used to verify all pages are fetched.
     std::set<UInt64> remaining_pages_to_fetch;
