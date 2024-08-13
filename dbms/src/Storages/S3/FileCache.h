@@ -270,7 +270,6 @@ public:
     void restoreTable(const std::filesystem::directory_entry & table_entry);
     void restoreDMFile(const std::filesystem::directory_entry & dmfile_entry);
 
-    void remove(std::unique_lock<std::mutex> & cache_lock, const String & s3_key, bool force = false);
     void remove(const String & s3_key, bool force = false);
     std::pair<Int64, std::list<String>::iterator> removeImpl(
         LRUFileTable & table,

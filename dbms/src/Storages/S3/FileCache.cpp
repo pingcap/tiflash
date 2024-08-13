@@ -333,20 +333,16 @@ void FileCache::removeDiskFile(const String & local_fname, bool update_fsize_met
     }
 }
 
-void FileCache::remove(std::unique_lock<std::mutex> &, const String & s3_key, bool force)
+void FileCache::remove(const String & s3_key, bool force)
 {
     auto file_type = getFileType(s3_key);
     auto & table = tables[static_cast<UInt64>(file_type)];
+
+    std::unique_lock lock(mtx);
     auto f = table.get(s3_key, /*update_lru*/ false);
     if (f == nullptr)
         return;
     std::ignore = removeImpl(table, s3_key, f, force);
-}
-
-void FileCache::remove(const String & s3_key, bool force)
-{
-    std::unique_lock lock(mtx);
-    remove(lock, s3_key, force);
 }
 
 std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(

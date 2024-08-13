@@ -31,7 +31,7 @@ struct VectorIndexDefinition
     UInt64 dimension = 0;
     tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
 
-    // TODO: There are possibly more fields, like efConstruct.
+    // TODO(vector-index): There are possibly more fields, like efConstruct.
     // Will be added later.
 };
 

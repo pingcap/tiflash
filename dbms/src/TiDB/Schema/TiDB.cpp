@@ -28,13 +28,13 @@
 #include <TiDB/Decode/Vector.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <common/logger_useful.h>
 #include <tipb/executor.pb.h>
 
 #include <algorithm>
 #include <cmath>
 #include <magic_enum.hpp>
-#include "TiDB/Schema/VectorIndex.h"
 
 namespace DB
 {
