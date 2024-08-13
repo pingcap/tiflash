@@ -108,9 +108,8 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 bool SegmentReadTask::hasColumnFileToFetch() const
 {
     auto need_to_fetch = [](const ColumnFilePtr & cf) {
-        // Only ColumnFileMemory and ColumnFileTiny need too fetch.
-        // ColumnFileDeleteRange and ColumnFileBig do not need to fetch.
-        return cf->isInMemoryFile() || cf->isTinyFile();
+        // In v7.5, Only ColumnFileTiny need too fetch.
+        return cf->isTinyFile();
     };
     const auto & mem_cfs = read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
     const auto & persisted_cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
