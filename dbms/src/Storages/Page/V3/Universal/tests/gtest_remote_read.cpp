@@ -368,6 +368,114 @@ try
 }
 CATCH
 
+TEST_P(UniPageStorageRemoteReadTest, WriteReadRefWithRestart)
+try
+{
+    const String test_page_id = "aaabbb";
+    /// Prepare data on remote store
+    auto writer = PS::V3::CPFilesWriter::create({
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
+        .data_source = PS::V3::CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
+    });
+
+    writer->writePrefix({
+        .writer = {},
+        .sequence = 5,
+        .last_sequence = 3,
+    });
+    {
+        auto edits = PS::V3::universal::PageEntriesEdit{};
+        edits.appendRecord(
+            {.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = test_page_id, .entry = {.size = 22, .offset = 10}});
+        writer->writeEditsAndApplyCheckpointInfo(edits);
+    }
+    auto data_paths = writer->writeSuffix();
+    writer.reset();
+    for (const auto & data_path : data_paths)
+    {
+        uploadFile(data_path);
+    }
+    uploadFile(manifest_file_path);
+
+    /// Put remote page into local
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_reader = PS::V3::CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
+    manifest_reader->readPrefix();
+    PS::V3::CheckpointProto::StringsInternMap im;
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        auto r = edits_r->getRecords();
+        ASSERT_EQ(1, r.size());
+
+        UniversalWriteBatch wb;
+        wb.disableRemoteLock();
+        wb.putRemotePage(
+            r[0].page_id,
+            0,
+            r[0].entry.size,
+            r[0].entry.checkpoint_info.data_location,
+            std::move(r[0].entry.field_offsets));
+        page_storage->write(std::move(wb));
+    }
+
+    /// Ref page and delete the original page
+    {
+        UniversalWriteBatch wb;
+        wb.putRefPage("xxx_a", test_page_id);
+        page_storage->write(std::move(wb));
+    }
+    // delete in another wb
+    {
+        UniversalWriteBatch wb;
+        wb.delPage(test_page_id);
+        page_storage->write(std::move(wb));
+    }
+    // Ref again
+    {
+        UniversalWriteBatch wb;
+        wb.putRefPage("xxx_a_a", "xxx_a");
+        wb.putRefPage("xxx_a_b", "xxx_a");
+        page_storage->write(std::move(wb));
+    }
+    // delete in another wb
+    {
+        UniversalWriteBatch wb;
+        wb.delPage("xxx_a");
+        page_storage->write(std::move(wb));
+    }
+
+    // read the tail ref page
+    {
+        auto page = page_storage->read("xxx_a_a");
+        ASSERT_TRUE(page.isValid());
+        ASSERT_EQ("nahida opened her eyes", String(page.data.begin(), page.data.size()));
+    }
+
+    // Mock restart
+    reload();
+
+    {
+        // ensure the page is deleted as expected
+        auto page = page_storage->read(test_page_id, nullptr, nullptr, false);
+        ASSERT_FALSE(page.isValid());
+        page = page_storage->read("xxx_a", nullptr, nullptr, false);
+        ASSERT_FALSE(page.isValid());
+        // read by the ref_id
+        auto page_ref = page_storage->read("xxx_a_a");
+        ASSERT_TRUE(page_ref.isValid());
+        ASSERT_EQ("nahida opened her eyes", String(page_ref.data.begin(), page_ref.data.size()));
+        page_ref = page_storage->read("xxx_a_b");
+        ASSERT_TRUE(page_ref.isValid());
+        ASSERT_EQ("nahida opened her eyes", String(page_ref.data.begin(), page_ref.data.size()));
+    }
+}
+CATCH
+
 TEST_P(UniPageStorageRemoteReadTest, MultiThreadReadUpdateRmotePage)
 try
 {

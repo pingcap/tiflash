@@ -290,13 +290,15 @@ void PageDirectoryFactory<Trait>::applyRecord(
             while (true)
             {
                 const auto & current_version_list = version_list_iter->second;
-                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = current_version_list->resolveToPageId(
-                    sequence_to_resolve,
-                    /*ignore_delete=*/id_to_resolve != r.page_id,
-                    nullptr);
+                const bool ignore_delete = id_to_resolve != r.page_id;
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve]
+                    = current_version_list->resolveToPageId(sequence_to_resolve, ignore_delete, nullptr);
                 if (resolve_state == ResolveResult::TO_NORMAL)
                 {
-                    current_version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry);
+                    current_version_list->updateLocalCacheForRemotePage(
+                        PageVersion(sequence_to_resolve, 0),
+                        r.entry,
+                        ignore_delete);
                     break;
                 }
                 else if (resolve_state == ResolveResult::TO_REF)
