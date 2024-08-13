@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::ErrorCodes
@@ -41,7 +42,7 @@ bool VectorIndexBuilder::isSupportedType(const IDataType & type)
 VectorIndexBuilderPtr VectorIndexBuilder::create(const TiDB::VectorIndexDefinitionPtr & definition)
 {
     RUNTIME_CHECK(definition->dimension > 0);
-    RUNTIME_CHECK(definition->dimension <= std::numeric_limits<UInt32>::max());
+    RUNTIME_CHECK(definition->dimension <= TiDB::MAX_VECTOR_DIMENSION);
 
     switch (definition->kind)
     {
@@ -49,7 +50,7 @@ VectorIndexBuilderPtr VectorIndexBuilder::create(const TiDB::VectorIndexDefiniti
         return std::make_shared<VectorIndexHNSWBuilder>(definition);
     default:
         throw Exception(
-            ErrorCodes::INCORRECT_QUERY,
+            ErrorCodes::BAD_ARGUMENTS,
             "Unsupported vector index {}",
             tipb::VectorIndexKind_Name(definition->kind));
     }
@@ -58,7 +59,7 @@ VectorIndexBuilderPtr VectorIndexBuilder::create(const TiDB::VectorIndexDefiniti
 VectorIndexViewerPtr VectorIndexViewer::view(const dtpb::VectorIndexFileProps & file_props, std::string_view path)
 {
     RUNTIME_CHECK(file_props.dimensions() > 0);
-    RUNTIME_CHECK(file_props.dimensions() <= std::numeric_limits<UInt32>::max());
+    RUNTIME_CHECK(file_props.dimensions() <= TiDB::MAX_VECTOR_DIMENSION);
 
     tipb::VectorIndexKind kind;
     RUNTIME_CHECK(tipb::VectorIndexKind_Parse(file_props.index_kind(), &kind));
@@ -68,7 +69,7 @@ VectorIndexViewerPtr VectorIndexViewer::view(const dtpb::VectorIndexFileProps & 
     case tipb::VectorIndexKind::HNSW:
         return VectorIndexHNSWViewer::view(file_props, path);
     default:
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unsupported vector index {}", file_props.index_kind());
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported vector index {}", file_props.index_kind());
     }
 }
 

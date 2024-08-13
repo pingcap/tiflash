@@ -39,6 +39,9 @@ struct VectorIndexDefinition
 // ever try to modify it anyway.
 using VectorIndexDefinitionPtr = std::shared_ptr<const VectorIndexDefinition>;
 
+// Defined in TiDB pkg/types/vector.go
+static constexpr Int64 MAX_VECTOR_DIMENSION = 16383;
+
 } // namespace TiDB
 
 template <>

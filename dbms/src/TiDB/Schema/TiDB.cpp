@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <cmath>
 #include <magic_enum.hpp>
+#include "TiDB/Schema/VectorIndex.h"
 
 namespace DB
 {
@@ -481,7 +482,7 @@ try
 
         auto dimension = vector_index_json->getValue<UInt64>("dimension");
         RUNTIME_CHECK(dimension > 0);
-        RUNTIME_CHECK(dimension <= 16383); // Just a protection
+        RUNTIME_CHECK(dimension <= TiDB::MAX_VECTOR_DIMENSION); // Just a protection
 
         tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
         auto distance_metric_field = vector_index_json->getValue<String>("distance_metric");
