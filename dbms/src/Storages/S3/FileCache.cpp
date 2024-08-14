@@ -261,8 +261,8 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
 
     GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
 
-    auto estimzted_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-    if (!reserveSpaceImpl(file_type, estimzted_size, /*try_evict*/ true))
+    auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
+    if (!reserveSpaceImpl(file_type, estimated_size, /*try_evict*/ true))
     {
         // Space not enough.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
@@ -272,19 +272,19 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
             s3_key,
             cache_capacity,
             cache_used,
-            estimzted_size);
+            estimated_size);
 
         // Just throw, no need to let the caller retry.
         throw Exception( //
             ErrorCodes::S3_ERROR,
             "Cannot reserve {} space for object {}",
-            estimzted_size,
+            estimated_size,
             s3_key);
         return nullptr;
     }
 
     auto file_seg
-        = std::make_shared<FileSegment>(toLocalFilename(s3_key), FileSegment::Status::Empty, estimzted_size, file_type);
+        = std::make_shared<FileSegment>(toLocalFilename(s3_key), FileSegment::Status::Empty, estimated_size, file_type);
     table.set(s3_key, file_seg);
     lock.unlock();
 
