@@ -37,6 +37,7 @@ class Arena;
 class ColumnGathererStream;
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
+#include <immintrin.h>
 struct alignas(64) AlignBufferAVX2
 {
     static constexpr size_t vector_size = sizeof(__m256i);
