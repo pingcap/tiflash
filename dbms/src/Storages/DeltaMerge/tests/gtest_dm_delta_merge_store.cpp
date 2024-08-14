@@ -64,6 +64,14 @@ extern const char force_set_page_file_write_errno[];
 extern const char proactive_flush_force_set_type[];
 } // namespace FailPoints
 
+namespace tests
+{
+DM::PushDownFilterPtr generatePushDownFilter(
+Context & ctx,
+const String table_info_json,
+const String & query,
+const std::optional<TimezoneInfo> & opt_tz = std::nullopt);
+}
 namespace DM
 {
 namespace tests
@@ -3963,6 +3971,96 @@ try
 }
 CATCH
 
+
+TEST_F(DeltaMergeStoreTest, RSResult)
+try
+{
+    auto log = Logger::get(GET_GTEST_FULL_NAME);
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    ColumnDefine cd_datetime(1, "col_datetime", std::make_shared<DataTypeMyDateTime>());
+    table_column_defines->push_back(cd_datetime);
+ 
+    store = reload(table_column_defines);
+
+    auto create_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
+        std::vector<DataTypeMyDateTime::FieldType> datetime_data(end - beg, MyDateTime(1999, 9, 9, 12, 34, 56, 0).toPackedUInt());
+        auto col_datetime = createColumn<MyDateTime>(datetime_data, cd_datetime.name, cd_datetime.id);
+        block.insert(col_datetime);
+        block.checkNumberOfRows();
+        return block;
+    };
+
+    auto check = [&](RSResult res, PushDownFilterPtr filter) {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            filter,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            "",
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        while (true)
+        {
+            auto b = in->read();
+            if (!b)
+                break;
+            
+            ASSERT_EQ(b.getRSResult(), res) << fmt::format("{} vs {}", b.getRSResult(), res);
+            const auto * v = toColumnVectorDataPtr<UInt64>(b.getByName("col_datetime").column);
+            ASSERT_NE(v, nullptr);
+            for (UInt64 i : *v)
+                ASSERT_EQ(MyDateTime(i).toString(0), "1999-09-09 20:34:56");
+        }
+        in->readSuffix();
+    };
+
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_datetime","O":"col_datetime"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":7}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    DB::registerFunctions();
+
+    // Disable delta merge to ensure read data from delta
+    FailPointHelper::enableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+
+    auto block = create_block(0, 128, 1);
+    store->write(*db_context, db_context->getSettingsRef(), block);
+
+    auto filter = generatePushDownFilter(
+            *db_context,
+            table_info_json,
+            "select * from default.t_111 where col_datetime > 19990909000000");
+    ASSERT_NE(filter->extra_cast, nullptr);
+    //LOG_DEBUG(log, "{}", filter->extra_cast->dumpActions());
+    std::cout << filter->rs_operator->toDebugString() << std::endl;
+    std::cout << filter->before_where->dumpActions() << std::endl;
+
+    // Read from delta
+    std::cout << "Check delta\n";
+    check(RSResult::Some, filter);
+    
+    FailPointHelper::disableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+    store->mergeDeltaAll(*db_context);
+
+    std::cout << "Check stable\n";
+    // Read from stable
+    check(RSResult::All, filter);
+}
+CATCH
 } // namespace tests
 } // namespace DM
 } // namespace DB
