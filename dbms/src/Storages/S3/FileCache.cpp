@@ -99,7 +99,6 @@ FileSegment::Status FileSegment::waitForNotEmpty()
                 "Failed to wait until S3 file {} is ready after {}s",
                 local_fname,
                 elapsed_secs);
-            return status;
         }
     }
 

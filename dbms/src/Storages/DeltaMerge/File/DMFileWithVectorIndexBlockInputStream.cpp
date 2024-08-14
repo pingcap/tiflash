@@ -205,11 +205,7 @@ Block DMFileWithVectorIndexBlockInputStream::readByIndexReader()
     vec_column_reader->read(vec_column, read_pack_id, read_rows);
     duration_read_from_vec_index_seconds += w.elapsedSeconds();
 
-    block.insert(ColumnWithTypeAndName{//
-                                       std::move(vec_column),
-                                       vec_cd.type,
-                                       vec_cd.name,
-                                       vec_cd.id});
+    block.insert(ColumnWithTypeAndName{std::move(vec_column), vec_cd.type, vec_cd.name, vec_cd.id});
 
     return block;
 }
