@@ -3977,15 +3977,15 @@ try
 {
     auto log = Logger::get(GET_GTEST_FULL_NAME);
     auto table_column_defines = DMTestEnv::getDefaultColumns();
-    ColumnDefine cd_datetime(1, "col_datetime", std::make_shared<DataTypeMyDateTime>());
+    ColumnDefine cd_datetime(1, "col_datetime", std::make_shared<DataTypeInt64>());
     table_column_defines->push_back(cd_datetime);
  
     store = reload(table_column_defines);
 
     auto create_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
         auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
-        std::vector<DataTypeMyDateTime::FieldType> datetime_data(end - beg, MyDateTime(1999, 9, 9, 12, 34, 56, 0).toPackedUInt());
-        auto col_datetime = createColumn<MyDateTime>(datetime_data, cd_datetime.name, cd_datetime.id);
+        std::vector<Int64> time_data(end - beg, 1);
+        auto col_datetime = createColumn<Int64>(time_data, cd_datetime.name, cd_datetime.id);
         block.insert(col_datetime);
         block.checkNumberOfRows();
         return block;
@@ -4018,14 +4018,14 @@ try
             const auto * v = toColumnVectorDataPtr<UInt64>(b.getByName("col_datetime").column);
             ASSERT_NE(v, nullptr);
             for (UInt64 i : *v)
-                ASSERT_EQ(MyDateTime(i).toString(0), "1999-09-09 20:34:56");
+                ASSERT_EQ(i, 1);
         }
         in->readSuffix();
     };
 
     const String table_info_json = R"json({
     "cols":[
-        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_datetime","O":"col_datetime"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":7}}
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_datetime","O":"col_datetime"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":11}}
     ],
     "pk_is_handle":false,"index_info":[],"is_common_handle":false,
     "name":{"L":"t_111","O":"t_111"},"partition":null,
@@ -4043,9 +4043,9 @@ try
     auto filter = generatePushDownFilter(
             *db_context,
             table_info_json,
-            "select * from default.t_111 where col_datetime > 19990909000000");
+            "select * from default.t_111 where col_datetime > 1");
     ASSERT_NE(filter->extra_cast, nullptr);
-    //LOG_DEBUG(log, "{}", filter->extra_cast->dumpActions());
+    std::cout << filter->extra_cast->dumpActions() << std::endl;
     std::cout << filter->rs_operator->toDebugString() << std::endl;
     std::cout << filter->before_where->dumpActions() << std::endl;
 
