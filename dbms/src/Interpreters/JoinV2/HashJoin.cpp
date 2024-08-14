@@ -541,12 +541,11 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
             src_column.name);
 
         added_columns.push_back(src_column.column->cloneEmpty());
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
         added_columns.back()->reserveAlign(rows, AlignBufferAVX2::buffer_size);
-        if (src_column.type && src_column.type->haveMaximumSizeOfValue())
-        {
-            // todo figure out more accurate `rows`
-            added_columns.back()->reserveAlign(rows, AlignBufferAVX2::buffer_size);
-        }
+#else
+        added_columns.back()->reserve(rows);
+#endif
     }
 
     auto & wd = probe_workers_data[stream_index];
