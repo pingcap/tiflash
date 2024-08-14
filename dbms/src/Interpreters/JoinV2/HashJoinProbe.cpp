@@ -274,8 +274,10 @@ private:
         }
         else
         {
+#ifdef __AVX2
             for (auto & b : wd.align_buffer)
                 b.need_flush = true;
+#endif
         }
         for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
         {

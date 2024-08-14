@@ -35,11 +35,13 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 
 class Arena;
 class ColumnGathererStream;
+
+#ifdef __AVX2
 struct alignas(64) AlignBufferAVX2
 {
-#ifdef __AVX2__
     static constexpr size_t vector_size = sizeof(__m256i);
     static constexpr size_t buffer_size = 2 * vector_size;
+    static_assert(buffer_size == 64);
 
     union
     {
@@ -55,8 +57,10 @@ struct alignas(64) AlignBufferAVX2
     size_t size2 = 0;
 
     bool need_flush = false;
-#endif
 };
+#else
+struct AlignBufferAVX2 {};
+#endif
 
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
