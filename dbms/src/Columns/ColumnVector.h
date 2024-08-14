@@ -359,6 +359,8 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
 
     size_t byteSize() const override { return data.size() * sizeof(data[0]); }
 
@@ -410,9 +412,24 @@ public:
         return this->template scatterImpl<Self>(num_columns, selector);
     }
 
+    MutableColumns scatter(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector,
+        const BlockSelective & selective) const override
+    {
+        return this->template scatterImpl<Self>(num_columns, selector, selective);
+    }
+
     void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector) const override
     {
         this->template scatterToImpl<Self>(columns, selector);
+    }
+    void scatterTo(
+        IColumn::ScatterColumns & columns,
+        const IColumn::Selector & selector,
+        const BlockSelective & selective) const override
+    {
+        this->template scatterToImpl<Self>(columns, selector, selective);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
@@ -432,6 +449,9 @@ public:
     const T & getElement(size_t n) const { return data[n]; }
 
     T & getElement(size_t n) { return data[n]; }
+
+    template <bool selective_block>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const;
 
 protected:
     Container data;

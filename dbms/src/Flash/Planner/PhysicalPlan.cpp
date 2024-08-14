@@ -94,6 +94,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
 {
     RUNTIME_CHECK(executor);
     RUNTIME_CHECK(executor->has_executor_id());
+
     const auto & executor_id = executor->executor_id();
     switch (executor->tp())
     {

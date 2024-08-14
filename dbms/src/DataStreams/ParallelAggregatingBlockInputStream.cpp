@@ -66,7 +66,6 @@ void ParallelAggregatingBlockInputStream::cancel(bool kill)
         processor.cancel(kill);
 }
 
-
 Block ParallelAggregatingBlockInputStream::readImpl()
 {
     if (!executed)

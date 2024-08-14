@@ -15,7 +15,6 @@
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Interpreters/Settings.h>
@@ -29,10 +28,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Page/PageUtil.h>
 #include <common/logger_useful.h>
-#include <kvproto/mpp.pb.h>
-#include <tipb/expression.pb.h>
 
-#include <ext/scope_guard.h>
 #include <memory>
 #include <tuple>
 

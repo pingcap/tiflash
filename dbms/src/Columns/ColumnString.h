@@ -19,6 +19,7 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <common/memcpy.h>
 
 namespace DB
@@ -30,6 +31,15 @@ class ColumnString final : public COWPtrHelper<IColumn, ColumnString>
 public:
     using Chars_t = PaddedPODArray<UInt8>;
     static const auto APPROX_STRING_SIZE = 64;
+
+    // Used when updating hash for column.
+    struct WeakHash32Info
+    {
+        WeakHash32::Container * hash_data;
+        String sort_key_container;
+        TiDB::TiDBCollatorPtr collator;
+        const BlockSelective * selective_ptr;
+    };
 
 private:
     friend class COWPtrHelper<IColumn, ColumnString>;
@@ -310,7 +320,12 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const override;
 
+    template <typename LoopFunc>
+    void updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const;
+
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
@@ -371,9 +386,20 @@ public:
         return scatterImpl<ColumnString>(num_columns, selector);
     }
 
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const override
+    {
+        return scatterImpl<ColumnString>(num_columns, selector, selective);
+    }
+
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         scatterToImpl<ColumnString>(columns, selector);
+    }
+
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
+    {
+        scatterToImpl<ColumnString>(columns, selector, selective);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;

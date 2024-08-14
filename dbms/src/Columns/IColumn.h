@@ -19,6 +19,7 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/WeakHash.h>
+#include <Core/BlockInfo.h>
 #include <Core/Field.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
@@ -312,6 +313,9 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const
         = 0;
+    virtual void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective &) const
+        = 0;
+
     void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /** Removes elements that don't match the filter.
@@ -378,6 +382,9 @@ public:
     using ScatterColumns = std::vector<MutablePtr>;
     using Selector = PaddedPODArray<ColumnIndex>;
     virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
+    virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const
+        = 0;
 
     void initializeScatterColumns(ScatterColumns & columns, ColumnIndex num_columns, size_t num_rows) const
     {
@@ -394,6 +401,8 @@ public:
 
     /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
     virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;
+    virtual void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const
+        = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
     /// For now it is a helper to de-virtualize calls to insert*() functions inside gather loop
@@ -549,10 +558,11 @@ protected:
     {
         size_t num_rows = size();
 
-        if (num_rows != selector.size())
-            throw Exception(
-                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        RUNTIME_CHECK_MSG(
+            num_rows == selector.size(),
+            "Size of selector: {} doesn't match size of column: {}",
+            selector.size(),
+            num_rows);
 
         ScatterColumns columns;
         initializeScatterColumns(columns, num_columns, num_rows);
@@ -564,17 +574,56 @@ protected:
     }
 
     template <typename Derived>
+    std::vector<MutablePtr> scatterImpl(
+        ColumnIndex num_columns,
+        const Selector & selector,
+        const BlockSelective & selective) const
+    {
+        const auto selective_rows = selective.size();
+
+        RUNTIME_CHECK_MSG(
+            selective_rows == selector.size(),
+            "Size of selector: {} doesn't match size of selective column: {}",
+            selector.size(),
+            selective_rows);
+
+        ScatterColumns columns;
+        initializeScatterColumns(columns, num_columns, selective_rows);
+
+        for (size_t i = 0; i < selective_rows; ++i)
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, selective[i]);
+
+        return columns;
+    }
+
+    template <typename Derived>
     void scatterToImpl(ScatterColumns & columns, const Selector & selector) const
     {
         size_t num_rows = size();
 
-        if (num_rows != selector.size())
-            throw Exception(
-                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        RUNTIME_CHECK_MSG(
+            num_rows == selector.size(),
+            "Size of selector: {} doesn't match size of column: {}",
+            selector.size(),
+            num_rows);
 
         for (size_t i = 0; i < num_rows; ++i)
             static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, i);
+    }
+
+    template <typename Derived>
+    void scatterToImpl(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const
+    {
+        const auto selective_rows = selective.size();
+
+        RUNTIME_CHECK_MSG(
+            selective_rows == selector.size(),
+            "Size of selector: {} doesn't match size of selective column: {}",
+            selector.size(),
+            selective_rows);
+
+        for (size_t i = 0; i < selective_rows; ++i)
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, selective[i]);
     }
 };
 

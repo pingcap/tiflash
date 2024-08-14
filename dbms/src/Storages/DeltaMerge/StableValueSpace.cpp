@@ -67,7 +67,8 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 dm_context->global_context.getFileProvider(),
                 dm_context->getReadLimiter(),
                 dm_context->scan_context,
-                dm_context->tracing_id);
+                dm_context->tracing_id,
+                ReadTag::Internal);
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -439,7 +440,8 @@ void StableValueSpace::calculateStableProperty(
             context.global_context.getFileProvider(),
             context.getReadLimiter(),
             context.scan_context,
-            context.tracing_id);
+            context.tracing_id,
+            ReadTag::Internal);
         const auto & pack_res = pack_filter.getPackResConst();
         size_t new_pack_properties_index = 0;
         const bool use_new_pack_properties = pack_properties.property_size() == 0;
@@ -455,7 +457,7 @@ void StableValueSpace::calculateStableProperty(
         }
         for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
         {
-            if (!isUse(pack_res[pack_id]))
+            if (!pack_res[pack_id].isUse())
                 continue;
             property.num_versions += pack_stats[pack_id].rows;
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
@@ -588,12 +590,13 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             context.global_context.getFileProvider(),
             context.getReadLimiter(),
             context.scan_context,
-            context.tracing_id);
+            context.tracing_id,
+            ReadTag::Internal);
         const auto & pack_stats = f->getPackStats();
         const auto & pack_res = filter.getPackResConst();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (isUse(pack_res[i]))
+            if (pack_res[i].isUse())
             {
                 ++match_packs;
                 total_match_rows += pack_stats[i].rows;
@@ -633,7 +636,8 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             context.global_context.getFileProvider(),
             context.getReadLimiter(),
             context.scan_context,
-            context.tracing_id);
+            context.tracing_id,
+            ReadTag::Internal);
         const auto & handle_filter_result = filter.getHandleRes();
         if (file_idx == 0)
         {

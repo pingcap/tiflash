@@ -302,6 +302,7 @@ void AsynchronousMetrics::update()
         set("LogDiskBytes", usage.total_log_disk_size);
         set("PagesInMem", usage.num_pages);
         set("VersionedEntries", DB::PS::PageStorageMemorySummary::versioned_entry_or_delete_count.load());
+        set("UniversalWrite", DB::PS::PageStorageMemorySummary::universal_write_count.load());
     }
 
     if (context.getSharedContextDisagg()->isDisaggregatedStorageMode())

@@ -253,34 +253,71 @@ void ColumnArray::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    auto s = offsets->size();
-    if (hash.getData().size() != s)
-        throw Exception(
-            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
-                + std::to_string(hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    updateWeakHash32Impl<false>(hash, collator, sort_key_container, {});
+}
+
+void ColumnArray::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    updateWeakHash32Impl<true>(hash, collator, sort_key_container, selective);
+}
+
+template <bool selective_block>
+void ColumnArray::updateWeakHash32Impl(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    size_t rows;
+    if constexpr (selective_block)
+    {
+        rows = selective.size();
+    }
+    else
+    {
+        rows = offsets->size();
+    }
+
+    RUNTIME_CHECK_MSG(
+        rows == hash.getData().size(),
+        "size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        rows);
 
     WeakHash32 internal_hash(data->size());
     data->updateWeakHash32(internal_hash, collator, sort_key_container);
 
-    Offset prev_offset = 0;
     const auto & offsets_data = getOffsets();
-    auto & hash_data = hash.getData();
-    auto & internal_hash_data = internal_hash.getData();
+    UInt32 * hash_data = hash.getData().data();
+    const auto & internal_hash_data = internal_hash.getData();
 
-    for (size_t i = 0; i < s; ++i)
+    for (size_t i = 0; i < rows; ++i)
     {
         /// This row improves hash a little bit according to integration tests.
         /// It is the same as to use previous hash value as the first element of array.
-        hash_data[i] = intHashCRC32(hash_data[i]);
+        *hash_data = intHashCRC32(*hash_data);
 
-        for (size_t row = prev_offset; row < offsets_data[i]; ++row)
+        size_t row = i;
+        if constexpr (selective_block)
+            row = selective[i];
+
+        Offset prev_offset = 0;
+        if likely (row > 0)
+            prev_offset = offsets_data[row - 1];
+
+        for (size_t sub_row = prev_offset; sub_row < offsets_data[row]; ++sub_row)
+        {
             /// It is probably not the best way to combine hashes.
             /// But much better then xor which lead to similar hash for arrays like [1], [1, 1, 1], [1, 1, 1, 1, 1], ...
             /// Much better implementation - to add offsets as an optional argument to updateWeakHash32.
-            hash_data[i] = intHashCRC32(internal_hash_data[row], hash_data[i]);
+            *hash_data = intHashCRC32(internal_hash_data[sub_row], *hash_data);
+        }
 
-        prev_offset = offsets_data[i];
+        ++hash_data;
     }
 }
 

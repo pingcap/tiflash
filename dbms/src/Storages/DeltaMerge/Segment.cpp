@@ -2944,7 +2944,8 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
             dm_context.global_context.getFileProvider(),
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
-            dm_context.tracing_id);
+            dm_context.tracing_id,
+            ReadTag::MVCC);
         const auto & pack_res = pack_filter.getPackResConst();
         const auto & handle_res = pack_filter.getHandleRes();
         const auto & pack_stats = dmfile->getPackStats();
@@ -2955,7 +2956,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
         {
             const auto & pack_stat = pack_stats[pack_id];
             preceded_rows += pack_stat.rows;
-            if (!isUse(pack_res[pack_id]))
+            if (!pack_res[pack_id].isUse())
             {
                 continue;
             }

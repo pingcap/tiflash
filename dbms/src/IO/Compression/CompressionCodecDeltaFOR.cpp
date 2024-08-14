@@ -20,8 +20,6 @@
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/EncodingUtil.h>
 #include <common/likely.h>
-#include <common/unaligned.h>
-#include <lz4.h>
 
 #include <magic_enum.hpp>
 
@@ -45,22 +43,11 @@ UInt8 CompressionCodecDeltaFOR::getMethodByte() const
 
 UInt32 CompressionCodecDeltaFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
-    switch (data_type)
-    {
-    case CompressionDataType::Int8:
-    case CompressionDataType::Int16:
-    case CompressionDataType::Int32:
-    case CompressionDataType::Int64:
-    {
-        // |bytes_of_original_type|first_value|frame_of_reference|width(bits)  |bitpacked data|
-        // |1 bytes               |bytes_size |bytes_size        |sizeof(UInt8)|required size |
-        auto bytes_size = magic_enum::enum_integer(data_type);
-        const size_t deltas_count = uncompressed_size / bytes_size - 1;
-        return 1 + bytes_size * 2 + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(deltas_count, bytes_size * 8);
-    }
-    default:
-        return 1 + LZ4_COMPRESSBOUND(uncompressed_size);
-    }
+    // |bytes_of_original_type|first_value|frame_of_reference|width(bits)  |bitpacked data|
+    // |1 bytes               |bytes_size |bytes_size        |sizeof(UInt8)|required size |
+    auto bytes_size = magic_enum::enum_integer(data_type);
+    const size_t deltas_count = uncompressed_size / bytes_size - 1;
+    return 1 + bytes_size * 2 + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(deltas_count, bytes_size * 8);
 }
 
 namespace
@@ -104,15 +91,7 @@ UInt32 CompressionCodecDeltaFOR::doCompressData(const char * source, UInt32 sour
     case CompressionDataType::Int64:
         return 1 + compressData<UInt64>(source, source_size, dest);
     default:
-        auto success = LZ4_compress_fast(
-            source,
-            dest,
-            source_size,
-            LZ4_COMPRESSBOUND(source_size),
-            CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
-        if (unlikely(!success))
-            throw Exception("Cannot LZ4_compress_fast", ErrorCodes::CANNOT_COMPRESS);
-        return 1 + success;
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Unsupported data type: {}", magic_enum::enum_name(data_type));
     }
 }
 
@@ -150,9 +129,10 @@ void CompressionCodecDeltaFOR::doDecompressData(
         DB::Compression::deltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
-        if (unlikely(LZ4_decompress_safe(&source[1], dest, source_size_no_header, uncompressed_size) < 0))
-            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
-        break;
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Unsupported data type: {}",
+            magic_enum::enum_name(data_type.value()));
     }
 }
 
@@ -190,9 +170,10 @@ void CompressionCodecDeltaFOR::ordinaryDecompress(
         DB::Compression::ordinaryDeltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
-        if (unlikely(LZ4_decompress_safe(&source[1], dest, source_size_no_header, uncompressed_size) < 0))
-            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
-        break;
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Unsupported data type: {}",
+            magic_enum::enum_name(data_type.value()));
     }
 }
 

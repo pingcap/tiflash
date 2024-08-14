@@ -23,7 +23,7 @@ static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fi
 
 static constexpr size_t maxFineGrainedStreamCount = 1024;
 
-inline bool enableFineGrainedShuffle(uint64_t stream_count)
+inline bool fineGrainedShuffleEnabled(uint64_t stream_count)
 {
     return stream_count > 0;
 }
@@ -40,7 +40,7 @@ struct FineGrainedShuffle
         , batch_size(executor ? executor->fine_grained_shuffle_batch_size() : 0)
     {}
 
-    bool enable() const { return enableFineGrainedShuffle(stream_count); }
+    bool enabled() const { return fineGrainedShuffleEnabled(stream_count); }
 
     const UInt64 stream_count;
     const UInt64 batch_size;
