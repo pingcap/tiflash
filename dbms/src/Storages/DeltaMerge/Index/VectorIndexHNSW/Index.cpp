@@ -162,6 +162,7 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
     std::atomic<size_t> discarded_nodes = 0;
     std::atomic<bool> has_exception_in_search = false;
 
+    // The non-valid rows should be discarded by this lambda
     auto predicate = [&](typename USearchImplType::member_cref_t const & member) {
         // Must catch exceptions in the predicate, because search runs on other threads.
         try
@@ -180,7 +181,7 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
         }
     };
 
-    // TODO: Support efSearch.
+    // TODO(vector-index): Support efSearch.
     auto result = index.search( //
         reinterpret_cast<const Float32 *>(query_info->ref_vec_f32().data() + sizeof(UInt32)),
         query_info->top_k(),

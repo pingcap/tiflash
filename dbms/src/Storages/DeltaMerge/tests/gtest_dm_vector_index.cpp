@@ -95,6 +95,11 @@ public:
         // When used in read, no need to assign vector_index.
         return ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
     }
+
+    static size_t cleanVectorCacheEntries(const std::shared_ptr<VectorIndexCache> & cache)
+    {
+        return cache->cleanOutdatedCacheEntries();
+    }
 };
 
 class VectorIndexDMFileTest
@@ -1638,7 +1643,8 @@ try
     {
         // We should be able to clear something from the vector index cache.
         auto vec_cache = TiFlashTestEnv::getGlobalContext().getVectorIndexCache();
-        ASSERT_EQ(1, vec_cache->cleanOutdatedCacheEntries());
+        ASSERT_NE(vec_cache, nullptr);
+        ASSERT_EQ(1, cleanVectorCacheEntries(vec_cache));
     }
     {
         // When cache is evicted (and memory cache is dropped), the query should be fine.
@@ -1777,7 +1783,8 @@ try
     {
         // We should be able to clear something from the vector index cache.
         auto vec_cache = TiFlashTestEnv::getGlobalContext().getVectorIndexCache();
-        ASSERT_EQ(1, vec_cache->cleanOutdatedCacheEntries());
+        ASSERT_NE(vec_cache, nullptr);
+        ASSERT_EQ(1, cleanVectorCacheEntries(vec_cache));
     }
     {
         // Query should be fine.

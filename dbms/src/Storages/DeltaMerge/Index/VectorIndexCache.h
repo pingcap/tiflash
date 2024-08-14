@@ -24,6 +24,11 @@
 #include <thread>
 #include <unordered_set>
 
+namespace DB::DM::tests
+{
+class VectorIndexTestUtils;
+}
+
 namespace DB::DM
 {
 
@@ -44,11 +49,8 @@ private:
     std::condition_variable shutdown_cv;
     std::mutex shutdown_mu;
 
-#ifdef DBMS_PUBLIC_GTEST
-public:
-#else
 private:
-#endif
+    friend class ::DB::DM::tests::VectorIndexTestUtils;
 
     // Drop the in-memory Vector Index if the on-disk file is deleted.
     // mmaped file could be unmmaped so that disk space can be reclaimed.
@@ -56,6 +58,7 @@ private:
 
     void cleanOutdatedLoop();
 
+    // TODO(vector-index): Use task on BackgroundProcessingPool instead of a raw thread
     std::thread cleaner_thread;
 
 public:
