@@ -63,7 +63,9 @@ struct alignas(64) AlignBufferAVX2
     bool need_flush = false;
 };
 #else
-struct AlignBufferAVX2 {};
+struct AlignBufferAVX2
+{
+};
 #endif
 
 /// Declares interface to store columns in memory.

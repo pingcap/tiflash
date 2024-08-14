@@ -57,7 +57,9 @@ StringRef ColumnVector<T>::serializeValueIntoArena(
 }
 
 template <typename T>
-void ColumnVector<T>::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer [[maybe_unused]])
+void ColumnVector<T>::deserializeAndInsertFromPos(
+    PaddedPODArray<UInt8 *> & pos,
+    AlignBufferAVX2 & buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
     size_t size = pos.size();

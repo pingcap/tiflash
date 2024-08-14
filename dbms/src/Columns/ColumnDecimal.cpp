@@ -123,7 +123,9 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
-void ColumnDecimal<T>::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer [[maybe_unused]])
+void ColumnDecimal<T>::deserializeAndInsertFromPos(
+    PaddedPODArray<UInt8 *> & pos,
+    AlignBufferAVX2 & buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
     size_t size = pos.size();
