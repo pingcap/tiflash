@@ -24,6 +24,10 @@
 #include <common/StringRef.h>
 #include <fmt/core.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+#include <immintrin.h>
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -37,7 +41,6 @@ class Arena;
 class ColumnGathererStream;
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#include <immintrin.h>
 struct alignas(64) AlignBufferAVX2
 {
     static constexpr size_t vector_size = sizeof(__m256i);
