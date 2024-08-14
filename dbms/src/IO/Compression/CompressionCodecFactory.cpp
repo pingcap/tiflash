@@ -94,6 +94,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>
     if (lz4_map.size() >= MAX_LZ4_MAP_SIZE)
         lz4_map.clear();
     auto [it, inserted] = lz4_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4>(setting.level));
+    assert(inserted);
     return it->second;
 }
 
@@ -113,27 +114,28 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4H
     if (lz4hc_map.size() >= MAX_LZ4HC_MAP_SIZE)
         lz4hc_map.clear();
     auto [it, inserted] = lz4hc_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4HC>(setting.level));
+    assert(inserted);
     return it->second;
 }
 
 template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecZSTD>(const CompressionSetting & setting)
 {
-    // ZSTD level is in the range [1, 22], the maximum size of the map is 22.
-    static std::vector<CompressionCodecPtr> zstd_map = {
-        std::make_shared<CompressionCodecZSTD>(1),  std::make_shared<CompressionCodecZSTD>(2),
-        std::make_shared<CompressionCodecZSTD>(3),  std::make_shared<CompressionCodecZSTD>(4),
-        std::make_shared<CompressionCodecZSTD>(5),  std::make_shared<CompressionCodecZSTD>(6),
-        std::make_shared<CompressionCodecZSTD>(7),  std::make_shared<CompressionCodecZSTD>(8),
-        std::make_shared<CompressionCodecZSTD>(9),  std::make_shared<CompressionCodecZSTD>(10),
-        std::make_shared<CompressionCodecZSTD>(11), std::make_shared<CompressionCodecZSTD>(12),
-        std::make_shared<CompressionCodecZSTD>(13), std::make_shared<CompressionCodecZSTD>(14),
-        std::make_shared<CompressionCodecZSTD>(15), std::make_shared<CompressionCodecZSTD>(16),
-        std::make_shared<CompressionCodecZSTD>(17), std::make_shared<CompressionCodecZSTD>(18),
-        std::make_shared<CompressionCodecZSTD>(19), std::make_shared<CompressionCodecZSTD>(20),
-        std::make_shared<CompressionCodecZSTD>(21), std::make_shared<CompressionCodecZSTD>(22),
-    };
-    return zstd_map[setting.level - 1];
+    static constexpr auto MAX_ZSTD_MAP_SIZE = 10;
+    static std::shared_mutex zstd_mutex;
+    static std::unordered_map<int, CompressionCodecPtr> zstd_map;
+    {
+        std::shared_lock lock(zstd_mutex);
+        auto it = zstd_map.find(setting.level);
+        if (it != zstd_map.end())
+            return it->second;
+    }
+    std::unique_lock lock(zstd_mutex);
+    if (zstd_map.size() >= MAX_ZSTD_MAP_SIZE)
+        zstd_map.clear();
+    auto [it, inserted] = zstd_map.emplace(setting.level, std::make_shared<CompressionCodecZSTD>(setting.level));
+    assert(inserted);
+    return it->second;
 }
 
 template <>
@@ -234,7 +236,7 @@ Codecs CompressionCodecFactory::createCodecs(const CompressionSettings & setting
         if (auto codec = create(setting); codec)
             codecs.push_back(std::move(codec));
     }
-    assert(!codecs.empty());
+    RUNTIME_CHECK(!codecs.empty());
     return codecs;
 }
 
