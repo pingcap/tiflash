@@ -353,18 +353,7 @@ public:
         }
     }
 
-    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos) override
-    {
-        size_t prev_size = data.size();
-        data.resize(prev_size + pos.size());
-
-        size_t size = pos.size();
-        for (size_t i = 0; i < size; ++i)
-        {
-            std::memcpy(&data[prev_size + i], pos[i], sizeof(T));
-            pos[i] += sizeof(T);
-        }
-    }
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer) override;
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
@@ -388,6 +377,7 @@ public:
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;
 
     void reserve(size_t n) override { data.reserve(n); }
+    void reserveAlign(size_t n, size_t alignment) override { data.reserve(n, alignment); }
 
     const char * getFamilyName() const override;
 

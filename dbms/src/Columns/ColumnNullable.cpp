@@ -234,10 +234,10 @@ void ColumnNullable::serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start,
     getNestedColumn().serializeToPos(pos, start, end, has_null);
 }
 
-void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos)
+void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer)
 {
-    getNullMapColumn().deserializeAndInsertFromPos(pos);
-    getNestedColumn().deserializeAndInsertFromPos(pos);
+    getNullMapColumn().deserializeAndInsertFromPos(pos, buffer);
+    getNestedColumn().deserializeAndInsertFromPos(pos, buffer);
 }
 
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
@@ -469,11 +469,24 @@ void ColumnNullable::reserve(size_t n)
     getNullMapData().reserve(n);
 }
 
+void ColumnNullable::reserveAlign(size_t n, size_t alignment)
+{
+    getNestedColumn().reserveAlign(n, alignment);
+    getNullMapData().reserve(n, alignment);
+}
+
 void ColumnNullable::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
 {
     getNullMapColumn().reserve(n);
     total_memory_hint -= n * sizeof(UInt8);
     getNestedColumn().reserveWithTotalMemoryHint(n, total_memory_hint);
+}
+
+void ColumnNullable::reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment)
+{
+    getNullMapColumn().reserveAlign(n, alignment);
+    total_memory_hint -= n * sizeof(UInt8);
+    getNestedColumn().reserveAlignWithTotalMemoryHint(n, total_memory_hint, alignment);
 }
 
 size_t ColumnNullable::byteSize() const

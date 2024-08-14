@@ -272,19 +272,28 @@ private:
             if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
                 return;
         }
+        else
+        {
+            for (auto & b : wd.align_buffer)
+                b.need_flush = true;
+        }
         for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
         {
             IColumn * column = added_columns[column_index].get();
             if (has_null_map && is_nullable)
                 column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-            column->deserializeAndInsertFromPos(wd.insert_batch);
+            column->deserializeAndInsertFromPos(wd.insert_batch, wd.align_buffer[column_index]);
         }
         for (auto [column_index, _] : row_layout.other_required_column_indexes)
         {
             if constexpr (key_all_raw)
-                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch);
+                added_columns[column_index]->deserializeAndInsertFromPos(
+                    wd.insert_batch,
+                    wd.align_buffer[column_index]);
             else
-                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch_other);
+                added_columns[column_index]->deserializeAndInsertFromPos(
+                    wd.insert_batch_other,
+                    wd.align_buffer[column_index]);
         }
 
         wd.insert_batch.clear();
@@ -364,7 +373,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
             {
                 ++current_offset;
                 insertRowToBatch(ptr + row_layout.key_offset, key_getter.getJoinKeySize(key2));
-                if unlikely (current_offset >= settings.max_block_size)
+                if unlikely (current_offset >= context.rows)
                     break;
             }
             ptr = row_layout.getNextRowPtr(ptr);
@@ -454,7 +463,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
                 ++current_offset;
                 selective_offsets.push_back(state->index);
                 insertRowToBatch(ptr + row_layout.key_offset, key_getter.getJoinKeySize(key2));
-                if unlikely (current_offset >= settings.max_block_size)
+                if unlikely (current_offset >= context.rows)
                 {
                     if (!next_ptr)
                     {

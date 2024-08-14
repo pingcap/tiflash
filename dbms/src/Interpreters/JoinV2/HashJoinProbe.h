@@ -73,6 +73,8 @@ struct alignas(ABSL_CACHELINE_SIZE) JoinProbeWorkerData
     size_t row_count = 0;
 
     ColumnUInt8::MutablePtr filter_column = ColumnUInt8::create();
+
+    std::vector<AlignBufferAVX2> align_buffer;
 };
 
 void joinProbeBlock(

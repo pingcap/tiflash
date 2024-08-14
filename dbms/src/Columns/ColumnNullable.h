@@ -80,7 +80,7 @@ public:
 
     void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override;
 
-    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer) override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
@@ -126,7 +126,9 @@ public:
     void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res)
         const;
     void reserve(size_t n) override;
+    void reserveAlign(size_t n, size_t alignment) override;
     void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
+    void reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment) override;
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;

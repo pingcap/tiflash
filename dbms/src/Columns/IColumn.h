@@ -35,6 +35,29 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 
 class Arena;
 class ColumnGathererStream;
+struct alignas(64) AlignBufferAVX2
+{
+    //#ifdef __AVX2__
+    //static constexpr size_t vector_size = sizeof(__m256i);
+    //static constexpr size_t buffer_size = 2 * vector_size;
+    static constexpr size_t vector_size = 32;
+    static constexpr size_t buffer_size = 64;
+    union
+    {
+        char data1[buffer_size]{};
+        //__m256i v1[2];
+    };
+    union
+    {
+        char data2[buffer_size]{};
+        //__m256i v2[2];
+    };
+    size_t size1 = 0;
+    size_t size2 = 0;
+
+    bool need_flush = false;
+    //#endif
+};
 
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
@@ -243,7 +266,7 @@ public:
         throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    virtual void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & /* pos */)
+    virtual void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & /* pos */, AlignBufferAVX2 & /* buffer */)
     {
         throw Exception(
             "Method deserializeAndInsertFromPos is not supported for " + getName(),
@@ -382,11 +405,22 @@ public:
 
     /// Reserves memory for specified amount of elements. If reservation isn't possible, does nothing.
     /// It affects performance only (not correctness).
-    virtual void reserve(size_t /*n*/){};
+    virtual void reserve(size_t /*n*/) {}
+
+    /// Reserves aligned memory for specified amount of elements. If reservation isn't possible, does nothing.
+    /// It affects performance only (not correctness).
+    virtual void reserveAlign(size_t /*n*/, size_t /*alignment*/) {}
 
     /// Reserve memory for specified amount of elements with a total memory hint, the default impl is
     /// calling `reserve(n)`, columns with non-fixed size elements can overwrite it for better reserve
     virtual void reserveWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/) { reserve(n); }
+
+    /// Reserve aligned memory for specified amount of elements with a total memory hint, the default impl is
+    /// calling `reserveAlign(n)`, columns with non-fixed size elements can overwrite it for better reserve
+    virtual void reserveAlignWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/, size_t alignment)
+    {
+        reserveAlign(n, alignment);
+    }
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;

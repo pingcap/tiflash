@@ -320,6 +320,8 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_concurrency = probe_concurrency_;
     active_probe_worker = probe_concurrency;
     probe_workers_data.resize(probe_concurrency);
+    for (size_t i = 0; i < probe_concurrency; ++i)
+        probe_workers_data[i].align_buffer.resize(right_sample_block_pruned.columns());
 }
 
 void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
@@ -539,11 +541,11 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
             src_column.name);
 
         added_columns.push_back(src_column.column->cloneEmpty());
-        added_columns.back()->reserve(rows);
+        added_columns.back()->reserveAlign(rows, AlignBufferAVX2::buffer_size);
         if (src_column.type && src_column.type->haveMaximumSizeOfValue())
         {
             // todo figure out more accurate `rows`
-            added_columns.back()->reserve(rows);
+            added_columns.back()->reserveAlign(rows, AlignBufferAVX2::buffer_size);
         }
     }
 

@@ -368,6 +368,12 @@ void ColumnArray::reserve(size_t n)
         n); /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
 }
 
+void ColumnArray::reserveAlign(size_t n, size_t alignment)
+{
+    getOffsets().reserve(n, alignment);
+    getData().reserveAlign(n, alignment);
+}
+
 
 size_t ColumnArray::byteSize() const
 {

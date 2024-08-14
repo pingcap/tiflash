@@ -277,26 +277,7 @@ public:
         }
     }
 
-    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos) override
-    {
-        size_t prev_size = offsets.size();
-        offsets.resize(prev_size + pos.size());
-
-        size_t size = pos.size();
-        size_t char_size = chars.size();
-        for (size_t i = 0; i < size; ++i)
-        {
-            size_t str_size;
-            std::memcpy(&str_size, pos[i], sizeof(size_t));
-            pos[i] += sizeof(size_t);
-
-            chars.resize(char_size + str_size);
-            inline_memcpy(&chars[char_size], pos[i], str_size);
-            char_size += str_size;
-            offsets[prev_size + i] = char_size;
-            pos[i] += str_size;
-        }
-    }
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer) override;
 
     void updateHashWithValue(
         size_t n,
@@ -399,7 +380,10 @@ public:
 
     void reserve(size_t n) override;
 
+    void reserveAlign(size_t n, size_t alignment) override;
+
     void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
+    void reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment) override;
 
     void getExtremes(Field & min, Field & max) const override;
 

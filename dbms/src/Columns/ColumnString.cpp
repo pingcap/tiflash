@@ -289,6 +289,12 @@ void ColumnString::reserve(size_t n)
     chars.reserve(n * APPROX_STRING_SIZE);
 }
 
+void ColumnString::reserveAlign(size_t n, size_t alignment)
+{
+    offsets.reserve(n, alignment);
+    chars.reserve(n * APPROX_STRING_SIZE, alignment);
+}
+
 void ColumnString::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
 {
     offsets.reserve(n);
@@ -299,6 +305,15 @@ void ColumnString::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
         chars.reserve(n * APPROX_STRING_SIZE);
 }
 
+void ColumnString::reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment)
+{
+    offsets.reserve(n, alignment);
+    total_memory_hint -= n * sizeof(offsets[0]);
+    if (total_memory_hint >= 0)
+        chars.reserve(total_memory_hint, alignment);
+    else
+        chars.reserve(n * APPROX_STRING_SIZE, alignment);
+}
 
 void ColumnString::getExtremes(Field & min, Field & max) const
 {
@@ -458,6 +473,109 @@ void ColumnString::getPermutationWithCollationImpl(
     {
         PermutationWithCollationUtils::getPermutationWithCollationImpl(*this, collator, reverse, limit, res);
     }
+    }
+}
+
+void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer)
+{
+    size_t prev_size = offsets.size();
+    size_t char_size = chars.size();
+    size_t size = pos.size();
+
+#ifdef __AVX2__
+    bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % AlignBufferAVX2::buffer_size == 0;
+    bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % AlignBufferAVX2::buffer_size == 0;
+
+    if likely (is_offset_aligned && is_char_aligned)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t str_size;
+            std::memcpy(&str_size, pos[i], sizeof(size_t));
+            pos[i] += sizeof(size_t);
+
+            do
+            {
+                size_t remain = AlignBufferAVX2::buffer_size - buffer.size1;
+                size_t copy_bytes = std::min(remain, str_size);
+                std::memcpy(&buffer.data1[buffer.size1], pos[i], copy_bytes);
+                pos[i] += copy_bytes;
+                buffer.size1 += copy_bytes;
+                str_size -= copy_bytes;
+                if (buffer.size1 == AlignBufferAVX2::buffer_size)
+                {
+                    chars.resize(char_size + AlignBufferAVX2::buffer_size, AlignBufferAVX2::buffer_size);
+                    _mm256_stream_si256((__m256i *)&chars[char_size], buffer.v1[0]);
+                    char_size += AlignBufferAVX2::vector_size;
+                    _mm256_stream_si256((__m256i *)&chars[char_size], buffer.v1[1]);
+                    char_size += AlignBufferAVX2::vector_size;
+                    buffer.size1 = 0;
+                }
+            } while (str_size > 0);
+
+            size_t offset = char_size + buffer.size1;
+            std::memcpy(&buffer.data2[buffer.size2], &offset, sizeof(size_t));
+            buffer.size2 += sizeof(size_t);
+            if (buffer.size2 == AlignBufferAVX2::buffer_size)
+            {
+                offsets.resize(prev_size + AlignBufferAVX2::buffer_size / sizeof(size_t), AlignBufferAVX2::buffer_size);
+                _mm256_stream_si256((__m256i *)&offsets[prev_size], buffer.v2[0]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
+                _mm256_stream_si256((__m256i *)&offsets[prev_size], buffer.v2[1]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
+                buffer.size2 = 0;
+            }
+        }
+
+        if unlikely (buffer.need_flush)
+        {
+            if (buffer.size1 != 0)
+            {
+                chars.resize(char_size + buffer.size1, AlignBufferAVX2::buffer_size);
+                std::memcpy(&chars[char_size], buffer.data1, buffer.size1);
+                buffer.size1 = 0;
+            }
+            if (buffer.size2 != 0)
+            {
+                offsets.resize(prev_size + buffer.size2 / sizeof(size_t), AlignBufferAVX2::buffer_size);
+                std::memcpy(&offsets[prev_size], buffer.data2, buffer.size2);
+                buffer.size2 = 0;
+            }
+            buffer.need_flush = false;
+        }
+
+        return;
+    }
+
+    if unlikely (buffer.size1 != 0)
+    {
+        chars.resize(char_size + buffer.size1, AlignBufferAVX2::buffer_size);
+        std::memcpy(&chars[char_size], buffer.data1, buffer.size1);
+        char_size += buffer.size1;
+        buffer.size1 = 0;
+    }
+    if unlikely (buffer.size2 != 0)
+    {
+        offsets.resize(prev_size + buffer.size2 / sizeof(size_t), AlignBufferAVX2::buffer_size);
+        std::memcpy(&offsets[prev_size], buffer.data2, buffer.size2);
+        prev_size += buffer.size2 / sizeof(size_t);
+        buffer.size2 = 0;
+    }
+    buffer.need_flush = false;
+#endif
+
+    offsets.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t str_size;
+        std::memcpy(&str_size, pos[i], sizeof(size_t));
+        pos[i] += sizeof(size_t);
+
+        chars.resize(char_size + str_size);
+        inline_memcpy(&chars[char_size], pos[i], str_size);
+        char_size += str_size;
+        offsets[prev_size + i] = char_size;
+        pos[i] += str_size;
     }
 }
 

@@ -54,6 +54,101 @@ StringRef ColumnVector<T>::serializeValueIntoArena(
 }
 
 template <typename T>
+void ColumnVector<T>::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer)
+{
+    size_t prev_size = data.size();
+    size_t size = pos.size();
+    data.resize(prev_size + size, AlignBufferAVX2::buffer_size);
+
+    size_t i = 0;
+
+#ifdef __AVX2__
+    if constexpr (AlignBufferAVX2::buffer_size % sizeof(T) == 0)
+    {
+        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::buffer_size == 0;
+        if likely (is_aligned)
+        {
+            if unlikely (buffer.size1 != 0)
+            {
+                size_t count = std::min(size, i + (AlignBufferAVX2::buffer_size - buffer.size1) / sizeof(T));
+                for (; i < count; ++i)
+                {
+                    std::memcpy(&buffer.data1[buffer.size1], pos[i], sizeof(T));
+                    buffer.size1 += sizeof(T);
+                    pos[i] += sizeof(T);
+                }
+
+                if (buffer.size1 < AlignBufferAVX2::buffer_size)
+                {
+                    if unlikely (buffer.need_flush)
+                    {
+                        std::memcpy(&data[prev_size], buffer.data1, buffer.size1);
+                        buffer.size1 = 0;
+                        buffer.need_flush = false;
+                    }
+                    return;
+                }
+
+                assert(buffer.size1 == AlignBufferAVX2::buffer_size);
+                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[0]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[1]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                buffer.size1 = 0;
+            }
+
+            constexpr size_t simd_width = AlignBufferAVX2::buffer_size / sizeof(T);
+            for (; i + simd_width <= size; i += simd_width)
+            {
+                for (size_t j = 0; j < simd_width; ++j)
+                {
+                    std::memcpy(&buffer.data1[buffer.size1], pos[i + j], sizeof(T));
+                    buffer.size1 += sizeof(T);
+                    pos[i + j] += sizeof(T);
+                }
+
+                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[0]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[1]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                buffer.size1 = 0;
+            }
+
+            for (; i < size; ++i)
+            {
+                std::memcpy(&buffer.data1[buffer.size1], pos[i], sizeof(T));
+                buffer.size1 += sizeof(T);
+                pos[i] += sizeof(T);
+            }
+
+            if unlikely (buffer.need_flush)
+            {
+                std::memcpy(&data[prev_size], buffer.data1, buffer.size1);
+                buffer.size1 = 0;
+                buffer.need_flush = false;
+            }
+
+            return;
+        }
+
+        if unlikely (buffer.size1 != 0)
+        {
+            std::memcpy(&data[prev_size], buffer.data1, buffer.size1);
+            buffer.size1 = 0;
+            buffer.need_flush = false;
+        }
+    }
+#endif
+
+    for (; i < size; ++i)
+    {
+        std::memcpy(&data[prev_size], pos[i], sizeof(T));
+        ++prev_size;
+        pos[i] += sizeof(T);
+    }
+}
+
+template <typename T>
 void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(data[n]);
