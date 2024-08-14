@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Filter/Unsupported.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -67,10 +68,10 @@ extern const char proactive_flush_force_set_type[];
 namespace tests
 {
 DM::PushDownFilterPtr generatePushDownFilter(
-Context & ctx,
-const String table_info_json,
-const String & query,
-const std::optional<TimezoneInfo> & opt_tz = std::nullopt);
+    Context & ctx,
+    const String table_info_json,
+    const String & query,
+    const std::optional<TimezoneInfo> & opt_tz = std::nullopt);
 }
 namespace DM
 {
@@ -3977,21 +3978,27 @@ try
 {
     auto log = Logger::get(GET_GTEST_FULL_NAME);
     auto table_column_defines = DMTestEnv::getDefaultColumns();
-    ColumnDefine cd_datetime(1, "col_datetime", std::make_shared<DataTypeInt64>());
-    table_column_defines->push_back(cd_datetime);
- 
+    ColumnDefine cd_time(1, "col_time", std::make_shared<DataTypeInt64>());
+    table_column_defines->push_back(cd_time);
+
     store = reload(table_column_defines);
+
+    auto create_data = [&](Int64 start, Int64 limit) {
+        std::vector<Int64> v(limit, 0);
+        std::iota(v.begin(), v.end(), start); // start ... start + limit - 1
+        return v;
+    };
 
     auto create_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
         auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
-        std::vector<Int64> time_data(end - beg, 1);
-        auto col_datetime = createColumn<Int64>(time_data, cd_datetime.name, cd_datetime.id);
-        block.insert(col_datetime);
+        auto time_data = create_data(0, end - beg);
+        auto col_time = createColumn<Int64>(time_data, cd_time.name, cd_time.id);
+        block.insert(col_time);
         block.checkNumberOfRows();
         return block;
     };
 
-    auto check = [&](RSResult res, PushDownFilterPtr filter) {
+    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4007,58 +4014,82 @@ try
             /* is_fast_scan= */ false,
             /* expected_block_size= */ 1024)[0];
 
+        Int64 rows = 0;
         in->readPrefix();
         while (true)
         {
             auto b = in->read();
             if (!b)
                 break;
-            
-            ASSERT_EQ(b.getRSResult(), res) << fmt::format("{} vs {}", b.getRSResult(), res);
-            const auto * v = toColumnVectorDataPtr<UInt64>(b.getByName("col_datetime").column);
+            rows += b.rows();
+            ASSERT_EQ(b.getRSResult(), expected_res) << fmt::format("{} vs {}", b.getRSResult(), expected_res);
+            const auto * v = toColumnVectorDataPtr<Int64>(b.getByName("col_time").column);
             ASSERT_NE(v, nullptr);
-            for (UInt64 i : *v)
-                ASSERT_EQ(i, 1);
+            ASSERT_EQ(v->size(), expected_data.size());
+            ASSERT_TRUE(std::equal(v->begin(), v->end(), expected_data.begin()))
+                << fmt::format("{} vs {}", *v, expected_data);
         }
         in->readSuffix();
+        ASSERT_EQ(rows, expected_data.size());
     };
 
     const String table_info_json = R"json({
     "cols":[
-        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_datetime","O":"col_datetime"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":11}}
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_time","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":11}}
     ],
     "pk_is_handle":false,"index_info":[],"is_common_handle":false,
     "name":{"L":"t_111","O":"t_111"},"partition":null,
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
+    auto create_filter = [&](Int64 value) {
+        auto filter = generatePushDownFilter(
+            *db_context,
+            table_info_json,
+            fmt::format("select * from default.t_111 where col_time >= {}", value));
+        RUNTIME_CHECK(filter->extra_cast != nullptr);
+        RUNTIME_CHECK(filter->rs_operator != nullptr);
+        auto rs_unsupported = typeid_cast<const Unsupported *>(filter->rs_operator.get());
+        RUNTIME_CHECK(rs_unsupported == nullptr, filter->rs_operator->toDebugString());
+        RUNTIME_CHECK(filter->before_where != nullptr);
+        LOG_DEBUG(
+            log,
+            "value={} extra_cast={} rs_operator={} before_where={}",
+            value,
+            filter->extra_cast->dumpActions(),
+            filter->rs_operator->toDebugString(),
+            filter->before_where->dumpActions());
+        return filter;
+    };
+
     DB::registerFunctions();
+
+    constexpr Int64 num_rows = 128;
+    auto filter_all = create_filter(0);
+    auto filter_all_data = create_data(0, num_rows);
+    auto filter_some = create_filter(64);
+    auto filter_some_data = create_data(64, num_rows - 64);
+    auto filter_none = create_filter(128);
+    auto filter_none_data = std::vector<Int64>{};
 
     // Disable delta merge to ensure read data from delta
     FailPointHelper::enableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
 
-    auto block = create_block(0, 128, 1);
+    auto block = create_block(0, num_rows, 1);
     store->write(*db_context, db_context->getSettingsRef(), block);
 
-    auto filter = generatePushDownFilter(
-            *db_context,
-            table_info_json,
-            "select * from default.t_111 where col_datetime > 1");
-    ASSERT_NE(filter->extra_cast, nullptr);
-    std::cout << filter->extra_cast->dumpActions() << std::endl;
-    std::cout << filter->rs_operator->toDebugString() << std::endl;
-    std::cout << filter->before_where->dumpActions() << std::endl;
+    LOG_DEBUG(log, "Check delta");
+    // Delta always return Some
+    check(filter_all, RSResult::Some, filter_all_data);
+    check(filter_some, RSResult::Some, filter_some_data);
+    check(filter_none, RSResult::Some, filter_none_data);
 
-    // Read from delta
-    std::cout << "Check delta\n";
-    check(RSResult::Some, filter);
-    
+    LOG_DEBUG(log, "Check stable");
     FailPointHelper::disableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
     store->mergeDeltaAll(*db_context);
-
-    std::cout << "Check stable\n";
-    // Read from stable
-    check(RSResult::All, filter);
+    check(filter_all, RSResult::All, filter_all_data);
+    check(filter_some, RSResult::Some, filter_some_data);
+    check(filter_none, RSResult::Some, filter_none_data);
 }
 CATCH
 } // namespace tests
