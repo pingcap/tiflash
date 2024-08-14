@@ -37,26 +37,25 @@ class Arena;
 class ColumnGathererStream;
 struct alignas(64) AlignBufferAVX2
 {
-    //#ifdef __AVX2__
-    //static constexpr size_t vector_size = sizeof(__m256i);
-    //static constexpr size_t buffer_size = 2 * vector_size;
-    static constexpr size_t vector_size = 32;
-    static constexpr size_t buffer_size = 64;
+#ifdef __AVX2__
+    static constexpr size_t vector_size = sizeof(__m256i);
+    static constexpr size_t buffer_size = 2 * vector_size;
+
     union
     {
         char data1[buffer_size]{};
-        //__m256i v1[2];
+        __m256i v1[2];
     };
     union
     {
         char data2[buffer_size]{};
-        //__m256i v2[2];
+        __m256i v2[2];
     };
     size_t size1 = 0;
     size_t size2 = 0;
 
     bool need_flush = false;
-    //#endif
+#endif
 };
 
 /// Declares interface to store columns in memory.
