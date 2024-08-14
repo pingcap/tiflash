@@ -529,7 +529,7 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
     }
     assert(!result_blocks.empty());
     auto && ret = vstackBlocks(std::move(result_blocks));
-    probe_workers_data[stream_index].probe_time += watch.elapsedMilliseconds();
+    probe_workers_data[stream_index].probe_time += watch.elapsedFromLastTime();
     return std::move(ret);
 }
 
