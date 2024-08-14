@@ -117,7 +117,7 @@ template <typename KeyGetter, bool KeyTypeReference = KeyGetter::Type::isJoinKey
 struct ProbePrefetchState;
 
 template <typename KeyGetter>
-struct ProbePrefetchState<KeyGetter, true>
+struct alignas(ABSL_CACHELINE_SIZE) ProbePrefetchState<KeyGetter, true>
 {
     using KeyGetterType = typename KeyGetter::Type;
     using KeyType = typename KeyGetterType::KeyType;
@@ -138,7 +138,7 @@ struct ProbePrefetchState<KeyGetter, true>
 };
 
 template <typename KeyGetter>
-struct ProbePrefetchState<KeyGetter, false>
+struct alignas(ABSL_CACHELINE_SIZE) ProbePrefetchState<KeyGetter, false>
 {
     using KeyGetterType = typename KeyGetter::Type;
     using KeyType = typename KeyGetterType::KeyType;
