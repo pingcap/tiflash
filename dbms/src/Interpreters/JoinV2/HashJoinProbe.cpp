@@ -341,8 +341,9 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     size_t current_offset = 0;
     auto & offsets_to_replicate = wd.offsets_to_replicate;
-    size_t & idx = context.start_row_idx;
-    RowPtr & ptr = context.current_probe_row_ptr;
+    size_t idx = context.start_row_idx;
+    RowPtr ptr = context.current_probe_row_ptr;
+    size_t collision = 0;
     for (; idx < context.rows; ++idx)
     {
         if (has_null_map && (*context.null_map)[idx])
@@ -375,13 +376,16 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
         while (true)
         {
             const auto & key2 = key_getter.deserializeJoinKey(ptr + row_layout.key_offset);
-            if (joinKeyIsEqual(key_getter, key, key2, hash, ptr))
+            bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, hash, ptr);
+            collision += !key_is_equal;
+            if (key_is_equal)
             {
                 ++current_offset;
                 insertRowToBatch(ptr + row_layout.key_offset, key_getter.getJoinKeySize(key2));
                 if unlikely (current_offset >= context.rows)
                     break;
             }
+
             ptr = row_layout.getNextRowPtr(ptr);
             if (ptr == nullptr)
                 break;
@@ -419,6 +423,10 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
     }
     FlushBatchIfNecessary<true>();
     FillNullMap(current_offset);
+
+    context.start_row_idx = idx;
+    context.current_probe_row_ptr = ptr;
+    wd.collision += collision;
 }
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>
@@ -428,13 +436,15 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
     auto & selective_offsets = wd.selective_offsets;
     auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(wd.prefetch_states.get());
 
-    size_t & idx = context.start_row_idx;
-    size_t & active_states = context.prefetch_active_states;
-    size_t & k = wd.prefetch_iter;
+    size_t idx = context.start_row_idx;
+    size_t active_states = context.prefetch_active_states;
+    size_t k = wd.prefetch_iter;
     size_t current_offset = 0;
+    size_t collision = 0;
+    const size_t probe_prefetch_step = settings.probe_prefetch_step;
     while (idx < context.rows || active_states > 0)
     {
-        k = k == settings.probe_prefetch_step ? 0 : k;
+        k = k == probe_prefetch_step ? 0 : k;
         auto * state = &states[k];
         if (state->stage == ProbePrefetchStage::FindNext)
         {
@@ -464,7 +474,9 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
 
             const auto & key = state->getJoinKey(key_getter);
             const auto & key2 = key_getter.deserializeJoinKey(ptr + row_layout.key_offset);
-            if (joinKeyIsEqual(key_getter, key, key2, state->hash, ptr))
+            bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, state->hash, ptr);
+            collision += !key_is_equal;
+            if (key_is_equal)
             {
                 ++current_offset;
                 selective_offsets.push_back(state->index);
@@ -479,6 +491,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
                     break;
                 }
             }
+
             if (next_ptr)
             {
                 ++k;
@@ -554,6 +567,11 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
 
     FlushBatchIfNecessary<true>();
     FillNullMap(current_offset);
+
+    context.start_row_idx = idx;
+    context.prefetch_active_states = active_states;
+    wd.prefetch_iter = k;
+    wd.collision += collision;
 }
 
 template <typename KeyGetter, bool has_null_map, bool key_all_raw, bool tagged_pointer>

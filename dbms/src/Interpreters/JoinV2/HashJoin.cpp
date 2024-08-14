@@ -408,7 +408,17 @@ bool HashJoin::finishOneBuild(size_t stream_index)
 
 bool HashJoin::finishOneProbe(size_t stream_index)
 {
-    LOG_INFO(log, "{} probe cost {}ms", stream_index, probe_workers_data[stream_index].probe_time);
+    auto & wd = probe_workers_data[stream_index];
+    LOG_INFO(
+        log,
+        "{} probe handle {} rows, cost {}ms(hash_table {}ms + replicate {}ms + other condition {}ms), collision {}",
+        stream_index,
+        wd.probe_handle_rows,
+        wd.probe_time / 1000000UL,
+        wd.probe_hash_table_time / 1000000UL,
+        wd.replicate_time / 1000000UL,
+        wd.other_condition_time / 1000000UL,
+        wd.collision);
     return active_probe_worker.fetch_sub(1) == 1;
 }
 
@@ -509,8 +519,12 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
         /// exit the while loop if
         /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
         /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
-        if (context.isCurrentProbeFinished()
-            || (may_probe_side_expanded_after_join && result_rows >= min_result_block_size))
+        if (context.isCurrentProbeFinished())
+        {
+            probe_workers_data[stream_index].probe_handle_rows += context.rows;
+            break;
+        }
+        if (may_probe_side_expanded_after_join && result_rows >= min_result_block_size)
             break;
     }
     assert(!result_blocks.empty());
@@ -549,7 +563,9 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
     }
 
     auto & wd = probe_workers_data[stream_index];
+    Stopwatch watch;
     joinProbeBlock(context, wd, method, kind, non_equal_conditions, settings, pointer_table, row_layout, added_columns);
+    wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
     for (size_t index = 0; index < num_columns_to_add; ++index)
     {
@@ -578,9 +594,13 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
             }
         }
     }
+    wd.replicate_time += watch.elapsedFromLastTime();
 
     if (has_other_condition)
+    {
         handleOtherConditions(block, stream_index);
+        wd.other_condition_time += watch.elapsedFromLastTime();
+    }
 
     return block;
 }

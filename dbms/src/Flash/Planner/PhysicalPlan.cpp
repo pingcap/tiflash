@@ -213,7 +213,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         auto fine_grained_shuffle = FineGrainedShuffle(executor);
         auto & settings = context.getSettingsRef();
         if (settings.enable_hash_join_v2 && context.getDAGContext()->getExecutionMode() == ExecutionMode::Pipeline
-            && !fine_grained_shuffle.enable() && PhysicalJoinV2::isSupported(executor->join())
+            && !fine_grained_shuffle.enabled() && PhysicalJoinV2::isSupported(executor->join())
             && settings.max_bytes_before_external_join == 0 && !context.getDAGContext()->isInAutoSpillMode())
         {
             pushBack(
