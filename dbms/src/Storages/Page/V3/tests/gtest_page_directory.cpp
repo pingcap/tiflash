@@ -27,6 +27,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
@@ -45,8 +46,6 @@
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
-
-#include "Storages/Page/V3/PageEntryCheckpointInfo.h"
 
 namespace DB
 {

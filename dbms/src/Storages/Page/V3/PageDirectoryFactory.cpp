@@ -290,6 +290,9 @@ void PageDirectoryFactory<Trait>::applyRecord(
             while (true)
             {
                 const auto & current_version_list = version_list_iter->second;
+                // We need to ignore the "deletes" both when resolve page id and update local cache.
+                // Check `PageDirectory::getByIDImpl` or the unit test
+                // `UniPageStorageRemoteReadTest.WriteReadRefWithRestart` for details.
                 const bool ignore_delete = id_to_resolve != r.page_id;
                 auto [resolve_state, next_id_to_resolve, next_ver_to_resolve]
                     = current_version_list->resolveToPageId(sequence_to_resolve, ignore_delete, nullptr);
