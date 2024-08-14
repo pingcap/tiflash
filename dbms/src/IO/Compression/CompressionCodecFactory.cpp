@@ -236,7 +236,7 @@ Codecs CompressionCodecFactory::createCodecs(const CompressionSettings & setting
         if (auto codec = create(setting); codec)
             codecs.push_back(std::move(codec));
     }
-    assert(!codecs.empty());
+    RUNTIME_CHECK(!codecs.empty());
     return codecs;
 }
 
