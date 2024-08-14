@@ -491,6 +491,21 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
 
     if likely (is_offset_aligned && is_char_aligned)
     {
+        union
+        {
+            char vec_data1[AlignBufferAVX2::buffer_size];
+            __m256i v1[2];
+        };
+        union
+        {
+            char vec_data2[AlignBufferAVX2::buffer_size];
+            __m256i v2[2];
+        };
+        std::memcpy(vec_data1, buffer.data1, buffer.size1);
+        std::memcpy(vec_data2, buffer.data2, buffer.size2);
+        size_t vec_size1 = buffer.size1;
+        size_t vec_size2 = buffer.size2;
+
         for (size_t i = 0; i < size; ++i)
         {
             size_t str_size;
@@ -499,36 +514,41 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
 
             do
             {
-                size_t remain = AlignBufferAVX2::buffer_size - buffer.size1;
+                size_t remain = AlignBufferAVX2::buffer_size - vec_size1;
                 size_t copy_bytes = std::min(remain, str_size);
-                std::memcpy(&buffer.data1[buffer.size1], pos[i], copy_bytes);
+                std::memcpy(&vec_data1[vec_size1], pos[i], copy_bytes);
                 pos[i] += copy_bytes;
-                buffer.size1 += copy_bytes;
+                vec_size1 += copy_bytes;
                 str_size -= copy_bytes;
-                if (buffer.size1 == AlignBufferAVX2::buffer_size)
+                if (vec_size1 == AlignBufferAVX2::buffer_size)
                 {
                     chars.resize(char_size + AlignBufferAVX2::buffer_size, AlignBufferAVX2::buffer_size);
-                    _mm256_stream_si256((__m256i *)&chars[char_size], buffer.v1[0]);
+                    _mm256_stream_si256((__m256i *)&chars[char_size], v1[0]);
                     char_size += AlignBufferAVX2::vector_size;
-                    _mm256_stream_si256((__m256i *)&chars[char_size], buffer.v1[1]);
+                    _mm256_stream_si256((__m256i *)&chars[char_size], v1[1]);
                     char_size += AlignBufferAVX2::vector_size;
-                    buffer.size1 = 0;
+                    vec_size1 = 0;
                 }
             } while (str_size > 0);
 
-            size_t offset = char_size + buffer.size1;
-            std::memcpy(&buffer.data2[buffer.size2], &offset, sizeof(size_t));
-            buffer.size2 += sizeof(size_t);
-            if (buffer.size2 == AlignBufferAVX2::buffer_size)
+            size_t offset = char_size + vec_size1;
+            std::memcpy(&vec_data2[vec_size2], &offset, sizeof(size_t));
+            vec_size2 += sizeof(size_t);
+            if (vec_size2 == AlignBufferAVX2::buffer_size)
             {
                 offsets.resize(prev_size + AlignBufferAVX2::buffer_size / sizeof(size_t), AlignBufferAVX2::buffer_size);
-                _mm256_stream_si256((__m256i *)&offsets[prev_size], buffer.v2[0]);
+                _mm256_stream_si256((__m256i *)&offsets[prev_size], v2[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
-                _mm256_stream_si256((__m256i *)&offsets[prev_size], buffer.v2[1]);
+                _mm256_stream_si256((__m256i *)&offsets[prev_size], v2[1]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
-                buffer.size2 = 0;
+                vec_size2 = 0;
             }
         }
+
+        std::memcpy(buffer.data1, vec_data1, vec_size1);
+        std::memcpy(buffer.data2, vec_data2, vec_size2);
+        buffer.size1 = vec_size1;
+        buffer.size2 = vec_size2;
 
         if unlikely (buffer.need_flush)
         {

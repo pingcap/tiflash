@@ -106,21 +106,27 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
                 buffer.size1 = 0;
             }
 
+            union
+            {
+                char vec_data[AlignBufferAVX2::buffer_size];
+                __m256i v[2];
+            };
+            size_t vec_size = 0;
             constexpr size_t simd_width = AlignBufferAVX2::buffer_size / sizeof(T);
             for (; i + simd_width <= size; i += simd_width)
             {
                 for (size_t j = 0; j < simd_width; ++j)
                 {
-                    std::memcpy(&buffer.data1[buffer.size1], pos[i + j], sizeof(T));
-                    buffer.size1 += sizeof(T);
+                    std::memcpy(&vec_data[vec_size], pos[i + j], sizeof(T));
+                    vec_size += sizeof(T);
                     pos[i + j] += sizeof(T);
                 }
 
-                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[0]);
+                _mm256_stream_si256((__m256i *)&data[prev_size], v[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[1]);
+                _mm256_stream_si256((__m256i *)&data[prev_size], v[1]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                buffer.size1 = 0;
+                vec_size = 0;
             }
 
             for (; i < size; ++i)
