@@ -45,7 +45,6 @@ struct alignas(64) AlignBufferAVX2
 {
     static constexpr size_t vector_size = sizeof(__m256i);
     static constexpr size_t buffer_size = 2 * vector_size;
-    static_assert(buffer_size == 64);
 
     union
     {
