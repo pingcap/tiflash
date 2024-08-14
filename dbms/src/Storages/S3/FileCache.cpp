@@ -252,11 +252,8 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
             GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
             return f;
         }
-        else
-        {
-            // On-going download failed, let the caller retry.
-            return nullptr;
-        }
+        // On-going download failed, let the caller retry.
+        return nullptr;
     }
 
     GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
@@ -275,12 +272,7 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
             estimated_size);
 
         // Just throw, no need to let the caller retry.
-        throw Exception( //
-            ErrorCodes::S3_ERROR,
-            "Cannot reserve {} space for object {}",
-            estimated_size,
-            s3_key);
-        return nullptr;
+        throw Exception(ErrorCodes::S3_ERROR, "Cannot reserve {} space for object {}", estimated_size, s3_key);
     }
 
     auto file_seg

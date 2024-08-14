@@ -69,7 +69,7 @@ DMFileWithVectorIndexBlockInputStream::DMFileWithVectorIndexBlockInputStream(
     const auto & pack_stats = dmfile->getPackStats();
     start_offset_to_pack_id.reserve(pack_stats.size());
     UInt32 start_offset = 0;
-    for (size_t pack_id = 0, pack_id_max = pack_stats.size(); pack_id < pack_id_max; pack_id++)
+    for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
     {
         start_offset_to_pack_id[start_offset] = pack_id;
         start_offset += pack_stats[pack_id].rows;
