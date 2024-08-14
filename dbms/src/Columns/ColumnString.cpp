@@ -493,12 +493,12 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
     {
         union
         {
-            char vec_data1[AlignBufferAVX2::buffer_size];
+            char vec_data1[AlignBufferAVX2::buffer_size]{};
             __m256i v1[2];
         };
         union
         {
-            char vec_data2[AlignBufferAVX2::buffer_size];
+            char vec_data2[AlignBufferAVX2::buffer_size]{};
             __m256i v2[2];
         };
         std::memcpy(vec_data1, buffer.data1, buffer.size1);
@@ -523,9 +523,9 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
                 if (vec_size1 == AlignBufferAVX2::buffer_size)
                 {
                     chars.resize(char_size + AlignBufferAVX2::buffer_size, AlignBufferAVX2::buffer_size);
-                    _mm256_stream_si256((__m256i *)&chars[char_size], v1[0]);
+                    _mm256_stream_si256(reinterpret_cast<__m256i *>(&chars[char_size]), v1[0]);
                     char_size += AlignBufferAVX2::vector_size;
-                    _mm256_stream_si256((__m256i *)&chars[char_size], v1[1]);
+                    _mm256_stream_si256(reinterpret_cast<__m256i *>(&chars[char_size]), v1[1]);
                     char_size += AlignBufferAVX2::vector_size;
                     vec_size1 = 0;
                 }
@@ -537,9 +537,9 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
             if (vec_size2 == AlignBufferAVX2::buffer_size)
             {
                 offsets.resize(prev_size + AlignBufferAVX2::buffer_size / sizeof(size_t), AlignBufferAVX2::buffer_size);
-                _mm256_stream_si256((__m256i *)&offsets[prev_size], v2[0]);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&offsets[prev_size]), v2[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
-                _mm256_stream_si256((__m256i *)&offsets[prev_size], v2[1]);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&offsets[prev_size]), v2[1]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
                 vec_size2 = 0;
             }

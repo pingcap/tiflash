@@ -165,16 +165,16 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                 }
 
                 assert(buffer.size1 == AlignBufferAVX2::buffer_size);
-                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[0]);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v1[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                _mm256_stream_si256((__m256i *)&data[prev_size], buffer.v1[1]);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v1[1]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
                 buffer.size1 = 0;
             }
 
             union
             {
-                char vec_data[AlignBufferAVX2::buffer_size];
+                char vec_data[AlignBufferAVX2::buffer_size]{};
                 __m256i v[2];
             };
             size_t vec_size = 0;
@@ -188,9 +188,9 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                     pos[i + j] += sizeof(T);
                 }
 
-                _mm256_stream_si256((__m256i *)&data[prev_size], v[0]);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                _mm256_stream_si256((__m256i *)&data[prev_size], v[1]);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[1]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
                 vec_size = 0;
             }
