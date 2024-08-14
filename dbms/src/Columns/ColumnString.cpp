@@ -20,6 +20,10 @@
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -482,7 +486,7 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
     size_t char_size = chars.size();
     size_t size = pos.size();
 
-#ifdef __AVX2__
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
     bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % AlignBufferAVX2::buffer_size == 0;
     bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % AlignBufferAVX2::buffer_size == 0;
 

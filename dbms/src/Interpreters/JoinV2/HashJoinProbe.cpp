@@ -18,6 +18,10 @@
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
+
 namespace DB
 {
 
@@ -274,7 +278,7 @@ private:
         }
         else
         {
-#ifdef __AVX2
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
             for (auto & b : wd.align_buffer)
                 b.need_flush = true;
 #endif

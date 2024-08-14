@@ -23,6 +23,9 @@
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
 
 template <typename T>
 bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
@@ -124,11 +127,15 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos
 {
     size_t prev_size = data.size();
     size_t size = pos.size();
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
     data.resize(prev_size + size, AlignBufferAVX2::buffer_size);
+#else
+    data.resize(prev_size + size);
+#endif
 
     size_t i = 0;
 
-#ifdef __AVX2__
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if constexpr (AlignBufferAVX2::buffer_size % sizeof(T) == 0)
     {
         bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::buffer_size == 0;

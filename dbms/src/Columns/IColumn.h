@@ -36,7 +36,7 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 class Arena;
 class ColumnGathererStream;
 
-#ifdef __AVX2
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
 struct alignas(64) AlignBufferAVX2
 {
     static constexpr size_t vector_size = sizeof(__m256i);
