@@ -106,7 +106,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
                 buffer.size1 = 0;
             }
 
-            union
+            alignas(64) union
             {
                 char vec_data[AlignBufferAVX2::buffer_size]{};
                 __m256i v[2];
