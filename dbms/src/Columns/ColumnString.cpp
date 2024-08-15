@@ -491,12 +491,12 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
 
     if likely (is_offset_aligned && is_char_aligned)
     {
-        alignas(64) union
+        union alignas(64)
         {
             char vec_data1[AlignBufferAVX2::buffer_size]{};
             __m256i v1[2];
         };
-        alignas(64) union
+        union alignas(64)
         {
             char vec_data2[AlignBufferAVX2::buffer_size]{};
             __m256i v2[2];

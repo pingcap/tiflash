@@ -172,7 +172,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                 buffer.size1 = 0;
             }
 
-            alignas(64) union
+            union alignas(64)
             {
                 char vec_data[AlignBufferAVX2::buffer_size]{};
                 __m256i v[2];
