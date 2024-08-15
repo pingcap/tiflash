@@ -157,7 +157,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                 {
                     if unlikely (buffer.need_flush)
                     {
-                        std::memcpy(&data[prev_size], buffer.data1, buffer.size1);
+                        std::memcpy(static_cast<void*>(&data[prev_size]), buffer.data1, buffer.size1);
                         buffer.size1 = 0;
                         buffer.need_flush = false;
                     }
@@ -204,7 +204,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
             if unlikely (buffer.need_flush)
             {
-                std::memcpy(&data[prev_size], buffer.data1, buffer.size1);
+                std::memcpy(static_cast<void*>(&data[prev_size]), buffer.data1, buffer.size1);
                 buffer.size1 = 0;
                 buffer.need_flush = false;
             }
@@ -214,7 +214,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
         if unlikely (buffer.size1 != 0)
         {
-            std::memcpy(&data[prev_size], buffer.data1, buffer.size1);
+            std::memcpy(static_cast<void*>(&data[prev_size]), buffer.data1, buffer.size1);
             buffer.size1 = 0;
             buffer.need_flush = false;
         }
@@ -223,7 +223,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
     for (; i < size; ++i)
     {
-        std::memcpy(&data[prev_size], pos[i], sizeof(T));
+        std::memcpy(static_cast<void*>(&data[prev_size]), pos[i], sizeof(T));
         ++prev_size;
         pos[i] += sizeof(T);
     }
