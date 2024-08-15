@@ -95,8 +95,8 @@ class PODArrayBase
 protected:
     /// Round padding up to an whole number of elements to simplify arithmetic.
     static constexpr size_t pad_right = integerRoundUp(pad_right_, ELEMENT_SIZE);
-    /// pad_left is also rounded up to 16 bytes to maintain alignment of allocated memory.
-    static constexpr size_t pad_left = integerRoundUp(integerRoundUp(pad_left_, ELEMENT_SIZE), 16);
+    /// pad_left is also rounded up to 64 bytes to maintain alignment of allocated memory.
+    static constexpr size_t pad_left = integerRoundUp(integerRoundUp(pad_left_, ELEMENT_SIZE), 64);
     /// Empty array will point to this static memory as padding.
     static constexpr char * null = pad_left ? const_cast<char *>(EmptyPODArray) + EmptyPODArraySize : nullptr;
 
