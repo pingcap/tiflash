@@ -501,8 +501,8 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
             char vec_data2[AlignBufferAVX2::buffer_size]{};
             __m256i v2[2];
         };
-        std::memcpy(vec_data1, buffer.data1, buffer.size1);
-        std::memcpy(vec_data2, buffer.data2, buffer.size2);
+        inline_memcpy(vec_data1, buffer.data1, buffer.size1);
+        inline_memcpy(vec_data2, buffer.data2, buffer.size2);
         size_t vec_size1 = buffer.size1;
         size_t vec_size2 = buffer.size2;
 
@@ -516,7 +516,7 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
             {
                 size_t remain = AlignBufferAVX2::buffer_size - vec_size1;
                 size_t copy_bytes = std::min(remain, str_size);
-                std::memcpy(&vec_data1[vec_size1], pos[i], copy_bytes);
+                inline_memcpy(&vec_data1[vec_size1], pos[i], copy_bytes);
                 pos[i] += copy_bytes;
                 vec_size1 += copy_bytes;
                 str_size -= copy_bytes;
@@ -545,8 +545,8 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
             }
         }
 
-        std::memcpy(buffer.data1, vec_data1, vec_size1);
-        std::memcpy(buffer.data2, vec_data2, vec_size2);
+        inline_memcpy(buffer.data1, vec_data1, vec_size1);
+        inline_memcpy(buffer.data2, vec_data2, vec_size2);
         buffer.size1 = vec_size1;
         buffer.size2 = vec_size2;
 
@@ -555,13 +555,13 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
             if (buffer.size1 != 0)
             {
                 chars.resize(char_size + buffer.size1, AlignBufferAVX2::buffer_size);
-                std::memcpy(&chars[char_size], buffer.data1, buffer.size1);
+                inline_memcpy(&chars[char_size], buffer.data1, buffer.size1);
                 buffer.size1 = 0;
             }
             if (buffer.size2 != 0)
             {
                 offsets.resize(prev_size + buffer.size2 / sizeof(size_t), AlignBufferAVX2::buffer_size);
-                std::memcpy(&offsets[prev_size], buffer.data2, buffer.size2);
+                inline_memcpy(&offsets[prev_size], buffer.data2, buffer.size2);
                 buffer.size2 = 0;
             }
             buffer.need_flush = false;
@@ -573,14 +573,14 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, Al
     if unlikely (buffer.size1 != 0)
     {
         chars.resize(char_size + buffer.size1, AlignBufferAVX2::buffer_size);
-        std::memcpy(&chars[char_size], buffer.data1, buffer.size1);
+        inline_memcpy(&chars[char_size], buffer.data1, buffer.size1);
         char_size += buffer.size1;
         buffer.size1 = 0;
     }
     if unlikely (buffer.size2 != 0)
     {
         offsets.resize(prev_size + buffer.size2 / sizeof(size_t), AlignBufferAVX2::buffer_size);
-        std::memcpy(&offsets[prev_size], buffer.data2, buffer.size2);
+        inline_memcpy(&offsets[prev_size], buffer.data2, buffer.size2);
         prev_size += buffer.size2 / sizeof(size_t);
         buffer.size2 = 0;
     }
