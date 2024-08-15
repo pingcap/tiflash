@@ -53,7 +53,7 @@ DMFileReader::DMFileReader(
     size_t max_read_buffer_size,
     const FileProviderPtr & file_provider_,
     const ReadLimiterPtr & read_limiter,
-    size_t max_rows_per_read_,
+    size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
     size_t max_sharing_column_bytes_,
@@ -73,8 +73,7 @@ DMFileReader::DMFileReader(
     , column_cache(column_cache_)
     , scan_context(scan_context_)
     , read_tag(read_tag_)
-    , min_rows_per_read(max_rows_per_read_ / 2)
-    , max_rows_per_read(max_rows_per_read_)
+    , rows_threshold_per_read(rows_threshold_per_read_)
     , max_sharing_column_bytes(max_sharing_column_bytes_)
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
@@ -152,7 +151,7 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
     auto last_pack_res = RSResult::All;
-    for (; next_pack_id < pack_res.size() && pack_res[next_pack_id].isUse() && read_rows < max_rows_per_read;
+    for (; next_pack_id < pack_res.size() && pack_res[next_pack_id].isUse() && read_rows < rows_threshold_per_read;
          ++next_pack_id)
     {
         if (next_pack_id - start_pack_id >= read_pack_limit)
@@ -719,7 +718,7 @@ void DMFileReader::initAllMatchBlockInfo()
         size_t rows = 0;
         for (size_t i = start_pack; i < pack_res.size(); ++i)
         {
-            if (!pack_res[i].allMatch() || rows >= max_rows_per_read)
+            if (!pack_res[i].allMatch() || rows >= rows_threshold_per_read)
                 break;
 
             ++count;
@@ -736,7 +735,7 @@ void DMFileReader::initAllMatchBlockInfo()
             continue;
         }
         auto [count, rows] = get_all_match_block(i);
-        if (rows >= min_rows_per_read)
+        if (rows >= rows_threshold_per_read / 2)
             all_match_block_infos.emplace(i, count);
         i += count;
     }
