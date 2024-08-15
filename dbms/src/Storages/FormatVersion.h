@@ -29,6 +29,7 @@ using Version = UInt32;
 
 inline static constexpr Version V1 = 1;
 inline static constexpr Version V2 = 2; // Support clustered index
+inline static constexpr Version V3 = 3; // Meta using protobuf
 
 } // namespace SegmentFormat
 
@@ -57,6 +58,7 @@ using Version = UInt64;
 inline static constexpr Version V1 = 1;
 inline static constexpr Version V2 = 2; // Support clustered index
 inline static constexpr Version V3 = 3; // Support DeltaPackFile
+inline static constexpr Version V4 = 4; // Meta using protobuf
 } // namespace DeltaFormat
 
 namespace PageFormat
@@ -132,10 +134,10 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersio
 };
 
 inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersion{
-    .segment = SegmentFormat::V2,
+    .segment = SegmentFormat::V3, // diff
     .dm_file = DMFileFormat::V3,
     .stable = StableFormat::V2, // diff
-    .delta = DeltaFormat::V3,
+    .delta = DeltaFormat::V4, // diff
     .page = PageFormat::V3,
     .identifier = 6,
 };
@@ -152,10 +154,10 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVers
 
 // STORAGE_FORMAT_V101 is used for S3 only
 inline static const StorageFormatVersion STORAGE_FORMAT_V101 = StorageFormatVersion{
-    .segment = SegmentFormat::V2,
+    .segment = SegmentFormat::V3, // diff
     .dm_file = DMFileFormat::V3,
     .stable = StableFormat::V2, // diff
-    .delta = DeltaFormat::V3,
+    .delta = DeltaFormat::V4, // diff
     .page = PageFormat::V4,
     .identifier = 101,
 };

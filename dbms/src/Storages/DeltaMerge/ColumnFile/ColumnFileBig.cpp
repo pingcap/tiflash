@@ -79,18 +79,21 @@ void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
     writeIntBinary(valid_bytes, buf);
 }
 
-ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
-    const DMContext & dm_context, //
-    const RowKeyRange & segment_range,
-    ReadBuffer & buf)
+void ColumnFileBig::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool /*save_schema*/) const
 {
-    UInt64 file_page_id;
-    size_t valid_rows, valid_bytes;
+    auto * big_pb = cf_pb->mutable_big_file();
+    big_pb->set_id(file->pageId());
+    big_pb->set_valid_rows(valid_rows);
+    big_pb->set_valid_bytes(valid_bytes);
+}
 
-    readIntBinary(file_page_id, buf);
-    readIntBinary(valid_rows, buf);
-    readIntBinary(valid_bytes, buf);
-
+ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
+    const DMContext & dm_context,
+    const RowKeyRange & segment_range,
+    UInt64 file_page_id,
+    size_t valid_rows,
+    size_t valid_bytes)
+{
     String file_parent_path;
     DMFilePtr dmfile;
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
@@ -131,6 +134,29 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
 
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
+}
+
+ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
+    const DMContext & dm_context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf)
+{
+    UInt64 file_page_id;
+    size_t valid_rows, valid_bytes;
+
+    readIntBinary(file_page_id, buf);
+    readIntBinary(valid_rows, buf);
+    readIntBinary(valid_bytes, buf);
+
+    return deserializeMetadata(dm_context, segment_range, file_page_id, valid_rows, valid_bytes);
+}
+
+ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
+    const DMContext & dm_context,
+    const RowKeyRange & segment_range,
+    const dtpb::ColumnFileBig & cf_pb)
+{
+    return deserializeMetadata(dm_context, segment_range, cf_pb.id(), cf_pb.valid_rows(), cf_pb.valid_bytes());
 }
 
 ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(

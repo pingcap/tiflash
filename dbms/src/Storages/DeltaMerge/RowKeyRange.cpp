@@ -131,4 +131,39 @@ String RowKeyRange::toString() const
     return rangeToString</*enable_redact*/ false>(*this);
 }
 
+namespace
+{
+// https://en.cppreference.com/w/cpp/algorithm/lower_bound
+size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, size_t last, const RowKeyValueRef & value)
+{
+    size_t count = last - first;
+    while (count > 0)
+    {
+        size_t step = count / 2;
+        size_t index = first + step;
+        if (value > rowkey_column.getRowKeyValue(index))
+        {
+            first = index + 1;
+            count -= step + 1;
+        }
+        else
+            count = step;
+    }
+    return first;
+}
+} // namespace
+
+std::pair<size_t, size_t> RowKeyRange::getPosRange(const ColumnPtr & column, const size_t offset, const size_t limit)
+    const
+{
+    RowKeyColumnContainer rowkey_column(column, is_common_handle);
+    size_t start_index = check(rowkey_column.getRowKeyValue(offset))
+        ? offset
+        : lowerBound(rowkey_column, offset, offset + limit, getStart());
+    size_t end_index = check(rowkey_column.getRowKeyValue(offset + limit - 1))
+        ? offset + limit
+        : lowerBound(rowkey_column, offset, offset + limit, getEnd());
+    return {start_index, end_index - start_index};
+}
+
 } // namespace DB::DM

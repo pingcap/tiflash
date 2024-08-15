@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/dtpb/column_file.pb.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
@@ -386,28 +387,6 @@ struct RowKeyColumnContainer
     }
 };
 
-namespace
-{
-// https://en.cppreference.com/w/cpp/algorithm/lower_bound
-size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, size_t last, const RowKeyValueRef & value)
-{
-    size_t count = last - first;
-    while (count > 0)
-    {
-        size_t step = count / 2;
-        size_t index = first + step;
-        if (value > rowkey_column.getRowKeyValue(index))
-        {
-            first = index + 1;
-            count -= step + 1;
-        }
-        else
-            count = step;
-    }
-    return first;
-}
-} // namespace
-
 /// A range denoted as [StartRowKey, EndRowKey).
 struct RowKeyRange
 {
@@ -569,6 +548,16 @@ struct RowKeyRange
         writeStringBinary(*end.value, buf);
     }
 
+    dtpb::RowKeyRange serialize() const
+    {
+        dtpb::RowKeyRange range;
+        range.set_is_common_handle(is_common_handle);
+        range.set_rowkey_column_size(rowkey_column_size);
+        range.set_start(start.value->data(), start.value->size());
+        range.set_end(end.value->data(), end.value->size());
+        return range;
+    }
+
     static RowKeyRange deserialize(ReadBuffer & buf)
     {
         bool is_common_handle;
@@ -578,6 +567,29 @@ struct RowKeyRange
         readIntBinary(rowkey_column_size, buf);
         readStringBinary(start, buf);
         readStringBinary(end, buf);
+        HandleValuePtr start_ptr = std::make_shared<String>(start);
+        HandleValuePtr end_ptr = std::make_shared<String>(end);
+        if unlikely (isLegacyCommonMin(rowkey_column_size, start_ptr))
+        {
+            start_ptr = RowKeyValue::COMMON_HANDLE_MIN_KEY.value;
+        }
+        if unlikely (isLegacyCommonMax(rowkey_column_size, end_ptr))
+        {
+            end_ptr = RowKeyValue::COMMON_HANDLE_MAX_KEY.value;
+        }
+        return RowKeyRange(
+            RowKeyValue(is_common_handle, start_ptr),
+            RowKeyValue(is_common_handle, end_ptr),
+            is_common_handle,
+            rowkey_column_size);
+    }
+
+    static RowKeyRange deserialize(const dtpb::RowKeyRange & range)
+    {
+        bool is_common_handle = range.is_common_handle();
+        size_t rowkey_column_size = range.rowkey_column_size();
+        String start = range.start();
+        String end = range.end();
         HandleValuePtr start_ptr = std::make_shared<String>(start);
         HandleValuePtr end_ptr = std::make_shared<String>(end);
         if unlikely (isLegacyCommonMin(rowkey_column_size, start_ptr))
@@ -724,17 +736,7 @@ struct RowKeyRange
     }
 
     /// Clip the <offset, limit> according to this range, and return the clipped <offset, limit>.
-    std::pair<size_t, size_t> getPosRange(const ColumnPtr & column, const size_t offset, const size_t limit) const
-    {
-        RowKeyColumnContainer rowkey_column(column, is_common_handle);
-        size_t start_index = check(rowkey_column.getRowKeyValue(offset))
-            ? offset
-            : lowerBound(rowkey_column, offset, offset + limit, getStart());
-        size_t end_index = check(rowkey_column.getRowKeyValue(offset + limit - 1))
-            ? offset + limit
-            : lowerBound(rowkey_column, offset, offset + limit, getEnd());
-        return {start_index, end_index - start_index};
-    }
+    std::pair<size_t, size_t> getPosRange(const ColumnPtr & column, size_t offset, size_t limit) const;
 
     static RowKeyRange fromHandleRange(const HandleRange & handle_range, bool is_common_handle = false)
     {

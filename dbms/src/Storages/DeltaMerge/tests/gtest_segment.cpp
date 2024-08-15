@@ -232,18 +232,33 @@ try
 }
 CATCH
 
-TEST_F(SegmentOperationTest, CurrentV2RestoreFromStableV1)
+TEST_F(SegmentOperationTest, CurrentV6RestoreFromV5)
 try
 {
     auto current = STORAGE_FORMAT_CURRENT;
     STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    // generate stable
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    // generate delta
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto range = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getRowKeyRange();
+    auto delta_id = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getDelta()->getId();
+    auto stable_id = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getStable()->getId();
+    auto column_file_count = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getDelta()->getColumnFileCount();
 
     STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V6;
     auto segment = Segment::restoreSegment(log, *dm_context, DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_EQ(segment->getRowKeyRange(), range);
+    ASSERT_EQ(segment->delta->getId(), delta_id);
+    ASSERT_EQ(segment->stable->getId(), stable_id);
     ASSERT_EQ(segment->stable->getRows(), 100);
+    ASSERT_EQ(segment->delta->getRows(), 100);
+    ASSERT_EQ(segment->delta->getColumnFileCount(), column_file_count);
     STORAGE_FORMAT_CURRENT = current;
 }
 CATCH
