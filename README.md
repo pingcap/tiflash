@@ -125,7 +125,7 @@ xcode-select --install
 brew install ninja cmake openssl@1.1 ccache
 ```
 
-If your MacOS is higher or equal to 13.0, it should work out of the box because by default Apple clang is 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
+If your MacOS is higher or equal to 13.0 (Ventura), it should work out of the box because by default Xcode 14.3 provide Apple clang 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
 
 ```shell
 brew install llvm@17
