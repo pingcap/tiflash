@@ -1385,7 +1385,7 @@ void Context::dropMinMaxIndexCache() const
 {
     auto lock = getLock();
     if (shared->minmax_index_cache)
-        shared->minmax_index_cache.reset();
+        shared->minmax_index_cache->reset();
 }
 
 void Context::setVectorIndexCache(size_t cache_entities)

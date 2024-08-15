@@ -262,7 +262,7 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
     {
         // Space not enough.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "s3_key={} space not enough(capacity={} used={} estimzted_size={}), skip cache",
             s3_key,
