@@ -84,6 +84,8 @@ void DMFilePackFilter::init(ReadTag read_tag)
     }
     else
     {
+        // ColumnFileBig in DeltaValueSpace never pass a filter to DMFilePackFilter.
+        // Assume its filter always return Some.
         std::transform(pack_res.cbegin(), pack_res.cend(), pack_res.begin(), [](RSResult a) {
             return a && RSResult::Some;
         });
