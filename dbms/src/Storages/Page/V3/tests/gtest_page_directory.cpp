@@ -27,6 +27,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
@@ -822,6 +823,96 @@ try
 
     auto snap = dir->createSnapshot();
     ASSERT_ENTRY_EQ(entry1, dir, 998, snap);
+}
+CATCH
+
+TEST_F(PageDirectoryTest, NewRefAfterDelThreeHopsRemotePage)
+try
+{
+    // Fix issue: https://github.com/pingcap/tiflash/issues/9307
+    PageEntryV3 entry1{
+        .file_id = 0,
+        .size = 1024,
+        .padded_size = 0,
+        .tag = 0,
+        .offset = 0,
+        .checksum = 0x0,
+        .checkpoint_info = OptionalCheckpointInfo(
+            CheckpointLocation{
+                .data_file_id = std::make_shared<const std::string>("s3://path/to/file"),
+                .offset_in_file = 0xa0,
+                .size_in_file = 1024},
+            true,
+            true),
+    };
+
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 951), entry1);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 954), buildV3Id(TEST_NAMESPACE_ID, 951));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 951));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 951));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 972), buildV3Id(TEST_NAMESPACE_ID, 954));
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 985), buildV3Id(TEST_NAMESPACE_ID, 954));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 954));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 998), buildV3Id(TEST_NAMESPACE_ID, 985));
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 1011), buildV3Id(TEST_NAMESPACE_ID, 985));
+        dir->apply(std::move(edit));
+    }
+
+    auto snap = dir->createSnapshot();
+    ASSERT_ENTRY_EQ(entry1, dir, 998, snap);
+
+    // Assume we download the data into this file offset
+    PageEntryV3 entry2{
+        .file_id = 11,
+        .size = 1024,
+        .padded_size = 0,
+        .tag = 0,
+        .offset = 0xf0,
+        .checksum = 0xabcd,
+        .checkpoint_info = OptionalCheckpointInfo(
+            CheckpointLocation{
+                .data_file_id = std::make_shared<const std::string>("s3://path/to/file"),
+                .offset_in_file = 0xa0,
+                .size_in_file = 1024},
+            true,
+            true),
+    };
+
+    // Mock that "update remote" after download from remote store by "snap"
+    {
+        PageEntriesEdit edit;
+        edit.updateRemote(buildV3Id(TEST_NAMESPACE_ID, 998), entry2);
+        dir->updateLocalCacheForRemotePages(std::move(edit), snap, nullptr);
+    }
+    snap = dir->createSnapshot();
+    ASSERT_ENTRY_EQ(entry2, dir, 998, snap);
 }
 CATCH
 
