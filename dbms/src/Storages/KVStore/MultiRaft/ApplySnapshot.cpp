@@ -80,8 +80,8 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryWriteBlockByRegion(old_region);
-            tryFlushRegionCacheInStorage(tmt, *old_region, log);
+            // It is not worthy to call `tryWriteBlockByRegion` and `tryFlushRegionCacheInStorage` here,
+            // even if the written data is useful, it could be overwritten later in `onSnapshot`.
             persistRegion(*old_region, region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
         }
     }
@@ -95,23 +95,49 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             if (overlapped_region.first != region_id)
             {
                 auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
-                if (state.state() != raft_serverpb::PeerState::Tombstone)
-                {
-                    throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
-                        "range of region_id={} is overlapped with region_id={}, state: {}",
-                        region_id,
-                        overlapped_region.first,
-                        state.ShortDebugString());
-                }
-                else
+                auto extra_msg = fmt::format("state={}, tiflash_state={}, new_region_state={}", state.ShortDebugString(),
+                    overlapped_region.second->mutMeta().getRegionState().getBase().ShortDebugString(),
+                    new_region->mutMeta().getRegionState().getBase().ShortDebugString());
+                if (state.state() == raft_serverpb::PeerState::Tombstone)
                 {
                     LOG_INFO(
                         log,
-                        "range of region_id={} is overlapped with `Tombstone` region_id={}",
+                        "range of region_id={} is overlapped with `Tombstone` region_id={}, {}",
                         region_id,
-                        overlapped_region.first);
+                        overlapped_region.first,
+                        extra_msg);
                     handleDestroy(overlapped_region.first, tmt, task_lock);
+                }
+                else if (state.state() == raft_serverpb::PeerState::Applying)
+                {
+                    auto r = RegionRangeKeys {
+                        TiKVKey::copyFrom(state.region().start_key()),
+                        TiKVKey::copyFrom(state.region().end_key()),
+                    };
+                    if(RegionsRangeIndex::isRangeOverlapped(new_range->comparableKeys(), r.comparableKeys())) {
+                        throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
+                            "range of region_id={} is overlapped with `Applying` region_id={}, {}",
+                            region_id,
+                            overlapped_region.first,
+                            extra_msg);
+                    } else {
+                        LOG_INFO(
+                            log,
+                            "range of region_id={} is overlapped with `Applying` region_id={}, {}",
+                            region_id,
+                            overlapped_region.first,
+                            extra_msg);
+                    }
+                }
+                else
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "range of region_id={} is overlapped with region_id={}, {}",
+                        region_id,
+                        overlapped_region.first,
+                        extra_msg);
                 }
             }
         }
@@ -196,9 +222,9 @@ void KVStore::onSnapshot(
                             new_key_range.toDebugString(),
                             keyspace_id,
                             table_id);
-                        dm_storage->deleteRange(old_key_range, context.getSettingsRef());
+                        dm_storage->deleteRange(new_key_range, context.getSettingsRef());
                         // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
-                        dm_storage->flushCache(context, old_key_range, /*try_until_succeed*/ true);
+                        dm_storage->flushCache(context, new_key_range, /*try_until_succeed*/ true);
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)

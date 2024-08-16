@@ -1164,4 +1164,42 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTest, ApplyShrinkedRegion)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+    {
+        initStorages();
+        KVStore & kvs = getKVS();
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        LOG_INFO(&Poco::Logger::get("Test"), "generated table_id {}", table_id);
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        {
+            // Multiple files
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{902, 800, ColumnFamilyType::Default};
+            default_cf.insert(1, "v1");
+            default_cf.finish_file();
+            default_cf.insert(2, "v2");
+            default_cf.finish_file();
+            default_cf.insert(3, "v3");
+            default_cf.insert(4, "v4");
+            default_cf.finish_file();
+            default_cf.insert(5, "v5");
+            default_cf.insert(6, "v6");
+            default_cf.finish_file();
+            default_cf.insert(7, "v7");
+            default_cf.finish_file();
+            default_cf.freeze();
+            validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 5, 7);
+        }
+    }
+}
+CATCH
+
 } // namespace DB::tests
