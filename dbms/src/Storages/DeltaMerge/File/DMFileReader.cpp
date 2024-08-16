@@ -713,6 +713,8 @@ void DMFileReader::initAllMatchBlockInfo()
 {
     const auto & pack_res = pack_filter.getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
+
+    // Get continuous packs with RSResult::All
     auto get_all_match_block = [&](size_t start_pack) {
         size_t count = 0;
         size_t rows = 0;
@@ -735,6 +737,7 @@ void DMFileReader::initAllMatchBlockInfo()
             continue;
         }
         auto [count, rows] = get_all_match_block(i);
+        // Do not read block too small, it may hurts performance
         if (rows >= rows_threshold_per_read / 2)
             all_match_block_infos.emplace(i, count);
         i += count;
@@ -743,15 +746,17 @@ void DMFileReader::initAllMatchBlockInfo()
 
 size_t DMFileReader::getReadPackLimit(size_t start_pack_id)
 {
-    if (all_match_block_infos.empty())
+    if (all_match_block_infos.empty() || read_one_pack_every_time)
         return read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
 
     const auto [next_all_match_block_start_pack_id, pack_count] = all_match_block_infos.front();
+    // Read packs with RSResult::All
     if (next_all_match_block_start_pack_id == start_pack_id)
     {
         all_match_block_infos.pop();
         return pack_count;
     }
+    // Read packs until next_all_match_block_start_pack_id
     RUNTIME_CHECK(
         next_all_match_block_start_pack_id > start_pack_id,
         next_all_match_block_start_pack_id,

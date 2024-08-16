@@ -174,6 +174,8 @@ private:
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
 
     // <start_pack, pack_count>
+    // Each pair object indicates several continuous packs with RSResult::All and will be read as a Block.
+    // It is sorted by start_pack.
     std::queue<std::pair<size_t, size_t>> all_match_block_infos;
 };
 
