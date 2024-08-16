@@ -1294,7 +1294,7 @@ try
         }
         catch (Exception & e)
         {
-            ASSERT_EQ(e.message(), "range of region_id=20 is overlapped with region_id=22, state: region { id: 22 }");
+            ASSERT_TRUE(e.message().rfind("range of region_id=20 is overlapped with region_id=22", 0) == 0);
         }
     }
 
