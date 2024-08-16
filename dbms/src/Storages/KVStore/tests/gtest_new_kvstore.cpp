@@ -1197,25 +1197,43 @@ try
         default_cf.finish_file();
         default_cf.freeze();
         kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
-        auto modified_meta = kvr1->cloneMetaRegion();
-        modified_meta.set_end_key(RecordKVFormat::genKey(table_id, 4));
+
+        auto make_meta = [&]() {
+            auto r2 = proxy_instance->getRegion(region_id);
+            auto modified_meta = r2->getState().region();
+            modified_meta.set_id(2);
+            modified_meta.set_start_key(RecordKVFormat::genKey(table_id, 1));
+            modified_meta.set_end_key(RecordKVFormat::genKey(table_id, 4));
+            modified_meta.add_peers()->set_id(2);
+            return modified_meta;
+        };
         auto peer_id = kvr1->getMeta().peerId();
         proxy_instance->debugAddRegions(
             kvs,
             ctx.getTMTContext(),
             {2},
             {{{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 4)}}});
-        proxy_instance->snapshot(
-            kvs,
-            ctx.getTMTContext(),
-            2,
-            {default_cf},
-            std::move(modified_meta),
-            peer_id,
-            0,
-            0,
-            std::nullopt,
-            false);
+
+        // Overlap
+        EXPECT_THROW(
+            proxy_instance
+                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            Exception);
+
+        LOG_INFO(log, "Set to applying");
+        r1->mutState().set_state(raft_serverpb::PeerState::Applying);
+        ASSERT_EQ(proxy_helper->getRegionLocalState(1).state(), raft_serverpb::PeerState::Applying);
+        EXPECT_THROW(
+            proxy_instance
+                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            Exception);
+
+
+        LOG_INFO(log, "Shrink region 1");
+        r1->mutState().mutable_region()->set_start_key(RecordKVFormat::genKey(table_id, 0));
+        r1->mutState().mutable_region()->set_end_key(RecordKVFormat::genKey(table_id, 1));
+        proxy_instance
+            ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false);
     }
 }
 CATCH

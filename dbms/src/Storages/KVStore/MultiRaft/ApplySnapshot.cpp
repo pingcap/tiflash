@@ -112,10 +112,11 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
                 }
                 else if (state.state() == raft_serverpb::PeerState::Applying)
                 {
-                    auto r = RegionRangeKeys(
+                    auto r = RegionRangeKeys::makeComparableKeys(
                         TiKVKey::copyFrom(state.region().start_key()),
                         TiKVKey::copyFrom(state.region().end_key()));
-                    if (RegionsRangeIndex::isRangeOverlapped(new_range->comparableKeys(), r.comparableKeys()))
+
+                    if (RegionsRangeIndex::isRangeOverlapped(new_range->comparableKeys(), r))
                     {
                         throw Exception(
                             ErrorCodes::LOGICAL_ERROR,
