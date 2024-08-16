@@ -95,9 +95,11 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             if (overlapped_region.first != region_id)
             {
                 auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
-                auto extra_msg = fmt::format("state={}, tiflash_state={}, new_region_state={}", state.ShortDebugString(),
-                    overlapped_region.second->mutMeta().getRegionState().getBase().ShortDebugString(),
-                    new_region->mutMeta().getRegionState().getBase().ShortDebugString());
+                auto extra_msg = fmt::format(
+                    "state={}, tiflash_state={}, new_region_state={}",
+                    state.ShortDebugString(),
+                    overlapped_region.second->getMeta().getRegionState().getBase().ShortDebugString(),
+                    new_region->getMeta().getRegionState().getBase().ShortDebugString());
                 if (state.state() == raft_serverpb::PeerState::Tombstone)
                 {
                     LOG_INFO(
@@ -110,18 +112,20 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
                 }
                 else if (state.state() == raft_serverpb::PeerState::Applying)
                 {
-                    auto r = RegionRangeKeys {
+                    auto r = RegionRangeKeys(
                         TiKVKey::copyFrom(state.region().start_key()),
-                        TiKVKey::copyFrom(state.region().end_key()),
-                    };
-                    if(RegionsRangeIndex::isRangeOverlapped(new_range->comparableKeys(), r.comparableKeys())) {
+                        TiKVKey::copyFrom(state.region().end_key()));
+                    if (RegionsRangeIndex::isRangeOverlapped(new_range->comparableKeys(), r.comparableKeys()))
+                    {
                         throw Exception(
                             ErrorCodes::LOGICAL_ERROR,
                             "range of region_id={} is overlapped with `Applying` region_id={}, {}",
                             region_id,
                             overlapped_region.first,
                             extra_msg);
-                    } else {
+                    }
+                    else
+                    {
                         LOG_INFO(
                             log,
                             "range of region_id={} is overlapped with `Applying` region_id={}, {}",

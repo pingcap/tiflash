@@ -172,14 +172,22 @@ RegionsRangeIndex::RootMap::iterator RegionsRangeIndex::split(const TiKVRangeKey
 }
 
 
-bool RegionsRangeIndex::isRangeOverlapped(const RegionRangeKeys::RegionRange & a, const RegionRangeKeys::RegionRange & b) {
+bool RegionsRangeIndex::isRangeOverlapped(
+    const RegionRangeKeys::RegionRange & a,
+    const RegionRangeKeys::RegionRange & b)
+{
     auto start = a.first.compare(b.first);
-    if(start == 0) {
+    if (start == 0)
+    {
         return true;
-    } else if (start < 0) {
-        return a.second.compare(b.second) >= 0;
-    } else {
-        return b.second.compare(a.second) >= 0;
+    }
+    else if (start < 0)
+    {
+        return a.second.compare(b.first) > 0;
+    }
+    else
+    {
+        return b.second.compare(a.first) > 0;
     }
 }
 

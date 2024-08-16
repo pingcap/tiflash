@@ -1708,4 +1708,43 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
     }
 }
 
+TEST_F(RegionKVStoreOldTest, RegionRange2)
+{
+    auto mustOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
+        auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
+        auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
+        ASSERT_TRUE(RegionsRangeIndex::isRangeOverlapped(r1, r2));
+        ASSERT_TRUE(RegionsRangeIndex::isRangeOverlapped(r2, r1));
+    };
+    auto mustNotOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
+        auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
+        auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
+        ASSERT_FALSE(RegionsRangeIndex::isRangeOverlapped(r1, r2));
+        ASSERT_FALSE(RegionsRangeIndex::isRangeOverlapped(r2, r1));
+    };
+    mustOverlap("", "a", "", "b");
+    mustOverlap("a", "", "b", "");
+    mustOverlap("", "", "b", "");
+    mustOverlap("", "", "", "a");
+    mustOverlap("", "", "a", "b");
+    mustOverlap("", "", "", "");
+
+    mustOverlap("a", "e", "", "f");
+    mustOverlap("a", "e", "", "");
+    mustOverlap("b", "e", "a", "");
+
+    mustOverlap("a", "e", "a", "e");
+    mustOverlap("a", "f", "c", "d");
+    mustOverlap("a", "f", "c", "f");
+
+    mustNotOverlap("a", "e", "e", "f");
+    mustNotOverlap("a", "e", "f", "g");
+    mustNotOverlap("", "e", "e", "f");
+    mustNotOverlap("a", "e", "e", "");
+    mustNotOverlap("", "e", "f", "g");
+    mustNotOverlap("a", "e", "f", "");
+    mustNotOverlap("", "e", "f", "");
+    mustNotOverlap("", "e", "e", "");
+}
+
 } // namespace DB::tests
