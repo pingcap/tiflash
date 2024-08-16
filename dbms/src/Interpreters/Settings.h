@@ -39,7 +39,7 @@ struct Settings
       *  but we are not going to do it, because settings is used everywhere as static struct fields.
       */
 
-// clang-format off
+    // clang-format off
 #define APPLY_FOR_SETTINGS(M)                                                                                                                                                                                                           \
     M(SettingString, regions, "", "Deprecated. the region need to be read.")                                                                                                                                                            \
     M(SettingBool, resolve_locks, false, "resolve locks for TiDB transaction")                                                                                                                                                          \
@@ -54,6 +54,7 @@ struct Settings
     M(SettingUInt64, mpp_task_waiting_timeout, DEFAULT_MPP_TASK_WAITING_TIMEOUT, "mpp task max time that waiting first data block from source input stream.")                                                                           \
     M(SettingUInt64, disagg_build_task_timeout, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC, "disagg task establish timeout, unit is second.")                                                                                                \
     M(SettingUInt64, disagg_task_snapshot_timeout, DEFAULT_DISAGG_TASK_TIMEOUT_SEC, "disagg task snapshot max endurable time, unit is second.")                                                                                         \
+    M(SettingUInt64, disagg_fetch_pages_timeout, DEFAULT_DISAGG_FETCH_PAGES_TIMEOUT_SEC, "fetch disagg pages timeout for one segment, unit is second.")                                                                                 \
     M(SettingInt64, safe_point_update_interval_seconds, 1, "The interval in seconds to update safe point from PD.")                                                                                                                     \
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value "                       \
                                                                                "and no less than the volume of data for one mark.")                                                                                                     \
@@ -219,8 +220,8 @@ struct Settings
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
     M(SettingBool, dt_enable_read_thread, true, "Enable storage read thread or not")                                                                                                                                                    \
-    M(SettingUInt64, dt_max_sharing_column_bytes_for_all, 2048 * Constant::MB, "Memory limitation for data sharing of all requests. 0 means disable data sharing")                                                                      \
-    M(SettingUInt64, dt_max_sharing_column_count, 5, "ColumnPtr object limitation for data sharing of each DMFileReader::Stream. 0 means disable data sharing")                                                                         \
+    M(SettingUInt64, dt_max_sharing_column_bytes_for_all, 2048 * Constant::MB, "Memory limitation for data sharing of all requests, include those sharing blocks in block queue. 0 means disable data sharing")                         \
+    M(SettingUInt64, dt_max_sharing_column_count, 5, "Deprecated")                                                                                                                                                                      \
     M(SettingBool, dt_enable_bitmap_filter, true, "Use bitmap filter to read data or not")                                                                                                                                              \
     M(SettingDouble, dt_read_thread_count_scale, 2.0, "Number of read thread = number of logical cpu cores * dt_read_thread_count_scale.  Only has meaning at server startup.")                                                         \
     M(SettingDouble, dt_filecache_max_downloading_count_scale, 1.0, "Max downloading task count of FileCache = io thread count * dt_filecache_max_downloading_count_scale.")                                                            \

@@ -73,6 +73,8 @@ public:
 
     BaseRuntimeStatistics getRuntimeStatistics() const override;
 
+    String getExtraJsonInfo() const override;
+
 protected:
     ExecutionResult execute(ResultHandler && result_handler) override;
 

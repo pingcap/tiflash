@@ -442,7 +442,19 @@ public:
         background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
-    ~LocalAdmissionController() { stop(); }
+    ~LocalAdmissionController() { safeStop(); }
+
+    void safeStop()
+    {
+        try
+        {
+            stop();
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "stop server id({}) failed: {}", unique_client_id, getCurrentExceptionMessage(false));
+        }
+    }
 
     void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {

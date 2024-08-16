@@ -151,6 +151,12 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & setReadTag(ReadTag read_tag_)
+    {
+        read_tag = read_tag_;
+        return *this;
+    }
+
 private:
     // These methods are called by the ctor
 
@@ -160,7 +166,6 @@ private:
         aio_threshold = settings.min_bytes_to_use_direct_io;
         max_read_buffer_size = settings.max_read_buffer_size;
         max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
-        max_sharing_column_count = settings.dt_max_sharing_column_count;
         return *this;
     }
     DMFileBlockInputStreamBuilder & setCaches(
@@ -196,8 +201,8 @@ private:
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
     size_t max_sharing_column_bytes_for_all = 0;
-    size_t max_sharing_column_count = 0;
     String tracing_id;
+    ReadTag read_tag = ReadTag::Internal;
 };
 
 /**

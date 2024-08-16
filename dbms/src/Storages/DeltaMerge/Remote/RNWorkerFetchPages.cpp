@@ -94,6 +94,12 @@ disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
 
 RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
 {
+    if (seg_task->meta.delta_tinycf_page_ids.empty())
+    {
+        // No page need to be fetched or guarded.
+        return seg_task;
+    }
+
     MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
@@ -170,10 +176,7 @@ void RNWorkerFetchPages::doFetchPages(
     const RNReadSegmentTaskPtr & seg_task,
     const disaggregated::FetchDisaggPagesRequest & request)
 {
-    // No page need to be fetched.
-    if (request.page_ids_size() == 0)
-        return;
-
+    // No matter all delta data is cached or not, call FetchDisaggPages to release snapshot in WN.
     Stopwatch sw_total;
     Stopwatch watch_rpc{CLOCK_MONOTONIC_COARSE};
     bool rpc_is_observed = false;
@@ -184,12 +187,20 @@ void RNWorkerFetchPages::doFetchPages(
         seg_task->meta.store_address);
 
     grpc::ClientContext client_context;
+    // set timeout for the streaming call to avoid inf wait before `Finish()`
+    rpc.setClientContext(
+        client_context,
+        seg_task->meta.dm_context->db_context.getSettingsRef().disagg_fetch_pages_timeout);
     auto stream_resp = rpc.call(&client_context, request);
 
     SCOPE_EXIT({
         // TODO: Not sure whether we really need this. Maybe RAII is already there?
         stream_resp->Finish();
     });
+
+    // All delta data is cached.
+    if (request.page_ids_size() == 0)
+        return;
 
     // Used to verify all pages are fetched.
     std::set<UInt64> remaining_pages_to_fetch;
@@ -317,9 +328,10 @@ void RNWorkerFetchPages::doFetchPages(
     // Verify all pending pages are now received.
     RUNTIME_CHECK_MSG(
         remaining_pages_to_fetch.empty(),
-        "Failed to fetch all pages (from {}), remaining_pages_to_fetch={}",
+        "Failed to fetch all pages for {}, remaining_pages_to_fetch={}, wn_address={}",
         seg_task->info(),
-        remaining_pages_to_fetch);
+        remaining_pages_to_fetch,
+        seg_task->meta.store_address);
 
     LOG_DEBUG(
         log,

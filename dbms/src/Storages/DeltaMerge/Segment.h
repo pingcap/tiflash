@@ -112,10 +112,13 @@ public:
             , read_columns(read_columns_)
         {}
 
-        DeltaValueReaderPtr getDeltaReader() const { return delta_reader->createNewReader(read_columns); }
-        DeltaValueReaderPtr getDeltaReader(ColumnDefinesPtr columns) const
+        DeltaValueReaderPtr getDeltaReader(ReadTag read_tag) const
         {
-            return delta_reader->createNewReader(columns);
+            return delta_reader->createNewReader(read_columns, read_tag);
+        }
+        DeltaValueReaderPtr getDeltaReader(ColumnDefinesPtr columns, ReadTag read_tag) const
+        {
+            return delta_reader->createNewReader(columns, read_tag);
         }
     };
 
@@ -250,7 +253,7 @@ public:
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & data_ranges,
+        const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
@@ -603,6 +606,7 @@ public:
         const ColumnDefines & read_columns,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
+        ReadTag read_tag,
         UInt64 max_version = std::numeric_limits<UInt64>::max()) const;
 
     static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
@@ -619,6 +623,7 @@ public:
         const IndexIterator & delta_index_begin,
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
+        ReadTag read_tag,
         UInt64 max_version = std::numeric_limits<UInt64>::max(),
         bool need_row_id = false);
 

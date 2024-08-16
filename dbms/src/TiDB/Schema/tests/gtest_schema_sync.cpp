@@ -32,6 +32,7 @@
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <limits>
@@ -43,8 +44,10 @@ namespace FailPoints
 extern const char exception_before_rename_table_old_meta_removed[];
 extern const char force_context_path[];
 extern const char force_set_num_regions_for_table[];
+extern const char random_ddl_fail_when_rename_partitions[];
 } // namespace FailPoints
-namespace tests
+} // namespace DB
+namespace DB::tests
 {
 class SchemaSyncTest : public ::testing::Test
 {
@@ -71,6 +74,14 @@ public:
 
     void SetUp() override
     {
+        // unit test.
+        // Get DBInfo/TableInfo from MockTiDB, but create table with names `t_${table_id}`
+        auto cluster = std::make_shared<pingcap::kv::Cluster>();
+        schema_sync_manager = std::make_unique<TiDBSchemaSyncerManager>(
+            cluster,
+            /*mock_getter*/ true,
+            /*mock_mapper*/ false);
+
         // disable schema sync timer
         global_ctx.getSchemaSyncService().reset();
         recreateMetadataPath();
@@ -96,16 +107,15 @@ public:
     // Sync schema info from TiDB/MockTiDB to TiFlash
     void refreshSchema()
     {
-        auto & flash_ctx = global_ctx.getTMTContext();
-        auto schema_syncer = flash_ctx.getSchemaSyncerManager();
         try
         {
-            schema_syncer->syncSchemas(global_ctx, NullspaceID);
+            schema_sync_manager->syncSchemas(global_ctx, NullspaceID);
         }
         catch (Exception & e)
         {
             if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
             {
+                LOG_WARNING(Logger::get(), "{}", e.message());
                 return;
             }
             else
@@ -117,16 +127,15 @@ public:
 
     void refreshTableSchema(TableID table_id)
     {
-        auto & flash_ctx = global_ctx.getTMTContext();
-        auto schema_syncer = flash_ctx.getSchemaSyncerManager();
         try
         {
-            schema_syncer->syncTableSchema(global_ctx, NullspaceID, table_id);
+            schema_sync_manager->syncTableSchema(global_ctx, NullspaceID, table_id);
         }
         catch (Exception & e)
         {
             if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
             {
+                LOG_WARNING(Logger::get(), "{}", e.message());
                 return;
             }
             else
@@ -137,11 +146,7 @@ public:
     }
 
     // Reset the schema syncer to mock TiFlash shutdown
-    void resetSchemas()
-    {
-        auto & flash_ctx = global_ctx.getTMTContext();
-        flash_ctx.getSchemaSyncerManager()->reset(NullspaceID);
-    }
+    void resetSchemas() { schema_sync_manager->reset(NullspaceID); }
 
     // Get the TiFlash synced table
     ManageableStoragePtr mustGetSyncedTable(TableID table_id)
@@ -163,6 +168,14 @@ public:
         auto tbl = flash_storages.get(NullspaceID, mock_tbl->id());
         RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! db_name={}, tbl_name={}", db_name, tbl_name);
         return tbl;
+    }
+
+    DatabasePtr getTiFlashDatabase(const String & db_name)
+    {
+        auto [ok, db_id] = MockTiDB::instance().getDBIDByName(db_name);
+        if (!ok)
+            return nullptr;
+        return global_ctx.tryGetDatabase(fmt::format("db_{}", db_id));
     }
 
     /*
@@ -189,6 +202,11 @@ public:
         drop_interpreter.execute();
     }
 
+    static std::optional<Timestamp> lastGcSafePoint(const SchemaSyncServicePtr & sync_service, KeyspaceID keyspace_id)
+    {
+        return sync_service->lastGcSafePoint(keyspace_id);
+    }
+
 private:
     static void recreateMetadataPath()
     {
@@ -201,6 +219,8 @@ private:
 
 protected:
     Context & global_ctx;
+
+    std::unique_ptr<TiDBSchemaSyncerManager> schema_sync_manager;
 };
 
 TEST_F(SchemaSyncTest, SchemaDiff)
@@ -294,7 +314,12 @@ try
         refreshTableSchema(table_id);
     }
 
-    auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
+    // Create a temporary context with ddl sync task disabled
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
+    ctx->getSettingsRef().ddl_sync_interval_seconds = 0;
+    auto sync_service = std::make_shared<SchemaSyncService>(*ctx);
+    sync_service->shutdown(); // shutdown the background tasks
+
     // run gc with safepoint == 0, will be skip
     ASSERT_FALSE(sync_service->gc(0, NullspaceID));
     ASSERT_TRUE(sync_service->gc(10000000, NullspaceID));
@@ -306,8 +331,6 @@ try
     ASSERT_TRUE(sync_service->gc(20000000, 1024));
     // run gc with the same safepoint
     ASSERT_FALSE(sync_service->gc(20000000, 1024));
-
-    sync_service->shutdown();
 }
 CATCH
 
@@ -351,9 +374,27 @@ try
         std::vector<RegionID>{1001, 1002, 1003});
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_num_regions_for_table); });
 
-    auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
-    ASSERT_TRUE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));
+    // Create a temporary context with ddl sync task disabled
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
+    ctx->getSettingsRef().ddl_sync_interval_seconds = 0;
+    auto sync_service = std::make_shared<SchemaSyncService>(*ctx);
+    sync_service->shutdown(); // shutdown the background tasks
 
+    {
+        // ensure gc_safe_point cache is empty
+        auto last_gc_safe_point = lastGcSafePoint(sync_service, NullspaceID);
+        ASSERT_FALSE(last_gc_safe_point.has_value());
+    }
+
+    // Run GC, but the table is not physically dropped because `force_set_num_regions_for_table`
+    ASSERT_FALSE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));
+    {
+        // gc_safe_point cache is not updated
+        auto last_gc_safe_point = lastGcSafePoint(sync_service, NullspaceID);
+        ASSERT_FALSE(last_gc_safe_point.has_value());
+    }
+
+    // ensure the table is not physically dropped
     size_t num_remain_tables = 0;
     for (auto table_id : table_ids)
     {
@@ -362,8 +403,6 @@ try
         ++num_remain_tables;
     }
     ASSERT_EQ(num_remain_tables, 1);
-
-    sync_service->shutdown();
 }
 CATCH
 
@@ -419,6 +458,232 @@ try
         ASSERT_EQ(part1_tbl->getTableInfo().name, fmt::format("t_{}", part1_id));
         auto part2_tbl = mustGetSyncedTable(part2_id);
         ASSERT_EQ(part2_tbl->getTableInfo().name, fmt::format("t_{}", part2_id));
+    }
+}
+CATCH
+
+TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabase)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String new_db_name = "mock_new_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+
+    MockTiDB::instance().newDataBase(db_name);
+    MockTiDB::instance().newDataBase(new_db_name);
+
+    auto [logical_table_id, physical_table_ids] = MockTiDB::instance().newPartitionTable( //
+        db_name,
+        tbl_name,
+        cols,
+        pd_client->getTS(),
+        "",
+        "dt",
+        {"red", "blue", "yellow"});
+
+    ASSERT_EQ(physical_table_ids.size(), 3);
+
+    refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(physical_table_ids[0]);
+    // refreshTableSchema(physical_table_ids[1]); // mock that physical_table[1] have no data neither read
+    refreshTableSchema(physical_table_ids[2]);
+
+    // check partition table are created
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, tbl_name);
+        auto part0_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+
+        // physical_table[1] is not created
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    // Rename the partition table across database
+    const String new_tbl_name = "mock_part_tbl_renamed";
+    MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
+    refreshSchema();
+
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, new_tbl_name);
+        auto part1_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+    }
+    {
+        // All partitions are not exist in the old database
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        // All partitions should be rename to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] still not created
+        EXPECT_FALSE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    {
+        // Mock that new data write into physical_table[1], it should be created under the new_database
+        refreshTableSchema(physical_table_ids[1]);
+
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] now is created
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+}
+CATCH
+
+TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabaseWithRestart)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String new_db_name = "mock_new_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+
+    MockTiDB::instance().newDataBase(db_name);
+    MockTiDB::instance().newDataBase(new_db_name);
+
+    auto [logical_table_id, physical_table_ids] = MockTiDB::instance().newPartitionTable( //
+        db_name,
+        tbl_name,
+        cols,
+        pd_client->getTS(),
+        "",
+        "dt",
+        {"red", "blue", "yellow"});
+
+    ASSERT_EQ(physical_table_ids.size(), 3);
+
+    refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(physical_table_ids[0]);
+    // refreshTableSchema(physical_table_ids[1]); // mock that physical_table[1] have no data neither read
+    refreshTableSchema(physical_table_ids[2]);
+
+    // check partition table are created
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, tbl_name);
+        auto part0_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+
+        // physical_table[1] is not created
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    // mock failures happen when renaming partitions of a partitioned table
+    FailPointHelper::enableRandomFailPoint(FailPoints::random_ddl_fail_when_rename_partitions, 0.5);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::random_ddl_fail_when_rename_partitions); });
+
+    // Rename the partition table across database
+    const String new_tbl_name = "mock_part_tbl_renamed";
+    MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
+    refreshSchema();
+
+    Strings not_renamed_tbls;
+    {
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        for (const auto & tbl : Strings{
+                 fmt::format("t_{}", physical_table_ids[0]),
+                 fmt::format("t_{}", physical_table_ids[2]),
+             })
+        {
+            if (!new_db->isTableExist(global_ctx, tbl))
+                not_renamed_tbls.push_back(tbl);
+        }
+    }
+    LOG_WARNING(
+        Logger::get(),
+        "mock that these partitions are not renamed before restart, not_renamed_tables={}",
+        not_renamed_tbls);
+
+    if (!not_renamed_tbls.empty())
+    {
+        // mock that tiflash restart and run the fix logic
+        resetSchemas();
+        refreshSchema();
+    }
+
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, new_tbl_name);
+        auto part1_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+    }
+    {
+        // All partitions are not exist in the old database
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        // All partitions should be rename to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] still not created
+        EXPECT_FALSE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    {
+        // Mock that new data write into physical_table[1], it should be created under the new_database
+        refreshTableSchema(physical_table_ids[1]);
+
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] now is created
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
     }
 }
 CATCH
@@ -503,5 +768,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

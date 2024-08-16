@@ -215,8 +215,12 @@ static void checkDeltaValueSpaceData(
     ASSERT_EQ(rows, expected_all_rows);
 
     {
-        auto reader
-            = std::make_shared<DeltaValueReader>(dm_context, snapshot, table_columns, RowKeyRange::newAll(false, 1));
+        auto reader = std::make_shared<DeltaValueReader>(
+            dm_context,
+            snapshot,
+            table_columns,
+            RowKeyRange::newAll(false, 1),
+            ReadTag::Internal);
         auto columns = expected_all_blocks[0].cloneEmptyColumns();
         ASSERT_EQ(reader->readRows(columns, 0, expected_all_rows, nullptr), expected_all_rows);
         Blocks result_blocks;
@@ -227,8 +231,12 @@ static void checkDeltaValueSpaceData(
     // read with a specific range
     {
         // For `ColumnFileBig`, the same column file reader cannot be used twice, wo we create a new `DeltaValueReader` here.
-        auto reader
-            = std::make_shared<DeltaValueReader>(dm_context, snapshot, table_columns, RowKeyRange::newAll(false, 1));
+        auto reader = std::make_shared<DeltaValueReader>(
+            dm_context,
+            snapshot,
+            table_columns,
+            RowKeyRange::newAll(false, 1),
+            ReadTag::Internal);
         auto columns = expected_all_blocks[0].cloneEmptyColumns();
         RowKeyRange read_range = RowKeyRange::fromHandleRange(handle_range);
         ASSERT_EQ(reader->readRows(columns, 0, expected_all_rows, &read_range), expected_range_rows);
@@ -536,7 +544,8 @@ TEST_F(DeltaValueSpaceTest, Restore)
                 dmContext(),
                 old_delta_snapshot,
                 table_columns,
-                RowKeyRange::newAll(false, 1));
+                RowKeyRange::newAll(false, 1),
+                ReadTag::Internal);
             old_delta_stream.readPrefix();
             while (true)
             {
@@ -555,7 +564,8 @@ TEST_F(DeltaValueSpaceTest, Restore)
                 dmContext(),
                 new_delta_snapshot,
                 table_columns,
-                RowKeyRange::newAll(false, 1));
+                RowKeyRange::newAll(false, 1),
+                ReadTag::Internal);
             new_delta_stream.readPrefix();
             while (true)
             {
@@ -676,8 +686,12 @@ TEST_F(DeltaValueSpaceTest, GetPlaceItems)
         // write some more data after create snapshot
         appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
         ASSERT_EQ(delta->getRows(true), total_rows_write + num_rows_write_per_batch);
-        auto reader
-            = std::make_shared<DeltaValueReader>(dmContext(), snapshot, table_columns, RowKeyRange::newAll(false, 1));
+        auto reader = std::make_shared<DeltaValueReader>(
+            dmContext(),
+            snapshot,
+            table_columns,
+            RowKeyRange::newAll(false, 1),
+            ReadTag::Internal);
         auto place_items = reader->getPlaceItems(0, 0, snapshot->getRows(), snapshot->getDeletes());
         ASSERT_EQ(place_items.size(), 2);
         size_t total_place_rows = 0;
@@ -697,17 +711,24 @@ TEST_F(DeltaValueSpaceTest, ShouldPlace)
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, num_rows_write_per_batch, tso);
     {
         auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto reader
-            = std::make_shared<DeltaValueReader>(dmContext(), snapshot, table_columns, RowKeyRange::newAll(false, 1));
+        auto reader = std::make_shared<DeltaValueReader>(
+            dmContext(),
+            snapshot,
+            table_columns,
+            RowKeyRange::newAll(false, 1),
+            ReadTag::Internal);
+        auto [placed_rows, placed_deletes] = snapshot->getSharedDeltaIndex()->getPlacedStatus();
         ASSERT_TRUE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso + 1));
         ASSERT_FALSE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso - 1));
@@ -715,17 +736,24 @@ TEST_F(DeltaValueSpaceTest, ShouldPlace)
     {
         delta->flush(dmContext());
         auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto reader
-            = std::make_shared<DeltaValueReader>(dmContext(), snapshot, table_columns, RowKeyRange::newAll(false, 1));
+        auto reader = std::make_shared<DeltaValueReader>(
+            dmContext(),
+            snapshot,
+            table_columns,
+            RowKeyRange::newAll(false, 1),
+            ReadTag::Internal);
+        auto [placed_rows, placed_deletes] = snapshot->getSharedDeltaIndex()->getPlacedStatus();
         ASSERT_TRUE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso + 1));
         ASSERT_FALSE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso - 1));

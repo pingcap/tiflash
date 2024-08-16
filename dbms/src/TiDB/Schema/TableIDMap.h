@@ -75,9 +75,14 @@ struct TableIDMap
         return tables;
     }
 
+    // Return all partition_ids' belonging to the database.
+    // Note that the normal table or the logical table of partitioned table is excluded.
+    std::map<TableID, DatabaseID> getAllPartitionsBelongDatabase() const;
+    void eraseFromTableIDToDatabaseID(DB::TableID table_id);
+
     bool tableIDInTwoMaps(TableID table_id) const
     {
-        std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);
+        std::shared_lock lock(mtx_id_mapping);
         return !(
             table_id_to_database_id.find(table_id) == table_id_to_database_id.end()
             && partition_id_to_logical_id.find(table_id) == partition_id_to_logical_id.end());
@@ -85,14 +90,14 @@ struct TableIDMap
 
     bool tableIDInDatabaseIdMap(TableID table_id) const
     {
-        std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);
+        std::shared_lock lock(mtx_id_mapping);
         return !(table_id_to_database_id.find(table_id) == table_id_to_database_id.end());
     }
 
     // if not find，than return -1
     DatabaseID findTableIDInDatabaseMap(TableID table_id) const
     {
-        std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);
+        std::shared_lock lock(mtx_id_mapping);
         auto database_iter = table_id_to_database_id.find(table_id);
         if (database_iter == table_id_to_database_id.end())
             return -1;
@@ -103,7 +108,7 @@ struct TableIDMap
     // if not find，than return -1
     TableID findTableIDInPartitionMap(TableID partition_id) const
     {
-        std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);
+        std::shared_lock lock(mtx_id_mapping);
         auto logical_table_iter = partition_id_to_logical_id.find(partition_id);
         if (logical_table_iter == partition_id_to_logical_id.end())
             return -1;

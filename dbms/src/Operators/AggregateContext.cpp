@@ -60,6 +60,7 @@ bool AggregateContext::isTaskMarkedForSpill(size_t task_index)
         return true;
     if (getAggSpillContext()->updatePerThreadRevocableMemory(many_data[task_index]->revocableBytes(), task_index))
     {
+        assert(!many_data[task_index]->empty());
         return many_data[task_index]->tryMarkNeedSpill();
     }
     return false;
@@ -160,7 +161,7 @@ void AggregateContext::initConvergentPrefix()
     if (total_src_rows == 0 && keys_size == 0 && !empty_result_for_aggregation_by_empty_set)
     {
         auto & agg_process_info = threads_data[0]->agg_process_info;
-        agg_process_info.resetBlock(this->getHeader());
+        agg_process_info.resetBlock(this->getSourceHeader());
         aggregator->executeOnBlock(agg_process_info, *many_data[0], 0);
         /// Since this won't consume a lot of memory,
         /// even if it triggers marking need spill due to a low threshold setting,
@@ -192,6 +193,12 @@ Block AggregateContext::getHeader() const
 {
     assert(aggregator);
     return aggregator->getHeader(true);
+}
+
+Block AggregateContext::getSourceHeader() const
+{
+    assert(aggregator);
+    return aggregator->getSourceHeader();
 }
 
 Block AggregateContext::readForConvergent(size_t index)

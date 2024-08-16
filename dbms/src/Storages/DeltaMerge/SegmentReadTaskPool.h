@@ -56,6 +56,9 @@ struct SegmentReadTask
     void mergeRanges() { ranges = DM::tryMergeRanges(std::move(ranges), 1); }
 
     static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
+
+    // WN calls hasColumnFileToFetch to check whether a SegmentReadTask need to fetch column files from it
+    bool hasColumnFileToFetch() const;
 };
 
 class BlockStat
@@ -158,7 +161,7 @@ public:
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         auto total_rows = blk_stat.totalRows();
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} "
             "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
@@ -228,7 +231,13 @@ public:
 
     bool isRUExhausted();
 
+    const LoggerPtr & getLogger() const { return log; }
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
@@ -296,5 +305,17 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
             t->segment->segmentId(),
             t->segment->segmentEpoch(),
             t->read_snapshot->delta->getDeltaIndexEpoch());
+    }
+};
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTaskPoolPtr>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTaskPoolPtr & pool, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", pool->pool_id);
     }
 };

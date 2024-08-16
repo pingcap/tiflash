@@ -46,14 +46,9 @@ public:
         ColumnPtr col_data;
     };
 
-    void add(size_t start_pack_id, size_t pack_count, ColumnPtr & col_data, size_t max_sharing_column_count)
+    void add(size_t start_pack_id, size_t pack_count, ColumnPtr & col_data)
     {
         std::lock_guard lock(mtx);
-        if (packs.size() >= max_sharing_column_count)
-        {
-            GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_reach_count_limit).Increment();
-            return;
-        }
         GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_succ).Increment();
         auto & value = packs[start_pack_id];
         if (value.pack_count < pack_count)
@@ -131,14 +126,9 @@ private:
 class ColumnSharingCacheMap
 {
 public:
-    ColumnSharingCacheMap(
-        const String & dmfile_name_,
-        const ColumnDefines & cds,
-        size_t max_sharing_column_count_,
-        LoggerPtr & log_)
+    ColumnSharingCacheMap(const String & dmfile_name_, const ColumnDefines & cds, LoggerPtr & log_)
         : dmfile_name(dmfile_name_)
         , stats(static_cast<int>(ColumnCacheStatus::_TOTAL_COUNT))
-        , max_sharing_column_count(max_sharing_column_count_)
         , log(log_)
     {
         for (const auto & cd : cds)
@@ -164,7 +154,7 @@ public:
         {
             return;
         }
-        itr->second.add(start_pack_id, pack_count, col_data, max_sharing_column_count);
+        itr->second.add(start_pack_id, pack_count, col_data);
     }
 
     bool get(
@@ -223,11 +213,31 @@ private:
     std::string dmfile_name;
     std::unordered_map<int64_t, ColumnSharingCache> cols;
     std::vector<std::atomic<int64_t>> stats;
-    size_t max_sharing_column_count;
     LoggerPtr log;
 };
 
 class DMFileReader;
+
+class DMFileReaderPoolSharding
+{
+public:
+    void add(const String & path, DMFileReader & reader);
+    void del(const String & path, DMFileReader & reader);
+    void set(
+        const String & path,
+        DMFileReader & from_reader,
+        int64_t col_id,
+        size_t start,
+        size_t count,
+        ColumnPtr & col);
+    bool hasConcurrentReader(const String & path);
+    // `get` is just for test.
+    DMFileReader * get(const std::string & path);
+
+private:
+    std::mutex mtx;
+    std::unordered_map<std::string, std::unordered_set<DMFileReader *>> readers;
+};
 
 // DMFileReaderPool holds all the DMFileReader objects, so we can easily find DMFileReader objects with the same DMFile ID.
 // When a DMFileReader object successfully reads a column's packs, it will try to put these packs into other DMFileReader objects' cache.
@@ -243,14 +253,14 @@ public:
     void set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col);
     bool hasConcurrentReader(DMFileReader & from_reader);
     // `get` is just for test.
-    DMFileReader * get(const std::string & name);
+    DMFileReader * get(const std::string & path);
 
 private:
     DMFileReaderPool() = default;
+    DMFileReaderPoolSharding & getSharding(const String & path);
 
 private:
-    std::mutex mtx;
-    std::unordered_map<std::string, std::unordered_set<DMFileReader *>> readers;
+    std::array<DMFileReaderPoolSharding, 16> shardings;
 };
 
 } // namespace DB::DM

@@ -105,6 +105,17 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
     return result_tasks;
 }
 
+bool SegmentReadTask::hasColumnFileToFetch() const
+{
+    auto need_to_fetch = [](const ColumnFilePtr & cf) {
+        // In v7.5, Only ColumnFileTiny need too fetch.
+        return cf->isTinyFile();
+    };
+    const auto & mem_cfs = read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
+    const auto & persisted_cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
+    return std::any_of(mem_cfs.cbegin(), mem_cfs.cend(), need_to_fetch)
+        || std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch);
+}
 
 SegmentReadTasksWrapper::SegmentReadTasksWrapper(bool enable_read_thread_, SegmentReadTasks && ordered_tasks_)
     : enable_read_thread(enable_read_thread_)

@@ -175,6 +175,7 @@ void ColumnFileBigReader::initStream()
     DMFileBlockInputStreamBuilder builder(context.db_context);
     file_stream
         = builder.setTracingID(context.tracing_id)
+              .setReadTag(read_tag)
               .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range}, context.scan_context);
 
     header = file_stream->getHeader();
@@ -384,6 +385,13 @@ ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr 
 {
     // Currently we don't reuse the cache data.
     return std::make_shared<ColumnFileBigReader>(context, column_file, new_col_defs);
+}
+
+void ColumnFileBigReader::setReadTag(ReadTag read_tag_)
+{
+    // `read_tag` should be set before `file_stream` is initialized.
+    RUNTIME_CHECK(file_stream == nullptr);
+    read_tag = read_tag_;
 }
 
 } // namespace DM

@@ -583,8 +583,12 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
     auto read_ranges = RowKeyRanges{rowkey_range};
 
     {
-        BlockInputStreamPtr delta_stream
-            = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read, rowkey_range);
+        BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
+            dm_context,
+            segment_snap->delta,
+            columns_to_read,
+            rowkey_range,
+            ReadTag::Internal);
         delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, read_ranges, 0);
         delta_stream->readPrefix();
         while (true)
@@ -768,8 +772,13 @@ BlockInputStreamPtr Segment::getInputStream(
     UInt64 max_version,
     size_t expected_block_size)
 {
-    auto clipped_block_rows
-        = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read, segment_snap->stable->stable);
+    Stopwatch sw;
+    SCOPE_EXIT({ dm_context.scan_context->build_inputstream_time_ns += sw.elapsed(); });
+    auto clipped_block_rows = clipBlockRows( //
+        dm_context.db_context,
+        expected_block_size,
+        columns_to_read,
+        segment_snap->stable->stable);
     switch (read_mode)
     {
     case ReadMode::Normal:
@@ -827,15 +836,10 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
 {
     LOG_TRACE(segment_snap->log, "Begin segment create input stream");
 
-    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
+    auto read_tag = need_row_id ? ReadTag::MVCC : ReadTag::Query;
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, max_version);
 
-    RowKeyRanges real_ranges;
-    for (const auto & read_range : read_ranges)
-    {
-        auto real_range = rowkey_range.shrink(read_range);
-        if (!real_range.none())
-            real_ranges.emplace_back(std::move(real_range));
-    }
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
     if (real_ranges.empty())
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
 
@@ -853,10 +857,12 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
             filter,
             max_version,
             expected_block_size,
-            false);
+            false,
+            read_tag);
     }
     else if (useCleanRead(segment_snap, columns_to_read))
     {
+        RUNTIME_CHECK_MSG(!need_row_id, "'need_row_id is true, should not come here'");
         // No delta, let's try some optimizations.
         stream = segment_snap->stable->getInputStream(
             dm_context,
@@ -865,7 +871,8 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
             filter,
             max_version,
             expected_block_size,
-            true);
+            true,
+            read_tag);
     }
     else
     {
@@ -875,10 +882,11 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
             real_ranges,
             filter,
             segment_snap->stable,
-            read_info.getDeltaReader(),
+            read_info.getDeltaReader(need_row_id ? ReadTag::MVCC : ReadTag::Query),
             read_info.index_begin,
             read_info.index_end,
             expected_block_size,
+            read_tag,
             max_version,
             need_row_id);
     }
@@ -931,7 +939,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(
     bool reorganize_block) const
 {
     RowKeyRanges data_ranges{data_range};
-    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, data_ranges);
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, data_ranges, ReadTag::Internal);
 
     BlockInputStreamPtr data_stream = getPlacedStream(
         dm_context,
@@ -939,10 +947,11 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(
         data_ranges,
         EMPTY_RS_OPERATOR,
         segment_snap->stable,
-        read_info.getDeltaReader(),
+        read_info.getDeltaReader(ReadTag::Internal),
         read_info.index_begin,
         read_info.index_end,
-        expected_block_size);
+        expected_block_size,
+        ReadTag::Internal);
 
 
     data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_ranges, 0);
@@ -970,10 +979,16 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
-    const RowKeyRanges & data_ranges,
+    const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
     size_t expected_block_size)
 {
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    if (real_ranges.empty())
+    {
+        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
+    }
+
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
     // new_columns_to_read need at most columns_to_read.size() + 2, due to may extra insert into the handle column and del_mark column.
@@ -1017,23 +1032,25 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *new_columns_to_read,
-        data_ranges,
+        real_ranges,
         filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        /* enable_handle_clean_read */ enable_handle_clean_read,
+        enable_handle_clean_read,
+        ReadTag::Query,
         /* is_fast_scan */ true,
-        /* enable_del_clean_read */ enable_del_clean_read);
+        enable_del_clean_read);
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
         new_columns_to_read,
-        this->rowkey_range);
+        this->rowkey_range,
+        ReadTag::Query);
 
     // Do row key filtering based on data_ranges.
-    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
-    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
+    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, real_ranges, 0);
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, real_ranges, 0);
 
     // Filter the unneeded column and filter out the rows whose del_mark is true.
     delta_stream
@@ -1085,13 +1102,15 @@ BlockInputStreamPtr Segment::getInputStreamModeRaw(
         EMPTY_RS_OPERATOR,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        /* enable_handle_clean_read */ false);
+        /* enable_handle_clean_read */ false,
+        ReadTag::Query);
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
         new_columns_to_read,
-        this->rowkey_range);
+        this->rowkey_range,
+        ReadTag::Query);
 
     // Do row key filtering based on data_ranges.
     delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
@@ -1499,7 +1518,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
     const auto & pk_col = getExtraHandleColumnDefine(is_common_handle);
     auto pk_col_defs = std::make_shared<ColumnDefines>(ColumnDefines{pk_col});
     // We need to create a new delta_reader here, because the one in read_info is used to read columns other than PK column.
-    auto delta_reader = read_info.getDeltaReader(pk_col_defs);
+    auto delta_reader = read_info.getDeltaReader(pk_col_defs, ReadTag::Internal);
 
     size_t exact_rows = 0;
 
@@ -1514,7 +1533,8 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
             delta_reader,
             read_info.index_begin,
             read_info.index_end,
-            dm_context.stable_pack_rows);
+            dm_context.stable_pack_rows,
+            ReadTag::Internal);
 
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, rowkey_ranges, 0);
 
@@ -1540,7 +1560,8 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
         delta_reader,
         read_info.index_begin,
         read_info.index_end,
-        dm_context.stable_pack_rows);
+        dm_context.stable_pack_rows,
+        ReadTag::Internal);
 
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, rowkey_ranges, 0);
 
@@ -1787,7 +1808,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
         dm_context,
         *schema_snap,
         segment_snap,
-        {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
+        ReadTag::Internal);
 
     if (!opt_split_point.has_value())
         opt_split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
@@ -1813,7 +1835,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
     StableValueSpacePtr other_stable;
 
     {
-        auto my_delta_reader = read_info.getDeltaReader(schema_snap);
+        auto my_delta_reader = read_info.getDeltaReader(schema_snap, ReadTag::Internal);
 
         RowKeyRanges my_ranges{my_range};
         BlockInputStreamPtr my_data = getPlacedStream(
@@ -1825,7 +1847,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             my_delta_reader,
             read_info.index_begin,
             read_info.index_end,
-            dm_context.stable_pack_rows);
+            dm_context.stable_pack_rows,
+            ReadTag::Internal);
 
 
         my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_ranges, 0);
@@ -1844,7 +1867,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
 
     {
         // Write new segment's data
-        auto other_delta_reader = read_info.getDeltaReader(schema_snap);
+        auto other_delta_reader = read_info.getDeltaReader(schema_snap, ReadTag::Internal);
 
         RowKeyRanges other_ranges{other_range};
         BlockInputStreamPtr other_data = getPlacedStream(
@@ -1856,7 +1879,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             other_delta_reader,
             read_info.index_begin,
             read_info.index_end,
-            dm_context.stable_pack_rows);
+            dm_context.stable_pack_rows,
+            ReadTag::Internal);
 
 
         other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_ranges, 0);
@@ -2046,7 +2070,8 @@ StableValueSpacePtr Segment::prepareMerge(
             dm_context,
             *schema_snap,
             segment_snap,
-            {RowKeyRange::newAll(segment->is_common_handle, segment->rowkey_column_size)});
+            {RowKeyRange::newAll(segment->is_common_handle, segment->rowkey_column_size)},
+            ReadTag::Internal);
         RowKeyRanges rowkey_ranges{segment->rowkey_range};
         BlockInputStreamPtr stream = getPlacedStream(
             dm_context,
@@ -2054,10 +2079,11 @@ StableValueSpacePtr Segment::prepareMerge(
             rowkey_ranges,
             EMPTY_RS_OPERATOR,
             segment_snap->stable,
-            read_info.getDeltaReader(),
+            read_info.getDeltaReader(ReadTag::Internal),
             read_info.index_begin,
             read_info.index_end,
-            dm_context.stable_pack_rows);
+            dm_context.stable_pack_rows,
+            ReadTag::Internal);
 
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, rowkey_ranges, 0);
         stream = std::make_shared<PKSquashingBlockInputStream<false>>(
@@ -2238,7 +2264,8 @@ void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr &
         dm_context,
         /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
         segment_snap,
-        {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
+        ReadTag::Internal);
 }
 
 String Segment::simpleInfo() const
@@ -2320,6 +2347,7 @@ Segment::ReadInfo Segment::getReadInfo(
     const ColumnDefines & read_columns,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
+    ReadTag read_tag,
     UInt64 max_version) const
 {
     LOG_DEBUG(segment_snap->log, "Begin segment getReadInfo");
@@ -2327,9 +2355,14 @@ Segment::ReadInfo Segment::getReadInfo(
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
         ColumnDefines{getExtraHandleColumnDefine(dm_context.is_common_handle), getVersionColumnDefine()});
-    // Create a reader only for pk and version columns.
-    auto delta_reader
-        = std::make_shared<DeltaValueReader>(dm_context, segment_snap->delta, pk_ver_col_defs, this->rowkey_range);
+    // Create a reader that reads pk and version columns to update deltaindex.
+    // It related to MVCC, so always set a `ReadTag::MVCC` for it.
+    auto delta_reader = std::make_shared<DeltaValueReader>(
+        dm_context,
+        segment_snap->delta,
+        pk_ver_col_defs,
+        this->rowkey_range,
+        ReadTag::MVCC);
 
     auto [my_delta_index, fully_indexed]
         = ensurePlace(dm_context, segment_snap, delta_reader, read_ranges, max_version);
@@ -2359,7 +2392,7 @@ Segment::ReadInfo Segment::getReadInfo(
         manager->refreshRef(segment_snap->delta->getSharedDeltaIndex());
 
     return ReadInfo(
-        delta_reader->createNewReader(new_read_columns),
+        delta_reader->createNewReader(new_read_columns, read_tag),
         compacted_index->begin(),
         compacted_index->end(),
         new_read_columns);
@@ -2394,6 +2427,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
     const IndexIterator & delta_index_begin,
     const IndexIterator & delta_index_end,
     size_t expected_block_size,
+    ReadTag read_tag,
     UInt64 max_version,
     bool need_row_id)
 {
@@ -2407,7 +2441,10 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
         filter,
         max_version,
         expected_block_size,
-        false);
+        /* enable_handle_clean_read */ false,
+        read_tag,
+        /* is_fast_scan */ false,
+        /* enable_del_clean_read */ false);
     RowKeyRange rowkey_range = rowkey_ranges.size() == 1
         ? rowkey_ranges[0]
         : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
@@ -2448,7 +2485,8 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
 {
     const auto & stable_snap = segment_snap->stable;
     auto delta_snap = delta_reader->getDeltaSnap();
-    // Clone a new delta index.
+    // Try to clone from the sahred delta index, if it fails to reuse the shared delta index,
+    // it will return an empty delta index and we should place it in the following branch.
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree = my_delta_index->getDeltaTree();
 
@@ -2464,9 +2502,17 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
     // Let's do a fast check, determine whether we need to do place or not.
-    if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, max_version))
+    if (!delta_reader->shouldPlace( //
+            dm_context,
+            my_placed_rows,
+            my_placed_deletes,
+            rowkey_range,
+            relevant_range,
+            max_version))
+    {
+        // We can reuse the shared-delta-index
         return {my_delta_index, false};
-
+    }
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
     GET_METRIC(tiflash_storage_subtask_count, type_place_index_update).Increment();
     Stopwatch watch;
@@ -2601,7 +2647,8 @@ bool Segment::placeUpsert(
         delta_reader,
         compacted_index->begin(),
         compacted_index->end(),
-        dm_context.stable_pack_rows);
+        dm_context.stable_pack_rows,
+        ReadTag::MVCC);
 
     if (do_sort)
         return DM::placeInsert<true>(
@@ -2653,7 +2700,8 @@ bool Segment::placeDelete(
             delta_reader,
             compacted_index->begin(),
             compacted_index->end(),
-            dm_context.stable_pack_rows);
+            dm_context.stable_pack_rows,
+            ReadTag::MVCC);
 
         delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_ranges, 0);
 
@@ -2690,7 +2738,8 @@ bool Segment::placeDelete(
             delta_reader,
             compacted_index->begin(),
             compacted_index->end(),
-            dm_context.stable_pack_rows);
+            dm_context.stable_pack_rows,
+            ReadTag::MVCC);
         fully_indexed &= DM::placeDelete(
             merged_stream,
             block,
@@ -2934,6 +2983,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         max_version,
         expected_block_size,
         /*enable_handle_clean_read*/ false,
+        ReadTag::MVCC,
         /*is_fast_scan*/ false,
         /*enable_del_clean_read*/ false,
         /*read_packs*/ some_packs_sets,
@@ -2983,6 +3033,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         max_version,
         expected_block_size,
         enable_handle_clean_read,
+        ReadTag::Query,
         is_fast_scan,
         enable_del_clean_read);
 
@@ -2991,7 +3042,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         dm_context,
         segment_snap->delta,
         columns_to_read_ptr,
-        this->rowkey_range);
+        this->rowkey_range,
+        ReadTag::Query);
 
     return std::make_shared<BitmapFilterBlockInputStream>(
         columns_to_read,
@@ -3027,10 +3079,15 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         max_version,
         expected_block_size,
         enable_handle_clean_read,
+        ReadTag::LMFilter,
         is_fast_scan,
         enable_del_clean_read);
-    SkippableBlockInputStreamPtr filter_column_delta_stream
-        = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, filter_columns, this->rowkey_range);
+    SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
+        dm_context,
+        segment_snap->delta,
+        filter_columns,
+        this->rowkey_range,
+        ReadTag::LMFilter);
 
     if (unlikely(filter_columns->size() == columns_to_read.size()))
     {
@@ -3109,13 +3166,15 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         max_version,
         expected_block_size,
         enable_handle_clean_read,
+        ReadTag::Query,
         is_fast_scan,
         enable_del_clean_read);
     SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
         rest_columns_to_read,
-        this->rowkey_range);
+        this->rowkey_range,
+        ReadTag::Query);
     SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
         *rest_columns_to_read,
         rest_column_stable_stream,

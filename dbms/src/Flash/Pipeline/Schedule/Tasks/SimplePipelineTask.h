@@ -42,7 +42,7 @@ protected:
 
     void finalizeImpl() override
     {
-        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs());
+        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs(), 0);
     }
 };
 } // namespace DB

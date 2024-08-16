@@ -120,6 +120,38 @@ try
 }
 CATCH
 
+TEST_F(TestOperatorSpillContext, AutoTriggerSpillOnEmptyData)
+try
+{
+    auto agg_spill_context = std::make_shared<AggSpillContext>(2, *spill_config_ptr, 0, logger);
+    agg_spill_context->setAutoSpillMode();
+    agg_spill_context->updatePerThreadRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD, 0);
+    agg_spill_context->updatePerThreadRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD, 1);
+    ASSERT_TRUE(agg_spill_context->triggerSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD) == 0);
+    ASSERT_TRUE(agg_spill_context->isThreadMarkedForAutoSpill(0));
+    ASSERT_FALSE(agg_spill_context->isThreadMarkedForAutoSpill(1));
+
+    auto sort_spill_context = std::make_shared<SortSpillContext>(*spill_config_ptr, 0, logger);
+    sort_spill_context->setAutoSpillMode();
+    ASSERT_FALSE(sort_spill_context->updateRevocableMemory(0));
+    ASSERT_TRUE(
+        sort_spill_context->triggerSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD)
+        == OperatorSpillContext::MIN_SPILL_THRESHOLD);
+
+    auto join_spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 0, logger);
+    join_spill_context->setAutoSpillMode();
+    join_spill_context->init(2);
+    ASSERT_TRUE(
+        join_spill_context->updatePartitionRevocableMemory(0, OperatorSpillContext::MIN_SPILL_THRESHOLD) == false);
+    ASSERT_TRUE(join_spill_context->updatePartitionRevocableMemory(1, 0) == false);
+    ASSERT_TRUE(
+        join_spill_context->triggerSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2)
+        == OperatorSpillContext::MIN_SPILL_THRESHOLD);
+    ASSERT_TRUE(join_spill_context->isPartitionMarkedForAutoSpill(0));
+    ASSERT_FALSE(join_spill_context->isPartitionMarkedForAutoSpill(1));
+}
+CATCH
+
 TEST_F(TestOperatorSpillContext, SortMarkSpill)
 try
 {

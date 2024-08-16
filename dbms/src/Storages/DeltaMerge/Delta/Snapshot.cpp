@@ -71,29 +71,32 @@ DeltaValueReader::DeltaValueReader(
     const DMContext & context,
     const DeltaSnapshotPtr & delta_snap_,
     const ColumnDefinesPtr & col_defs_,
-    const RowKeyRange & segment_range_)
+    const RowKeyRange & segment_range_,
+    ReadTag read_tag_)
     : delta_snap(delta_snap_)
     , mem_table_reader(std::make_shared<ColumnFileSetReader>(
           context,
           delta_snap_->getMemTableSetSnapshot(),
           col_defs_,
-          segment_range_))
+          segment_range_,
+          read_tag_))
     , persisted_files_reader(std::make_shared<ColumnFileSetReader>(
           context,
           delta_snap_->getPersistedFileSetSnapshot(),
           col_defs_,
-          segment_range_))
+          segment_range_,
+          read_tag_))
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {}
 
-DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag)
 {
     auto * new_reader = new DeltaValueReader();
     new_reader->delta_snap = delta_snap;
     new_reader->compacted_delta_index = compacted_delta_index;
-    new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs);
-    new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs);
+    new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs, read_tag);
+    new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs, read_tag);
     new_reader->col_defs = new_col_defs;
     new_reader->segment_range = segment_range;
 
@@ -118,15 +121,15 @@ size_t DeltaValueReader::readRows(
     //
     // So here, we should filter out those out-of-range rows.
 
-    auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
-    auto total_delta_rows = delta_snap->getRows();
+    const auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
+    const auto total_delta_rows = delta_snap->getRows();
 
-    auto persisted_files_start = std::min(offset, mem_table_rows_offset);
-    auto persisted_files_end = std::min(offset + limit, mem_table_rows_offset);
-    auto mem_table_start = offset <= mem_table_rows_offset
+    const auto persisted_files_start = std::min(offset, mem_table_rows_offset);
+    const auto persisted_files_end = std::min(offset + limit, mem_table_rows_offset);
+    const auto mem_table_start = offset <= mem_table_rows_offset
         ? 0
         : std::min(offset - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
-    auto mem_table_end = offset + limit <= mem_table_rows_offset
+    const auto mem_table_end = offset + limit <= mem_table_rows_offset
         ? 0
         : std::min(offset + limit - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
 
@@ -144,8 +147,12 @@ size_t DeltaValueReader::readRows(
     }
     if (mem_table_start < mem_table_end)
     {
-        actual_read += mem_table_reader
-                           ->readRows(output_cols, mem_table_start, mem_table_end - mem_table_start, range, row_ids);
+        actual_read += mem_table_reader->readRows( //
+            output_cols,
+            mem_table_start,
+            mem_table_end - mem_table_start,
+            range,
+            row_ids);
     }
 
     if (row_ids != nullptr)
@@ -210,14 +217,13 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(
 
 bool DeltaValueReader::shouldPlace(
     const DMContext & context,
-    DeltaIndexPtr my_delta_index,
+    const size_t placed_rows,
+    const size_t placed_delete_ranges,
     const RowKeyRange & segment_range_,
     const RowKeyRange & relevant_range,
     UInt64 max_version)
 {
-    auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
-
-    // Already placed.
+    // The placed_rows, placed_delete_range already contains the data in delta_snap
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;
 

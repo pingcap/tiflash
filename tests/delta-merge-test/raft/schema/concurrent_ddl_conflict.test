@@ -32,6 +32,18 @@
 │ test1 │     1 │ 65536 │
 └───────┴───────┴───────┘
 
+# Meet SchemaDiff with regenerate_schema_map
+=> DBGInvoke __regenerate_schema_map()
+# Try gc tombstone storages
+=> DBGInvoke __refresh_schemas()
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
+# Check the storage is not dropped
+>> DBGInvoke query_mapped('select col_1,col_2,col_3 from \$d.\$t', default, test)
+┌─col_1─┬─col_2─┬─col_3─┐
+│ test1 │     1 │ 65536 │
+└───────┴───────┴───────┘
+
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __refresh_schemas()

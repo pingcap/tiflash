@@ -103,6 +103,13 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     snap->iterateTableSnapshots([&](const DM::Remote::DisaggPhysicalTableReadSnapshotPtr & snap) {
         response->add_tables(Serializer::serializeTo(snap, task_id, mem_tracker_wrapper).SerializeAsString());
     });
+
+    // Release SegmentReadTasks that do not have ColumnFileTiny and ColumnFileInMemory
+    // because these tasks will never call FetchDisaggPages.
+    auto to_release_tasks = snap->releaseNoNeedFetchTasks();
+    if (!to_release_tasks.empty())
+        LOG_INFO(log, "Release no need fetch tasks: count={} segments={}", to_release_tasks.size(), to_release_tasks);
+    snaps->unregisterSnapshotIfEmpty(task_id);
 }
 
 } // namespace DB

@@ -70,6 +70,7 @@ namespace ErrorCodes
 {
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 extern const int TIMEOUT_EXCEEDED;
+extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
@@ -171,7 +172,8 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
     // First split the read task for different write nodes.
     // For each write node, a BatchCopTask is built.
     {
-        auto remote_table_ranges = buildRemoteTableRanges();
+        auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
+        scan_context->setRegionNumOfCurrentInstance(region_num);
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
         const auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
         batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
@@ -200,6 +202,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
         // TODO
     }
 
+    scan_context->num_segments = output_seg_tasks.size();
     return DM::Remote::RNReadTask::create(output_seg_tasks);
 }
 
@@ -227,7 +230,12 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             req->address(),
             log->identifier());
     else if (!status.ok())
-        throw Exception(rpc.errMsg(status));
+        throw Exception(
+            ErrorCodes::UNKNOWN_EXCEPTION,
+            "EstablishDisaggTask failed, wn_address={}, errmsg={}, {}",
+            req->address(),
+            rpc.errMsg(status),
+            log->identifier());
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
     LOG_DEBUG(
@@ -477,8 +485,11 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
             return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
-    auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
+    auto rs_operator = DM::FilterParser::parseDAGQuery(
+        *dag_query,
+        table_scan.getColumns(),
+        std::move(create_attr_by_column_id),
+        log);
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
     return rs_operator;

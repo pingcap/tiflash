@@ -167,7 +167,7 @@ std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus> Ma
                         throw TiFlashException(
                             Errors::Coprocessor::BadRequest,
                             "Income key ranges is illegal, region_id={} version={} conf_version={} request_range=[{}, "
-                            "{}) region_range=[{}, {}}",
+                            "{}) region_range=[{}, {}]",
                             r.region_id,
                             r.region_version,
                             r.region_conf_version,
@@ -719,6 +719,8 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
             req,
             store_type,
             dagContext().getKeyspaceID(),
+            0, // connection_id
+            "", // connection_alias
             &Poco::Logger::get("pingcap/coprocessor"),
             std::move(meta_data),
             [&] { GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(); });
@@ -1182,7 +1184,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
-    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
+    mvcc_query_info->scan_context->setRegionNumOfCurrentInstance(total_local_region_num);
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
@@ -1248,7 +1250,7 @@ void DAGStorageInterpreter::buildLocalExec(
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
-    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
+    mvcc_query_info->scan_context->setRegionNumOfCurrentInstance(total_local_region_num);
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     ConcatBuilderPool builder_pool{max_streams};
