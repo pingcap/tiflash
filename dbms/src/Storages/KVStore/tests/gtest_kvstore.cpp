@@ -1057,6 +1057,7 @@ try
             RecordKVFormat::genKey(table_id, 0),
             RecordKVFormat::genKey(table_id, 10000),
             kvs.getProxyHelper());
+        // Fill data from 20 to 100.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20, 100, 0);
         std::vector<SSTView> sst_views{
             SSTView{
@@ -1085,6 +1086,7 @@ try
         if (ingest_using_split)
         {
             auto stats = storage->getStore()->getStoreStats();
+            // Including 0..20, 20..100, 100..inf.
             ASSERT_EQ(3, stats.segment_count);
         }
 
@@ -1097,6 +1099,7 @@ try
             RecordKVFormat::genKey(table_id, 20000),
             RecordKVFormat::genKey(table_id, 50000),
             kvs.getProxyHelper());
+        // Fill data from 20100 to 20200.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20100, 20200, 0);
         std::vector<SSTView> sst_views{
             SSTView{
@@ -1148,10 +1151,22 @@ try
         ASSERT_EQ(0, gc_n);
 
         auto stats = storage->getStore()->getStoreStats();
-        ASSERT_EQ(1, stats.segment_count);
-        ASSERT_EQ(0, stats.total_stable_size_on_disk);
-        ASSERT_EQ(0, stats.total_rows);
-        ASSERT_EQ(0, stats.total_size);
+        // The data of [20, 100), is not reclaimed during Apply Snapshot.
+        if (ingest_using_split)
+        {
+            ASSERT_EQ(3, stats.segment_count);
+            ASSERT_NE(0, stats.total_stable_size_on_disk);
+            ASSERT_EQ(80, stats.total_rows);
+            ASSERT_NE(0, stats.total_size);
+        }
+        else
+        {
+            // The only segment is not reclaimed.
+            ASSERT_EQ(1, stats.segment_count);
+            ASSERT_NE(0, stats.total_stable_size_on_disk);
+            ASSERT_EQ(180, stats.total_rows);
+            ASSERT_NE(0, stats.total_size);
+        }
     }
 }
 CATCH
