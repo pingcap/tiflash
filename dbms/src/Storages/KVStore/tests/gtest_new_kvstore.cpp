@@ -1232,6 +1232,7 @@ try
 
         LOG_INFO(log, "Shrink region 1");
         // region_state is "applying", but the key-range in proxy side is not overlap.
+        r1->mutState().set_state(raft_serverpb::PeerState::Applying);
         r1->mutState().mutable_region()->set_start_key(RecordKVFormat::genKey(table_id, 0));
         r1->mutState().mutable_region()->set_end_key(RecordKVFormat::genKey(table_id, 1));
         proxy_instance
