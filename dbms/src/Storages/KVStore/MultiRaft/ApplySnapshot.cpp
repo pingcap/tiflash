@@ -112,12 +112,15 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
                 }
                 else if (state.state() == raft_serverpb::PeerState::Applying)
                 {
+                    // In this case, the `overlapped_region` also has a snapshot applied in raftstore,
+                    // and is pending to be applied in TiFlash.
                     auto r = RegionRangeKeys::makeComparableKeys(
                         TiKVKey::copyFrom(state.region().start_key()),
                         TiKVKey::copyFrom(state.region().end_key()));
 
                     if (RegionsRangeIndex::isRangeOverlapped(new_range->comparableKeys(), r))
                     {
+                        // If the range is still overlapped after the snapshot, there is a hard error.
                         throw Exception(
                             ErrorCodes::LOGICAL_ERROR,
                             "range of region_id={} is overlapped with `Applying` region_id={}, {}",
@@ -192,6 +195,7 @@ void KVStore::onSnapshot(
 {
     RegionID region_id = new_region_wrap->id();
 
+    // 1. Try to clean stale data.
     {
         auto keyspace_id = new_region_wrap->getKeyspaceID();
         auto table_id = new_region_wrap->getMappedTableID();
@@ -267,6 +271,7 @@ void KVStore::onSnapshot(
         }
     }
 
+    // 2. Dump data to RegionTable.
     {
         const auto range = new_region_wrap->getRange();
         auto & region_table = tmt.getRegionTable();
@@ -292,6 +297,7 @@ void KVStore::onSnapshot(
         // For `RegionPtrWithSnapshotFiles`, don't need to flush cache.
     }
 
+    // Register the new Region.
     RegionPtr new_region = new_region_wrap.base;
     {
         auto task_lock = genTaskLock();
