@@ -64,7 +64,7 @@ public:
     KeyspaceID getKeyspaceID() const;
     std::string toDebugString() const;
 
-    static bool isRangeOverlapped(const RegionRangeKeys::RegionRange & a, const RegionRangeKeys::RegionRange & b)
+    static bool isRangeOverlapped(const RegionRange & a, const RegionRange & b)
     {
         auto start = a.first.compare(b.first);
         if (start == 0)
