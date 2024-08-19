@@ -82,6 +82,8 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             old_region->setStateApplying();
             // It is not worthy to call `tryWriteBlockByRegion` and `tryFlushRegionCacheInStorage` here,
             // even if the written data is useful, it could be overwritten later in `onSnapshot`.
+            // Note that we must persistRegion. This is to ensure even if a restart happens before
+            // the apply snapshot is finished, TiFlash can correctly reject the read index requests
             persistRegion(*old_region, region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
         }
     }
