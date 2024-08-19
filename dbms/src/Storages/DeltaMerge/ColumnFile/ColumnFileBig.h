@@ -92,12 +92,6 @@ public:
         const DMContext & context,
         const RowKeyRange & segment_range,
         const dtpb::ColumnFileBig & cf_pb);
-    static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & dm_context,
-        const RowKeyRange & segment_range,
-        UInt64 file_page_id,
-        size_t valid_rows,
-        size_t valid_bytes);
 
     static ColumnFilePersistedPtr createFromCheckpoint(
         const LoggerPtr & parent_log,
