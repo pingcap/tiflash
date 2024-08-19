@@ -231,9 +231,12 @@ void KVStore::onSnapshot(
                             new_key_range.toDebugString(),
                             keyspace_id,
                             table_id);
-                        dm_storage->deleteRange(new_key_range, context.getSettingsRef());
-                        // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
-                        dm_storage->flushCache(context, new_key_range, /*try_until_succeed*/ true);
+                        /// Previously, we clean `old_key_range` here. However, we can only clean `nbew_key_range` here, if there is also a overlapped snapshot in region worker queue.
+                        /// Consider:
+                        /// 1. apply snapshot a of range [0..100)
+                        /// 2. apply snapshot b of range [50..100)
+                        /// 3. apply snapshot a' of range [0..50)
+                        /// In 3, we could clean the old range [0..100), which covers the written data of snapshot b in stage 2.
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
@@ -260,6 +263,8 @@ void KVStore::onSnapshot(
                     static_assert(std::is_same_v<RegionPtrWrap, RegionPtrWithBlock>);
                     // Call `deleteRange` to delete data for range
                     dm_storage->deleteRange(new_key_range, context.getSettingsRef());
+                    // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
+                    dm_storage->flushCache(context, new_key_range, /*try_until_succeed*/ true);
                 }
             }
             catch (DB::Exception & e)
