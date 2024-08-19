@@ -232,7 +232,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentOperationTest, CurrentV6RestoreFromV5)
+TEST_F(SegmentOperationTest, CurrentV7RestoreFromV5)
 try
 {
     auto current = STORAGE_FORMAT_CURRENT;
@@ -250,7 +250,7 @@ try
     auto stable_id = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getStable()->getId();
     auto column_file_count = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getDelta()->getColumnFileCount();
 
-    STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V6;
+    STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V7;
     auto segment = Segment::restoreSegment(log, *dm_context, DELTA_MERGE_FIRST_SEGMENT_ID);
     ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     ASSERT_EQ(segment->getRowKeyRange(), range);

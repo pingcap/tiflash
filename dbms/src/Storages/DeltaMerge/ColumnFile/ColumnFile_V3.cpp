@@ -93,9 +93,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV4Format(
             break;
         }
         default:
-            throw Exception(
-                "Unexpected column file type: " + DB::toString(column_file_type),
-                ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected column file type: {}", column_file_type);
         }
         column_files.emplace_back(std::move(column_file));
     }

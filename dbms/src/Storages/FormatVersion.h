@@ -134,12 +134,21 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersio
 };
 
 inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersion{
-    .segment = SegmentFormat::V3, // diff
+    .segment = SegmentFormat::V2,
     .dm_file = DMFileFormat::V3,
     .stable = StableFormat::V2, // diff
-    .delta = DeltaFormat::V4, // diff
+    .delta = DeltaFormat::V3,
     .page = PageFormat::V3,
     .identifier = 6,
+};
+
+inline static const StorageFormatVersion STORAGE_FORMAT_V7 = StorageFormatVersion{
+    .segment = SegmentFormat::V3, // diff
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2,
+    .delta = DeltaFormat::V4, // diff
+    .page = PageFormat::V3,
+    .identifier = 7,
 };
 
 // STORAGE_FORMAT_V100 is used for S3 only
@@ -154,12 +163,22 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVers
 
 // STORAGE_FORMAT_V101 is used for S3 only
 inline static const StorageFormatVersion STORAGE_FORMAT_V101 = StorageFormatVersion{
-    .segment = SegmentFormat::V3, // diff
+    .segment = SegmentFormat::V2,
     .dm_file = DMFileFormat::V3,
     .stable = StableFormat::V2, // diff
-    .delta = DeltaFormat::V4, // diff
+    .delta = DeltaFormat::V3,
     .page = PageFormat::V4,
     .identifier = 101,
+};
+
+// STORAGE_FORMAT_V102 is used for S3 only
+inline static const StorageFormatVersion STORAGE_FORMAT_V102 = StorageFormatVersion{
+    .segment = SegmentFormat::V3, // diff
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2,
+    .delta = DeltaFormat::V4, // diff
+    .page = PageFormat::V4,
+    .identifier = 102,
 };
 
 inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
@@ -180,10 +199,14 @@ inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
         return STORAGE_FORMAT_V5;
     case 6:
         return STORAGE_FORMAT_V6;
+    case 7:
+        return STORAGE_FORMAT_V7;
     case 100:
         return STORAGE_FORMAT_V100;
     case 101:
         return STORAGE_FORMAT_V101;
+    case 102:
+        return STORAGE_FORMAT_V102;
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal setting value: {}", setting);
     }

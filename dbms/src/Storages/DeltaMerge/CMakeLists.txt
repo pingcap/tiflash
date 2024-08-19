@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(./dtpb)
+add_subdirectory(dtpb)
 
 include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
