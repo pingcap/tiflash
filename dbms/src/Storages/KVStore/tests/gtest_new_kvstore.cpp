@@ -1221,6 +1221,7 @@ try
             Exception);
 
         LOG_INFO(log, "Set to applying");
+        // region_state is "applying", but the key-range in proxy side still overlaps.
         r1->mutState().set_state(raft_serverpb::PeerState::Applying);
         ASSERT_EQ(proxy_helper->getRegionLocalState(1).state(), raft_serverpb::PeerState::Applying);
         EXPECT_THROW(
@@ -1230,6 +1231,7 @@ try
 
 
         LOG_INFO(log, "Shrink region 1");
+        // region_state is "applying", but the key-range in proxy side is not overlap.
         r1->mutState().mutable_region()->set_start_key(RecordKVFormat::genKey(table_id, 0));
         r1->mutState().mutable_region()->set_end_key(RecordKVFormat::genKey(table_id, 1));
         proxy_instance
