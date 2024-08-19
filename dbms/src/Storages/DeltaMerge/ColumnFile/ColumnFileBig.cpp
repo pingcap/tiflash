@@ -101,11 +101,8 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     readIntBinary(valid_bytes, buf);
 
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    DMFilePtr dmfile;
-    if (remote_data_store)
-        dmfile = restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, file_page_id);
-    else
-        dmfile = restoreDMFileFromLocal(dm_context, file_page_id);
+    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, file_page_id)
+                                    : restoreDMFileFromLocal(dm_context, file_page_id);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -140,27 +137,8 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto remote_page_id = UniversalPageIdFormat::toFullPageId(
-        UniversalPageIdFormat::toFullPrefix(dm_context.keyspace_id, StorageType::Data, dm_context.physical_table_id),
-        file_page_id);
-    auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
-    auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
-    auto file_oid = data_key_view.getDMFileOID();
-    auto data_key = data_key_view.toFullKey();
-    auto delegator = dm_context.path_pool->getStableDiskDelegator();
-    auto new_local_page_id = dm_context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-    PS::V3::CheckpointLocation loc{
-        .data_file_id = std::make_shared<String>(data_key),
-        .offset_in_file = 0,
-        .size_in_file = 0,
-    };
-    wbs.data.putRemoteExternal(new_local_page_id, loc);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
-    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
-    wbs.writeLogAndData();
-    // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
-    delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }

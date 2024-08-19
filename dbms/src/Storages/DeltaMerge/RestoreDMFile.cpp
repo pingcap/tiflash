@@ -28,7 +28,6 @@ DMFilePtr restoreDMFileFromRemoteDataSource(
     Remote::IDataStorePtr remote_data_store,
     UInt64 file_page_id)
 {
-    DMFilePtr dmfile;
     auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
     auto wn_ps = dm_context.global_context.getWriteNodePageStorage();
     auto full_page_id = UniversalPageIdFormat::toFullPageId(
@@ -40,7 +39,7 @@ DMFilePtr restoreDMFileFromRemoteDataSource(
     const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
     auto file_oid = lock_key_view.asDataFile().getDMFileOID();
     auto prepared = remote_data_store->prepareDMFile(file_oid, file_page_id);
-    dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
     // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
     path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
     return dmfile;

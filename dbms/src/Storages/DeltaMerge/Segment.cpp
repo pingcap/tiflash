@@ -371,6 +371,7 @@ void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_in
     {
         dtpb::SegmentMeta meta;
         String data;
+        readStringBinary(data, buf);
         RUNTIME_CHECK_MSG(
             meta.ParseFromString(data),
             "Failed to parse SegmentMeta from string: {}",
