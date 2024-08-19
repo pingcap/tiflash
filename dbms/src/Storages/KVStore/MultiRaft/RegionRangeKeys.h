@@ -64,6 +64,23 @@ public:
     KeyspaceID getKeyspaceID() const;
     std::string toDebugString() const;
 
+    static bool isRangeOverlapped(const RegionRangeKeys::RegionRange & a, const RegionRangeKeys::RegionRange & b)
+    {
+        auto start = a.first.compare(b.first);
+        if (start == 0)
+        {
+            return true;
+        }
+        else if (start < 0)
+        {
+            return a.second.compare(b.first) > 0;
+        }
+        else
+        {
+            return b.second.compare(a.first) > 0;
+        }
+    }
+
 private:
     RegionRange ori;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> raw;

@@ -120,7 +120,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
                         TiKVKey::copyFrom(state.region().start_key()),
                         TiKVKey::copyFrom(state.region().end_key()));
 
-                    if (RegionsRangeIndex::isRangeOverlapped(new_range->comparableKeys(), r))
+                    if (RegionRangeKeys::isRangeOverlapped(new_range->comparableKeys(), r))
                     {
                         // If the range is still overlapped after the snapshot, there is a hard error.
                         throw Exception(

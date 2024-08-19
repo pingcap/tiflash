@@ -1728,14 +1728,14 @@ TEST_F(RegionKVStoreOldTest, RegionRange2)
     auto mustOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
         auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
         auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
-        ASSERT_TRUE(RegionsRangeIndex::isRangeOverlapped(r1, r2));
-        ASSERT_TRUE(RegionsRangeIndex::isRangeOverlapped(r2, r1));
+        ASSERT_TRUE(RegionRangeKeys::isRangeOverlapped(r1, r2));
+        ASSERT_TRUE(RegionRangeKeys::isRangeOverlapped(r2, r1));
     };
     auto mustNotOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
         auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
         auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
-        ASSERT_FALSE(RegionsRangeIndex::isRangeOverlapped(r1, r2));
-        ASSERT_FALSE(RegionsRangeIndex::isRangeOverlapped(r2, r1));
+        ASSERT_FALSE(RegionRangeKeys::isRangeOverlapped(r1, r2));
+        ASSERT_FALSE(RegionRangeKeys::isRangeOverlapped(r2, r1));
     };
     mustOverlap("", "a", "", "b");
     mustOverlap("a", "", "b", "");

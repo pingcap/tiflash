@@ -171,25 +171,4 @@ RegionsRangeIndex::RootMap::iterator RegionsRangeIndex::split(const TiKVRangeKey
         return do_split(begin_it, new_start);
 }
 
-
-bool RegionsRangeIndex::isRangeOverlapped(
-    const RegionRangeKeys::RegionRange & a,
-    const RegionRangeKeys::RegionRange & b)
-{
-    auto start = a.first.compare(b.first);
-    if (start == 0)
-    {
-        return true;
-    }
-    else if (start < 0)
-    {
-        return a.second.compare(b.first) > 0;
-    }
-    else
-    {
-        return b.second.compare(a.first) > 0;
-    }
-}
-
-
 } // namespace DB

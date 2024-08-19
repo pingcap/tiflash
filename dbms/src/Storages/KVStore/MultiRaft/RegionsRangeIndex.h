@@ -71,8 +71,6 @@ public:
     // TODO this friend class decl is not working.
     RootMap::iterator split(const TiKVRangeKey & new_start);
 
-    static bool isRangeOverlapped(const RegionRangeKeys::RegionRange &, const RegionRangeKeys::RegionRange &);
-
 private:
     friend class ::DB::tests::KVStoreTestBase;
     friend class ::DB::tests::RegionKVStoreOldTest;
