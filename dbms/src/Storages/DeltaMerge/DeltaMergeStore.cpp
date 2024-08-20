@@ -53,6 +53,8 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
+#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 #include <atomic>

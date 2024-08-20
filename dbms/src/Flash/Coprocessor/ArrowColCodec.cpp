@@ -27,6 +27,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/copyData.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
 namespace DB

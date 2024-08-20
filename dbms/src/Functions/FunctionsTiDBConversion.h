@@ -54,6 +54,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <TiDB/Collation/Collator.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <ext/collection_cast.h>
 #include <ext/enumerate.h>

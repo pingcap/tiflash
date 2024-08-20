@@ -17,11 +17,11 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
 #include <string>
 #include <type_traits>
-#include <vector>
 
 namespace DB::tests
 {

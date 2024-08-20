@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Parsers/IAST_fwd.h>
 #include <TiDB/Schema/TiDB.h>
 #include <kvproto/mpp.pb.h>
 

@@ -17,6 +17,7 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
 #include <TestUtils/ProjectionTestUtil.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 
 namespace DB

@@ -16,6 +16,7 @@
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/ExpandBinder2.h>
 #include <Parsers/ASTAsterisk.h>
+#include <Parsers/IAST_fwd.h>
 
 
 namespace DB::mock

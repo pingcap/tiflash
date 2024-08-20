@@ -23,6 +23,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <TiDB/Decode/Datum.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 #include <unordered_map>
 

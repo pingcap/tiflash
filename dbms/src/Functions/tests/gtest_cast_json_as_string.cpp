@@ -21,9 +21,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/JsonBinary.h>
-
-#include <string>
-#include <vector>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB::tests
 {

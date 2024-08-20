@@ -20,7 +20,6 @@
 #include <Core/SortDescription.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Collation/Collator.h>
-#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB_fwd.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/executor.pb.h>

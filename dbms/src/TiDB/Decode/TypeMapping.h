@@ -16,18 +16,15 @@
 
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
+#include <Parsers/IAST_fwd.h>
 #include <TiDB/Schema/TiDB.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/expression.pb.h>
-
 #pragma GCC diagnostic pop
 
 namespace DB
 {
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-using ASTPtrVec = std::vector<ASTPtr>;
 
 // Because for compatible issues, we need to deal with the duration type separately for computing layer.
 // TODO: Need a better implement.

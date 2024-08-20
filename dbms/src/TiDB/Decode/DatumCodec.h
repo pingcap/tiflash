@@ -18,7 +18,6 @@
 #include <Core/Field.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Endian.h>
-#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
 /// Functions in this file are used for individual datum codec, i.e. UInt/Int64, Float64, String/Bytes, Decimal, Enum, Set, etc.
