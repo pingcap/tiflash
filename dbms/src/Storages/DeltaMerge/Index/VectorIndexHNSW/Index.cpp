@@ -84,10 +84,7 @@ void VectorIndexHNSWBuilder::addBlock(
 
     const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
 
-    if (!index.reserve(unum::usearch::ceil2(index.size() + column.size())))
-    {
-        throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Could not reserve memory for HNSW index");
-    }
+    index.reserve(unum::usearch::ceil2(index.size() + column.size()));
 
     Stopwatch w;
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
@@ -170,6 +167,7 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProp
     SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
 
     auto vi = std::make_shared<VectorIndexHNSWViewer>(file_props);
+
     vi->index = USearchImplType::make(
         unum::usearch::metric_punned_t( //
             file_props.dimensions(),
@@ -178,6 +176,10 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProp
             unum::usearch::default_connectivity(),
             unum::usearch::default_expansion_add(),
             16 /* default is 64 */));
+
+    // Currently may have a lot of threads querying concurrently
+    auto limit = unum::usearch::index_limits_t(0, /* threads */ std::thread::hardware_concurrency() * 10);
+    vi->index.reserve(limit);
 
     auto result = vi->index.view(unum::usearch::memory_mapped_file_t(path.data()));
     RUNTIME_CHECK_MSG(result, "Failed to load vector index: {}", result.error.what());

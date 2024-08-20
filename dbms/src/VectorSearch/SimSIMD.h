@@ -29,11 +29,10 @@
 #define SIMSIMD_TARGET_SVE 1
 #define SIMSIMD_TARGET_HASWELL 1
 #define SIMSIMD_TARGET_SKYLAKE 1
-#define SIMSIMD_TARGET_ICE 0
+#define SIMSIMD_TARGET_ICE 1
 #define SIMSIMD_TARGET_GENOA 0
 #define SIMSIMD_TARGET_SAPPHIRE 0
 #include <simsimd/simsimd.h>
-
 
 namespace simsimd_details
 {

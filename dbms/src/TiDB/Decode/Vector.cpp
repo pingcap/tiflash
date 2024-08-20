@@ -16,7 +16,7 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <TiDB/Decode/Vector.h>
-#include <VectorSearch/simdsimd-internals.h>
+#include <VectorSearch/SimSIMD.h>
 
 #include <compare>
 
