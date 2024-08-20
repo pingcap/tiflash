@@ -76,7 +76,9 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
 
     if (block.getRSResult().allMatch())
     {
-        block.insert(header.getPositionByName(filter_column), header.safeGetByPosition(filter_column)); // Make some checks on block structure happy.
+        block.insert(
+            filter_column,
+            header.safeGetByPosition(filter_column)); // Make some checks on block structure happy.
         if (return_filter)
             res_filter = nullptr;
         return true;
