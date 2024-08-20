@@ -107,14 +107,15 @@ bool HashJoinPointerTable::buildImpl(
 
             auto hash = unalignedLoad<HashValueType>(row_ptr);
             size_t bucket = getBucketNum(hash);
-            RowPtr old_head = reinterpret_cast<RowPtr>(pointer_table[bucket].exchange(reinterpret_cast<uintptr_t>(row_ptr), std::memory_order_relaxed));
+            auto old_head = reinterpret_cast<RowPtr>(pointer_table[bucket].exchange(reinterpret_cast<uintptr_t>(row_ptr), std::memory_order_relaxed));
             if constexpr (tagged_pointer)
             {
                 UInt16 tag = (hash & ROW_PTR_TAG_MASK) | getRowPtrTag(old_head);
                 pointer_table[bucket].fetch_or(static_cast<uintptr_t>(tag) << (64 - ROW_PTR_TAG_BITS), std::memory_order_relaxed);
                 old_head = removeRowPtrTag(old_head);
             }
-            unalignedStore<RowPtr>(row_ptr + row_layout.next_pointer_offset, old_head);
+            if (old_head != nullptr)
+                unalignedStore<RowPtr>(row_ptr + row_layout.next_pointer_offset, old_head);
         }
 
         if (build_size >= max_build_size)
