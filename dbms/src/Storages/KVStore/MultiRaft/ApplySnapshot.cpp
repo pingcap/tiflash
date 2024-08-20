@@ -239,6 +239,7 @@ void KVStore::onSnapshot(
                         /// 2. apply snapshot b of range [50..100)
                         /// 3. apply snapshot a' of range [0..50)
                         /// In stage 3, we will mistakenly clean the old range [0..100), which covers the written data of snapshot b in stage 2.
+                        /// The clean operation is implicit by `ingestFiles(..., clear_data_in_range=true)`.
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
@@ -265,8 +266,7 @@ void KVStore::onSnapshot(
                     static_assert(std::is_same_v<RegionPtrWrap, RegionPtrWithBlock>);
                     // Call `deleteRange` to delete data for range
                     dm_storage->deleteRange(new_key_range, context.getSettingsRef());
-                    // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
-                    dm_storage->flushCache(context, new_key_range, /*try_until_succeed*/ true);
+                    // We don't flushCache here, but flush as a whole in stage 2 in `tryFlushRegionCacheInStorage`.
                 }
             }
             catch (DB::Exception & e)
