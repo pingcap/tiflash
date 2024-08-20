@@ -38,7 +38,6 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/TableNameMeta.h>
-#include <TiDB/Schema/TiDB.h>
 
 #include <queue>
 

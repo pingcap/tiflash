@@ -24,7 +24,6 @@
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <TiDB/Schema/TiDB.h>
 
 #include <utility>
 

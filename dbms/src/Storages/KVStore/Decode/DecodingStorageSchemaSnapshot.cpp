@@ -14,6 +14,7 @@
 
 #include <DataTypes/DataTypeString.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

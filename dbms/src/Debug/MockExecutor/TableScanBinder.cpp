@@ -16,6 +16,7 @@
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/TableScanBinder.h>
 #include <Storages/MutableSupport.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB::mock
 {
@@ -114,7 +115,7 @@ void TableScanBinder::buildTable(tipb::Executor * tipb_executor)
 
 ExecutorBinderPtr compileTableScan(
     size_t & executor_index,
-    TableInfo & table_info,
+    TiDB::TableInfo & table_info,
     const String & db,
     const String & table_name,
     bool append_pk_column,

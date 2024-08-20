@@ -19,7 +19,6 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
-#include <TiDB/Schema/TiDB.h>
 #include <common/StringRef.h>
 
 namespace DB

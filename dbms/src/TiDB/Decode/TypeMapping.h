@@ -32,13 +32,13 @@ using ASTPtrVec = std::vector<ASTPtr>;
 
 // Because for compatible issues, we need to deal with the duration type separately for computing layer.
 // TODO: Need a better implement.
-DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info);
-DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_info);
+DataTypePtr getDataTypeByColumnInfo(const TiDB::ColumnInfo & column_info);
+DataTypePtr getDataTypeByColumnInfoForComputingLayer(const TiDB::ColumnInfo & column_info);
 
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type);
 DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type);
 
-DataTypePtr getDataTypeByColumnInfoForDisaggregatedStorageLayer(const ColumnInfo & column_info);
+DataTypePtr getDataTypeByColumnInfoForDisaggregatedStorageLayer(const TiDB::ColumnInfo & column_info);
 
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 

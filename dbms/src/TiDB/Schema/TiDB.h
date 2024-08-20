@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <tipb/schema.pb.h>
 
 #include <optional>
@@ -285,8 +286,6 @@ struct DBInfo
     void deserialize(const String & json_str);
 };
 
-struct TableInfo;
-using TableInfoPtr = std::shared_ptr<TableInfo>;
 
 struct TiFlashReplicaInfo
 {
@@ -413,7 +412,6 @@ struct TableInfo
     IndexInfo & getPrimaryIndexInfo() { return index_infos[0]; }
 };
 
-using DBInfoPtr = std::shared_ptr<DBInfo>;
 
 String genJsonNull();
 
