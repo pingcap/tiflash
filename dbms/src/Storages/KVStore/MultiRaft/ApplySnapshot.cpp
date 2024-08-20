@@ -80,8 +80,10 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryWriteBlockByRegion(old_region);
-            tryFlushRegionCacheInStorage(tmt, *old_region, log);
+            // It is not worthy to call `tryWriteBlockByRegion` and `tryFlushRegionCacheInStorage` here,
+            // even if the written data is useful, it could be overwritten later in `onSnapshot`.
+            // Note that we must persistRegion. This is to ensure even if a restart happens before
+            // the apply snapshot is finished, TiFlash can correctly reject the read index requests
             persistRegion(*old_region, region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
         }
     }
@@ -95,23 +97,57 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             if (overlapped_region.first != region_id)
             {
                 auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
-                if (state.state() != raft_serverpb::PeerState::Tombstone)
-                {
-                    throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
-                        "range of region_id={} is overlapped with region_id={}, state: {}",
-                        region_id,
-                        overlapped_region.first,
-                        state.ShortDebugString());
-                }
-                else
+                auto extra_msg = fmt::format(
+                    "state={}, tiflash_state={}, new_region_state={}",
+                    state.ShortDebugString(),
+                    overlapped_region.second->getMeta().getRegionState().getBase().ShortDebugString(),
+                    new_region->getMeta().getRegionState().getBase().ShortDebugString());
+                if (state.state() == raft_serverpb::PeerState::Tombstone)
                 {
                     LOG_INFO(
                         log,
-                        "range of region_id={} is overlapped with `Tombstone` region_id={}",
+                        "range of region_id={} is overlapped with `Tombstone` region_id={}, {}",
                         region_id,
-                        overlapped_region.first);
+                        overlapped_region.first,
+                        extra_msg);
                     handleDestroy(overlapped_region.first, tmt, task_lock);
+                }
+                else if (state.state() == raft_serverpb::PeerState::Applying)
+                {
+                    // In this case, the `overlapped_region` also has a snapshot applied in raftstore,
+                    // and is pending to be applied in TiFlash.
+                    auto r = RegionRangeKeys::makeComparableKeys(
+                        TiKVKey::copyFrom(state.region().start_key()),
+                        TiKVKey::copyFrom(state.region().end_key()));
+
+                    if (RegionRangeKeys::isRangeOverlapped(new_range->comparableKeys(), r))
+                    {
+                        // If the range is still overlapped after the snapshot, there is a hard error.
+                        throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
+                            "range of region_id={} is overlapped with `Applying` region_id={}, {}",
+                            region_id,
+                            overlapped_region.first,
+                            extra_msg);
+                    }
+                    else
+                    {
+                        LOG_INFO(
+                            log,
+                            "range of region_id={} is overlapped with `Applying` region_id={}, {}",
+                            region_id,
+                            overlapped_region.first,
+                            extra_msg);
+                    }
+                }
+                else
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "range of region_id={} is overlapped with region_id={}, {}",
+                        region_id,
+                        overlapped_region.first,
+                        extra_msg);
                 }
             }
         }
@@ -161,6 +197,7 @@ void KVStore::onSnapshot(
 {
     RegionID region_id = new_region_wrap->id();
 
+    // 1. Try to clean stale data.
     {
         auto keyspace_id = new_region_wrap->getKeyspaceID();
         auto table_id = new_region_wrap->getMappedTableID();
@@ -189,16 +226,24 @@ void KVStore::onSnapshot(
                     {
                         LOG_INFO(
                             log,
+<<<<<<< HEAD
                             "clear old range before apply snapshot, region_id={} old_range={} new_range={} "
                             "keyspace_id={} table_id={}",
+=======
+                            "region range changed before apply snapshot, region_id={} old_range={} new_range={} "
+                            "keyspace={} table_id={}",
+>>>>>>> 5500b35dfc (KVStore: Fix spurious region overlap when two region are both applying snapshots (#9330))
                             region_id,
                             old_key_range.toDebugString(),
                             new_key_range.toDebugString(),
                             keyspace_id,
                             table_id);
-                        dm_storage->deleteRange(old_key_range, context.getSettingsRef());
-                        // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
-                        dm_storage->flushCache(context, old_key_range, /*try_until_succeed*/ true);
+                        /// Previously, we clean `old_key_range` here. However, we can only clean `new_key_range` here, if there is also an overlapped snapshot in region worker queue.
+                        /// Consider:
+                        /// 1. there exists a region A of range [0..100)
+                        /// 2. region A splitted into A' [0..50) and B [50..100)
+                        /// 3. snapshot of B is applied into tiflash storage first
+                        /// 4. when applying snapshot A -> A' of range [0..50), we should not clear the old range [0, 100) but only clean the new range
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
@@ -225,6 +270,7 @@ void KVStore::onSnapshot(
                     static_assert(std::is_same_v<RegionPtrWrap, RegionPtrWithBlock>);
                     // Call `deleteRange` to delete data for range
                     dm_storage->deleteRange(new_key_range, context.getSettingsRef());
+                    // We don't flushCache here, but flush as a whole in stage 2 in `tryFlushRegionCacheInStorage`.
                 }
             }
             catch (DB::Exception & e)
@@ -236,6 +282,7 @@ void KVStore::onSnapshot(
         }
     }
 
+    // 2. Dump data to RegionTable.
     {
         const auto range = new_region_wrap->getRange();
         auto & region_table = tmt.getRegionTable();
@@ -261,6 +308,7 @@ void KVStore::onSnapshot(
         // For `RegionPtrWithSnapshotFiles`, don't need to flush cache.
     }
 
+    // Register the new Region.
     RegionPtr new_region = new_region_wrap.base;
     {
         auto task_lock = genTaskLock();
