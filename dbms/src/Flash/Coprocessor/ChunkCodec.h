@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <TiDB/Schema/TiDB.h>
 #include <tipb/select.pb.h>
 
 namespace DB

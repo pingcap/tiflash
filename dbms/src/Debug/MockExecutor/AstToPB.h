@@ -16,7 +16,7 @@
 
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST_fwd.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <kvproto/mpp.pb.h>
 
 namespace DB

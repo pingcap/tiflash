@@ -20,13 +20,14 @@
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Flash/Coprocessor/TiDBEnum.h>
 #include <Flash/Coprocessor/TiDBTime.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 
 namespace DB
 {
 class TiDBColumn
 {
 public:
-    TiDBColumn(Int8 element_len);
+    explicit TiDBColumn(Int8 element_len);
 
     void appendNull();
     void append(Int64 value);
@@ -44,7 +45,7 @@ public:
     void clear();
 
 private:
-    bool isFixed() { return fixed_size != VAR_SIZE; }
+    bool isFixed() const { return fixed_size != VAR_SIZE; }
     void finishAppendFixed();
     void finishAppendVar(UInt32 size);
     void appendNullBitMap(bool value);

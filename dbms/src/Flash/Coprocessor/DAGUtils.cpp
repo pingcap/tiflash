@@ -24,6 +24,8 @@
 #include <Interpreters/Context.h>
 #include <TiDB/Decode/Datum.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDBTypes.h>
 
 #include <unordered_map>
 

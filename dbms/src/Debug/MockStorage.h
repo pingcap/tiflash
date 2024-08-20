@@ -20,7 +20,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/types.h>
 
 #include <atomic>

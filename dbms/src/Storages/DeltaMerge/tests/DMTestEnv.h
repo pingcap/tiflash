@@ -27,6 +27,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <vector>
 
