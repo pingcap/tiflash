@@ -30,14 +30,6 @@ struct DataStoreS3Trait
 {
 };
 
-struct RemoteReadTaskTrait
-{
-};
-
-struct RNPreparerTrait
-{
-};
-
 struct RNWritePageCacheTrait
 {
 };
@@ -45,13 +37,24 @@ struct RNWritePageCacheTrait
 struct WNEstablishDisaggTaskTrait
 {
 };
+
+struct BuildReadTaskForWNTrait
+{
+};
+struct BuildReadTaskForWNTableTrait
+{
+};
+struct BuildReadTaskTrait
+{
+};
 } // namespace io_pool_details
 
 // TODO: Move these out.
 using DataStoreS3Pool = IOThreadPool<io_pool_details::DataStoreS3Trait>;
 using S3FileCachePool = IOThreadPool<io_pool_details::S3FileCacheTrait>;
-using RNRemoteReadTaskPool = IOThreadPool<io_pool_details::RemoteReadTaskTrait>;
-using RNPagePreparerPool = IOThreadPool<io_pool_details::RNPreparerTrait>;
 using RNWritePageCachePool = IOThreadPool<io_pool_details::RNWritePageCacheTrait>;
 using WNEstablishDisaggTaskPool = IOThreadPool<io_pool_details::WNEstablishDisaggTaskTrait>;
+using BuildReadTaskForWNPool = IOThreadPool<io_pool_details::BuildReadTaskForWNTrait>;
+using BuildReadTaskForWNTablePool = IOThreadPool<io_pool_details::BuildReadTaskForWNTableTrait>;
+using BuildReadTaskPool = IOThreadPool<io_pool_details::BuildReadTaskTrait>;
 } // namespace DB
