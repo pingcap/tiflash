@@ -49,7 +49,7 @@ DMFilePtr restoreDMFileFromLocal(const DMContext & dm_context, UInt64 file_page_
 {
     auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
     auto file_id = dm_context.storage_pool->dataReader()->getNormalPageId(file_page_id);
-    auto file_parent_path = dm_context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
+    auto file_parent_path = path_delegate.getDTFilePath(file_id);
     auto dmfile = DMFile::restore(
         dm_context.global_context.getFileProvider(),
         file_id,

@@ -113,11 +113,8 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     const dtpb::ColumnFileBig & cf_pb)
 {
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    DMFilePtr dmfile;
-    if (remote_data_store)
-        dmfile = restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, cf_pb.id());
-    else
-        dmfile = restoreDMFileFromLocal(dm_context, cf_pb.id());
+    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, cf_pb.id())
+                                    : restoreDMFileFromLocal(dm_context, cf_pb.id());
     auto * dp_file = new ColumnFileBig(dmfile, cf_pb.valid_rows(), cf_pb.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }

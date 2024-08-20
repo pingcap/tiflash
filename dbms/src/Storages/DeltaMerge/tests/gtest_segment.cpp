@@ -242,7 +242,7 @@ try
     // generate stable
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
     // generate delta
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 120);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
 
     auto range = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getRowKeyRange();
@@ -257,7 +257,7 @@ try
     ASSERT_EQ(segment->delta->getId(), delta_id);
     ASSERT_EQ(segment->stable->getId(), stable_id);
     ASSERT_EQ(segment->stable->getRows(), 100);
-    ASSERT_EQ(segment->delta->getRows(), 100);
+    ASSERT_EQ(segment->delta->getRows(), 120);
     ASSERT_EQ(segment->delta->getColumnFileCount(), column_file_count);
     STORAGE_FORMAT_CURRENT = current;
 }
@@ -273,7 +273,7 @@ try
     // generate stable
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
     // generate delta
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 120);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
 
     auto range = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->getRowKeyRange();
@@ -287,7 +287,7 @@ try
     ASSERT_EQ(segment->delta->getId(), delta_id);
     ASSERT_EQ(segment->stable->getId(), stable_id);
     ASSERT_EQ(segment->stable->getRows(), 100);
-    ASSERT_EQ(segment->delta->getRows(), 100);
+    ASSERT_EQ(segment->delta->getRows(), 120);
     ASSERT_EQ(segment->delta->getColumnFileCount(), column_file_count);
     STORAGE_FORMAT_CURRENT = current;
 }

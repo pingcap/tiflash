@@ -588,10 +588,8 @@ struct RowKeyRange
     {
         bool is_common_handle = range.is_common_handle();
         size_t rowkey_column_size = range.rowkey_column_size();
-        String start = range.start();
-        String end = range.end();
-        HandleValuePtr start_ptr = std::make_shared<String>(start);
-        HandleValuePtr end_ptr = std::make_shared<String>(end);
+        HandleValuePtr start_ptr = std::make_shared<String>(range.start());
+        HandleValuePtr end_ptr = std::make_shared<String>(range.end());
         if unlikely (isLegacyCommonMin(rowkey_column_size, start_ptr))
         {
             start_ptr = RowKeyValue::COMMON_HANDLE_MIN_KEY.value;
