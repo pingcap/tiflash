@@ -226,19 +226,19 @@ void KVStore::onSnapshot(
                     {
                         LOG_INFO(
                             log,
-                            "clear old range before apply snapshot, region_id={} old_range={} new_range={} "
+                            "region range changed before apply snapshot, region_id={} old_range={} new_range={} "
                             "keyspace={} table_id={}",
                             region_id,
                             old_key_range.toDebugString(),
                             new_key_range.toDebugString(),
                             keyspace_id,
                             table_id);
-                        /// Previously, we clean `old_key_range` here. However, we can only clean `nbew_key_range` here, if there is also a overlapped snapshot in region worker queue.
+                        /// Previously, we clean `old_key_range` here. However, we can only clean `new_key_range` here, if there is also a overlapped snapshot in region worker queue.
                         /// Consider:
                         /// 1. apply snapshot a of range [0..100)
                         /// 2. apply snapshot b of range [50..100)
                         /// 3. apply snapshot a' of range [0..50)
-                        /// In 3, we could clean the old range [0..100), which covers the written data of snapshot b in stage 2.
+                        /// In stage 3, we will mistakenly clean the old range [0..100), which covers the written data of snapshot b in stage 2.
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
