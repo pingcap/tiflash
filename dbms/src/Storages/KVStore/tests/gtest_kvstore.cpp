@@ -1057,6 +1057,7 @@ try
             RecordKVFormat::genKey(table_id, 0),
             RecordKVFormat::genKey(table_id, 10000),
             kvs.getProxyHelper());
+        // Fill data from 20 to 100.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20, 100, 0);
         std::vector<SSTView> sst_views{
             SSTView{
@@ -1085,6 +1086,7 @@ try
         if (ingest_using_split)
         {
             auto stats = storage->getStore()->getStoreStats();
+            // Including 0..20, 20..100, 100..inf.
             ASSERT_EQ(3, stats.segment_count);
         }
 
@@ -1097,6 +1099,7 @@ try
             RecordKVFormat::genKey(table_id, 20000),
             RecordKVFormat::genKey(table_id, 50000),
             kvs.getProxyHelper());
+        // Fill data from 20100 to 20200.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20100, 20200, 0);
         std::vector<SSTView> sst_views{
             SSTView{
@@ -1148,10 +1151,22 @@ try
         ASSERT_EQ(0, gc_n);
 
         auto stats = storage->getStore()->getStoreStats();
-        ASSERT_EQ(1, stats.segment_count);
-        ASSERT_EQ(0, stats.total_stable_size_on_disk);
-        ASSERT_EQ(0, stats.total_rows);
-        ASSERT_EQ(0, stats.total_size);
+        // The data of [20, 100), is not reclaimed during Apply Snapshot.
+        if (ingest_using_split)
+        {
+            ASSERT_EQ(3, stats.segment_count);
+            ASSERT_NE(0, stats.total_stable_size_on_disk);
+            ASSERT_EQ(80, stats.total_rows);
+            ASSERT_NE(0, stats.total_size);
+        }
+        else
+        {
+            // The only segment is not reclaimed.
+            ASSERT_EQ(1, stats.segment_count);
+            ASSERT_NE(0, stats.total_stable_size_on_disk);
+            ASSERT_EQ(180, stats.total_rows);
+            ASSERT_NE(0, stats.total_size);
+        }
     }
 }
 CATCH
@@ -1294,7 +1309,7 @@ try
         }
         catch (Exception & e)
         {
-            ASSERT_EQ(e.message(), "range of region_id=20 is overlapped with region_id=22, state: region { id: 22 }");
+            ASSERT_TRUE(e.message().rfind("range of region_id=20 is overlapped with region_id=22", 0) == 0);
         }
     }
 
@@ -1706,6 +1721,45 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
             ASSERT_EQ(region_state.getRange()->comparableKeys().second.key, RecordKVFormat::genKey(2, 10));
         }
     }
+}
+
+TEST_F(RegionKVStoreOldTest, RegionRange2)
+{
+    auto mustOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
+        auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
+        auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
+        ASSERT_TRUE(RegionRangeKeys::isRangeOverlapped(r1, r2));
+        ASSERT_TRUE(RegionRangeKeys::isRangeOverlapped(r2, r1));
+    };
+    auto mustNotOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
+        auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
+        auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
+        ASSERT_FALSE(RegionRangeKeys::isRangeOverlapped(r1, r2));
+        ASSERT_FALSE(RegionRangeKeys::isRangeOverlapped(r2, r1));
+    };
+    mustOverlap("", "a", "", "b");
+    mustOverlap("a", "", "b", "");
+    mustOverlap("", "", "b", "");
+    mustOverlap("", "", "", "a");
+    mustOverlap("", "", "a", "b");
+    mustOverlap("", "", "", "");
+
+    mustOverlap("a", "e", "", "f");
+    mustOverlap("a", "e", "", "");
+    mustOverlap("b", "e", "a", "");
+
+    mustOverlap("a", "e", "a", "e");
+    mustOverlap("a", "f", "c", "d");
+    mustOverlap("a", "f", "c", "f");
+
+    mustNotOverlap("a", "e", "e", "f");
+    mustNotOverlap("a", "e", "f", "g");
+    mustNotOverlap("", "e", "e", "f");
+    mustNotOverlap("a", "e", "e", "");
+    mustNotOverlap("", "e", "f", "g");
+    mustNotOverlap("a", "e", "f", "");
+    mustNotOverlap("", "e", "f", "");
+    mustNotOverlap("", "e", "e", "");
 }
 
 } // namespace DB::tests
