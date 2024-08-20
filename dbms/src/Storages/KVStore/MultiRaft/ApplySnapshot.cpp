@@ -233,13 +233,12 @@ void KVStore::onSnapshot(
                             new_key_range.toDebugString(),
                             keyspace_id,
                             table_id);
-                        /// Previously, we clean `old_key_range` here. However, we can only clean `new_key_range` here, if there is also a overlapped snapshot in region worker queue.
+                        /// Previously, we clean `old_key_range` here. However, we can only clean `new_key_range` here, if there is also an overlapped snapshot in region worker queue.
                         /// Consider:
-                        /// 1. apply snapshot a of range [0..100)
-                        /// 2. apply snapshot b of range [50..100)
-                        /// 3. apply snapshot a' of range [0..50)
-                        /// In stage 3, we will mistakenly clean the old range [0..100), which covers the written data of snapshot b in stage 2.
-                        /// The clean operation is implicit by `ingestFiles(..., clear_data_in_range=true)`.
+                        /// 1. there exists a region A of range [0..100)
+                        /// 2. region A splitted into A' [0..50) and B [50..100)
+                        /// 3. snapshot of B is applied into tiflash storage first
+                        /// 4. when applying snapshot A -> A' of range [0..50), we should not clear the old range [0, 100) but only clean the new range
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
