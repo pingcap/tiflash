@@ -18,10 +18,15 @@
 #include <TiDB/Decode/Datum.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/RowCodec.h>
+#include <TiDB/Schema/TiDB.h>
 
 
 namespace DB
 {
+using TiDB::ColumnInfo;
+using TiDB::ColumnInfos;
+using TiDB::TableInfo;
+
 template <typename T>
 static T decodeUInt(size_t & cursor, const TiKVValue::Base & raw_value)
 {

@@ -20,6 +20,7 @@ namespace TiDB
 {
 
 struct ColumnInfo;
+using ColumnInfos = std::vector<ColumnInfo>;
 
 struct TableInfo;
 using TableInfoPtr = std::shared_ptr<TableInfo>;

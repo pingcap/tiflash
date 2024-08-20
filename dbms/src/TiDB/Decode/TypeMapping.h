@@ -25,7 +25,6 @@
 
 namespace DB
 {
-using ColumnInfo = TiDB::ColumnInfo;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 using ASTPtrVec = std::vector<ASTPtr>;
@@ -47,7 +46,7 @@ TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 // such as mock TiDB table using TiFlash SQL parser, and getting field type for `void` column in DAG.
 // Note that not every TiFlash type has a corresponding TiDB type,
 // caller should make sure the source type is valid, otherwise exception will be thrown.
-ColumnInfo reverseGetColumnInfo(
+TiDB::ColumnInfo reverseGetColumnInfo(
     const NameAndTypePair & column,
     ColumnID id,
     const Field & default_value,

@@ -38,6 +38,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/TableNameMeta.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 
 #include <queue>
 
@@ -179,7 +180,7 @@ public:
     friend struct DB::CheckpointIngestInfo;
     struct Settings
     {
-        NotCompress not_compress_columns{};
+        NotCompress not_compress_columns;
     };
     static Settings EMPTY_SETTINGS;
 
@@ -507,7 +508,7 @@ public:
     std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & base_segment);
 
     /// Apply schema change on `table_columns`
-    void applySchemaChanges(TableInfo & table_info);
+    void applySchemaChanges(TiDB::TableInfo & table_info);
 
     ColumnDefinesPtr getStoreColumns() const
     {

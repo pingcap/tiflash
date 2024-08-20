@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/KVStore/Types.h>
-#include <TiDB/Schema/TiDB_fwd.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <shared_mutex>
 #include <unordered_map>

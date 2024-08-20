@@ -54,8 +54,10 @@ private:
     std::atomic<Int64> current_id = 0;
 };
 
-ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos);
-ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const ColumnsWithTypeAndName & all_columns);
+TiDB::ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos);
+ColumnsWithTypeAndName getUsedColumns(
+    const TiDB::ColumnInfos & used_columns,
+    const ColumnsWithTypeAndName & all_columns);
 
 /** Responsible for mock data for executor tests and mpp tests.
   * 1. Use this class to add mock table schema and table column data.

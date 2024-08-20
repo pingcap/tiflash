@@ -79,7 +79,7 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     return false;
 }
 
-ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnInfos & scan_column_infos)
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const TiDB::ColumnInfos & scan_column_infos)
 {
     assert(isColumnExpr(expr));
     auto column_index = decodeDAGInt64(expr.val());
@@ -110,7 +110,7 @@ inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezon
 inline RSOperatorPtr parseTiCompareExpr( //
     const tipb::Expr & expr,
     const FilterParser::RSFilterType filter_type,
-    const ColumnInfos & scan_column_infos,
+    const TiDB::ColumnInfos & scan_column_infos,
     const FilterParser::AttrCreatorByColumnID & creator,
     const TimezoneInfo & timezone_info)
 {
@@ -243,7 +243,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
 
 RSOperatorPtr parseTiExpr(
     const tipb::Expr & expr,
-    const ColumnInfos & scan_column_infos,
+    const TiDB::ColumnInfos & scan_column_infos,
     const FilterParser::AttrCreatorByColumnID & creator,
     const TimezoneInfo & timezone_info,
     const LoggerPtr & log)
@@ -358,7 +358,7 @@ RSOperatorPtr parseTiExpr(
 
 RSOperatorPtr FilterParser::parseDAGQuery(
     const DAGQueryInfo & dag_info,
-    const ColumnInfos & scan_column_infos,
+    const TiDB::ColumnInfos & scan_column_infos,
     FilterParser::AttrCreatorByColumnID && creator,
     const LoggerPtr & log)
 {
@@ -422,7 +422,7 @@ RSOperatorPtr FilterParser::parseRFInExpr(
 
 std::optional<Attr> FilterParser::createAttr(
     const tipb::Expr & expr,
-    const ColumnInfos & scan_column_infos,
+    const TiDB::ColumnInfos & scan_column_infos,
     const ColumnDefines & table_column_defines)
 {
     if (!isColumnExpr(expr))

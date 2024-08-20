@@ -124,7 +124,7 @@ ExecutorBinderPtr compileTableScan(
     DAGSchema ts_output;
     for (const auto & column_info : table_info.columns)
     {
-        ColumnInfo ci;
+        TiDB::ColumnInfo ci;
         ci.id = column_info.id;
         ci.tp = column_info.tp;
         ci.flag = column_info.flag;
@@ -140,7 +140,7 @@ ExecutorBinderPtr compileTableScan(
     }
     if (append_pk_column)
     {
-        ColumnInfo ci;
+        TiDB::ColumnInfo ci;
         ci.tp = TiDB::TypeLongLong;
         ci.id = TiDBPkColumnID;
         ci.setPriKeyFlag();

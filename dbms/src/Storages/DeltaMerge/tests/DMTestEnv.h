@@ -231,7 +231,7 @@ public:
         {
             table_info.is_common_handle = true;
             table_info.pk_is_handle = false;
-            ColumnInfo pk_column; // For common handle, there must be a user-given primary key.
+            TiDB::ColumnInfo pk_column; // For common handle, there must be a user-given primary key.
             pk_column.id = PK_ID_PK_IS_HANDLE;
             pk_column.name = PK_NAME_PK_IS_HANDLE;
             pk_column.setPriKeyFlag();
@@ -242,7 +242,7 @@ public:
         {
             table_info.is_common_handle = false;
             table_info.pk_is_handle = true;
-            ColumnInfo pk_column;
+            TiDB::ColumnInfo pk_column;
             pk_column.id = PK_ID_PK_IS_HANDLE;
             pk_column.name = PK_NAME_PK_IS_HANDLE;
             pk_column.setPriKeyFlag();

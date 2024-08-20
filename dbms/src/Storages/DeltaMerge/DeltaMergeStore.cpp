@@ -1873,7 +1873,7 @@ BlockPtr DeltaMergeStore::getHeader() const
     return std::atomic_load<Block>(&original_table_header);
 }
 
-void DeltaMergeStore::applySchemaChanges(TableInfo & table_info)
+void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
 {
     std::unique_lock lock(read_write_mutex);
 

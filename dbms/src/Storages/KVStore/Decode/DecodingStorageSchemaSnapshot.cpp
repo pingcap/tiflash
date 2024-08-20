@@ -54,7 +54,7 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
         }
         else
         {
-            column_infos.push_back(ColumnInfo());
+            column_infos.push_back(TiDB::ColumnInfo());
         }
     }
 

@@ -32,7 +32,7 @@ const char * arrowColToFlashCol(
     const std::vector<UInt8> & null_bitmap,
     const std::vector<UInt64> & offsets,
     const ColumnWithTypeAndName & flash_col,
-    const ColumnInfo & col_info,
+    const TiDB::ColumnInfo & col_info,
     UInt32 length);
 
 } // namespace DB

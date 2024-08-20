@@ -86,7 +86,7 @@ struct TaskMeta
 };
 
 using TaskMetas = std::vector<TaskMeta>;
-void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
+void literalFieldToTiPBExpr(const TiDB::ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
 void literalToPB(tipb::Expr * expr, const Field & value, int32_t collator_id);
 String getFunctionNameForConstantFolding(tipb::Expr * expr);
 void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & context);

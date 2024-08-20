@@ -61,7 +61,7 @@ public:
         DAGSchema schema;
         for (size_t i = 0; i < fields.size(); ++i)
         {
-            ColumnInfo info = TiDB::fieldTypeToColumnInfo(fields[i]);
+            TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(fields[i]);
             schema.emplace_back(String("col") + std::to_string(i), std::move(info));
         }
         return schema;

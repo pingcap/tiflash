@@ -85,7 +85,7 @@ ExecutorBinderPtr compileExpand2(
                     // base col ref (since ast can't derive the expression's field type, use the test injected one)
                     if (ft->second.hasNotNullFlag() && (fts[j].flag() & TiDB::ColumnFlagNotNull) == 0)
                     {
-                        ColumnInfo ci;
+                        TiDB::ColumnInfo ci;
                         ci.flag = ft->second.flag;
                         ci.tp = ft->second.tp;
                         ci.name = ft->second.name;

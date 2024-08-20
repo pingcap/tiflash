@@ -40,9 +40,6 @@ TMTPKType getTMTPKType(const IDataType & rhs);
  */
 using SortedColumnIDWithPos = std::map<ColumnID, size_t>;
 using SortedColumnIDWithPosConstIter = SortedColumnIDWithPos::const_iterator;
-using TableInfo = TiDB::TableInfo;
-using ColumnInfo = TiDB::ColumnInfo;
-using ColumnInfos = std::vector<ColumnInfo>;
 struct DecodingStorageSchemaSnapshot
 {
     DecodingStorageSchemaSnapshot(
@@ -63,7 +60,7 @@ struct DecodingStorageSchemaSnapshot
     // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may not be a real column in tidb schema,
     // so their corresponding elements in `column_infos` are just nullptr and won't be used when decoding.
     DM::ColumnDefinesPtr column_defines;
-    ColumnInfos column_infos;
+    TiDB::ColumnInfos column_infos;
 
     // 1. when the table doesn't have a common handle,
     //    1) if `pk_is_handle` is false, `pk_column_ids` is empty

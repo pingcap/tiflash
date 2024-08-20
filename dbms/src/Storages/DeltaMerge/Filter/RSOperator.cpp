@@ -51,7 +51,7 @@ RSOperatorPtr createUnsupported(const String & reason)                          
 
 RSOperatorPtr RSOperator::build(
     const std::unique_ptr<DAGQueryInfo> & dag_query,
-    const ColumnInfos & scan_column_infos,
+    const TiDB::ColumnInfos & scan_column_infos,
     const ColumnDefines & table_column_defines,
     bool enable_rs_filter,
     const LoggerPtr & tracing_logger)
