@@ -389,15 +389,6 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
             ptr = row_layout.getNextRowPtr(ptr);
             if (ptr == nullptr)
                 break;
-            if constexpr (tagged_pointer)
-            {
-                if (!containOtherTag(ptr, hash_tag))
-                {
-                    ptr = nullptr;
-                    break;
-                }
-                ptr = removeRowPtrTag(ptr);
-            }
         }
         offsets_to_replicate[idx] = current_offset;
         if unlikely (ptr != nullptr)
@@ -405,19 +396,6 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
             ptr = row_layout.getNextRowPtr(ptr);
             if (ptr == nullptr)
                 ++idx;
-            else
-            {
-                if constexpr (tagged_pointer)
-                {
-                    if (!containOtherTag(ptr, hash_tag))
-                    {
-                        ptr = nullptr;
-                        ++idx;
-                    }
-                    else
-                        ptr = removeRowPtrTag(ptr);
-                }
-            }
             break;
         }
     }
@@ -452,24 +430,8 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
             RowPtr next_ptr = row_layout.getNextRowPtr(ptr);
             if (next_ptr)
             {
-                bool forward = true;
-                if constexpr (tagged_pointer)
-                {
-                    if (containOtherTag(next_ptr, state->hash_tag))
-                    {
-                        next_ptr = removeRowPtrTag(next_ptr);
-                    }
-                    else
-                    {
-                        next_ptr = nullptr;
-                        forward = false;
-                    }
-                }
-                if (forward)
-                {
-                    state->ptr = next_ptr;
-                    PREFETCH_READ(next_ptr + row_layout.next_pointer_offset);
-                }
+                state->ptr = next_ptr;
+                PREFETCH_READ(next_ptr + row_layout.next_pointer_offset);
             }
 
             const auto & key = state->getJoinKey(key_getter);

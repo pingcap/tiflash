@@ -54,10 +54,10 @@ public:
 
     RowPtr getHeadPointer(size_t hash) const
     {
-        return pointer_table[getBucketNum(hash)].load(std::memory_order_relaxed);
+        return reinterpret_cast<RowPtr>(pointer_table[getBucketNum(hash)].load(std::memory_order_relaxed));
     }
 
-    std::atomic<RowPtr> * getPointerTable() const { return pointer_table; }
+    std::atomic<RowPtr> * getPointerTable() const { return reinterpret_cast<std::atomic<RowPtr> *>(pointer_table); }
 
 private:
     template <typename HashValueType, bool tagged_pointer>
@@ -72,7 +72,7 @@ private:
     size_t pointer_table_size = 0;
     size_t pointer_table_size_degree = 0;
     size_t pointer_table_size_mask = 0;
-    std::atomic<RowPtr> * pointer_table = nullptr;
+    std::atomic<uintptr_t> * pointer_table = nullptr;
     Allocator<true> alloc;
     bool enable_probe_prefetch = false;
     bool enable_tagged_pointer = false;
