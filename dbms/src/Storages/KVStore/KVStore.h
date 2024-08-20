@@ -138,7 +138,6 @@ public:
 
     size_t regionSize() const;
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
-    void debugSetProxyHelperUnsafe(const TiFlashRaftProxyHelper * h) { proxy_helper = h; }
     // Exported only for tests.
     TiFlashRaftProxyHelper * mutProxyHelperUnsafe() { return const_cast<TiFlashRaftProxyHelper *>(proxy_helper); }
     void setStore(metapb::Store);
