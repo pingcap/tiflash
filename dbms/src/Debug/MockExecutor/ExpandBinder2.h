@@ -51,7 +51,7 @@ private:
 ExecutorBinderPtr compileExpand2(
     ExecutorBinderPtr input,
     size_t & executor_index,
-    std::vector<ASTPtr> level_select_list,
+    ASTs level_select_list,
     std::vector<String> output_names,
     std::vector<tipb::FieldType> fts);
 } // namespace DB::mock

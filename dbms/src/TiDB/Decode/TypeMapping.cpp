@@ -38,6 +38,8 @@
 
 namespace DB
 {
+using TiDB::ColumnInfo;
+
 class TypeMapping : public ext::Singleton<TypeMapping>
 {
 public:

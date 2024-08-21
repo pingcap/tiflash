@@ -23,6 +23,9 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <TiDB/Decode/Datum.h>
+#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDBTypes.h>
 
 #include <unordered_map>
 
@@ -1162,7 +1165,7 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
-ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col)
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<TiDB::ColumnInfo> & input_col)
 {
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
@@ -1178,7 +1181,7 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<Col
 
 void getColumnIDsFromExpr(
     const tipb::Expr & expr,
-    const std::vector<ColumnInfo> & input_col,
+    const std::vector<TiDB::ColumnInfo> & input_col,
     std::unordered_set<ColumnID> & col_id_set)
 {
     if (expr.children_size() == 0)

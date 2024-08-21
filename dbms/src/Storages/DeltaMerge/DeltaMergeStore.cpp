@@ -53,6 +53,8 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
+#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -1873,7 +1875,7 @@ BlockPtr DeltaMergeStore::getHeader() const
     return std::atomic_load<Block>(&original_table_header);
 }
 
-void DeltaMergeStore::applySchemaChanges(TableInfo & table_info)
+void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
 {
     std::unique_lock lock(read_write_mutex);
 

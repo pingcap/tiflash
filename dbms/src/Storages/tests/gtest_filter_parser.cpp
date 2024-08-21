@@ -29,10 +29,10 @@
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
-#include <optional>
 #include <regex>
 
 namespace DB

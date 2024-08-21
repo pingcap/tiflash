@@ -25,7 +25,6 @@
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/DatumCodec.h>
-#include <TiDB/Schema/TiDB.h>
 
 namespace DB::DM
 {

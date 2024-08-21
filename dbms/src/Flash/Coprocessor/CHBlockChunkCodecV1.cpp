@@ -20,6 +20,9 @@
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
+#include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {

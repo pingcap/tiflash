@@ -357,10 +357,9 @@ void insert( //
     if (table_info.is_common_handle)
     {
         std::vector<Field> keys;
-
-        for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
+        const auto & pk_index = table_info.getPrimaryIndexInfo();
+        for (const auto & idx_col : pk_index.idx_cols)
         {
-            const auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
             const auto & column_info = table_info.columns[idx_col.offset];
             auto start_field = RegionBench::convertField(column_info, fields[idx_col.offset]);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);

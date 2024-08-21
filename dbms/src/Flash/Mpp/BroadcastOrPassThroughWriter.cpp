@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

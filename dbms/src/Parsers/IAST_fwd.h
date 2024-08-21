@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +14,15 @@
 
 #pragma once
 
-namespace TiDB
+#include <memory>
+#include <vector>
+
+namespace DB
 {
 
-// Indicate that use 'TMT' or 'DM' as storage engine in AP. (TMT by default now)
-enum class StorageEngine
-{
-    UNSPECIFIED = 0,
-    TMT,
-    DT,
+class IAST;
+using ASTPtr = std::shared_ptr<IAST>;
+using ASTs = std::vector<ASTPtr>;
 
-    // indicate other engine type in ClickHouse
-    UNSUPPORTED_ENGINES = 128,
-};
 
-} // namespace TiDB
+} // namespace DB
