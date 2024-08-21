@@ -151,7 +151,6 @@ struct StmtCase
         EXPECT_EQ(json1, json2) << "Table info unescaped serde mismatch:\n" + json1 + "\n" + json2;
 
         // generate create statement with db_info and table_info
-        table_info.engine_type = TiDB::StorageEngine::DT;
         String stmt = createTableStmt(
             db_info.keyspace_id,
             db_info.id,

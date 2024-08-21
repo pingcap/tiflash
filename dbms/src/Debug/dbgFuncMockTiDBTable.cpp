@@ -66,8 +66,6 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
 
     String engine_type("dt");
-    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
-        engine_type = "tmt";
     if (args.size() == 5)
         engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
 
@@ -355,8 +353,6 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
     }
     auto tso = context.getTMTContext().getPDClient()->getTS();
     String engine_type("dt");
-    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
-        engine_type = "tmt";
     MockTiDB::instance().newTables(database_name, tables, tso, engine_type);
     output("");
 }

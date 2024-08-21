@@ -299,10 +299,7 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
     std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) {
         return std::tolower(c);
     });
-    if (engine_type == "dt")
-        table_info.engine_type = TiDB::StorageEngine::DT;
-
-    if (table_info.engine_type != TiDB::StorageEngine::DT)
+    if (engine_type != "dt")
     {
         throw Exception("Unknown engine type : " + engine_type + ", must be 'dt'", ErrorCodes::BAD_ARGUMENTS);
     }

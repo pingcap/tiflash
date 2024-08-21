@@ -85,20 +85,6 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::AbstractConfigura
         LOG_INFO(log, "Found ignore databases: {}", fmt_buf.toString());
     }
 
-    if (config.has("raft.storage_engine"))
-    {
-        String s_engine = config.getString("raft.storage_engine");
-        std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
-        if (s_engine == "tmt")
-            res.engine = ::TiDB::StorageEngine::TMT;
-        else if (s_engine == "dt")
-            res.engine = ::TiDB::StorageEngine::DT;
-        else
-            res.engine = DEFAULT_ENGINE;
-    }
-
-    LOG_INFO(log, "Default storage engine [type={}]", static_cast<Int64>(res.engine));
-
     return res;
 }
 

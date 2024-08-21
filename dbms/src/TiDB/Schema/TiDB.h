@@ -309,8 +309,6 @@ struct TableInfo
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
-    TiDB::StorageEngine engine_type = TiDB::StorageEngine::UNSPECIFIED; // TODO(hyy):seems could be removed
-
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;
     KeyspaceID getKeyspaceID() const;
