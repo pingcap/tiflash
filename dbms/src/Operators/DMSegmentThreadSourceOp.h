@@ -51,8 +51,6 @@ protected:
 
     OperatorStatus readImpl(Block & block) override;
 
-    OperatorStatus executeIOImpl() override;
-
 private:
     DM::DMContextPtr dm_context;
     DM::SegmentReadTaskPoolPtr task_pool;
