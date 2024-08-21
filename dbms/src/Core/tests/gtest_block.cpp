@@ -19,10 +19,14 @@
 #include <DataStreams/materializeBlock.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Encryption/MockKeyManager.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+using namespace DB::DM;
+using namespace DB::DM::tests;
 
 namespace DB
 {
@@ -166,5 +170,72 @@ try
 }
 CATCH
 
+template <typename F>
+void permutationRSResults(F && check)
+{
+    const RSResults candidate_rs_results{RSResult::All, RSResult::AllNull, RSResult::Some, RSResult::SomeNull};
+    for (auto a : candidate_rs_results)
+        for (auto b : candidate_rs_results)
+            for (auto c : candidate_rs_results)
+                for (auto d : candidate_rs_results)
+                    check({a, b, c, d});
+}
+
+RSResult logicalAnd(const RSResults & rs_results)
+{
+    auto res = RSResult::All;
+    for (auto rs_result : rs_results)
+        res = res && rs_result;
+    return res;
+}
+
+TEST_F(BlockTest, VstackBlocksRSResult)
+try
+{
+    auto check_vstack_blocks = [](const RSResults & rs_results) {
+        Blocks blocks;
+        size_t start = 0;
+        constexpr size_t num_rows = 10;
+        for (auto rs_result : rs_results)
+        {
+            blocks.push_back(DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows, false));
+            blocks.back().setRSResult(rs_result);
+            start += num_rows;
+        }
+        auto b = vstackBlocks(std::move(blocks));
+        ASSERT_EQ(b.getRSResult(), logicalAnd(rs_results));
+    };
+    permutationRSResults(std::move(check_vstack_blocks));
+}
+CATCH
+
+TEST_F(BlockTest, HstackBlocksRSResult)
+try
+{
+    auto create_column_defines = [](int count) {
+        ColumnDefines column_defines;
+        for (int i = 0; i < count; ++i)
+            column_defines.emplace_back(i + 1, std::to_string(i), std::make_shared<DataTypeInt64>());
+        return column_defines;
+    };
+    auto check_hstack_blocks = [&](const RSResults & rs_results) {
+        auto column_defines = create_column_defines(rs_results.size());
+        auto header = toEmptyBlock(column_defines);
+        Blocks blocks;
+        constexpr size_t num_rows = 10;
+        for (size_t i = 0; i < rs_results.size(); ++i)
+        {
+            const auto & cd = column_defines[i];
+            Block block;
+            block.insert(createColumn<Int64>(createSignedNumbers(0, num_rows), cd.name, cd.id));
+            block.setRSResult(rs_results[i]);
+            blocks.push_back(std::move(block));
+        }
+        auto b = hstackBlocks(std::move(blocks), header);
+        ASSERT_EQ(b.getRSResult(), logicalAnd(rs_results));
+    };
+    permutationRSResults(std::move(check_hstack_blocks));
+}
+CATCH
 } // namespace tests
 } // namespace DB
