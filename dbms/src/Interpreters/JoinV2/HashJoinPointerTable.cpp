@@ -114,7 +114,7 @@ bool HashJoinPointerTable::buildImpl(
             }
 
             size_t bucket = getBucketNum(hash);
-            auto old_head = reinterpret_cast<RowPtr>(
+            auto * old_head = reinterpret_cast<RowPtr>(
                 pointer_table[bucket].exchange(reinterpret_cast<uintptr_t>(row_ptr), std::memory_order_relaxed));
             if constexpr (tagged_pointer)
             {
