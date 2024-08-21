@@ -333,7 +333,7 @@ struct TableInfo
     }
 
     /// should not be called if is_common_handle = false.
-    const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
+    const IndexInfo & getPrimaryIndexInfo() const;
 };
 
 
