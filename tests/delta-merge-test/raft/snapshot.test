@@ -20,7 +20,7 @@
 => DBGInvoke __refresh_schemas()
 
 ## create table and apply an empty snapshot
-=> DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 Int64')
 => DBGInvoke __refresh_mapped_table_schema(default, test_dm)
 => DBGInvoke query_mapped('select tidb_database,tidb_name,engine from system.tables where database=''\$d'' and name=''\$t''', default, test_dm)
 ┌─database─┬─name────┬─engine─────┐

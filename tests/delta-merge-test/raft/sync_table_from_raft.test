@@ -22,7 +22,7 @@
 
 
 ## create a DeltaMerge table
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
 => DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke query_mapped('select tidb_database,tidb_name,engine from system.tables where database=''\$d'' and name=''\$t''', default, test)
 ┌─database─┬─name─┬─engine─────┐
