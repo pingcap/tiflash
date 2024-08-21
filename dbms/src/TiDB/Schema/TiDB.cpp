@@ -1137,6 +1137,14 @@ const IndexInfo & TableInfo::getPrimaryIndexInfo() const
 #endif
     return index_infos[0];
 }
+size_t TableInfo::numColumnsInKey() const
+{
+    if (pk_is_handle)
+        return 1;
+    else if (is_common_handle)
+        return getPrimaryIndexInfo().idx_cols.size();
+    return 0;
+}
 
 String TableInfo::getColumnName(const ColumnID id) const
 {

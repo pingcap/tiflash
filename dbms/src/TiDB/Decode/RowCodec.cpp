@@ -184,11 +184,7 @@ struct RowEncoderV2
 
     void encode(WriteBuffer & ss) &&
     {
-        size_t column_in_key = 0;
-        if (table_info.pk_is_handle)
-            column_in_key = 1;
-        else if (table_info.is_common_handle)
-            column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
+        size_t column_in_key = table_info.numColumnsInKey();
         if (table_info.columns.size() < fields.size() + column_in_key)
             throw Exception(
                 std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
