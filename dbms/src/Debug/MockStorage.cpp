@@ -507,7 +507,9 @@ CutColumnInfo getCutColumnInfo(size_t rows, Int64 partition_id, Int64 partition_
     return {start, cur_rows};
 }
 
-ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const ColumnsWithTypeAndName & all_columns)
+ColumnsWithTypeAndName getUsedColumns(
+    const TiDB::ColumnInfos & used_columns,
+    const ColumnsWithTypeAndName & all_columns)
 {
     if (used_columns.empty())
         /// if used columns is not set, just return all the columns
@@ -589,10 +591,10 @@ DM::ColumnDefines MockStorage::getStoreColumnDefines(Int64 table_id)
     return storage_delta_merge_map[table_id]->getStoreColumnDefines();
 }
 
-ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)
+TiDB::ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)
 {
     ColumnID col_id = 0;
-    ColumnInfos ret;
+    TiDB::ColumnInfos ret;
     ret.reserve(mock_column_infos.size());
     for (const auto & mock_column_info : mock_column_infos)
     {

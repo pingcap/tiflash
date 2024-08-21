@@ -14,14 +14,14 @@
 
 #pragma once
 
-#include <TiDB/Decode/TypeMapping.h>
+#include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
 class DAGContext;
-using ColumnInfos = std::vector<TiDB::ColumnInfo>;
 
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`
 class TiDBTableScan
@@ -30,7 +30,7 @@ public:
     TiDBTableScan(const tipb::Executor * table_scan_, const String & executor_id_, const DAGContext & dag_context);
     bool isPartitionTableScan() const { return is_partition_table_scan; }
     Int64 getColumnSize() const { return columns.size(); }
-    const ColumnInfos & getColumns() const { return columns; }
+    const TiDB::ColumnInfos & getColumns() const { return columns; }
     void constructTableScanForRemoteRead(tipb::TableScan * tipb_table_scan, TableID table_id) const;
     Int64 getLogicalTableID() const { return logical_table_id; }
     const std::vector<Int64> & getPhysicalTableIDs() const { return physical_table_ids; }
@@ -51,7 +51,7 @@ private:
     const tipb::Executor * table_scan;
     String executor_id;
     bool is_partition_table_scan;
-    const ColumnInfos columns;
+    const TiDB::ColumnInfos columns;
     /// logical_table_id is the table id for a TiDB' table, while if the
     /// TiDB table is partition, each partition is a physical table, and
     /// the partition's table id is the physical table id.

@@ -634,8 +634,8 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(
             "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange checked false "
             "because segment DTFile is shared with a neighbor segment, "
             "first_pack_inc={} last_pack_inc={} prev_seg_files=[{}] next_seg_files=[{}] my_files=[{}] segment={}",
-            magic_enum::enum_name(at_least_result.first_pack_intersection),
-            magic_enum::enum_name(at_least_result.last_pack_intersection),
+            at_least_result.first_pack_intersection,
+            at_least_result.last_pack_intersection,
             fmt::join(prev_segment_file_ids, ","),
             fmt::join(next_segment_file_ids, ","),
             [&] {
@@ -687,8 +687,8 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(
         "check_result={} first_pack_inc={} last_pack_inc={} rows_at_least={} bytes_at_least={} file_rows={} "
         "file_bytes={} segment={} ",
         check_result,
-        magic_enum::enum_name(at_least_result.first_pack_intersection),
-        magic_enum::enum_name(at_least_result.last_pack_intersection),
+        at_least_result.first_pack_intersection,
+        at_least_result.last_pack_intersection,
         at_least_result.rows,
         at_least_result.bytes,
         file_rows,

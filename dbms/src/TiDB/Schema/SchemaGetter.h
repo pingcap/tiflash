@@ -15,10 +15,15 @@
 #pragma once
 
 #include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/logger_useful.h>
 
 #include <optional>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {

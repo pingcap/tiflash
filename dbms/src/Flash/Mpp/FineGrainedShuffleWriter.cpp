@@ -19,6 +19,7 @@
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

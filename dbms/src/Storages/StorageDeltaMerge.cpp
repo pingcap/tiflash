@@ -56,6 +56,7 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 
@@ -177,7 +178,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
             /// If TableInfo from TiDB is not empty, we get column id and default value from TiDB
             auto & columns = tidb_table_info.columns;
             col_def.id = tidb_table_info.getColumnID(col_def.name);
-            auto itr = std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & v) {
+            auto itr = std::find_if(columns.begin(), columns.end(), [&](const TiDB::ColumnInfo & v) {
                 return v.id == col_def.id;
             });
             if (itr != columns.end())

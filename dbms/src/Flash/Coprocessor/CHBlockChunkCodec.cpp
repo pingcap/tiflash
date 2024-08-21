@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <IO/Buffer/ReadBufferFromString.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

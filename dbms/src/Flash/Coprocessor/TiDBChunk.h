@@ -16,7 +16,6 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/TiDBColumn.h>
-#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
@@ -41,7 +40,7 @@ public:
         size_t start_index,
         size_t end_index);
 
-    TiDBColumn & getColumn(int index) { return columns[index]; };
+    TiDBColumn & getColumn(int index) { return columns[index]; }
     void clear()
     {
         for (auto & c : columns)

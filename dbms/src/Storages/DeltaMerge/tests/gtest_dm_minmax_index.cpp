@@ -33,23 +33,14 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
-#include <magic_enum.hpp>
 #include <memory>
 
 namespace DB::DM::tests
 {
 
-static const ColId DEFAULT_COL_ID = 0;
-static const String DEFAULT_COL_NAME = "2020-09-26";
-
 class MinMaxIndexTest : public ::testing::Test
 {
-public:
-    MinMaxIndexTest() = default;
-
 protected:
-    static void SetUpTestCase() {}
-
     void SetUp() override
     {
         context = DMTestEnv::getContext();
@@ -66,6 +57,11 @@ protected:
     ContextPtr context;
 };
 
+namespace
+{
+static constexpr ColId DEFAULT_COL_ID = 0;
+static const String DEFAULT_COL_NAME = "2020-09-26";
+
 Attr attr(String type)
 {
     return Attr{DEFAULT_COL_NAME, DEFAULT_COL_ID, DataTypeFactory::instance().get(type)};
@@ -77,7 +73,7 @@ Attr pkAttr()
     return Attr{col.name, col.id, col.type};
 }
 
-
+// Check if the data in `block_tuples` match `filter`.
 bool checkMatch(
     const String & test_case,
     Context & context,
@@ -149,19 +145,6 @@ bool checkMatch(
     store->drop();
 
     return rows != 0;
-}
-
-bool checkMatch(
-    const String & test_case,
-    Context & context,
-    const String & type,
-    const String & value,
-    const RSOperatorPtr & filter)
-{
-    // The first three values are pk, version and del_mark.
-    // For del_mark, 1 means deleted.
-    CSVTuples tuples = {{"0", "0", "0", value}};
-    return checkMatch(test_case, context, type, tuples, filter);
 }
 
 bool checkDelMatch(
@@ -241,24 +224,24 @@ Decimal64 getDecimal64(String s)
     return expected_default_value;
 }
 
-#define Int64_Match_DATA (100)
-#define Int64_Greater_DATA (10000)
-#define Int64_Smaller_DATA (-1)
+static constexpr Int64 Int64_Match_DATA = 100;
+static constexpr Int64 Int64_Greater_DATA = 10000;
+static constexpr Int64 Int64_Smaller_DATA = -1;
 
-#define Date_Match_DATA ("2020-09-27")
-#define Date_Greater_DATA ("2022-09-27")
-#define Date_Smaller_DATA ("1997-09-27")
+static const String Date_Match_DATA = "2020-09-27";
+static const String Date_Greater_DATA = "2022-09-27";
+static const String Date_Smaller_DATA = "1997-09-27";
 
-#define DateTime_Match_DATA ("2020-01-01 05:00:01")
-#define DateTime_Greater_DATA ("2022-01-01 05:00:01")
-#define DateTime_Smaller_DATA ("1997-01-01 05:00:01")
+static const String DateTime_Match_DATA = "2020-01-01 05:00:01";
+static const String DateTime_Greater_DATA = "2022-01-01 05:00:01";
+static const String DateTime_Smaller_DATA = "1997-01-01 05:00:01";
 
-#define MyDateTime_Match_DATE ("2020-09-27")
-#define MyDateTime_Greater_DATE ("2022-09-27")
-#define MyDateTime_Smaller_DATE ("1997-09-27")
+static const String MyDateTime_Match_DATE = "2020-09-27";
+static const String MyDateTime_Greater_DATE = "2022-09-27";
+static const String MyDateTime_Smaller_DATE = "1997-09-27";
 
-#define Decimal_Match_DATA ("100.25566")
-#define Decimal_UnMatch_DATA ("100.25500")
+static const String Decimal_Match_DATA = "100.25566";
+static const String Decimal_UnMatch_DATA = "100.25500";
 
 std::pair<String, CSVTuples> generateTypeValue(MinMaxTestDatatype data_type, bool has_null)
 {
@@ -278,55 +261,51 @@ std::pair<String, CSVTuples> generateTypeValue(MinMaxTestDatatype data_type, boo
     }
     case Test_Date:
     {
-        return {"Date", {{"0", "0", "0", DB::toString(Date_Match_DATA)}}};
+        return {"Date", {{"0", "0", "0", Date_Match_DATA}}};
     }
     case Test_Nullable_Date:
     {
         if (has_null)
         {
-            return {"Nullable(Date)", {{"0", "0", "0", DB::toString(Date_Match_DATA)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(Date)", {{"0", "0", "0", Date_Match_DATA}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(Date)", {{"0", "0", "0", DB::toString(Date_Match_DATA)}}};
+        return {"Nullable(Date)", {{"0", "0", "0", Date_Match_DATA}}};
     }
     case Test_DateTime:
     {
-        return {"DateTime", {{"0", "0", "0", DB::toString(DateTime_Match_DATA)}}};
+        return {"DateTime", {{"0", "0", "0", DateTime_Match_DATA}}};
     }
     case Test_Nullable_DateTime:
     {
         if (has_null)
         {
-            return {"Nullable(DateTime)", {{"0", "0", "0", DB::toString(DateTime_Match_DATA)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(DateTime)", {{"0", "0", "0", DateTime_Match_DATA}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(DateTime)", {{"0", "0", "0", DB::toString(DateTime_Match_DATA)}}};
+        return {"Nullable(DateTime)", {{"0", "0", "0", DateTime_Match_DATA}}};
     }
     case Test_MyDateTime:
     {
-        return {"MyDateTime", {{"0", "0", "0", DB::toString(MyDateTime_Match_DATE)}}};
+        return {"MyDateTime", {{"0", "0", "0", MyDateTime_Match_DATE}}};
     }
     case Test_Nullable_MyDateTime:
     {
         if (has_null)
         {
-            return {
-                "Nullable(MyDateTime)",
-                {{"0", "0", "0", DB::toString(MyDateTime_Match_DATE)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(MyDateTime)", {{"0", "0", "0", MyDateTime_Match_DATE}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(MyDateTime)", {{"0", "0", "0", DB::toString(MyDateTime_Match_DATE)}}};
+        return {"Nullable(MyDateTime)", {{"0", "0", "0", MyDateTime_Match_DATE}}};
     }
     case Test_Decimal64:
     {
-        return {"Decimal(20, 5)", {{"0", "0", "0", DB::toString(Decimal_Match_DATA)}}};
+        return {"Decimal(20, 5)", {{"0", "0", "0", Decimal_Match_DATA}}};
     }
     case Test_Nullable_Decimal64:
     {
         if (has_null)
         {
-            return {
-                "Nullable(Decimal(20, 5))",
-                {{"0", "0", "0", DB::toString(Decimal_Match_DATA)}, {"1", "1", "0", "\\N"}}};
+            return {"Nullable(Decimal(20, 5))", {{"0", "0", "0", Decimal_Match_DATA}, {"1", "1", "0", "\\N"}}};
         }
-        return {"Nullable(Decimal(20, 5))", {{"0", "0", "0", DB::toString(Decimal_Match_DATA)}}};
+        return {"Nullable(Decimal(20, 5))", {{"0", "0", "0", Decimal_Match_DATA}}};
     }
     default:
         throw Exception("Unknown data type");
@@ -341,66 +320,66 @@ RSOperatorPtr generateEqualOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createEqual(attr("Int64"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createEqual(attr("Int64"), Field(Int64_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createEqual(attr("Int64"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createEqual(attr("Nullable(Int64)"), Field(Int64_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createEqual(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createEqual(attr("Date"), Field(static_cast<String> Date_Match_DATA));
+            return createEqual(attr("Date"), Field(Date_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createEqual(attr("Date"), Field(Date_Smaller_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA));
+            return createEqual(attr("Nullable(Date)"), Field(Date_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createEqual(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createEqual(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA));
+            return createEqual(attr("DateTime"), Field(DateTime_Match_DATA));
         }
         else
         {
-            return createEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createEqual(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA));
+            return createEqual(attr("Nullable(DateTime)"), Field(DateTime_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createEqual(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_MyDateTime:
@@ -468,66 +447,66 @@ RSOperatorPtr generateInOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createIn(attr("Int64"), {Field(static_cast<Int64> Int64_Match_DATA)});
+            return createIn(attr("Int64"), {Field(Int64_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Int64"), {Field(static_cast<Int64> Int64_Smaller_DATA)});
+            return createIn(attr("Int64"), {Field(Int64_Smaller_DATA)});
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64> Int64_Match_DATA)});
+            return createIn(attr("Nullable(Int64)"), {Field(Int64_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64> Int64_Smaller_DATA)});
+            return createIn(attr("Nullable(Int64)"), {Field(Int64_Smaller_DATA)});
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createIn(attr("Date"), {Field(static_cast<String> Date_Match_DATA)});
+            return createIn(attr("Date"), {Field(Date_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Date"), {Field(static_cast<String> Date_Smaller_DATA)});
+            return createIn(attr("Date"), {Field(Date_Smaller_DATA)});
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(Date)"), {Field(static_cast<String> Date_Match_DATA)});
+            return createIn(attr("Nullable(Date)"), {Field(Date_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(Date)"), {Field(static_cast<String> Date_Smaller_DATA)});
+            return createIn(attr("Nullable(Date)"), {Field(Date_Smaller_DATA)});
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createIn(attr("DateTime"), {Field(static_cast<String> DateTime_Match_DATA)});
+            return createIn(attr("DateTime"), {Field(DateTime_Match_DATA)});
         }
         else
         {
-            return createIn(attr("DateTime"), {Field(static_cast<String> DateTime_Smaller_DATA)});
+            return createIn(attr("DateTime"), {Field(DateTime_Smaller_DATA)});
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(DateTime)"), {Field(static_cast<String> DateTime_Match_DATA)});
+            return createIn(attr("Nullable(DateTime)"), {Field(DateTime_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(DateTime)"), {Field(static_cast<String> DateTime_Smaller_DATA)});
+            return createIn(attr("Nullable(DateTime)"), {Field(DateTime_Smaller_DATA)});
         }
     }
     case Test_MyDateTime:
@@ -595,66 +574,66 @@ RSOperatorPtr generateGreaterOperator(MinMaxTestDatatype data_type, bool is_matc
     {
         if (is_match)
         {
-            return createGreater(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreater(attr("Int64"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Int64"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createGreater(attr("Int64"), Field(Int64_Match_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreater(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createGreater(attr("Nullable(Int64)"), Field(Int64_Match_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createGreater(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreater(attr("Date"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Date"), Field(static_cast<String> Date_Match_DATA));
+            return createGreater(attr("Date"), Field(Date_Match_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreater(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA));
+            return createGreater(attr("Nullable(Date)"), Field(Date_Match_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createGreater(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreater(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA));
+            return createGreater(attr("DateTime"), Field(DateTime_Match_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreater(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreater(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA));
+            return createGreater(attr("Nullable(DateTime)"), Field(DateTime_Match_DATA));
         }
     }
     case Test_MyDateTime:
@@ -722,66 +701,66 @@ RSOperatorPtr generateGreaterEqualOperator(MinMaxTestDatatype data_type, bool is
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreaterEqual(attr("Int64"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Int64"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createGreaterEqual(attr("Int64"), Field(Int64_Greater_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createGreaterEqual(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createGreaterEqual(attr("Nullable(Int64)"), Field(Int64_Greater_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreaterEqual(attr("Date"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Date"), Field(static_cast<String> Date_Greater_DATA));
+            return createGreaterEqual(attr("Date"), Field(Date_Greater_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createGreaterEqual(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA));
+            return createGreaterEqual(attr("Nullable(Date)"), Field(Date_Greater_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreaterEqual(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createGreaterEqual(attr("DateTime"), Field(DateTime_Greater_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createGreaterEqual(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createGreaterEqual(attr("Nullable(DateTime)"), Field(DateTime_Greater_DATA));
         }
     }
     case Test_MyDateTime:
@@ -849,66 +828,66 @@ RSOperatorPtr generateLessOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createLess(attr("Int64"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLess(attr("Int64"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Int64"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createLess(attr("Int64"), Field(Int64_Match_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLess(attr("Nullable(Int64)"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Match_DATA));
+            return createLess(attr("Nullable(Int64)"), Field(Int64_Match_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createLess(attr("Date"), Field(static_cast<String> Date_Greater_DATA));
+            return createLess(attr("Date"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Date"), Field(static_cast<String> Date_Match_DATA));
+            return createLess(attr("Date"), Field(Date_Match_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA));
+            return createLess(attr("Nullable(Date)"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA));
+            return createLess(attr("Nullable(Date)"), Field(Date_Match_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createLess(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLess(attr("DateTime"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLess(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA));
+            return createLess(attr("DateTime"), Field(DateTime_Match_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLess(attr("Nullable(DateTime)"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLess(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA));
+            return createLess(attr("Nullable(DateTime)"), Field(DateTime_Match_DATA));
         }
     }
     case Test_MyDateTime:
@@ -976,66 +955,66 @@ RSOperatorPtr generateLessEqualOperator(MinMaxTestDatatype data_type, bool is_ma
     {
         if (is_match)
         {
-            return createLessEqual(attr("Int64"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLessEqual(attr("Int64"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Int64"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createLessEqual(attr("Int64"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Nullable_Int64:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Greater_DATA));
+            return createLessEqual(attr("Nullable(Int64)"), Field(Int64_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Nullable(Int64)"), Field(static_cast<Int64> Int64_Smaller_DATA));
+            return createLessEqual(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
         }
     }
     case Test_Date:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Date"), Field(static_cast<String> Date_Greater_DATA));
+            return createLessEqual(attr("Date"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
+            return createLessEqual(attr("Date"), Field(Date_Smaller_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA));
+            return createLessEqual(attr("Nullable(Date)"), Field(Date_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
+            return createLessEqual(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createLessEqual(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLessEqual(attr("DateTime"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createLessEqual(attr("DateTime"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA));
+            return createLessEqual(attr("Nullable(DateTime)"), Field(DateTime_Greater_DATA));
         }
         else
         {
-            return createLessEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
+            return createLessEqual(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
         }
     }
     case Test_MyDateTime:
@@ -1180,6 +1159,7 @@ RSOperatorPtr generateRSOperator(MinMaxTestDatatype data_type, MinMaxTestOperato
         throw Exception("Unknown filter operator type");
     }
 }
+} // namespace
 
 TEST_F(MinMaxIndexTest, Equal)
 try
@@ -2052,7 +2032,7 @@ try
     // make a euqal filter, check equal with 1
     auto filter = createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
 
-    ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::SomeNull);
 }
 CATCH
 
@@ -2087,32 +2067,32 @@ try
     {
         // make a in filter, check in (NULL)
         auto filter = createIn(attr("Nullable(Int64)"), {Field()});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::NoneNull);
     }
     {
         // make a in filter, check in (NULL, 1)
         auto filter = createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::SomeNull);
     }
     {
         // make a in filter, check in (3)
         auto filter = createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::NoneNull);
     }
     {
         // make a not in filter, check not in (NULL)
         auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field()}));
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::AllNull);
     }
     {
         // make a not in filter, check not in (NULL, 1)
         auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))}));
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::SomeNull);
     }
     {
         // make a not in filter, check not in (3)
         auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))}));
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::AllNull);
     }
 }
 CATCH
@@ -2239,7 +2219,7 @@ try
     TiDB::ColumnInfo a, b;
     a.id = 1;
     b.id = 2;
-    ColumnInfos column_infos = {a, b};
+    TiDB::ColumnInfos column_infos = {a, b};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         tipb::ANNQueryInfo{},
@@ -2265,6 +2245,24 @@ try
 }
 CATCH
 
+namespace
+{
+// Only support Int64 for testing.
+template <typename T>
+MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const T & cases)
+{
+    auto minmax_index = std::make_shared<MinMaxIndex>(col_type);
+    for (const auto & c : cases)
+    {
+        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+    return minmax_index;
+}
+} // namespace
+
 TEST_F(MinMaxIndexTest, CheckIsNull)
 try
 {
@@ -2287,26 +2285,382 @@ try
     };
 
     auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
-    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
-    for (const auto & c : cases)
-    {
-        ASSERT_EQ(c.column_data.size(), c.del_mark.size());
-        auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
-        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
-        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
-    }
+    auto minmax_index = createMinMaxIndex(*col_type, cases);
 
     auto actual_results = minmax_index->checkIsNull(0, cases.size());
     for (size_t i = 0; i < cases.size(); ++i)
     {
         const auto & c = cases[i];
-        ASSERT_EQ(actual_results[i], c.result) << fmt::format(
-            "i={} actual={} expected={}",
-            i,
-            magic_enum::enum_name(actual_results[i]),
-            magic_enum::enum_name(c.result));
+        ASSERT_EQ(actual_results[i], c.result)
+            << fmt::format("i={} actual={} expected={}", i, actual_results[i], c.result);
     }
 }
 CATCH
 
+namespace
+{
+struct MinMaxCheckTestData
+{
+    std::vector<std::optional<Int64>> column_data;
+    std::vector<UInt64> del_mark;
+};
+
+const auto min_max_check_test_data = std::array{
+    MinMaxCheckTestData{
+        .column_data = {1, 2, 3, 4, std::nullopt},
+        .del_mark = {0, 0, 0, 0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {6, 7, 8, 9, 10},
+        .del_mark = {0, 0, 0, 0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {std::nullopt, std::nullopt},
+        .del_mark = {0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 2, 3, 4, std::nullopt},
+        .del_mark = {0, 0, 0, 0, 1},
+    },
+    MinMaxCheckTestData{
+        .column_data = {6, 7, 8, 9, 10},
+        .del_mark = {0, 0, 0, 1, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {std::nullopt, std::nullopt},
+        .del_mark = {1, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {std::nullopt, std::nullopt},
+        .del_mark = {1, 1},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 2, 3, 4},
+        .del_mark = {1, 1, 1, 1},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 1},
+        .del_mark = {0, 0},
+    },
+    MinMaxCheckTestData{
+        .column_data = {1, 1, std::nullopt},
+        .del_mark = {0, 0, 0},
+    },
+};
+} // namespace
+
+TEST_F(MinMaxIndexTest, CheckIn)
+try
+{
+    struct ValuesAndResults
+    {
+        std::vector<Int64> values; // select ... in (values)
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .values = {1, 2, 3, 4, 5, 6},
+            .results = {
+                RSResult::SomeNull,  // checkIn can return All only when min value equals to max value
+                RSResult::Some,
+                RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::Some,  // checkIn can return All only when min value equals to max value
+                RSResult::Some,
+                RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::All,   // checkIn can return All only when min value equals to max value
+                RSResult::AllNull, // checkIn can return All only when min value equals to max value
+            },
+        },
+        {
+            .values = {100},
+            .results = {
+            RSResult::NoneNull,
+            RSResult::None,
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::None,
+            RSResult::None,
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::None,
+            RSResult::NoneNull,
+            },
+        },
+        {
+            .values = {0},
+            .results = {
+            RSResult::NoneNull,
+            RSResult::None,
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::None,
+            RSResult::None,
+            RSResult::SomeNull,  // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull,  // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::None,
+            RSResult::NoneNull,
+            },
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    for (const auto & [values, expected_results] : params)
+    {
+        auto actual_results = minmax_index->checkIn(
+            0,
+            min_max_check_test_data.size(),
+            std::vector<Field>(values.cbegin(), values.cend()),
+            col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
+                values,
+                actual_results[j],
+                expected_results[j]);
+        }
+    }
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckCmp_Equal)
+try
+{
+    struct ValuesAndResults
+    {
+        Int64 value; // select ... = value
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .value = 1,
+            .results = {
+                RSResult::SomeNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::Some,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::AllNull,
+            },
+        },
+        {
+            .value = 5,
+            .results = {
+                RSResult::NoneNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        }
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    for (const auto & [value, expected_results] : params)
+    {
+        auto actual_results
+            = minmax_index->checkCmp<RoughCheck::CheckEqual>(0, min_max_check_test_data.size(), value, col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
+                value,
+                actual_results[j],
+                expected_results[j]);
+        }
+    }
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckCmp_Greater)
+try
+{
+    struct ValuesAndResults
+    {
+        Int64 value; // select ... > value
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .value = 0,
+            .results = {
+                RSResult::AllNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::AllNull,
+            },
+        },
+        {
+            .value = 5,
+            .results = {
+                RSResult::NoneNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+        {
+            .value = 11,
+            .results = {
+                RSResult::NoneNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    for (const auto & [value, expected_results] : params)
+    {
+        auto actual_results
+            = minmax_index->checkCmp<RoughCheck::CheckGreater>(0, min_max_check_test_data.size(), value, col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
+                value,
+                actual_results[j],
+                expected_results[j]);
+        }
+    }
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckCmp_GreaterEqual)
+try
+{
+    struct ValuesAndResults
+    {
+        Int64 value; // select ... >= value
+        std::array<RSResult, min_max_check_test_data.size()> results; // Result of each test data
+    };
+
+    std::vector<ValuesAndResults> params = {
+        {
+            .value = 1,
+            .results = {
+				RSResult::AllNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::All,
+                RSResult::AllNull,
+            },
+        },
+        {
+            .value = 2,
+            .results = {
+				RSResult::SomeNull,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::Some,
+                RSResult::All,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+        {
+            .value = 10,
+            .results = {
+				RSResult::NoneNull,
+                RSResult::Some,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::Some,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+        {
+            .value = 11,
+            .results = {
+				RSResult::NoneNull,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::None,
+                RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+                RSResult::None,
+                RSResult::NoneNull,
+            },
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    for (const auto & [value, expected_results] : params)
+    {
+        auto actual_results
+            = minmax_index->checkCmp<RoughCheck::CheckGreaterEqual>(0, min_max_check_test_data.size(), value, col_type);
+        for (size_t j = 0; j < min_max_check_test_data.size(); ++j)
+        {
+            ASSERT_EQ(actual_results[j], expected_results[j]) << fmt::format(
+                "<{}> column_data={}, del_mark={}, values={}, actual={} expected={}",
+                j,
+                min_max_check_test_data[j].column_data,
+                min_max_check_test_data[j].del_mark,
+                value,
+                actual_results[j],
+                expected_results[j]);
+        }
+    }
+}
+CATCH
 } // namespace DB::DM::tests

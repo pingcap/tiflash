@@ -17,9 +17,6 @@
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <common/likely.h>
-#include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 namespace DB
 {
@@ -52,14 +49,17 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     return smap;
 }
 
-bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
+bool SpaceMap::isInvalidRange(UInt64 offset, size_t size) const
 {
-    return (offset < start) || (offset > end) || (offset + size - 1 > end);
+    return (offset < start)
+        || (offset > end)
+        // check whether it can be changed to `(offset + size > end)`
+        || ((size != 0) && (offset + size - 1 > end));
 }
 
 bool SpaceMap::markFree(UInt64 offset, size_t length)
 {
-    if (checkSpace(offset, length))
+    if (isInvalidRange(offset, length))
     {
         throw Exception(
             fmt::format(
@@ -75,7 +75,7 @@ bool SpaceMap::markFree(UInt64 offset, size_t length)
 
 bool SpaceMap::markUsed(UInt64 offset, size_t length)
 {
-    if (checkSpace(offset, length))
+    if (isInvalidRange(offset, length))
     {
         throw Exception(
             fmt::format(
@@ -91,7 +91,7 @@ bool SpaceMap::markUsed(UInt64 offset, size_t length)
 
 bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
 {
-    if (checkSpace(offset, length))
+    if (isInvalidRange(offset, length))
     {
         throw Exception(
             fmt::format(

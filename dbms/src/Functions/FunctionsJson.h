@@ -35,7 +35,8 @@
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
 #include <TiDB/Decode/JsonScanner.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDBTypes.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/JSON.h>
 #include <simdjson.h>
 #include <tipb/expression.pb.h>

@@ -2956,7 +2956,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
         {
             const auto & pack_stat = pack_stats[pack_id];
             preceded_rows += pack_stat.rows;
-            if (!isUse(pack_res[pack_id]))
+            if (!pack_res[pack_id].isUse())
             {
                 continue;
             }

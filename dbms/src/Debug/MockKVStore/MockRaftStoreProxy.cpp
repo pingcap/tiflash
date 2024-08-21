@@ -674,7 +674,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, "mock apply snapshot error {}", e.message());
+        LOG_ERROR(log, "mock apply snapshot exception {}", e.message());
         e.rethrow();
     }
     LOG_FATAL(DB::Logger::get(), "Should not happen");

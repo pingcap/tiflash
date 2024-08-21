@@ -455,7 +455,7 @@ void StableValueSpace::calculateStableProperty(
         }
         for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
         {
-            if (!isUse(pack_res[pack_id]))
+            if (!pack_res[pack_id].isUse())
                 continue;
             property.num_versions += pack_stats[pack_id].rows;
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
@@ -609,7 +609,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
         const auto & pack_res = filter.getPackResConst();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (isUse(pack_res[i]))
+            if (pack_res[i].isUse())
             {
                 ++match_packs;
                 total_match_rows += pack_stats[i].rows;

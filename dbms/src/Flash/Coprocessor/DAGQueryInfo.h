@@ -31,7 +31,7 @@ struct DAGQueryInfo
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters_,
         const tipb::ANNQueryInfo & ann_query_info_,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_,
-        const ColumnInfos & source_columns_,
+        const TiDB::ColumnInfos & source_columns_,
         const std::vector<int> & runtime_filter_ids_,
         const int rf_max_wait_time_ms_,
         const TimezoneInfo & timezone_info_)
@@ -44,7 +44,7 @@ struct DAGQueryInfo
         , timezone_info(timezone_info_){};
 
     // A light copy of tipb::TableScan::columns from TiDB, some attributes are empty, like name.
-    const ColumnInfos & source_columns;
+    const TiDB::ColumnInfos & source_columns;
     // filters in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters;
     // filters for approximate nearest neighbor (ann) vector search

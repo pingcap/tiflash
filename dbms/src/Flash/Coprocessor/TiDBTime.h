@@ -21,7 +21,7 @@
 
 #include <Common/MyTime.h>
 #include <Core/Types.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDBTypes.h>
 
 namespace DB
 {
@@ -47,7 +47,7 @@ public:
             return ret;
         }
         if (fsp > 0)
-            ret |= UInt64(fsp) << 1u;
+            ret |= static_cast<UInt64>(fsp) << 1u;
         if (time_type == TiDB::TypeTimestamp)
             ret |= 1u;
         return ret;

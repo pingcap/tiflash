@@ -247,7 +247,7 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
         "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
-    if (fine_grained_shuffle.enable())
+    if (fine_grained_shuffle.enabled())
         join_build_extra_info = fmt::format("{} {}", join_build_extra_info, String(enableFineGrainedShuffleExtraInfo));
     auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
     auto build_streams = [&](BlockInputStreams & streams) {
