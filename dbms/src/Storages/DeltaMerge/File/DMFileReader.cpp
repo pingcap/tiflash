@@ -736,11 +736,11 @@ void DMFileReader::initAllMatchBlockInfo()
             ++i;
             continue;
         }
-        auto [count, rows] = get_all_match_block(i);
+        auto [pack_count, rows] = get_all_match_block(i);
         // Do not read block too small, it may hurts performance
         if (rows >= rows_threshold_per_read / 2)
-            all_match_block_infos.emplace(i, count);
-        i += count;
+            all_match_block_infos.emplace(i, pack_count);
+        i += pack_count;
     }
 }
 
