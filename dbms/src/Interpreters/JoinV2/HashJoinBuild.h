@@ -62,6 +62,9 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
 
     ssize_t build_pointer_table_iter = -1;
 
+    size_t padding_size = 0;
+    size_t all_size = 0;
+
     bool enable_tagged_pointer = true;
 };
 

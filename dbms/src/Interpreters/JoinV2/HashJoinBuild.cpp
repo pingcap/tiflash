@@ -95,6 +95,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
                 {
                     wd.row_sizes[wd.last_partition_index[part_num]] += remain_size - align_remain_size;
                     wd.partition_row_sizes[part_num] += remain_size - align_remain_size;
+                    wd.padding_size += remain_size - align_remain_size;
                 }
             }
         }
@@ -106,6 +107,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
                 {
                     wd.row_sizes[wd.last_partition_index[part_num]] += remain_size;
                     wd.partition_row_sizes[part_num] += remain_size;
+                    wd.padding_size += remain_size;
                 }
             }
         }
@@ -125,6 +127,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data());
             wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data() + wd.partition_row_sizes[i]);
             assert((reinterpret_cast<uintptr_t>(container.data.data()) & (CPU_CACHE_LINE_SIZE - 1)) == 0);
+            wd.all_size += wd.partition_row_sizes[i];
 
             container.offsets.reserve(wd.partition_row_count[i]);
             if constexpr (!KeyGetterType::joinKeyCompareHashFirst())

@@ -390,12 +390,16 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
 
 bool HashJoin::finishOneBuild(size_t stream_index)
 {
+    auto & wd = build_workers_data[stream_index];
     LOG_INFO(
         log,
-        "{} insert block to row containers cost {}ms, row count {}",
+        "{} insert block to row containers cost {}ms, row count {}, padding size {}({} of all size {})",
         stream_index,
-        build_workers_data[stream_index].build_time,
-        build_workers_data[stream_index].row_count);
+        wd.build_time,
+        wd.row_count,
+        wd.padding_size,
+        1.0 * wd.padding_size / wd.all_size,
+        wd.all_size);
     if (active_build_worker.fetch_sub(1) == 1)
     {
         workAfterBuildFinish();
