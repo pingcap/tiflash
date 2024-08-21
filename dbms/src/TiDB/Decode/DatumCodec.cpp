@@ -617,7 +617,7 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBuffer
     ss.write(buf.c_str(), buf.size());
 }
 
-void EncodeDecimalForRow(const Field & field, WriteBuffer & ss, const ColumnInfo & column_info)
+void EncodeDecimalForRow(const Field & field, WriteBuffer & ss, const TiDB::ColumnInfo & column_info)
 {
     if (field.getType() == Field::Types::Decimal32)
     {
@@ -673,7 +673,11 @@ void EncodeDecimal(const Field & field, WriteBuffer & ss)
     }
 }
 
-void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, WriteBuffer & ss, const ColumnInfo & column_info)
+void EncodeDatumForRow(
+    const Field & field,
+    TiDB::CodecFlag flag,
+    WriteBuffer & ss,
+    const TiDB::ColumnInfo & column_info)
 {
     if (flag == TiDB::CodecFlagDecimal && !field.isNull())
     {

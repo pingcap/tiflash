@@ -20,7 +20,7 @@
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Flash/Coprocessor/TiDBEnum.h>
 #include <Flash/Coprocessor/TiDBTime.h>
-#include <TiDB/Schema/TiDB.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 
 namespace DB
 {
@@ -46,9 +46,9 @@ public:
     void clear();
 
 private:
-    void finishAppendVar(UInt32 size);
-    void finishAppendFixed();
     bool isFixed() const { return fixed_size != VAR_SIZE; }
+    void finishAppendFixed();
+    void finishAppendVar(UInt32 size);
 
     void appendNullBitMap(bool value);
 

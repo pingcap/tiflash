@@ -121,7 +121,7 @@ void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 {
     assert(plan_node);
     /// For fine grained mode, all plan node should enable fine grained shuffle.
-    if (!plan_node->getFineGrainedShuffle().enable())
+    if (!plan_node->getFineGrainedShuffle().enabled())
         is_fine_grained_mode = false;
     plan_nodes.push_back(plan_node);
 }

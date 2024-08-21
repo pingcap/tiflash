@@ -256,7 +256,7 @@ void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
     for (int i = 0; i < exchange_receiver_meta.field_types_size(); ++i)
     {
         String name = genNameForExchangeReceiver(i);
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
+        TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
         schema.emplace_back(std::move(name), std::move(info));
     }
 }

@@ -106,7 +106,7 @@ public:
         const auto & pack_stats = dmfile->getPackStats();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (isUse(pack_res[i]))
+            if (pack_res[i].isUse())
             {
                 rows += pack_stats[i].rows;
                 bytes += pack_stats[i].bytes;
@@ -157,8 +157,8 @@ private:
 
     void tryLoadIndex(ColId col_id);
 
-    // None, Some, All
-    std::tuple<UInt64, UInt64, UInt64> countPackRes() const;
+    // None+NoneNull, Some+SomeNull, All, AllNull
+    std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const;
 
 private:
     DMFilePtr dmfile;

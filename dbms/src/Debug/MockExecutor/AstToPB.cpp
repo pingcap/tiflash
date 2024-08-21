@@ -34,7 +34,7 @@
 
 namespace DB
 {
-void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
+void literalFieldToTiPBExpr(const TiDB::ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
 {
     *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
     expr->mutable_field_type()->set_collate(collator_id);
@@ -133,7 +133,7 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
 void literalToPB(tipb::Expr * expr, const Field & value, int32_t collator_id)
 {
     DataTypePtr type = applyVisitor(FieldToDataType(), value);
-    ColumnInfo ci = reverseGetColumnInfo({"", type}, 0, Field(), true);
+    TiDB::ColumnInfo ci = reverseGetColumnInfo({"", type}, 0, Field(), true);
     literalFieldToTiPBExpr(ci, value, expr, collator_id);
 }
 
@@ -701,7 +701,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
     }
 }
 
-void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions)
+void compileFilter(const DAGSchema & input, ASTPtr ast, ASTs & conditions)
 {
     if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {

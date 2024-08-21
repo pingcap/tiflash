@@ -15,15 +15,11 @@
 #pragma once
 
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
-namespace TiDB
-{
-struct ColumnInfo;
-}
 
 namespace DB::DM
 {
@@ -32,5 +28,4 @@ using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 using ColumnDefineMap = std::unordered_map<DB::ColumnID, ColumnDefine>;
 
-using ColumnInfos = std::vector<TiDB::ColumnInfo>;
 } // namespace DB::DM

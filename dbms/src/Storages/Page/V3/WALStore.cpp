@@ -33,7 +33,6 @@
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
-#include <cassert>
 #include <memory>
 #include <mutex>
 
@@ -140,7 +139,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     auto filename = log_filename.filename(log_filename.stage);
     auto fullname = log_filename.fullname(log_filename.stage);
     // TODO check whether the file already existed
-    LOG_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
+    LOG_INFO(logger, "Creating log file for writing, fullname={}", fullname);
     // if it is a temp file, we will manually sync it after writing snapshot
     auto log_writer = std::make_unique<LogWriter>(
         fullname,
@@ -255,21 +254,21 @@ bool WALStore::saveSnapshot(
         normal_fullname,
         EncryptionPath(normal_fullname, ""),
         true);
-    LOG_INFO(logger, "Rename log file to normal done [tempname={}] [fullname={}]", temp_fullname, normal_fullname);
+    LOG_INFO(logger, "Rename log file to normal done, tempname={} fullname={}", temp_fullname, normal_fullname);
 
     // Remove compacted log files.
     removeLogFiles(files_snap.persisted_log_files);
 
     auto get_logging_str = [&]() {
         FmtBuffer fmt_buf;
-        fmt_buf.append("Dumped directory snapshot to log file done. [files_snapshot=");
+        fmt_buf.append("Dumped directory snapshot to log file done. files_snapshot=");
         fmt_buf.joinStr(
             files_snap.persisted_log_files.begin(),
             files_snap.persisted_log_files.end(),
             [](const auto & arg, FmtBuffer & fb) { fb.append(arg.filename(arg.stage)); },
             ", ");
         fmt_buf.fmtAppend(
-            "] [dump_cost={}] [num_records={}] [file={}] [size={}].",
+            " dump_cost={} num_records={} file={} size={}",
             files_snap.dump_elapsed_ms,
             files_snap.num_records,
             normal_fullname,

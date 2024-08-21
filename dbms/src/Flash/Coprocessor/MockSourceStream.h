@@ -86,7 +86,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     DB::LoggerPtr log,
     String executor_id,
     Int64 table_id = 0,
-    const ColumnInfos & used_columns = {})
+    const TiDB::ColumnInfos & used_columns = {})
 {
     ColumnsWithTypeAndName columns_with_type_and_name;
     if constexpr (std::is_same_v<SourceType, MockExchangeReceiverInputStream>)

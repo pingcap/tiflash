@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 #include <tipb/select.pb.h>
 
 namespace DB
 {
-using DAGColumnInfo = std::pair<String, ColumnInfo>;
+using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 
 class ChunkCodecStream

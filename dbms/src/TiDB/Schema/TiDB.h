@@ -20,6 +20,8 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDBTypes.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <tipb/schema.pb.h>
 
 #include <optional>
@@ -53,54 +55,6 @@ using DB::String;
 using DB::TableID;
 using DB::Timestamp;
 
-// Column types.
-// In format:
-// TiDB type, int value, codec flag, CH type.
-// The int value is defined in pingcap/tidb pkg/parser/mysql/type.go
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define COLUMN_TYPES(M)                       \
-    M(Decimal, 0, Decimal, Decimal32)         \
-    M(Tiny, 1, VarInt, Int8)                  \
-    M(Short, 2, VarInt, Int16)                \
-    M(Long, 3, VarInt, Int32)                 \
-    M(Float, 4, Float, Float32)               \
-    M(Double, 5, Float, Float64)              \
-    M(Null, 6, Nil, Nothing)                  \
-    M(Timestamp, 7, UInt, MyDateTime)         \
-    M(LongLong, 8, Int, Int64)                \
-    M(Int24, 9, VarInt, Int32)                \
-    M(Date, 10, UInt, MyDate)                 \
-    M(Time, 11, Duration, Int64)              \
-    M(Datetime, 12, UInt, MyDateTime)         \
-    M(Year, 13, Int, Int16)                   \
-    M(NewDate, 14, Int, MyDate)               \
-    M(Varchar, 15, CompactBytes, String)      \
-    M(Bit, 16, VarInt, UInt64)                \
-    M(JSON, 0xf5, Json, String)               \
-    M(NewDecimal, 0xf6, Decimal, Decimal32)   \
-    M(Enum, 0xf7, VarUInt, Enum16)            \
-    M(Set, 0xf8, VarUInt, UInt64)             \
-    M(TinyBlob, 0xf9, CompactBytes, String)   \
-    M(MediumBlob, 0xfa, CompactBytes, String) \
-    M(LongBlob, 0xfb, CompactBytes, String)   \
-    M(Blob, 0xfc, CompactBytes, String)       \
-    M(VarString, 0xfd, CompactBytes, String)  \
-    M(String, 0xfe, CompactBytes, String)     \
-    M(Geometry, 0xff, CompactBytes, String)   \
-    M(TiDBVectorFloat32, 0xe1, VectorFloat32, Array)
-
-enum TP
-{
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(tt, v, cf, ct) Type##tt = (v),
-    COLUMN_TYPES(M)
-#undef M
-};
-
 // Column flags.
 #ifdef M
 #error "Please undefine macro M first."
@@ -133,37 +87,6 @@ enum ColumnFlag
 #endif
 #define M(cf, v) ColumnFlag##cf = (v),
     COLUMN_FLAGS(M)
-#undef M
-};
-
-// Codec flags.
-// In format: TiDB codec flag, int value.
-// Defined in pingcap/tidb pkg/util/codec/codec.go
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define CODEC_FLAGS(M)   \
-    M(Nil, 0)            \
-    M(Bytes, 1)          \
-    M(CompactBytes, 2)   \
-    M(Int, 3)            \
-    M(UInt, 4)           \
-    M(Float, 5)          \
-    M(Decimal, 6)        \
-    M(Duration, 7)       \
-    M(VarInt, 8)         \
-    M(VarUInt, 9)        \
-    M(Json, 10)          \
-    M(VectorFloat32, 20) \
-    M(Max, 250)
-
-enum CodecFlag
-{
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(cf, v) CodecFlag##cf = (v),
-    CODEC_FLAGS(M)
 #undef M
 };
 
@@ -289,8 +212,6 @@ struct DBInfo
     void deserialize(const String & json_str);
 };
 
-struct TableInfo;
-using TableInfoPtr = std::shared_ptr<TableInfo>;
 
 struct TiFlashReplicaInfo
 {
@@ -393,7 +314,7 @@ struct TableInfo
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
-    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED; // TODO(hyy):seems could be removed
+    TiDB::StorageEngine engine_type = TiDB::StorageEngine::UNSPECIFIED; // TODO(hyy):seems could be removed
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;
@@ -412,12 +333,10 @@ struct TableInfo
     }
 
     /// should not be called if is_common_handle = false.
-    const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
-
-    IndexInfo & getPrimaryIndexInfo() { return index_infos[0]; }
+    const IndexInfo & getPrimaryIndexInfo() const;
+    size_t numColumnsInKey() const;
 };
 
-using DBInfoPtr = std::shared_ptr<DBInfo>;
 
 String genJsonNull();
 

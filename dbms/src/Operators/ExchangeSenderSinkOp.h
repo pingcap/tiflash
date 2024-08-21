@@ -33,6 +33,8 @@ public:
 
     String getName() const override { return "ExchangeSenderSinkOp"; }
 
+    bool canHandleSelectiveBlock() const override { return true; }
+
 protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;

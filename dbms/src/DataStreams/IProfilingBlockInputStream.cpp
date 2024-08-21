@@ -95,6 +95,11 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
         if (quota != nullptr)
             checkQuota(res);
+
+        RUNTIME_CHECK_MSG(
+            !parent || parent->canHandleSelectiveBlock() || !res.info.selective,
+            "{} cannot handle selective block",
+            parent->getName());
     }
     else
     {
@@ -228,7 +233,7 @@ static bool handleOverflowMode(OverflowMode mode, const String & message, int co
     default:
         throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
     }
-};
+}
 
 
 bool IProfilingBlockInputStream::checkTimeLimit() const

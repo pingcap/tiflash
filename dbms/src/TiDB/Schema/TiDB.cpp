@@ -1132,6 +1132,23 @@ KeyspaceID TableInfo::getKeyspaceID() const
     return keyspace_id;
 }
 
+const IndexInfo & TableInfo::getPrimaryIndexInfo() const
+{
+    assert(is_common_handle);
+#ifndef NDEBUG
+    RUNTIME_CHECK(index_infos[0].is_primary);
+#endif
+    return index_infos[0];
+}
+size_t TableInfo::numColumnsInKey() const
+{
+    if (pk_is_handle)
+        return 1;
+    else if (is_common_handle)
+        return getPrimaryIndexInfo().idx_cols.size();
+    return 0;
+}
+
 String TableInfo::getColumnName(const ColumnID id) const
 {
     for (const auto & col : columns)

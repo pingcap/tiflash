@@ -38,6 +38,8 @@ public:
     String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
 
+    bool canHandleSelectiveBlock() const override { return true; }
+
 protected:
     Block readImpl() override;
     void readPrefixImpl() override { writer->prepare(getHeader()); }
