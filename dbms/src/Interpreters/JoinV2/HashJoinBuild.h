@@ -40,7 +40,7 @@ inline size_t getJoinBuildPartitionNum(HashValueType hash)
     return (hash & partition_mask) >> (hash_value_bits - JOIN_BUILD_PARTITION_BITS);
 }
 
-struct alignas(ABSL_CACHELINE_SIZE) JoinBuildWorkerData
+struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
 {
     std::unique_ptr<void, std::function<void(void *)>> key_getter;
     size_t row_count = 0;
@@ -53,6 +53,7 @@ struct alignas(ABSL_CACHELINE_SIZE) JoinBuildWorkerData
 
     PaddedPODArray<size_t> partition_row_sizes;
     PaddedPODArray<size_t> partition_row_count;
+    PaddedPODArray<ssize_t> last_partition_index;
 
     size_t build_time = 0;
 

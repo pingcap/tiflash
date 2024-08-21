@@ -21,6 +21,7 @@ namespace ErrorCodes
 extern const int UNKNOWN_SET_DATA_VARIANT;
 } // namespace ErrorCodes
 
+
 template <typename KeyGetter, bool has_null_map, bool need_record_null_rows>
 void NO_INLINE insertBlockToRowContainersTypeImpl(
     Block & block,
@@ -31,12 +32,12 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     JoinBuildWorkerData & wd)
 {
-    using Type = typename KeyGetter::Type;
+    using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
     static_assert(sizeof(HashValueType) <= sizeof(decltype(wd.hashes)::value_type));
 
-    Type & key_getter = *static_cast<Type *>(wd.key_getter.get());
+    KeyGetterType & key_getter = *static_cast<KeyGetterType *>(wd.key_getter.get());
     key_getter.reset(key_columns);
 
     wd.row_sizes.clear();
@@ -50,6 +51,8 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     wd.partition_row_sizes.resize_fill(part_count, 0);
     wd.partition_row_count.clear();
     wd.partition_row_count.resize_fill(part_count, 0);
+    wd.last_partition_index.clear();
+    wd.last_partition_index.resize_fill(part_count, -1);
 
     for (const auto & [index, is_fixed_size] : row_layout.other_required_column_indexes)
     {
@@ -63,19 +66,51 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         {
             if constexpr (need_record_null_rows)
             {
-                wd.row_sizes[i] += sizeof(RowPtr);
-                wd.row_sizes[i] = alignRowSize(wd.row_sizes[i]);
-                wd.partition_row_sizes[part_count - 1] += wd.row_sizes[i];
-                ++wd.partition_row_count[part_count - 1];
+                //TODO
+                //wd.row_sizes[i] += sizeof(RowPtr);
+                //wd.row_sizes[i] = alignRowSize(wd.row_sizes[i]);
+                //wd.partition_row_sizes[part_count - 1] += wd.row_sizes[i];
+                //++wd.partition_row_count[part_count - 1];
             }
             continue;
         }
         const auto & key = key_getter.getJoinKeyWithBufferHint(i);
-
-        wd.row_sizes[i] += sizeof(HashValueType) + sizeof(RowPtr) + key_getter.getJoinKeySize(key);
-        wd.row_sizes[i] = alignRowSize(wd.row_sizes[i]);
         wd.hashes[i] = static_cast<HashValueType>(Hash()(key));
         size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[i]);
+
+        size_t ptr_and_key_size = sizeof(RowPtr) + key_getter.getJoinKeySize(key);
+        if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+        {
+            ptr_and_key_size += sizeof(HashValueType);
+        }
+        wd.row_sizes[i] += ptr_and_key_size;
+
+        size_t remain_size = CPU_CACHE_LINE_SIZE - wd.partition_row_sizes[part_num] % CPU_CACHE_LINE_SIZE;
+        size_t align_remain_size = remain_size / ROW_ALIGN * ROW_ALIGN;
+        if (align_remain_size >= ptr_and_key_size)
+        {
+            if (remain_size > align_remain_size)
+            {
+                if likely (wd.last_partition_index[part_num] != -1)
+                {
+                    wd.row_sizes[wd.last_partition_index[part_num]] += remain_size - align_remain_size;
+                    wd.partition_row_sizes[part_num] += remain_size - align_remain_size;
+                }
+            }
+        }
+        else
+        {
+            if (remain_size != 0)
+            {
+                if likely (wd.last_partition_index[part_num] != -1)
+                {
+                    wd.row_sizes[wd.last_partition_index[part_num]] += remain_size;
+                    wd.partition_row_sizes[part_num] += remain_size;
+                }
+            }
+        }
+
+        wd.last_partition_index[part_num] = i;
         wd.partition_row_sizes[part_num] += wd.row_sizes[i];
         ++wd.partition_row_count[part_num];
     }
@@ -86,11 +121,15 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         if (wd.partition_row_count[i] > 0)
         {
             auto & container = partition_column_row[i];
-            container.data.resize(wd.partition_row_sizes[i], ROW_ALIGN);
+            container.data.resize(wd.partition_row_sizes[i], CPU_CACHE_LINE_SIZE);
             wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data());
             wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data() + wd.partition_row_sizes[i]);
+            assert((reinterpret_cast<uintptr_t>(container.data.data()) & (CPU_CACHE_LINE_SIZE - 1)) == 0);
 
             container.offsets.reserve(wd.partition_row_count[i]);
+            if constexpr (!KeyGetterType::joinKeyCompareHashFirst())
+                container.hashes.reserve(wd.partition_row_count[i]);
+
             wd.partition_row_sizes[i] = 0;
             wd.row_count += wd.partition_row_count[i];
         }
@@ -139,11 +178,18 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         wd.partition_row_sizes[part_num] += wd.row_sizes[i];
         partition_column_row[part_num].offsets.push_back(wd.partition_row_sizes[part_num]);
 
-        unalignedStore<HashValueType>(wd.row_ptrs[i], static_cast<HashValueType>(wd.hashes[i]));
-        wd.row_ptrs[i] += sizeof(HashValueType);
         unalignedStore<RowPtr>(wd.row_ptrs[i], nullptr);
         wd.row_ptrs[i] += sizeof(RowPtr);
 
+        if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+        {
+            unalignedStore<HashValueType>(wd.row_ptrs[i], static_cast<HashValueType>(wd.hashes[i]));
+            wd.row_ptrs[i] += sizeof(HashValueType);
+        }
+        else
+        {
+            partition_column_row[part_num].hashes.push_back(wd.hashes[i]);
+        }
         const auto & key = key_getter.getJoinKeyWithBufferHint(i);
         key_getter.serializeJoinKey(key, wd.row_ptrs[i]);
         wd.row_ptrs[i] += key_getter.getJoinKeySize(key);

@@ -47,20 +47,18 @@ void HashJoinPointerTable::init(
 
 template <typename HashValueType>
 bool HashJoinPointerTable::build(
-    const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & wd,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size)
 {
     if (enable_tagged_pointer)
-        return buildImpl<HashValueType, true>(row_layout, wd, multi_row_containers, max_build_size);
+        return buildImpl<HashValueType, true>(wd, multi_row_containers, max_build_size);
     else
-        return buildImpl<HashValueType, false>(row_layout, wd, multi_row_containers, max_build_size);
+        return buildImpl<HashValueType, false>(wd, multi_row_containers, max_build_size);
 }
 
 template <typename HashValueType, bool tagged_pointer>
 bool HashJoinPointerTable::buildImpl(
-    const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & wd,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size)
@@ -105,17 +103,29 @@ bool HashJoinPointerTable::buildImpl(
             if constexpr (tagged_pointer)
                 assert(isRowPtrTagZero(row_ptr));
 
-            auto hash = unalignedLoad<HashValueType>(row_ptr);
+            size_t hash;
+            if constexpr (std::is_same_v<HashValueType, void>)
+            {
+                hash = container->getHash(i);
+            }
+            else
+            {
+                hash = unalignedLoad<HashValueType>(row_ptr + sizeof(RowPtr));
+            }
+
             size_t bucket = getBucketNum(hash);
-            auto old_head = reinterpret_cast<RowPtr>(pointer_table[bucket].exchange(reinterpret_cast<uintptr_t>(row_ptr), std::memory_order_relaxed));
+            auto old_head = reinterpret_cast<RowPtr>(
+                pointer_table[bucket].exchange(reinterpret_cast<uintptr_t>(row_ptr), std::memory_order_relaxed));
             if constexpr (tagged_pointer)
             {
                 UInt16 tag = (hash & ROW_PTR_TAG_MASK) | getRowPtrTag(old_head);
-                pointer_table[bucket].fetch_or(static_cast<uintptr_t>(tag) << (64 - ROW_PTR_TAG_BITS), std::memory_order_relaxed);
+                pointer_table[bucket].fetch_or(
+                    static_cast<uintptr_t>(tag) << (64 - ROW_PTR_TAG_BITS),
+                    std::memory_order_relaxed);
                 old_head = removeRowPtrTag(old_head);
             }
             if (old_head != nullptr)
-                unalignedStore<RowPtr>(row_ptr + row_layout.next_pointer_offset, old_head);
+                unalignedStore<RowPtr>(row_ptr, old_head);
         }
 
         if (build_size >= max_build_size)
@@ -126,23 +136,23 @@ bool HashJoinPointerTable::buildImpl(
     return is_end;
 }
 
+template bool HashJoinPointerTable::build<void>(
+    JoinBuildWorkerData & worker_data,
+    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
+    size_t max_build_size);
 template bool HashJoinPointerTable::build<UInt8>(
-    const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
 template bool HashJoinPointerTable::build<UInt16>(
-    const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
 template bool HashJoinPointerTable::build<UInt32>(
-    const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
 template bool HashJoinPointerTable::build<size_t>(
-    const HashJoinRowLayout & row_layout,
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);

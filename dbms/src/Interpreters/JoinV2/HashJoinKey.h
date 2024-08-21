@@ -57,7 +57,7 @@ enum class HashJoinKeyMethod
 };
 
 template <typename T>
-class alignas(ABSL_CACHELINE_SIZE) HashJoinKeyOneNumber
+class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeyOneNumber
 {
 public:
     using KeyType = T;
@@ -94,7 +94,7 @@ private:
 };
 
 template <typename T>
-class alignas(ABSL_CACHELINE_SIZE) HashJoinKeysFixed
+class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeysFixed
 {
 public:
     using KeyType = T;
@@ -171,7 +171,7 @@ private:
     size_t fixed_size_sum;
 };
 
-class alignas(ABSL_CACHELINE_SIZE) HashJoinKeysFixedOther
+class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeysFixedOther
 {
 public:
     using KeyType = StringRef;
@@ -230,7 +230,7 @@ private:
 };
 
 template <bool padding>
-class alignas(ABSL_CACHELINE_SIZE) HashJoinKeyStringBin
+class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeyStringBin
 {
 public:
     using KeyType = StringRef;
@@ -273,7 +273,7 @@ private:
     const ColumnString * column_string = nullptr;
 };
 
-class alignas(ABSL_CACHELINE_SIZE) HashJoinKeyString
+class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeyString
 {
 public:
     using KeyType = StringRef;
@@ -348,7 +348,7 @@ private:
     bool buffer_initialized = false;
 };
 
-class alignas(ABSL_CACHELINE_SIZE) HashJoinKeySerialized
+class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeySerialized
 {
 public:
     using KeyType = StringRef;

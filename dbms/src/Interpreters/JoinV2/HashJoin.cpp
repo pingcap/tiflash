@@ -244,8 +244,6 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
         method = HashJoinKeyMethod::KeySerialized;
     }
 
-    row_layout.next_pointer_offset = getHashValueByteSize(method);
-    row_layout.key_offset = row_layout.next_pointer_offset + sizeof(RowPtr);
     row_layout.key_all_raw_required = row_layout.raw_required_key_column_indexes.size() == keys_size;
 
     for (size_t i = 0; i < keys_size; ++i)
@@ -460,14 +458,19 @@ bool HashJoin::buildPointerTable(size_t stream_index)
     case HashJoinKeyMethod::Cross:
         return true;
 
-#define M(METHOD)                                                                                         \
-    case HashJoinKeyMethod::METHOD:                                                                       \
-        using HashValueType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::HashValueType; \
-        is_end = pointer_table.build<HashValueType##METHOD>(                                              \
-            row_layout,                                                                                   \
-            build_workers_data[stream_index],                                                             \
-            multi_row_containers,                                                                         \
-            settings.max_block_size);                                                                     \
+#define M(METHOD)                                                                          \
+    case HashJoinKeyMethod::METHOD:                                                        \
+        using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
+        if constexpr (KeyGetterType##METHOD::Type::joinKeyCompareHashFirst())              \
+            is_end = pointer_table.build<KeyGetterType##METHOD::HashValueType>(            \
+                build_workers_data[stream_index],                                          \
+                multi_row_containers,                                                      \
+                settings.max_block_size);                                                  \
+        else                                                                               \
+            is_end = pointer_table.build<void>(                                            \
+                build_workers_data[stream_index],                                          \
+                multi_row_containers,                                                      \
+                settings.max_block_size);                                                  \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M

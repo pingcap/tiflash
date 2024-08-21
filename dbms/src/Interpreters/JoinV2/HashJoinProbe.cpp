@@ -117,7 +117,7 @@ template <typename KeyGetter, bool KeyTypeReference = KeyGetter::Type::isJoinKey
 struct ProbePrefetchState;
 
 template <typename KeyGetter>
-struct alignas(ABSL_CACHELINE_SIZE) ProbePrefetchState<KeyGetter, true>
+struct alignas(CPU_CACHE_LINE_SIZE) ProbePrefetchState<KeyGetter, true>
 {
     using KeyGetterType = typename KeyGetter::Type;
     using KeyType = typename KeyGetterType::KeyType;
@@ -138,7 +138,7 @@ struct alignas(ABSL_CACHELINE_SIZE) ProbePrefetchState<KeyGetter, true>
 };
 
 template <typename KeyGetter>
-struct alignas(ABSL_CACHELINE_SIZE) ProbePrefetchState<KeyGetter, false>
+struct alignas(CPU_CACHE_LINE_SIZE) ProbePrefetchState<KeyGetter, false>
 {
     using KeyGetterType = typename KeyGetter::Type;
     using KeyType = typename KeyGetterType::KeyType;
@@ -251,7 +251,7 @@ private:
     {
         if constexpr (KeyGetterType::joinKeyCompareHashFirst())
         {
-            auto hash2 = unalignedLoad<HashValueType>(row_ptr);
+            auto hash2 = unalignedLoad<HashValueType>(row_ptr + sizeof(RowPtr));
             if (hash1 != hash2)
                 return false;
         }
@@ -344,6 +344,11 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
     size_t idx = context.start_row_idx;
     RowPtr ptr = context.current_probe_row_ptr;
     size_t collision = 0;
+    size_t key_offset = sizeof(RowPtr);
+    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+    {
+        key_offset += sizeof(HashValueType);
+    }
     for (; idx < context.rows; ++idx)
     {
         if (has_null_map && (*context.null_map)[idx])
@@ -375,25 +380,25 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
         }
         while (true)
         {
-            const auto & key2 = key_getter.deserializeJoinKey(ptr + row_layout.key_offset);
+            const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, hash, ptr);
             collision += !key_is_equal;
             if (key_is_equal)
             {
                 ++current_offset;
-                insertRowToBatch(ptr + row_layout.key_offset, key_getter.getJoinKeySize(key2));
+                insertRowToBatch(ptr + key_offset, key_getter.getJoinKeySize(key2));
                 if unlikely (current_offset >= context.rows)
                     break;
             }
 
-            ptr = row_layout.getNextRowPtr(ptr);
+            ptr = HashJoinRowLayout::getNextRowPtr(ptr);
             if (ptr == nullptr)
                 break;
         }
         offsets_to_replicate[idx] = current_offset;
         if unlikely (ptr != nullptr)
         {
-            ptr = row_layout.getNextRowPtr(ptr);
+            ptr = HashJoinRowLayout::getNextRowPtr(ptr);
             if (ptr == nullptr)
                 ++idx;
             break;
@@ -419,6 +424,11 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
     size_t k = wd.prefetch_iter;
     size_t current_offset = 0;
     size_t collision = 0;
+    size_t key_offset = sizeof(RowPtr);
+    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+    {
+        key_offset += sizeof(HashValueType);
+    }
     const size_t probe_prefetch_step = settings.probe_prefetch_step;
     while (idx < context.rows || active_states > 0)
     {
@@ -427,22 +437,22 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
         if (state->stage == ProbePrefetchStage::FindNext)
         {
             RowPtr ptr = state->ptr;
-            RowPtr next_ptr = row_layout.getNextRowPtr(ptr);
+            RowPtr next_ptr = HashJoinRowLayout::getNextRowPtr(ptr);
             if (next_ptr)
             {
                 state->ptr = next_ptr;
-                PREFETCH_READ(next_ptr + row_layout.next_pointer_offset);
+                PREFETCH_READ(next_ptr);
             }
 
             const auto & key = state->getJoinKey(key_getter);
-            const auto & key2 = key_getter.deserializeJoinKey(ptr + row_layout.key_offset);
+            const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, state->hash, ptr);
             collision += !key_is_equal;
             if (key_is_equal)
             {
                 ++current_offset;
                 selective_offsets.push_back(state->index);
-                insertRowToBatch(ptr + row_layout.key_offset, key_getter.getJoinKeySize(key2));
+                insertRowToBatch(ptr + key_offset, key_getter.getJoinKeySize(key2));
                 if unlikely (current_offset >= context.rows)
                 {
                     if (!next_ptr)
@@ -478,7 +488,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, key_all_raw, tagged
                 }
                 if (forward)
                 {
-                    PREFETCH_READ(ptr + row_layout.next_pointer_offset);
+                    PREFETCH_READ(ptr);
                     state->ptr = ptr;
                     state->stage = ProbePrefetchStage::FindNext;
                     ++k;

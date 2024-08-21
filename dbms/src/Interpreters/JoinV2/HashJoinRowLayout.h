@@ -14,20 +14,14 @@
 
 #pragma once
 
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <absl/base/optimization.h>
+#include <Storages/KVStore/Utils.h>
 
 #include <vector>
 
 namespace DB
 {
 
-constexpr size_t ROW_ALIGN = 4;
-
-inline size_t alignRowSize(size_t size)
-{
-    return (size + ROW_ALIGN - 1) / ROW_ALIGN * ROW_ALIGN;
-}
+constexpr size_t ROW_ALIGN = 8;
 
 using RowPtr = UInt8 *;
 using RowPtrs = PaddedPODArray<RowPtr>;
@@ -36,13 +30,15 @@ struct RowContainer
 {
     PaddedPODArray<UInt8> data;
     PaddedPODArray<size_t> offsets;
+    PaddedPODArray<size_t> hashes;
 
     size_t size() const { return offsets.size(); }
 
     RowPtr getRowPtr(ssize_t row) { return &data[offsets[row - 1]]; }
+    size_t getHash(ssize_t row) { return hashes[row]; }
 };
 
-struct alignas(ABSL_CACHELINE_SIZE) MultipleRowContainer
+struct alignas(CPU_CACHE_LINE_SIZE) MultipleRowContainer
 {
     std::mutex mu;
     std::vector<RowContainer> column_rows;
@@ -80,8 +76,6 @@ struct alignas(ABSL_CACHELINE_SIZE) MultipleRowContainer
 /// 1. Null join key row(For right anti/outer join): <All Required Columns>
 struct HashJoinRowLayout
 {
-    size_t next_pointer_offset;
-    size_t key_offset;
     /// The raw join key are the same as the original data.
     /// raw_required_key_column_index + is_nullable
     std::vector<std::pair<size_t, bool>> raw_required_key_column_indexes;
@@ -91,10 +85,7 @@ struct HashJoinRowLayout
     size_t other_column_fixed_size = 0;
     bool key_all_raw_required;
 
-    ALWAYS_INLINE RowPtr getNextRowPtr(const RowPtr ptr) const
-    {
-        return unalignedLoad<RowPtr>(ptr + next_pointer_offset);
-    }
+    static RowPtr getNextRowPtr(const RowPtr ptr) { return unalignedLoad<RowPtr>(ptr); }
 };
 
 constexpr size_t ROW_PTR_TAG_BITS = 16;

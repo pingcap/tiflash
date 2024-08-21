@@ -37,7 +37,6 @@ public:
 
     template <typename HashValueType>
     bool build(
-        const HashJoinRowLayout & row_layout,
         JoinBuildWorkerData & wd,
         std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
         size_t max_build_size);
@@ -62,7 +61,6 @@ public:
 private:
     template <typename HashValueType, bool tagged_pointer>
     bool buildImpl(
-        const HashJoinRowLayout & row_layout,
         JoinBuildWorkerData & wd,
         std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
         size_t max_build_size);

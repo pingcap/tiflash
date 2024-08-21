@@ -58,7 +58,7 @@ struct JoinProbeContext
         const TiDB::TiDBCollators & collators);
 };
 
-struct alignas(ABSL_CACHELINE_SIZE) JoinProbeWorkerData
+struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 {
     size_t prefetch_iter = 0;
     std::unique_ptr<void, std::function<void(void *)>> prefetch_states;
