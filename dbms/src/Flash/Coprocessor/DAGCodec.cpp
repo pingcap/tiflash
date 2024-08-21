@@ -53,6 +53,11 @@ void encodeDAGDecimal(const Field & field, WriteBuffer & ss)
     EncodeDecimal(field, ss);
 }
 
+void encodeDAGVectorFloat32(const Array & v, WriteBuffer & ss)
+{
+    EncodeVectorFloat32(v, ss);
+}
+
 Int64 decodeDAGInt64(const String & s)
 {
     auto u = *(reinterpret_cast<const UInt64 *>(s.data()));
@@ -91,6 +96,12 @@ Field decodeDAGDecimal(const String & s)
 {
     size_t cursor = 0;
     return DecodeDecimal(cursor, s);
+}
+
+Field decodeDAGVectorFloat32(const String & s)
+{
+    size_t cursor = 0;
+    return DecodeVectorFloat32(cursor, s);
 }
 
 } // namespace DB

@@ -128,6 +128,9 @@ TiKVValue::Base encodeNotNullColumn(const Field & field, const ColumnInfo & colu
     case TiDB::TypeLongBlob:
     case TiDB::TypeJSON:
         return field.safeGet<String>();
+    case TiDB::TypeTiDBVectorFloat32:
+        // unsupported, only used in tests.
+        throw Exception("unsupported encode TiDBVectorFloat32");
     case TiDB::TypeNewDecimal:
         EncodeDecimalForRow(field, ss, column_info);
         break;
