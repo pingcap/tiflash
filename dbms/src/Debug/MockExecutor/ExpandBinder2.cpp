@@ -57,17 +57,17 @@ bool ExpandBinder2::toTiPBExecutor(
 ExecutorBinderPtr compileExpand2(
     ExecutorBinderPtr input,
     size_t & executor_index,
-    ASTPtrVec level_select_list,
+    ASTs level_select_list,
     std::vector<String> output_names,
     std::vector<tipb::FieldType> fts)
 {
     DAGSchema output_schema;
-    std::vector<std::vector<ASTPtr>> expand_exprs;
+    std::vector<ASTs> expand_exprs;
     auto input_col_size = input->output_schema.size();
     for (size_t i = 0; i < level_select_list.size(); i++)
     {
         auto level_proj = level_select_list[i];
-        std::vector<ASTPtr> level_exprs;
+        ASTs level_exprs;
         for (size_t j = 0; j < level_proj->children.size(); j++)
         {
             auto expr = level_proj->children[j];

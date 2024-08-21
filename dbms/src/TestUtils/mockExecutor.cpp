@@ -59,7 +59,7 @@ ASTPtr buildLiteral(const Field & field)
 
 ASTPtr buildOrderByItemVec(MockOrderByItemVec order_by_items)
 {
-    std::vector<ASTPtr> vec(order_by_items.size());
+    MockAstVec vec(order_by_items.size());
     size_t i = 0;
     for (auto item : order_by_items)
     {

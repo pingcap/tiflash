@@ -101,7 +101,7 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t collator_id, const Context & context);
 void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns);
 TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast);
-void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions);
+void compileFilter(const DAGSchema & input, ASTPtr ast, ASTs & conditions);
 void fillTaskMetaWithMPPInfo(mpp::TaskMeta & task_meta, const MPPInfo & mpp_info);
 
 } // namespace DB

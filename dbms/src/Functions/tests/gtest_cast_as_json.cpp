@@ -17,7 +17,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/JsonBinary.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDBTypes.h>
 #include <gtest/gtest.h>
 
 #include <string>

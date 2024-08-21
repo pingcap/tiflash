@@ -694,7 +694,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
     }
 }
 
-void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions)
+void compileFilter(const DAGSchema & input, ASTPtr ast, ASTs & conditions)
 {
     if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
