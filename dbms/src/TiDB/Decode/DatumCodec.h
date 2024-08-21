@@ -59,6 +59,8 @@ UInt64 DecodeVarUInt(size_t & cursor, const StringRef & raw_value);
 
 Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
 
+Field DecodeVectorFloat32(size_t & cursor, const String & raw_value);
+
 Field DecodeDecimal(size_t & cursor, const String & raw_value);
 
 Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info);
@@ -88,6 +90,8 @@ void EncodeBytes(const String & ori_str, WriteBuffer & ss);
 void EncodeCompactBytes(const String & str, WriteBuffer & ss);
 
 void EncodeJSON(const String & str, WriteBuffer & ss);
+
+void EncodeVectorFloat32(const Array & val, WriteBuffer & ss);
 
 void EncodeVarUInt(UInt64 num, WriteBuffer & ss);
 

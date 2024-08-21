@@ -16,10 +16,10 @@
 
 namespace TiDB
 {
-
 // Column types.
 // In format:
 // TiDB type, int value, codec flag, CH type.
+// The int value is defined in pingcap/tidb pkg/parser/mysql/type.go
 #ifdef M
 #error "Please undefine macro M first."
 #endif
@@ -51,7 +51,8 @@ namespace TiDB
     M(Blob, 0xfc, CompactBytes, String)       \
     M(VarString, 0xfd, CompactBytes, String)  \
     M(String, 0xfe, CompactBytes, String)     \
-    M(Geometry, 0xff, CompactBytes, String)
+    M(Geometry, 0xff, CompactBytes, String)   \
+    M(TiDBVectorFloat32, 0xe1, VectorFloat32, Array)
 
 enum TP
 {
@@ -66,21 +67,23 @@ enum TP
 
 // Codec flags.
 // In format: TiDB codec flag, int value.
+// Defined in pingcap/tidb pkg/util/codec/codec.go
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define CODEC_FLAGS(M) \
-    M(Nil, 0)          \
-    M(Bytes, 1)        \
-    M(CompactBytes, 2) \
-    M(Int, 3)          \
-    M(UInt, 4)         \
-    M(Float, 5)        \
-    M(Decimal, 6)      \
-    M(Duration, 7)     \
-    M(VarInt, 8)       \
-    M(VarUInt, 9)      \
-    M(Json, 10)        \
+#define CODEC_FLAGS(M)   \
+    M(Nil, 0)            \
+    M(Bytes, 1)          \
+    M(CompactBytes, 2)   \
+    M(Int, 3)            \
+    M(UInt, 4)           \
+    M(Float, 5)          \
+    M(Decimal, 6)        \
+    M(Duration, 7)       \
+    M(VarInt, 8)         \
+    M(VarUInt, 9)        \
+    M(Json, 10)          \
+    M(VectorFloat32, 20) \
     M(Max, 250)
 
 enum CodecFlag

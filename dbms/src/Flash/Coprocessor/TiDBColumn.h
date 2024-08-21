@@ -41,6 +41,7 @@ public:
     void append(const TiDBDecimal & decimal);
     void append(const TiDBBit & bit);
     void append(const TiDBEnum & ti_enum);
+    void appendVectorF32(UInt32 num_elem, StringRef elem_bytes);
     void encodeColumn(WriteBuffer & ss);
     void clear();
 
@@ -48,14 +49,17 @@ private:
     bool isFixed() const { return fixed_size != VAR_SIZE; }
     void finishAppendFixed();
     void finishAppendVar(UInt32 size);
+
     void appendNullBitMap(bool value);
+
+    // WriteBufferFromOwnString is not moveable.
+    std::unique_ptr<WriteBufferFromOwnString> data;
 
     UInt32 length;
     UInt32 null_cnt;
     std::vector<UInt8> null_bitmap;
     std::vector<Int64> var_offsets;
-    // WriteBufferFromOwnString is not moveable.
-    std::unique_ptr<WriteBufferFromOwnString> data;
+
     std::string default_value;
     UInt64 current_data_size;
     Int8 fixed_size;
