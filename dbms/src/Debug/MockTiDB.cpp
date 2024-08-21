@@ -280,7 +280,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             index_info.id = 1;
             index_info.is_primary = true;
             index_info.idx_name = "PRIMARY";
-            index_info.tbl_name = tbl_name;
             index_info.is_unique = true;
             index_info.index_type = 1;
             index_info.idx_cols.resize(string_tokens.count());
@@ -295,8 +294,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
         else
             table_info.pk_is_handle = true;
     }
-
-    table_info.comment = "Mocked.";
 
     // set storage engine type
     std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) {
