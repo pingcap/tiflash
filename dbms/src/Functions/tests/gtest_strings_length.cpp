@@ -45,8 +45,8 @@ TEST_F(StringLength, strAndStrTest)
 
     auto & factory = FunctionFactory::instance();
 
-    std::vector<String> strs{"hi~", "23333", "pingcap", "你好", "233哈哈", ""};
-    std::vector<Int64> results{3, 5, 7, 6, 9, 0};
+    std::vector<String> strs{"hi~", "23333", "pingcap", "你好", "233哈哈", "", "asdの的", "ヽ(￣▽￣)و"};
+    std::vector<Int64> results{3, 5, 7, 6, 9, 0, 9, 16};
 
     for (int i = 0; i < 2; i++)
     {
@@ -74,7 +74,7 @@ TEST_F(StringLength, strAndStrTest)
         test_block.insert({nullptr, func->getReturnType(), "res"});
         func->execute(test_block, cns, 1);
         const IColumn * res = test_block.getByPosition(1).column.get();
-        const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+        const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
 
         Field res_field;
 
@@ -134,7 +134,7 @@ TEST_F(StringLength, nullTest)
     MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
     NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
     const IColumn * res = test_block.getByPosition(1).column.get();
-    const ColumnNullable * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
+    const auto * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
     const IColumn & res_string = res_nullable_string->getNestedColumn();
 
     Field res_field;
