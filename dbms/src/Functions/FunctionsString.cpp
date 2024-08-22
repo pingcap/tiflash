@@ -4534,7 +4534,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
+        if unlikely (arguments.size() != 1)
             throw Exception(
                 fmt::format(
                     "Number of arguments for function {} doesn't match: passed {}, should be 1.",
@@ -4549,7 +4549,7 @@ public:
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        if (c0_string == nullptr)
+        if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -4588,7 +4588,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
+        if unlikely (arguments.size() != 1)
             throw Exception(
                 fmt::format(
                     "Number of arguments for function {} doesn't match: passed {}, should be 1.",
@@ -4603,7 +4603,7 @@ public:
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        if (c0_string == nullptr)
+        if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -4616,9 +4616,9 @@ public:
 
         if (val_num > 0)
             col_res->insert(offsets[0] - 1);
-        
+
         for (size_t i = 1; i < val_num; i++)
-            col_res->insert(offsets[i] - offsets[i-1] - 1);
+            col_res->insert(offsets[i] - offsets[i - 1] - 1);
 
         block.getByPosition(result).column = std::move(col_res);
     }
@@ -5013,7 +5013,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 2)
+        if unlikely (arguments.size() != 2)
             throw Exception(
                 fmt::format(
                     "Number of arguments for function {} doesn't match: passed {}, should be 2.",
@@ -5026,37 +5026,32 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
-        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        Field c0_field;
+        const IColumn * col0 = block.getByPosition(arguments[0]).column.get();
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(col0);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(col0);
 
-        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
-        const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
-        const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
-        Field c1_field;
+        const IColumn * col1 = block.getByPosition(arguments[1]).column.get();
+        const auto * c1_const = checkAndGetColumn<ColumnConst>(col1);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(col1);
 
-        if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
+        if unlikely ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (c0_col->size() != c1_col->size())
+        if unlikely (col0->size() != col1->size())
             throw Exception(
-                fmt::format("Function {} column number is inconformity", getName()),
+                fmt::format("Row number in of columns in function {} is inconformity", getName()),
                 ErrorCodes::LOGICAL_ERROR);
 
         auto col_res = ColumnInt64::create();
-        int val_num = c0_col->size();
+        int val_num = col0->size();
         col_res->reserve(val_num);
 
         for (int i = 0; i < val_num; i++)
         {
-            c0_col->get(i, c0_field);
-            c1_col->get(i, c1_field);
-
-            String c0_str = c0_field.get<String>();
-            String c1_str = c1_field.get<String>();
+            const String c0_str = col0->getDataAt(i).toString();
+            const String c1_str = col1->getDataAt(i).toString();
 
             // return -1 when c1_str not contains the c0_str
             Int64 idx = c1_str.find(c0_str);
