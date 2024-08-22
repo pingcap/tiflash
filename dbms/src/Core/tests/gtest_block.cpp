@@ -25,6 +25,8 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <numeric>
+
 using namespace DB::DM;
 using namespace DB::DM::tests;
 
@@ -183,10 +185,7 @@ void permutationRSResults(F && check)
 
 RSResult logicalAnd(const RSResults & rs_results)
 {
-    auto res = RSResult::All;
-    for (auto rs_result : rs_results)
-        res = res && rs_result;
-    return res;
+    return std::accumulate(rs_results.cbegin(), rs_results.cend(), RSResult::All, std::logical_and<>{});
 }
 
 TEST_F(BlockTest, VstackBlocksRSResult)
