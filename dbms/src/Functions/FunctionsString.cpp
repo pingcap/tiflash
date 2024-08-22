@@ -4474,6 +4474,8 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 1)
@@ -4490,24 +4492,23 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr)
+        if (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        for (int i = 0; i < val_num; i++)
+        size_t val_num = c0_col->size();
+        auto col_res = ColumnInt64::create();
+        col_res->reserve(val_num);
+
+        for (size_t i = 0; i < val_num; i++)
         {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            Int64 res = handled_str.empty() ? 0 : static_cast<Int64>(handled_str[0]);
-            col_res->insert(res);
+            const StringRef data_str = c0_string->getDataAt(i);
+            if likely (data_str.size != 0)
+                col_res->insert(data_str.data[0]);
+            else
+                col_res->insert(0);
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -4527,6 +4528,8 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 1)
@@ -4543,24 +4546,23 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr)
+        if (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        for (int i = 0; i < val_num; i++)
-        {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            col_res->insert(static_cast<Int64>(handled_str.size()));
-        }
+        size_t val_num = c0_col->size();
+        auto col_res = ColumnInt64::create();
+        col_res->reserve(val_num);
+
+        const auto & offsets = c0_string->getOffsets();
+
+        if (val_num > 0)
+            col_res->insert(offsets[0] - 1);
+        
+        for (size_t i = 1; i < val_num; i++)
+            col_res->insert(offsets[i] - offsets[i-1] - 1);
 
         block.getByPosition(result).column = std::move(col_res);
     }
