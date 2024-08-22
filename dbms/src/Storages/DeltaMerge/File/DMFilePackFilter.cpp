@@ -82,6 +82,15 @@ void DMFilePackFilter::init(ReadTag read_tag)
             pack_res.begin(),
             [](RSResult a, RSResult b) { return a && b; });
     }
+    else
+    {
+        // ColumnFileBig in DeltaValueSpace never pass a filter to DMFilePackFilter.
+        // Assume its filter always return Some.
+        std::transform(pack_res.cbegin(), pack_res.cend(), pack_res.begin(), [](RSResult a) {
+            return a && RSResult::Some;
+        });
+    }
+
     auto [none_count, some_count, all_count, all_null_count] = countPackRes();
     auto after_filter = some_count + all_count + all_null_count;
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
