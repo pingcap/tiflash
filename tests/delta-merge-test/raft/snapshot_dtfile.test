@@ -20,7 +20,7 @@
 
 #####
 ## Pre-handle region to dt files then apply
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke region_snapshot_pre_handle_file(default, test, 4, 3, 6, 'col_1 Int64', '')
@@ -84,7 +84,7 @@
 ## Recreate test table
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 ## Mock to test apply snapshot with an older schema (case 1 - add column)
@@ -119,7 +119,7 @@
 ## Recreate test table
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 ## Mock to test apply snapshot with an older schema (case 2 - drop column)
@@ -153,7 +153,7 @@
 ## Test that BR/lightning may only ingest sst files of write cf into tikv without default cf
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 # Only the sst files of write cf ingested and send to TiFlash as a snapshot, no panic, and those uncommitted data remain in memory
@@ -183,7 +183,7 @@
 ## selraw will ignore 'delete_range', so rebuild the table first
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke __region_snapshot_pre_handle_file_pks(default, test, 4, 'col_1 Int64', '', 3,4,5, 5,5,5, 5,6,7, 8,9)

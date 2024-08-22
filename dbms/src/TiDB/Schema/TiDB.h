@@ -125,7 +125,6 @@ struct ColumnInfo
     // Elems is the element list for enum and set type.
     std::vector<std::pair<std::string, Int16>> elems;
     SchemaState state = StateNone;
-    String comment;
 
 #ifdef M
 #error "Please undefine macro M first."
@@ -167,7 +166,6 @@ struct PartitionDefinition
     TableID id = DB::InvalidTableID;
     String name;
     // LessThan []string `json:"less_than"`
-    String comment;
 };
 
 struct PartitionInfo
@@ -252,7 +250,6 @@ struct IndexInfo
 
     Int64 id = -1;
     String idx_name;
-    String tbl_name;
     std::vector<IndexColumnInfo> idx_cols;
     SchemaState state = StatePublic;
     Int32 index_type = -1;
@@ -292,14 +289,12 @@ struct TableInfo
     std::vector<ColumnInfo> columns;
     /// index_infos stores the index info from TiDB. But we do not store all
     /// the index infos because most of the index info is useless in TiFlash.
-    /// If is_common_handle = true, the primary index info is stored
-    /// otherwise, all of the index info are ignored
+    /// Only the primary index info is stored now
     std::vector<IndexInfo> index_infos;
     SchemaState state = StateNone;
     bool pk_is_handle = false;
     /// when is_common_handle = true, it means this table is a clustered index table
     bool is_common_handle = false;
-    String comment;
     Timestamp update_timestamp = 0;
     bool is_partition_table = false;
     TableID belonging_table_id = DB::InvalidTableID;
@@ -313,8 +308,6 @@ struct TableInfo
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
-
-    TiDB::StorageEngine engine_type = TiDB::StorageEngine::UNSPECIFIED; // TODO(hyy):seems could be removed
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;

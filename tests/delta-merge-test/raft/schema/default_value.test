@@ -15,7 +15,7 @@
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
 
 => DBGInvoke __put_region(4, 0, 100, default, test)
 

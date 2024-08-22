@@ -1,4 +1,4 @@
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2024 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +15,10 @@
 protobuf_generate_cpp(
         dtpb_srcs dtpb_hdrs
         dmfile.proto
+        column_file.proto
+        segment.proto
 )
 
-add_library(dtpb
-        ${dtpb_srcs})
-target_include_directories(dtpb
-        PUBLIC ${Protobuf_INCLUDE_DIR})
-target_compile_options(dtpb
-        PRIVATE -Wno-unused-parameter)
+add_library(dtpb ${dtpb_srcs})
+target_include_directories(dtpb PUBLIC ${Protobuf_INCLUDE_DIR})
+target_compile_options(dtpb PRIVATE -Wno-unused-parameter)
