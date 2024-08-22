@@ -167,6 +167,15 @@ public:
         callback(data);
     }
 
+    bool canBeInsideNullable() const override { return true; }
+
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
+        override;
+
+    void insertFromDatumData(const char * data, size_t length) override;
+
+    std::pair<UInt32, StringRef> getElementRef(size_t element_idx) const;
+
 private:
     ColumnPtr data;
     ColumnPtr offsets;

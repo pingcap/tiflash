@@ -16,6 +16,7 @@
 #include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 #include <utility>

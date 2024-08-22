@@ -15,15 +15,13 @@
 #pragma once
 
 #include <TiDB/Collation/CollatorCompare.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/StringRef.h>
 
 #include <memory>
-#include <unordered_map>
 
 namespace TiDB
 {
-using TiDBCollatorPtr = class ITiDBCollator const *;
-using TiDBCollators = std::vector<TiDBCollatorPtr>;
 
 class ITiDBCollator
 {

@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB::DM::tests
 {

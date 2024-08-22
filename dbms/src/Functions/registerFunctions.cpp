@@ -50,6 +50,7 @@ void registerFunctionsRegexpInstr(FunctionFactory &);
 void registerFunctionsRegexpSubstr(FunctionFactory &);
 void registerFunctionsRegexpReplace(FunctionFactory &);
 void registerFunctionsGrouping(FunctionFactory &);
+void registerFunctionsVector(FunctionFactory &);
 
 void registerFunctions()
 {
@@ -83,6 +84,7 @@ void registerFunctions()
     registerFunctionsJson(factory);
     registerFunctionsIsIPAddr(factory);
     registerFunctionsGrouping(factory);
+    registerFunctionsVector(factory);
 }
 
 } // namespace DB
