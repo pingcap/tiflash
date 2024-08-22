@@ -73,15 +73,15 @@ TEST_F(StringASCII, strAndStrTest)
         test_block.insert({nullptr, func->getReturnType(), "res"});
         func->execute(test_block, cns, 1);
         const IColumn * res = test_block.getByPosition(1).column.get();
-        const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+        const auto * actual_res = checkAndGetColumn<ColumnInt64>(res);
 
         Field res_field;
-        std::vector<Int64> results{104, 72, 50, 35, 0};
-        for (size_t t = 0; t < results.size(); t++)
+        std::vector<Int64> expect_results{104, 72, 50, 35, 0};
+        for (size_t t = 0; t < expect_results.size(); t++)
         {
-            res_string->get(t, res_field);
+            actual_res->get(t, res_field);
             Int64 res_val = res_field.get<Int64>();
-            EXPECT_EQ(results[t], res_val);
+            EXPECT_EQ(expect_results[t], res_val);
         }
     }
 }
@@ -133,7 +133,7 @@ TEST_F(StringASCII, nullTest)
     MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
     NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
     const IColumn * res = test_block.getByPosition(1).column.get();
-    const ColumnNullable * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
+    const auto * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
     const IColumn & res_string = res_nullable_string->getNestedColumn();
 
     Field res_field;
