@@ -30,7 +30,8 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
-#include <TiDB/Schema/TiDB.h>
+#include <Storages/KVStore/StorageEngineType.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 
 #include <ext/shared_ptr_helper.h>
 
@@ -172,7 +173,7 @@ public:
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
 
-    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
+    TiDB::StorageEngine engineType() const override { return TiDB::StorageEngine::DT; }
 
     const TiDB::TableInfo & getTableInfo() const override { return tidb_table_info; }
 

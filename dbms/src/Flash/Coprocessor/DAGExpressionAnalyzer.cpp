@@ -1050,6 +1050,12 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
+    else if (checkDataTypeArray<DataTypeFloat32>(org_type.get()))
+    {
+        tipb::Expr const_expr = constructZeroVectorFloat32TiExpr();
+        auto const_expr_name = getActions(const_expr, actions);
+        return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
+    }
     throw TiFlashException(
         fmt::format("Filter on {} is not supported.", org_type->getName()),
         Errors::Coprocessor::Unimplemented);
@@ -1145,7 +1151,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
     const std::vector<UInt8> & may_need_add_cast_column,
-    const ColumnInfos & table_scan_columns)
+    const TiDB::ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
     std::vector<String> casted_columns;

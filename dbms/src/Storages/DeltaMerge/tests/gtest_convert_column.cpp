@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
 namespace DB::DM::tests

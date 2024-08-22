@@ -20,7 +20,6 @@
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/TableLockHolder.h>
-#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

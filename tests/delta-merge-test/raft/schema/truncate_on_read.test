@@ -20,7 +20,7 @@
 
 
 
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
 => DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 'test1')

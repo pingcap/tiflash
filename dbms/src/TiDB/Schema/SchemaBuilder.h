@@ -87,7 +87,7 @@ private:
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id, std::string_view action);
 
-    void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
+    void applyRecoverTable(DatabaseID database_id, TableID table_id);
     void applyRecoverLogicalTable(
         DatabaseID database_id,
         const TiDB::TableInfoPtr & table_info,
@@ -103,7 +103,7 @@ private:
         const TiDB::TableInfoPtr & table_info,
         const ManageableStoragePtr & storage);
 
-    void applyRenameTable(DatabaseID database_id, TiDB::TableID table_id);
+    void applyRenameTable(DatabaseID database_id, TableID table_id);
 
     void applyRenameLogicalTable(
         DatabaseID new_database_id,

@@ -18,7 +18,7 @@
 => DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __refresh_schemas()
 
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __region_snapshot(4, 0, 1000, default, test)
 => DBGInvoke __region_ingest_sst(default, test, 4, 3, 6)
 => DBGInvoke query_mapped('select * from \$d.\$t', default, test)

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Parsers/IAST_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
@@ -25,7 +26,6 @@
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/StorageEngineType.h>
 
-#include <condition_variable>
 #include <magic_enum.hpp>
 
 namespace TiDB
@@ -48,10 +48,6 @@ namespace tests
 {
 class KVStoreTestBase;
 } // namespace tests
-
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-using ASTs = std::vector<ASTPtr>;
 
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;

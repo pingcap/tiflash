@@ -173,6 +173,11 @@ public:
         throw Exception("Method decodeTiDBRowV2Datum is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    virtual void insertFromDatumData(const char *, size_t)
+    {
+        throw Exception("Method insertFromDatumData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Like getData, but has special behavior for columns that contain variable-length strings.
     /// In this special case inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
     virtual void insertDataWithTerminatingZero(const char * pos, size_t length) { insertData(pos, length); }

@@ -2219,7 +2219,7 @@ try
     TiDB::ColumnInfo a, b;
     a.id = 1;
     b.id = 2;
-    ColumnInfos column_infos = {a, b};
+    TiDB::ColumnInfos column_infos = {a, b};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         pushed_down_filters, // Not care now

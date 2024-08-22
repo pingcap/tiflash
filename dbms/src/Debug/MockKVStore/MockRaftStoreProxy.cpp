@@ -674,7 +674,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, "mock apply snapshot error {}", e.message());
+        LOG_ERROR(log, "mock apply snapshot exception {}", e.message());
         e.rethrow();
     }
     LOG_FATAL(DB::Logger::get(), "Should not happen");
@@ -694,8 +694,8 @@ TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTCont
     }
     MockTiDB::instance().newDataBase("d");
     // Make sure there is a table with smaller id.
-    MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "", "dt");
-    UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
+    MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "");
+    UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "");
 
     auto schema_syncer = tmt.getSchemaSyncerManager();
     schema_syncer->syncSchemas(ctx, NullspaceID);
