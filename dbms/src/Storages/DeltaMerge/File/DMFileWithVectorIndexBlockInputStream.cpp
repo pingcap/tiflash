@@ -178,7 +178,7 @@ Block DMFileWithVectorIndexBlockInputStream::readByIndexReader()
     // Skip as many packs as possible according to Pack Filter
     while (index_reader_next_pack_id < all_packs)
     {
-        if (isUse(pack_res[index_reader_next_pack_id]))
+        if (pack_res[index_reader_next_pack_id].isUse())
             break;
         index_reader_next_row_id += pack_stats[index_reader_next_pack_id].rows;
         index_reader_next_pack_id++;
@@ -399,10 +399,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
     scan_context->total_vector_idx_search_discarded_nodes += discarded_nodes;
     scan_context->total_vector_idx_search_visited_nodes += visited_nodes;
 
-    vec_column_reader = std::make_shared<VectorColumnFromIndexReader>( //
-        dmfile,
-        vec_index,
-        sorted_results);
+    vec_column_reader = std::make_shared<VectorColumnFromIndexReader>(dmfile, vec_index, sorted_results);
 
     // Vector index is very likely to filter out some packs. For example,
     // if we query for Top 1, then only 1 pack will be remained. So we
@@ -420,8 +417,8 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
 
     for (size_t pack_id = 0, pack_id_max = dmfile->getPacks(); pack_id < pack_id_max; pack_id++)
     {
-        if (isUse(pack_res[pack_id]))
-            valid_packs_before_search++;
+        if (pack_res[pack_id].isUse())
+            ++valid_packs_before_search;
 
         bool pack_has_result = false;
 
@@ -437,8 +434,8 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
         if (!pack_has_result)
             pack_res[pack_id] = RSResult::None;
 
-        if (isUse(pack_res[pack_id]))
-            valid_packs_after_search++;
+        if (pack_res[pack_id].isUse())
+            ++valid_packs_after_search;
 
         pack_start = pack_end;
     }
