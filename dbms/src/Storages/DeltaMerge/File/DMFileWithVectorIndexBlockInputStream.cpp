@@ -331,6 +331,8 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorIndex()
 
         auto download_duration = watch.elapsedSeconds();
         duration_load_index += download_duration;
+
+        GET_METRIC(tiflash_vector_index_duration, type_download).Observe(download_duration);
     }
     else
     {

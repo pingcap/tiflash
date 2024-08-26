@@ -29,6 +29,8 @@ class VectorIndexHNSWBuilder : public VectorIndexBuilder
 public:
     explicit VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_);
 
+    ~VectorIndexHNSWBuilder() override;
+
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark) override;
 
     void save(std::string_view path) const override;
@@ -36,6 +38,9 @@ public:
 private:
     USearchImplType index;
     UInt64 added_rows = 0; // Includes nulls and deletes. Used as the index key.
+
+    mutable double total_duration = 0;
+    size_t last_reported_memory_usage = 0;
 };
 
 class VectorIndexHNSWViewer : public VectorIndexViewer
@@ -43,9 +48,9 @@ class VectorIndexHNSWViewer : public VectorIndexViewer
 public:
     static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & props, std::string_view path);
 
-    explicit VectorIndexHNSWViewer(const dtpb::VectorIndexFileProps & props)
-        : VectorIndexViewer(props)
-    {}
+    explicit VectorIndexHNSWViewer(const dtpb::VectorIndexFileProps & props);
+
+    ~VectorIndexHNSWViewer() override;
 
     std::vector<Key> search(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const override;
 
@@ -53,6 +58,8 @@ public:
 
 private:
     USearchImplType index;
+
+    size_t last_reported_memory_usage = 0;
 };
 
 } // namespace DB::DM
