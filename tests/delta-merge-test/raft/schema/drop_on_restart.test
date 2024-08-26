@@ -28,8 +28,8 @@
 # share the same data path
 => DBGInvoke __mock_tidb_db(db3)
 => DBGInvoke __mock_tidb_db(db4)
-=> DBGInvoke __mock_tidb_table(db3, test3, 'col_1 String', '', 'dt')
-=> DBGInvoke __mock_tidb_table(db4, test, 'col_1 String', '', 'dt')
+=> DBGInvoke __mock_tidb_table(db3, test3, 'col_1 String')
+=> DBGInvoke __mock_tidb_table(db4, test, 'col_1 String')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __refresh_mapped_table_schema(db3, test3)
 => DBGInvoke __refresh_mapped_table_schema(db4, test)

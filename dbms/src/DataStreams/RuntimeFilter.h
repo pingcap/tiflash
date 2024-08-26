@@ -77,7 +77,7 @@ public:
 
     bool await(int64_t ms_remaining);
 
-    void setTargetAttr(const DM::ColumnInfos & scan_column_infos, const DM::ColumnDefines & table_column_defines);
+    void setTargetAttr(const TiDB::ColumnInfos & scan_column_infos, const DM::ColumnDefines & table_column_defines);
     DM::RSOperatorPtr parseToRSOperator() const;
 
     const int id;

@@ -126,7 +126,7 @@ private:
         PageType page_type,
         const WriteLimiterPtr & write_limiter = nullptr);
 
-    BlobFilePtr read(
+    void read(
         const PageId & page_id_v3,
         BlobFileId blob_id,
         BlobFileOffset offset,

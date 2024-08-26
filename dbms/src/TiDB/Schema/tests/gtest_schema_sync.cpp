@@ -32,6 +32,7 @@
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <limits>
@@ -43,6 +44,7 @@ namespace FailPoints
 extern const char exception_before_rename_table_old_meta_removed[];
 extern const char force_context_path[];
 extern const char force_set_num_regions_for_table[];
+extern const char random_ddl_fail_when_rename_partitions[];
 } // namespace FailPoints
 } // namespace DB
 namespace DB::tests
@@ -113,6 +115,7 @@ public:
         {
             if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
             {
+                LOG_WARNING(Logger::get(), "{}", e.message());
                 return;
             }
             else
@@ -132,6 +135,7 @@ public:
         {
             if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
             {
+                LOG_WARNING(Logger::get(), "{}", e.message());
                 return;
             }
             else
@@ -164,6 +168,14 @@ public:
         auto tbl = flash_storages.get(NullspaceID, mock_tbl->id());
         RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! db_name={}, tbl_name={}", db_name, tbl_name);
         return tbl;
+    }
+
+    DatabasePtr getTiFlashDatabase(const String & db_name)
+    {
+        auto [ok, db_id] = MockTiDB::instance().getDBIDByName(db_name);
+        if (!ok)
+            return nullptr;
+        return global_ctx.tryGetDatabase(fmt::format("db_{}", db_id));
     }
 
     /*
@@ -240,7 +252,7 @@ try
         {"t1", cols, ""},
         {"t2", cols, ""},
     };
-    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS());
 
     refreshSchema();
 
@@ -283,7 +295,7 @@ try
         {"t1", cols, ""},
         {"t2", cols, ""},
     };
-    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS());
 
     refreshSchema();
     for (auto table_id : table_ids)
@@ -338,7 +350,7 @@ try
     std::vector<std::tuple<String, ColumnsDescription, String>> tables{
         {"t1", cols, ""},
     };
-    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS());
 
     refreshSchema();
     for (auto table_id : table_ids)
@@ -408,7 +420,7 @@ try
     });
 
     MockTiDB::instance().newDataBase(db_name);
-    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
+    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "");
     auto part1_id
         = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
     auto part2_id
@@ -450,6 +462,230 @@ try
 }
 CATCH
 
+TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabase)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String new_db_name = "mock_new_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+
+    MockTiDB::instance().newDataBase(db_name);
+    MockTiDB::instance().newDataBase(new_db_name);
+
+    auto [logical_table_id, physical_table_ids] = MockTiDB::instance().newPartitionTable( //
+        db_name,
+        tbl_name,
+        cols,
+        pd_client->getTS(),
+        "",
+        {"red", "blue", "yellow"});
+
+    ASSERT_EQ(physical_table_ids.size(), 3);
+
+    refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(physical_table_ids[0]);
+    // refreshTableSchema(physical_table_ids[1]); // mock that physical_table[1] have no data neither read
+    refreshTableSchema(physical_table_ids[2]);
+
+    // check partition table are created
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, tbl_name);
+        auto part0_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+
+        // physical_table[1] is not created
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    // Rename the partition table across database
+    const String new_tbl_name = "mock_part_tbl_renamed";
+    MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
+    refreshSchema();
+
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, new_tbl_name);
+        auto part1_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+    }
+    {
+        // All partitions are not exist in the old database
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        // All partitions should be rename to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] still not created
+        EXPECT_FALSE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    {
+        // Mock that new data write into physical_table[1], it should be created under the new_database
+        refreshTableSchema(physical_table_ids[1]);
+
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] now is created
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+}
+CATCH
+
+TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabaseWithRestart)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String new_db_name = "mock_new_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+
+    MockTiDB::instance().newDataBase(db_name);
+    MockTiDB::instance().newDataBase(new_db_name);
+
+    auto [logical_table_id, physical_table_ids] = MockTiDB::instance().newPartitionTable( //
+        db_name,
+        tbl_name,
+        cols,
+        pd_client->getTS(),
+        "",
+        {"red", "blue", "yellow"});
+
+    ASSERT_EQ(physical_table_ids.size(), 3);
+
+    refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(physical_table_ids[0]);
+    // refreshTableSchema(physical_table_ids[1]); // mock that physical_table[1] have no data neither read
+    refreshTableSchema(physical_table_ids[2]);
+
+    // check partition table are created
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, tbl_name);
+        auto part0_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+
+        // physical_table[1] is not created
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    // mock failures happen when renaming partitions of a partitioned table
+    FailPointHelper::enableRandomFailPoint(FailPoints::random_ddl_fail_when_rename_partitions, 0.5);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::random_ddl_fail_when_rename_partitions); });
+
+    // Rename the partition table across database
+    const String new_tbl_name = "mock_part_tbl_renamed";
+    MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
+    refreshSchema();
+
+    Strings not_renamed_tbls;
+    {
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        for (const auto & tbl : Strings{
+                 fmt::format("t_{}", physical_table_ids[0]),
+                 fmt::format("t_{}", physical_table_ids[2]),
+             })
+        {
+            if (!new_db->isTableExist(global_ctx, tbl))
+                not_renamed_tbls.push_back(tbl);
+        }
+    }
+    LOG_WARNING(
+        Logger::get(),
+        "mock that these partitions are not renamed before restart, not_renamed_tables={}",
+        not_renamed_tbls);
+
+    if (!not_renamed_tbls.empty())
+    {
+        // mock that tiflash restart and run the fix logic
+        resetSchemas();
+        refreshSchema();
+    }
+
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, new_tbl_name);
+        auto part1_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+    }
+    {
+        // All partitions are not exist in the old database
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        // All partitions should be rename to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] still not created
+        EXPECT_FALSE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    {
+        // Mock that new data write into physical_table[1], it should be created under the new_database
+        refreshTableSchema(physical_table_ids[1]);
+
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] now is created
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+}
+CATCH
+
 TEST_F(SchemaSyncTest, PartitionTableRestart)
 try
 {
@@ -464,7 +700,7 @@ try
     });
 
     auto db_id = MockTiDB::instance().newDataBase(db_name);
-    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
+    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "");
     auto part1_id
         = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
     auto part2_id

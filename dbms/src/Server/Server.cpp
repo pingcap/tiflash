@@ -778,14 +778,21 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
     auto disaggregated_mode = getDisaggregatedMode(config);
     if (disaggregated_mode == DisaggregatedMode::Compute)
     {
-        RNPagePreparerPool::initialize(
+        BuildReadTaskForWNPool::initialize(
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
-        RNRemoteReadTaskPool::initialize(
+
+        BuildReadTaskForWNTablePool::initialize(
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
+
+        BuildReadTaskPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+
         RNWritePageCachePool::initialize(
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
@@ -822,17 +829,23 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
     GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 400);
 
-    if (RNPagePreparerPool::instance)
+    if (BuildReadTaskForWNPool::instance)
     {
-        RNPagePreparerPool::instance->setMaxThreads(max_io_thread_count);
-        RNPagePreparerPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        RNPagePreparerPool::instance->setQueueSize(max_io_thread_count * 2);
+        BuildReadTaskForWNPool::instance->setMaxThreads(max_io_thread_count);
+        BuildReadTaskForWNPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        BuildReadTaskForWNPool::instance->setQueueSize(max_io_thread_count * 2);
     }
-    if (RNRemoteReadTaskPool::instance)
+    if (BuildReadTaskForWNTablePool::instance)
     {
-        RNRemoteReadTaskPool::instance->setMaxThreads(max_io_thread_count);
-        RNRemoteReadTaskPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        RNRemoteReadTaskPool::instance->setQueueSize(max_io_thread_count * 2);
+        BuildReadTaskForWNTablePool::instance->setMaxThreads(max_io_thread_count);
+        BuildReadTaskForWNTablePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        BuildReadTaskForWNTablePool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (BuildReadTaskPool::instance)
+    {
+        BuildReadTaskPool::instance->setMaxThreads(max_io_thread_count);
+        BuildReadTaskPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        BuildReadTaskPool::instance->setQueueSize(max_io_thread_count * 2);
     }
     if (DataStoreS3Pool::instance)
     {
@@ -1404,9 +1417,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
-                bool updated
-                    = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.
-                if (updated)
+                if (bool updated = global_context->getSecurityConfig()->update(*config); updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
                     auto cluster_config

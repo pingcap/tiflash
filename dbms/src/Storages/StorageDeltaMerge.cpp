@@ -55,6 +55,7 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 
@@ -176,7 +177,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
             /// If TableInfo from TiDB is not empty, we get column id and default value from TiDB
             auto & columns = tidb_table_info.columns;
             col_def.id = tidb_table_info.getColumnID(col_def.name);
-            auto itr = std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & v) {
+            auto itr = std::find_if(columns.begin(), columns.end(), [&](const TiDB::ColumnInfo & v) {
                 return v.id == col_def.id;
             });
             if (itr != columns.end())
@@ -462,8 +463,7 @@ public:
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(
-            fmt::format("(while writing to table `{}`.`{}`)", store->getDatabaseName(), store->getTableName()));
+        e.addMessage(fmt::format("(while writing to table `{}`)", store->getIdent()));
         throw;
     }
 
@@ -1457,12 +1457,12 @@ String StorageDeltaMerge::getTableName() const
 {
     if (storeInited())
     {
-        return _store->getTableName();
+        return _store->getTableMeta().table_name;
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getTableName();
+        return _store->getTableMeta().table_name;
     }
     return table_column_info->table_name;
 }
@@ -1471,12 +1471,12 @@ String StorageDeltaMerge::getDatabaseName() const
 {
     if (storeInited())
     {
-        return _store->getDatabaseName();
+        return _store->getTableMeta().db_name;
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getDatabaseName();
+        return _store->getTableMeta().db_name;
     }
     return table_column_info->db_name;
 }

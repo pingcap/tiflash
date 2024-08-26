@@ -207,7 +207,7 @@ bool RuntimeFilter::updateStatus(RuntimeFilterStatus status_, const std::string 
 }
 
 void RuntimeFilter::setTargetAttr(
-    const DM::ColumnInfos & scan_column_infos,
+    const TiDB::ColumnInfos & scan_column_infos,
     const DM::ColumnDefines & table_column_defines)
 {
     target_attr = DM::FilterParser::createAttr(target_expr, scan_column_infos, table_column_defines);

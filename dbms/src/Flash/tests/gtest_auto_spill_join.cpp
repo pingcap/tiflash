@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/tests/gtest_join.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 #include <magic_enum.hpp>
 

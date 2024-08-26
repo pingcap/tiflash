@@ -7,3 +7,4 @@ race:fiu_fail
 race:dbms/src/DataStreams/BlockStreamProfileInfo.h
 race:StackTrace::toString
 race:DB::SyncPointCtl::sync
+race:XXH3_hashLong_64b_withSeed_selection

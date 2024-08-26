@@ -143,16 +143,16 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
                 "start_col, [, start_col2, ..., end_col1, end_col2, ...]",
                 arg_size);
         }
-        size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
         auto key_size = arg_size / 2;
         std::vector<Field> start_field;
         start_field.reserve(key_size);
         std::vector<Field> end_field;
         end_field.reserve(key_size);
 
-        for (size_t i = 0; i < handle_column_size; i++)
+        const auto & pk_index = table_info.getPrimaryIndexInfo();
+        for (size_t i = 0; i < pk_index.idx_cols.size(); i++)
         {
-            auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
+            auto & column_info = table_info.columns[pk_index.idx_cols[i].offset];
             auto start_datum = TiDB::DatumBumpy(
                 RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[OFFSET + i]).value),
                 column_info.tp);

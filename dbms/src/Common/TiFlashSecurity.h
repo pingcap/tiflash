@@ -41,8 +41,6 @@ extern const int INVALID_CONFIG_PARAMETER;
 class TiFlashSecurityConfig : public ConfigObject
 {
 public:
-    TiFlashSecurityConfig() = default;
-
     explicit TiFlashSecurityConfig(const LoggerPtr & log_)
         : log(log_)
     {}
@@ -54,12 +52,6 @@ public:
             update(config);
             inited = true;
         }
-    }
-
-    void setLog(const LoggerPtr & log_)
-    {
-        std::unique_lock lock(mu);
-        log = log_;
     }
 
     bool hasTlsConfig()
@@ -96,31 +88,7 @@ public:
     bool update(Poco::Util::AbstractConfiguration & config)
     {
         std::unique_lock lock(mu);
-        if (config.has("security"))
-        {
-            if (inited && !has_security)
-            {
-                LOG_WARNING(log, "Can't add security config online");
-                return false;
-            }
-            has_security = true;
-
-            bool cert_file_updated = updateCertPath(config);
-
-            if (config.has("security.cert_allowed_cn") && has_tls_config)
-            {
-                String verify_cns = config.getString("security.cert_allowed_cn");
-                allowed_common_names = parseAllowedCN(verify_cns);
-            }
-
-            // Mostly options name are combined with "_", keep this style
-            if (config.has("security.redact_info_log"))
-            {
-                redact_info_log = parseRedactLog(config.getString("security.redact_info_log"));
-            }
-            return cert_file_updated;
-        }
-        else
+        if (!config.has("security"))
         {
             if (inited && has_security)
             {
@@ -130,8 +98,31 @@ public:
             {
                 LOG_INFO(log, "security config is not set");
             }
+            return false;
         }
-        return false;
+
+        assert(config.has("security"));
+        if (inited && !has_security)
+        {
+            LOG_WARNING(log, "Can't add security config online");
+            return false;
+        }
+        has_security = true;
+
+        bool cert_file_updated = updateCertPath(config);
+
+        if (config.has("security.cert_allowed_cn") && has_tls_config)
+        {
+            String verify_cns = config.getString("security.cert_allowed_cn");
+            allowed_common_names = parseAllowedCN(verify_cns);
+        }
+
+        // Mostly options name are combined with "_", keep this style
+        if (config.has("security.redact_info_log"))
+        {
+            redact_info_log = parseRedactLog(config.getString("security.redact_info_log"));
+        }
+        return cert_file_updated;
     }
 
     static RedactMode parseRedactLog(const String & config_str)
@@ -272,18 +263,18 @@ private:
         String new_key_path;
         if (config.has("security.ca_path"))
         {
-            new_ca_path = config.getString("security.ca_path");
-            miss_ca_path = false;
+            new_ca_path = Poco::trim(config.getString("security.ca_path"));
+            miss_ca_path = new_ca_path.empty();
         }
         if (config.has("security.cert_path"))
         {
-            new_cert_path = config.getString("security.cert_path");
-            miss_cert_path = false;
+            new_cert_path = Poco::trim(config.getString("security.cert_path"));
+            miss_cert_path = new_cert_path.empty();
         }
         if (config.has("security.key_path"))
         {
-            new_key_path = config.getString("security.key_path");
-            miss_key_path = false;
+            new_key_path = Poco::trim(config.getString("security.key_path"));
+            miss_key_path = new_key_path.empty();
         }
 
         if (miss_ca_path && miss_cert_path && miss_key_path)
@@ -358,8 +349,10 @@ private:
     String key_path;
 
     FilesChangesTracker cert_files;
-    RedactMode redact_info_log = RedactMode::Disable;
     std::set<String> allowed_common_names;
+
+    RedactMode redact_info_log = RedactMode::Disable;
+
     bool has_tls_config = false;
     bool has_security = false;
     bool inited = false;

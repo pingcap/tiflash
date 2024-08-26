@@ -14,7 +14,7 @@
 
 #include <Core/Types.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <city.h>
 
@@ -50,7 +50,7 @@ CompressedWriteBuffer<add_legacy_checksum>::CompressedWriteBuffer(
     : BufferWithOwnMemory<WriteBuffer>(buf_size)
     , out(out_)
     , compression_settings(compression_settings_)
-    , codec(CompressionFactory::create(compression_settings))
+    , codec(CompressionCodecFactory::create(compression_settings))
 {}
 
 template <bool add_legacy_checksum>
