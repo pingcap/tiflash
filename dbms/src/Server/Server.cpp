@@ -1108,27 +1108,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
-<<<<<<< HEAD
-=======
-            DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
-            if (FileCache::instance() != nullptr)
-            {
-                FileCache::instance()->updateConfig(global_context->getSettingsRef());
-            }
-            {
-                // update TiFlashSecurity and related config in client for ssl certificate reload.
-                if (bool updated = global_context->getSecurityConfig()->update(*config); updated)
-                {
-                    auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                    auto cluster_config
-                        = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
-                    global_context->getTMTContext().updateSecurityConfig(
-                        std::move(raft_config),
-                        std::move(cluster_config));
-                    LOG_DEBUG(log, "TMTContext updated security config");
-                }
-            }
->>>>>>> 951e010ab8 (security: Allow empty security config for disabling tls (#9234))
         },
         /* already_loaded = */ true);
 
