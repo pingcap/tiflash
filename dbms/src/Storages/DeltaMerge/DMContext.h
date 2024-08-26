@@ -133,7 +133,8 @@ public:
         TableID physical_table_id_,
         bool is_common_handle_,
         size_t rowkey_column_size_,
-        const DB::Settings & settings)
+        const DB::Settings & settings,
+        const ScanContextPtr & scan_context = nullptr)
     {
         return std::unique_ptr<DMContext>(new DMContext(
             session_context_,
@@ -145,7 +146,7 @@ public:
             is_common_handle_,
             rowkey_column_size_,
             settings,
-            nullptr,
+            scan_context,
             ""));
     }
 

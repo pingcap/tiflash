@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/File/VectorColumnFromIndexReader.h>
+
+#include <algorithm>
 
 
 namespace DB::DM
@@ -31,18 +34,22 @@ std::vector<UInt32> VectorColumnFromIndexReader::calcPackStartRowID(const DMFile
 }
 
 MutableColumnPtr VectorColumnFromIndexReader::calcResultsByPack(
-    std::vector<VectorIndex::Key> && results,
+    const std::vector<VectorIndexViewer::Key> & sorted_results,
     const DMFileMeta::PackStats & pack_stats,
     const std::vector<UInt32> & pack_start_rowid)
 {
     auto column = ColumnArray::create(ColumnUInt32::create());
 
-    // results must be in ascending order.
-    std::sort(results.begin(), results.end());
+#ifndef NDEBUG
+    {
+        const auto sorted = std::is_sorted(sorted_results.begin(), sorted_results.end());
+        RUNTIME_CHECK(sorted);
+    }
+#endif
 
     std::vector<UInt32> offsets_in_pack;
     size_t results_it = 0;
-    const size_t results_it_max = results.size();
+    const size_t results_it_max = sorted_results.size();
     for (size_t pack_id = 0, pack_id_max = pack_start_rowid.size(); pack_id < pack_id_max; pack_id++)
     {
         offsets_in_pack.clear();
@@ -51,10 +58,10 @@ MutableColumnPtr VectorColumnFromIndexReader::calcResultsByPack(
         UInt32 pack_end = pack_start + pack_stats[pack_id].rows;
 
         while (results_it < results_it_max //
-               && results[results_it] >= pack_start //
-               && results[results_it] < pack_end)
+               && sorted_results[results_it] >= pack_start //
+               && sorted_results[results_it] < pack_end)
         {
-            offsets_in_pack.push_back(results[results_it] - pack_start);
+            offsets_in_pack.push_back(sorted_results[results_it] - pack_start);
             results_it++;
         }
 
@@ -73,7 +80,6 @@ void VectorColumnFromIndexReader::read(MutableColumnPtr & column, size_t start_p
 {
     std::vector<Float32> value;
     const auto * results_by_pack = checkAndGetColumn<ColumnArray>(this->results_by_pack.get());
-    checkAndGetColumn<ColumnArray>(column.get());
 
     size_t pack_id = start_pack_id;
     UInt32 remaining_rows_in_pack = pack_stats[pack_id].rows;
@@ -110,7 +116,7 @@ void VectorColumnFromIndexReader::read(MutableColumnPtr & column, size_t start_p
             RUNTIME_CHECK(filled_result_rows == offset_in_pack);
 
             // TODO(vector-index): We could fill multiple rows if rowid is continuous.
-            VectorIndex::Key rowid = pack_start_rowid[pack_id] + offset_in_pack;
+            VectorIndexViewer::Key rowid = pack_start_rowid[pack_id] + offset_in_pack;
             index->get(rowid, value);
             column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
             filled_result_rows++;

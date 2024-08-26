@@ -49,13 +49,6 @@ message ChecksumConfig {
     repeated ChecksumDebugInfo debug_info = 5;
 }
 
-// Note: This message does not contain all fields of VectorIndexInfo,
-// because this message is only used for reading the vector index carried with the column.
-message ColumnVectorIndexInfo {
-    optional string index_kind = 1;
-    optional string distance_metric = 2;
-}
-
 message ColumnStat {
     optional int64 col_id = 1;
     optional string type_name = 2;
@@ -69,8 +62,9 @@ message ColumnStat {
     optional uint64 array_sizes_bytes = 10;
     optional uint64 array_sizes_mark_bytes = 11;
 
+    reserved 101; // used before
     // TODO(vector-index) Support multiple vector index on the same column
-    optional ColumnVectorIndexInfo vector_index = 101;
+    optional VectorIndexFileProps vector_index = 102;
 }
 
 message ColumnStats {
@@ -85,4 +79,16 @@ message StableLayerMeta {
     optional uint64 valid_rows = 1;
     optional uint64 valid_bytes = 2;
     repeated StableFile files = 3;
+}
+
+// Note: This message is something different to VectorIndexDefinition.
+// VectorIndexDefinition defines an index, comes from table DDL.
+// It includes information about how index should be constructed,
+// for example, it contains HNSW's 'efConstruct' parameter.
+// However, VectorIndexFileProps provides information for read out the index,
+// for example, very basic information about what the index is, and how it is stored.
+message VectorIndexFileProps {
+    optional string index_kind = 1;       // The value is tipb.VectorIndexKind
+    optional string distance_metric = 2;  // The value is tipb.VectorDistanceMetric
+    optional uint64 dimensions = 3;
 }

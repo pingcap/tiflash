@@ -54,7 +54,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -1388,13 +1388,13 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
-void Context::setVectorIndexCache(size_t cache_size_in_bytes)
+void Context::setVectorIndexCache(size_t cache_entities)
 {
     auto lock = getLock();
 
     RUNTIME_CHECK(!shared->vector_index_cache);
 
-    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_size_in_bytes);
+    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_entities);
 }
 
 DM::VectorIndexCachePtr Context::getVectorIndexCache() const
@@ -1407,7 +1407,7 @@ void Context::dropVectorIndexCache() const
 {
     auto lock = getLock();
     if (shared->vector_index_cache)
-        shared->vector_index_cache->reset();
+        shared->vector_index_cache.reset();
 }
 
 bool Context::isDeltaIndexLimited() const

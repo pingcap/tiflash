@@ -16,9 +16,14 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
+#include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
+#include <tipb/executor.pb.h>
 
 #include <algorithm>
+#include <usearch/index.hpp>
+#include <usearch/index_plugins.hpp>
 
 namespace DB::ErrorCodes
 {
@@ -30,69 +35,36 @@ extern const int CANNOT_ALLOCATE_MEMORY;
 namespace DB::DM
 {
 
-template <unum::usearch::metric_kind_t Metric>
-USearchIndexWithSerialization<Metric>::USearchIndexWithSerialization(size_t dimensions)
-    : Base(Base::make(unum::usearch::metric_punned_t(dimensions, Metric)))
-{}
-
-template <unum::usearch::metric_kind_t Metric>
-void USearchIndexWithSerialization<Metric>::serialize(WriteBuffer & ostr) const
+unum::usearch::metric_kind_t getUSearchMetricKind(tipb::VectorDistanceMetric d)
 {
-    auto callback = [&ostr](void * from, size_t n) {
-        ostr.write(reinterpret_cast<const char *>(from), n);
-        return true;
-    };
-    Base::save_to_stream(callback);
-}
-
-template <unum::usearch::metric_kind_t Metric>
-void USearchIndexWithSerialization<Metric>::deserialize(ReadBuffer & istr)
-{
-    auto callback = [&istr](void * from, size_t n) {
-        istr.readStrict(reinterpret_cast<char *>(from), n);
-        return true;
-    };
-    Base::load_from_stream(callback);
-}
-
-template class USearchIndexWithSerialization<unum::usearch::metric_kind_t::l2sq_k>;
-template class USearchIndexWithSerialization<unum::usearch::metric_kind_t::cos_k>;
-
-constexpr TiDB::DistanceMetric toTiDBDistanceMetric(unum::usearch::metric_kind_t metric)
-{
-    switch (metric)
+    switch (d)
     {
-    case unum::usearch::metric_kind_t::l2sq_k:
-        return TiDB::DistanceMetric::L2;
-    case unum::usearch::metric_kind_t::cos_k:
-        return TiDB::DistanceMetric::COSINE;
+    case tipb::VectorDistanceMetric::INNER_PRODUCT:
+        return unum::usearch::metric_kind_t::ip_k;
+    case tipb::VectorDistanceMetric::COSINE:
+        return unum::usearch::metric_kind_t::cos_k;
+    case tipb::VectorDistanceMetric::L2:
+        return unum::usearch::metric_kind_t::l2sq_k;
     default:
-        return TiDB::DistanceMetric::INVALID;
+        // Specifically, L1 is currently unsupported by usearch.
+
+        RUNTIME_CHECK_MSG( //
+            false,
+            "Unsupported vector distance {}",
+            tipb::VectorDistanceMetric_Name(d));
     }
 }
 
-constexpr tipb::ANNQueryDistanceMetric toTiDBQueryDistanceMetric(unum::usearch::metric_kind_t metric)
+VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
+    : VectorIndexBuilder(definition_)
+    , index(USearchImplType::make(unum::usearch::metric_punned_t( //
+          definition_->dimension,
+          getUSearchMetricKind(definition->distance_metric))))
 {
-    switch (metric)
-    {
-    case unum::usearch::metric_kind_t::l2sq_k:
-        return tipb::ANNQueryDistanceMetric::L2;
-    case unum::usearch::metric_kind_t::cos_k:
-        return tipb::ANNQueryDistanceMetric::Cosine;
-    default:
-        return tipb::ANNQueryDistanceMetric::InvalidMetric;
-    }
+    RUNTIME_CHECK(definition_->kind == tipb::VectorIndexKind::HNSW);
 }
 
-template <unum::usearch::metric_kind_t Metric>
-VectorIndexHNSW<Metric>::VectorIndexHNSW(UInt32 dimensions_)
-    : VectorIndex(TiDB::VectorIndexKind::HNSW, toTiDBDistanceMetric(Metric))
-    , dimensions(dimensions_)
-    , index(std::make_shared<USearchIndexWithSerialization<Metric>>(static_cast<size_t>(dimensions_)))
-{}
-
-template <unum::usearch::metric_kind_t Metric>
-void VectorIndexHNSW<Metric>::addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark)
+void VectorIndexHNSWBuilder::addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     // Note: column may be nullable.
     const ColumnArray * col_array;
@@ -106,7 +78,7 @@ void VectorIndexHNSW<Metric>::addBlock(const IColumn & column, const ColumnVecto
 
     const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
 
-    if (!index->reserve(unum::usearch::ceil2(index->size() + column.size())))
+    if (!index.reserve(unum::usearch::ceil2(index.size() + column.size())))
     {
         throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Could not reserve memory for HNSW index");
     }
@@ -125,12 +97,12 @@ void VectorIndexHNSW<Metric>::addBlock(const IColumn & column, const ColumnVecto
             continue;
 
         // Expect all data to have matching dimensions.
-        RUNTIME_CHECK(col_array->sizeAt(i) == dimensions);
+        RUNTIME_CHECK(col_array->sizeAt(i) == definition->dimension);
 
         auto data = col_array->getDataAt(i);
-        RUNTIME_CHECK(data.size == dimensions * sizeof(Float32));
+        RUNTIME_CHECK(data.size == definition->dimension * sizeof(Float32));
 
-        if (auto rc = index->add(row_offset, reinterpret_cast<const Float32 *>(data.data)); !rc)
+        if (auto rc = index.add(row_offset, reinterpret_cast<const Float32 *>(data.data)); !rc)
             throw Exception(
                 ErrorCodes::INCORRECT_DATA,
                 "Failed to add vector to HNSW index, i={} row_offset={} error={}",
@@ -140,76 +112,89 @@ void VectorIndexHNSW<Metric>::addBlock(const IColumn & column, const ColumnVecto
     }
 }
 
-template <unum::usearch::metric_kind_t Metric>
-void VectorIndexHNSW<Metric>::serializeBinary(WriteBuffer & ostr) const
+void VectorIndexHNSWBuilder::save(std::string_view path) const
 {
-    writeStringBinary(magic_enum::enum_name(kind), ostr);
-    writeStringBinary(magic_enum::enum_name(distance_metric), ostr);
-    writeIntBinary<UInt32>(dimensions, ostr);
-    index->serialize(ostr);
+    auto result = index.save(unum::usearch::output_file_t(path.data()));
+    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
 }
 
-template <unum::usearch::metric_kind_t Metric>
-VectorIndexPtr VectorIndexHNSW<Metric>::deserializeBinary(ReadBuffer & istr)
+VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProps & file_props, std::string_view path)
 {
-    String kind;
-    readStringBinary(kind, istr);
-    RUNTIME_CHECK(magic_enum::enum_cast<TiDB::VectorIndexKind>(kind) == TiDB::VectorIndexKind::HNSW);
+    RUNTIME_CHECK(file_props.index_kind() == tipb::VectorIndexKind_Name(tipb::VectorIndexKind::HNSW));
 
-    String distance_metric;
-    readStringBinary(distance_metric, istr);
-    RUNTIME_CHECK(magic_enum::enum_cast<TiDB::DistanceMetric>(distance_metric) == toTiDBDistanceMetric(Metric));
+    tipb::VectorDistanceMetric metric;
+    RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
+    RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
-    UInt32 dimensions;
-    readIntBinary(dimensions, istr);
+    auto vi = std::make_shared<VectorIndexHNSWViewer>(file_props);
+    vi->index = USearchImplType::make(unum::usearch::metric_punned_t( //
+        file_props.dimensions(),
+        getUSearchMetricKind(metric)));
+    auto result = vi->index.view(unum::usearch::memory_mapped_file_t(path.data()));
+    RUNTIME_CHECK_MSG(result, "Failed to load vector index: {}", result.error.what());
 
-    auto vi = std::make_shared<VectorIndexHNSW<Metric>>(dimensions);
-    vi->index->deserialize(istr);
     return vi;
 }
 
-template <unum::usearch::metric_kind_t Metric>
-std::vector<VectorIndex::Key> VectorIndexHNSW<Metric>::search(
+std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
     const ANNQueryInfoPtr & query_info,
-    const RowFilter & valid_rows,
-    SearchStatistics & statistics) const
+    const RowFilter & valid_rows) const
 {
     RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32));
     auto query_vec_size = readLittleEndian<UInt32>(query_info->ref_vec_f32().data());
-    if (query_vec_size != dimensions)
+    if (query_vec_size != file_props.dimensions())
         throw Exception(
             ErrorCodes::INCORRECT_QUERY,
             "Query vector size {} does not match index dimensions {}",
             query_vec_size,
-            dimensions);
+            file_props.dimensions());
 
     RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32) + query_vec_size * sizeof(Float32));
 
-    if (query_info->distance_metric() != toTiDBQueryDistanceMetric(Metric))
+    if (tipb::VectorDistanceMetric_Name(query_info->distance_metric()) != file_props.distance_metric())
         throw Exception(
             ErrorCodes::INCORRECT_QUERY,
             "Query distance metric {} does not match index distance metric {}",
-            tipb::ANNQueryDistanceMetric_Name(query_info->distance_metric()),
-            tipb::ANNQueryDistanceMetric_Name(toTiDBQueryDistanceMetric(Metric)));
+            tipb::VectorDistanceMetric_Name(query_info->distance_metric()),
+            file_props.distance_metric());
 
-    RUNTIME_CHECK(index != nullptr);
+    std::atomic<size_t> visited_nodes = 0;
+    std::atomic<size_t> discarded_nodes = 0;
+    std::atomic<bool> has_exception_in_search = false;
 
     // The non-valid rows should be discarded by this lambda
-    auto predicate
-        = [&valid_rows, &statistics](typename USearchIndexWithSerialization<Metric>::member_cref_t const & member) {
-              statistics.visited_nodes++;
-              if (!valid_rows[member.key])
-                  statistics.discarded_nodes++;
-              return valid_rows[member.key];
-          };
+    auto predicate = [&](typename USearchImplType::member_cref_t const & member) {
+        // Must catch exceptions in the predicate, because search runs on other threads.
+        try
+        {
+            // Note: We don't increase the thread_local perf, because search runs on other threads.
+            visited_nodes++;
+            if (!valid_rows[member.key])
+                discarded_nodes++;
+            return valid_rows[member.key];
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            has_exception_in_search = true;
+            return false;
+        }
+    };
 
     // TODO(vector-index): Support efSearch.
-    auto result = index->search( //
+    auto result = index.search( //
         reinterpret_cast<const Float32 *>(query_info->ref_vec_f32().data() + sizeof(UInt32)),
         query_info->top_k(),
         predicate);
+
+    if (has_exception_in_search)
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Exception happened occurred during search");
+
     std::vector<Key> keys(result.size());
     result.dump_to(keys.data());
+
+    PerfContext::vector_search.visited_nodes += visited_nodes;
+    PerfContext::vector_search.discarded_nodes += discarded_nodes;
 
     // For some reason usearch does not always do the predicate for all search results.
     // So we need to filter again.
@@ -220,14 +205,10 @@ std::vector<VectorIndex::Key> VectorIndexHNSW<Metric>::search(
     return keys;
 }
 
-template <unum::usearch::metric_kind_t Metric>
-void VectorIndexHNSW<Metric>::get(Key key, std::vector<Float32> & out) const
+void VectorIndexHNSWViewer::get(Key key, std::vector<Float32> & out) const
 {
-    out.resize(dimensions);
-    index->get(key, out.data());
+    out.resize(file_props.dimensions());
+    index.get(key, out.data());
 }
-
-template class VectorIndexHNSW<unum::usearch::metric_kind_t::l2sq_k>;
-template class VectorIndexHNSW<unum::usearch::metric_kind_t::cos_k>;
 
 } // namespace DB::DM

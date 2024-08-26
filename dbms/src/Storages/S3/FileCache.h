@@ -26,6 +26,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <mutex>
@@ -71,6 +72,8 @@ public:
         return status == Status::Complete;
     }
 
+    Status waitForNotEmpty();
+
     void setSize(UInt64 size_)
     {
         std::lock_guard lock(mtx);
@@ -81,6 +84,8 @@ public:
     {
         std::lock_guard lock(mtx);
         status = s;
+        if (status != Status::Empty)
+            cv_ready.notify_all();
     }
 
     UInt64 getSize() const
@@ -126,6 +131,7 @@ private:
     UInt64 size;
     const FileType file_type;
     std::chrono::time_point<std::chrono::system_clock> last_access_time;
+    std::condition_variable cv_ready;
 };
 
 using FileSegmentPtr = std::shared_ptr<FileSegment>;
@@ -219,6 +225,13 @@ public:
         const S3::S3FilenameView & s3_fname,
         const std::optional<UInt64> & filesize);
 
+    /// Download the file if it is not in the local cache and returns the
+    /// file guard of the local cache file. When file guard is alive,
+    /// local file will not be evicted.
+    FileSegmentPtr downloadFileForLocalRead(
+        const S3::S3FilenameView & s3_fname,
+        const std::optional<UInt64> & filesize);
+
     void updateConfig(const Settings & settings);
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -233,8 +246,14 @@ public:
     DISALLOW_COPY_AND_MOVE(FileCache);
 
     FileSegmentPtr get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize = std::nullopt);
+    /// Try best to wait until the file is available in cache. If the file is not in cache, it will download the file in foreground.
+    /// It may return nullptr after wait. In this case the caller could retry.
+    FileSegmentPtr getOrWait(
+        const S3::S3FilenameView & s3_fname,
+        const std::optional<UInt64> & filesize = std::nullopt);
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
+    void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void download(const String & s3_key, FileSegmentPtr & file_seg);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg);
 

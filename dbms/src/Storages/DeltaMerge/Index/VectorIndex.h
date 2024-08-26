@@ -16,92 +16,75 @@
 
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
-#include <Common/LRUCache.h>
 #include <DataTypes/IDataType.h>
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
+#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <TiDB/Schema/VectorIndex.h>
 
-namespace DB
-{
-namespace DM
+
+namespace DB::DM
 {
 
-class VectorIndex
+/// Builds a VectorIndex in memory.
+class VectorIndexBuilder
 {
 public:
     /// The key is the row's offset in the DMFile.
     using Key = UInt32;
 
+public:
+    static VectorIndexBuilderPtr create(const TiDB::VectorIndexDefinitionPtr & definition);
+
+    static bool isSupportedType(const IDataType & type);
+
+public:
+    explicit VectorIndexBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
+        : definition(definition_)
+    {}
+
+    virtual ~VectorIndexBuilder() = default;
+
+    virtual void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark) = 0;
+
+    virtual void save(std::string_view path) const = 0;
+
+public:
+    const TiDB::VectorIndexDefinitionPtr definition;
+};
+
+/// Views a VectorIndex file.
+/// It may nor may not read the whole content of the file into memory.
+class VectorIndexViewer
+{
+public:
+    /// The key is the row's offset in the DMFile.
+    using Key = VectorIndexBuilder::Key;
+
     /// True bit means the row is valid and should be kept in the search result.
     /// False bit lets the row filtered out and will search for more results.
     using RowFilter = BitmapFilterView;
 
-    struct SearchStatistics
-    {
-        size_t visited_nodes = 0;
-        size_t discarded_nodes = 0; // Rows filtered out by MVCC
-    };
+public:
+    static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & file_props, std::string_view path);
 
-    static bool isSupportedType(const IDataType & type);
-
-    static VectorIndexPtr create(const TiDB::VectorIndexInfo & index_info);
-
-    static VectorIndexPtr load(TiDB::VectorIndexKind kind, TiDB::DistanceMetric distance_metric, ReadBuffer & istr);
-
-    VectorIndex(TiDB::VectorIndexKind kind_, TiDB::DistanceMetric distance_metric_)
-        : kind(kind_)
-        , distance_metric(distance_metric_)
+public:
+    explicit VectorIndexViewer(const dtpb::VectorIndexFileProps & file_props_)
+        : file_props(file_props_)
     {}
 
-    virtual ~VectorIndex() = default;
-
-    virtual void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark) = 0;
-
-    virtual void serializeBinary(WriteBuffer & ostr) const = 0;
-
-    virtual size_t memoryUsage() const = 0;
+    virtual ~VectorIndexViewer() = default;
 
     // Invalid rows in `valid_rows` will be discared when applying the search
-    virtual std::vector<Key> search( //
-        const ANNQueryInfoPtr & query_info,
-        const RowFilter & valid_rows,
-        SearchStatistics & statistics) const
-        = 0;
+    virtual std::vector<Key> search(const ANNQueryInfoPtr & queryInfo, const RowFilter & valid_rows) const = 0;
 
     // Get the value (i.e. vector content) of a Key.
     virtual void get(Key key, std::vector<Float32> & out) const = 0;
 
 public:
-    const TiDB::VectorIndexKind kind;
-    const TiDB::DistanceMetric distance_metric;
+    const dtpb::VectorIndexFileProps file_props;
 };
 
-struct VectorIndexWeightFunction
-{
-    size_t operator()(const String &, const VectorIndex & index) const { return index.memoryUsage(); }
-};
-
-class VectorIndexCache : public LRUCache<String, VectorIndex, std::hash<String>, VectorIndexWeightFunction>
-{
-private:
-    using Base = LRUCache<String, VectorIndex, std::hash<String>, VectorIndexWeightFunction>;
-
-public:
-    explicit VectorIndexCache(size_t max_size_in_bytes)
-        : Base(max_size_in_bytes)
-    {}
-
-    template <typename LoadFunc>
-    MappedPtr getOrSet(const Key & key, LoadFunc && load)
-    {
-        auto result = Base::getOrSet(key, load);
-        return result.first;
-    }
-};
-
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

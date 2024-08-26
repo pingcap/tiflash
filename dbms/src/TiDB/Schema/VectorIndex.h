@@ -16,6 +16,7 @@
 
 #include <Core/Types.h>
 #include <fmt/format.h>
+#include <tipb/executor.pb.h>
 
 #include <magic_enum.hpp>
 #include <memory>
@@ -23,80 +24,49 @@
 namespace TiDB
 {
 
-enum class VectorIndexKind
+// Constructed from table definition.
+struct VectorIndexDefinition
 {
-    INVALID = 0,
-
-    // Note: Field names must match TiDB's enum definition.
-    HNSW,
-};
-
-enum class DistanceMetric
-{
-    INVALID = 0,
-
-    // Note: Field names must match TiDB's enum definition.
-    L1,
-    L2,
-    COSINE,
-    INNER_PRODUCT,
-};
-
-
-struct VectorIndexInfo
-{
-    VectorIndexKind kind = VectorIndexKind::INVALID;
+    tipb::VectorIndexKind kind = tipb::VectorIndexKind::INVALID_INDEX_KIND;
     UInt64 dimension = 0;
-    DistanceMetric distance_metric = DistanceMetric::INVALID;
+    tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
+
+    // TODO(vector-index): There are possibly more fields, like efConstruct.
+    // Will be added later.
 };
 
-using VectorIndexInfoPtr = std::shared_ptr<VectorIndexInfo>;
+// As this is constructed from TiDB's table definition, we should not
+// ever try to modify it anyway.
+using VectorIndexDefinitionPtr = std::shared_ptr<const VectorIndexDefinition>;
+
+// Defined in TiDB pkg/types/vector.go
+static constexpr Int64 MAX_VECTOR_DIMENSION = 16383;
 
 } // namespace TiDB
 
 template <>
-struct fmt::formatter<TiDB::VectorIndexKind>
+struct fmt::formatter<TiDB::VectorIndexDefinition>
 {
     static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(const TiDB::VectorIndexKind & v, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const TiDB::VectorIndexDefinition & vi, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "{}", magic_enum::enum_name(v));
+        return fmt::format_to(
+            ctx.out(), //
+            "{}:{}",
+            tipb::VectorIndexKind_Name(vi.kind),
+            tipb::VectorDistanceMetric_Name(vi.distance_metric));
     }
 };
 
 template <>
-struct fmt::formatter<TiDB::DistanceMetric>
+struct fmt::formatter<TiDB::VectorIndexDefinitionPtr>
 {
     static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(const TiDB::DistanceMetric & d, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        return fmt::format_to(ctx.out(), "{}", magic_enum::enum_name(d));
-    }
-};
-
-template <>
-struct fmt::formatter<TiDB::VectorIndexInfo>
-{
-    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const TiDB::VectorIndexInfo & vi, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        return fmt::format_to(ctx.out(), "{}:{}", vi.kind, vi.distance_metric);
-    }
-};
-
-template <>
-struct fmt::formatter<TiDB::VectorIndexInfoPtr>
-{
-    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const TiDB::VectorIndexInfoPtr & vi, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const TiDB::VectorIndexDefinitionPtr & vi, FormatContext & ctx) const -> decltype(ctx.out())
     {
         if (!vi)
             return fmt::format_to(ctx.out(), "<no_idx>");

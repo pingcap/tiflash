@@ -129,7 +129,7 @@ struct ColumnInfo
     String comment;
 
     // TODO(vector-index): This index will be moved to the table level later
-    VectorIndexInfoPtr vector_index = nullptr;
+    VectorIndexDefinitionPtr vector_index = nullptr;
 
 #ifdef M
 #error "Please undefine macro M first."
