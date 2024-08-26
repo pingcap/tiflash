@@ -59,7 +59,7 @@ private:
 
     bool applyCreateSchema(DatabaseID schema_id);
 
-    void applyCreateSchema(const TiDB::DBInfoPtr & db_info);
+    void applyCreateSchemaByInfo(const TiDB::DBInfoPtr & db_info);
 
     void applyCreateTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 

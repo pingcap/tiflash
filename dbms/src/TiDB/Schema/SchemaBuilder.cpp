@@ -777,7 +777,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     // TiFlash accepts the "create database" schema diff. We need to ensure the local
     // database exist before executing renaming.
     const auto action = fmt::format("applyRenamePhysicalTable-table_id={}", new_table_info.id);
-    ensureLocalDatabaseExist(new_database_id, new_mapped_db_name, action);
+    ensureLocalDatabaseExist(new_db_info->id, new_mapped_db_name, action);
     const auto old_mapped_tbl_name = storage->getTableName();
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_column).Increment();
     LOG_INFO(
@@ -947,7 +947,7 @@ bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
     {
         return false;
     }
-    applyCreateSchema(db);
+    applyCreateSchemaByInfo(db);
     return true;
 }
 
@@ -993,10 +993,10 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr & db_info)
+void SchemaBuilder<Getter, NameMapper>::applyCreateSchemaByInfo(const TiDB::DBInfoPtr & db_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_db).Increment();
-    LOG_INFO(log, "Creating database {}", name_mapper.debugDatabaseName(*db_info));
+    LOG_INFO(log, "Create database {} begin, database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
 
     auto statement = createDatabaseStmt(context, *db_info, name_mapper);
 
@@ -1008,7 +1008,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
     interpreter.execute();
 
     databases[db_info->id] = db_info;
-    LOG_INFO(log, "Created database {}", name_mapper.debugDatabaseName(*db_info));
+    LOG_INFO(log, "Created database {} end, database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1230,8 +1230,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
     // If "CREATE DATABASE" is executed in TiFlash after user has executed "DROP DATABASE"
     // in TiDB, then TiFlash may not create the IDatabase instance. Make sure we can access
     // to the IDatabase when creating IStorage.
-    const auto database_mapped_name = name_mapper.mapDatabaseName(database_id, keyspace_id);
-    ensureLocalDatabaseExist(database_id, database_mapped_name, action);
+    const auto database_mapped_name = name_mapper.mapDatabaseName(*db_info);
+    ensureLocalDatabaseExist(db_info->id, database_mapped_name, fmt::format("CreatePhysicalTable-{}", table_info->id));
 
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);
@@ -1239,7 +1239,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
     auto * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
     ast_create_query->attach = true;
     ast_create_query->if_not_exists = true;
-    ast_create_query->database = name_mapper.mapDatabaseName(*db_info);
+    ast_create_query->database = database_mapped_name;
 
     InterpreterCreateQuery interpreter(ast, context);
     interpreter.setInternal(true);
@@ -1273,7 +1273,7 @@ void SchemaBuilder<Getter, NameMapper>::ensureLocalDatabaseExist(
     database_info->charset = "utf8mb4"; // default value
     database_info->collate = "utf8mb4_bin"; // default value
     database_info->state = TiDB::StateNone; // special state
-    applyCreateDatabaseByInfo(database_info);
+    applyCreateSchemaByInfo(database_info);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1443,7 +1443,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         db_set.emplace(name_mapper.mapDatabaseName(*db));
         if (databases.find(db->id) == databases.end())
         {
-            applyCreateSchema(db);
+            applyCreateSchemaByInfo(db);
             LOG_INFO(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
         }
     }
