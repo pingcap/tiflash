@@ -16,14 +16,12 @@ mysql> drop table if exists test.t;
 mysql> drop table if exists test_new.t2;
 mysql> drop database if exists test_new;
 
+# (case 1) rename table across database
+## prepare some data
 mysql> create table test.t(a int, b int)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
-
-mysql> insert into test.t values (1, 1);
-mysql> insert into test.t values (1, 2);
-
+mysql> insert into test.t values (1, 1),(1, 2);
 func> wait_table test t
-
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+------+
 | a    | b    |
@@ -31,7 +29,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 |    1 |    1 |
 |    1 |    2 |
 +------+------+
-
 # check table info in tiflash
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name='t' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_name─┐
@@ -64,19 +61,19 @@ mysql> drop table if exists test.t;
 mysql> drop table if exists test_new.t2;
 mysql> drop database if exists test_new;
 
-# rename table across database case 2
+# (case 2) rename table across database
 mysql> create database if not exists test
 mysql> create database if not exists test_new
-# (required) stop regular schema sync
+## (required) stop regular schema sync
 => DBGInvoke __enable_schema_sync_service('false')
 
 mysql> create table test.t(a int, b int);
 mysql> insert into test.t values (1, 1); insert into test.t values (1, 2);
-# (required) sync table id mapping to tiflash
+## (required) sync table id mapping to tiflash
 => DBGInvoke __refresh_schemas()
 mysql> rename table test.t to test_new.t2;
 mysql> alter table test_new.t2 set tiflash replica 1;
-# new snapshot sync to tiflash, but the table id mapping is not updated
+## new snapshot sync to tiflash, but the table id mapping is not updated
 func> wait_table test_new t2
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.t2;
 +------+------+
@@ -90,7 +87,7 @@ mysql> drop table if exists test.t;
 mysql> drop table if exists test_new.t2;
 mysql> drop database if exists test_new;
 
-# (required) create a new table and sync to tiflash, check whether it can apply
+## (required) create a new table and sync to tiflash, check whether it can apply
 mysql> drop table if exists test.t3;
 mysql> create table test.t3(c int, d int);
 mysql> insert into test.t3 values (3,3),(3,4);
@@ -105,3 +102,49 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t3;
 +------+------+
 
 mysql> drop table if exists test.t3;
+
+# (case 3) rename partitioned table across database
+mysql> create database if not exists test_new;
+mysql> drop table if exists test.part4;
+mysql> CREATE TABLE test.part4 (id INT NOT NULL,store_id INT NOT NULL)PARTITION BY RANGE (store_id) (PARTITION p0 VALUES LESS THAN (6),PARTITION p1 VALUES LESS THAN (11),PARTITION p2 VALUES LESS THAN (16),PARTITION p3 VALUES LESS THAN (21));
+# (1,1),(2,2),(3,3) => p0; p1 is empty;(11,11) => p2;(16,16) => p3
+mysql> insert into test.part4(id, store_id) values(1,1),(2,2),(3,3),(11,11),(16,16);
+mysql> alter table test.part4 set tiflash replica 1;
+func> wait_table test part4
+
+mysql> rename table test.part4 to test_new.part4;
+mysql> alter table test_new.part4 add column c1 int;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.part4 order by id;
++----+----------+------+
+| id | store_id | c1   |
++----+----------+------+
+|  1 |        1 | NULL |
+|  2 |        2 | NULL |
+|  3 |        3 | NULL |
+| 11 |       11 | NULL |
+| 16 |       16 | NULL |
++----+----------+------+
+
+mysql> drop table if exists test_new.part4
+
+# (case 4) rename partitioned table across database
+# (required) stop regular schema sync
+=> DBGInvoke __enable_schema_sync_service('false')
+mysql> drop database if exists test_new;
+mysql> drop table if exists test.part5;
+mysql> CREATE TABLE test.part5 (id INT NOT NULL,store_id INT NOT NULL)PARTITION BY RANGE (store_id) (PARTITION p0 VALUES LESS THAN (6),PARTITION p1 VALUES LESS THAN (11),PARTITION p2 VALUES LESS THAN (16),PARTITION p3 VALUES LESS THAN (21));
+# (1,1),(2,2),(3,3) => p0; p1 is empty;(11,11) => p2;(16,16) => p3
+mysql> alter table test.part5 set tiflash replica 1;
+func> wait_table test part5
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+mysql> insert into test.part5(id, store_id) values(1,1),(2,2),(3,3),(11,11),(16,16);
+
+# create target db, rename table to target db, then drop target db
+mysql> create database if not exists test_new;
+mysql> rename table test.part5 to test_new.part5;
+mysql> alter table test_new.part5 add column c1 int;
+mysql> drop database if exists test_new;
+# raft command comes after target db dropped, no crashes
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __refresh_schemas()

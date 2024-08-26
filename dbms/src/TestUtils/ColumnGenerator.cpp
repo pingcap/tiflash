@@ -103,6 +103,13 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
             genString(col, int_rand_gen(rand_gen));
         break;
     }
+    case TypeIndex::FixedString:
+    {
+        auto int_rand_gen = std::uniform_int_distribution<Int64>(0, opts.string_max_size);
+        for (size_t i = 0; i < opts.size; ++i)
+            genString(col, int_rand_gen(rand_gen));
+        break;
+    }
     case TypeIndex::Decimal32:
     case TypeIndex::Decimal64:
     case TypeIndex::Decimal128:

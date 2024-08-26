@@ -188,6 +188,13 @@ public:
 
     virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
 
+    virtual bool canHandleSelectiveBlock() const { return false; }
+
+    void setParent(const IBlockInputStream * parent_) { parent = parent_; }
+    const IBlockInputStream * getParent() const { return parent; }
+
+    BlockInputStreams getChildren() { return children; }
+
 protected:
     virtual uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) { return 0; }
 
@@ -223,6 +230,9 @@ protected:
     // flags to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
     bool thread_cnt_collected = false;
     bool cpu_time_ns_collected = false;
+
+    // To avoid cyclic references, shared_ptr was not used.
+    const IBlockInputStream * parent = nullptr;
 
 private:
     TableLockHolders table_locks;

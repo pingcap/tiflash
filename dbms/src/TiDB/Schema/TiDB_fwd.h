@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/formatAST.h>
-#include <Parsers/parseQuery.h>
+#pragma once
 
-#include <iostream>
+#include <memory>
 
-
-int main(int, char **)
+namespace TiDB
 {
-    using namespace DB;
 
-    std::string input
-        = "CREATE TABLE hits (URL String, UserAgentMinor2 FixedString(2), EventTime DateTime) ENGINE = Log";
-    ParserCreateQuery parser;
-    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0);
+struct ColumnInfo;
+using ColumnInfos = std::vector<ColumnInfo>;
 
-    formatAST(*ast, std::cerr);
-    std::cerr << std::endl;
+struct TableInfo;
+using TableInfoPtr = std::shared_ptr<TableInfo>;
 
-    return 0;
-}
+struct DBInfo;
+using DBInfoPtr = std::shared_ptr<DBInfo>;
+
+class ITiDBCollator;
+using TiDBCollatorPtr = ITiDBCollator const *;
+using TiDBCollators = std::vector<TiDBCollatorPtr>;
+
+} // namespace TiDB

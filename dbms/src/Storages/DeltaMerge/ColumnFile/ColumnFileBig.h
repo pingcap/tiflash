@@ -19,10 +19,9 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class ColumnFileBig;
@@ -73,7 +72,7 @@ public:
     PageIdU64 getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }
-    size_t getBytes() const override { return valid_bytes; };
+    size_t getBytes() const override { return valid_bytes; }
 
     void removeData(WriteBatches & wbs) const override;
 
@@ -83,11 +82,16 @@ public:
         const ColumnDefinesPtr & col_defs) const override;
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
+    void serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool save_schema) const override;
 
     static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & context, //
+        const DMContext & context,
         const RowKeyRange & segment_range,
         ReadBuffer & buf);
+    static ColumnFilePersistedPtr deserializeMetadata(
+        const DMContext & context,
+        const RowKeyRange & segment_range,
+        const dtpb::ColumnFileBig & cf_pb);
 
     static ColumnFilePersistedPtr createFromCheckpoint(
         const LoggerPtr & parent_log,
@@ -97,12 +101,7 @@ public:
         UniversalPageStoragePtr temp_ps,
         WriteBatches & wbs);
 
-    String toString() const override
-    {
-        String s = "{big_file,rows:" + DB::toString(getRows()) //
-            + ",bytes:" + DB::toString(getBytes()) + "}"; //
-        return s;
-    }
+    String toString() const override { return fmt::format("{{big_file,rows:{},bytes:{}}}", getRows(), getBytes()); }
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {
@@ -139,7 +138,7 @@ private:
     Block cur_block;
     Columns cur_block_data; // The references to columns in cur_block, for faster access.
 
-    ReadTag read_tag;
+    ReadTag read_tag = ReadTag::Internal;
 
 private:
     void initStream();
@@ -198,5 +197,4 @@ public:
     void setReadTag(ReadTag read_tag_) override;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

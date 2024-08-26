@@ -128,10 +128,25 @@ struct AggregationMethodOneNumber
         : data(other.data)
     {}
 
-    /// To use one `Method` in different threads, use different `State`.
     using State = ColumnsHashing::
         HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     /// Shuffle key columns before `insertKeyIntoColumns` call if needed.
@@ -168,7 +183,22 @@ struct AggregationMethodString
     {}
 
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -200,9 +230,24 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
-    // Remove last zero byte.
-    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    using State = ColumnsHashing::
+        HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -235,7 +280,22 @@ struct AggregationMethodOneKeyStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -301,7 +361,22 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     using State
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -405,7 +480,22 @@ struct AggregationMethodFixedString
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -438,7 +528,22 @@ struct AggregationMethodFixedStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -473,7 +578,22 @@ struct AggregationMethodKeysFixed
 
     using State
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     // Because shuffle key optimization will reorder group by key internally, which is not compatible with
     // key_ref_agg_func optimization. Because the latter optimization also needs to reorder group by key
@@ -564,7 +684,22 @@ struct AggregationMethodSerialized
     {}
 
     using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
 
     static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -1013,6 +1148,8 @@ public:
 
     size_t getConcurrency() const { return concurrency; }
 
+    bool isTwoLevel() const { return is_two_level; }
+
 private:
     Block getDataForSingleLevel();
 
@@ -1130,7 +1267,8 @@ public:
         const Params & params_,
         const String & req_id,
         size_t concurrency,
-        const RegisterOperatorSpillContext & register_operator_spill_context);
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        bool is_auto_pass_through_ = false);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
@@ -1160,7 +1298,7 @@ public:
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
     struct AggProcessInfo
     {
-        AggProcessInfo(Aggregator * aggregator_)
+        explicit AggProcessInfo(Aggregator * aggregator_)
             : aggregator(aggregator_)
         {
             assert(aggregator);
@@ -1175,6 +1313,11 @@ public:
         AggregateColumns aggregate_columns;
         AggregateFunctionInstructions aggregate_functions_instructions;
         Aggregator * aggregator;
+
+        bool only_lookup = false;
+        size_t hit_row_cnt = 0;
+        std::vector<UInt64> not_found_rows;
+
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
@@ -1189,11 +1332,26 @@ public:
             end_row = 0;
             materialized_columns.clear();
             prepare_for_agg_done = false;
+
+            hit_row_cnt = 0;
+            not_found_rows.clear();
+            not_found_rows.reserve(block_.rows() / 2);
         }
     };
 
     /// Process one block. Return false if the processing should be aborted.
     bool executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+    bool executeOnBlockCollectHitRate(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
+    bool executeOnBlockOnlyLookup(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
+
+    template <bool collect_hit_rate, bool only_lookup>
+    bool executeOnBlockImpl(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
 
     /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
       * Return nullptr if there are no non empty data_variant.
@@ -1230,6 +1388,8 @@ public:
     /// Get data structure of the result.
     Block getHeader(bool final) const;
     Block getSourceHeader() const;
+
+    const Params & getParams() const { return params; }
 
 protected:
     friend struct AggregatedDataVariants;
@@ -1268,6 +1428,8 @@ protected:
     size_t group_by_two_level_threshold = 0;
     size_t group_by_two_level_threshold_bytes = 0;
 
+    const bool is_auto_pass_through;
+
     /// For external aggregation.
     AggSpillContextPtr agg_spill_context;
     std::atomic<bool> spill_triggered{false};
@@ -1286,22 +1448,22 @@ protected:
 
 
     /// Process one data block, aggregate the data into a hash table.
-    template <typename Method>
+    template <bool collect_hit_rate, bool only_lookup, typename Method>
     void executeImpl(
         Method & method,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <typename Method>
+    template <bool collect_hit_rate, bool only_loopup, typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <typename Method>
-    std::optional<typename Method::EmplaceResult> emplaceKey(
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
         Method & method,
         typename Method::State & state,
         size_t index,

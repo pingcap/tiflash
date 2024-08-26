@@ -29,7 +29,7 @@ namespace
 {
 void columnToTiPBExpr(tipb::Expr * expr, const ColumnWithTypeAndName column, size_t index)
 {
-    ColumnInfo ci = reverseGetColumnInfo({column.name, column.type}, 0, Field(), true);
+    auto ci = reverseGetColumnInfo({column.name, column.type}, 0, Field(), true);
     bool is_const = false;
     if (column.column != nullptr)
     {
@@ -113,7 +113,7 @@ void columnsToTiPBExprForTiDBCast(
     DataTypePtr target_type = DataTypeFactory::instance().get(type_string);
     auto * argument_expr = expr->add_children();
     columnToTiPBExpr(argument_expr, columns[argument_column_number[0]], 0);
-    ColumnInfo ci = reverseGetColumnInfo({type_string, target_type}, 0, Field(), true);
+    auto ci = reverseGetColumnInfo({type_string, target_type}, 0, Field(), true);
     if (ci.tp == TiDB::TypeString)
     {
         ci.flen = -1;

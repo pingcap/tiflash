@@ -19,8 +19,10 @@
 namespace DB::DM
 {
 
-void DMFilePackFilter::init()
+void DMFilePackFilter::init(ReadTag read_tag)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
     size_t pack_count = dmfile->getPacks();
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
@@ -47,32 +49,20 @@ void DMFilePackFilter::init()
 
     ProfileEvents::increment(ProfileEvents::DMFileFilterNoFilter, pack_count);
 
-    size_t after_pk = 0;
-    size_t after_read_packs = 0;
-    size_t after_filter = 0;
-
     /// Check packs by handle_res
-    for (size_t i = 0; i < pack_count; ++i)
-    {
-        use_packs[i] = handle_res[i] != None;
-    }
-
-    for (auto u : use_packs)
-        after_pk += u;
+    pack_res = handle_res;
+    auto after_pk = countUsePack();
 
     /// Check packs by read_packs
     if (read_packs)
     {
         for (size_t i = 0; i < pack_count; ++i)
         {
-            use_packs[i] = (static_cast<bool>(use_packs[i])) && read_packs->contains(i);
+            pack_res[i] = read_packs->contains(i) ? pack_res[i] : RSResult::None;
         }
     }
-
-    for (auto u : use_packs)
-        after_read_packs += u;
+    auto after_read_packs = countUsePack();
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftPKAndPackSet, after_read_packs);
-
 
     /// Check packs by filter in where clause
     if (filter)
@@ -84,20 +74,39 @@ void DMFilePackFilter::init()
             tryLoadIndex(id);
         }
 
-        Stopwatch watch;
         const auto check_results = filter->roughCheck(0, pack_count, param);
         std::transform(
-            use_packs.begin(),
-            use_packs.end(),
-            check_results.begin(),
-            use_packs.begin(),
-            [](UInt8 a, RSResult b) { return (static_cast<bool>(a)) && (b != None); });
-        scan_context->total_dmfile_rough_set_index_check_time_ns += watch.elapsed();
+            pack_res.cbegin(),
+            pack_res.cend(),
+            check_results.cbegin(),
+            pack_res.begin(),
+            [](RSResult a, RSResult b) { return a && b; });
+    }
+    else
+    {
+        // ColumnFileBig in DeltaValueSpace never pass a filter to DMFilePackFilter.
+        // Assume its filter always return Some.
+        std::transform(pack_res.cbegin(), pack_res.cend(), pack_res.begin(), [](RSResult a) {
+            return a && RSResult::Some;
+        });
     }
 
-    for (auto u : use_packs)
-        after_filter += u;
+    auto [none_count, some_count, all_count, all_null_count] = countPackRes();
+    auto after_filter = some_count + all_count + all_null_count;
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
+    // In table scanning, DMFilePackFilter of a DMFile may be created several times:
+    // 1. When building MVCC bitmap (ReadTag::MVCC).
+    // 2. When building LM filter stream (ReadTag::LM).
+    // 3. When building stream of other columns (ReadTag::Query).
+    // Only need to count the filter result once.
+    // TODO: We can create DMFilePackFilter at the beginning and pass it to the stages described above.
+    if (read_tag == ReadTag::Query)
+    {
+        scan_context->rs_pack_filter_none += none_count;
+        scan_context->rs_pack_filter_some += some_count;
+        scan_context->rs_pack_filter_all += all_count;
+        scan_context->rs_pack_filter_all_null += all_null_count;
+    }
 
     Float64 filter_rate = 0.0;
     if (after_read_packs != 0)
@@ -108,14 +117,45 @@ void DMFilePackFilter::init()
     LOG_DEBUG(
         log,
         "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
-        ", read_packs: {}, pack_count: {}",
+        ", read_packs: {}, pack_count: {}, none_count: {}, some_count: {}, all_count: {}, all_null_count: {}, "
+        "read_tag: {}",
         ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
         after_pk,
         after_read_packs,
         after_filter,
         toDebugString(rowkey_ranges),
         ((read_packs == nullptr) ? 0 : read_packs->size()),
-        pack_count);
+        pack_count,
+        none_count,
+        some_count,
+        all_count,
+        all_null_count,
+        magic_enum::enum_name(read_tag));
+}
+
+std::tuple<UInt64, UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() const
+{
+    UInt64 none_count = 0;
+    UInt64 some_count = 0;
+    UInt64 all_count = 0;
+    UInt64 all_null_count = 0;
+    for (auto res : pack_res)
+    {
+        if (res == RSResult::None || res == RSResult::NoneNull)
+            ++none_count;
+        else if (res == RSResult::Some || res == RSResult::SomeNull)
+            ++some_count;
+        else if (res == RSResult::All)
+            ++all_count;
+        else if (res == RSResult::AllNull)
+            ++all_null_count;
+    }
+    return {none_count, some_count, all_count, all_null_count};
+}
+
+UInt64 DMFilePackFilter::countUsePack() const
+{
+    return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return res.isUse(); });
 }
 
 void DMFilePackFilter::loadIndex(
@@ -224,7 +264,7 @@ void DMFilePackFilter::loadIndex(
     indexes.emplace(col_id, RSIndex(type, minmax_index));
 }
 
-void DMFilePackFilter::tryLoadIndex(const ColId col_id)
+void DMFilePackFilter::tryLoadIndex(ColId col_id)
 {
     if (param.indexes.count(col_id))
         return;
@@ -234,8 +274,6 @@ void DMFilePackFilter::tryLoadIndex(const ColId col_id)
 
     Stopwatch watch;
     loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
-
-    scan_context->total_dmfile_rough_set_index_check_time_ns += watch.elapsed();
 }
 
 } // namespace DB::DM

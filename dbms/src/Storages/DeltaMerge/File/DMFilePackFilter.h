@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/S3/S3Common.h>
@@ -51,9 +52,10 @@ public:
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context,
-        const String & tracing_id)
+        const String & tracing_id,
+        const ReadTag read_tag)
     {
-        auto pack_filter = DMFilePackFilter(
+        return DMFilePackFilter(
             dmfile,
             index_cache,
             set_cache_if_miss,
@@ -63,14 +65,14 @@ public:
             file_provider,
             read_limiter,
             scan_context,
-            tracing_id);
-        pack_filter.init();
-        return pack_filter;
+            tracing_id,
+            read_tag);
     }
 
-    inline const std::vector<RSResult> & getHandleRes() const { return handle_res; }
-    inline const std::vector<UInt8> & getUsePacksConst() const { return use_packs; }
-    inline std::vector<UInt8> & getUsePacks() { return use_packs; }
+    const RSResults & getHandleRes() const { return handle_res; }
+    const RSResults & getPackResConst() const { return pack_res; }
+    RSResults & getPackRes() { return pack_res; }
+    UInt64 countUsePack() const;
 
     Handle getMinHandle(size_t pack_id)
     {
@@ -104,7 +106,7 @@ public:
         const auto & pack_stats = dmfile->getPackStats();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (use_packs[i])
+            if (pack_res[i].isUse())
             {
                 rows += pack_stats[i].rows;
                 bytes += pack_stats[i].bytes;
@@ -124,7 +126,8 @@ private:
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
-        const String & tracing_id)
+        const String & tracing_id,
+        const ReadTag read_tag)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -133,13 +136,14 @@ private:
         , read_packs(read_packs_)
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
-        , use_packs(dmfile->getPacks())
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
-    {}
+    {
+        init(read_tag);
+    }
 
-    void init();
+    void init(ReadTag read_tag);
 
     static void loadIndex(
         ColumnIndexes & indexes,
@@ -151,7 +155,10 @@ private:
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context);
 
-    void tryLoadIndex(const ColId col_id);
+    void tryLoadIndex(ColId col_id);
+
+    // None+NoneNull, Some+SomeNull, All, AllNull
+    std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const;
 
 private:
     DMFilePtr dmfile;
@@ -164,8 +171,10 @@ private:
 
     RSCheckParam param;
 
+    // `handle_res` is the filter results of `rowkey_ranges`.
     std::vector<RSResult> handle_res;
-    std::vector<UInt8> use_packs;
+    // `pack_res` is the filter results of `rowkey_ranges && filter && read_packs`.
+    std::vector<RSResult> pack_res;
 
     const ScanContextPtr scan_context;
 

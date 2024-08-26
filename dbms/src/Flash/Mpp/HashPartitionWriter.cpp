@@ -19,6 +19,7 @@
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {
@@ -101,7 +102,12 @@ WaitResult HashPartitionWriter<ExchangeWriterPtr>::waitForWritable() const
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
 {
-    size_t rows = block.rows();
+    size_t rows = 0;
+    if (block.info.selective)
+        rows = block.info.selective->size();
+    else
+        rows = block.rows();
+
     if (rows > 0)
     {
         rows_in_blocks += rows;
@@ -116,7 +122,12 @@ void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::writeImpl(const Block & block)
 {
-    size_t rows = block.rows();
+    size_t rows = 0;
+    if (block.info.selective)
+        rows = block.info.selective->size();
+    else
+        rows = block.rows();
+
     if (rows > 0)
     {
         rows_in_blocks += rows;
@@ -168,13 +179,22 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
             assertBlockSchema(expected_types, block, HashPartitionWriterLabels[MPPDataPacketV1]);
         }
         auto && dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-        HashBaseWriterHelper::scatterColumns(
-            block,
-            partition_col_ids,
-            collators,
-            partition_key_containers,
-            partition_num,
-            dest_tbl_cols);
+        if (block.info.selective)
+            HashBaseWriterHelper::scatterColumnsSelectiveBlock(
+                block,
+                partition_col_ids,
+                collators,
+                partition_key_containers,
+                partition_num,
+                dest_tbl_cols);
+        else
+            HashBaseWriterHelper::scatterColumns(
+                block,
+                partition_col_ids,
+                collators,
+                partition_key_containers,
+                partition_num,
+                dest_tbl_cols);
         block.clear();
 
         for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -222,13 +242,23 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::scatterColumns(
-                block,
-                partition_col_ids,
-                collators,
-                partition_key_containers,
-                partition_num,
-                dest_tbl_cols);
+            if (block.info.selective)
+                HashBaseWriterHelper::scatterColumnsSelectiveBlock(
+                    block,
+                    partition_col_ids,
+                    collators,
+                    partition_key_containers,
+                    partition_num,
+                    dest_tbl_cols);
+            else
+                HashBaseWriterHelper::scatterColumns(
+                    block,
+                    partition_col_ids,
+                    collators,
+                    partition_key_containers,
+                    partition_num,
+                    dest_tbl_cols);
+
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -262,5 +292,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePartitionBlocks(std::vector<Bl
 
 template class HashPartitionWriter<SyncMPPTunnelSetWriterPtr>;
 template class HashPartitionWriter<AsyncMPPTunnelSetWriterPtr>;
+
 
 } // namespace DB

@@ -12,71 +12,173 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/TiFlashSecurity.h>
 #include <Poco/File.h>
 #include <Poco/FileStream.h>
 #include <TestUtils/ConfigTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
-class TiFlashSecurityTest : public ext::Singleton<TiFlashSecurityTest>
-{
-};
 
 TEST(TiFlashSecurityTest, Config)
 {
-    TiFlashSecurityConfig tiflash_config;
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String("[abc,efg]"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String(R"(["abc","efg"])"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String("[ abc , efg ]"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
+    {
+        auto cns = TiFlashSecurityConfig::parseAllowedCN(String(R"([ "abc", "efg" ])"));
+        ASSERT_EQ(cns.count("abc"), 1);
+        ASSERT_EQ(cns.count("efg"), 1);
+    }
+
     const auto log = Logger::get();
-    tiflash_config.setLog(log);
 
-    tiflash_config.parseAllowedCN(String("[abc,efg]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"(["abc","efg"])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String("[ abc , efg ]"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    tiflash_config.allowedCommonNames().clear();
-
-    tiflash_config.parseAllowedCN(String(R"([ "abc", "efg" ])"));
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("abc"), 1);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("efg"), 1);
-
-    String test =
-        R"(
+    {
+        auto new_config = loadConfigFromString(R"(
 [security]
 ca_path="security/ca.pem"
 cert_path="security/cert.pem"
 key_path="security/key.pem"
 cert_allowed_cn="tidb"
-        )";
-    auto new_config = loadConfigFromString(test);
-    tiflash_config.update(*new_config);
-    ASSERT_EQ((int)tiflash_config.allowedCommonNames().count("tidb"), 1);
+        )");
+        TiFlashSecurityConfig tiflash_config(log);
+        tiflash_config.init(*new_config);
+        ASSERT_TRUE(tiflash_config.hasTlsConfig());
+        ASSERT_EQ(tiflash_config.allowedCommonNames().count("tidb"), 1);
+    }
 
-    test =
-        R"(
+    {
+        auto new_config = loadConfigFromString(R"(
 [security]
 cert_allowed_cn="tidb"
-        )";
-    new_config = loadConfigFromString(test);
-    auto new_tiflash_config = TiFlashSecurityConfig(log);
-    new_tiflash_config.init(*new_config);
-    ASSERT_EQ((int)new_tiflash_config.allowedCommonNames().count("tidb"), 0);
+        )");
+        auto new_tiflash_config = TiFlashSecurityConfig(log);
+        new_tiflash_config.init(*new_config);
+        ASSERT_FALSE(new_tiflash_config.hasTlsConfig());
+        // allowed common names is ignored when tls is not enabled
+        ASSERT_EQ(new_tiflash_config.allowedCommonNames().count("tidb"), 0);
+    }
+}
+
+TEST(TiFlashSecurityTest, EmptyConfig)
+try
+{
+    const auto log = Logger::get();
+
+    for (const auto & c : Strings{
+             // empty strings
+             R"([security]
+ca_path=""
+cert_path=""
+key_path="")",
+             // non-empty strings with space only
+             R"([security]
+ca_path="  "
+cert_path=""
+key_path="")",
+         })
+    {
+        SCOPED_TRACE(fmt::format("case: {}", c));
+        TiFlashSecurityConfig tiflash_config(log);
+        auto new_config = loadConfigFromString(c);
+        tiflash_config.init(*new_config);
+        ASSERT_FALSE(tiflash_config.hasTlsConfig());
+    }
+}
+CATCH
+
+TEST(TiFlashSecurityTest, InvalidConfig)
+try
+{
+    const auto log = Logger::get();
+
+    for (const auto & c : Strings{
+             // only a part of ssl path is set
+             R"([security]
+ca_path="security/ca.pem"
+cert_path=""
+key_path="")",
+             R"([security]
+ca_path=""
+cert_path="security/cert.pem"
+key_path="")",
+             R"([security]
+ca_path=""
+cert_path=""
+key_path="security/key.pem")",
+             R"([security]
+ca_path=""
+cert_path="security/cert.pem"
+key_path="security/key.pem")",
+             // comment out
+             R"([security]
+ca_path="security/ca.pem"
+#cert_path="security/cert.pem"
+key_path="security/key.pem")",
+         })
+    {
+        SCOPED_TRACE(fmt::format("case: {}", c));
+        TiFlashSecurityConfig tiflash_config(log);
+        auto new_config = loadConfigFromString(c);
+        try
+        {
+            tiflash_config.init(*new_config);
+            ASSERT_FALSE(true) << "should raise exception";
+        }
+        catch (Exception & e)
+        {
+            // has_tls remains false when an exception raise
+            ASSERT_FALSE(tiflash_config.hasTlsConfig());
+            // the error code must be INVALID_CONFIG_PARAMETER
+            ASSERT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+    }
+}
+CATCH
+
+TEST(TiFlashSecurityTest, RedactLogConfig)
+{
+    for (const auto & [input, expect] : std::vector<std::pair<String, RedactMode>>{
+             {"marker", RedactMode::Marker},
+             {"Marker", RedactMode::Marker},
+             {"MARKER", RedactMode::Marker},
+             {"true", RedactMode::Enable},
+             {"True", RedactMode::Enable},
+             {"TRUE", RedactMode::Enable},
+             {"yes", RedactMode::Enable},
+             {"on", RedactMode::Enable},
+             {"1", RedactMode::Enable},
+             {"2", RedactMode::Enable},
+             {"false", RedactMode::Disable},
+             {"False", RedactMode::Disable},
+             {"FALSE", RedactMode::Disable},
+             {"no", RedactMode::Disable},
+             {"off", RedactMode::Disable},
+             {"0", RedactMode::Disable},
+         })
+    {
+        EXPECT_EQ(TiFlashSecurityConfig::parseRedactLog(input), expect);
+    }
 }
 
 TEST(TiFlashSecurityTest, Update)
@@ -271,5 +373,5 @@ TEST(TiFlashSecurityTest, readAndCacheSslCredentialOptions)
     Poco::File key_file(key_path);
     key_file.remove(false);
 }
-} // namespace tests
-} // namespace DB
+
+} // namespace DB::tests

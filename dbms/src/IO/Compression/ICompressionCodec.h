@@ -18,6 +18,7 @@
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
+#include <memory>
 
 
 namespace DB
@@ -58,11 +59,7 @@ public:
     /// Read method byte from compressed source
     static UInt8 readMethod(const char * source);
 
-    /// Return true if this codec actually compressing something. Otherwise it can be just transformation that helps compression (e.g. Delta).
     virtual bool isCompression() const = 0;
-
-    /// Is it a generic compression algorithm like lz4, zstd. Usually it does not make sense to apply generic compression more than single time.
-    virtual bool isGenericCompression() const = 0;
 
 protected:
     /// Return size of compressed data without header
@@ -76,7 +73,7 @@ protected:
         = 0;
 };
 
-using CompressionCodecPtr = std::unique_ptr<ICompressionCodec>;
+using CompressionCodecPtr = std::shared_ptr<ICompressionCodec>;
 using Codecs = std::vector<CompressionCodecPtr>;
 
 } // namespace DB

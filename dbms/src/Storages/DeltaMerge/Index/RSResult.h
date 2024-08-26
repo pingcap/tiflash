@@ -14,67 +14,91 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <common/types.h>
+#include <fmt/format.h>
 
-namespace DB
-{
-namespace DM
-{
-struct Attr
-{
-    String col_name;
-    ColId col_id;
-    DataTypePtr type;
-};
-using Attrs = std::vector<Attr>;
+#include <magic_enum.hpp>
 
-enum class RSResult : UInt8
+namespace DB::DM
 {
-    Unknown = 0, // Not checked yet
-    Some = 1, // Suspected (but may be empty or full)
-    None = 2, // Empty, no need to read
-    All = 3, // Full, need to read
+class RSResult;
+}
+namespace fmt
+{
+template <>
+struct formatter<DB::DM::RSResult>;
+}
+
+namespace DB::DM
+{
+
+class RSResult
+{
+private:
+    enum class ValueResult : UInt8
+    {
+        Some = 1, // Some values meet requirements and NOT has null, need to read and perform filtering
+        None = 2, // No value meets requirements and NOT has null, no need to read
+        All = 3, // All values meet requirements NOT has null, need to read and no need perform filtering
+    };
+
+    static ValueResult logicalNot(ValueResult v) noexcept;
+    static ValueResult logicalAnd(ValueResult v0, ValueResult v1) noexcept;
+    static ValueResult logicalOr(ValueResult v0, ValueResult v1) noexcept;
+
+    // Deleting or privating constructors, so that cannot create invalid objects.
+    // Use the static member variables below.
+    RSResult() = delete;
+    RSResult(ValueResult v_, bool has_null_)
+        : v(v_)
+        , has_null(has_null_)
+    {}
+
+    friend struct fmt::formatter<DB::DM::RSResult>;
+
+    ValueResult v;
+    bool has_null;
+
+public:
+    bool isUse() const noexcept { return v != ValueResult::None; }
+
+    bool allMatch() const noexcept { return *this == RSResult::All; }
+
+    void setHasNull() noexcept { has_null = true; }
+
+    RSResult operator!() const noexcept { return RSResult(logicalNot(v), has_null); }
+
+    RSResult operator&&(RSResult r) const noexcept { return RSResult(logicalAnd(v, r.v), has_null || r.has_null); }
+
+    RSResult operator||(RSResult r) const noexcept
+    {
+        // Because the result of `1 || 1/0/NULL` is always 1.
+        if (allMatch() || r.allMatch())
+            return RSResult(ValueResult::All, false);
+        return RSResult(logicalOr(v, r.v), has_null || r.has_null);
+    }
+
+    bool operator==(RSResult r) const noexcept { return v == r.v && has_null == r.has_null; }
+
+    static const RSResult Some;
+    static const RSResult None;
+    static const RSResult All;
+    static const RSResult SomeNull;
+    static const RSResult NoneNull;
+    static const RSResult AllNull;
 };
+
 using RSResults = std::vector<RSResult>;
+} // namespace DB::DM
 
-static constexpr RSResult Unknown = RSResult::Unknown;
-static constexpr RSResult Some = RSResult::Some;
-static constexpr RSResult None = RSResult::None;
-static constexpr RSResult All = RSResult::All;
-
-inline RSResult operator!(RSResult v)
+template <>
+struct fmt::formatter<DB::DM::RSResult>
 {
-    if (unlikely(v == Unknown))
-        throw Exception("Unexpected Unknown");
-    if (v == All)
-        return None;
-    else if (v == None)
-        return All;
-    return v;
-}
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
-inline RSResult operator||(RSResult v0, RSResult v1)
-{
-    if (unlikely(v0 == Unknown || v1 == Unknown))
-        throw Exception("Unexpected Unknown");
-    if (v0 == All || v1 == All)
-        return All;
-    if (v0 == Some || v1 == Some)
-        return Some;
-    return None;
-}
-
-inline RSResult operator&&(RSResult v0, RSResult v1)
-{
-    if (unlikely(v0 == Unknown || v1 == Unknown))
-        throw Exception("Unexpected Unknown");
-    if (v0 == None || v1 == None)
-        return None;
-    if (v0 == All && v1 == All)
-        return All;
-    return Some;
-}
-
-} // namespace DM
-
-} // namespace DB
+    template <typename FormatContext>
+    auto format(const DB::DM::RSResult r, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}{}", magic_enum::enum_name(r.v), r.has_null ? "Null" : "");
+    }
+};

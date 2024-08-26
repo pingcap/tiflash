@@ -16,7 +16,7 @@
 
 => DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __refresh_schemas()
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDateTime(1)', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDateTime(1)')
 
 => DBGInvoke __put_region(4, 0, 100, default, test)
 
@@ -34,7 +34,7 @@
 
 => DBGInvoke __drop_tidb_table(default, test)
 
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDate', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDate')
 
 => DBGInvoke __put_region(4, 0, 100, default, test)
 
@@ -51,7 +51,7 @@
 └────────────┴─────────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDateTime(1)', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDateTime(1)')
 
 => DBGInvoke __put_region(4, 0, 100, default, test)
 

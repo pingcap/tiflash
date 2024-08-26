@@ -24,7 +24,7 @@
 #include <Storages/DeltaMerge/File/ColumnStat.h>
 #include <Storages/DeltaMerge/File/DMFileUtil.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <common/types.h>
 
 namespace DB::DM
