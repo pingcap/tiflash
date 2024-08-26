@@ -923,6 +923,7 @@ std::string ExpressionActions::dumpActions() const
     return ss.str();
 }
 
+<<<<<<< HEAD
 void ExpressionActions::optimize()
 {
     optimizeArrayJoin();
@@ -1011,11 +1012,13 @@ void ExpressionActions::optimizeArrayJoin()
 
 
 BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
+=======
+BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block &, size_t, size_t, size_t) const
+>>>>>>> bf0d129d05 (avoid potential TiFlash crash in `NonJoinedBlockInputStream` (#9364))
 {
     for (const auto & action : actions)
         if (action.join && (action.join->getKind() == ASTTableJoin::Kind::Full || action.join->getKind() == ASTTableJoin::Kind::Right))
-            return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
-
+            throw Exception("Not supported");
     return {};
 }
 
