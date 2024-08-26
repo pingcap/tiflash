@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/TiFlashSecurity.h>
+#include <TestUtils/ConfigTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>
