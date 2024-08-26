@@ -450,10 +450,14 @@ void UniversalPageStorage::unregisterUniversalExternalPagesCallbacks(const Strin
 
 void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch & wb, SnapshotPtr snapshot) const
 {
+    // store the downloaded page data into local cache and generate new "edit"
     auto edit = blob_store->write(std::move(wb));
+    // Update the entries to the location of BlobFile.
     auto ignored_entries = page_directory->updateLocalCacheForRemotePages(std::move(edit), snapshot);
     if (!ignored_entries.empty())
     {
+        // Some entries are not valid for updating the page_directory. BlobStore should
+        // release the space for new blob data.
         blob_store->removeEntries(ignored_entries);
     }
 }

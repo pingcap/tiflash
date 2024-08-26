@@ -19,11 +19,6 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
-namespace DB::HashBaseWriterHelper
-{
-struct HashPartitionWriterHelperV1;
-}
-
 namespace DB
 {
 class DAGContext;

@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/ArrowColCodec.h>
 #include <IO/copyData.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

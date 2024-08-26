@@ -54,6 +54,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <TiDB/Collation/Collator.h>
+#include <TiDB/Schema/TiDBTypes.h>
 
 #include <ext/collection_cast.h>
 #include <ext/enumerate.h>
@@ -1012,12 +1013,13 @@ struct TiDBConvertToDecimal
         }
         else if (v_scale > scale)
         {
-            const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
+            const bool neg = (value < 0);
+            const bool need_to_round = ((neg ? -value : value) % scale_mul) >= (scale_mul / 2);
             auto old_value = value;
             value /= scale_mul;
             if (need_to_round)
             {
-                if (value < 0)
+                if (neg)
                     --value;
                 else
                     ++value;

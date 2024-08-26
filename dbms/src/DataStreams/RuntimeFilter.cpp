@@ -206,7 +206,14 @@ bool RuntimeFilter::updateStatus(RuntimeFilterStatus status_, const std::string 
     return true;
 }
 
-DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_to_read)
+void RuntimeFilter::setTargetAttr(
+    const TiDB::ColumnInfos & scan_column_infos,
+    const DM::ColumnDefines & table_column_defines)
+{
+    target_attr = DM::FilterParser::createAttr(target_expr, scan_column_infos, table_column_defines);
+}
+
+DM::RSOperatorPtr RuntimeFilter::parseToRSOperator()
 {
     switch (rf_type)
     {
@@ -216,7 +223,7 @@ DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_t
         return DM::FilterParser::parseRFInExpr(
             rf_type,
             target_expr,
-            columns_to_read,
+            target_attr,
             in_values_set->getUniqueSetElements(),
             timezone_info);
     case tipb::MIN_MAX:

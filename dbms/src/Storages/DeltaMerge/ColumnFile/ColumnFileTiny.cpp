@@ -163,12 +163,40 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
+void ColumnFileTiny::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool save_schema) const
+{
+    dtpb::ColumnFileTiny * tiny_pb = cf_pb->mutable_tiny_file();
+    if (save_schema)
+        serializeSchema(tiny_pb, schema->getSchema());
+
+    tiny_pb->set_id(data_page_id);
+    tiny_pb->set_rows(rows);
+    tiny_pb->set_bytes(bytes);
+}
+
 ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
     const DMContext & context,
     ReadBuffer & buf,
     ColumnFileSchemaPtr & last_schema)
 {
     auto schema_block = deserializeSchema(buf);
+    auto schema = getSchema(context, schema_block, last_schema);
+
+    PageIdU64 data_page_id;
+    size_t rows, bytes;
+
+    readIntBinary(data_page_id, buf);
+    readIntBinary(rows, buf);
+    readIntBinary(bytes, buf);
+
+    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context);
+}
+
+std::shared_ptr<ColumnFileSchema> ColumnFileTiny::getSchema(
+    const DMContext & context,
+    BlockPtr schema_block,
+    ColumnFileSchemaPtr & last_schema)
+{
     std::shared_ptr<ColumnFileSchema> schema;
 
     if (!schema_block)
@@ -181,13 +209,20 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
 
     if (unlikely(!schema))
         throw Exception("Cannot deserialize DeltaPackBlock's schema", ErrorCodes::LOGICAL_ERROR);
+    return schema;
+}
 
-    PageIdU64 data_page_id;
-    size_t rows, bytes;
+ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
+    const DMContext & context,
+    const dtpb::ColumnFileTiny & cf_pb,
+    ColumnFileSchemaPtr & last_schema)
+{
+    auto schema_block = deserializeSchema(cf_pb.columns());
+    auto schema = getSchema(context, schema_block, last_schema);
 
-    readIntBinary(data_page_id, buf);
-    readIntBinary(rows, buf);
-    readIntBinary(bytes, buf);
+    PageIdU64 data_page_id = cf_pb.id();
+    size_t rows = cf_pb.rows();
+    size_t bytes = cf_pb.bytes();
 
     return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context);
 }

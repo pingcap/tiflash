@@ -29,6 +29,7 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -96,6 +97,12 @@ void initDisaggTaskMeta(
     meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
     meta->set_connection_id(sender_target_mpp_task_id.gather_id.query_id.connection_id);
     meta->set_connection_alias(sender_target_mpp_task_id.gather_id.query_id.connection_alias);
+}
+
+void waitForCompletion(std::vector<std::future<void>> & futures)
+{
+    for (auto & f : futures)
+        f.get();
 }
 } // namespace
 
@@ -212,17 +219,15 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     DM::SegmentReadTasks output_seg_tasks;
 
     // Then, for each BatchCopTask, let's build read tasks concurrently.
-    auto thread_manager = newThreadManager();
+    std::vector<std::future<void>> futures;
+    futures.reserve(batch_cop_tasks.size());
     for (const auto & cop_task : batch_cop_tasks)
     {
-        thread_manager->schedule(true, "buildReadTaskForWriteNode", [&] {
-            buildReadTaskForWriteNode(db_context, scan_context, cop_task, output_lock, output_seg_tasks);
-        });
+        auto f = BuildReadTaskForWNPool::get().scheduleWithFuture(
+            [&] { buildReadTaskForWriteNode(db_context, scan_context, cop_task, output_lock, output_seg_tasks); });
+        futures.push_back(std::move(f));
     }
-
-    // Let's wait for all threads to finish. Otherwise local variable references will be invalid.
-    // The first exception will be thrown out if any, after all threads are finished, which is safe.
-    thread_manager->wait();
+    waitForCompletion(futures);
 
     // Do some integrity checks for the build seg tasks. For example, we should not
     // ever read from the same store+table+segment multiple times.
@@ -363,10 +368,11 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     // Now we have successfully established disaggregated read for this write node.
     // Let's parse the result and generate actual segment read tasks.
     // There may be multiple tables, so we concurrently build tasks for these tables.
-    auto thread_manager = newThreadManager();
+    std::vector<std::future<void>> futures;
+    futures.reserve(resp.tables().size());
     for (const auto & serialized_physical_table : resp.tables())
     {
-        thread_manager->schedule(true, "buildReadTaskForWriteNodeTable", [&] {
+        auto f = BuildReadTaskForWNTablePool::get().scheduleWithFuture([&] {
             buildReadTaskForWriteNodeTable(
                 db_context,
                 scan_context,
@@ -377,8 +383,9 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
                 output_lock,
                 output_seg_tasks);
         });
+        futures.push_back(std::move(f));
     }
-    thread_manager->wait();
+    waitForCompletion(futures);
 }
 
 void StorageDisaggregated::buildReadTaskForWriteNodeTable(
@@ -394,34 +401,32 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     DB::DM::RemotePb::RemotePhysicalTable table;
     auto parse_ok = table.ParseFromString(serialized_physical_table);
     RUNTIME_CHECK_MSG(parse_ok, "Failed to deserialize RemotePhysicalTable from response");
-
-    auto thread_manager = newThreadManager();
-    auto n = static_cast<size_t>(table.segments().size());
-
     auto table_tracing_logger = log->getChild(
         fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
-    for (size_t idx = 0; idx < n; ++idx)
+    auto disagg_build_task_timeout_us = db_context.getSettingsRef().disagg_build_task_timeout * 1000000;
+    std::vector<std::future<void>> futures;
+    futures.reserve(table.segments().size());
+    for (const auto & remote_seg : table.segments())
     {
-        const auto & remote_seg = table.segments(idx);
-
-        thread_manager->schedule(true, "buildRNReadSegmentTask", [&] {
-            auto seg_read_task = std::make_shared<DM::SegmentReadTask>(
-                table_tracing_logger,
-                db_context,
-                scan_context,
-                remote_seg,
-                snapshot_id,
-                store_id,
-                store_address,
-                table.keyspace_id(),
-                table.table_id());
-
-            std::lock_guard lock(output_lock);
-            output_seg_tasks.push_back(seg_read_task);
-        });
+        auto f = BuildReadTaskPool::get().scheduleWithFuture(
+            [&]() {
+                auto seg_read_task = std::make_shared<DM::SegmentReadTask>(
+                    table_tracing_logger,
+                    db_context,
+                    scan_context,
+                    remote_seg,
+                    snapshot_id,
+                    store_id,
+                    store_address,
+                    table.keyspace_id(),
+                    table.table_id());
+                std::lock_guard lock(output_lock);
+                output_seg_tasks.push_back(seg_read_task);
+            },
+            disagg_build_task_timeout_us);
+        futures.push_back(std::move(f));
     }
-
-    thread_manager->wait();
+    waitForCompletion(futures);
 }
 
 /**
@@ -501,19 +506,8 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         std::vector<int>{},
         0,
         db_context.getTimezoneInfo());
-    auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
-        auto iter = std::find_if(defines->begin(), defines->end(), [column_id](const DM::ColumnDefine & d) -> bool {
-            return d.id == column_id;
-        });
-        if (iter != defines->end())
-            return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
-    auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
-    if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
-        LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
-    return rs_operator;
+
+    return DM::RSOperator::build(dag_query, table_scan.getColumns(), *columns_to_read, enable_rs_filter, log);
 }
 
 std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(
@@ -526,7 +520,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
+    auto push_down_filter = DM::PushDownFilter::build(
         rs_operator,
         table_scan.getColumns(),
         table_scan.getPushedDownFilters(),

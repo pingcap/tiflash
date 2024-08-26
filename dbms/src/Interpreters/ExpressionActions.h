@@ -207,6 +207,7 @@ public:
     const Block & getSampleBlock() const { return sample_block; }
 
     std::string dumpActions() const;
+    std::string dumpJSONActions() const;
 
     template <class NameAndTypeContainer>
     static std::string getSmallestColumn(const NameAndTypeContainer & columns);

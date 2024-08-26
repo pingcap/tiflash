@@ -36,8 +36,8 @@ And the following operating systems:
 
 The following packages are required:
 
-- CMake 3.21.0+
-- Clang 13.0.6+
+- CMake 3.23.0+
+- Clang 17.0.0+ under Linux or AppleClang 14.0.0+ under MacOS
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
@@ -56,10 +56,10 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install LLVM, see https://apt.llvm.org for details
-# Clang will be available as /usr/bin/clang++-13
+# Clang will be available as /usr/bin/clang++-17
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 13 all
+sudo ./llvm.sh 17 all
 
 # Install other dependencies
 sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev ccache
@@ -125,13 +125,13 @@ xcode-select --install
 brew install ninja cmake openssl@1.1 ccache
 ```
 
-If your MacOS is higher or equal to 13.0, it should work out of the box because by default Apple clang is 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
+If your MacOS is higher or equal to 13.0 (Ventura), it should work out of the box because by default Xcode 14.3 provides Apple clang 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
 
 ```shell
-brew install llvm@15
+brew install llvm@17
 
 # check llvm version
-clang --version # should be 15.0.0 or higher
+clang --version # should be 17.0.0 or higher
 ```
 
 </details>
@@ -149,21 +149,14 @@ To build TiFlash for development:
 
 ```shell
 # In the TiFlash repository root:
-mkdir cmake-build-debug  # The directory name can be customized
-cd cmake-build-debug
-
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-
-ninja tiflash
+cmake --workflow --preset dev
 ```
 
 Note: In Linux, usually you need to explicitly specify to use LLVM.
 
 ```shell
-# In cmake-build-debug directory:
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
-  -DCMAKE_C_COMPILER=/usr/bin/clang-13 \
-  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-13
+export CC="/usr/bin/clang-17"
+export CXX="/usr/bin/clang++-17"
 ```
 
 In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
@@ -177,7 +170,12 @@ export CXX="/opt/homebrew/opt/llvm/bin/clang++"
 
 Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
 ```shell
+mkdir cmake-build-debug
+cd cmake-build-debug
+
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
+
+ninja tiflash
 ```
 
 After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
@@ -270,11 +268,8 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 Unit tests are automatically enabled in debug profile. To build these unit tests:
 
 ```shell
-cd cmake-build-debug
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-ninja gtests_dbms       # Most TiFlash unit tests
-ninja gtests_libdaemon  # Settings related tests
-ninja gtests_libcommon
+# In the TiFlash repository root:
+cmake --workflow --preset unit-tests-all
 ```
 
 Then, to run these unit tests:
@@ -296,18 +291,15 @@ To build unit test executables with sanitizer enabled:
 
 ```shell
 # In the TiFlash repository root:
-mkdir cmake-build-sanitizer
-cd cmake-build-sanitizer
-cmake .. -GNinja -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
-ninja gtests_dbms
-ninja gtests_libdaemon
-ninja gtests_libcommon
+cmake --workflow --preset asan-tests-all # or tsan-tests-all
 ```
 
 There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
 
 ```shell
-LSAN_OPTIONS=suppressions=test/sanitize/asan.suppression
+LSAN_OPTIONS="suppressions=tests/sanitize/asan.suppression" ./dbms/gtests_dbms ...
+# or
+TSAN_OPTIONS="suppressions=tests/sanitize/tsan.suppression" ./dbms/gtests_dbms ...
 ```
 
 ## Run Integration Tests
@@ -357,10 +349,7 @@ To build micro benchmark tests, you need release profile and tests enabled:
 
 ```shell
 # In the TiFlash repository root:
-mkdir cmake-build-release
-cd cmake-build-release
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
-ninja bench_dbms
+cmake --workflow --preset benchmarks
 ```
 
 Then, to run these micro benchmarks:

@@ -23,7 +23,7 @@
 
 
 # Sync add column by reading.
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8, col_3 Int32', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8, col_3 Int32')
 => DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 'test', 1, 3)
@@ -61,7 +61,7 @@
 => DBGInvoke __drop_tidb_table(default, test)
 
 # Test convert nullable type to not-null type.
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Nullable(Int8)', '', 'dt')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Nullable(Int8)')
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 'test', 1)
 => DBGInvoke __raft_insert_row(default, test, 4, 51, 'test', 2)

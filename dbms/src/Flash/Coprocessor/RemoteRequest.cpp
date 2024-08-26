@@ -55,7 +55,7 @@ RemoteRequest RemoteRequest::build(
 
             if (col_id == DB::TiDBPkColumnID)
             {
-                ColumnInfo ci;
+                TiDB::ColumnInfo ci;
                 ci.tp = TiDB::TypeLongLong;
                 ci.setPriKeyFlag();
                 ci.setNotNullFlag();
@@ -63,7 +63,7 @@ RemoteRequest RemoteRequest::build(
             }
             else if (col_id == ExtraTableIDColumnID)
             {
-                ColumnInfo ci;
+                TiDB::ColumnInfo ci;
                 ci.tp = TiDB::TypeLongLong;
                 schema.emplace_back(std::make_pair(MutableSupport::extra_table_id_column_name, std::move(ci)));
             }

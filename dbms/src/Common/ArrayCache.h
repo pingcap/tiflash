@@ -378,8 +378,6 @@ private:
         {
             --left_it;
 
-            //std::cerr << "left_it->isFree(): " << left_it->isFree() << "\n";
-
             if (left_it->chunk == region.chunk && left_it->isFree())
             {
                 region.size += left_it->size;
@@ -392,8 +390,6 @@ private:
         ++right_it;
         if (right_it != adjacency_list.end())
         {
-            //std::cerr << "right_it->isFree(): " << right_it->isFree() << "\n";
-
             if (right_it->chunk == region.chunk && right_it->isFree())
             {
                 region.size += right_it->size;
@@ -401,8 +397,6 @@ private:
                 adjacency_list.erase_and_dispose(right_it, [](RegionMetadata * elem) { elem->destroy(); });
             }
         }
-
-        //std::cerr << "size is enlarged: " << was_size << " -> " << region.size << "\n";
 
         size_multimap.insert(region);
     }
@@ -432,10 +426,6 @@ private:
     {
         if (lru_list.empty())
             return nullptr;
-
-        /*for (const auto & elem : adjacency_list)
-            std::cerr << (!elem.SizeMultimapHook::is_linked() ? "\033[1m" : "") << elem.size << (!elem.SizeMultimapHook::is_linked() ? "\033[0m " : " ");
-        std::cerr << '\n';*/
 
         auto it = adjacency_list.iterator_to(lru_list.front());
 
@@ -543,8 +533,6 @@ private:
             RegionMetadata * free_region = addNewChunk(required_chunk_size);
             return allocateFromFreeRegion(*free_region, size);
         }
-
-        //        std::cerr << "Requested size: " << size << "\n";
 
         /// Evict something from cache and continue.
         while (true)

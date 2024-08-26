@@ -449,8 +449,10 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             if (expressions.has_join)
             {
                 for (auto & stream : pipeline.streams)
-                    stream
-                        = std::make_shared<ExpressionBlockInputStream>(stream, expressions.before_join, /*req_id=*/"");
+                    stream = std::make_shared<ExpressionBlockInputStream>(
+                        stream,
+                        expressions.before_join,
+                        /*req_id=*/"");
             }
 
             if (expressions.has_where)

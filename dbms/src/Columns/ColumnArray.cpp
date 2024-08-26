@@ -25,7 +25,12 @@
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <Functions/FunctionHelpers.h>
+#include <IO/Endian.h>
+#include <IO/WriteHelpers.h>
 #include <string.h> // memcpy
+
+#include <memory>
 
 namespace DB
 {
@@ -253,34 +258,71 @@ void ColumnArray::updateWeakHash32(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    auto s = offsets->size();
-    if (hash.getData().size() != s)
-        throw Exception(
-            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
-                + std::to_string(hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    updateWeakHash32Impl<false>(hash, collator, sort_key_container, {});
+}
+
+void ColumnArray::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    updateWeakHash32Impl<true>(hash, collator, sort_key_container, selective);
+}
+
+template <bool selective_block>
+void ColumnArray::updateWeakHash32Impl(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    size_t rows;
+    if constexpr (selective_block)
+    {
+        rows = selective.size();
+    }
+    else
+    {
+        rows = offsets->size();
+    }
+
+    RUNTIME_CHECK_MSG(
+        rows == hash.getData().size(),
+        "size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        rows);
 
     WeakHash32 internal_hash(data->size());
     data->updateWeakHash32(internal_hash, collator, sort_key_container);
 
-    Offset prev_offset = 0;
     const auto & offsets_data = getOffsets();
-    auto & hash_data = hash.getData();
-    auto & internal_hash_data = internal_hash.getData();
+    UInt32 * hash_data = hash.getData().data();
+    const auto & internal_hash_data = internal_hash.getData();
 
-    for (size_t i = 0; i < s; ++i)
+    for (size_t i = 0; i < rows; ++i)
     {
         /// This row improves hash a little bit according to integration tests.
         /// It is the same as to use previous hash value as the first element of array.
-        hash_data[i] = intHashCRC32(hash_data[i]);
+        *hash_data = intHashCRC32(*hash_data);
 
-        for (size_t row = prev_offset; row < offsets_data[i]; ++row)
+        size_t row = i;
+        if constexpr (selective_block)
+            row = selective[i];
+
+        Offset prev_offset = 0;
+        if likely (row > 0)
+            prev_offset = offsets_data[row - 1];
+
+        for (size_t sub_row = prev_offset; sub_row < offsets_data[row]; ++sub_row)
+        {
             /// It is probably not the best way to combine hashes.
             /// But much better then xor which lead to similar hash for arrays like [1], [1, 1, 1], [1, 1, 1, 1, 1], ...
             /// Much better implementation - to add offsets as an optional argument to updateWeakHash32.
-            hash_data[i] = intHashCRC32(internal_hash_data[row], hash_data[i]);
+            *hash_data = intHashCRC32(internal_hash_data[sub_row], *hash_data);
+        }
 
-        prev_offset = offsets_data[i];
+        ++hash_data;
     }
 }
 
@@ -761,10 +803,44 @@ void ColumnArray::getPermutation(bool reverse, size_t limit, int nan_direction_h
     }
 }
 
-ColumnPtr ColumnArray::replicateRange(size_t /*start_row*/, size_t /*end_row*/, const IColumn::Offsets & /*offsets*/)
+ColumnPtr ColumnArray::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets)
     const
 {
-    throw Exception("not implement.", ErrorCodes::NOT_IMPLEMENTED);
+    size_t col_size = size();
+    if (col_size != replicate_offsets.size())
+        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    // We only support replicate to full column.
+    RUNTIME_CHECK(start_row == 0, start_row);
+    RUNTIME_CHECK(end_row == replicate_offsets.size(), end_row, replicate_offsets.size());
+
+    if (typeid_cast<const ColumnUInt8 *>(data.get()))
+        return replicateNumber<UInt8>(replicate_offsets);
+    if (typeid_cast<const ColumnUInt16 *>(data.get()))
+        return replicateNumber<UInt16>(replicate_offsets);
+    if (typeid_cast<const ColumnUInt32 *>(data.get()))
+        return replicateNumber<UInt32>(replicate_offsets);
+    if (typeid_cast<const ColumnUInt64 *>(data.get()))
+        return replicateNumber<UInt64>(replicate_offsets);
+    if (typeid_cast<const ColumnUInt128 *>(data.get()))
+        return replicateNumber<UInt128>(replicate_offsets);
+    if (typeid_cast<const ColumnInt8 *>(data.get()))
+        return replicateNumber<Int8>(replicate_offsets);
+    if (typeid_cast<const ColumnInt16 *>(data.get()))
+        return replicateNumber<Int16>(replicate_offsets);
+    if (typeid_cast<const ColumnInt32 *>(data.get()))
+        return replicateNumber<Int32>(replicate_offsets);
+    if (typeid_cast<const ColumnInt64 *>(data.get()))
+        return replicateNumber<Int64>(replicate_offsets);
+    if (typeid_cast<const ColumnFloat32 *>(data.get()))
+        return replicateNumber<Float32>(replicate_offsets);
+    if (typeid_cast<const ColumnFloat64 *>(data.get()))
+        return replicateNumber<Float64>(replicate_offsets);
+    if (typeid_cast<const ColumnConst *>(data.get()))
+        return replicateConst(replicate_offsets);
+    if (typeid_cast<const ColumnNullable *>(data.get()))
+        return replicateNullable(replicate_offsets);
+    return replicateGeneric(replicate_offsets);
 }
 
 
@@ -1009,6 +1085,34 @@ ColumnPtr ColumnArray::replicateTuple(const Offsets & replicate_offsets) const
 void ColumnArray::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);
+}
+
+bool ColumnArray::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */)
+{
+    RUNTIME_CHECK(raw_value.size() >= cursor + length);
+    insertFromDatumData(raw_value.c_str() + cursor, length);
+    return true;
+}
+
+void ColumnArray::insertFromDatumData(const char * data, size_t length)
+{
+    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
+
+    RUNTIME_CHECK(checkAndGetColumn<ColumnVector<Float32>>(&getData()));
+    RUNTIME_CHECK(getData().isFixedAndContiguous());
+
+    RUNTIME_CHECK(length >= sizeof(UInt32), length);
+    auto n = readLittleEndian<UInt32>(data);
+    data += sizeof(UInt32);
+
+    auto precise_data_size = n * sizeof(Float32);
+    RUNTIME_CHECK(length >= sizeof(UInt32) + precise_data_size, n, length);
+    insertData(data, precise_data_size);
+}
+
+std::pair<UInt32, StringRef> ColumnArray::getElementRef(size_t element_idx) const
+{
+    return {static_cast<UInt32>(sizeAt(element_idx)), getDataAt(element_idx)};
 }
 
 } // namespace DB

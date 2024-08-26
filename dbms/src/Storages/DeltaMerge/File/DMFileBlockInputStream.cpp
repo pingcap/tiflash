@@ -60,7 +60,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         file_provider,
         read_limiter,
         scan_context,
-        tracing_id);
+        tracing_id,
+        read_tag);
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
 

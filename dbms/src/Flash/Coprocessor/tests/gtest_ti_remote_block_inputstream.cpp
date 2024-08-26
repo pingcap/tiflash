@@ -78,7 +78,7 @@ struct MockWriter
         summary.scan_context->dmfile_mvcc_skipped_rows = 15000;
         summary.scan_context->dmfile_lm_filter_scanned_rows = 8000;
         summary.scan_context->dmfile_lm_filter_skipped_rows = 15000;
-        summary.scan_context->total_dmfile_rough_set_index_check_time_ns = 10;
+        summary.scan_context->total_rs_pack_filter_check_time_ns = 10;
         summary.scan_context->total_dmfile_read_time_ns = 200;
         summary.scan_context->create_snapshot_time_ns = 5;
         summary.scan_context->total_local_region_num = 10;
@@ -224,7 +224,7 @@ struct MockReceiverContext
         for (size_t i = 0; i < field_types.size(); ++i)
         {
             String name = "exchange_receiver_" + std::to_string(i);
-            ColumnInfo info = TiDB::fieldTypeToColumnInfo(field_types[i]);
+            TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(field_types[i]);
             schema.emplace_back(std::move(name), std::move(info));
         }
     }
@@ -306,7 +306,7 @@ public:
         DAGSchema schema;
         for (size_t i = 0; i < fields.size(); ++i)
         {
-            ColumnInfo info = TiDB::fieldTypeToColumnInfo(fields[i]);
+            TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(fields[i]);
             schema.emplace_back(String("col") + std::to_string(i), std::move(info));
         }
         return schema;

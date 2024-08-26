@@ -15,7 +15,8 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <TiDB/Schema/TiDB.h>
+#include <Parsers/IAST_fwd.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <kvproto/mpp.pb.h>
 
 namespace DB
@@ -86,7 +87,7 @@ struct TaskMeta
 };
 
 using TaskMetas = std::vector<TaskMeta>;
-void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
+void literalFieldToTiPBExpr(const TiDB::ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
 void literalToPB(tipb::Expr * expr, const Field & value, int32_t collator_id);
 String getFunctionNameForConstantFolding(tipb::Expr * expr);
 void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & context);
@@ -100,7 +101,7 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t collator_id, const Context & context);
 void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns);
 TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast);
-void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions);
+void compileFilter(const DAGSchema & input, ASTPtr ast, ASTs & conditions);
 void fillTaskMetaWithMPPInfo(mpp::TaskMeta & task_meta, const MPPInfo & mpp_info);
 
 } // namespace DB

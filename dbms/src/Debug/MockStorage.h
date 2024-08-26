@@ -19,7 +19,8 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Operators/Operator.h>
-#include <TiDB/Schema/TiDB.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/types.h>
 
 #include <atomic>
@@ -53,8 +54,10 @@ private:
     std::atomic<Int64> current_id = 0;
 };
 
-ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos);
-ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const ColumnsWithTypeAndName & all_columns);
+TiDB::ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos);
+ColumnsWithTypeAndName getUsedColumns(
+    const TiDB::ColumnInfos & used_columns,
+    const ColumnsWithTypeAndName & all_columns);
 
 /** Responsible for mock data for executor tests and mpp tests.
   * 1. Use this class to add mock table schema and table column data.
@@ -146,6 +149,7 @@ public:
 
     TableInfo getTableInfo(const String & name);
     TableInfo getTableInfoForDeltaMerge(const String & name);
+    DM::ColumnDefines getStoreColumnDefines(Int64 table_id);
 
     size_t getTableScanConcurrencyHint(const TiDBTableScan & table_scan);
 

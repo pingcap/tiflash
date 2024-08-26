@@ -199,6 +199,14 @@ void ThreadPoolImpl<Thread>::scheduleOrThrow(
 }
 
 template <typename Thread>
+std::future<void> ThreadPoolImpl<Thread>::scheduleWithFuture(Job job, uint64_t wait_timeout_us)
+{
+    auto task = std::make_shared<std::packaged_task<void()>>(std::move(job));
+    scheduleOrThrow([task]() { (*task)(); }, 0, wait_timeout_us);
+    return task->get_future();
+}
+
+template <typename Thread>
 void ThreadPoolImpl<Thread>::wait()
 {
     {

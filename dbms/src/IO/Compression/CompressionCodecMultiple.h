@@ -34,6 +34,8 @@ public:
 
     UInt8 getMethodByte() const override;
 
+    bool isCompression() const override;
+
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
     static std::vector<UInt8> getCodecsBytesFromData(const char * source);
@@ -43,9 +45,6 @@ protected:
 
     void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 decompressed_size)
         const override;
-
-    bool isCompression() const override;
-    bool isGenericCompression() const override { return false; }
 
 private:
     Codecs codecs;

@@ -967,6 +967,30 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     return filter_column_name;
 }
 
+std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownFilter(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+{
+    assert(!conditions.empty());
+
+    ExpressionActionsChain chain;
+    initChain(chain);
+    String filter_column_name = appendWhere(chain, conditions);
+    ExpressionActionsPtr before_where = chain.getLastActions();
+    chain.addStep();
+
+    // remove useless tmp column and keep the schema of local streams and remote streams the same.
+    for (const auto & col : getCurrentInputColumns())
+    {
+        chain.getLastStep().required_output.push_back(col.name);
+    }
+    ExpressionActionsPtr project_after_where = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+
+    RUNTIME_CHECK(!project_after_where->getActions().empty());
+    return {before_where, filter_column_name, project_after_where};
+}
+
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
@@ -1023,6 +1047,12 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
     if (org_type->isDateOrDateTime())
     {
         tipb::Expr const_expr = constructDateTimeLiteralTiExpr(0);
+        auto const_expr_name = getActions(const_expr, actions);
+        return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
+    }
+    else if (checkDataTypeArray<DataTypeFloat32>(org_type.get()))
+    {
+        tipb::Expr const_expr = constructZeroVectorFloat32TiExpr();
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
@@ -1121,7 +1151,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
     const std::vector<UInt8> & may_need_add_cast_column,
-    const ColumnInfos & table_scan_columns)
+    const TiDB::ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
     std::vector<String> casted_columns;

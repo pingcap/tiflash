@@ -16,6 +16,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/FilterConditions.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
@@ -69,6 +70,8 @@ private:
         size_t) override;
 
     void buildRuntimeFilterInLocalStream(Context & context);
+
+    RuntimeFilteList getRuntimeFilterList(Context & context);
 
 private:
     FilterConditions filter_conditions;

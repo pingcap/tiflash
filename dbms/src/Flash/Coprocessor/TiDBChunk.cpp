@@ -31,7 +31,7 @@ namespace DB
 {
 TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
 {
-    for (auto & type : field_types)
+    for (const auto & type : field_types)
     {
         columns.emplace_back(getFieldLengthForArrowEncode(type.tp()));
     }

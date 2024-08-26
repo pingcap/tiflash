@@ -27,7 +27,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
 {
     // For fine grained shuffle, PhysicalAggregation will not be broken into AggregateBuild and AggregateConvergent.
     // So only non fine grained shuffle is considered here.
-    RUNTIME_CHECK(!fine_grained_shuffle.enable());
+    RUNTIME_CHECK(!fine_grained_shuffle.enabled());
 
     assert(aggregate_context);
     if (aggregate_context->hasSpilledData())

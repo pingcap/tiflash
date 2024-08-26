@@ -16,7 +16,6 @@
 
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>

@@ -18,8 +18,11 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <IO/Buffer/ReadBufferFromString.h>
-#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
+#include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -556,7 +559,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::string_view str,
     assert(compression_method != CompressionMethod::NONE);
 
     String compressed_buffer;
-    auto codec = CompressionFactory::create(CompressionSetting(compression_method));
+    auto codec = CompressionCodecFactory::create(CompressionSetting(compression_method));
     compressed_buffer.resize(codec->getCompressedReserveSize(str.size()));
     size_t compressed_size = codec->compress(str.data(), str.size(), compressed_buffer.data());
     compressed_buffer.resize(compressed_size);

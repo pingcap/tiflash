@@ -21,9 +21,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/JsonBinary.h>
-
-#include <string>
-#include <vector>
+#include <TiDB/Schema/TiDBTypes.h>
 
 namespace DB::tests
 {
@@ -120,7 +118,7 @@ try
     /// ColumnConst(nullable)
     auto nested_str_col = ColumnString::create();
     nested_str_col->insertData(reinterpret_cast<const char *>(bj9), sizeof(bj9) / sizeof(UInt8));
-    col_null_map = ColumnUInt8::create(3, 0);
+    col_null_map = ColumnUInt8::create(1, 0);
     json_col = ColumnNullable::create(std::move(nested_str_col), std::move(col_null_map));
     auto const_json_col = ColumnConst::create(std::move(json_col), 3);
     auto const_nullable_input_col

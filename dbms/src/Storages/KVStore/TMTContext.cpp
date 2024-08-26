@@ -158,19 +158,42 @@ TMTContext::TMTContext(
           context.getSettingsRef().task_scheduler_thread_soft_limit,
           context.getSettingsRef().task_scheduler_thread_hard_limit,
           context.getSettingsRef().task_scheduler_active_set_soft_limit)))
-    , engine(raft_config.engine)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
+    , raftproxy_config(raft_config)
 {
     startMonitorMPPTaskThread(mpp_task_manager);
-
     etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
-    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
+}
+
+void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
+{
+    if (!raftproxy_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
         && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
+        kvstore->fetchProxyConfig(proxy_helper);
+        if (kvstore->getProxyConfigSummay().valid)
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from proxy's conf engine_addr={}",
+                kvstore->getProxyConfigSummay().engine_addr);
+            s3gc_owner = OwnerManager::createS3GCOwner(
+                context,
+                /*id*/ kvstore->getProxyConfigSummay().engine_addr,
+                etcd_client);
+        }
+        else
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from tiflash's conf engine_addr={}",
+                raftproxy_config.advertise_engine_addr);
+            s3gc_owner
+                = OwnerManager::createS3GCOwner(context, /*id*/ raftproxy_config.advertise_engine_addr, etcd_client);
+        }
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
