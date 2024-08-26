@@ -73,10 +73,11 @@ struct CheckIn
         {
             if (result == RSResult::All)
                 break;
-            // skip null value
+
             if (v.isNull())
-                continue;
-            result = result || CheckEqual::check<T>(v, type, min, max);
+                result = result || RSResult::NoneNull;
+            else
+                result = result || CheckEqual::check<T>(v, type, min, max);
         }
         return result;
     }

@@ -258,8 +258,6 @@ RSResults MinMaxIndex::checkNullableIn(
 {
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto & null_map = column_nullable.getNullMapColumn();
-
-    RSResults results(pack_count, RSResult::SomeNull);
     const auto * raw_type = type.get();
 
 #define DISPATCH(TYPE)                                 \
@@ -284,6 +282,7 @@ RSResults MinMaxIndex::checkNullableIn(
         const auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
         const auto & chars = string_column->getChars();
         const auto & offsets = string_column->getOffsets();
+        RSResults results(pack_count, RSResult::SomeNull);
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             if (details::minIsNull(null_map, i))
@@ -321,7 +320,7 @@ RSResults MinMaxIndex::checkNullableIn(
             values,
             type);
     }
-    return results;
+    return RSResults(pack_count, RSResult::SomeNull);
 }
 
 template <typename T>
@@ -351,8 +350,6 @@ RSResults MinMaxIndex::checkIn(
     const std::vector<Field> & values,
     const DataTypePtr & type)
 {
-    RSResults results(pack_count, RSResult::None);
-
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
     {
@@ -371,6 +368,7 @@ RSResults MinMaxIndex::checkIn(
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
+        RSResults results(pack_count, RSResult::None);
         const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
         const auto & chars = string_column->getChars();
         const auto & offsets = string_column->getOffsets();
@@ -421,9 +419,8 @@ RSResults MinMaxIndex::checkCmpImpl(size_t start_pack, size_t pack_count, const 
 template <typename Op>
 RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
 {
-    RSResults results(pack_count, RSResult::None);
     if (value.isNull())
-        return results;
+        return RSResults(pack_count, RSResult::NoneNull);
 
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
@@ -445,6 +442,7 @@ RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Fiel
         const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
         const auto & chars = string_column->getChars();
         const auto & offsets = string_column->getOffsets();
+        RSResults results(pack_count, RSResult::None);
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             if (!has_value_marks[i])
@@ -520,8 +518,6 @@ RSResults MinMaxIndex::checkNullableCmp(
 {
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto & null_map = column_nullable.getNullMapColumn();
-
-    RSResults results(pack_count, RSResult::SomeNull);
     const auto * raw_type = type.get();
 
 #define DISPATCH(TYPE)                                 \
@@ -546,6 +542,7 @@ RSResults MinMaxIndex::checkNullableCmp(
         const auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
         const auto & chars = string_column->getChars();
         const auto & offsets = string_column->getOffsets();
+        RSResults results(pack_count, RSResult::SomeNull);
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             if (details::minIsNull(null_map, i))
@@ -583,7 +580,7 @@ RSResults MinMaxIndex::checkNullableCmp(
             value,
             type);
     }
-    return results;
+    return RSResults(pack_count, RSResult::SomeNull);
 }
 
 // If a pack only contains null marks and delete marks, checkIsNull will return RSResult::All.
