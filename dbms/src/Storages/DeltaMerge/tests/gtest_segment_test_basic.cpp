@@ -531,8 +531,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(
             file_id,
             ref_id,
             parent_path,
-            DMFileMeta::ReadMode::all(),
-            /* meta_version= */ 0);
+            DMFileMeta::ReadMode::all());
         wbs.writeLogAndData();
         ASSERT_TRUE(segment->ingestDataToDelta(
             *dm_context,
@@ -591,8 +590,7 @@ void SegmentTestBasic::ingestDTFileByReplace(
             file_id,
             ref_id,
             parent_path,
-            DMFileMeta::ReadMode::all(),
-            /* meta_version= */ 0);
+            DMFileMeta::ReadMode::all());
         wbs.writeLogAndData();
 
         auto apply_result = segment->ingestDataForTest(*dm_context, ref_file, clear);

@@ -78,7 +78,7 @@ try
     {
         S3::uploadEmptyFile(
             *s3_client,
-            fmt::format("{}/{}", s3name_dtfile.toFullKey(), DM::DMFileMetaV2::metaFileName(/* meta_version= */ 0)));
+            fmt::format("{}/{}", s3name_dtfile.toFullKey(), DM::DMFileMetaV2::metaFileName()));
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(s3name_dtfile.toFullKey()),
             .offset_in_file = 0,

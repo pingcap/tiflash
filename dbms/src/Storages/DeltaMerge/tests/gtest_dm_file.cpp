@@ -146,13 +146,7 @@ public:
         auto page_id = dm_file->pageId();
         auto parent_path = dm_file->parentPath();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(
-            file_provider,
-            file_id,
-            page_id,
-            parent_path,
-            DMFileMeta::ReadMode::all(),
-            /* meta_version= */ 0);
+        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFileMeta::ReadMode::all());
     }
 
     DMContext & dmContext() { return *dm_context; }
@@ -558,8 +552,7 @@ try
         dmfile2->fileId(),
         dmfile2->pageId(),
         dmfile2->parentPath(),
-        DMFileMeta::ReadMode::all(),
-        /* meta_version= */ 0);
+        DMFileMeta::ReadMode::all());
     LOG_DEBUG(Logger::get(), "check dmfile1 dmfile3");
     check_meta(dmfile1, dmfile3);
 
@@ -623,8 +616,7 @@ try
             dmfile->fileId(),
             dmfile->pageId(),
             dmfile->parentPath(),
-            DMFileMeta::ReadMode::all(),
-            /* meta_version= */ 0);
+            DMFileMeta::ReadMode::all());
         FAIL(); // Should not come here.
     }
     catch (const DB::Exception & e)

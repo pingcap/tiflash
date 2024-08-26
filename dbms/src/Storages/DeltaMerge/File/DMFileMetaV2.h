@@ -80,7 +80,7 @@ public:
     void finalize(WriteBuffer & buffer, const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
         override;
     void read(const FileProviderPtr & file_provider, const DMFileMeta::ReadMode & read_meta_mode) override;
-    static String metaFileName(UInt32 meta_version)
+    static String metaFileName(UInt32 meta_version = 0)
     {
         if (meta_version == 0)
             return "meta";

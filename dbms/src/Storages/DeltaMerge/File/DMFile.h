@@ -63,7 +63,7 @@ public:
         UInt64 page_id,
         const String & parent_path,
         const DMFileMeta::ReadMode & read_meta_mode,
-        UInt32 meta_version,
+        UInt32 meta_version = 0,
         KeyspaceID keyspace_id = NullspaceID);
 
     struct ListOptions
