@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -237,6 +238,7 @@ bool SegmentReadTaskScheduler::schedule()
 
 void SegmentReadTaskScheduler::schedLoop()
 {
+    setThreadName("segment-sched");
     while (!isStop())
     {
         if (!schedule())
