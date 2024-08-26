@@ -2296,7 +2296,7 @@ private:
 };
 
 
-BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const JoinPtr & parent, const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
+BlockInputStreamPtr createStreamWithNonJoinedRows(const JoinPtr & parent, const Block & left_sample_block, size_t index, size_t step, size_t max_block_size)
 {
     return std::make_shared<NonJoinedBlockInputStream>(parent, left_sample_block, index, step, max_block_size);
 }

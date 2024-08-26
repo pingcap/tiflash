@@ -187,7 +187,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
         const auto & input_header = probe_pipeline.firstStream()->getHeader();
         for (size_t i = 0; i < not_joined_concurrency; ++i)
         {
-            auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(join_ptr, input_header, i, not_joined_concurrency, settings.max_block_size);
+            auto non_joined_stream = createStreamWithNonJoinedRows(join_ptr, input_header, i, not_joined_concurrency, settings.max_block_size);
             non_joined_stream->setExtraInfo("add stream with non_joined_data if full_or_right_join");
             probe_pipeline.streams_with_non_joined_data.push_back(non_joined_stream);
             join_execute_info.non_joined_streams.push_back(non_joined_stream);

@@ -743,7 +743,7 @@ std::string ExpressionActions::dumpActions() const
     return ss.str();
 }
 
-BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & , size_t , size_t , size_t ) const
+BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block &, size_t, size_t, size_t) const
 {
     throw Exception("Not supported");
 }
