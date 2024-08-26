@@ -37,8 +37,7 @@ if (ARCH_AARCH64)
     option (TIFLASH_ENABLE_ASIMD_SUPPORT "Enable Advanced SIMD support." ON)
     option (TIFLASH_ENABLE_SVE_SUPPORT "Enable Scalable Vector Extension support." OFF)
     # TODO: default ON, to be changed after CI is updated
-    # Note: explicitly set to OFF for cse-branch
-    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." OFF)
+    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." ON)
 
     if (NO_ARMV81_OR_HIGHER)
         # crc32 is optional in v8.0 and mandatory in v8.1. Enable it as __crc32()* is used in lot's of places and even very old ARM CPUs
