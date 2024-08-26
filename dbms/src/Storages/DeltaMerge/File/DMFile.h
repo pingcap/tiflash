@@ -17,9 +17,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
-#include <Storages/DeltaMerge/File/DMFileV3IncrementWriter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
@@ -40,6 +38,7 @@ namespace tests
 {
 class DMFileTest;
 class DMFileMetaV2Test;
+class DMFileV3IncrementWriter;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
 
