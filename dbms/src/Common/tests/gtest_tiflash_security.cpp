@@ -68,8 +68,8 @@ key_path="")",
     {
         SCOPED_TRACE(fmt::format("case: {}", c));
         auto new_config = loadConfigFromString(c);
-        TiFlashSecurityConfig tiflash_config(new_config, log);
-        ASSERT_FALSE(tiflash_config.hasTlsConfig());
+        TiFlashSecurityConfig tiflash_config(*new_config, log);
+        ASSERT_FALSE(tiflash_config.has_tls_config);
     }
 }
 CATCH
@@ -108,13 +108,11 @@ key_path="security/key.pem")",
         auto new_config = loadConfigFromString(c);
         try
         {
-            TiFlashSecurityConfig tiflash_config(new_config, log);
+            TiFlashSecurityConfig tiflash_config(*new_config, log);
             ASSERT_FALSE(true) << "should raise exception";
         }
         catch (Exception & e)
         {
-            // has_tls remains false when an exception raise
-            ASSERT_FALSE(tiflash_config.hasTlsConfig());
             // the error code must be INVALID_CONFIG_PARAMETER
             ASSERT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
