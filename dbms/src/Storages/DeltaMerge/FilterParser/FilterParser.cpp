@@ -395,8 +395,10 @@ RSOperatorPtr FilterParser::parseRFInExpr(
     case tipb::IN:
     {
         if (!isColumnExpr(target_expr) || !target_attr)
-            return createUnsupported(
-                fmt::format("rf target expr is not column expr, expr.tp={}", tipb::ExprType_Name(target_expr.tp())));
+            return createUnsupported(fmt::format(
+                "rf target expr is not column expr or attr not found, expr.tp={} target_attr.has_value={}",
+                tipb::ExprType_Name(target_expr.tp()),
+                target_attr.has_value()));
         const auto & attr = *target_attr;
         if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
         {
