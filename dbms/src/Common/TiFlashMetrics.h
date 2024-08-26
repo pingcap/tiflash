@@ -1155,6 +1155,7 @@ private:
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
     static constexpr auto raft_proxy_thread_memory_usage = "tiflash_raft_proxy_thread_memory_usage";
     static constexpr auto storages_thread_memory_usage = "tiflash_storages_thread_memory_usage";
+    static constexpr auto stack_thread_memory_usage = "tiflash_stack_thread_memory_usage";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
     // Here we add a ProcessCollector to collect cpu/rss/vsize/start_time information.
@@ -1183,6 +1184,10 @@ private:
     prometheus::Family<prometheus::Gauge> * registered_storage_thread_memory_usage_family;
     std::shared_mutex storage_thread_report_mtx;
     std::unordered_map<std::string, prometheus::Gauge *> registered_storage_thread_memory_usage_metrics;
+
+    prometheus::Family<prometheus::Gauge> * registered_stack_thread_memory_usage_family;
+    std::shared_mutex stack_thread_report_mtx;
+    std::unordered_map<std::string, prometheus::Gauge *> registered_stack_thread_memory_usage_metrics;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
