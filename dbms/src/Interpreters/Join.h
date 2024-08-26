@@ -32,6 +32,10 @@
 
 namespace DB
 {
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+using Joins = std::vector<JoinPtr>;
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -134,7 +138,7 @@ public:
       * Use only after all calls to joinBlock was done.
       * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const JoinPtr & parent, const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -398,9 +402,6 @@ private:
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
 };
-
-using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
 
 
 } // namespace DB

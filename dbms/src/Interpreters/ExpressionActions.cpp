@@ -743,13 +743,9 @@ std::string ExpressionActions::dumpActions() const
     return ss.str();
 }
 
-BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
+BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & , size_t , size_t , size_t ) const
 {
-    for (const auto & action : actions)
-        if (action.join && (action.join->getKind() == ASTTableJoin::Kind::Full || action.join->getKind() == ASTTableJoin::Kind::Right))
-            return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
-
-    return {};
+    throw Exception("Not supported");
 }
 
 void ExpressionActionsChain::addStep()

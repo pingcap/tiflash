@@ -314,6 +314,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         for (size_t i = 0; i < not_joined_concurrency; ++i)
         {
             auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(
+                join_ptr,
                 pipeline.firstStream()->getHeader(),
                 i,
                 not_joined_concurrency,
