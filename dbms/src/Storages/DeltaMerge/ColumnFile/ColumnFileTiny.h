@@ -158,10 +158,26 @@ public:
         const dtpb::ColumnFileTiny & cf_pb,
         ColumnFileSchemaPtr & last_schema);
 
+    static ColumnFilePersistedPtr restoreFromCheckpoint(
+        const LoggerPtr & parent_log,
+        const DMContext & context,
+        UniversalPageStoragePtr temp_ps,
+        WriteBatches & wbs,
+        BlockPtr schema,
+        PageIdU64 data_page_id,
+        size_t rows,
+        size_t bytes);
     static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(
         const LoggerPtr & parent_log,
         const DMContext & context,
         ReadBuffer & buf,
+        UniversalPageStoragePtr temp_ps,
+        const BlockPtr & last_schema,
+        WriteBatches & wbs);
+    static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(
+        const LoggerPtr & parent_log,
+        const DMContext & context,
+        const dtpb::ColumnFileTiny & cf_pb,
         UniversalPageStoragePtr temp_ps,
         const BlockPtr & last_schema,
         WriteBatches & wbs);
