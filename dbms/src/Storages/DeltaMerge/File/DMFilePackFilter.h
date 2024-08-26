@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/S3/S3Common.h>
@@ -51,9 +52,10 @@ public:
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context,
-        const String & tracing_id)
+        const String & tracing_id,
+        const ReadTag read_tag)
     {
-        auto pack_filter = DMFilePackFilter(
+        return DMFilePackFilter(
             dmfile,
             index_cache,
             set_cache_if_miss,
@@ -63,9 +65,8 @@ public:
             file_provider,
             read_limiter,
             scan_context,
-            tracing_id);
-        pack_filter.init();
-        return pack_filter;
+            tracing_id,
+            read_tag);
     }
 
     const RSResults & getHandleRes() const { return handle_res; }
@@ -105,7 +106,7 @@ public:
         const auto & pack_stats = dmfile->getPackStats();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (isUse(pack_res[i]))
+            if (pack_res[i].isUse())
             {
                 rows += pack_stats[i].rows;
                 bytes += pack_stats[i].bytes;
@@ -125,7 +126,8 @@ private:
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
-        const String & tracing_id)
+        const String & tracing_id,
+        const ReadTag read_tag)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -137,9 +139,11 @@ private:
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
-    {}
+    {
+        init(read_tag);
+    }
 
-    void init();
+    void init(ReadTag read_tag);
 
     static void loadIndex(
         ColumnIndexes & indexes,
@@ -153,8 +157,8 @@ private:
 
     void tryLoadIndex(ColId col_id);
 
-    // None, Some, All
-    std::tuple<UInt64, UInt64, UInt64> countPackRes() const;
+    // None+NoneNull, Some+SomeNull, All, AllNull
+    std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const;
 
 private:
     DMFilePtr dmfile;

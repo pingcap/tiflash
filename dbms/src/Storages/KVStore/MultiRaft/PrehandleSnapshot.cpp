@@ -138,20 +138,17 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
     const auto & opts = prehandle_ctx.opts;
     auto & tmt = prehandle_ctx.tmt;
     auto & trace = prehandle_ctx.trace;
+    const auto split_id = sst_stream->getSplitId();
+    const String limit_tag = sst_stream->getSoftLimit() ? sst_stream->getSoftLimit()->toDebugString() : "";
+    const auto region_id = new_region->id();
 
-    auto region_id = new_region->id();
-    auto split_id = sst_stream->getSplitId();
     CurrentMetrics::add(CurrentMetrics::RaftNumPrehandlingSubTasks);
     SCOPE_EXIT({
         trace.releaseSubtaskResources(region_id, split_id);
         CurrentMetrics::sub(CurrentMetrics::RaftNumPrehandlingSubTasks);
     });
     Stopwatch sw;
-    LOG_INFO(
-        log,
-        "Add prehandle task split_id={} limit={}",
-        split_id,
-        sst_stream->getSoftLimit().has_value() ? sst_stream->getSoftLimit()->toDebugString() : "");
+    LOG_INFO(log, "Add prehandle task split_id={} limit={}", split_id, limit_tag);
     std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
     // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
     // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
@@ -218,7 +215,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                 .ingest_ids = stream->outputFiles(),
                 .stats = PrehandleResult::Stats{
                     .parallels = 1,
-                    .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
+                    .raft_snapshot_bytes = sst_stream->getProcessKeys().totalBytes(),
                     .approx_raft_snapshot_size = 0,
                     .dt_disk_bytes = stream->getTotalBytesOnDisk(),
                     .dt_total_bytes = stream->getTotalCommittedBytes(),
@@ -520,6 +517,7 @@ std::tuple<ReadFromStreamResult, PrehandleResult> executeParallelTransform(
         split_key_count,
         new_region->id(),
         snaps.len);
+
     Stopwatch watch;
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
@@ -659,7 +657,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     });
 
     PrehandleResult prehandle_result;
-    TableID physical_table_id = InvalidTableID;
+    TableID physical_table_id = new_region->getMappedTableID();
 
     auto region_id = new_region->id();
     auto prehandle_task = prehandling_trace.registerTask(region_id);
@@ -671,7 +669,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstone.
-            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            const auto [table_drop_lock, storage, schema_snap]
+                = AtomicGetStorageSchema(region_id, keyspace_id, physical_table_id, tmt);
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
@@ -688,7 +687,6 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     /* ignore_cache= */ false,
                     context.getSettingsRef().safe_point_update_interval_seconds);
             }
-            physical_table_id = storage->getTableInfo().id;
 
             auto opt = DM::SSTFilesToBlockInputStreamOpts{
                 .log_prefix = fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id),

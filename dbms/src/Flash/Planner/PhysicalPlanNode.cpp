@@ -145,7 +145,7 @@ void PhysicalPlanNode::buildPipeline(
 
 EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorContext & exec_context)
 {
-    if (getFineGrainedShuffle().enable())
+    if (getFineGrainedShuffle().enabled())
         return nullptr;
     return doSinkComplete(exec_context);
 }

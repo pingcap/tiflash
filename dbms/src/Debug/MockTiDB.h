@@ -84,22 +84,29 @@ public:
         const String & table_name,
         const ColumnsDescription & columns,
         Timestamp tso,
+        const String & handle_pk_name);
+
+    // Mock to create a partition table with given partition names
+    // Return <logical_table_id, [physical_table_id0, physical_table_id1, ...]>
+    std::tuple<TableID, std::vector<TableID>> newPartitionTable(
+        const String & database_name,
+        const String & table_name,
+        const ColumnsDescription & columns,
+        Timestamp tso,
         const String & handle_pk_name,
-        const String & engine_type);
+        const Strings & part_names);
 
     std::vector<TableID> newTables(
         const String & database_name,
         const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
-        Timestamp tso,
-        const String & engine_type);
+        Timestamp tso);
 
     TableID addTable(const String & database_name, TiDB::TableInfo && table_info);
 
     static TiDB::TableInfoPtr parseColumns(
         const String & tbl_name,
         const ColumnsDescription & columns,
-        const String & handle_pk_name,
-        String engine_type);
+        const String & handle_pk_name);
 
     DatabaseID newDataBase(const String & database_name);
 
@@ -135,6 +142,12 @@ public:
         const String & new_column_name);
 
     void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
+    // Rename table to another database
+    void renameTableTo(
+        const String & database_name,
+        const String & table_name,
+        const String & new_database_name,
+        const String & new_table_name);
 
     void renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map);
 

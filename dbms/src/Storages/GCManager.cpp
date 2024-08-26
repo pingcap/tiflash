@@ -20,6 +20,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

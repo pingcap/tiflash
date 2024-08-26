@@ -188,7 +188,7 @@ public:
     std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<UInt8> & may_need_add_cast_column,
-        const ColumnInfos & table_scan_columns);
+        const TiDB::ColumnInfos & table_scan_columns);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

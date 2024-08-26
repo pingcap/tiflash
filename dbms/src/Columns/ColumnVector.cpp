@@ -72,28 +72,53 @@ void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, co
 template <typename T>
 void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    auto s = data.size();
+    updateWeakHash32Impl<false>(hash, {});
+}
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+template <typename T>
+void ColumnVector<T>::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr &,
+    String &,
+    const BlockSelective & selective) const
+{
+    updateWeakHash32Impl<true>(hash, selective);
+}
+
+template <typename T>
+template <bool selective_block>
+void ColumnVector<T>::updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const
+{
+    size_t rows;
+    if constexpr (selective_block)
+    {
+        rows = selective.size();
+    }
+    else
+    {
+        rows = data.size();
+    }
+
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        rows);
 
     const T * begin = data.data();
-    const T * end = begin + s;
     UInt32 * hash_data = hash.getData().data();
 
-    while (begin < end)
+    for (size_t i = 0; i < rows; ++i)
     {
-        if constexpr (is_fit_register<T>)
-            *hash_data = intHashCRC32(*begin, *hash_data);
-        else
-            *hash_data = wideIntHashCRC32(*begin, *hash_data);
+        size_t row = i;
+        if constexpr (selective_block)
+            row = selective[i];
 
-        ++begin;
+        if constexpr (is_fit_register<T>)
+            *hash_data = intHashCRC32(*(begin + row), *hash_data);
+        else
+            *hash_data = wideIntHashCRC32(*(begin + row), *hash_data);
+
         ++hash_data;
     }
 }

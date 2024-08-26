@@ -158,7 +158,6 @@ TMTContext::TMTContext(
           context.getSettingsRef().task_scheduler_thread_soft_limit,
           context.getSettingsRef().task_scheduler_thread_hard_limit,
           context.getSettingsRef().task_scheduler_active_set_soft_limit)))
-    , engine(raft_config.engine)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
@@ -171,10 +170,10 @@ TMTContext::TMTContext(
 
 void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
 {
-    kvstore->fetchProxyConfig(proxy_helper);
     if (!raftproxy_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
         && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        kvstore->fetchProxyConfig(proxy_helper);
         if (kvstore->getProxyConfigSummay().valid)
         {
             LOG_INFO(

@@ -71,6 +71,8 @@ Block LateMaterializationBlockInputStream::read()
                 }
                 for (auto & col : filter_column_block)
                 {
+                    if (col.name == filter_column_name)
+                        continue;
                     col.column = col.column->filter(col_filter, passed_count);
                 }
             }

@@ -1,0 +1,66 @@
+// Copyright 2024 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto2";
+
+package dtpb;
+
+message ColumnFileBig {
+    required uint64 id = 1;
+    required uint64 valid_rows = 2;
+    required uint64 valid_bytes = 3;
+}
+
+message RowKeyRange {
+    required bool is_common_handle = 1;
+    required uint64 rowkey_column_size = 2;
+    required bytes start = 3;
+    required bytes end = 4;
+}
+
+message ColumnFileDeleteRange {
+    required RowKeyRange range = 1;
+}
+
+message ColumnSchema {
+    required int64 column_id = 1;
+    required string column_name = 2;
+    required string column_type = 3;
+}
+
+message ColumnFileTiny {
+    repeated ColumnSchema columns = 1;
+    required uint64 id = 2;
+    required uint64 rows = 3;
+    required uint64 bytes = 4;
+}
+
+enum ColumnFileType {
+    BIG_FILE = 1;
+    TINY_FILE = 2;
+    DELETE_RANGE = 3;
+}
+
+message ColumnFilePersisted {
+    required ColumnFileType type = 1;
+    oneof file {
+        ColumnFileBig big_file = 2;
+        ColumnFileTiny tiny_file = 3;
+        ColumnFileDeleteRange delete_range = 4;
+    }
+}
+
+message DeltaLayerMeta {
+    repeated ColumnFilePersisted files = 1;
+}

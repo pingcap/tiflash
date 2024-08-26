@@ -61,7 +61,7 @@ Table::Table(
     , database_name(database_name_)
     , database_id(database_id_)
     , table_name(table_name_)
-    , col_id(table_info_.columns.size())
+    , col_id(table_info.columns.size())
 {}
 
 MockTiDB::MockTiDB()
@@ -143,7 +143,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const TablePtr & table, 
 
 void MockTiDB::dropDB(Context & context, const String & database_name, bool drop_regions)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     std::vector<String> table_names;
     std::for_each(tables_by_id.begin(), tables_by_id.end(), [&](const auto & pair) {
@@ -170,7 +170,7 @@ void MockTiDB::dropDB(Context & context, const String & database_name, bool drop
 
 void MockTiDB::dropTable(Context & context, const String & database_name, const String & table_name, bool drop_regions)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     auto table = dropTableByNameImpl(context, database_name, table_name, drop_regions);
     if (!table)
@@ -188,7 +188,7 @@ void MockTiDB::dropTable(Context & context, const String & database_name, const 
 
 void MockTiDB::dropTableById(Context & context, const TableID & table_id, bool drop_regions)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     auto table = dropTableByIdImpl(context, table_id, drop_regions);
     if (!table)
@@ -234,8 +234,7 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
 TiDB::TableInfoPtr MockTiDB::parseColumns(
     const String & tbl_name,
     const ColumnsDescription & columns,
-    const String & handle_pk_name,
-    String engine_type)
+    const String & handle_pk_name)
 {
     TableInfo table_info;
     table_info.name = tbl_name;
@@ -280,7 +279,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             index_info.id = 1;
             index_info.is_primary = true;
             index_info.idx_name = "PRIMARY";
-            index_info.tbl_name = tbl_name;
             index_info.is_unique = true;
             index_info.index_type = 1;
             index_info.idx_cols.resize(string_tokens.count());
@@ -296,20 +294,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             table_info.pk_is_handle = true;
     }
 
-    table_info.comment = "Mocked.";
-
-    // set storage engine type
-    std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) {
-        return std::tolower(c);
-    });
-    if (engine_type == "dt")
-        table_info.engine_type = TiDB::StorageEngine::DT;
-
-    if (table_info.engine_type != TiDB::StorageEngine::DT)
-    {
-        throw Exception("Unknown engine type : " + engine_type + ", must be 'dt'", ErrorCodes::BAD_ARGUMENTS);
-    }
-
     return std::make_shared<TiDB::TableInfo>(std::move(table_info));
 }
 
@@ -318,10 +302,9 @@ TableID MockTiDB::newTable(
     const String & table_name,
     const ColumnsDescription & columns,
     Timestamp tso,
-    const String & handle_pk_name,
-    const String & engine_type)
+    const String & handle_pk_name)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     String qualified_name = database_name + "." + table_name;
     if (tables_by_name.find(qualified_name) != tables_by_name.end())
@@ -334,19 +317,59 @@ TableID MockTiDB::newTable(
         throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
+    auto table_info = parseColumns(table_name, columns, handle_pk_name);
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
     return addTable(database_name, std::move(*table_info));
 }
 
+std::tuple<TableID, std::vector<TableID>> MockTiDB::newPartitionTable(
+    const String & database_name,
+    const String & table_name,
+    const ColumnsDescription & columns,
+    Timestamp tso,
+    const String & handle_pk_name,
+    const Strings & part_names)
+{
+    std::scoped_lock lock(tables_mutex);
+
+    String qualified_name = database_name + "." + table_name;
+    if (tables_by_name.find(qualified_name) != tables_by_name.end())
+    {
+        throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
+    }
+
+    if (databases.find(database_name) == databases.end())
+    {
+        throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
+    }
+
+    std::vector<TableID> physical_table_ids;
+    physical_table_ids.reserve(part_names.size());
+    auto table_info = parseColumns(table_name, columns, handle_pk_name);
+    table_info->id = table_id_allocator++;
+    table_info->is_partition_table = true;
+    table_info->partition.enable = true;
+    for (const auto & part_name : part_names)
+    {
+        PartitionDefinition part_def;
+        part_def.id = table_id_allocator++;
+        part_def.name = part_name;
+        table_info->partition.definitions.emplace_back(part_def);
+        ++table_info->partition.num;
+        physical_table_ids.emplace_back(part_def.id);
+    }
+    table_info->update_timestamp = tso;
+    auto logical_table_id = addTable(database_name, std::move(*table_info));
+    return {logical_table_id, physical_table_ids};
+}
+
 std::vector<TableID> MockTiDB::newTables(
     const String & database_name,
     const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
-    Timestamp tso,
-    const String & engine_type)
+    Timestamp tso)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
     std::vector<TableID> table_ids;
     table_ids.reserve(tables.size());
     if (databases.find(database_name) == databases.end())
@@ -365,7 +388,7 @@ std::vector<TableID> MockTiDB::newTables(
             throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
         }
 
-        auto table_info = *parseColumns(table_name, columns, handle_pk_name, engine_type);
+        auto table_info = *parseColumns(table_name, columns, handle_pk_name);
         table_info.id = table_id_allocator++;
         table_info.update_timestamp = tso;
 
@@ -433,7 +456,7 @@ TableID MockTiDB::newPartition(
     Timestamp tso,
     bool is_add_part)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr logical_table = getTableByID(belong_logical_table);
     TableID partition_id = table_id_allocator++; // allocate automatically
@@ -448,7 +471,7 @@ TableID MockTiDB::newPartition(
     Timestamp tso,
     bool is_add_part)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr logical_table = getTableByNameInternal(database_name, table_name);
     return newPartitionImpl(logical_table, partition_id, toString(partition_id), tso, is_add_part);
@@ -495,7 +518,7 @@ TableID MockTiDB::newPartitionImpl(
 
 void MockTiDB::dropPartition(const String & database_name, const String & table_name, TableID partition_id)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr table = getTableByNameInternal(database_name, table_name);
     TableInfo & table_info = table->table_info;
@@ -529,7 +552,7 @@ void MockTiDB::addColumnToTable(
     const NameAndTypePair & column,
     const Field & default_value)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr table = getTableByNameInternal(database_name, table_name);
     String qualified_name = database_name + "." + table_name;
@@ -558,7 +581,7 @@ void MockTiDB::addColumnToTable(
 
 void MockTiDB::dropColumnFromTable(const String & database_name, const String & table_name, const String & column_name)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr table = getTableByNameInternal(database_name, table_name);
     String qualified_name = database_name + "." + table_name;
@@ -588,7 +611,7 @@ void MockTiDB::modifyColumnInTable(
     const String & table_name,
     const NameAndTypePair & column)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr table = getTableByNameInternal(database_name, table_name);
     String qualified_name = database_name + "." + table_name;
@@ -625,7 +648,7 @@ void MockTiDB::renameColumnInTable(
     const String & old_column_name,
     const String & new_column_name)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr table = getTableByNameInternal(database_name, table_name);
     String qualified_name = database_name + "." + table_name;
@@ -658,7 +681,7 @@ void MockTiDB::renameColumnInTable(
 
 void MockTiDB::renameTable(const String & database_name, const String & table_name, const String & new_table_name)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr table = getTableByNameInternal(database_name, table_name);
     String qualified_name = database_name + "." + table_name;
@@ -683,9 +706,48 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
     version_diff[version] = diff;
 }
 
+void MockTiDB::renameTableTo(
+    const String & database_name,
+    const String & table_name,
+    const String & new_database_name,
+    const String & new_table_name)
+{
+    std::scoped_lock lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    String qualified_name = database_name + "." + table_name;
+    String new_qualified_name = new_database_name + "." + new_table_name;
+
+    const auto old_database_id = table->database_id;
+    const auto new_database = databases.find(new_database_name);
+    RUNTIME_CHECK_MSG(
+        new_database != databases.end(),
+        "new_database is not exist in MockTiDB, new_database_name={}",
+        new_database_name);
+    table->database_id = new_database->second; // set new_database_id
+
+    TableInfo new_table_info = table->table_info;
+    new_table_info.name = new_table_name;
+    auto new_table
+        = std::make_shared<Table>(new_database_name, table->database_id, new_table_name, std::move(new_table_info));
+
+    tables_by_id[new_table->table_info.id] = new_table;
+    tables_by_name.erase(qualified_name);
+    tables_by_name.emplace(new_qualified_name, new_table);
+
+    version++;
+    SchemaDiff diff;
+    diff.type = SchemaActionType::RenameTable;
+    diff.schema_id = table->database_id;
+    diff.old_schema_id = old_database_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
 void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
     version++;
     SchemaDiff diff;
     for (const auto & [database_name, table_name, new_table_name] : table_name_map)
@@ -725,7 +787,7 @@ void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::strin
 
 void MockTiDB::truncateTable(const String & database_name, const String & table_name)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     TablePtr table = getTableByNameInternal(database_name, table_name);
 
@@ -747,7 +809,7 @@ void MockTiDB::truncateTable(const String & database_name, const String & table_
 
 Int64 MockTiDB::regenerateSchemaMap()
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     SchemaDiff diff;
     diff.type = SchemaActionType::None;
@@ -760,7 +822,7 @@ Int64 MockTiDB::regenerateSchemaMap()
 
 TablePtr MockTiDB::getTableByName(const String & database_name, const String & table_name)
 {
-    std::lock_guard lock(tables_mutex);
+    std::scoped_lock lock(tables_mutex);
 
     return getTableByNameInternal(database_name, table_name);
 }
@@ -796,17 +858,18 @@ TiDB::TableInfoPtr MockTiDB::getTableInfoByID(TableID table_id)
 
 TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
 {
-    TiDB::DBInfoPtr db_ptr = std::make_shared<TiDB::DBInfo>(TiDB::DBInfo());
-    db_ptr->id = db_id;
     for (const auto & database : databases)
     {
         if (database.second == db_id)
         {
+            TiDB::DBInfoPtr db_ptr = std::make_shared<TiDB::DBInfo>(TiDB::DBInfo());
+            db_ptr->id = db_id;
             db_ptr->name = database.first;
-            break;
+            return db_ptr;
         }
     }
-    return db_ptr;
+    // If the database has been dropped in TiKV, TiFlash get a nullptr
+    return nullptr;
 }
 
 std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name)

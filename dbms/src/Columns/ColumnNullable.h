@@ -65,9 +65,11 @@ public:
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
     UInt64 get64(size_t n) const override { return nested_column->get64(n); }
-    StringRef getDataAt(size_t n) const override;
+    StringRef getDataAt(size_t) const override;
+    /// Will insert null value if pos=nullptr
     void insertData(const char * pos, size_t length) override;
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode) override;
+    void insertFromDatumData(const char *, size_t) override;
     StringRef serializeValueIntoArena(
         size_t n,
         Arena & arena,
@@ -129,6 +131,8 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
     void getExtremes(Field & min, Field & max) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
@@ -136,9 +140,20 @@ public:
         return scatterImpl<ColumnNullable>(num_columns, selector);
     }
 
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const override
+    {
+        return scatterImpl<ColumnNullable>(num_columns, selector, selective);
+    }
+
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         scatterToImpl<ColumnNullable>(columns, selector);
+    }
+
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
+    {
+        scatterToImpl<ColumnNullable>(columns, selector, selective);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
@@ -193,6 +208,13 @@ private:
 
     template <bool negative>
     void applyNullMapImpl(const ColumnUInt8 & map);
+
+    template <bool selective_block>
+    void updateWeakHash32Impl(
+        WeakHash32 & hash,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container,
+        const BlockSelective & selective) const;
 };
 
 

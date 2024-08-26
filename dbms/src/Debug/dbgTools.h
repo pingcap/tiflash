@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <kvproto/raft_cmdpb.pb.h>
 
 #include <optional>

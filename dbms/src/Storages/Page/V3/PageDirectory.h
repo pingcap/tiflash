@@ -253,7 +253,7 @@ struct EntryOrDelete
             PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_sub(sizeof(PageEntryV3));
     }
 
-    static EntryOrDelete newDelete() { return EntryOrDelete(std::nullopt); };
+    static EntryOrDelete newDelete() { return EntryOrDelete(std::nullopt); }
     static EntryOrDelete newNormalEntry(const PageEntryV3 & entry) { return EntryOrDelete(entry); }
     static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
     {
@@ -320,7 +320,7 @@ public:
 
     // Update the local cache info for remote page,
     // Must a hold snap to prevent the page being deleted.
-    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry);
+    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry, bool ignore_delete);
 
     std::shared_ptr<PageId> fromRestored(const typename PageEntriesEdit::EditRecord & rec);
 

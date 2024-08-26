@@ -18,6 +18,7 @@
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
+#include <memory>
 
 
 namespace DB
@@ -58,6 +59,8 @@ public:
     /// Read method byte from compressed source
     static UInt8 readMethod(const char * source);
 
+    virtual bool isCompression() const = 0;
+
 protected:
     /// Return size of compressed data without header
     virtual UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const { return uncompressed_size; }
@@ -70,7 +73,7 @@ protected:
         = 0;
 };
 
-using CompressionCodecPtr = std::unique_ptr<ICompressionCodec>;
+using CompressionCodecPtr = std::shared_ptr<ICompressionCodec>;
 using Codecs = std::vector<CompressionCodecPtr>;
 
 } // namespace DB

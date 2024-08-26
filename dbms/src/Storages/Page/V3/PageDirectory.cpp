@@ -67,6 +67,7 @@ namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
 extern const char pause_before_full_gc_prepare[];
+extern const char pause_before_page_dir_update_local_cache[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -86,7 +87,7 @@ namespace PS::V3
 template <typename Trait>
 PageLock VersionedPageEntries<Trait>::acquireLock() const NO_THREAD_SAFETY_ANALYSIS
 {
-    return std::lock_guard(m);
+    return std::lock_guard{m};
 }
 
 template <typename Trait>
@@ -330,20 +331,41 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver) NO_THREA
 }
 
 template <typename Trait>
-bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry)
-    NO_THREAD_SAFETY_ANALYSIS
+bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(
+    const PageVersion & ver,
+    const PageEntryV3 & entry,
+    bool ignore_delete) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        RUNTIME_CHECK_MSG(last_iter != entries.end() && last_iter->second.isEntry(), "{}", toDebugString());
+        if (ignore_delete)
+        {
+            // find the first non-delete entry until it is the first entry or there is no such entry
+            while (last_iter != entries.end() && last_iter != entries.begin() && last_iter->second.isDelete())
+            {
+                --last_iter;
+            }
+        }
+        RUNTIME_CHECK_MSG(
+            last_iter != entries.end() && last_iter->second.isEntry(),
+            "this={}, entries={}, ver={}, entry={}",
+            toDebugString(),
+            entries,
+            ver,
+            entry);
+
         auto & ori_entry = last_iter->second.entry.value();
         RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
+
+        // maybe another thread has in-place update the local blob location, ignored
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
         }
+
+        // update the entry in-place
         ori_entry.file_id = entry.file_id;
         ori_entry.size = entry.size;
         ori_entry.offset = entry.offset;
@@ -458,8 +480,9 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
 }
 
 template <typename Trait>
-std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVersion> VersionedPageEntries<
-    Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry) NO_THREAD_SAFETY_ANALYSIS
+std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVersion> //
+VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -1784,6 +1807,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
     const DB::PageStorageSnapshotPtr & snap_,
     const WriteLimiterPtr & write_limiter)
 {
+    FAIL_POINT_PAUSE(FailPoints::pause_before_page_dir_update_local_cache);
     std::unique_lock apply_lock(apply_mutex);
     auto seq = toConcreteSnapshot(snap_)->sequence;
     for (auto & r : edit.getMutRecords())
@@ -1797,34 +1821,57 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
 
         for (const auto & r : edit.getRecords())
         {
-            auto id_to_resolve = r.page_id;
-            auto sequence_to_resolve = seq;
-            while (true)
+            try
             {
-                auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
-                assert(iter != mvcc_table_directory.end());
-                auto & version_list = iter->second;
-                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(
-                    sequence_to_resolve,
-                    /*ignore_delete=*/id_to_resolve != r.page_id,
-                    nullptr);
-                if (resolve_state == ResolveResult::TO_NORMAL)
+                auto id_to_resolve = r.page_id;
+                auto sequence_to_resolve = seq;
+                while (true)
                 {
-                    if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                    auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
+                    assert(iter != mvcc_table_directory.end());
+                    auto & version_list = iter->second;
+                    // We need to ignore the "deletes" both when resolve page id and update local cache.
+                    // Check `PageDirectory::getByIDImpl` or the unit test
+                    // `UniPageStorageRemoteReadTest.WriteReadRefWithRestart` for details.
+                    const bool ignore_delete = id_to_resolve != r.page_id;
+                    auto [resolve_state, next_id_to_resolve, next_ver_to_resolve]
+                        = version_list->resolveToPageId(sequence_to_resolve, ignore_delete, nullptr);
+                    if (resolve_state == ResolveResult::TO_NORMAL)
                     {
-                        ignored_entries.push_back(r.entry);
+                        if (!version_list->updateLocalCacheForRemotePage(
+                                PageVersion(sequence_to_resolve, 0),
+                                r.entry,
+                                ignore_delete))
+                        {
+                            // The entry is not valid for updating the version_list.
+                            // Caller should notice these part of "ignored_entries" and release
+                            // the space allocated for these invalid entries.
+                            // For the information persisted in WAL, it should be ignored when
+                            // restoring from disk.
+                            ignored_entries.push_back(r.entry);
+                        }
+                        break;
                     }
-                    break;
+                    else if (resolve_state == ResolveResult::TO_REF)
+                    {
+                        id_to_resolve = next_id_to_resolve;
+                        sequence_to_resolve = next_ver_to_resolve.sequence;
+                    }
+                    else
+                    {
+                        RUNTIME_CHECK(false);
+                    }
                 }
-                else if (resolve_state == ResolveResult::TO_REF)
-                {
-                    id_to_resolve = next_id_to_resolve;
-                    sequence_to_resolve = next_ver_to_resolve.sequence;
-                }
-                else
-                {
-                    RUNTIME_CHECK(false);
-                }
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage(fmt::format(
+                    " type={}, page_id={}, ver={}, seq={}",
+                    magic_enum::enum_name(r.type),
+                    r.page_id,
+                    r.version,
+                    seq));
+                throw e;
             }
         }
     }

@@ -52,7 +52,7 @@ DAGSchema getSelectSchema(Context & context)
     auto result_field_types = dag_context->result_field_types;
     for (size_t i = 0; i < result_field_types.size(); ++i)
     {
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(result_field_types[i]);
+        TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(result_field_types[i]);
         String col_name = "col_" + std::to_string(i);
         schema.emplace_back(col_name, info);
     }

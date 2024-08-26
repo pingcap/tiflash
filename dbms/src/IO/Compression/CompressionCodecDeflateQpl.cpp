@@ -15,7 +15,7 @@
 #include <Common/config.h>
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
-#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <x86intrin.h>
 

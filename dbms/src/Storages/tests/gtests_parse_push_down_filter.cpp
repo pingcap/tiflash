@@ -25,6 +25,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <common/logger_useful.h>
 
 #include <regex>
@@ -58,22 +59,24 @@ protected:
         TimezoneInfo & timezone_info);
 };
 
-
-DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
+DM::PushDownFilterPtr generatePushDownFilter(
+    Context & ctx,
     const String table_info_json,
     const String & query,
-    TimezoneInfo & timezone_info)
+    const std::optional<TimezoneInfo> & opt_tz = std::nullopt)
 {
+    auto timezone_info = opt_tz ? *opt_tz : ctx.getTimezoneInfo();
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
-        *ctx,
+        ctx,
         query,
         [&](const String &, const String &) { return table_info; },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
+    auto log = Logger::get();
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
-    ctx->setDAGContext(&dag_context);
+    ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     // Push down all filters
@@ -119,8 +122,16 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     auto rs_operator
         = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
     auto push_down_filter
-        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
+        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, ctx, log);
     return push_down_filter;
+}
+
+DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
+    String table_info_json,
+    const String & query,
+    TimezoneInfo & timezone_info)
+{
+    return ::DB::tests::generatePushDownFilter(*ctx, table_info_json, query, timezone_info);
 }
 
 // Test cases for col and literal

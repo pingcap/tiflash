@@ -41,7 +41,7 @@ public:
     using AttrCreatorByColumnID = std::function<Attr(const DB::ColumnID)>;
     static RSOperatorPtr parseDAGQuery(
         const DAGQueryInfo & dag_info,
-        const ColumnInfos & scan_column_infos,
+        const TiDB::ColumnInfos & scan_column_infos,
         AttrCreatorByColumnID && creator,
         const LoggerPtr & log);
 
@@ -55,7 +55,7 @@ public:
 
     static std::optional<Attr> createAttr(
         const tipb::Expr & expr,
-        const ColumnInfos & scan_column_infos,
+        const TiDB::ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines);
 
     static bool isRSFilterSupportType(Int32 field_type);

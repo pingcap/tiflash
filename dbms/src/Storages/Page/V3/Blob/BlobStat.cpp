@@ -15,6 +15,7 @@
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/Page/V3/Blob/BlobStat.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/PathPool.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
@@ -216,8 +217,6 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(
     PageType page_type,
     const std::lock_guard<std::mutex> &)
 {
-    BlobStatPtr stat_ptr = nullptr;
-
     // No stats exist
     if (stats_map.empty())
     {
@@ -301,6 +300,12 @@ BlobStats::StatsMap BlobStats::getStats() const NO_THREAD_SAFETY_ANALYSIS
 
 BlobFileOffset BlobStats::BlobStat::getPosFromStat(size_t buf_size, const std::unique_lock<std::mutex> &)
 {
+    // A shortcut for empty page. All empty pages will be stored
+    // at the beginning of the BlobFile. It should not affects the
+    // sm_max_caps or other fields by adding these empty pages.
+    if (unlikely(buf_size == 0))
+        return 0;
+
     BlobFileOffset offset = 0;
     UInt64 max_cap = 0;
     bool expansion = true;

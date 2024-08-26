@@ -43,8 +43,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
 {
     if (args.size() != 3 && args.size() != 4 && args.size() != 5)
         throw Exception(
-            "Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name], [, "
-            "engine-type(tmt|dt)]",
+            "Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name]",
             ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -65,16 +64,9 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
     ColumnsDescription columns
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
 
-    String engine_type("dt");
-    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
-        engine_type = "tmt";
-    if (args.size() == 5)
-        engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
-
     auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID table_id
-        = MockTiDB::instance().newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
+    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso, handle_pk_name);
 
     output(fmt::format("mock table #{}", table_id));
 }
@@ -354,10 +346,7 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
         tables.emplace_back(table_name, columns, "");
     }
     auto tso = context.getTMTContext().getPDClient()->getTS();
-    String engine_type("dt");
-    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
-        engine_type = "tmt";
-    MockTiDB::instance().newTables(database_name, tables, tso, engine_type);
+    MockTiDB::instance().newTables(database_name, tables, tso);
     output("");
 }
 
