@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO Enabling this feature causes "is missing exception specification" error on rockylinux8 and arm64
-option(USE_ARM_OPTIMIZED_ROUTINES "Use ARM optimized routines" OFF)
+option(USE_ARM_OPTIMIZED_ROUTINES "Use ARM optimized routines" ON)
 
 set (aor_sources)
 
