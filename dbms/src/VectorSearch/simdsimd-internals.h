@@ -12,24 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-// USearch is header only. We don't use cmake to make these defines to avoid
+// SIMSIMD is header only. We don't use cmake to make these defines to avoid
 // polluting all compile units.
 
-#define USEARCH_USE_SIMSIMD 1
+#pragma once
+
+// Note: Be careful that usearch also includes simsimd with a customized config.
+// Don't include simsimd and usearch at the same time. Otherwise, the effective
+// config depends on the include order.
 #define SIMSIMD_NATIVE_F16 0
 #define SIMSIMD_NATIVE_BF16 0
+#define SIMSIMD_DYNAMIC_DISPATCH 0
 
-// Force enable all target features.
+// Force enable all target features. We will do our own dynamic dispatch.
 #define SIMSIMD_TARGET_NEON 1
 #define SIMSIMD_TARGET_SVE 0 // Clang13's header does not support enableing SVE for region
 #define SIMSIMD_TARGET_HASWELL 1
-#define SIMSIMD_TARGET_SKYLAKE 0 // Clang13 does not support AVX512
+#define SIMSIMD_TARGET_SKYLAKE 1
 #define SIMSIMD_TARGET_ICE 0
 #define SIMSIMD_TARGET_GENOA 0
 #define SIMSIMD_TARGET_SAPPHIRE 0
+#include <simsimd/simsimd.h>
 
-#include <usearch/index.hpp>
-#include <usearch/index_dense.hpp>
-#include <usearch/index_plugins.hpp>
+
+namespace simsimd_details
+{
+
+simsimd_capability_t simd_capabilities();
+
+simsimd_capability_t actual_capability(simsimd_datatype_t data_type, simsimd_metric_kind_t kind);
+
+} // namespace simsimd_details

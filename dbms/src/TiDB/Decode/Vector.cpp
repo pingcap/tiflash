@@ -16,28 +16,9 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <TiDB/Decode/Vector.h>
+#include <VectorSearch/simdsimd-internals.h>
 
 #include <compare>
-
-// SIMSIMD is header only. We don't use cmake to make these defines to avoid
-// polluting all compile units.
-
-// Note: Be careful that usearch also includes simsimd with a customized config.
-// Don't include simsimd and usearch at the same time. Otherwise, the effective
-// config depends on the include order.
-#define SIMSIMD_NATIVE_F16 0
-#define SIMSIMD_NATIVE_BF16 0
-#define SIMSIMD_DYNAMIC_DISPATCH 0
-
-// Force enable all target features. We will do our own dynamic dispatch.
-#define SIMSIMD_TARGET_NEON 1
-#define SIMSIMD_TARGET_SVE 0 // Clang13's header does not support enableing SVE for region
-#define SIMSIMD_TARGET_HASWELL 1
-#define SIMSIMD_TARGET_SKYLAKE 0 // Clang13 does not support AVX512
-#define SIMSIMD_TARGET_ICE 0
-#define SIMSIMD_TARGET_GENOA 0
-#define SIMSIMD_TARGET_SAPPHIRE 0
-#include <simsimd/simsimd.h>
 
 namespace DB
 {
@@ -46,36 +27,6 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
-
-namespace simsimd_details
-{
-
-simsimd_capability_t simd_capabilities()
-{
-    static simsimd_capability_t static_capabilities = simsimd_cap_any_k;
-    if (static_capabilities == simsimd_cap_any_k)
-        static_capabilities = simsimd_capabilities_implementation();
-    return static_capabilities;
-}
-
-} // namespace simsimd_details
-
-std::vector<std::string> VectorDistanceSIMDFeatures::get()
-{
-    simsimd_capability_t caps = simsimd_details::simd_capabilities();
-    std::vector<std::string> ret{};
-    if (caps & simsimd_cap_neon_k)
-        ret.push_back("vec_distance=neon");
-    if (caps & simsimd_cap_sve_k)
-        ret.push_back("vec_distance=sve");
-    if (caps & simsimd_cap_sve2_k)
-        ret.push_back("vec_distance=sve2");
-    if (caps & simsimd_cap_haswell_k)
-        ret.push_back("vec_distance=haswell");
-    if (caps & simsimd_cap_skylake_k)
-        ret.push_back("vec_distance=skylake");
-    return ret;
-}
 
 VectorFloat32Ref::VectorFloat32Ref(const Float32 * elements, size_t n)
     : elements(elements)

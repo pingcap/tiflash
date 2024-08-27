@@ -96,6 +96,8 @@ add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
+add_headers_and_sources(tiflash_vector_search src/VectorSearch)
+
 check_then_add_sources_compile_flag (
     TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
     "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
@@ -203,14 +205,25 @@ target_link_libraries (tiflash_common_io
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
-target_compile_definitions(tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
+target_compile_definitions (tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
+
+add_library(tiflash_vector_search
+    ${tiflash_vector_search_headers}
+    ${tiflash_vector_search_sources}
+)
+target_link_libraries(tiflash_vector_search
+    tiflash_contrib::usearch
+    tiflash_contrib::simsimd
+
+    fmt 
+)
+
 target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
-    tiflash_contrib::usearch
-    tiflash_contrib::simsimd
     tiflash_contrib::aws_s3
+    tiflash_vector_search
 
     etcdpb
     tiflash_parsers
