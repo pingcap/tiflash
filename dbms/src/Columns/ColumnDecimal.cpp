@@ -158,7 +158,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
                 if (buffer_size < AlignBufferAVX2::buffer_size)
                 {
-                    if unlikely (align_buffer.need_flush)
+                    if unlikely (align_buffer.needFlush())
                     {
                         std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
                         buffer_size = 0;
@@ -204,7 +204,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                 pos[i] += sizeof(T);
             }
 
-            if unlikely (buffer.need_flush)
+            if unlikely (align_buffer.needFlush())
             {
                 std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
                 buffer_size = 0;

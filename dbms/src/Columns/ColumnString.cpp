@@ -540,7 +540,7 @@ void ColumnString::deserializeAndInsertFromPos(
             }
         }
 
-        if unlikely (buffer.need_flush)
+        if unlikely (align_buffer.needFlush())
         {
             if (char_buffer_size != 0)
             {
