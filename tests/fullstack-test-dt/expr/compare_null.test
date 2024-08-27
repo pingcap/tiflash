@@ -138,3 +138,81 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t w
 +------------+
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL, '2024-08-26');
+
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values('2024-08-21'),('2024-08-22'),('2024-08-23'),('2024-08-24');
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is NULL;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is not NULL;
++------------+
+| a          |
++------------+
+| 2024-08-21 |
+| 2024-08-22 |
+| 2024-08-23 |
+| 2024-08-24 |
++------------+
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values(NULL),(NULL),(NULL),(NULL);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is NULL;
++------+
+| a    |
++------+
+| NULL |
+| NULL |
+| NULL |
+| NULL |
++------+
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is not NULL;
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values('2024-08-21'),('2024-08-22'),('2024-08-23'),('2024-08-24'),(NULL);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is NULL;
++------+
+| a    |
++------+
+| NULL |
++------+
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is not NULL;
++------------+
+| a          |
++------------+
+| 2024-08-21 |
+| 2024-08-22 |
+| 2024-08-23 |
+| 2024-08-24 |
++------------+
