@@ -16,7 +16,7 @@
 
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndexHNSW/usearch_index_dense.h>
+#include <VectorSearch/USearch.h>
 
 namespace DB::DM
 {

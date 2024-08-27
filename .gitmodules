@@ -149,3 +149,6 @@
 [submodule "contrib/usearch"]
 	path = contrib/usearch
 	url = https://github.com/unum-cloud/usearch.git
+[submodule "contrib/simsimd"]
+	path = contrib/simsimd
+	url = https://github.com/ashvardanian/SimSIMD

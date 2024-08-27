@@ -200,3 +200,5 @@ add_subdirectory(simdjson)
 add_subdirectory(fastpforlib)
 
 add_subdirectory(usearch-cmake)
+
+add_subdirectory(simsimd-cmake)
