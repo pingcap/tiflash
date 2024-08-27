@@ -42,136 +42,114 @@ class StringPosition : public DB::tests::FunctionTest
 TEST_F(StringPosition, strAndStrTest)
 {
     const auto context = TiFlashTestEnv::getContext();
-
     auto & factory = FunctionFactory::instance();
 
-    // case insensitive
     std::vector<String> c0_var_strs{"ell", "LL", "3", "ElL", "ye", "aaaa", "world", "", "", "biu"};
     std::vector<String> c1_var_strs{"hello", "HELLO", "23333", "HeLlO", "hey", "a", "WoRlD", "", "ping", ""};
-
-    // var-var
-    std::vector<Int64> result0{2, 3, 2, 0, 0, 0, 0, 1, 1, 0};
+    std::vector<Int64> result0{2, 3, 2, 2, 0, 0, 1, 1, 1, 0};
 
     std::vector<String> c0_strs;
     std::vector<String> c1_strs;
-    std::vector<Int64> results;
-    for (int i = 0; i < 4; i++)
+    std::vector<Int64> expect_results;
+
+    MutableColumnPtr csp0;
+    MutableColumnPtr csp1;
+
+    c0_strs = c0_var_strs;
+    c1_strs = c1_var_strs;
+    expect_results = result0;
+
+    csp0 = ColumnString::create();
+    csp1 = ColumnString::create();
+
+    for (size_t i = 0; i < c0_strs.size(); i++)
     {
-        MutableColumnPtr csp0;
-        MutableColumnPtr csp1;
+        csp0->insert(Field(c0_strs[i].c_str(), c0_strs[i].size()));
+        csp1->insert(Field(c1_strs[i].c_str(), c1_strs[i].size()));
+    }
 
-        // var-var
-        c0_strs = c0_var_strs;
-        c1_strs = c1_var_strs;
-        results = result0;
+    Block test_block;
+    ColumnWithTypeAndName ctn0
+        = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
+    ColumnWithTypeAndName ctn1
+        = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
+    ColumnsWithTypeAndName ctns{ctn0, ctn1};
+    test_block.insert(ctn0);
+    test_block.insert(ctn1);
 
-        csp0 = ColumnString::create();
-        csp1 = ColumnString::create();
+    // for result from position
+    test_block.insert({});
+    ColumnNumbers cns{0, 1};
 
-        for (size_t j = 0; j < c0_strs.size(); j++)
-        {
-            csp0->insert(Field(c0_strs[j].c_str(), c0_strs[j].size()));
-            csp1->insert(Field(c1_strs[j].c_str(), c1_strs[j].size()));
-        }
+    // test position
+    auto bp = factory.tryGet("position", *context);
+    ASSERT_TRUE(bp != nullptr);
+    ASSERT_FALSE(bp->isVariadic());
 
-        Block test_block;
-        ColumnWithTypeAndName ctn0
-            = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
-        ColumnWithTypeAndName ctn1
-            = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
-        ColumnsWithTypeAndName ctns{ctn0, ctn1};
-        test_block.insert(ctn0);
-        test_block.insert(ctn1);
-        // for result from position
-        test_block.insert({});
-        ColumnNumbers cns{0, 1};
+    bp->build(ctns)->execute(test_block, cns, 2);
+    const IColumn * res = test_block.getByPosition(2).column.get();
+    const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
 
-        // test position
-        auto bp = factory.tryGet("position", *context);
-        ASSERT_TRUE(bp != nullptr);
-        ASSERT_FALSE(bp->isVariadic());
+    Field res_field;
 
-        bp->build(ctns)->execute(test_block, cns, 2);
-        const IColumn * res = test_block.getByPosition(2).column.get();
-        const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
-
-        Field res_field;
-
-        for (size_t t = 0; t < results.size(); t++)
-        {
-            res_string->get(t, res_field);
-            Int64 res_val = res_field.get<Int64>();
-            EXPECT_EQ(results[t], res_val);
-        }
+    for (size_t i = 0; i < expect_results.size(); i++)
+    {
+        res_string->get(i, res_field);
+        Int64 res_val = res_field.get<Int64>();
+        EXPECT_EQ(expect_results[i], res_val);
     }
 }
 
 // test string and string in utf8
 TEST_F(StringPosition, utf8StrAndStrTest)
 {
-    const auto context = TiFlashTestEnv::getContext();
-
-    auto & factory = FunctionFactory::instance();
-
-    // case insensitive
-    std::vector<String> c0_var_strs{"好", "平凯", "aa哈", "？！", "呵呵呵", "233", "嗯？？"};
-    std::vector<String> c1_var_strs{"ni好", "平凯星辰", "啊啊aaa哈哈", "？？！！", "呵呵呵", "哈哈2333", "嗯？"};
-
-    // var-var
-    std::vector<Int64> result0{3, 1, 4, 2, 1, 3, 0};
-
-    std::vector<String> c0_strs;
-    std::vector<String> c1_strs;
-    std::vector<Int64> results;
-    for (int i = 0; i < 4; i++)
     {
-        MutableColumnPtr csp0;
-        MutableColumnPtr csp1;
+        // const const
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(0, 0),
+            executeFunction("position", createConstColumn<String>(0, ""), createConstColumn<String>(0, "")));
 
-        // var-var
-        c0_strs = c0_var_strs;
-        c1_strs = c1_var_strs;
-        results = result0;
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, 3),
+            executeFunction("position", createConstColumn<String>(1, "a啊A"), createConstColumn<String>(1, "g他A啊a")));
 
-        csp0 = ColumnString::create();
-        csp1 = ColumnString::create();
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(10, 1),
+            executeFunction(
+                "position",
+                createConstColumn<String>(10, "a啊A"),
+                createConstColumn<String>(10, "A啊a我")));
+    }
 
+    {
+        // const vector
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({1, 1, 3, 2, 0, 0}),
+            executeFunction(
+                "position",
+                createConstColumn<String>(6, "我aA"),
+                createColumn<String>({"我aa", "我AA123", "aa我aa", "肥我aA个", "vrfv干扰", ""})));
+    }
 
-        for (size_t i = 0; i < c0_strs.size(); i++)
-        {
-            csp0->insert(Field(c0_strs[i].c_str(), c0_strs[i].size()));
-            csp1->insert(Field(c1_strs[i].c_str(), c1_strs[i].size()));
-        }
+    {
+        // vector vector
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({3, 1, 4, 2, 1, 3, 0, 2, 3}),
+            executeFunction(
+                "position",
+                createColumn<String>({"好", "平凯", "aa哈", "？！", "呵呵呵", "233", "嗯？？", "好", "aaa"}),
+                createColumn<String>(
+                    {"ni好", "平凯星辰", "啊啊aaa哈哈", "？？！！", "呵呵呵", "哈哈2333", "嗯？", " 好", "vdAaAvr"})));
+    }
 
-        Block test_block;
-        ColumnWithTypeAndName ctn0
-            = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
-        ColumnWithTypeAndName ctn1
-            = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
-        ColumnsWithTypeAndName ctns{ctn0, ctn1};
-        test_block.insert(ctn0);
-        test_block.insert(ctn1);
-        // for result from position
-        test_block.insert({});
-        ColumnNumbers cns{0, 1};
-
-        // test position
-        auto bp = factory.tryGet("position", *context);
-        ASSERT_TRUE(bp != nullptr);
-        ASSERT_FALSE(bp->isVariadic());
-
-        bp->build(ctns)->execute(test_block, cns, 2);
-        const IColumn * res = test_block.getByPosition(2).column.get();
-        const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
-
-        Field res_field;
-
-        for (size_t t = 0; t < results.size(); t++)
-        {
-            res_string->get(t, res_field);
-            Int64 res_val = res_field.get<Int64>();
-            EXPECT_EQ(results[t], res_val);
-        }
+    {
+        // vector const
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({1, 1, 11, 0, 6, 6}),
+            executeFunction(
+                "position",
+                createColumn<String>({"", "f", "z", "备份", "备g份", "备G份"}),
+                createConstColumn<String>(6, "fevre备g份gfz")));
     }
 }
 

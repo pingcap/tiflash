@@ -35,6 +35,8 @@
 #include <ext/range.h>
 #include <magic_enum.hpp>
 
+#include "Columns/IColumn.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -4463,6 +4465,13 @@ private:
     }
 };
 
+static Int64 getResult(const ColumnString::Chars_t & chars, size_t size, size_t offset)
+{
+    if unlikely (size == 0)
+        return 0;
+    return chars[offset];
+}
+
 class FunctionASCII : public IFunction
 {
 public:
@@ -4502,13 +4511,19 @@ public:
         auto col_res = ColumnInt64::create();
         col_res->reserve(val_num);
 
-        for (size_t i = 0; i < val_num; i++)
+        const auto & chars = c0_string->getChars();
+        const auto & offsets = c0_string->getOffsets();
+
+        if (val_num > 0)
         {
-            const StringRef data_str = c0_string->getDataAt(i);
-            if likely (data_str.size != 0)
-                col_res->insert(data_str.data[0]);
-            else
-                col_res->insert(0);
+            size_t size = offsets[0] - 1;
+            col_res->insert(getResult(chars, size, 0));
+        }
+
+        for (size_t i = 1; i < val_num; i++)
+        {
+            auto size = offsets[i] - offsets[i - 1] - 1;
+            col_res->insert(getResult(chars, size, offsets[i - 1]));
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -4955,6 +4970,8 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if unlikely (arguments.size() != 2)
@@ -4992,26 +5009,52 @@ public:
         int val_num = col0->size();
         col_res->reserve(val_num);
 
+        if (val_num == 0)
+        {
+            block.getByPosition(result).column = std::move(col_res);
+            return;
+        }
+
+        StringRef c0_str;
+        if (c0_const != nullptr)
+            c0_str = col0->getDataAt(0);
+
         for (int i = 0; i < val_num; i++)
         {
-            const String c0_str = col0->getDataAt(i).toString();
-            const String c1_str = col1->getDataAt(i).toString();
+            if (c0_const == nullptr)
+                c0_str = col0->getDataAt(i);
 
-            // return -1 when c1_str not contains the c0_str
-            Int64 idx = c1_str.find(c0_str);
-            col_res->insert(getPositionUTF8(c1_str, idx));
+            const StringRef c1_str = col1->getDataAt(i);
+
+            if unlikely (c0_str.size == 0)
+            {
+                col_res->insert(1);
+                continue;
+            }
+
+            if unlikely (c1_str.size == 0)
+            {
+                col_res->insert(0);
+                continue;
+            }
+
+            VolnitskyCaseInsensitiveUTF8 searcher(c0_str.data, c0_str.size, c1_str.size);
+            const char * res = searcher.search(c1_str.data, c1_str.size);
+            Int64 idx = res - c1_str.data;
+            if (idx >= static_cast<Int64>(c1_str.size))
+                idx = -1;
+            col_res->insert(getPositionUTF8(reinterpret_cast<const UInt8 *>(c1_str.data), idx));
         }
 
         block.getByPosition(result).column = std::move(col_res);
     }
 
 private:
-    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
+    static Int64 getPositionUTF8(const UInt8 * data, Int64 idx)
     {
         if (idx == -1)
             return 0;
 
-        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
 };
