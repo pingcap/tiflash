@@ -491,16 +491,16 @@ void ColumnString::deserializeAndInsertFromPos(
     bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % AlignBufferAVX2::buffer_size == 0;
     bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % AlignBufferAVX2::buffer_size == 0;
 
+    size_t char_buffer_index = align_buffer.nextIndex();
+    AlignBufferAVX2 & char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
+    UInt8 & char_buffer_size = align_buffer.getSize(char_buffer_index);
+
+    size_t offset_buffer_index = align_buffer.nextIndex();
+    AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
+    UInt8 & offset_buffer_size = align_buffer.getSize(offset_buffer_index);
+
     if likely (is_offset_aligned && is_char_aligned)
     {
-        size_t char_buffer_index = align_buffer.nextIndex();
-        AlignBufferAVX2 & char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
-        UInt8 & char_buffer_size = align_buffer.getSize(char_buffer_index);
-
-        size_t offset_buffer_index = align_buffer.nextIndex();
-        AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
-        UInt8 & offset_buffer_size = align_buffer.getSize(offset_buffer_index);
-
         for (size_t i = 0; i < size; ++i)
         {
             size_t str_size;
@@ -558,14 +558,14 @@ void ColumnString::deserializeAndInsertFromPos(
         return;
     }
 
-    if unlikely (buffer.size1 != 0)
+    if unlikely (char_buffer_size != 0)
     {
         chars.resize(char_size + char_buffer_size, AlignBufferAVX2::buffer_size);
         inline_memcpy(&chars[char_size], char_buffer.data, char_buffer_size);
         char_size += char_buffer_size;
         char_buffer_size = 0;
     }
-    if unlikely (buffer.size2 != 0)
+    if unlikely (offset_buffer_size != 0)
     {
         offsets.resize(prev_size + offset_buffer_size / sizeof(size_t), AlignBufferAVX2::buffer_size);
         inline_memcpy(&offsets[prev_size], offset_buffer.data, offset_buffer_size);
