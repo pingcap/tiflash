@@ -59,7 +59,6 @@ void recordFilteredRows(
         {
             MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
             PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
-            mutable_null_map.resize_fill(0);
             mutable_null_map.resize_fill(column->size(), 1);
             null_map_holder = std::move(mutable_null_map_holder);
         }

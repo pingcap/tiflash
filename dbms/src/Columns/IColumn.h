@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/COWPtr.h>
+#include <Common/ColumnsAlignBuffer.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
@@ -24,10 +25,6 @@
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
 #include <fmt/core.h>
-
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#include <immintrin.h>
-#endif
 
 namespace DB
 {
@@ -40,34 +37,6 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 
 class Arena;
 class ColumnGathererStream;
-
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-struct alignas(64) AlignBufferAVX2
-{
-    static constexpr size_t vector_size = sizeof(__m256i);
-    static constexpr size_t buffer_size = 2 * vector_size;
-
-    union
-    {
-        char data1[buffer_size]{};
-        __m256i v1[2];
-    };
-    union
-    {
-        char data2[buffer_size]{};
-        __m256i v2[2];
-    };
-    size_t size1 = 0;
-    size_t size2 = 0;
-
-    bool need_flush = false;
-};
-#else
-struct AlignBufferAVX2
-{
-};
-#endif
-
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
 {
@@ -275,7 +244,9 @@ public:
         throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    virtual void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & /* pos */, AlignBufferAVX2 & /* buffer */)
+    virtual void deserializeAndInsertFromPos(
+        PaddedPODArray<UInt8 *> & /* pos */,
+        ColumnsAlignBufferAVX2 & /* align_buffer */)
     {
         throw Exception(
             "Method deserializeAndInsertFromPos is not supported for " + getName(),

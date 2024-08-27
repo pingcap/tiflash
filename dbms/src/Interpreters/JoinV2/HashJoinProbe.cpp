@@ -276,30 +276,22 @@ private:
             if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
                 return;
         }
-        else
-        {
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            for (auto & b : wd.align_buffer)
-                b.need_flush = true;
+        wd.align_buffer.reset(force);
 #endif
-        }
         for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
         {
             IColumn * column = added_columns[column_index].get();
             if (has_null_map && is_nullable)
                 column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-            column->deserializeAndInsertFromPos(wd.insert_batch, wd.align_buffer[column_index]);
+            column->deserializeAndInsertFromPos(wd.insert_batch, wd.align_buffer);
         }
         for (auto [column_index, _] : row_layout.other_required_column_indexes)
         {
             if constexpr (key_all_raw)
-                added_columns[column_index]->deserializeAndInsertFromPos(
-                    wd.insert_batch,
-                    wd.align_buffer[column_index]);
+                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, wd.align_buffer);
             else
-                added_columns[column_index]->deserializeAndInsertFromPos(
-                    wd.insert_batch_other,
-                    wd.align_buffer[column_index]);
+                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch_other, wd.align_buffer);
         }
 
         wd.insert_batch.clear();
@@ -317,7 +309,7 @@ private:
                 {
                     auto & null_map_vec
                         = static_cast<ColumnNullable &>(*added_columns[column_index]).getNullMapColumn().getData();
-                    null_map_vec.resize_fill(null_map_vec.size() + size, 0);
+                    null_map_vec.resize_fill_zero(null_map_vec.size() + size);
                 }
             }
         }

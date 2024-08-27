@@ -155,7 +155,7 @@ static inline void read(const DataTypeFixedString & self, IColumn & column, Read
     }
 
     if (data.size() < prev_size + self.getN())
-        data.resize_fill(prev_size + self.getN());
+        data.resize_fill_zero(prev_size + self.getN());
 
     if (data.size() > prev_size + self.getN())
     {
