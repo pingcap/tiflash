@@ -53,17 +53,21 @@ std::vector<std::string> VectorDistanceSIMDFeatures::get()
     simsimd_capability_t cap_cos = simsimd_details::actual_capability(simsimd_datatype_f32_k, simsimd_metric_cos_k);
 
     auto cap_to_string = [](simsimd_capability_t cap) -> std::string {
-        if (cap & simsimd_cap_neon_k)
-            return "neon";
-        if (cap & simsimd_cap_sve_k)
-            return "sve";
-        if (cap & simsimd_cap_sve2_k)
+        switch (cap)
+        {
+        case simsimd_cap_sve2_k:
             return "sve2";
-        if (cap & simsimd_cap_haswell_k)
-            return "haswell";
-        if (cap & simsimd_cap_skylake_k)
+        case simsimd_cap_sve_k:
+            return "sve";
+        case simsimd_cap_neon_k:
+            return "neon";
+        case simsimd_cap_skylake_k:
             return "skylake";
-        return "serial";
+        case simsimd_cap_haswell_k:
+            return "haswell";
+        default:
+            return "serial";
+        }
     };
 
     std::vector<std::string> ret{};
