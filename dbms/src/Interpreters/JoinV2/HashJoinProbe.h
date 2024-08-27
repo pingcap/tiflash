@@ -78,7 +78,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 
     ColumnUInt8::MutablePtr filter_column = ColumnUInt8::create();
 
-    std::vector<AlignBufferAVX2> align_buffer;
+    ColumnsAlignBufferAVX2 align_buffer;
 };
 
 void joinProbeBlock(

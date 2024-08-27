@@ -141,7 +141,7 @@ private:
         // get result's data container
         auto col_vec_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_vec_res->getData();
-        vec_res.resize_fill(row_num);
+        vec_res.resize_fill_zero(row_num);
 
         for (size_t i = 0; i < row_num; ++i)
         {

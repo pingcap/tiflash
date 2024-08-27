@@ -125,7 +125,7 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 template <typename T>
 void ColumnDecimal<T>::deserializeAndInsertFromPos(
     PaddedPODArray<UInt8 *> & pos,
-    AlignBufferAVX2 & buffer [[maybe_unused]])
+    ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
     size_t size = pos.size();
@@ -140,36 +140,38 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if constexpr (AlignBufferAVX2::buffer_size % sizeof(T) == 0)
     {
+        size_t buffer_index = align_buffer.nextIndex();
+        AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
+        UInt8 & buffer_size = align_buffer.getSize(buffer_index);
         bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::buffer_size == 0;
         if likely (is_aligned)
         {
-            if unlikely (buffer.size1 != 0)
+            if (buffer_size != 0)
             {
-                size_t count = std::min(size, i + (AlignBufferAVX2::buffer_size - buffer.size1) / sizeof(T));
+                size_t count = std::min(size, i + (AlignBufferAVX2::buffer_size - buffer_size) / sizeof(T));
                 for (; i < count; ++i)
                 {
-                    std::memcpy(&buffer.data1[buffer.size1], pos[i], sizeof(T));
-                    buffer.size1 += sizeof(T);
+                    std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                    buffer_size += sizeof(T);
                     pos[i] += sizeof(T);
                 }
 
-                if (buffer.size1 < AlignBufferAVX2::buffer_size)
+                if (buffer_size < AlignBufferAVX2::buffer_size)
                 {
-                    if unlikely (buffer.need_flush)
+                    if unlikely (align_buffer.need_flush)
                     {
-                        std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data1, buffer.size1);
-                        buffer.size1 = 0;
-                        buffer.need_flush = false;
+                        std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                        buffer_size = 0;
                     }
                     return;
                 }
 
-                assert(buffer.size1 == AlignBufferAVX2::buffer_size);
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v1[0]);
+                assert(buffer_size == AlignBufferAVX2::buffer_size);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v1[1]);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[1]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                buffer.size1 = 0;
+                buffer_size = 0;
             }
 
             union alignas(64)
@@ -197,26 +199,24 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
             for (; i < size; ++i)
             {
-                std::memcpy(&buffer.data1[buffer.size1], pos[i], sizeof(T));
-                buffer.size1 += sizeof(T);
+                std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                buffer_size += sizeof(T);
                 pos[i] += sizeof(T);
             }
 
             if unlikely (buffer.need_flush)
             {
-                std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data1, buffer.size1);
-                buffer.size1 = 0;
-                buffer.need_flush = false;
+                std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                buffer_size = 0;
             }
 
             return;
         }
 
-        if unlikely (buffer.size1 != 0)
+        if unlikely (buffer_size != 0)
         {
-            std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data1, buffer.size1);
-            buffer.size1 = 0;
-            buffer.need_flush = false;
+            std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+            buffer_size = 0;
         }
     }
 #endif

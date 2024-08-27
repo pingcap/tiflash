@@ -6147,7 +6147,7 @@ private:
         auto & res_chars = res_col->getChars();
         auto & res_offsets = res_col->getOffsets();
 
-        res_offsets.resize_fill(nrow);
+        res_offsets.resize_fill_zero(nrow);
 
         for (size_t i = 0; i < nrow; ++i)
         {

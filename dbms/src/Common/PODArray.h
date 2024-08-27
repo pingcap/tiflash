@@ -397,23 +397,25 @@ public:
     const_iterator cend() const { return t_end(); }
 
     /// Same as resize, but zeroes new elements.
-    void resize_fill(size_t n)
+    template <typename... TAllocatorParams>
+    void resize_fill_zero(size_t n, TAllocatorParams &&... allocator_params)
     {
         size_t old_size = this->size();
         if (n > old_size)
         {
-            this->reserve(n);
+            this->reserve(n, std::forward<TAllocatorParams>(allocator_params)...);
             memset(this->c_end, 0, this->byte_size(n - old_size));
         }
         this->c_end = this->c_start + this->byte_size(n);
     }
 
-    void resize_fill(size_t n, const T & value)
+    template <typename... TAllocatorParams>
+    void resize_fill(size_t n, const T & value, TAllocatorParams &&... allocator_params)
     {
         size_t old_size = this->size();
         if (n > old_size)
         {
-            this->reserve(n);
+            this->reserve(n, std::forward<TAllocatorParams>(allocator_params)...);
             std::fill(t_end(), t_end() + n - old_size, value);
         }
         this->c_end = this->c_start + this->byte_size(n);

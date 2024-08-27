@@ -287,7 +287,7 @@ public:
         }
     }
 
-    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, AlignBufferAVX2 & buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
 
     void updateHashWithValue(
         size_t n,
@@ -341,7 +341,7 @@ public:
 
     void insertManyDefaults(size_t length) override
     {
-        chars.resize_fill(chars.size() + length);
+        chars.resize_fill_zero(chars.size() + length);
         offsets.reserve(offsets.size() + length);
         for (size_t i = 0; i < length; ++i)
         {
