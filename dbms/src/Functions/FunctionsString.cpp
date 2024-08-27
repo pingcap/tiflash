@@ -4970,11 +4970,9 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
-    bool useDefaultImplementationForConstants() const override { return true; }
-
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if unlikely (arguments.size() != 2)
+        if (arguments.size() != 2)
             throw Exception(
                 fmt::format(
                     "Number of arguments for function {} doesn't match: passed {}, should be 2.",
@@ -4987,74 +4985,53 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const IColumn * col0 = block.getByPosition(arguments[0]).column.get();
-        const auto * c0_const = checkAndGetColumn<ColumnConst>(col0);
-        const auto * c0_string = checkAndGetColumn<ColumnString>(col0);
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        Field c0_field;
 
-        const IColumn * col1 = block.getByPosition(arguments[1]).column.get();
-        const auto * c1_const = checkAndGetColumn<ColumnConst>(col1);
-        const auto * c1_string = checkAndGetColumn<ColumnString>(col1);
+        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
+        const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
+        Field c1_field;
 
-        if unlikely ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
+        if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if unlikely (col0->size() != col1->size())
+        if (c0_col->size() != c1_col->size())
             throw Exception(
-                fmt::format("Row number in of columns in function {} is inconformity", getName()),
+                fmt::format("Function {} column number is inconformity", getName()),
                 ErrorCodes::LOGICAL_ERROR);
 
         auto col_res = ColumnInt64::create();
-        int val_num = col0->size();
+        int val_num = c0_col->size();
         col_res->reserve(val_num);
-
-        if (val_num == 0)
-        {
-            block.getByPosition(result).column = std::move(col_res);
-            return;
-        }
-
-        StringRef c0_str;
-        if (c0_const != nullptr)
-            c0_str = col0->getDataAt(0);
 
         for (int i = 0; i < val_num; i++)
         {
-            if (c0_const == nullptr)
-                c0_str = col0->getDataAt(i);
+            c0_col->get(i, c0_field);
+            c1_col->get(i, c1_field);
 
-            const StringRef c1_str = col1->getDataAt(i);
+            String c0_str = c0_field.get<String>();
+            String c1_str = c1_field.get<String>();
 
-            if unlikely (c0_str.size == 0)
-            {
-                col_res->insert(1);
-                continue;
-            }
-
-            if unlikely (c1_str.size == 0)
-            {
-                col_res->insert(0);
-                continue;
-            }
-
-            VolnitskyCaseInsensitiveUTF8 searcher(c0_str.data, c0_str.size, c1_str.size);
-            const char * res = searcher.search(c1_str.data, c1_str.size);
-            Int64 idx = res - c1_str.data;
-            if (idx >= static_cast<Int64>(c1_str.size))
-                idx = -1;
-            col_res->insert(getPositionUTF8(reinterpret_cast<const UInt8 *>(c1_str.data), idx));
+            // return -1 when c1_str not contains the c0_str
+            Int64 idx = c1_str.find(c0_str);
+            col_res->insert(getPositionUTF8(c1_str, idx));
         }
 
         block.getByPosition(result).column = std::move(col_res);
     }
 
 private:
-    static Int64 getPositionUTF8(const UInt8 * data, Int64 idx)
+    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
     {
         if (idx == -1)
             return 0;
 
+        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
 };
