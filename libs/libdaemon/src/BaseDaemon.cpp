@@ -653,7 +653,7 @@ static std::string createDirectory(const std::string & file)
         return "";
     Poco::File(path).createDirectories();
     return path.toString();
-};
+}
 
 static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path)
 {
