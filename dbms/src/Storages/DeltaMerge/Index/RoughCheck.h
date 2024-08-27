@@ -75,7 +75,7 @@ struct CheckIn
                 break;
 
             if (v.isNull())
-                result = result || RSResult::NoneNull;
+                result = result || RSResult::NoneNull; // the result of any arithmetic comparison with NULL is also NULL
             else
                 result = result || CheckEqual::check<T>(v, type, min, max);
         }
