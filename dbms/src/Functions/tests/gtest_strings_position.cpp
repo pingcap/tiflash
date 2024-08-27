@@ -46,7 +46,7 @@ TEST_F(StringPosition, strAndStrTest)
 
     std::vector<String> c0_var_strs{"ell", "LL", "3", "ElL", "ye", "aaaa", "world", "", "", "biu"};
     std::vector<String> c1_var_strs{"hello", "HELLO", "23333", "HeLlO", "hey", "a", "WoRlD", "", "ping", ""};
-    std::vector<Int64> result0{2, 3, 2, 2, 0, 0, 1, 1, 1, 0};
+    std::vector<Int64> result0{2, 3, 2, 0, 0, 0, 0, 1, 1, 0};
 
     std::vector<String> c0_strs;
     std::vector<String> c1_strs;
@@ -106,19 +106,16 @@ TEST_F(StringPosition, utf8StrAndStrTest)
     {
         // const const
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(0, 0),
+            createColumn<Int64>({}),
             executeFunction("position", createConstColumn<String>(0, ""), createConstColumn<String>(0, "")));
 
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(1, 3),
-            executeFunction("position", createConstColumn<String>(1, "a啊A"), createConstColumn<String>(1, "g他A啊a")));
+            createColumn<Int64>({3}),
+            executeFunction("position", createConstColumn<String>(1, "a啊A"), createConstColumn<String>(1, "g他a啊A")));
 
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(10, 1),
-            executeFunction(
-                "position",
-                createConstColumn<String>(10, "a啊A"),
-                createConstColumn<String>(10, "A啊a我")));
+            createColumn<Int64>({1, 1, 1}),
+            executeFunction("position", createConstColumn<String>(3, "a啊A"), createConstColumn<String>(3, "a啊A我")));
     }
 
     {
@@ -128,7 +125,7 @@ TEST_F(StringPosition, utf8StrAndStrTest)
             executeFunction(
                 "position",
                 createConstColumn<String>(6, "我aA"),
-                createColumn<String>({"我aa", "我AA123", "aa我aa", "肥我aA个", "vrfv干扰", ""})));
+                createColumn<String>({"我aA", "我aA123", "aa我aA", "肥我aA个", "vrfv干扰", ""})));
     }
 
     {
@@ -137,7 +134,7 @@ TEST_F(StringPosition, utf8StrAndStrTest)
             createColumn<Int64>({3, 1, 4, 2, 1, 3, 0, 2, 3}),
             executeFunction(
                 "position",
-                createColumn<String>({"好", "平凯", "aa哈", "？！", "呵呵呵", "233", "嗯？？", "好", "aaa"}),
+                createColumn<String>({"好", "平凯", "aa哈", "？！", "呵呵呵", "233", "嗯？？", "好", "AaA"}),
                 createColumn<String>(
                     {"ni好", "平凯星辰", "啊啊aaa哈哈", "？？！！", "呵呵呵", "哈哈2333", "嗯？", " 好", "vdAaAvr"})));
     }
@@ -145,10 +142,10 @@ TEST_F(StringPosition, utf8StrAndStrTest)
     {
         // vector const
         ASSERT_COLUMN_EQ(
-            createColumn<Int64>({1, 1, 11, 0, 6, 6}),
+            createColumn<Int64>({1, 1, 11, 0, 6}),
             executeFunction(
                 "position",
-                createColumn<String>({"", "f", "z", "备份", "备g份", "备G份"}),
+                createColumn<String>({"", "f", "z", "备份", "备g份"}),
                 createConstColumn<String>(6, "fevre备g份gfz")));
     }
 }
