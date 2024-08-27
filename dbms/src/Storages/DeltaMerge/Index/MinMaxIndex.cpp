@@ -420,7 +420,7 @@ template <typename Op>
 RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
 {
     if (value.isNull())
-        return RSResults(pack_count, RSResult::NoneNull);
+        return RSResults(pack_count, RSResult::NoneNull); // the result of any arithmetic comparison with NULL is also NULL
 
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
