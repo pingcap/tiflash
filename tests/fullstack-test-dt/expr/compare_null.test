@@ -231,7 +231,7 @@ func> wait_table test t
 
 mysql> alter table test.t compact tiflash replica;
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select sum(b) from test.t group by a order by a desc;
+mysql> set session tidb_isolation_read_engines='tiflash'; select a, sum(b) from test.t group by a order by a desc;
 +------------+--------+
 | a          | sum(b) |
 +------------+--------+
@@ -242,7 +242,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select sum(b) from tes
 | NULL       |     15 |
 +------------+--------+
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select sum(b) from test.t group by a order by a desc;
+mysql> set session tidb_isolation_read_engines='tiflash'; select a, sum(b) from test.t group by a order by a desc;
 +------------+--------+
 | a          | sum(b) |
 +------------+--------+
