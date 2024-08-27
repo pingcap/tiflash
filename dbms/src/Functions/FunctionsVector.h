@@ -33,7 +33,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int ILLEGAL_COLUMN;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
 class FunctionsCastVectorFloat32AsString : public IFunction

@@ -190,6 +190,7 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
     std::atomic<size_t> discarded_nodes = 0;
     std::atomic<bool> has_exception_in_search = false;
 
+    // The non-valid rows should be discarded by this lambda.
     auto predicate = [&](const Key & key) {
         // Must catch exceptions in the predicate, because search runs on other threads.
         try
