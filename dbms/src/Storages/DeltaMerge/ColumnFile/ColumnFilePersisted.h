@@ -83,7 +83,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(
     const RowKeyRange & segment_range,
     ReadBuffer & buf);
 
-ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
+ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint(
     const LoggerPtr & parent_log,
     DMContext & context,
     const RowKeyRange & segment_range,
@@ -96,5 +96,13 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV4Format(
     const DMContext & context,
     const RowKeyRange & segment_range,
     const dtpb::DeltaLayerMeta & meta);
+
+ColumnFilePersisteds createColumnFilesInV4FormatFromCheckpoint(
+    const LoggerPtr & parent_log,
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    const dtpb::DeltaLayerMeta & meta,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs);
 } // namespace DM
 } // namespace DB

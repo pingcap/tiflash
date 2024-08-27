@@ -48,20 +48,23 @@ private:
         , segment_range(segment_range_)
     {}
 
-    void calculateStat(const DMContext & context);
+    void calculateStat(const DMContext & dm_context);
 
 public:
-    ColumnFileBig(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_);
+    ColumnFileBig(const DMContext & dm_context, const DMFilePtr & file_, const RowKeyRange & segment_range_);
 
     ColumnFileBig(const ColumnFileBig &) = default;
 
-    ColumnFileBigPtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
+    ColumnFileBigPtr cloneWith(
+        DMContext & dm_context,
+        const DMFilePtr & new_file,
+        const RowKeyRange & new_segment_range)
     {
         auto * new_column_file = new ColumnFileBig(*this);
         new_column_file->file = new_file;
         new_column_file->segment_range = new_segment_range;
         // update `valid_rows` and `valid_bytes` by `new_segment_range`
-        new_column_file->calculateStat(context);
+        new_column_file->calculateStat(dm_context);
         return std::shared_ptr<ColumnFileBig>(new_column_file);
     }
 
@@ -77,7 +80,7 @@ public:
     void removeData(WriteBatches & wbs) const override;
 
     ColumnFileReaderPtr getReader(
-        const DMContext & context,
+        const DMContext & dm_context,
         const IColumnFileDataProviderPtr & data_provider,
         const ColumnDefinesPtr & col_defs) const override;
 
@@ -85,19 +88,24 @@ public:
     void serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool save_schema) const override;
 
     static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & context,
+        const DMContext & dm_context,
         const RowKeyRange & segment_range,
         ReadBuffer & buf);
     static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & context,
+        const DMContext & dm_context,
         const RowKeyRange & segment_range,
         const dtpb::ColumnFileBig & cf_pb);
 
     static ColumnFilePersistedPtr createFromCheckpoint(
-        const LoggerPtr & parent_log,
-        DMContext & context, //
+        DMContext & dm_context,
         const RowKeyRange & target_range,
         ReadBuffer & buf,
+        UniversalPageStoragePtr temp_ps,
+        WriteBatches & wbs);
+    static ColumnFilePersistedPtr createFromCheckpoint(
+        DMContext & dm_context,
+        const RowKeyRange & target_range,
+        const dtpb::ColumnFileBig & cf_pb,
         UniversalPageStoragePtr temp_ps,
         WriteBatches & wbs);
 
@@ -155,10 +163,10 @@ private:
 
 public:
     ColumnFileBigReader(
-        const DMContext & context_,
+        const DMContext & dm_context_,
         const ColumnFileBig & column_file_,
         const ColumnDefinesPtr & col_defs_)
-        : dm_context(context_)
+        : dm_context(dm_context_)
         , column_file(column_file_)
         , col_defs(col_defs_)
     {
