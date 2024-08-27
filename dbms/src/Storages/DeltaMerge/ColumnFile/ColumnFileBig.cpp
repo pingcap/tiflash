@@ -26,15 +26,14 @@
 #include <Storages/PathPool.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
-ColumnFileBig::ColumnFileBig(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
+
+ColumnFileBig::ColumnFileBig(const DMContext & dm_context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
     : file(file_)
     , segment_range(segment_range_)
 {
-    calculateStat(context);
+    calculateStat(dm_context);
 }
 
 void ColumnFileBig::calculateStat(const DMContext & dm_context)
@@ -66,11 +65,11 @@ void ColumnFileBig::removeData(WriteBatches & wbs) const
 }
 
 ColumnFileReaderPtr ColumnFileBig::getReader(
-    const DMContext & context,
+    const DMContext & dm_context,
     const IColumnFileDataProviderPtr &,
     const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
+    return std::make_shared<ColumnFileBigReader>(dm_context, *this, col_defs);
 }
 
 void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -120,8 +119,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
 }
 
 ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
-    [[maybe_unused]] const LoggerPtr & parent_log,
-    DMContext & dm_context, //
+    DMContext & dm_context,
     const RowKeyRange & target_range,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
@@ -133,6 +131,23 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     readIntBinary(file_page_id, buf);
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
+
+    auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
+    auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
+    return std::shared_ptr<ColumnFileBig>(dp_file);
+}
+
+ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
+    DMContext & dm_context,
+    const RowKeyRange & target_range,
+    const dtpb::ColumnFileBig & cf_pb,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs)
+{
+    UInt64 file_page_id = cf_pb.id();
+    size_t valid_rows = cf_pb.valid_rows();
+    size_t valid_bytes = cf_pb.valid_bytes();
 
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
     auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
@@ -370,5 +385,4 @@ void ColumnFileBigReader::setReadTag(ReadTag read_tag_)
     read_tag = read_tag_;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
