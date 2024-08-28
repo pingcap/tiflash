@@ -45,15 +45,13 @@
 #include <memory>
 #include <random>
 
-namespace DB
-{
 
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
-} // namespace ErrorCodes
+} // namespace DB::ErrorCodes
 
-namespace FailPoints
+namespace DB::FailPoints
 {
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
@@ -63,20 +61,20 @@ extern const char segment_merge_after_ingest_packs[];
 extern const char force_set_segment_physical_split[];
 extern const char force_set_page_file_write_errno[];
 extern const char proactive_flush_force_set_type[];
-} // namespace FailPoints
+} // namespace DB::FailPoints
 
-namespace tests
+namespace DB::tests
 {
 DM::PushDownFilterPtr generatePushDownFilter(
     Context & ctx,
     const String & table_info_json,
     const String & query,
     const std::optional<TimezoneInfo> & opt_tz = std::nullopt);
-}
-namespace DM
+} // namespace DB::tests
+
+namespace DB::DM::tests
 {
-namespace tests
-{
+
 String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 {
     const auto mode = info.param;
@@ -3972,7 +3970,6 @@ try
 }
 CATCH
 
-
 TEST_F(DeltaMergeStoreTest, RSResult)
 try
 {
@@ -4217,6 +4214,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests
