@@ -36,7 +36,7 @@ static std::tuple<String, UInt64> parseDMFilePath(const String & path)
     return std::tuple<String, UInt64>{parent_path, file_id};
 }
 
-DMFilePtr MockPreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode, UInt32 meta_version)
+DMFilePtr MockPreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode, UInt64 meta_version)
 {
     auto [parent_path, file_id] = parseDMFilePath(path);
     return DMFile::restore(

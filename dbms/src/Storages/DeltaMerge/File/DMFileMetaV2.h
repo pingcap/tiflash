@@ -31,7 +31,7 @@ public:
         KeyspaceID keyspace_id_,
         DMConfigurationOpt configuration_,
         DMFileFormat::Version format_version_,
-        UInt32 meta_version_)
+        UInt64 meta_version_)
         : DMFileMeta(file_id_, parent_path_, status_, keyspace_id_, configuration_, format_version_)
         , small_file_size_threshold(small_file_size_threshold_)
         , merged_file_max_size(merged_file_max_size_)
@@ -80,7 +80,7 @@ public:
     void finalize(WriteBuffer & buffer, const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
         override;
     void read(const FileProviderPtr & file_provider, const DMFileMeta::ReadMode & read_meta_mode) override;
-    static String metaFileName(UInt32 meta_version = 0)
+    static String metaFileName(UInt64 meta_version = 0)
     {
         if (meta_version == 0)
             return "meta";
@@ -111,7 +111,7 @@ public:
 
     UInt64 small_file_size_threshold;
     UInt64 merged_file_max_size;
-    UInt32 meta_version = 0; // Note: meta_version affects the output file name.
+    UInt64 meta_version = 0; // Note: meta_version affects the output file name.
 
 private:
     UInt64 getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const;

@@ -284,7 +284,7 @@ IPreparedDMFileTokenPtr DataStoreS3::prepareDMFileByKey(const String & remote_ke
     return prepareDMFile(oid, 0);
 }
 
-DMFilePtr S3PreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode, UInt32 meta_version)
+DMFilePtr S3PreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode, UInt64 meta_version)
 {
     return DMFile::restore(
         file_provider,

@@ -395,10 +395,7 @@ protected:
 INSTANTIATE_TEST_CASE_P( //
     DMFileMetaVersion,
     S3DMFile,
-    /* enable_encryption */ ::testing::Values(false));
-
-// In this TiFlash version WN does not support encryption at all.
-// See https://github.com/pingcap/tiflash/issues/8351
+    /* enable_encryption */ ::testing::Bool());
 
 TEST_P(S3DMFile, Basic)
 try
@@ -409,12 +406,14 @@ try
     ASSERT_TRUE(dm_file->path().starts_with("s3://"));
     ASSERT_EQ(0, dm_file->metaVersion());
 
-    auto token = dataStore()->prepareDMFile(S3::DMFileOID{
-        .store_id = store_id,
-        .keyspace_id = keyspace_id,
-        .table_id = table_id,
-        .file_id = 1,
-    });
+    auto token = dataStore()->prepareDMFile(
+        S3::DMFileOID{
+            .store_id = store_id,
+            .keyspace_id = keyspace_id,
+            .table_id = table_id,
+            .file_id = 1,
+        },
+        /* page_id= */ 0);
     auto cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 0);
     ASSERT_EQ(0, cn_dmf->metaVersion());
 
@@ -446,12 +445,14 @@ try
     iw->finalize();
 
     // Read out meta version = 0
-    auto token = dataStore()->prepareDMFile(S3::DMFileOID{
-        .store_id = store_id,
-        .keyspace_id = keyspace_id,
-        .table_id = table_id,
-        .file_id = 1,
-    });
+    auto token = dataStore()->prepareDMFile(
+        S3::DMFileOID{
+            .store_id = store_id,
+            .keyspace_id = keyspace_id,
+            .table_id = table_id,
+            .file_id = 1,
+        },
+        /* page_id= */ 0);
     auto cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 0);
     ASSERT_EQ(0, cn_dmf->metaVersion());
     ASSERT_STREQ("", cn_dmf->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
@@ -497,12 +498,14 @@ try
     }
 
     // Read out meta version = 0
-    auto token = dataStore()->prepareDMFile(S3::DMFileOID{
-        .store_id = store_id,
-        .keyspace_id = keyspace_id,
-        .table_id = table_id,
-        .file_id = 1,
-    });
+    auto token = dataStore()->prepareDMFile(
+        S3::DMFileOID{
+            .store_id = store_id,
+            .keyspace_id = keyspace_id,
+            .table_id = table_id,
+            .file_id = 1,
+        },
+        /* page_id= */ 0);
     auto cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 0);
     ASSERT_EQ(0, cn_dmf->metaVersion());
     ASSERT_STREQ("", cn_dmf->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
