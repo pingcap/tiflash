@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
+#include <Columns/IColumn.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
@@ -35,7 +36,6 @@
 #include <ext/range.h>
 #include <magic_enum.hpp>
 
-#include "Columns/IColumn.h"
 
 namespace DB
 {
@@ -4465,13 +4465,6 @@ private:
     }
 };
 
-static Int64 getResult(const ColumnString::Chars_t & chars, size_t size, size_t offset)
-{
-    if unlikely (size == 0)
-        return 0;
-    return chars[offset];
-}
-
 class FunctionASCII : public IFunction
 {
 public:
@@ -4515,21 +4508,17 @@ public:
         const auto & offsets = c0_string->getOffsets();
 
         if (val_num > 0)
-        {
-            size_t size = offsets[0] - 1;
-            col_res->insert(getResult(chars, size, 0));
-        }
+            col_res->insert(getResult(chars, 0));
+        
 
         for (size_t i = 1; i < val_num; i++)
-        {
-            auto size = offsets[i] - offsets[i - 1] - 1;
-            col_res->insert(getResult(chars, size, offsets[i - 1]));
-        }
+            col_res->insert(getResult(chars, offsets[i - 1]));
 
         block.getByPosition(result).column = std::move(col_res);
     }
 
 private:
+static Int64 getResult(const ColumnString::Chars_t & chars, size_t offset) { return chars[offset]; }
 };
 
 class FunctionLength : public IFunction
