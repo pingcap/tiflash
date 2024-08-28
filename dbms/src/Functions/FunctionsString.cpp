@@ -4565,7 +4565,6 @@ public:
 
         if (val_num > 0)
             col_res->insert(getResult(chars, 0));
-        
 
         for (size_t i = 1; i < val_num; i++)
             col_res->insert(getResult(chars, offsets[i - 1]));
@@ -4574,7 +4573,7 @@ public:
     }
 
 private:
-static Int64 getResult(const ColumnString::Chars_t & chars, size_t offset) { return chars[offset]; }
+    static Int64 getResult(const ColumnString::Chars_t & chars, size_t offset) { return chars[offset]; }
 };
 
 class FunctionLength : public IFunction
