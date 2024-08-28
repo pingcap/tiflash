@@ -56,18 +56,18 @@ public:
             bool miss_key_path = true;
             if (config.has("security.ca_path"))
             {
-                ca_path = config.getString("security.ca_path");
-                miss_ca_path = false;
+                ca_path = Poco::trim(config.getString("security.ca_path"));
+                miss_ca_path = ca_path.empty();
             }
             if (config.has("security.cert_path"))
             {
-                cert_path = config.getString("security.cert_path");
-                miss_cert_path = false;
+                cert_path = Poco::trim(config.getString("security.cert_path"));
+                miss_cert_path = cert_path.empty();
             }
             if (config.has("security.key_path"))
             {
-                key_path = config.getString("security.key_path");
-                miss_key_path = false;
+                key_path = Poco::trim(config.getString("security.key_path"));
+                miss_key_path = key_path.empty();
             }
             if (miss_ca_path && miss_cert_path && miss_key_path)
             {

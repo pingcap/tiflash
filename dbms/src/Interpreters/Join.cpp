@@ -2067,14 +2067,14 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
 class NonJoinedBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    NonJoinedBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
+    NonJoinedBlockInputStream(const JoinPtr & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
         : parent(parent_)
         , index(index_)
         , step(step_)
         , max_block_size(max_block_size_)
         , add_not_mapped_rows(true)
     {
-        size_t build_concurrency = parent.getBuildConcurrency();
+        size_t build_concurrency = parent->getBuildConcurrency();
         if (unlikely(step > build_concurrency || index >= build_concurrency))
             throw Exception("The concurrency of NonJoinedBlockInputStream should not be larger than join build concurrency");
 
@@ -2083,14 +2083,14 @@ public:
           */
 
         size_t num_columns_left = left_sample_block.columns();
-        size_t num_columns_right = parent.sample_block_with_columns_to_add.columns();
+        size_t num_columns_right = parent->sample_block_with_columns_to_add.columns();
 
         result_sample_block = materializeBlock(left_sample_block);
 
         /// Add columns from the right-side table to the block.
         for (size_t i = 0; i < num_columns_right; ++i)
         {
-            const ColumnWithTypeAndName & src_column = parent.sample_block_with_columns_to_add.getByPosition(i);
+            const ColumnWithTypeAndName & src_column = parent->sample_block_with_columns_to_add.getByPosition(i);
             result_sample_block.insert(src_column.cloneEmpty());
         }
 
@@ -2107,7 +2107,7 @@ public:
             column_indices_right.push_back(num_columns_left + i);
 
         /// If use_nulls, convert left columns to Nullable.
-        if (parent.use_nulls)
+        if (parent->use_nulls)
         {
             for (size_t i = 0; i < num_columns_left; ++i)
             {
@@ -2128,7 +2128,7 @@ public:
 protected:
     Block readImpl() override
     {
-        if (parent.blocks.empty())
+        if (parent->blocks.empty())
             return Block();
 
         if (add_not_mapped_rows)
@@ -2137,16 +2137,16 @@ protected:
             add_not_mapped_rows = false;
         }
 
-        if (parent.strictness == ASTTableJoin::Strictness::Any)
-            return createBlock<ASTTableJoin::Strictness::Any>(parent.maps_any_full);
-        else if (parent.strictness == ASTTableJoin::Strictness::All)
-            return createBlock<ASTTableJoin::Strictness::All>(parent.maps_all_full);
+        if (parent->strictness == ASTTableJoin::Strictness::Any)
+            return createBlock<ASTTableJoin::Strictness::Any>(parent->maps_any_full);
+        else if (parent->strictness == ASTTableJoin::Strictness::All)
+            return createBlock<ASTTableJoin::Strictness::All>(parent->maps_all_full);
         else
             throw Exception("Logical error: unknown JOIN strictness (must be ANY or ALL)", ErrorCodes::LOGICAL_ERROR);
     }
 
 private:
-    const Join & parent;
+    const JoinPtr parent;
     size_t index;
     size_t step;
     size_t max_block_size;
@@ -2170,9 +2170,9 @@ private:
 
     void setNextCurrentNotMappedRow()
     {
-        while (current_not_mapped_row == nullptr && next_index < parent.rows_not_inserted_to_map.size())
+        while (current_not_mapped_row == nullptr && next_index < parent->rows_not_inserted_to_map.size())
         {
-            current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->next;
+            current_not_mapped_row = parent->rows_not_inserted_to_map[next_index]->next;
             next_index += step;
         }
     }
@@ -2197,7 +2197,7 @@ private:
 
         size_t rows_added = 0;
 
-        switch (parent.type)
+        switch (parent->type)
         {
 #define M(TYPE)                                                                                                             \
     case Join::Type::TYPE:                                                                                                  \
@@ -2231,7 +2231,7 @@ private:
                        MutableColumns & mutable_columns_right)
     {
         size_t rows_added = 0;
-        size_t key_num = parent.key_names_right.size();
+        size_t key_num = parent->key_names_right.size();
         while (current_not_mapped_row != nullptr)
         {
             rows_added++;
@@ -2296,9 +2296,9 @@ private:
 };
 
 
-BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
+BlockInputStreamPtr createStreamWithNonJoinedRows(const JoinPtr & parent, const Block & left_sample_block, size_t index, size_t step, size_t max_block_size)
 {
-    return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
+    return std::make_shared<NonJoinedBlockInputStream>(parent, left_sample_block, index, step, max_block_size);
 }
 
 } // namespace DB
