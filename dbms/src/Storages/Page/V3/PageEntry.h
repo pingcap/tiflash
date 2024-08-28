@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Storages/Page/PageStorageMemorySummary.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <fmt/format.h>

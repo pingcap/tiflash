@@ -96,7 +96,7 @@ public:
     // New writes will be written to new BlobFiles.
     void freezeBlobFiles();
 
-    void remove(const PageEntries & del_entries);
+    void removeEntries(const PageEntries & del_entries);
 
     PageMap read(PageIdAndEntries & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
@@ -126,7 +126,7 @@ private:
         PageType page_type,
         const WriteLimiterPtr & write_limiter = nullptr);
 
-    BlobFilePtr read(
+    void read(
         const PageId & page_id_v3,
         BlobFileId blob_id,
         BlobFileOffset offset,

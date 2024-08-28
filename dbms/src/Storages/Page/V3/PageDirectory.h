@@ -161,7 +161,22 @@ public:
                 }
                 return;
             }
-            RUNTIME_CHECK(ref_count_delta_in_snap > 0, deref_count_delta, ref_count_delta_in_snap);
+            if unlikely (ref_count_delta_in_snap <= 0)
+            {
+                FmtBuffer buf;
+                for (const auto & [ver, ref_count_delta] : *versioned_ref_counts)
+                {
+                    buf.fmtAppend("{}|{},", ver.sequence, ref_count_delta);
+                }
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Check ref_count_delta_in_snap > 0 failed, deref_count_delta={}, ref_count_delta_in_snap={}, "
+                    "snap_seq={}, versions={}",
+                    deref_count_delta,
+                    ref_count_delta_in_snap,
+                    snap_seq,
+                    buf.toString());
+            }
             new_versioned_ref_counts->emplace_back(PageVersion(snap_seq, 0), ref_count_delta_in_snap);
             versioned_ref_counts.swap(new_versioned_ref_counts);
         }
@@ -207,31 +222,47 @@ struct EntryOrDelete
     MultiVersionRefCount being_ref_count;
     std::optional<PageEntryV3> entry;
 
-    static EntryOrDelete newDelete()
+    EntryOrDelete(const EntryOrDelete & other)
+        : being_ref_count(other.being_ref_count)
+        , entry(other.entry)
     {
-        return EntryOrDelete{
-            .entry = std::nullopt,
-        };
-    };
-    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
-    {
-        return EntryOrDelete{
-            .entry = entry,
-        };
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1);
+        if (entry)
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_add(sizeof(PageEntryV3));
     }
+    EntryOrDelete() { PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1); }
+    EntryOrDelete(std::optional<PageEntryV3> entry_)
+        : entry(std::move(entry_))
+    {
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1);
+        if (entry)
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_add(sizeof(PageEntryV3));
+    }
+    EntryOrDelete(MultiVersionRefCount being_ref_count_, std::optional<PageEntryV3> entry_)
+        : being_ref_count(being_ref_count_)
+        , entry(std::move(entry_))
+    {
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_add(1);
+        if (entry)
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_add(sizeof(PageEntryV3));
+    }
+    ~EntryOrDelete()
+    {
+        PageStorageMemorySummary::versioned_entry_or_delete_count.fetch_sub(1);
+        if (entry)
+            PageStorageMemorySummary::versioned_entry_or_delete_bytes.fetch_sub(sizeof(PageEntryV3));
+    }
+
+    static EntryOrDelete newDelete() { return EntryOrDelete(std::nullopt); }
+    static EntryOrDelete newNormalEntry(const PageEntryV3 & entry) { return EntryOrDelete(entry); }
     static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
     {
-        return EntryOrDelete{
-            .being_ref_count = ori_entry.being_ref_count,
-            .entry = entry,
-        };
+        return EntryOrDelete(ori_entry.being_ref_count, entry);
     }
 
     static EntryOrDelete newFromRestored(PageEntryV3 entry, const PageVersion & ver, Int64 being_ref_count)
     {
-        auto result = EntryOrDelete{
-            .entry = entry,
-        };
+        auto result = EntryOrDelete(std::move(entry));
         result.being_ref_count.restoreFrom(ver, being_ref_count);
         return result;
     }
@@ -289,7 +320,7 @@ public:
 
     // Update the local cache info for remote page,
     // Must a hold snap to prevent the page being deleted.
-    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry);
+    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry, bool ignore_delete);
 
     std::shared_ptr<PageId> fromRestored(const typename PageEntriesEdit::EditRecord & rec);
 

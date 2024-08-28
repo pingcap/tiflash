@@ -50,6 +50,7 @@
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/DeltaMerge/dtpb/segment.pb.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -63,6 +64,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+
 
 namespace ProfileEvents
 {
@@ -352,22 +354,38 @@ void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_in
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         segment_info.range = RowKeyRange::fromHandleRange(range);
+        readIntBinary(segment_info.next_segment_id, buf);
+        readIntBinary(segment_info.delta_id, buf);
+        readIntBinary(segment_info.stable_id, buf);
         break;
     }
     case SegmentFormat::V2:
     {
         segment_info.range = RowKeyRange::deserialize(buf);
+        readIntBinary(segment_info.next_segment_id, buf);
+        readIntBinary(segment_info.delta_id, buf);
+        readIntBinary(segment_info.stable_id, buf);
+        break;
+    }
+    case SegmentFormat::V3:
+    {
+        dtpb::SegmentMeta meta;
+        String data;
+        readStringBinary(data, buf);
+        RUNTIME_CHECK_MSG(
+            meta.ParseFromString(data),
+            "Failed to parse SegmentMeta from string: {}",
+            Redact::keyToHexString(data.data(), data.size()));
+        segment_info.range = RowKeyRange::deserialize(meta.range());
+        segment_info.next_segment_id = meta.next_segment_id();
+        segment_info.delta_id = meta.delta_id();
+        segment_info.stable_id = meta.stable_id();
         break;
     }
     default:
-        throw Exception(fmt::format("Illegal version: {}", segment_info.version), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal version: {}", segment_info.version);
     }
-
-    readIntBinary(segment_info.next_segment_id, buf);
-    readIntBinary(segment_info.delta_id, buf);
-    readIntBinary(segment_info.stable_id, buf);
 }
-
 
 std::vector<PageIdU64> Segment::getAllSegmentIds(const DMContext & context, PageIdU64 segment_id)
 {
@@ -549,10 +567,29 @@ UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);
     writeIntBinary(epoch, buf);
-    rowkey_range.serialize(buf);
-    writeIntBinary(next_segment_id, buf);
-    writeIntBinary(delta->getId(), buf);
-    writeIntBinary(stable->getId(), buf);
+
+    if (likely(
+            STORAGE_FORMAT_CURRENT.segment == SegmentFormat::V1 //
+            || STORAGE_FORMAT_CURRENT.segment == SegmentFormat::V2))
+    {
+        rowkey_range.serialize(buf);
+        writeIntBinary(next_segment_id, buf);
+        writeIntBinary(delta->getId(), buf);
+        writeIntBinary(stable->getId(), buf);
+    }
+    else if (STORAGE_FORMAT_CURRENT.segment == SegmentFormat::V3)
+    {
+        dtpb::SegmentMeta meta;
+        auto range = rowkey_range.serialize();
+        meta.mutable_range()->Swap(&range);
+        meta.set_next_segment_id(next_segment_id);
+        meta.set_delta_id(delta->getId());
+        meta.set_stable_id(stable->getId());
+
+        auto data = meta.SerializeAsString();
+        writeStringBinary(data, buf);
+    }
+
     return buf.count();
 }
 
@@ -896,13 +933,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     auto read_tag = need_row_id ? ReadTag::MVCC : ReadTag::Query;
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
 
-    RowKeyRanges real_ranges;
-    for (const auto & read_range : read_ranges)
-    {
-        auto real_range = rowkey_range.shrink(read_range);
-        if (!real_range.none())
-            real_ranges.emplace_back(std::move(real_range));
-    }
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
     if (real_ranges.empty())
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
 
@@ -1042,10 +1073,16 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
-    const RowKeyRanges & data_ranges,
+    const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
     size_t expected_block_size)
 {
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    if (real_ranges.empty())
+    {
+        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
+    }
+
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
     // new_columns_to_read need at most columns_to_read.size() + 2, due to may extra insert into the handle column and del_mark column.
@@ -1089,7 +1126,7 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *new_columns_to_read,
-        data_ranges,
+        real_ranges,
         filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
@@ -1106,8 +1143,8 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
         ReadTag::Query);
 
     // Do row key filtering based on data_ranges.
-    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
-    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
+    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, real_ranges, 0);
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, real_ranges, 0);
 
     // Filter the unneeded column and filter out the rows whose del_mark is true.
     delta_stream
@@ -2944,8 +2981,9 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
             dm_context.global_context.getFileProvider(),
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
-            dm_context.tracing_id);
-        const auto & use_packs = pack_filter.getUsePacksConst();
+            dm_context.tracing_id,
+            ReadTag::MVCC);
+        const auto & pack_res = pack_filter.getPackResConst();
         const auto & handle_res = pack_filter.getHandleRes();
         const auto & pack_stats = dmfile->getPackStats();
 
@@ -2955,7 +2993,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
         {
             const auto & pack_stat = pack_stats[pack_id];
             preceded_rows += pack_stat.rows;
-            if (!use_packs[pack_id])
+            if (!pack_res[pack_id].isUse())
             {
                 continue;
             }

@@ -16,7 +16,7 @@
 
 #include <Common/ComputeLabelHolder.h>
 #include <Common/Exception.h>
-#include <Common/ProcessCollector.h>
+#include <Common/ProcessCollector_fwd.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
 #include <common/types.h>
@@ -212,6 +212,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "The freshness of tiflash data with tikv data",                                                                               \
       Histogram,                                                                                                                    \
       F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.001, 2, 20}))                                       \
+    M(tiflash_memory_usage_by_class,                                                                                                \
+      "TiFlash memory consumes by class",                                                                                           \
+      Gauge,                                                                                                                        \
+      F(type_uni_page_ids, {"type", "uni_page_ids"}),                                                                               \
+      F(type_versioned_entries, {"type", "versioned_entries"}))                                                                     \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                       \
     M(tiflash_storage_command_count,                                                                                                \
       "Total number of storage's command, such as delete range / shutdown /startup",                                                \
@@ -399,6 +404,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
       F(type_failed_baddata, {{"type", "failed_baddata"}}),                                                                         \
       F(type_failed_repeated, {{"type", "failed_repeated"}}),                                                                       \
+      F(type_failed_build_chkpt, {{"type", "failed_build_chkpt"}}),                                                                 \
       F(type_restore, {{"type", "restore"}}),                                                                                       \
       F(type_succeed, {{"type", "succeed"}}))                                                                                       \
     M(tiflash_fap_task_state,                                                                                                       \
@@ -428,6 +434,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_total, {{"type", "total"}}, ExpBucketsWithRange{0.2, 4, 300}),                                                         \
       F(type_queue_stage, {{"type", "queue_stage"}}, ExpBucketsWithRange{0.2, 4, 300}),                                             \
       F(type_phase1_total, {{"type", "phase1_total"}}, ExpBucketsWithRange{0.2, 4, 300}))                                           \
+    M(tiflash_raft_command_throughput,                                                                                              \
+      "",                                                                                                                           \
+      Histogram,                                                                                                                    \
+      F(type_prehandle_snapshot, {{"type", "prehandle_snapshot"}}, ExpBuckets{128, 2, 11}))                                         \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
@@ -496,6 +506,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_flush_log_gap, {{"type", "flush_log_gap"}}),                                                                           \
       F(type_flush_size, {{"type", "flush_size"}}),                                                                                 \
       F(type_flush_rowcount, {{"type", "flush_rowcount"}}),                                                                         \
+      F(type_prehandle, {{"type", "prehandle"}}),                                                                                   \
       F(type_flush_eager_gc, {{"type", "flush_eager_gc"}}))                                                                         \
     M(tiflash_raft_raft_frequent_events_count,                                                                                      \
       "Raft frequent event counter",                                                                                                \
@@ -852,7 +863,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fg_read, {"type", "fg_read"}),                                                                                         \
       F(type_bg_read, {"type", "bg_read"}),                                                                                         \
       F(type_fg_write, {"type", "fg_write"}),                                                                                       \
-      F(type_bg_write, {"type", "bg_write"}))
+      F(type_bg_write, {"type", "bg_write"}))                                                                                       \
+    M(tiflash_read_thread_internal_us,                                                                                              \
+      "Durations of read thread internal components",                                                                               \
+      Histogram,                                                                                                                    \
+      F(type_block_queue_pop_latency, {{"type", "block_queue_pop_latency"}}, ExpBuckets{1, 2, 20}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
@@ -1074,6 +1089,7 @@ struct MetricFamily
         return *(resource_group_metrics_map[resource_group_name][idx]);
     }
 
+
 private:
     void addMetricsForResourceGroup(const String & resource_group_name)
     {
@@ -1128,6 +1144,7 @@ public:
     double getStorageThreadMemory(MemoryAllocType type, const std::string & k);
     void registerProxyThreadMemory(const std::string & k);
     void registerStorageThreadMemory(const std::string & k);
+    void setProvideProxyProcessMetrics(bool v);
 
 private:
     TiFlashMetrics();
@@ -1139,13 +1156,10 @@ private:
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
     static constexpr auto raft_proxy_thread_memory_usage = "tiflash_raft_proxy_thread_memory_usage";
-    static constexpr auto storages_thread_memory_usage = "storages_thread_memory_usage";
+    static constexpr auto storages_thread_memory_usage = "tiflash_storages_thread_memory_usage";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
-    // Here we add a ProcessCollector to collect cpu/rss/vsize/start_time information.
-    // Normally, these metrics will be collected by tiflash-proxy,
-    // but in disaggregated compute mode with AutoScaler, tiflash-proxy will not start, so tiflash will collect these metrics itself.
-    std::shared_ptr<ProcessCollector> cn_process_collector = std::make_shared<ProcessCollector>();
+    std::shared_ptr<ProcessCollector> process_collector;
 
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;

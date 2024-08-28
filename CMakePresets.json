@@ -1,8 +1,8 @@
 {
-  "version": 3,
+  "version": 6,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 21,
+    "minor": 23,
     "patch": 0
   },
   "configurePresets": [
@@ -72,7 +72,8 @@
         "tests-on"
       ],
       "displayName": "Development: DEBUG build with tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-debug"
     },
     {
         "name": "dev-coverage",
@@ -83,7 +84,8 @@
         "displayName": "Development: DEBUG build with tests and code coverage enabled",
         "cacheVariables": {
             "TEST_LLVM_COVERAGE": "ON"
-        }
+        },
+        "binaryDir": "${sourceDir}/cmake-build-coverage"
     },
     {
       "name": "release",
@@ -92,7 +94,8 @@
         "tests-off"
       ],
       "displayName": "Release: RELWITHDEBINFO build without tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-release"
     },
     {
       "name": "asan",
@@ -101,7 +104,8 @@
         "tests-on"
       ],
       "displayName": "AddressSanitizer: ASAN build with tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-asan"
     },
     {
       "name": "tsan",
@@ -110,7 +114,8 @@
         "tests-on"
       ],
       "displayName": "ThreadSanitizer: TSAN build with tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-tsan"
     },
     {
       "name": "benchmarks",
@@ -119,7 +124,204 @@
         "tests-on"
       ],
       "displayName": "Benchmarks: RELEASE build with benchmarks enabled",
-      "cacheVariables": {}
+      "cacheVariables": {},
+      "binaryDir": "${sourceDir}/cmake-build-release"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "displayName": "Build tiflash binary with debug info and tests enabled",
+      "configurePreset": "dev",
+      "targets": ["tiflash"]
+    },
+    {
+      "name": "unit-tests",
+      "displayName": "Build dbms unit tests",
+      "configurePreset": "dev",
+      "targets": ["gtests_dbms"]
+    },
+    {
+      "name": "unit-tests-all",
+      "displayName": "Build all unit tests",
+      "configurePreset": "dev",
+      "targets": ["gtests_dbms, gtests_libdaemon, gtests_libcommon"]
+    },
+    {
+      "name": "dev-coverage",
+      "displayName": "Build dbms unit tests with code coverage",
+      "configurePreset": "dev-coverage",
+      "targets": ["gtests_dbms"]
+    },
+    {
+      "name": "dev-coverage-all",
+      "displayName": "Build all unit tests with code coverage",
+      "configurePreset": "dev-coverage",
+      "targets": ["gtests_dbms, gtests_libdaemon, gtests_libcommon"]
+    },
+    {
+      "name": "release",
+      "displayName": "Build tiflash binary without debug info",
+      "configurePreset": "release",
+      "targets": ["tiflash"]
+    },
+    {
+      "name": "asan",
+      "displayName": "Build dbms Address Sanitizer tests",
+      "configurePreset": "asan",
+      "targets": ["gtests_dbms"]
+    },
+    {
+      "name": "asan-all",
+      "displayName": "Build all Address Sanitizer tests",
+      "configurePreset": "asan",
+      "targets": ["gtests_dbms, gtests_libdaemon, gtests_libcommon"]
+    },
+    {
+      "name": "tsan",
+      "displayName": "Build dbms Thread Sanitizer tests",
+      "configurePreset": "tsan",
+      "targets": ["gtests_dbms"]
+    },
+    {
+      "name": "tsan-all",
+      "displayName": "Build all Thread Sanitizer tests",
+      "configurePreset": "tsan",
+      "targets": ["gtests_dbms, gtests_libdaemon, gtests_libcommon"]
+    },
+    {
+      "name": "benchmarks",
+      "displayName": "Build benchmarks",
+      "configurePreset": "benchmarks",
+      "targets": ["bench_dbms"]
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "dev",
+      "displayName": "Build debug binary workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev"
+        },
+        {
+          "type": "build",
+          "name": "dev"
+        }
+      ]
+    },
+    {
+      "name": "unit-tests",
+      "displayName": "Build dbms unit tests workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev"
+        },
+        {
+          "type": "build",
+          "name": "unit-tests"
+        }
+      ]
+    },
+    {
+      "name": "unit-tests-all",
+      "displayName": "Build all unit tests workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev"
+        },
+        {
+          "type": "build",
+          "name": "unit-tests-all"
+        }
+      ]
+    },
+    {
+      "name": "benchmarks",
+      "displayName": "Build benchmarks workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "benchmarks"
+        },
+        {
+          "type": "build",
+          "name": "benchmarks"
+        }
+      ]
+    },
+    {
+      "name": "asan-tests",
+      "displayName": "Build dbms Address Sanitizer tests workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "asan"
+        },
+        {
+          "type": "build",
+          "name": "asan"
+        }
+      ]
+    },
+    {
+      "name": "asan-tests-all",
+      "displayName": "Build all Address Sanitizer tests workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "asan"
+        },
+        {
+          "type": "build",
+          "name": "asan-all"
+        }
+      ]
+    },
+    {
+      "name": "tsan-tests",
+      "displayName": "Build dbms Thread Sanitizer tests workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "tsan"
+        },
+        {
+          "type": "build",
+          "name": "tsan"
+        }
+      ]
+    },
+    {
+      "name": "tsan-tests-all",
+      "displayName": "Build all Thread Sanitizer tests workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "tsan"
+        },
+        {
+          "type": "build",
+          "name": "tsan-all"
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "displayName": "Build release binary workflow",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "release"
+        },
+        {
+          "type": "build",
+          "name": "release"
+        }
+      ]
     }
   ]
 }

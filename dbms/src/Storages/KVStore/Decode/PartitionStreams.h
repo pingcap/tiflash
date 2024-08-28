@@ -20,7 +20,6 @@
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/TableLockHolder.h>
-#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
@@ -37,7 +36,7 @@ void RemoveRegionCommitCache(
     bool lock_region = true);
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
+AtomicGetStorageSchema(RegionID region_id, KeyspaceID keyspace_id, TableID table_id, TMTContext & tmt);
 
 Block GenRegionBlockDataWithSchema(
     const RegionPtr & region, //

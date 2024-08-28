@@ -31,9 +31,12 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB::FailPoints
 {
 extern const char exception_after_large_write_exceed[];
+extern const char force_pick_all_blobs_to_full_gc[];
 } // namespace DB::FailPoints
 
 namespace DB::PS::V3::tests
@@ -917,7 +920,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
     // After remove `entries_del1`.
     // Remain entries index [0, 2, 5, 6, 8]
-    blob_store.remove(entries_del1);
+    blob_store.removeEntries(entries_del1);
     ASSERT_EQ(entries_del1.begin()->file_id, 10);
 
     auto stat = blob_store.blob_stats.blobIdToStat(10);
@@ -929,7 +932,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     // After remove `entries_del2`.
     // Remain entries index [0, 2, 5].
     // But file size still is 10 * 1024
-    blob_store.remove(entries_del2);
+    blob_store.removeEntries(entries_del2);
 
     ASSERT_EQ(stat->sm_valid_rate, 0.3);
     ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
@@ -949,7 +952,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
     // Check whether the stat can be totally removed
     stat->changeToReadOnly();
-    blob_store.remove(remain_entries);
+    blob_store.removeEntries(remain_entries);
     ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 0);
 }
 
@@ -997,7 +1000,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
     // After remove `entries_del`.
     // Remain entries index [8, 9].
-    blob_store.remove(entries_del);
+    blob_store.removeEntries(entries_del);
 
     auto stat = blob_store.blob_stats.blobIdToStat(10);
 
@@ -1059,7 +1062,7 @@ TEST_F(BlobStoreTest, testBlobStoreRaftDataGcStats)
 
     // After remove `entries_del`.
     // Remain entries index [8, 9].
-    blob_store.remove(entries_del);
+    blob_store.removeEntries(entries_del);
 
     auto stat = blob_store.blob_stats.blobIdToStat(PageTypeUtils::nextFileID(PageType::RaftData, 1));
     ASSERT_NE(stat, nullptr);
@@ -1645,7 +1648,7 @@ try
         page_type_and_config);
 
     {
-        size_t size_500 = 500;
+        const size_t size_500 = 500;
         char c_buff[size_500];
 
         WriteBatch wb;
@@ -1656,10 +1659,63 @@ try
         const auto & gc_info = blob_store.getGCStats();
         ASSERT_TRUE(gc_info.empty());
 
+        // only one blob_file for the large write
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 1);
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
-        blob_store.remove({records[0].entry});
+        blob_store.removeEntries({records[0].entry});
+        ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 0);
+    }
+}
+CATCH
+
+TEST_F(BlobStoreTest, ReadEmptyPageAfterAllValidEntriesRmoved)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
+
+    BlobConfig config_with_small_file_limit_size;
+    config_with_small_file_limit_size.file_limit_size = 400;
+    auto blob_store = BlobStore(
+        getCurrentTestName(),
+        file_provider,
+        delegator,
+        config_with_small_file_limit_size,
+        page_type_and_config);
+
+    {
+        const size_t size_500 = 500;
+        char c_buff[size_500];
+
+        WriteBatch wb;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, size_500);
+        wb.putPage(50, /* tag */ 0, buff, size_500);
+        wb.putPage(51, 0, std::make_shared<ReadBufferFromMemory>(c_buff, 0), 0);
+        wb.putPage(52, 0, std::make_shared<ReadBufferFromMemory>(c_buff, 20), 20);
+        wb.putPage(53, 0, std::make_shared<ReadBufferFromMemory>(c_buff, 0), 0);
+        PageEntriesEdit edit = blob_store.write(std::move(wb));
+
+        // make the blob_file to be READ_ONLY
+        FailPointHelper::enableFailPoint(FailPoints::force_pick_all_blobs_to_full_gc);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_pick_all_blobs_to_full_gc); });
+        const auto & gc_info = blob_store.getGCStats();
+        ASSERT_FALSE(gc_info.empty());
+
+        // one blob_file for the large write, another for the other pages
+        ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 2);
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 4);
+        // remove the non-empty entries
+        blob_store.removeEntries({records[0].entry, records[2].entry});
+
+        /// try to read the empty pages after the blob_file get removed, no exception should happen
+        // read-1-entry
+        blob_store.read(PageIDAndEntryV3(51, records[1].entry), nullptr);
+        blob_store.read(PageIDAndEntryV3(53, records[3].entry), nullptr);
+        // read multiple entry
+        PageIDAndEntriesV3 entries{PageIDAndEntryV3(51, records[1].entry), PageIDAndEntryV3(53, records[3].entry)};
+        blob_store.read(entries, nullptr);
+
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 0);
     }
 }
@@ -1773,7 +1829,7 @@ try
         ASSERT_EQ(stat->sm_total_size, 700);
         ASSERT_TRUE(stat->isReadOnly());
 
-        blob_store.remove({entry_from_write1});
+        blob_store.removeEntries({entry_from_write1});
 
         // new write will create new blob file
         size_t size_100 = 100;
@@ -1789,7 +1845,7 @@ try
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 2);
 
         // remove one shot blob file
-        blob_store.remove({entry_from_write2});
+        blob_store.removeEntries({entry_from_write2});
         ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 1);
     }
 }
@@ -1848,12 +1904,12 @@ try
         Poco::File file1(blob_store.getBlobFile(10)->getPath());
         ASSERT_EQ(file1.getSize(), 800);
         ASSERT_TRUE(blob_store.blob_stats.blobIdToStat(10)->isNormal()); // BlobStat type doesn't change after reload
-        blob_store.remove({entry_from_write3});
+        blob_store.removeEntries({entry_from_write3});
         auto blob_need_gc = blob_store.getGCStats();
         ASSERT_EQ(blob_need_gc.size(), 0);
         ASSERT_EQ(file1.getSize(), 600);
 
-        blob_store.remove({entry_from_write1});
+        blob_store.removeEntries({entry_from_write1});
 
         const auto & blob_need_gc2 = blob_store.getGCStats();
         ASSERT_EQ(blob_need_gc2.size(), 1);

@@ -29,6 +29,7 @@ struct PageIdTrait
     static inline PageIdU64 getU64ID(const PageId & page_id) { return page_id.low; }
     static inline Prefix getPrefix(const PageId & page_id) { return page_id.high; }
     static inline PageIdU64 getPageMapKey(const PageId & page_id) { return page_id.low; }
+    static inline size_t getPageIDSize(const PageId & page_id) { return sizeof(page_id); }
 };
 } // namespace u128
 namespace universal
@@ -45,6 +46,8 @@ struct PageIdTrait
     static Prefix getPrefix(const PageId & page_id);
 
     static inline PageId getPageMapKey(const PageId & page_id) { return page_id; }
+
+    static inline size_t getPageIDSize(const PageId & page_id) { return page_id.size(); }
 };
 } // namespace universal
 } // namespace DB::PS::V3

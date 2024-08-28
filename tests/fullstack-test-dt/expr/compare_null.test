@@ -1,0 +1,254 @@
+# Copyright 2024 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Must enable DT rough set filter and open debug level log to run this test, otherwise disable this test
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values('2024-08-26'),('2024-08-25'),('2024-08-24'),('2024-08-23');
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a between NULL and '2024-08-25';
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where not (a between NULL and '2024-08-25');
++------------+
+| a          |
++------------+
+| 2024-08-26 |
++------------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL, '2024-08-26');
++------------+
+| a          |
++------------+
+| 2024-08-26 |
++------------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL, '2024-08-26');
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL, '2024-09-01');
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL, '2024-09-01');
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values('2024-08-26'),('2024-08-26'),('2024-08-26'),('2024-08-26');
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL, '2024-08-26');
++------------+
+| a          |
++------------+
+| 2024-08-26 |
+| 2024-08-26 |
+| 2024-08-26 |
+| 2024-08-26 |
++------------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL, '2024-08-26');
+
+# not null
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date not null);
+
+mysql> insert into test.t values('2024-08-26'),('2024-08-25'),('2024-08-24'),('2024-08-23');
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a between NULL and '2024-08-25';
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where not (a between NULL and '2024-08-25');
++------------+
+| a          |
++------------+
+| 2024-08-26 |
++------------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL, '2024-08-26');
++------------+
+| a          |
++------------+
+| 2024-08-26 |
++------------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL, '2024-08-26');
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL, '2024-09-01');
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL, '2024-09-01');
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date not null);
+
+mysql> insert into test.t values('2024-08-26'),('2024-08-26'),('2024-08-26'),('2024-08-26');
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a in (NULL, '2024-08-26');
++------------+
+| a          |
++------------+
+| 2024-08-26 |
+| 2024-08-26 |
+| 2024-08-26 |
+| 2024-08-26 |
++------------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where a not in (NULL, '2024-08-26');
+
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values('2024-08-21'),('2024-08-22'),('2024-08-23'),('2024-08-24');
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is NULL;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is not NULL;
++------------+
+| a          |
++------------+
+| 2024-08-21 |
+| 2024-08-22 |
+| 2024-08-23 |
+| 2024-08-24 |
++------------+
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values(NULL),(NULL),(NULL),(NULL);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is NULL;
++------+
+| a    |
++------+
+| NULL |
+| NULL |
+| NULL |
+| NULL |
++------+
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is not NULL;
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date);
+
+mysql> insert into test.t values('2024-08-21'),('2024-08-22'),('2024-08-23'),('2024-08-24'),(NULL);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is NULL;
++------+
+| a    |
++------+
+| NULL |
++------+
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t where a is not NULL;
++------------+
+| a          |
++------------+
+| 2024-08-21 |
+| 2024-08-22 |
+| 2024-08-23 |
+| 2024-08-24 |
++------------+
+
+mysql> drop table if exists test.t;
+
+mysql> create table test.t (a date, b int);
+
+mysql> insert into test.t values('2024-08-21', 1),('2024-08-22', 2),('2024-08-23', 3),('2024-08-24', 4), (NULL, 5);
+
+mysql> insert into test.t values('2024-08-21', 6),('2024-08-22', 7),('2024-08-23', 8),('2024-08-24', 9), (NULL, 10);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select a, sum(b) from test.t group by a order by a desc;
++------------+--------+
+| a          | sum(b) |
++------------+--------+
+| 2024-08-24 |     13 |
+| 2024-08-23 |     11 |
+| 2024-08-22 |      9 |
+| 2024-08-21 |      7 |
+| NULL       |     15 |
++------------+--------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select a, sum(b) from test.t group by a order by a desc;
++------------+--------+
+| a          | sum(b) |
++------------+--------+
+| NULL       |     15 |
+| 2024-08-21 |      7 |
+| 2024-08-22 |      9 |
+| 2024-08-23 |     11 |
+| 2024-08-24 |     13 |
++------------+--------+

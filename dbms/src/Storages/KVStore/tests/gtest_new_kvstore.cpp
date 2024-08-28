@@ -20,6 +20,11 @@
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
+#include <Storages/Page/V3/PageDefines.h>
+#include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
@@ -1078,6 +1083,17 @@ try
         delete[] a;
     });
     t2.join();
+
+    std::thread t3([&]() {
+        // Will not cover mmap memory.
+        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+        char * a = new char[120];
+        void * buf = mmap(nullptr, 6000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        ASSERT_LT(*allocated, 6000);
+        munmap(buf, 0);
+        delete[] a;
+    });
+    t3.join();
 }
 CATCH
 
@@ -1128,6 +1144,100 @@ TEST(ProxyMode, Normal)
 try
 {
     ASSERT_EQ(SERVERLESS_PROXY, 0);
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, ParseUniPage)
+try
+{
+    String origin = "0101020000000000000835010000000000021AE8";
+    auto decode = Redact::hexStringToKey(origin.data(), origin.size());
+    const char * data = decode.data();
+    size_t len = decode.size();
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), UniversalPageIdFormat::RAFT_PREFIX);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x02);
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
+    LOG_INFO(DB::Logger::get(), "region_id={}", RecordKVFormat::readUInt64(data, len));
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    LOG_INFO(DB::Logger::get(), "index={}", RecordKVFormat::readUInt64(data, len));
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, ApplyShrinkedRegion)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+
+    initStorages();
+    KVStore & kvs = getKVS();
+    table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    LOG_INFO(&Poco::Logger::get("Test"), "generated table_id {}", table_id);
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+    auto kvr1 = kvs.getRegion(region_id);
+    auto r1 = proxy_instance->getRegion(region_id);
+    {
+        // Multiple files
+        MockSSTReader::getMockSSTData().clear();
+        MockSSTGenerator default_cf{902, 800, ColumnFamilyType::Default};
+        default_cf.insert(1, "v1");
+        default_cf.finish_file();
+        default_cf.insert(2, "v2");
+        default_cf.finish_file();
+        default_cf.insert(3, "v3");
+        default_cf.insert(4, "v4");
+        default_cf.finish_file();
+        default_cf.insert(5, "v5");
+        default_cf.insert(6, "v6");
+        default_cf.finish_file();
+        default_cf.insert(7, "v7");
+        default_cf.finish_file();
+        default_cf.freeze();
+        kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+
+        auto make_meta = [&]() {
+            auto r2 = proxy_instance->getRegion(region_id);
+            auto modified_meta = r2->getState().region();
+            modified_meta.set_id(2);
+            modified_meta.set_start_key(RecordKVFormat::genKey(table_id, 1));
+            modified_meta.set_end_key(RecordKVFormat::genKey(table_id, 4));
+            modified_meta.add_peers()->set_id(2);
+            return modified_meta;
+        };
+        auto peer_id = kvr1->getMeta().peerId();
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {2},
+            {{{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 4)}}});
+
+        // Overlap
+        EXPECT_THROW(
+            proxy_instance
+                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            Exception);
+
+        LOG_INFO(log, "Set to applying");
+        // region_state is "applying", but the key-range in proxy side still overlaps.
+        r1->mutState().set_state(raft_serverpb::PeerState::Applying);
+        ASSERT_EQ(proxy_helper->getRegionLocalState(1).state(), raft_serverpb::PeerState::Applying);
+        EXPECT_THROW(
+            proxy_instance
+                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            Exception);
+
+
+        LOG_INFO(log, "Shrink region 1");
+        // region_state is "applying", but the key-range in proxy side is not overlap.
+        r1->mutState().set_state(raft_serverpb::PeerState::Applying);
+        r1->mutState().mutable_region()->set_start_key(RecordKVFormat::genKey(table_id, 0));
+        r1->mutState().mutable_region()->set_end_key(RecordKVFormat::genKey(table_id, 1));
+        proxy_instance
+            ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false);
+    }
 }
 CATCH
 

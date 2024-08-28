@@ -20,14 +20,14 @@
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Flash/Coprocessor/TiDBEnum.h>
 #include <Flash/Coprocessor/TiDBTime.h>
-#include <TiDB/Schema/TiDB.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 
 namespace DB
 {
 class TiDBColumn
 {
 public:
-    TiDBColumn(Int8 element_len);
+    explicit TiDBColumn(Int8 element_len);
 
     void appendNull();
     void append(Int64 value);
@@ -41,21 +41,25 @@ public:
     void append(const TiDBDecimal & decimal);
     void append(const TiDBBit & bit);
     void append(const TiDBEnum & ti_enum);
+    void appendVectorF32(UInt32 num_elem, StringRef elem_bytes);
     void encodeColumn(WriteBuffer & ss);
     void clear();
 
 private:
-    bool isFixed() { return fixed_size != VAR_SIZE; };
+    bool isFixed() const { return fixed_size != VAR_SIZE; }
     void finishAppendFixed();
     void finishAppendVar(UInt32 size);
+
     void appendNullBitMap(bool value);
+
+    // WriteBufferFromOwnString is not moveable.
+    std::unique_ptr<WriteBufferFromOwnString> data;
 
     UInt32 length;
     UInt32 null_cnt;
     std::vector<UInt8> null_bitmap;
     std::vector<Int64> var_offsets;
-    // WriteBufferFromOwnString is not moveable.
-    std::unique_ptr<WriteBufferFromOwnString> data;
+
     std::string default_value;
     UInt64 current_data_size;
     Int8 fixed_size;

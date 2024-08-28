@@ -20,6 +20,7 @@
 #include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 
 #include <functional>
@@ -31,21 +32,13 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
-#define WRAP_FOR_TEST_BEGIN                         \
-    std::vector<bool> planner_bools{false, true};   \
-    for (auto enable_planner : planner_bools)       \
-    {                                               \
-        enablePlanner(enable_planner);              \
-        std::vector<bool> pipeline_bools{false};    \
-        if (enable_planner)                         \
-            pipeline_bools.push_back(true);         \
-        for (auto enable_pipeline : pipeline_bools) \
-        {                                           \
-            enablePipeline(enable_pipeline);
+#define WRAP_FOR_TEST_BEGIN                        \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
 
-#define WRAP_FOR_TEST_END \
-    }                     \
-    }
+#define WRAP_FOR_TEST_END }
 
 class ExecutorTest : public ::testing::Test
 {
@@ -66,8 +59,6 @@ public:
     void initializeClientInfo() const;
 
     DAGContext & getDAGContext();
-
-    void enablePlanner(bool is_enable) const;
 
     void enablePipeline(bool is_enable) const;
 

@@ -23,8 +23,11 @@ extern "C" {
 struct ProcessMetricsInfo
 {
     uint64_t cpu_total;
-    int64_t vsize;
-    int64_t rss;
+    uint64_t vsize;
+    uint64_t rss;
+    uint64_t rss_anon;
+    uint64_t rss_file;
+    uint64_t rss_shared;
     int64_t start_time;
 };
 

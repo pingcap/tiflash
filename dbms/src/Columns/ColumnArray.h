@@ -85,6 +85,8 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src_, size_t n) override;
@@ -144,9 +146,18 @@ public:
     {
         return scatterImpl<ColumnArray>(num_columns, selector);
     }
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const override
+    {
+        return scatterImpl<ColumnArray>(num_columns, selector, selective);
+    }
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         scatterToImpl<ColumnArray>(columns, selector);
+    }
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
+    {
+        scatterToImpl<ColumnArray>(columns, selector, selective);
     }
     void gather(ColumnGathererStream & gatherer_stream) override;
 
@@ -155,6 +166,15 @@ public:
         callback(offsets);
         callback(data);
     }
+
+    bool canBeInsideNullable() const override { return true; }
+
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
+        override;
+
+    void insertFromDatumData(const char * data, size_t length) override;
+
+    std::pair<UInt32, StringRef> getElementRef(size_t element_idx) const;
 
 private:
     ColumnPtr data;
@@ -196,6 +216,13 @@ private:
     ColumnPtr filterTuple(const Filter & filt, ssize_t result_size_hint) const;
     ColumnPtr filterNullable(const Filter & filt, ssize_t result_size_hint) const;
     ColumnPtr filterGeneric(const Filter & filt, ssize_t result_size_hint) const;
+
+    template <bool selective_block>
+    void updateWeakHash32Impl(
+        WeakHash32 & hash,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container,
+        const BlockSelective & selective) const;
 };
 
 

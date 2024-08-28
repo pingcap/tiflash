@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/RedactHelpers.h>
+#include <Common/SharedMutexProtected.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
 namespace DB::DM
@@ -59,9 +60,8 @@ RowKeyValue RowKeyValueRef::toRowKeyValue() const
     }
 }
 
-std::unordered_map<KeyspaceTableID, RowKeyRange::TableRangeMinMax, boost::hash<KeyspaceTableID>>
+SharedMutexProtected<std::unordered_map<KeyspaceTableID, RowKeyRange::TableRangeMinMax, boost::hash<KeyspaceTableID>>>
     RowKeyRange::table_min_max_data;
-std::shared_mutex RowKeyRange::table_mutex;
 
 const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(
     KeyspaceID keyspace_id,
@@ -70,12 +70,12 @@ const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(
 {
     auto keyspace_table_id = KeyspaceTableID{keyspace_id, table_id};
     {
-        std::shared_lock lock(table_mutex);
-        if (auto it = table_min_max_data.find(keyspace_table_id); it != table_min_max_data.end())
+        auto lock = table_min_max_data.lockShared();
+        if (auto it = lock->find(keyspace_table_id); it != lock->end())
             return it->second;
     }
-    std::unique_lock lock(table_mutex);
-    return table_min_max_data.try_emplace(keyspace_table_id, keyspace_id, table_id, is_common_handle).first->second;
+    auto lock = table_min_max_data.lockExclusive();
+    return lock->try_emplace(keyspace_table_id, keyspace_id, table_id, is_common_handle).first->second;
 }
 
 template <bool enable_redact, bool right_open = true>
@@ -129,6 +129,41 @@ String RowKeyRange::toDebugString() const
 String RowKeyRange::toString() const
 {
     return rangeToString</*enable_redact*/ false>(*this);
+}
+
+namespace
+{
+// https://en.cppreference.com/w/cpp/algorithm/lower_bound
+size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, size_t last, const RowKeyValueRef & value)
+{
+    size_t count = last - first;
+    while (count > 0)
+    {
+        size_t step = count / 2;
+        size_t index = first + step;
+        if (value > rowkey_column.getRowKeyValue(index))
+        {
+            first = index + 1;
+            count -= step + 1;
+        }
+        else
+            count = step;
+    }
+    return first;
+}
+} // namespace
+
+std::pair<size_t, size_t> RowKeyRange::getPosRange(const ColumnPtr & column, const size_t offset, const size_t limit)
+    const
+{
+    RowKeyColumnContainer rowkey_column(column, is_common_handle);
+    size_t start_index = check(rowkey_column.getRowKeyValue(offset))
+        ? offset
+        : lowerBound(rowkey_column, offset, offset + limit, getStart());
+    size_t end_index = check(rowkey_column.getRowKeyValue(offset + limit - 1))
+        ? offset + limit
+        : lowerBound(rowkey_column, offset, offset + limit, getEnd());
+    return {start_index, end_index - start_index};
 }
 
 } // namespace DB::DM

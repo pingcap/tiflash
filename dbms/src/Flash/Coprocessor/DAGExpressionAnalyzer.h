@@ -19,7 +19,6 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
@@ -68,18 +67,7 @@ public:
 
     GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
 
-    ExpressionActionsPtr appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain);
-
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
-
-    std::vector<NameAndTypePair> appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN);
-
-    /// <aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key>
-    /// May change the source columns.
-    std::tuple<Names, std::unordered_map<String, TiDB::TiDBCollatorPtr>, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> appendAggregation(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg,
-        bool group_by_collation_sensitive);
 
     void appendWindowColumns(
         WindowDescription & window_description,
@@ -94,23 +82,7 @@ public:
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
-    // Generate a project action for non-root DAGQueryBlock,
-    // to keep the schema of Block and tidb-schema the same, and
-    // guarantee that left/right block of join don't have duplicated column names.
-    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const String & column_prefix) const;
-
     NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
-
-    // Generate a project action for root DAGQueryBlock,
-    // to keep the schema of Block and tidb-schema the same.
-    NamesWithAliases appendFinalProjectForRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const std::vector<tipb::FieldType> & schema,
-        const std::vector<Int32> & output_offsets,
-        const String & column_prefix,
-        bool keep_session_timezone_info);
 
     NamesWithAliases buildFinalProjection(
         const ExpressionActionsPtr & actions,
@@ -174,6 +146,9 @@ public:
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
 
+    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+
     void buildAggFuncs(
         const tipb::Aggregation & aggregation,
         const ExpressionActionsPtr & actions,
@@ -213,7 +188,7 @@ public:
     std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<UInt8> & may_need_add_cast_column,
-        const ColumnInfos & table_scan_columns);
+        const TiDB::ColumnInfos & table_scan_columns);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

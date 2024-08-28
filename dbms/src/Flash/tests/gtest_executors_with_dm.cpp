@@ -102,7 +102,6 @@ public:
 };
 
 #define WRAP_FOR_DM_TEST_BEGIN                     \
-    enablePlanner(true);                           \
     std::vector<bool> pipeline_bools{false, true}; \
     for (auto enable_pipeline : pipeline_bools)    \
     {                                              \
@@ -143,7 +142,6 @@ try
              toNullableVec<String>(col_string)});
 
         request = context.scan("test_db", "big_table", keep_order).build(context);
-        enablePlanner(false);
         auto expect = executeStreams(request, 1);
 
         executeAndAssertColumnsEqual(request, expect);

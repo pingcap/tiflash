@@ -21,21 +21,31 @@
 
 namespace DB
 {
-Planner::Planner(Context & context_, const PlanQuerySource & plan_source_)
+Planner::Planner(Context & context_)
     : context(context_)
-    , plan_source(plan_source_)
     , max_streams(context.getMaxStreams())
     , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
-BlockIO Planner::execute()
+void recursiveSetBlockInputStreamParent(BlockInputStreamPtr self, const IBlockInputStream * parent)
+{
+    if (self->getParent() != nullptr)
+        return;
+
+    for (auto & child : self->getChildren())
+    {
+        recursiveSetBlockInputStreamParent(child, self.get());
+    }
+    self->setParent(parent);
+}
+
+BlockInputStreamPtr Planner::execute()
 {
     DAGPipeline pipeline;
     executeImpl(pipeline);
     executeCreatingSets(pipeline, context, max_streams, log);
-    BlockIO res;
-    res.in = pipeline.firstStream();
-    return res;
+    pipeline.transform([](auto & stream) { recursiveSetBlockInputStreamParent(stream, nullptr); });
+    return pipeline.firstStream();
 }
 
 DAGContext & Planner::dagContext() const
@@ -47,7 +57,7 @@ void Planner::executeImpl(DAGPipeline & pipeline)
 {
     PhysicalPlan physical_plan{context, log->identifier()};
 
-    physical_plan.build(&plan_source.getDAGRequest());
+    physical_plan.build(dagContext().dag_request());
     physical_plan.outputAndOptimize();
 
     physical_plan.buildBlockInputStream(pipeline, context, max_streams);

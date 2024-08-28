@@ -1950,6 +1950,7 @@ try
     }
 
     FailPointHelper::enableFailPoint(FailPoints::force_pick_all_blobs_to_full_gc);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_pick_all_blobs_to_full_gc); });
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
 

@@ -59,7 +59,7 @@ ASTPtr buildLiteral(const Field & field)
 
 ASTPtr buildOrderByItemVec(MockOrderByItemVec order_by_items)
 {
-    std::vector<ASTPtr> vec(order_by_items.size());
+    MockAstVec vec(order_by_items.size());
     size_t i = 0;
     for (auto item : order_by_items)
     {
@@ -355,7 +355,8 @@ DAGRequestBuilder & DAGRequestBuilder::join(
 DAGRequestBuilder & DAGRequestBuilder::aggregation(
     ASTPtr agg_func,
     ASTPtr group_by_expr,
-    uint64_t fine_grained_shuffle_stream_count)
+    uint64_t fine_grained_shuffle_stream_count,
+    std::shared_ptr<AutoPassThroughSwitcher> switcher)
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
@@ -363,13 +364,14 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(
         agg_funcs->children.push_back(agg_func);
     if (group_by_expr)
         group_by_exprs->children.push_back(group_by_expr);
-    return buildAggregation(agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
+    return buildAggregation(agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count, switcher);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::aggregation(
     MockAstVec agg_funcs,
     MockAstVec group_by_exprs,
-    uint64_t fine_grained_shuffle_stream_count)
+    uint64_t fine_grained_shuffle_stream_count,
+    std::shared_ptr<AutoPassThroughSwitcher> switcher)
 {
     auto agg_func_list = std::make_shared<ASTExpressionList>();
     auto group_by_expr_list = std::make_shared<ASTExpressionList>();
@@ -377,16 +379,23 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(
         agg_func_list->children.push_back(func);
     for (const auto & group_by : group_by_exprs)
         group_by_expr_list->children.push_back(group_by);
-    return buildAggregation(agg_func_list, group_by_expr_list, fine_grained_shuffle_stream_count);
+    return buildAggregation(agg_func_list, group_by_expr_list, fine_grained_shuffle_stream_count, switcher);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::buildAggregation(
     ASTPtr agg_funcs,
     ASTPtr group_by_exprs,
-    uint64_t fine_grained_shuffle_stream_count)
+    uint64_t fine_grained_shuffle_stream_count,
+    std::shared_ptr<AutoPassThroughSwitcher> switcher)
 {
     assert(root);
-    root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs, fine_grained_shuffle_stream_count);
+    root = compileAggregation(
+        root,
+        getExecutorIndex(),
+        agg_funcs,
+        group_by_exprs,
+        fine_grained_shuffle_stream_count,
+        switcher);
     return *this;
 }
 

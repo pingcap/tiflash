@@ -436,31 +436,6 @@ void executeCreatingSets(DAGPipeline & pipeline, const Context & context, size_t
     }
 }
 
-std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
-    DAGExpressionAnalyzer & analyzer)
-{
-    assert(!conditions.empty());
-
-    ExpressionActionsChain chain;
-    analyzer.initChain(chain);
-    String filter_column_name = analyzer.appendWhere(chain, conditions);
-    ExpressionActionsPtr before_where = chain.getLastActions();
-    chain.addStep();
-
-    // remove useless tmp column and keep the schema of local streams and remote streams the same.
-    for (const auto & col : analyzer.getCurrentInputColumns())
-    {
-        chain.getLastStep().required_output.push_back(col.name);
-    }
-    ExpressionActionsPtr project_after_where = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    RUNTIME_CHECK(!project_after_where->getActions().empty());
-    return {before_where, filter_column_name, project_after_where};
-}
-
 void executePushedDownFilter(
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
@@ -468,7 +443,7 @@ void executePushedDownFilter(
     DAGPipeline & pipeline)
 {
     auto [before_where, filter_column_name, project_after_where]
-        = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
+        = analyzer.buildPushDownFilter(filter_conditions.conditions);
 
     for (auto & stream : pipeline.streams)
     {
@@ -489,7 +464,7 @@ void executePushedDownFilter(
     LoggerPtr log)
 {
     auto [before_where, filter_column_name, project_after_where]
-        = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
+        = analyzer.buildPushDownFilter(filter_conditions.conditions);
 
     auto input_header = group_builder.getCurrentHeader();
     for (size_t i = 0; i < group_builder.concurrency(); ++i)
