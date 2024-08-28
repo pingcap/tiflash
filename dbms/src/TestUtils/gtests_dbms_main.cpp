@@ -72,9 +72,8 @@ int main(int argc, char ** argv)
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
-    DB::DM::SegmentReaderPoolManager::instance().init(
-        server_info.cpu_info.logical_cores,
-        DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
+    // Set the number of threads of SegmentReader to 4 to avoid print too much log when exists.
+    DB::DM::SegmentReaderPoolManager::instance().init(4, 1.0);
     DB::DM::SegmentReadTaskScheduler::instance();
 
     DB::GlobalThreadPool::initialize(/*max_threads*/ 100, /*max_free_threds*/ 10, /*queue_size*/ 1000);
