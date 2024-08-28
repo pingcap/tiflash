@@ -145,7 +145,11 @@ bool LocalIndexerScheduler::isTaskReady(std::unique_lock<std::mutex> &, const In
 {
     for (const auto & page_id : task->user_task.page_ids)
     {
-        if (adding_index_page_id_set.find(page_id) != adding_index_page_id_set.end())
+        auto unique_page_id = UniquePageID{
+            .page_type = task->user_task.page_type,
+            .page_id = page_id,
+        };
+        if (adding_index_page_id_set.find(unique_page_id) != adding_index_page_id_set.end())
             return false;
     }
     return true;
@@ -155,7 +159,11 @@ void LocalIndexerScheduler::taskOnSchedule(std::unique_lock<std::mutex> &, const
 {
     for (const auto & page_id : task->user_task.page_ids)
     {
-        auto [it, inserted] = adding_index_page_id_set.insert(page_id);
+        auto unique_page_id = UniquePageID{
+            .page_type = task->user_task.page_type,
+            .page_id = page_id,
+        };
+        auto [it, inserted] = adding_index_page_id_set.insert(unique_page_id);
         RUNTIME_CHECK(inserted);
         UNUSED(it);
     }
@@ -180,7 +188,11 @@ void LocalIndexerScheduler::taskOnFinish(std::unique_lock<std::mutex> & lock, co
 {
     for (const auto & page_id : task->user_task.page_ids)
     {
-        auto erased = adding_index_page_id_set.erase(page_id);
+        auto unique_page_id = UniquePageID{
+            .page_type = task->user_task.page_type,
+            .page_id = page_id,
+        };
+        auto erased = adding_index_page_id_set.erase(unique_page_id);
         RUNTIME_CHECK(erased == 1, erased);
     }
 

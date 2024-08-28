@@ -35,6 +35,12 @@ public:
         // Note: The scheduler will try to schedule farely according to keyspace_id and table_id.
         KeyspaceID keyspace_id;
         TableID table_id;
+        enum class PageType : UInt8
+        {
+            DMFile = 0,
+            ColumnFileTiny = 1,
+        };
+        PageType page_type;
 
         // Used for the scheduler to avoid concurrently adding index for the same Page (ColumnFileTiny/DMFile).
         std::vector<PageIdU64> page_ids;
@@ -97,11 +103,38 @@ public:
     size_t dropTasks(KeyspaceID keyspace_id, TableID table_id);
 
 private:
-    // The set of DMFiles that are currently adding index.
+    struct UniquePageID
+    {
+        // We could use DMFile path as well, but this should be faster.
+
+        Task::PageType page_type;
+        PageIdU64 page_id;
+
+        bool operator==(const UniquePageID & other) const
+        {
+            return page_type == other.page_type && page_id == other.page_id;
+        }
+    };
+
+    struct UniquePageIDHasher
+    {
+        std::size_t operator()(const UniquePageID & id) const
+        {
+            using boost::hash_combine;
+            using boost::hash_value;
+
+            std::size_t seed = 0;
+            hash_combine(seed, hash_value(id.page_type));
+            hash_combine(seed, hash_value(id.page_id));
+            return seed;
+        }
+    };
+
+    // The set of Page that are currently adding index.
     // There maybe multiple threads trying to add index for the same Page. For example,
     // after logical split two segments share the same DMFile, so that adding index for the two segments
     // could result in adding the same index for the same DMFile. It's just a waste of resource.
-    std::unordered_set<PageIdU64> adding_index_page_id_set;
+    std::unordered_set<UniquePageID, UniquePageIDHasher> adding_index_page_id_set;
 
     bool isTaskReady(std::unique_lock<std::mutex> &, const InternalTaskPtr & task);
 

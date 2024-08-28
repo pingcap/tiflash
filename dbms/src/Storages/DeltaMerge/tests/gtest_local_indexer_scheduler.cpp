@@ -79,7 +79,6 @@ try
 }
 CATCH
 
-
 TEST_F(LocalIndexerSchedulerTest, KeyspaceFair)
 try
 {
@@ -91,42 +90,42 @@ try
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {1},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 2,
-        .page_ids = {},
+        .page_ids = {2},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t2"); },
     });
     scheduler->pushTask({
         .keyspace_id = 3,
         .table_id = 3,
-        .page_ids = {},
+        .page_ids = {3},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks3_t3"); },
     });
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 4,
-        .page_ids = {},
+        .page_ids = {4},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t4"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {5},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 3,
-        .page_ids = {},
+        .page_ids = {6},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t3"); },
     });
@@ -148,7 +147,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {1},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t1"); },
     });
@@ -159,7 +158,6 @@ try
     ASSERT_STREQ(results[0].c_str(), "ks2_t1");
 }
 CATCH
-
 
 TEST_F(LocalIndexerSchedulerTest, TableFair)
 try
@@ -172,35 +170,35 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 3,
-        .page_ids = {},
+        .page_ids = {1},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t3_#1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {2},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t1_#1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 3,
-        .page_ids = {},
+        .page_ids = {3},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t3_#2"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 2,
-        .page_ids = {},
+        .page_ids = {4},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t2_#1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {5},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t1_#1"); },
     });
@@ -218,7 +216,6 @@ try
 }
 CATCH
 
-
 TEST_F(LocalIndexerSchedulerTest, TaskExceedMemoryLimit)
 try
 {
@@ -233,7 +230,7 @@ try
             scheduler->pushTask({
                 .keyspace_id = 1,
                 .table_id = 1,
-                .page_ids = {},
+                .page_ids = {1},
                 .request_memory = 100,
                 .workload = [&]() { pushResult("foo"); },
             });
@@ -243,7 +240,7 @@ try
         scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
-            .page_ids = {},
+            .page_ids = {2},
             .request_memory = 0,
             .workload = [&]() { pushResult("bar"); },
         });
@@ -266,7 +263,7 @@ try
         scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
-            .page_ids = {},
+            .page_ids = {3},
             .request_memory = 100,
             .workload = [&]() { pushResult("foo"); },
         });
@@ -275,7 +272,7 @@ try
         scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
-            .page_ids = {},
+            .page_ids = {4},
             .request_memory = 0,
             .workload = [&]() { pushResult("bar"); },
         });
@@ -289,7 +286,6 @@ try
     ASSERT_STREQ(results[1].c_str(), "bar");
 }
 CATCH
-
 
 TEST_F(LocalIndexerSchedulerTest, MemoryLimit)
 try
@@ -311,7 +307,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {1},
         .request_memory = 1,
         .workload =
             [=]() {
@@ -322,7 +318,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {2},
         .request_memory = 1,
         .workload =
             [=]() {
@@ -333,7 +329,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {3},
         .request_memory = 1,
         .workload =
             [=]() {
@@ -361,7 +357,6 @@ try
 }
 CATCH
 
-
 TEST_F(LocalIndexerSchedulerTest, ShutdownWithPendingTasks)
 try
 {
@@ -376,7 +371,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {1},
         .request_memory = 0,
         .workload =
             [=]() {
@@ -388,7 +383,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {1},
         .request_memory = 0,
         .workload =
             [=]() {
@@ -414,7 +409,6 @@ try
 }
 CATCH
 
-
 TEST_F(LocalIndexerSchedulerTest, WorkloadException)
 try
 {
@@ -426,14 +420,14 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {1},
         .request_memory = 0,
         .workload = [&]() { throw DB::Exception("foo"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .page_ids = {2},
         .request_memory = 0,
         .workload = [&]() { pushResult("bar"); },
     });
@@ -446,8 +440,7 @@ try
 }
 CATCH
 
-
-TEST_F(LocalIndexerSchedulerTest, DMFileIsUsing)
+TEST_F(LocalIndexerSchedulerTest, PageIsUsing)
 try
 {
     auto scheduler = LocalIndexerScheduler::create({
@@ -507,11 +500,10 @@ try
 }
 CATCH
 
-
-TEST_F(LocalIndexerSchedulerTest, DMFileFromDifferentTable)
+TEST_F(LocalIndexerSchedulerTest, DifferentTypePage)
 try
 {
-    // When DMFiles come from different table, should not block
+    // When pages are different type, should not block
 
     auto scheduler = LocalIndexerScheduler::create({
         .pool_size = 4,
@@ -524,6 +516,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
+        .page_type = LocalIndexerScheduler::Task::PageType::DMFile,
         .page_ids = {1},
         .request_memory = 0,
         .workload = [&]() { task_1_is_started->set_value(); },
@@ -531,46 +524,8 @@ try
 
     scheduler->pushTask({
         .keyspace_id = 1,
-        .table_id = 2,
-        .page_ids = {1, 2},
-        .request_memory = 0,
-        .workload = [&]() { task_2_is_started->set_value(); },
-    });
-
-    scheduler->start();
-
-    task_1_is_started->get_future().wait();
-    task_2_is_started->get_future().wait();
-
-    scheduler->waitForFinish();
-}
-CATCH
-
-
-TEST_F(LocalIndexerSchedulerTest, DMFileFromDifferentKeyspace)
-try
-{
-    // When DMFiles come from different keyspace, should not block
-
-    auto scheduler = LocalIndexerScheduler::create({
-        .pool_size = 4,
-        .auto_start = false,
-    });
-
-    auto task_1_is_started = std::make_shared<std::promise<void>>();
-    auto task_2_is_started = std::make_shared<std::promise<void>>();
-
-    scheduler->pushTask({
-        .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {1},
-        .request_memory = 0,
-        .workload = [&]() { task_1_is_started->set_value(); },
-    });
-
-    scheduler->pushTask({
-        .keyspace_id = 2,
-        .table_id = 1,
+        .page_type = LocalIndexerScheduler::Task::PageType::ColumnFileTiny,
         .page_ids = {1},
         .request_memory = 0,
         .workload = [&]() { task_2_is_started->set_value(); },
