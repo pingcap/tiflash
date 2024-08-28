@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -172,6 +173,19 @@ struct StoreStats
 
     UInt64 background_tasks_length = 0;
 };
+
+struct LocalIndexStats
+{
+    String column_name{};
+    UInt64 column_id{};
+    String index_kind{};
+
+    UInt64 rows_stable_indexed{}; // Total rows
+    UInt64 rows_stable_not_indexed{}; // Total rows
+    UInt64 rows_delta_indexed{}; // Total rows
+    UInt64 rows_delta_not_indexed{}; // Total rows
+};
+using LocalIndexesStats = std::vector<LocalIndexStats>;
 
 class DeltaMergeStore : private boost::noncopyable
 {
@@ -527,6 +541,7 @@ public:
 
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
+    LocalIndexesStats getLocalIndexStats();
 
     bool isCommonHandle() const { return is_common_handle; }
     size_t getRowKeyColumnSize() const { return rowkey_column_size; }
@@ -837,6 +852,11 @@ public:
     std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
 
     RowKeyValue next_gc_check_key;
+
+    // Some indexes are built in TiFlash locally. For example, Vector Index.
+    // Compares to the lightweight RoughSet Indexes, these indexes require lot
+    // of resources to build, so they will be built in separated background pool.
+    IndexInfosPtr local_index_infos;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
