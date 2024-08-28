@@ -318,6 +318,72 @@ DeltaMergeStore::DeltaMergeStore(
     LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", magic_enum::enum_name(page_storage_run_mode));
 }
 
+DeltaMergeStorePtr DeltaMergeStore::create(
+    Context & db_context,
+    bool data_path_contains_database_name,
+    const String & db_name_,
+    const String & table_name_,
+    KeyspaceID keyspace_id_,
+    TableID physical_table_id_,
+    bool has_replica,
+    const ColumnDefines & columns,
+    const ColumnDefine & handle,
+    bool is_common_handle_,
+    size_t rowkey_column_size_,
+    const Settings & settings_,
+    ThreadPool * thread_pool)
+{
+    auto * store = new DeltaMergeStore(
+        db_context,
+        data_path_contains_database_name,
+        db_name_,
+        table_name_,
+        keyspace_id_,
+        physical_table_id_,
+        has_replica,
+        columns,
+        handle,
+        is_common_handle_,
+        rowkey_column_size_,
+        settings_,
+        thread_pool);
+    std::shared_ptr<DeltaMergeStore> store_shared_ptr(store);
+    return store_shared_ptr;
+}
+
+std::unique_ptr<DeltaMergeStore> DeltaMergeStore::createUnique(
+    Context & db_context,
+    bool data_path_contains_database_name,
+    const String & db_name_,
+    const String & table_name_,
+    KeyspaceID keyspace_id_,
+    TableID physical_table_id_,
+    bool has_replica,
+    const ColumnDefines & columns,
+    const ColumnDefine & handle,
+    bool is_common_handle_,
+    size_t rowkey_column_size_,
+    const Settings & settings_,
+    ThreadPool * thread_pool)
+{
+    auto * store = new DeltaMergeStore(
+        db_context,
+        data_path_contains_database_name,
+        db_name_,
+        table_name_,
+        keyspace_id_,
+        physical_table_id_,
+        has_replica,
+        columns,
+        handle,
+        is_common_handle_,
+        rowkey_column_size_,
+        settings_,
+        thread_pool);
+    std::unique_ptr<DeltaMergeStore> store_unique_ptr(store);
+    return store_unique_ptr;
+}
+
 DeltaMergeStore::~DeltaMergeStore()
 {
     LOG_INFO(log, "Release DeltaMerge Store start");

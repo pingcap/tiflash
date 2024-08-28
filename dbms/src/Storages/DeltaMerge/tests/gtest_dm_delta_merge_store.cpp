@@ -69,7 +69,7 @@ namespace tests
 {
 DM::PushDownFilterPtr generatePushDownFilter(
     Context & ctx,
-    const String table_info_json,
+    const String & table_info_json,
     const String & query,
     const std::optional<TimezoneInfo> & opt_tz = std::nullopt);
 }
@@ -272,7 +272,7 @@ try
     {
         new_cols = DMTestEnv::getDefaultColumns();
         ColumnDefine handle_column_define = (*new_cols)[0];
-        new_store = std::make_shared<DeltaMergeStore>(
+        new_store = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
@@ -3341,7 +3341,7 @@ public:
     void setupDMStore()
     {
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
-        store = std::make_shared<DeltaMergeStore>(
+        store = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
@@ -3779,7 +3779,7 @@ try
             real_columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -4049,7 +4049,7 @@ try
             fmt::format("select * from default.t_111 where col_time >= {}", value));
         RUNTIME_CHECK(filter->extra_cast != nullptr);
         RUNTIME_CHECK(filter->rs_operator != nullptr);
-        auto rs_unsupported = typeid_cast<const Unsupported *>(filter->rs_operator.get());
+        const auto * rs_unsupported = typeid_cast<const Unsupported *>(filter->rs_operator.get());
         RUNTIME_CHECK(rs_unsupported == nullptr, filter->rs_operator->toDebugString());
         RUNTIME_CHECK(filter->before_where != nullptr);
         LOG_DEBUG(
@@ -4172,7 +4172,7 @@ try
             fmt::format("select * from default.t_111 where col_time >= {}", value));
         RUNTIME_CHECK(filter->extra_cast != nullptr);
         RUNTIME_CHECK(filter->rs_operator != nullptr);
-        auto rs_unsupported = typeid_cast<const Unsupported *>(filter->rs_operator.get());
+        const auto * rs_unsupported = typeid_cast<const Unsupported *>(filter->rs_operator.get());
         RUNTIME_CHECK(rs_unsupported == nullptr, filter->rs_operator->toDebugString());
         RUNTIME_CHECK(filter->before_where != nullptr);
         LOG_DEBUG(

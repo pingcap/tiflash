@@ -47,8 +47,6 @@ namespace DM
 {
 struct RowKeyRange;
 struct RowKeyValue;
-class DeltaMergeStore;
-using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 using RowKeyRanges = std::vector<RowKeyRange>;
 struct ExternalDTFileInfo;
 struct GCOptions;
