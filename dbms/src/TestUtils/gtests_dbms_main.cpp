@@ -72,7 +72,7 @@ int main(int argc, char ** argv)
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
-    // Set the number of threads of SegmentReader to 4 to avoid print too much log when exists.
+    // Set the number of threads of SegmentReader to 4 to avoid print too many log.
     DB::DM::SegmentReaderPoolManager::instance().init(4, 1.0);
     DB::DM::SegmentReadTaskScheduler::instance();
 
