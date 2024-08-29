@@ -41,7 +41,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int INCORRECT_DATA;
+} // namespace ErrorCodes
 extern const UInt8 TYPE_CODE_LITERAL;
 extern const UInt8 LITERAL_NIL;
 
@@ -384,27 +385,29 @@ try
     json->set("origin_default", origin_default_value);
     json->set("default", default_value);
     json->set("default_bit", default_bit_value);
-    Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
-    tp_json->set("Tp", static_cast<Int32>(tp));
-    tp_json->set("Flag", flag);
-    tp_json->set("Flen", flen);
-    tp_json->set("Decimal", decimal);
-    tp_json->set("Charset", charset);
-    tp_json->set("Collate", collate);
-    if (!elems.empty())
     {
-        Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
-        for (const auto & elem : elems)
-            elem_arr->add(elem.first);
-        tp_json->set("Elems", elem_arr);
+        // "type" field
+        Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
+        tp_json->set("Tp", static_cast<Int32>(tp));
+        tp_json->set("Flag", flag);
+        tp_json->set("Flen", flen);
+        tp_json->set("Decimal", decimal);
+        tp_json->set("Charset", charset);
+        tp_json->set("Collate", collate);
+        if (!elems.empty())
+        {
+            Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
+            for (const auto & elem : elems)
+                elem_arr->add(elem.first);
+            tp_json->set("Elems", elem_arr);
+        }
+        else
+        {
+            tp_json->set("Elems", Poco::Dynamic::Var());
+        }
+        json->set("type", tp_json);
     }
-    else
-    {
-        tp_json->set("Elems", Poco::Dynamic::Var());
-    }
-    json->set("type", tp_json);
     json->set("state", static_cast<Int32>(state));
-    json->set("comment", comment);
 
     if (vector_index)
     {
@@ -446,28 +449,30 @@ try
         default_value = json->get("default");
     if (!json->isNull("default_bit"))
         default_bit_value = json->get("default_bit");
-    auto type_json = json->getObject("type");
-    tp = static_cast<TP>(type_json->getValue<Int32>("Tp"));
-    flag = type_json->getValue<UInt32>("Flag");
-    flen = type_json->getValue<Int64>("Flen");
-    decimal = type_json->getValue<Int64>("Decimal");
-    if (!type_json->isNull("Elems"))
     {
-        auto elems_arr = type_json->getArray("Elems");
-        size_t elems_size = elems_arr->size();
-        for (size_t i = 1; i <= elems_size; i++)
+        // type
+        auto type_json = json->getObject("type");
+        tp = static_cast<TP>(type_json->getValue<Int32>("Tp"));
+        flag = type_json->getValue<UInt32>("Flag");
+        flen = type_json->getValue<Int64>("Flen");
+        decimal = type_json->getValue<Int64>("Decimal");
+        if (!type_json->isNull("Elems"))
         {
-            elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), static_cast<Int16>(i)));
+            auto elems_arr = type_json->getArray("Elems");
+            size_t elems_size = elems_arr->size();
+            for (size_t i = 1; i <= elems_size; i++)
+            {
+                elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), static_cast<Int16>(i)));
+            }
         }
+        /// need to do this check for forward compatibility
+        if (!type_json->isNull("Charset"))
+            charset = type_json->get("Charset");
+        /// need to do this check for forward compatibility
+        if (!type_json->isNull("Collate"))
+            collate = type_json->get("Collate");
     }
-    /// need to do this check for forward compatibility
-    if (!type_json->isNull("Charset"))
-        charset = type_json->get("Charset");
-    /// need to do this check for forward compatibility
-    if (!type_json->isNull("Collate"))
-        collate = type_json->get("Collate");
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
-    comment = json->getValue<String>("comment");
 
     auto vector_index_json = json->getObject("vector_index");
     if (vector_index_json)
@@ -524,7 +529,6 @@ try
     name_json->set("O", name);
     name_json->set("L", name);
     json->set("name", name_json);
-    json->set("comment", comment);
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
@@ -546,8 +550,6 @@ try
 {
     id = json->getValue<TableID>("id");
     name = json->getObject("name")->getValue<String>("L");
-    if (json->has("comment"))
-        comment = json->getValue<String>("comment");
 }
 catch (const Poco::Exception & e)
 {
@@ -812,16 +814,10 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexInfo::IndexInfo(Poco::JSON::Object::Ptr json)
-    : id(0)
-    , state(TiDB::SchemaState::StateNone)
-    , index_type(0)
-    , is_unique(true)
-    , is_primary(true)
-    , is_invisible(true)
-    , is_global(true)
 {
     deserialize(json);
 }
+
 Poco::JSON::Object::Ptr IndexInfo::getJSONObject() const
 try
 {
@@ -833,11 +829,6 @@ try
     idx_name_json->set("O", idx_name);
     idx_name_json->set("L", idx_name);
     json->set("idx_name", idx_name_json);
-
-    Poco::JSON::Object::Ptr tbl_name_json = new Poco::JSON::Object();
-    tbl_name_json->set("O", tbl_name);
-    tbl_name_json->set("L", tbl_name);
-    json->set("tbl_name", tbl_name_json);
 
     Poco::JSON::Array::Ptr cols_array = new Poco::JSON::Array();
     for (const auto & col : idx_cols)
@@ -872,7 +863,6 @@ try
 {
     id = json->getValue<Int64>("id");
     idx_name = json->getObject("idx_name")->getValue<String>("L");
-    tbl_name = json->getObject("tbl_name")->getValue<String>("L");
 
     auto cols_array = json->getArray("idx_cols");
     idx_cols.clear();
@@ -953,7 +943,6 @@ try
     json->set("state", static_cast<Int32>(state));
     json->set("pk_is_handle", pk_is_handle);
     json->set("is_common_handle", is_common_handle);
-    json->set("comment", comment);
     json->set("update_timestamp", update_timestamp);
     if (is_partition_table)
     {
@@ -1018,16 +1007,21 @@ try
         }
     }
 
-    auto index_arr = obj->getArray("index_info");
     index_infos.clear();
-    if (!index_arr.isNull())
+    bool has_primary_index = false;
+    if (auto index_arr = obj->getArray("index_info"); !index_arr.isNull())
     {
         for (size_t i = 0; i < index_arr->size(); i++)
         {
             auto index_info_json = index_arr->getObject(i);
             IndexInfo index_info(index_info_json);
+            // We only keep the "primary index" in tiflash now
             if (index_info.is_primary)
-                index_infos.emplace_back(index_info);
+            {
+                has_primary_index = true;
+                // always put the primary_index at the front of all index_info
+                index_infos.insert(index_infos.begin(), std::move(index_info));
+            }
         }
     }
 
@@ -1035,9 +1029,6 @@ try
     pk_is_handle = obj->getValue<bool>("pk_is_handle");
     if (obj->has("is_common_handle"))
         is_common_handle = obj->getValue<bool>("is_common_handle");
-    if (!is_common_handle)
-        index_infos.clear();
-    comment = obj->getValue<String>("comment");
     if (obj->has("update_timestamp"))
         update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");
@@ -1068,12 +1059,13 @@ try
             replica_info.deserialize(replica_obj);
         }
     }
-    if (is_common_handle && index_infos.size() != 1)
+    if (is_common_handle && !has_primary_index)
     {
         throw DB::Exception(
-            std::string(__PRETTY_FUNCTION__)
-            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: "
-            + JSONToString(obj));
+            DB::ErrorCodes::INCORRECT_DATA,
+            "{}: Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: ",
+            __PRETTY_FUNCTION__,
+            JSONToString(obj));
     }
 }
 catch (const Poco::Exception & e)

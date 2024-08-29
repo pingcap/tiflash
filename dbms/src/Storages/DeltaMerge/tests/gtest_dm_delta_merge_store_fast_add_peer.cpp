@@ -42,14 +42,13 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 
-namespace DB
-{
-namespace FailPoints
+
+namespace DB::FailPoints
 {
 extern const char force_use_dmfile_format_v3[];
 extern const char force_stop_background_checkpoint_upload[];
-} // namespace FailPoints
-namespace DM
+} // namespace DB::FailPoints
+namespace DB::DM
 {
 extern DMFilePtr writeIntoNewDMFile(
     DMContext & dm_context,
@@ -57,20 +56,24 @@ extern DMFilePtr writeIntoNewDMFile(
     const BlockInputStreamPtr & input_stream,
     UInt64 file_id,
     const String & parent_path);
-namespace tests
+} // namespace DB::DM
+namespace DB::DM::tests
 {
 // Simple test suit for DeltaMergeStoreTestFastAddPeer.
 class DeltaMergeStoreTestFastAddPeer
     : public DB::base::TiFlashStorageTestBasic
-    , public testing::WithParamInterface<KeyspaceID>
+    , public testing::WithParamInterface<std::tuple<KeyspaceID, StorageFormatVersion, StorageFormatVersion>>
 {
 public:
     DeltaMergeStoreTestFastAddPeer()
-        : keyspace_id(GetParam())
+        : keyspace_id(std::get<0>(GetParam()))
+        , write_format_version(std::get<1>(GetParam()))
+        , restore_format_version(std::get<2>(GetParam()))
     {}
 
     void SetUp() override
     {
+        setStorageFormat(write_format_version);
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
         FailPointHelper::enableFailPoint(FailPoints::force_stop_background_checkpoint_upload);
         DB::tests::TiFlashTestEnv::enableS3Config();
@@ -90,7 +93,7 @@ public:
         {
             already_initialize_data_store = true;
         }
-        if (global_context.getWriteNodePageStorage() == nullptr)
+        if (global_context.tryGetWriteNodePageStorage() == nullptr)
         {
             already_initialize_write_ps = false;
             orig_mode = global_context.getPageStorageRunMode();
@@ -122,6 +125,7 @@ public:
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
         DB::tests::TiFlashTestEnv::disableS3Config();
+        setStorageFormat(current_format_version);
     }
 
     void resetStoreId(UInt64 store_id)
@@ -157,7 +161,7 @@ public:
 
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+        DeltaMergeStorePtr s = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
@@ -267,6 +271,9 @@ protected:
     DeltaMergeStorePtr store;
     UInt64 current_store_id = 100;
     KeyspaceID keyspace_id;
+    StorageFormatVersion write_format_version;
+    StorageFormatVersion restore_format_version;
+    StorageFormatVersion current_format_version = STORAGE_FORMAT_CURRENT;
     TableID table_id = 800;
     UInt64 upload_sequence = 1000;
     bool already_initialize_data_store = false;
@@ -351,6 +358,8 @@ try
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
+
+    setStorageFormat(restore_format_version);
 
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(write_store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
@@ -485,6 +494,8 @@ try
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
 
+    setStorageFormat(restore_format_version);
+
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(write_store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = write_store_id;
@@ -542,7 +553,16 @@ try
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(Type, DeltaMergeStoreTestFastAddPeer, testing::Values(NullspaceID, 300));
-} // namespace tests
-} // namespace DM
-} // namespace DB
+INSTANTIATE_TEST_CASE_P(
+    Type,
+    DeltaMergeStoreTestFastAddPeer,
+    testing::Values(
+        std::make_tuple(NullspaceID, STORAGE_FORMAT_V5, STORAGE_FORMAT_V5), // V5 -> V5
+        std::make_tuple(NullspaceID, STORAGE_FORMAT_V5, STORAGE_FORMAT_V7), // V5 -> V7
+        std::make_tuple(NullspaceID, STORAGE_FORMAT_V7, STORAGE_FORMAT_V7), // V7 -> V7
+        std::make_tuple(300, STORAGE_FORMAT_V5, STORAGE_FORMAT_V5), // V5 -> V5
+        std::make_tuple(300, STORAGE_FORMAT_V5, STORAGE_FORMAT_V7), // V5 -> V7
+        std::make_tuple(300, STORAGE_FORMAT_V7, STORAGE_FORMAT_V7) // V7 -> V7
+        ));
+
+} // namespace DB::DM::tests

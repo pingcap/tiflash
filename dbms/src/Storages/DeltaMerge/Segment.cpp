@@ -50,6 +50,7 @@
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/DeltaMerge/dtpb/segment.pb.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -63,6 +64,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+
 
 namespace ProfileEvents
 {
@@ -352,22 +354,38 @@ void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_in
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         segment_info.range = RowKeyRange::fromHandleRange(range);
+        readIntBinary(segment_info.next_segment_id, buf);
+        readIntBinary(segment_info.delta_id, buf);
+        readIntBinary(segment_info.stable_id, buf);
         break;
     }
     case SegmentFormat::V2:
     {
         segment_info.range = RowKeyRange::deserialize(buf);
+        readIntBinary(segment_info.next_segment_id, buf);
+        readIntBinary(segment_info.delta_id, buf);
+        readIntBinary(segment_info.stable_id, buf);
+        break;
+    }
+    case SegmentFormat::V3:
+    {
+        dtpb::SegmentMeta meta;
+        String data;
+        readStringBinary(data, buf);
+        RUNTIME_CHECK_MSG(
+            meta.ParseFromString(data),
+            "Failed to parse SegmentMeta from string: {}",
+            Redact::keyToHexString(data.data(), data.size()));
+        segment_info.range = RowKeyRange::deserialize(meta.range());
+        segment_info.next_segment_id = meta.next_segment_id();
+        segment_info.delta_id = meta.delta_id();
+        segment_info.stable_id = meta.stable_id();
         break;
     }
     default:
-        throw Exception(fmt::format("Illegal version: {}", segment_info.version), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal version: {}", segment_info.version);
     }
-
-    readIntBinary(segment_info.next_segment_id, buf);
-    readIntBinary(segment_info.delta_id, buf);
-    readIntBinary(segment_info.stable_id, buf);
 }
-
 
 std::vector<PageIdU64> Segment::getAllSegmentIds(const DMContext & context, PageIdU64 segment_id)
 {
@@ -549,10 +567,29 @@ UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);
     writeIntBinary(epoch, buf);
-    rowkey_range.serialize(buf);
-    writeIntBinary(next_segment_id, buf);
-    writeIntBinary(delta->getId(), buf);
-    writeIntBinary(stable->getId(), buf);
+
+    if (likely(
+            STORAGE_FORMAT_CURRENT.segment == SegmentFormat::V1 //
+            || STORAGE_FORMAT_CURRENT.segment == SegmentFormat::V2))
+    {
+        rowkey_range.serialize(buf);
+        writeIntBinary(next_segment_id, buf);
+        writeIntBinary(delta->getId(), buf);
+        writeIntBinary(stable->getId(), buf);
+    }
+    else if (STORAGE_FORMAT_CURRENT.segment == SegmentFormat::V3)
+    {
+        dtpb::SegmentMeta meta;
+        auto range = rowkey_range.serialize();
+        meta.mutable_range()->Swap(&range);
+        meta.set_next_segment_id(next_segment_id);
+        meta.set_delta_id(delta->getId());
+        meta.set_stable_id(stable->getId());
+
+        auto data = meta.SerializeAsString();
+        writeStringBinary(data, buf);
+    }
+
     return buf.count();
 }
 

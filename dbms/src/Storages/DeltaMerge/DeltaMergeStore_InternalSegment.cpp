@@ -34,10 +34,41 @@ extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfSegmentIngest;
 } // namespace CurrentMetrics
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
+
+void DeltaMergeStore::removeSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
 {
+    segments.erase(segment->getRowKeyRange().getEnd());
+    id_to_segment.erase(segment->segmentId());
+}
+
+void DeltaMergeStore::addSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+{
+    RUNTIME_CHECK_MSG(
+        !segments.contains(segment->getRowKeyRange().getEnd()),
+        "Trying to add segment {} but there is a segment with the same key exists. Old segment must be removed "
+        "before adding new.",
+        segment->simpleInfo());
+    segments[segment->getRowKeyRange().getEnd()] = segment;
+    id_to_segment[segment->segmentId()] = segment;
+}
+
+void DeltaMergeStore::replaceSegment(
+    std::unique_lock<std::shared_mutex> &,
+    const SegmentPtr & old_segment,
+    const SegmentPtr & new_segment)
+{
+    RUNTIME_CHECK(
+        old_segment->segmentId() == new_segment->segmentId(),
+        old_segment->segmentId(),
+        new_segment->segmentId());
+    segments.erase(old_segment->getRowKeyRange().getEnd());
+
+    segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
+    id_to_segment[new_segment->segmentId()] = new_segment;
+}
+
 SegmentPair DeltaMergeStore::segmentSplit(
     DMContext & dm_context,
     const SegmentPtr & segment,
@@ -180,14 +211,9 @@ SegmentPair DeltaMergeStore::segmentSplit(
         wbs.writeMeta();
 
         segment->abandon(dm_context);
-        segments.erase(range.getEnd());
-        id_to_segment.erase(segment->segmentId());
-
-        segments[new_left->getRowKeyRange().getEnd()] = new_left;
-        segments[new_right->getRowKeyRange().getEnd()] = new_right;
-
-        id_to_segment.emplace(new_left->segmentId(), new_left);
-        id_to_segment.emplace(new_right->segmentId(), new_right);
+        removeSegment(lock, segment);
+        addSegment(lock, new_left);
+        addSegment(lock, new_right);
 
         if constexpr (DM_RUN_CHECK)
         {
@@ -338,12 +364,10 @@ SegmentPtr DeltaMergeStore::segmentMerge(
         for (const auto & seg : ordered_segments)
         {
             seg->abandon(dm_context);
-            segments.erase(seg->getRowKeyRange().getEnd());
-            id_to_segment.erase(seg->segmentId());
+            removeSegment(lock, seg);
         }
 
-        segments.emplace(merged->getRowKeyRange().getEnd(), merged);
-        id_to_segment.emplace(merged->segmentId(), merged);
+        addSegment(lock, merged);
 
         if constexpr (DM_RUN_CHECK)
             merged->check(dm_context, "After segment merge");
@@ -474,9 +498,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
     SegmentPtr new_segment;
     {
-        std::unique_lock read_write_lock(read_write_mutex);
+        std::unique_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(read_write_lock, segment))
+        if (!isSegmentValid(lock, segment))
         {
             LOG_DEBUG(
                 log,
@@ -495,11 +519,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         // The instance of PKRange::End is closely linked to instance of PKRange. So we cannot reuse it.
         // Replace must be done by erase + insert.
-        segments.erase(segment->getRowKeyRange().getEnd());
-        id_to_segment.erase(segment->segmentId());
-
-        segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
-        id_to_segment[new_segment->segmentId()] = new_segment;
+        replaceSegment(lock, segment, new_segment);
 
         segment->abandon(dm_context);
 
@@ -604,8 +624,7 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
             RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
 
             segment->abandon(dm_context);
-            segments[segment->getRowKeyRange().getEnd()] = new_segment;
-            id_to_segment[segment->segmentId()] = new_segment;
+            replaceSegment(lock, segment, new_segment);
 
             LOG_INFO(
                 log,
@@ -682,8 +701,7 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceDataFromCheckpoint(
         wbs.writeMeta();
 
         segment->abandon(dm_context);
-        segments[segment->getRowKeyRange().getEnd()] = new_segment;
-        id_to_segment[segment->segmentId()] = new_segment;
+        replaceSegment(lock, segment, new_segment);
 
         LOG_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
     }
@@ -729,6 +747,4 @@ bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
     return true;
 }
 
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

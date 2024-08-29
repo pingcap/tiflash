@@ -1794,7 +1794,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
     std::lock_guard lock(store_mutex);
     if (_store == nullptr)
     {
-        _store = std::make_shared<DeltaMergeStore>(
+        _store = DeltaMergeStore::create(
             global_context,
             data_path_contains_database_name,
             table_column_info->db_name,

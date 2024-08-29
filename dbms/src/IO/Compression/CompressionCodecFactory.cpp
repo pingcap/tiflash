@@ -94,7 +94,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>
     if (lz4_map.size() >= MAX_LZ4_MAP_SIZE)
         lz4_map.clear();
     auto [it, inserted] = lz4_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4>(setting.level));
-    assert(inserted);
+    UNUSED(inserted);
     return it->second;
 }
 
@@ -114,7 +114,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4H
     if (lz4hc_map.size() >= MAX_LZ4HC_MAP_SIZE)
         lz4hc_map.clear();
     auto [it, inserted] = lz4hc_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4HC>(setting.level));
-    assert(inserted);
+    UNUSED(inserted);
     return it->second;
 }
 
@@ -134,7 +134,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecZSTD
     if (zstd_map.size() >= MAX_ZSTD_MAP_SIZE)
         zstd_map.clear();
     auto [it, inserted] = zstd_map.emplace(setting.level, std::make_shared<CompressionCodecZSTD>(setting.level));
-    assert(inserted);
+    UNUSED(inserted);
     return it->second;
 }
 

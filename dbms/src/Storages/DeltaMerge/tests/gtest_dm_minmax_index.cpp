@@ -111,7 +111,7 @@ bool checkMatch(
     Block block = genBlock(header, block_tuples);
 
     // max page id is only updated at restart, so we need recreate page v3 before recreate table
-    DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
+    DeltaMergeStorePtr store = DeltaMergeStore::create(
         context,
         false,
         "test_database",
@@ -2663,4 +2663,82 @@ try
     }
 }
 CATCH
+
+TEST_F(MinMaxIndexTest, CheckCmpNullValue)
+try
+{
+    auto col_type = DataTypeFactory::instance().get("Int64");
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    auto rs_index = RSIndex(col_type, minmax_index);
+    RSCheckParam param;
+    param.indexes.emplace(DEFAULT_COL_ID, rs_index);
+
+    Field null_value;
+    ASSERT_TRUE(null_value.isNull());
+
+    auto check = [&](RSOperatorPtr rs, RSResult expected_res) {
+        auto results = rs->roughCheck(0, min_max_check_test_data.size(), param);
+        for (auto actual_res : results)
+            ASSERT_EQ(actual_res, expected_res) << fmt::format("actual: {}, expected: {}", actual_res, expected_res);
+    };
+
+    check(createGreater(attr("Int64"), null_value), RSResult::NoneNull);
+    check(createGreaterEqual(attr("Int64"), null_value), RSResult::NoneNull);
+    check(createLess(attr("Int64"), null_value), RSResult::AllNull);
+    check(createLessEqual(attr("Int64"), null_value), RSResult::AllNull);
+    check(createEqual(attr("Int64"), null_value), RSResult::NoneNull);
+    check(createNotEqual(attr("Int64"), null_value), RSResult::AllNull);
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckInNullValue)
+try
+{
+    auto col_type = DataTypeFactory::instance().get("Nullable(Int64)");
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    auto rs_index = RSIndex(col_type, minmax_index);
+    RSCheckParam param;
+    param.indexes.emplace(DEFAULT_COL_ID, rs_index);
+
+    Field null_value;
+    ASSERT_TRUE(null_value.isNull());
+
+    {
+        auto rs = createIn(attr("Nullable(Int64)"), {null_value});
+        auto results = rs->roughCheck(0, min_max_check_test_data.size(), param);
+        auto excepted_results = {
+            RSResult::NoneNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::NoneNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::NoneNull,
+            RSResult::NoneNull,
+        };
+        ASSERT_TRUE(std::equal(results.cbegin(), results.cend(), excepted_results.begin()));
+    }
+
+    {
+        auto rs = createIn(attr("Nullable(Int64)"), {Field{static_cast<Int64>(1)}, null_value});
+        auto results = rs->roughCheck(0, min_max_check_test_data.size(), param);
+        auto excepted_results = {
+            RSResult::SomeNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::All,
+            RSResult::AllNull,
+        };
+        ASSERT_TRUE(std::equal(results.cbegin(), results.cend(), excepted_results.begin()));
+    }
+}
+CATCH
+
 } // namespace DB::DM::tests

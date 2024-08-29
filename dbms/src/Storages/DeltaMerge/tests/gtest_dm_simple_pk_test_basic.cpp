@@ -47,7 +47,7 @@ void SimplePKTestBasic::reload()
 
     auto cols = DMTestEnv::getDefaultColumns(
         is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-    store = std::make_shared<DeltaMergeStore>(
+    store = DeltaMergeStore::create(
         *db_context,
         false,
         "test",

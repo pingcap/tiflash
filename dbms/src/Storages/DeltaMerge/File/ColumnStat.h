@@ -17,7 +17,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 
 namespace DB
 {

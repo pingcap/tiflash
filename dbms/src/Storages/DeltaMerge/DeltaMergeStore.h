@@ -187,6 +187,9 @@ struct LocalIndexStats
 };
 using LocalIndexesStats = std::vector<LocalIndexStats>;
 
+class DeltaMergeStore;
+using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+
 class DeltaMergeStore : private boost::noncopyable
 {
 public:
@@ -274,8 +277,11 @@ public:
         BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
+private:
+    // Let the constructor be private, so that we can control the creation of DeltaMergeStore.
+    // Please use DeltaMergeStore::create to create a DeltaMergeStore
     DeltaMergeStore(
-        Context & db_context, //
+        Context & db_context,
         bool data_path_contains_database_name,
         const String & db_name,
         const String & table_name_,
@@ -288,6 +294,38 @@ public:
         size_t rowkey_column_size_,
         const Settings & settings_ = EMPTY_SETTINGS,
         ThreadPool * thread_pool = nullptr);
+
+public:
+    static DeltaMergeStorePtr create(
+        Context & db_context,
+        bool data_path_contains_database_name,
+        const String & db_name,
+        const String & table_name_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool has_replica,
+        const ColumnDefines & columns,
+        const ColumnDefine & handle,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const Settings & settings_ = EMPTY_SETTINGS,
+        ThreadPool * thread_pool = nullptr);
+
+    static std::unique_ptr<DeltaMergeStore> createUnique(
+        Context & db_context,
+        bool data_path_contains_database_name,
+        const String & db_name,
+        const String & table_name_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool has_replica,
+        const ColumnDefines & columns,
+        const ColumnDefine & handle,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const Settings & settings_ = EMPTY_SETTINGS,
+        ThreadPool * thread_pool = nullptr);
+
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -780,6 +818,26 @@ private:
         bool try_split_task = true);
 
 private:
+    /**
+      * Remove the segment from the store's memory structure.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void removeSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
+    /**
+      * Add the segment to the store's memory structure.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void addSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
+    /**
+      * Replace the old segment with the new segment in the store's memory structure.
+      * New segment should have the same segment id as the old segment.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void replaceSegment(
+        std::unique_lock<std::shared_mutex> &,
+        const SegmentPtr & old_segment,
+        const SegmentPtr & new_segment);
+
     /**
      * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
      * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).

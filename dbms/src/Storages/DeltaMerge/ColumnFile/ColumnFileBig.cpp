@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/RestoreDMFile.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -25,15 +26,14 @@
 #include <Storages/PathPool.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
-ColumnFileBig::ColumnFileBig(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
+
+ColumnFileBig::ColumnFileBig(const DMContext & dm_context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
     : file(file_)
     , segment_range(segment_range_)
 {
-    calculateStat(context);
+    calculateStat(dm_context);
 }
 
 void ColumnFileBig::calculateStat(const DMContext & dm_context)
@@ -65,11 +65,11 @@ void ColumnFileBig::removeData(WriteBatches & wbs) const
 }
 
 ColumnFileReaderPtr ColumnFileBig::getReader(
-    const DMContext & context,
+    const DMContext & dm_context,
     const IColumnFileDataProviderPtr &,
     const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
+    return std::make_shared<ColumnFileBigReader>(dm_context, *this, col_defs);
 }
 
 void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -79,8 +79,16 @@ void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
     writeIntBinary(valid_bytes, buf);
 }
 
+void ColumnFileBig::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool /*save_schema*/) const
+{
+    auto * big_pb = cf_pb->mutable_big_file();
+    big_pb->set_id(file->pageId());
+    big_pb->set_valid_rows(valid_rows);
+    big_pb->set_valid_bytes(valid_bytes);
+}
+
 ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
-    const DMContext & dm_context, //
+    const DMContext & dm_context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf)
 {
@@ -91,51 +99,27 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    String file_parent_path;
-    DMFilePtr dmfile;
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
-    if (remote_data_store)
-    {
-        auto wn_ps = dm_context.global_context.getWriteNodePageStorage();
-        auto full_page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toFullPrefix(
-                dm_context.keyspace_id,
-                StorageType::Data,
-                dm_context.physical_table_id),
-            file_page_id);
-        auto full_external_id = wn_ps->getNormalPageId(full_page_id);
-        auto local_external_id = UniversalPageIdFormat::getU64ID(full_external_id);
-        auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
-        const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-        auto file_oid = lock_key_view.asDataFile().getDMFileOID();
-        auto prepared = remote_data_store->prepareDMFile(file_oid, file_page_id);
-        dmfile = prepared->restore(DMFileMeta::ReadMode::all());
-        // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
-        path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
-    }
-    else
-    {
-        auto file_id = dm_context.storage_pool->dataReader()->getNormalPageId(file_page_id);
-        file_parent_path = dm_context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
-        dmfile = DMFile::restore(
-            dm_context.global_context.getFileProvider(),
-            file_id,
-            file_page_id,
-            file_parent_path,
-            DMFileMeta::ReadMode::all(),
-            dm_context.keyspace_id);
-        auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
-        RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
-    }
-
+    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, file_page_id)
+                                    : restoreDMFileFromLocal(dm_context, file_page_id);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
 
+ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
+    const DMContext & dm_context,
+    const RowKeyRange & segment_range,
+    const dtpb::ColumnFileBig & cf_pb)
+{
+    auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
+    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, cf_pb.id())
+                                    : restoreDMFileFromLocal(dm_context, cf_pb.id());
+    auto * dp_file = new ColumnFileBig(dmfile, cf_pb.valid_rows(), cf_pb.valid_bytes(), segment_range);
+    return std::shared_ptr<ColumnFileBig>(dp_file);
+}
+
 ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
-    [[maybe_unused]] const LoggerPtr & parent_log,
-    DMContext & dm_context, //
+    DMContext & dm_context,
     const RowKeyRange & target_range,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
@@ -148,27 +132,25 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto remote_page_id = UniversalPageIdFormat::toFullPageId(
-        UniversalPageIdFormat::toFullPrefix(dm_context.keyspace_id, StorageType::Data, dm_context.physical_table_id),
-        file_page_id);
-    auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
-    auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
-    auto file_oid = data_key_view.getDMFileOID();
-    auto data_key = data_key_view.toFullKey();
-    auto delegator = dm_context.path_pool->getStableDiskDelegator();
-    auto new_local_page_id = dm_context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-    PS::V3::CheckpointLocation loc{
-        .data_file_id = std::make_shared<String>(data_key),
-        .offset_in_file = 0,
-        .size_in_file = 0,
-    };
-    wbs.data.putRemoteExternal(new_local_page_id, loc);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
-    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
-    wbs.writeLogAndData();
-    // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
-    delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
+    auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
+    return std::shared_ptr<ColumnFileBig>(dp_file);
+}
+
+ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
+    DMContext & dm_context,
+    const RowKeyRange & target_range,
+    const dtpb::ColumnFileBig & cf_pb,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs)
+{
+    UInt64 file_page_id = cf_pb.id();
+    size_t valid_rows = cf_pb.valid_rows();
+    size_t valid_bytes = cf_pb.valid_bytes();
+
+    auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -403,5 +385,4 @@ void ColumnFileBigReader::setReadTag(ReadTag read_tag_)
     read_tag = read_tag_;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
