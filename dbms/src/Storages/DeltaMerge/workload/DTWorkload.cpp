@@ -59,7 +59,7 @@ DTWorkload::DTWorkload(
     context->initializeGlobalPageIdAllocator();
     context->initializeGlobalStoragePoolIfNeed(context->getPathPool());
     Stopwatch sw;
-    store = std::make_unique<DeltaMergeStore>(
+    store = DeltaMergeStore::createUnique(
         *context,
         true,
         table_info->db_name,

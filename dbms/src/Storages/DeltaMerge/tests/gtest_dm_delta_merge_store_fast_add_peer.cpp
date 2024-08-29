@@ -161,7 +161,7 @@ public:
 
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+        DeltaMergeStorePtr s = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
