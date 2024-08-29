@@ -47,11 +47,8 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , prehandle_task(prehandle_task_)
     , opts(std::move(opts_))
     , snap_reader(std::move(snap_reader_))
+    , log(Logger::get(opts.log_prefix, fmt::format("region_id={} split_id={}", region->id(), snap_reader.getSplitId())))
 {
-    const size_t split_id
-        = soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
-    log = Logger::get(opts.log_prefix, fmt::format("region_id={} split_id={}", region->id(), split_id));
-
     // Init stat info.
     process_keys.default_cf = 0;
     process_keys.write_cf = 0;

@@ -151,6 +151,8 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         prehandle_ctx.prehandle_task,
         DM::SSTFilesToBlockInputStreamOpts(opts));
 
+    const auto region_id = new_region->id();
+
     CurrentMetrics::add(CurrentMetrics::RaftNumPrehandlingSubTasks);
     SCOPE_EXIT({
         trace.releaseSubtaskResources(region_id, split_id);

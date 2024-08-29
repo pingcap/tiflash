@@ -22,4 +22,4 @@ namespace DB::DM
 struct SSTScanSoftLimit;
 class SnapshotSSTReader;
 
-} // namespace DB
+} // namespace DB::DM
