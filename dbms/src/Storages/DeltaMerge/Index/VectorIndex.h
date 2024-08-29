@@ -20,8 +20,8 @@
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <TiDB/Schema/VectorIndex.h>
 
 
