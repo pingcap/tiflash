@@ -54,14 +54,14 @@ protected:
     ContextPtr ctx = DB::tests::TiFlashTestEnv::getContext();
     TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
     DM::PushDownFilterPtr generatePushDownFilter(
-        String table_info_json,
+        const String & table_info_json,
         const String & query,
         TimezoneInfo & timezone_info);
 };
 
 DM::PushDownFilterPtr generatePushDownFilter(
     Context & ctx,
-    const String table_info_json,
+    const String & table_info_json,
     const String & query,
     const std::optional<TimezoneInfo> & opt_tz = std::nullopt)
 {
@@ -127,7 +127,7 @@ DM::PushDownFilterPtr generatePushDownFilter(
 }
 
 DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
-    String table_info_json,
+    const String & table_info_json,
     const String & query,
     TimezoneInfo & timezone_info)
 {

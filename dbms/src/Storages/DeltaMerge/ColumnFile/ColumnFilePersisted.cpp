@@ -147,9 +147,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
         break;
     }
     default:
-        throw Exception(
-            "Unexpected delta value version: " + DB::toString(STORAGE_FORMAT_CURRENT.delta),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected delta value version: {}", STORAGE_FORMAT_CURRENT.delta);
     }
 }
 
@@ -162,17 +160,14 @@ ColumnFilePersisteds deserializeSavedColumnFiles(
     DeltaFormat::Version version;
     readIntBinary(version, buf);
 
-    ColumnFilePersisteds column_files;
     switch (version)
     {
         // V1 and V2 share the same deserializer.
     case DeltaFormat::V1:
     case DeltaFormat::V2:
-        column_files = deserializeSavedColumnFilesInV2Format(context, buf, version);
-        break;
+        return deserializeSavedColumnFilesInV2Format(context, buf, version);
     case DeltaFormat::V3:
-        column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
-        break;
+        return deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
     case DeltaFormat::V4:
     {
         dtpb::DeltaLayerMeta meta;
@@ -182,17 +177,15 @@ ColumnFilePersisteds deserializeSavedColumnFiles(
             meta.ParseFromString(data),
             "Failed to parse DeltaLayerMeta from string: {}",
             Redact::keyToHexString(data.data(), data.size()));
-        column_files = deserializeSavedColumnFilesInV4Format(context, segment_range, meta);
-        break;
+        return deserializeSavedColumnFilesInV4Format(context, segment_range, meta);
     }
     default:
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "Unexpected delta value version: {}, latest version: {}",
             version,
-            DeltaFormat::V3);
+            DeltaFormat::V4);
     }
-    return column_files;
 }
 
 ColumnFilePersisteds createColumnFilesFromCheckpoint( //
@@ -207,20 +200,28 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     DeltaFormat::Version version;
     readIntBinary(version, buf);
 
-    ColumnFilePersisteds column_files;
     switch (version)
     {
     case DeltaFormat::V3:
-        column_files = createColumnFilesInV3FormatFromCheckpoint(parent_log, context, segment_range, buf, temp_ps, wbs);
-        break;
+        return createColumnFilesInV3FormatFromCheckpoint(parent_log, context, segment_range, buf, temp_ps, wbs);
+    case DeltaFormat::V4:
+    {
+        dtpb::DeltaLayerMeta meta;
+        String data;
+        readStringBinary(data, buf);
+        RUNTIME_CHECK_MSG(
+            meta.ParseFromString(data),
+            "Failed to parse DeltaLayerMeta from string: {}",
+            Redact::keyToHexString(data.data(), data.size()));
+        return createColumnFilesInV4FormatFromCheckpoint(parent_log, context, segment_range, meta, temp_ps, wbs);
+    }
     default:
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "Unexpected delta value version: {}, latest version: {}",
             version,
-            DeltaFormat::V3);
+            DeltaFormat::V4);
     }
-    return column_files;
 }
 
 } // namespace DB::DM

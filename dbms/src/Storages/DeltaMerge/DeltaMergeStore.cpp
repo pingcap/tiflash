@@ -284,9 +284,10 @@ DeltaMergeStore::DeltaMergeStore(
                 {
                     auto task = [this, dm_context, segment_id] {
                         auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
-                        std::lock_guard lock(read_write_mutex);
-                        segments.emplace(segment->getRowKeyRange().getEnd(), segment);
-                        id_to_segment.emplace(segment_id, segment);
+                        {
+                            std::unique_lock lock(read_write_mutex);
+                            addSegment(lock, segment);
+                        }
                     };
                     wait_group->schedule(task);
                 }
@@ -299,9 +300,10 @@ DeltaMergeStore::DeltaMergeStore(
                 while (segment_id != 0)
                 {
                     auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
-                    segments.emplace(segment->getRowKeyRange().getEnd(), segment);
-                    id_to_segment.emplace(segment_id, segment);
-
+                    {
+                        std::unique_lock lock(read_write_mutex);
+                        addSegment(lock, segment);
+                    }
                     segment_id = segment->nextSegmentId();
                 }
             }
@@ -316,6 +318,72 @@ DeltaMergeStore::DeltaMergeStore(
     setUpBackgroundTask(dm_context);
 
     LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", magic_enum::enum_name(page_storage_run_mode));
+}
+
+DeltaMergeStorePtr DeltaMergeStore::create(
+    Context & db_context,
+    bool data_path_contains_database_name,
+    const String & db_name_,
+    const String & table_name_,
+    KeyspaceID keyspace_id_,
+    TableID physical_table_id_,
+    bool has_replica,
+    const ColumnDefines & columns,
+    const ColumnDefine & handle,
+    bool is_common_handle_,
+    size_t rowkey_column_size_,
+    const Settings & settings_,
+    ThreadPool * thread_pool)
+{
+    auto * store = new DeltaMergeStore(
+        db_context,
+        data_path_contains_database_name,
+        db_name_,
+        table_name_,
+        keyspace_id_,
+        physical_table_id_,
+        has_replica,
+        columns,
+        handle,
+        is_common_handle_,
+        rowkey_column_size_,
+        settings_,
+        thread_pool);
+    std::shared_ptr<DeltaMergeStore> store_shared_ptr(store);
+    return store_shared_ptr;
+}
+
+std::unique_ptr<DeltaMergeStore> DeltaMergeStore::createUnique(
+    Context & db_context,
+    bool data_path_contains_database_name,
+    const String & db_name_,
+    const String & table_name_,
+    KeyspaceID keyspace_id_,
+    TableID physical_table_id_,
+    bool has_replica,
+    const ColumnDefines & columns,
+    const ColumnDefine & handle,
+    bool is_common_handle_,
+    size_t rowkey_column_size_,
+    const Settings & settings_,
+    ThreadPool * thread_pool)
+{
+    auto * store = new DeltaMergeStore(
+        db_context,
+        data_path_contains_database_name,
+        db_name_,
+        table_name_,
+        keyspace_id_,
+        physical_table_id_,
+        has_replica,
+        columns,
+        handle,
+        is_common_handle_,
+        rowkey_column_size_,
+        settings_,
+        thread_pool);
+    std::unique_ptr<DeltaMergeStore> store_unique_ptr(store);
+    return store_unique_ptr;
 }
 
 DeltaMergeStore::~DeltaMergeStore()
@@ -389,16 +457,11 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
             // The order to drop the meta and data of this segment doesn't matter,
             // Because there is no segment pointing to this segment,
             // so it won't be restored again even the drop process was interrupted by restart
-            segments.erase(segment_to_drop->getRowKeyRange().getEnd());
-            id_to_segment.erase(segment_id_to_drop);
+            removeSegment(lock, segment_to_drop);
             if (previous_segment)
             {
                 assert(new_previous_segment);
-                assert(previous_segment->segmentId() == new_previous_segment->segmentId());
-                segments.erase(previous_segment->getRowKeyRange().getEnd());
-                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
-                id_to_segment.erase(previous_segment->segmentId());
-                id_to_segment.emplace(new_previous_segment->segmentId(), new_previous_segment);
+                replaceSegment(lock, previous_segment, new_previous_segment);
             }
             auto drop_lock = segment_to_drop->mustGetUpdateLock();
             segment_to_drop->abandon(*dm_context);
@@ -2215,8 +2278,7 @@ void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context)
         RowKeyRange::newAll(is_common_handle, rowkey_column_size),
         segment_id,
         0);
-    segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
-    id_to_segment.emplace(segment_id, first_segment);
+    addSegment(lock, first_segment);
 }
 
 } // namespace DM
