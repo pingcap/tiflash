@@ -47,7 +47,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .file_ids = {},
         .request_memory = 0,
         .workload = [this]() { pushResult("foo"); },
     });
@@ -66,7 +66,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {},
+        .file_ids = {},
         .request_memory = 0,
         .workload = [this]() { pushResult("bar"); },
     });
@@ -90,42 +90,42 @@ try
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 1,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 2,
-        .page_ids = {2},
+        .file_ids = {LocalIndexerScheduler::DMFileID(2)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t2"); },
     });
     scheduler->pushTask({
         .keyspace_id = 3,
         .table_id = 3,
-        .page_ids = {3},
+        .file_ids = {LocalIndexerScheduler::DMFileID(3)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks3_t3"); },
     });
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 4,
-        .page_ids = {4},
+        .file_ids = {LocalIndexerScheduler::DMFileID(4)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t4"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {5},
+        .file_ids = {LocalIndexerScheduler::DMFileID(5)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 3,
-        .page_ids = {6},
+        .file_ids = {LocalIndexerScheduler::DMFileID(6)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t3"); },
     });
@@ -147,7 +147,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 1,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t1"); },
     });
@@ -170,35 +170,35 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 3,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t3_#1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {2},
+        .file_ids = {LocalIndexerScheduler::DMFileID(2)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t1_#1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 3,
-        .page_ids = {3},
+        .file_ids = {LocalIndexerScheduler::DMFileID(3)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t3_#2"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 2,
-        .page_ids = {4},
+        .file_ids = {LocalIndexerScheduler::DMFileID(4)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks1_t2_#1"); },
     });
     scheduler->pushTask({
         .keyspace_id = 2,
         .table_id = 1,
-        .page_ids = {5},
+        .file_ids = {LocalIndexerScheduler::DMFileID(5)},
         .request_memory = 0,
         .workload = [&]() { pushResult("ks2_t1_#1"); },
     });
@@ -230,7 +230,7 @@ try
             scheduler->pushTask({
                 .keyspace_id = 1,
                 .table_id = 1,
-                .page_ids = {1},
+                .file_ids = {LocalIndexerScheduler::DMFileID(1)},
                 .request_memory = 100,
                 .workload = [&]() { pushResult("foo"); },
             });
@@ -240,7 +240,7 @@ try
         scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
-            .page_ids = {2},
+            .file_ids = {LocalIndexerScheduler::DMFileID(2)},
             .request_memory = 0,
             .workload = [&]() { pushResult("bar"); },
         });
@@ -263,7 +263,7 @@ try
         scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
-            .page_ids = {3},
+            .file_ids = {LocalIndexerScheduler::DMFileID(3)},
             .request_memory = 100,
             .workload = [&]() { pushResult("foo"); },
         });
@@ -272,7 +272,7 @@ try
         scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
-            .page_ids = {4},
+            .file_ids = {LocalIndexerScheduler::DMFileID(4)},
             .request_memory = 0,
             .workload = [&]() { pushResult("bar"); },
         });
@@ -307,7 +307,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 1,
         .workload =
             [=]() {
@@ -318,7 +318,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {2},
+        .file_ids = {LocalIndexerScheduler::DMFileID(2)},
         .request_memory = 1,
         .workload =
             [=]() {
@@ -329,7 +329,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {3},
+        .file_ids = {LocalIndexerScheduler::DMFileID(3)},
         .request_memory = 1,
         .workload =
             [=]() {
@@ -371,7 +371,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload =
             [=]() {
@@ -383,7 +383,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload =
             [=]() {
@@ -420,14 +420,14 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload = [&]() { throw DB::Exception("foo"); },
     });
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {2},
+        .file_ids = {LocalIndexerScheduler::DMFileID(2)},
         .request_memory = 0,
         .workload = [&]() { pushResult("bar"); },
     });
@@ -440,7 +440,7 @@ try
 }
 CATCH
 
-TEST_F(LocalIndexerSchedulerTest, PageIsUsing)
+TEST_F(LocalIndexerSchedulerTest, FileIsUsing)
 try
 {
     auto scheduler = LocalIndexerScheduler::create({
@@ -457,7 +457,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload =
             [&]() {
@@ -469,7 +469,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {1, 2},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1), LocalIndexerScheduler::DMFileID(2)},
         .request_memory = 0,
         .workload = [&]() { task_2_is_started->set_value(); },
     });
@@ -477,7 +477,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_ids = {3},
+        .file_ids = {LocalIndexerScheduler::DMFileID(3)},
         .request_memory = 0,
         .workload = [&]() { task_3_is_started->set_value(); },
     });
@@ -500,10 +500,10 @@ try
 }
 CATCH
 
-TEST_F(LocalIndexerSchedulerTest, DifferentTypePage)
+TEST_F(LocalIndexerSchedulerTest, DifferentTypeFile)
 try
 {
-    // When pages are different type, should not block
+    // When files are different type, should not block
 
     auto scheduler = LocalIndexerScheduler::create({
         .pool_size = 4,
@@ -516,8 +516,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_type = LocalIndexerScheduler::Task::PageType::DMFile,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::DMFileID(1)},
         .request_memory = 0,
         .workload = [&]() { task_1_is_started->set_value(); },
     });
@@ -525,8 +524,7 @@ try
     scheduler->pushTask({
         .keyspace_id = 1,
         .table_id = 1,
-        .page_type = LocalIndexerScheduler::Task::PageType::ColumnFileTiny,
-        .page_ids = {1},
+        .file_ids = {LocalIndexerScheduler::ColumnFileTinyID(1)},
         .request_memory = 0,
         .workload = [&]() { task_2_is_started->set_value(); },
     });

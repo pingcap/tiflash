@@ -19,6 +19,24 @@
 namespace DB::DM
 {
 
+bool operator==(const LocalIndexerScheduler::FileID & lhs, const LocalIndexerScheduler::FileID & rhs)
+{
+    if (lhs.index() != rhs.index())
+        return false;
+
+    auto index = lhs.index();
+    if (index == 0)
+    {
+        return std::get<LocalIndexerScheduler::DMFileID>(lhs).id == std::get<LocalIndexerScheduler::DMFileID>(rhs).id;
+    }
+    else if (index == 1)
+    {
+        return std::get<LocalIndexerScheduler::ColumnFileTinyID>(lhs).id
+            == std::get<LocalIndexerScheduler::ColumnFileTinyID>(rhs).id;
+    }
+    return false;
+}
+
 LocalIndexerScheduler::LocalIndexerScheduler(const Options & options)
     : logger(Logger::get())
     , pool(std::make_unique<ThreadPool>(options.pool_size, options.pool_size, options.pool_size + 1))
@@ -143,13 +161,9 @@ size_t LocalIndexerScheduler::dropTasks(KeyspaceID keyspace_id, TableID table_id
 
 bool LocalIndexerScheduler::isTaskReady(std::unique_lock<std::mutex> &, const InternalTaskPtr & task)
 {
-    for (const auto & page_id : task->user_task.page_ids)
+    for (const auto & file_id : task->user_task.file_ids)
     {
-        auto unique_page_id = UniquePageID{
-            .page_type = task->user_task.page_type,
-            .page_id = page_id,
-        };
-        if (adding_index_page_id_set.find(unique_page_id) != adding_index_page_id_set.end())
+        if (adding_index_page_id_set.find(file_id) != adding_index_page_id_set.end())
             return false;
     }
     return true;
@@ -157,24 +171,20 @@ bool LocalIndexerScheduler::isTaskReady(std::unique_lock<std::mutex> &, const In
 
 void LocalIndexerScheduler::taskOnSchedule(std::unique_lock<std::mutex> &, const InternalTaskPtr & task)
 {
-    for (const auto & page_id : task->user_task.page_ids)
+    for (const auto & file_id : task->user_task.file_ids)
     {
-        auto unique_page_id = UniquePageID{
-            .page_type = task->user_task.page_type,
-            .page_id = page_id,
-        };
-        auto [it, inserted] = adding_index_page_id_set.insert(unique_page_id);
+        auto [it, inserted] = adding_index_page_id_set.insert(file_id);
         RUNTIME_CHECK(inserted);
         UNUSED(it);
     }
 
     LOG_DEBUG( //
         logger,
-        "Start LocalIndex task, keyspace_id={} table_id={} page_ids={} "
+        "Start LocalIndex task, keyspace_id={} table_id={} file_ids={} "
         "memory_[this/total/limit]_mb={:.1f}/{:.1f}/{:.1f} all_tasks={}",
         task->user_task.keyspace_id,
         task->user_task.table_id,
-        task->user_task.page_ids,
+        task->user_task.file_ids,
         static_cast<double>(task->user_task.request_memory) / 1024 / 1024,
         static_cast<double>(pool_current_memory) / 1024 / 1024,
         static_cast<double>(pool_max_memory_limit) / 1024 / 1024,
@@ -186,13 +196,9 @@ void LocalIndexerScheduler::taskOnSchedule(std::unique_lock<std::mutex> &, const
 
 void LocalIndexerScheduler::taskOnFinish(std::unique_lock<std::mutex> & lock, const InternalTaskPtr & task)
 {
-    for (const auto & page_id : task->user_task.page_ids)
+    for (const auto & file_id : task->user_task.file_ids)
     {
-        auto unique_page_id = UniquePageID{
-            .page_type = task->user_task.page_type,
-            .page_id = page_id,
-        };
-        auto erased = adding_index_page_id_set.erase(unique_page_id);
+        auto erased = adding_index_page_id_set.erase(file_id);
         RUNTIME_CHECK(erased == 1, erased);
     }
 
@@ -203,12 +209,12 @@ void LocalIndexerScheduler::taskOnFinish(std::unique_lock<std::mutex> & lock, co
 
     LOG_DEBUG( //
         logger,
-        "Finish LocalIndex task, keyspace_id={} table_id={} page_ids={} "
+        "Finish LocalIndex task, keyspace_id={} table_id={} file_ids={} "
         "memory_[this/total/limit]_mb={:.1f}/{:.1f}/{:.1f} "
         "[schedule/task]_cost_sec={:.1f}/{:.1f}",
         task->user_task.keyspace_id,
         task->user_task.table_id,
-        task->user_task.page_ids,
+        task->user_task.file_ids,
         static_cast<double>(task->user_task.request_memory) / 1024 / 1024,
         static_cast<double>(pool_current_memory) / 1024 / 1024,
         static_cast<double>(pool_max_memory_limit) / 1024 / 1024,
@@ -333,10 +339,10 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
         LOG_DEBUG(
             logger,
             "LocalIndex task is not ready, will try again later when it is ready. "
-            "keyspace_id={} table_id={} page_ids={}",
+            "keyspace_id={} table_id={} file_ids={}",
             task->user_task.keyspace_id,
             task->user_task.table_id,
-            task->user_task.page_ids);
+            task->user_task.file_ids);
 
         // Let the caller retry. At next retry, we will continue using this
         // Keyspace+Table and try next task.

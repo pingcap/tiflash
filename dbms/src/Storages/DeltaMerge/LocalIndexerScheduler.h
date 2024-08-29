@@ -30,20 +30,33 @@ namespace DB::DM
 class LocalIndexerScheduler
 {
 public:
+    // The file id of the DMFile.
+    struct DMFileID
+    {
+        explicit DMFileID(PageIdU64 id_)
+            : id(id_)
+        {}
+        PageIdU64 id;
+    };
+    // The page id of the ColumnFileTiny.
+    struct ColumnFileTinyID
+    {
+        explicit ColumnFileTinyID(PageIdU64 id_)
+            : id(id_)
+        {}
+        PageIdU64 id;
+    };
+    using FileID = std::variant<DMFileID, ColumnFileTinyID>;
+
     struct Task
     {
         // Note: The scheduler will try to schedule farely according to keyspace_id and table_id.
         KeyspaceID keyspace_id;
         TableID table_id;
-        enum class PageType : UInt8
-        {
-            DMFile = 0,
-            ColumnFileTiny = 1,
-        };
-        PageType page_type;
 
-        // Used for the scheduler to avoid concurrently adding index for the same Page (ColumnFileTiny/DMFile).
-        std::vector<PageIdU64> page_ids;
+        // The file id of the ColumnFileTiny or DMFile.
+        // Used for the scheduler to avoid concurrently adding index for the same file.
+        std::vector<FileID> file_ids;
 
         // Used for the scheduler to control the maximum requested memory usage.
         size_t request_memory;
@@ -103,29 +116,16 @@ public:
     size_t dropTasks(KeyspaceID keyspace_id, TableID table_id);
 
 private:
-    struct UniquePageID
+    struct FileIDHasher
     {
-        // We could use DMFile path as well, but this should be faster.
-
-        Task::PageType page_type;
-        PageIdU64 page_id;
-
-        bool operator==(const UniquePageID & other) const
-        {
-            return page_type == other.page_type && page_id == other.page_id;
-        }
-    };
-
-    struct UniquePageIDHasher
-    {
-        std::size_t operator()(const UniquePageID & id) const
+        std::size_t operator()(const FileID & id) const
         {
             using boost::hash_combine;
             using boost::hash_value;
 
             std::size_t seed = 0;
-            hash_combine(seed, hash_value(id.page_type));
-            hash_combine(seed, hash_value(id.page_id));
+            hash_combine(seed, hash_value(id.index()));
+            hash_combine(seed, hash_value(std::visit([](const auto & id) { return id.id; }, id)));
             return seed;
         }
     };
@@ -134,7 +134,7 @@ private:
     // There maybe multiple threads trying to add index for the same Page. For example,
     // after logical split two segments share the same DMFile, so that adding index for the two segments
     // could result in adding the same index for the same DMFile. It's just a waste of resource.
-    std::unordered_set<UniquePageID, UniquePageIDHasher> adding_index_page_id_set;
+    std::unordered_set<FileID, FileIDHasher> adding_index_page_id_set;
 
     bool isTaskReady(std::unique_lock<std::mutex> &, const InternalTaskPtr & task);
 
@@ -206,4 +206,18 @@ private:
     std::atomic<bool> is_shutting_down = false;
 };
 
+bool operator==(const LocalIndexerScheduler::FileID & lhs, const LocalIndexerScheduler::FileID & rhs);
+
 } // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DM::LocalIndexerScheduler::FileID>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::LocalIndexerScheduler::FileID & id, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "{}", std::visit([](const auto & id) { return id.id; }, id));
+    }
+};
