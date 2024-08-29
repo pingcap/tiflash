@@ -36,6 +36,8 @@
 #include <ext/range.h>
 #include <magic_enum.hpp>
 
+#include "Columns/ColumnsNumber.h"
+
 
 namespace DB
 {
@@ -4558,22 +4560,17 @@ public:
 
         size_t val_num = c0_col->size();
         auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
+        ColumnInt64::Container & data = col_res->getData();
+        data.resize(val_num);
 
         const auto & chars = c0_string->getChars();
         const auto & offsets = c0_string->getOffsets();
 
-        if (val_num > 0)
-            col_res->insert(getResult(chars, 0));
-
-        for (size_t i = 1; i < val_num; i++)
-            col_res->insert(getResult(chars, offsets[i - 1]));
+        for (size_t i = 0; i < val_num; i++)
+            data[i] = chars[offsets[i - 1]];
 
         block.getByPosition(result).column = std::move(col_res);
     }
-
-private:
-    static Int64 getResult(const ColumnString::Chars_t & chars, size_t offset) { return chars[offset]; }
 };
 
 class FunctionLength : public IFunction
@@ -4613,15 +4610,16 @@ public:
 
         size_t val_num = c0_col->size();
         auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
+        ColumnInt64::Container & data = col_res->getData();
+        data.resize(val_num);
 
         const auto & offsets = c0_string->getOffsets();
 
         if (val_num > 0)
-            col_res->insert(offsets[0] - 1);
+            data[0] = offsets[0] - 1;
 
         for (size_t i = 1; i < val_num; i++)
-            col_res->insert(offsets[i] - offsets[i - 1] - 1);
+            data[i] = offsets[i] - offsets[i - 1] - 1;
 
         block.getByPosition(result).column = std::move(col_res);
     }
