@@ -4502,7 +4502,7 @@ public:
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        auto val_num = static_cast<Int64>(c0_col->size());
+        auto val_num = static_cast<ssize_t>(c0_col->size());
         auto col_res = ColumnInt64::create();
         ColumnInt64::Container & data = col_res->getData();
         data.resize(val_num);
@@ -4510,7 +4510,7 @@ public:
         const auto & chars = c0_string->getChars();
         const auto & offsets = c0_string->getOffsets();
 
-        for (Int64 i = 0; i < val_num; i++)
+        for (ssize_t i = 0; i < val_num; i++)
             data[i] = chars[offsets[i - 1]];
 
         block.getByPosition(result).column = std::move(col_res);
@@ -4552,17 +4552,14 @@ public:
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        auto val_num = static_cast<Int64>(c0_col->size());
+        auto val_num = static_cast<ssize_t>(c0_col->size());
         auto col_res = ColumnInt64::create();
         ColumnInt64::Container & data = col_res->getData();
         data.resize(val_num);
 
         const auto & offsets = c0_string->getOffsets();
 
-        if (val_num > 0)
-            data[0] = offsets[0] - 1;
-
-        for (Int64 i = 1; i < val_num; i++)
+        for (ssize_t i = 0; i < val_num; i++)
             data[i] = offsets[i] - offsets[i - 1] - 1;
 
         block.getByPosition(result).column = std::move(col_res);
