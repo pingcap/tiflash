@@ -110,9 +110,8 @@ private:
     TMTContext & tmt;
     std::shared_ptr<PreHandlingTrace::Item> prehandle_task;
     const SSTFilesToBlockInputStreamOpts opts;
-    LoggerPtr log;
-
     SnapshotSSTReader snap_reader;
+    const LoggerPtr log;
 
     DecodedTiKVKey default_last_loaded_rowkey;
     DecodedTiKVKey lock_last_loaded_rowkey;
