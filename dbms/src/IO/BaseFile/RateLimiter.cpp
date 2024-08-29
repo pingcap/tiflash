@@ -221,7 +221,7 @@ void WriteLimiter::request(Int64 bytes)
         }
 
         // time to do refill
-        if (req_queue.front() == &r && timed_out)
+        if (!req_queue.empty() && req_queue.front() == &r && timed_out)
         {
             refillAndAlloc();
 
