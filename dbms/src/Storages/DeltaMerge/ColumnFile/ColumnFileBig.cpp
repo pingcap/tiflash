@@ -85,6 +85,7 @@ void ColumnFileBig::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool /*
     big_pb->set_id(file->pageId());
     big_pb->set_valid_rows(valid_rows);
     big_pb->set_valid_bytes(valid_bytes);
+    big_pb->set_meta_version(file->metaVersion());
 }
 
 ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
