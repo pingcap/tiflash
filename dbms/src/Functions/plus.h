@@ -79,8 +79,8 @@ struct PlusImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        // if constexpr ((std::is_same_v<A, Int64> || std::is_same_v<A, UInt64>) && (std::is_same_v<B, Int64> || std::is_same_v<B, UInt64>))
-        //     checkPlusOverflow<A, B, ResultType>(a, b);
+        if constexpr ((std::is_same_v<A, Int64> || std::is_same_v<A, UInt64>) && (std::is_same_v<B, Int64> || std::is_same_v<B, UInt64>))
+            checkPlusOverflow<A, B, ResultType>(a, b);
         
         /// Next everywhere, static_cast - so that there is no wrong result in expressions of the form Int64 c = UInt32(a) * Int32(-1).
         return static_cast<Result>(a) + b;
