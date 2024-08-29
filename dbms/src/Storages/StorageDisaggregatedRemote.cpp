@@ -98,12 +98,6 @@ void initDisaggTaskMeta(
     meta->set_connection_id(sender_target_mpp_task_id.gather_id.query_id.connection_id);
     meta->set_connection_alias(sender_target_mpp_task_id.gather_id.query_id.connection_alias);
 }
-
-void waitForCompletion(std::vector<std::future<void>> & futures)
-{
-    for (auto & f : futures)
-        f.get();
-}
 } // namespace
 
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
@@ -219,15 +213,14 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     DM::SegmentReadTasks output_seg_tasks;
 
     // Then, for each BatchCopTask, let's build read tasks concurrently.
-    std::vector<std::future<void>> futures;
-    futures.reserve(batch_cop_tasks.size());
+    IOPoolHelper::FutureContainer futures(log, batch_cop_tasks.size());
     for (const auto & cop_task : batch_cop_tasks)
     {
         auto f = BuildReadTaskForWNPool::get().scheduleWithFuture(
             [&] { buildReadTaskForWriteNode(db_context, scan_context, cop_task, output_lock, output_seg_tasks); });
-        futures.push_back(std::move(f));
+        futures.add(std::move(f));
     }
-    waitForCompletion(futures);
+    futures.getAllResults();
 
     // Do some integrity checks for the build seg tasks. For example, we should not
     // ever read from the same store+table+segment multiple times.
@@ -368,8 +361,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     // Now we have successfully established disaggregated read for this write node.
     // Let's parse the result and generate actual segment read tasks.
     // There may be multiple tables, so we concurrently build tasks for these tables.
-    std::vector<std::future<void>> futures;
-    futures.reserve(resp.tables().size());
+    IOPoolHelper::FutureContainer futures(log, resp.tables().size());
     for (const auto & serialized_physical_table : resp.tables())
     {
         auto f = BuildReadTaskForWNTablePool::get().scheduleWithFuture([&] {
@@ -383,9 +375,9 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
                 output_lock,
                 output_seg_tasks);
         });
-        futures.push_back(std::move(f));
+        futures.add(std::move(f));
     }
-    waitForCompletion(futures);
+    futures.getAllResults();
 }
 
 void StorageDisaggregated::buildReadTaskForWriteNodeTable(
@@ -404,8 +396,8 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     auto table_tracing_logger = log->getChild(
         fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
     auto disagg_build_task_timeout_us = db_context.getSettingsRef().disagg_build_task_timeout * 1000000;
-    std::vector<std::future<void>> futures;
-    futures.reserve(table.segments().size());
+
+    IOPoolHelper::FutureContainer futures(log, table.segments().size());
     for (const auto & remote_seg : table.segments())
     {
         auto f = BuildReadTaskPool::get().scheduleWithFuture(
@@ -424,9 +416,9 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
                 output_seg_tasks.push_back(seg_read_task);
             },
             disagg_build_task_timeout_us);
-        futures.push_back(std::move(f));
+        futures.add(std::move(f));
     }
-    waitForCompletion(futures);
+    futures.getAllResults();
 }
 
 /**
