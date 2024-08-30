@@ -186,7 +186,7 @@ private:
     size_t pool_current_memory = 0;
 
     size_t all_tasks_count = 0; // ready_tasks + unready_tasks
-    /// Schedule farely according to keyspace_id, and then according to table_id.
+    /// Schedule fairly according to keyspace_id, and then according to table_id.
     std::map<KeyspaceID, std::map<TableID, std::list<InternalTaskPtr>>> ready_tasks{};
     /// When the scheduler will stop waiting and try to schedule again?
     /// 1. When a new task is added (and pool is not full)

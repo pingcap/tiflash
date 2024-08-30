@@ -305,7 +305,8 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
     if (last_schedule_table_id_by_ks.find(keyspace_id) != last_schedule_table_id_by_ks.end())
         last_schedule_table_id = last_schedule_table_id_by_ks[keyspace_id];
 
-    auto table_it = tasks_by_table.upper_bound(last_schedule_table_id);
+    // Try to finish all tasks in the last table before moving to the next table.
+    auto table_it = tasks_by_table.find(last_schedule_table_id);
     if (table_it == tasks_by_table.end())
         table_it = tasks_by_table.begin();
     const TableID table_id = table_it->first;
