@@ -110,7 +110,7 @@ void LocalIndexerScheduler::pushTask(const Task & task)
     const auto internal_task = std::make_shared<InternalTask>(InternalTask{
         .user_task = task,
         .created_at = Stopwatch(),
-        .scheduled_at = Stopwatch{}, // Not scheduled
+        .scheduled_at = Stopwatch(), // Not scheduled
     });
 
     // Whether task is ready is undertermined. It can be changed any time
@@ -128,12 +128,10 @@ size_t LocalIndexerScheduler::dropTasks(KeyspaceID keyspace_id, TableID table_id
     size_t dropped_tasks = 0;
 
     std::unique_lock lock(mutex);
-    auto it = ready_tasks.find(keyspace_id);
-    if (it != ready_tasks.end())
+    if (auto it = ready_tasks.find(keyspace_id); it != ready_tasks.end())
     {
         auto & tasks_by_table = it->second;
-        auto table_it = tasks_by_table.find(table_id);
-        if (table_it != tasks_by_table.end())
+        if (auto table_it = tasks_by_table.find(table_id); table_it != tasks_by_table.end())
         {
             dropped_tasks += table_it->second.size();
             tasks_by_table.erase(table_it);
@@ -267,7 +265,6 @@ bool LocalIndexerScheduler::tryAddTaskToPool(std::unique_lock<std::mutex> & lock
         }
         catch (...)
         {
-            // TODO: We should ensure ADD INDEX task is retried somewhere else?
             tryLogCurrentException(
                 logger,
                 fmt::format(
@@ -294,7 +291,8 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
     if (ready_tasks.empty())
         return ScheduleResult::FAIL_NO_TASK;
 
-    // Find the keyspace ID which is just > last_schedule_keyspace_id.
+    // To be fairly between different keyspaces,
+    // find the keyspace ID which is just > last_schedule_keyspace_id.
     auto keyspace_it = ready_tasks.upper_bound(last_schedule_keyspace_id);
     if (keyspace_it == ready_tasks.end())
         keyspace_it = ready_tasks.begin();
@@ -303,7 +301,7 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
     auto & tasks_by_table = keyspace_it->second;
     RUNTIME_CHECK(!tasks_by_table.empty());
 
-    TableID last_schedule_table_id = -1;
+    TableID last_schedule_table_id = InvalidTableID;
     if (last_schedule_table_id_by_ks.find(keyspace_id) != last_schedule_table_id_by_ks.end())
         last_schedule_table_id = last_schedule_table_id_by_ks[keyspace_id];
 

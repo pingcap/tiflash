@@ -50,16 +50,16 @@ public:
 
     struct Task
     {
-        // Note: The scheduler will try to schedule farely according to keyspace_id and table_id.
-        KeyspaceID keyspace_id;
-        TableID table_id;
+        // Note: The scheduler will try to schedule fairly according to keyspace_id and table_id.
+        const KeyspaceID keyspace_id;
+        const TableID table_id;
 
         // The file id of the ColumnFileTiny or DMFile.
         // Used for the scheduler to avoid concurrently adding index for the same file.
-        std::vector<FileID> file_ids;
+        const std::vector<FileID> file_ids;
 
         // Used for the scheduler to control the maximum requested memory usage.
-        size_t request_memory;
+        const size_t request_memory;
 
         // The actual index setup workload.
         // The scheduler does not care about the workload.
