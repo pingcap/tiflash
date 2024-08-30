@@ -97,7 +97,7 @@ void DMFileV3IncrementWriter::finalize()
 
     writeAndIncludeMetaFile();
 
-    LOG_DEBUG(
+    LOG_INFO(
         logger,
         "Write incremental update for DMFile, local_path={} dmfile_path={} old_meta_version={} new_meta_version={}",
         local_path,
