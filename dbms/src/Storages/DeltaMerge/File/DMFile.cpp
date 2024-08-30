@@ -158,7 +158,7 @@ DMFilePtr DMFile::restore(
     }
     else if (!read_meta_mode.isNone())
     {
-        RUNTIME_CHECK_MSG(meta_version == 0, "Only support meta_version=0 for MetaV2, meta_version={}", meta_version);
+        RUNTIME_CHECK_MSG(meta_version == 0, "Only support meta_version=0 for MetaV1, meta_version={}", meta_version);
 
         dmfile->meta = std::make_unique<DMFileMeta>(
             file_id,
