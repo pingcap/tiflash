@@ -374,7 +374,7 @@ bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode ev
     if (evict == EvictMode::TryEvict || evict == EvictMode::ForceEvict)
     {
         UInt64 min_evict_size = size - (cache_capacity - cache_used);
-        LOG_DEBUG( //
+        LOG_DEBUG(
             log,
             "tryEvictFile for {} min_evict_size={} evict_mode={}",
             magic_enum::enum_name(reserve_for),
@@ -656,7 +656,7 @@ bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size,
     if (content_length > reserved_size)
     {
         // Need more space.
-        return reserveSpace(reserve_for, content_length - reserved_size, /*try_evict*/ EvictMode::TryEvict);
+        return reserveSpace(reserve_for, content_length - reserved_size, EvictMode::TryEvict);
     }
     else if (content_length < reserved_size)
     {
