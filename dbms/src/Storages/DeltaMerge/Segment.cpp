@@ -1388,6 +1388,93 @@ SegmentPtr Segment::replaceData(
     return new_me;
 }
 
+SegmentPtr Segment::replaceStableMetaVersion(
+    const Segment::Lock &,
+    DMContext & dm_context,
+    const DMFiles & new_stable_files)
+{
+    auto current_stable_files_str = [&] {
+        FmtBuffer fmt_buf;
+        fmt_buf.append('[');
+        fmt_buf.joinStr(
+            stable->getDMFiles().begin(),
+            stable->getDMFiles().end(),
+            [](const DMFilePtr & file, FmtBuffer & fb) {
+                fb.fmtAppend("dmf_{}(v{})", file->fileId(), file->metaVersion());
+            },
+            ",");
+        fmt_buf.append(']');
+        return fmt_buf.toString();
+    };
+
+    auto new_stable_files_str = [&] {
+        FmtBuffer fmt_buf;
+        fmt_buf.append('[');
+        fmt_buf.joinStr(
+            new_stable_files.begin(),
+            new_stable_files.end(),
+            [](const DMFilePtr & file, FmtBuffer & fb) {
+                fb.fmtAppend("dmf_{}(v{})", file->fileId(), file->metaVersion());
+            },
+            ",");
+        fmt_buf.append(']');
+        return fmt_buf.toString();
+    };
+
+    LOG_DEBUG(
+        log,
+        "ReplaceStableMetaVersion - Begin, current_stable={} new_stable={}",
+        current_stable_files_str(),
+        new_stable_files_str());
+
+    // Ensure new stable files have the same DMFile ID as the old stable files.
+    // We only allow changing meta version when calling this function.
+
+    if (new_stable_files.size() != stable->getDMFiles().size())
+    {
+        LOG_WARNING(
+            log,
+            "ReplaceStableMetaVersion - Fail, stable files count mismatch, current_stable={} new_stable={}",
+            current_stable_files_str(),
+            new_stable_files_str());
+        return {};
+    }
+    for (size_t i = 0; i < new_stable_files.size(); i++)
+    {
+        if (new_stable_files[i]->fileId() != stable->getDMFiles()[i]->fileId())
+        {
+            LOG_WARNING(
+                log,
+                "ReplaceStableMetaVersion - Fail, stable files mismatch, current_stable={} new_stable={}",
+                current_stable_files_str(),
+                new_stable_files_str());
+            return {};
+        }
+    }
+
+    WriteBatches wbs(*dm_context.storage_pool, dm_context.getWriteLimiter());
+
+    auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
+    new_stable->setFiles(new_stable_files, rowkey_range, &dm_context);
+    new_stable->saveMeta(wbs.meta);
+
+    auto new_me = std::make_shared<Segment>( //
+        parent_log,
+        epoch + 1,
+        rowkey_range,
+        segment_id,
+        next_segment_id,
+        delta, // Delta is untouched. Shares the same delta instance.
+        new_stable);
+    new_me->serialize(wbs.meta);
+
+    wbs.writeAll();
+
+    LOG_DEBUG(log, "ReplaceStableMetaVersion - Finish, new_stable_files={}", new_stable_files_str());
+
+    return new_me;
+}
+
 SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
     const Segment::Lock &, //
     DMContext & dm_context,
@@ -1412,6 +1499,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
         new_page_id,
         data_file->parentPath(),
         DMFileMeta::ReadMode::all(),
+        data_file->metaVersion(),
         dm_context.keyspace_id);
     wbs.data.putRefPage(new_page_id, data_file->pageId());
 
@@ -1452,7 +1540,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
             auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
             RUNTIME_CHECK(remote_data_store != nullptr);
             auto prepared = remote_data_store->prepareDMFile(file_oid, new_data_page_id);
-            auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+            auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), b->getFile()->metaVersion());
             auto new_column_file = b->cloneWith(dm_context, dmfile, rowkey_range);
             new_column_file_persisteds.push_back(new_column_file);
         }
@@ -1851,6 +1939,7 @@ Segment::prepareSplitLogical( //
             /* page_id= */ my_dmfile_page_id,
             file_parent_path,
             DMFileMeta::ReadMode::all(),
+            dmfile->metaVersion(),
             dm_context.keyspace_id);
         auto other_dmfile = DMFile::restore(
             dm_context.global_context.getFileProvider(),
@@ -1858,6 +1947,7 @@ Segment::prepareSplitLogical( //
             /* page_id= */ other_dmfile_page_id,
             file_parent_path,
             DMFileMeta::ReadMode::all(),
+            dmfile->metaVersion(),
             dm_context.keyspace_id);
         my_stable_files.push_back(my_dmfile);
         other_stable_files.push_back(other_dmfile);

@@ -162,7 +162,7 @@ public:
 
     static void breakFileMetaV2File(const DMFilePtr & dmfile)
     {
-        PosixWritableFile file(dmfile->metav2Path(), false, -1, 0666);
+        PosixWritableFile file(dmfile->metav2Path(/* meta_version= */ 0), false, -1, 0666);
         String s = "hello";
         auto n = file.pwrite(s.data(), s.size(), 0);
         ASSERT_EQ(n, s.size());

@@ -708,6 +708,33 @@ void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const DMFilePtr 
         operation_statistics["replaceData"]++;
 }
 
+bool SegmentTestBasic::replaceSegmentStableData(PageIdU64 segment_id, const DMFilePtr & file)
+{
+    LOG_INFO(
+        logger_op,
+        "replaceSegmentStableData, segment_id={} file=dmf_{}(v={})",
+        segment_id,
+        file->fileId(),
+        file->metaVersion());
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    bool success = false;
+    auto segment = segments[segment_id];
+    {
+        auto lock = segment->mustGetUpdateLock();
+        auto new_segment = segment->replaceStableMetaVersion(lock, *dm_context, {file});
+        if (new_segment != nullptr)
+        {
+            segments[new_segment->segmentId()] = new_segment;
+            success = true;
+        }
+    }
+
+    operation_statistics["replaceStableData"]++;
+    return success;
+}
+
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageIdU64> & segments_id) const
 {
     RUNTIME_CHECK(segments_id.size() >= 2);

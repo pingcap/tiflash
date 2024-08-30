@@ -136,6 +136,7 @@ public:
                     /* page_id= */ 0,
                     path,
                     DMFileMeta::ReadMode::none(),
+                    0 /* a meta version that must exist */,
                     path_pool->getKeyspaceID());
                 if (unlikely(!dmfile))
                 {

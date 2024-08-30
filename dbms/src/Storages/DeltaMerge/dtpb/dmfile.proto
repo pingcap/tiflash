@@ -62,7 +62,8 @@ message ColumnStat {
     optional uint64 array_sizes_bytes = 10;
     optional uint64 array_sizes_mark_bytes = 11;
 
-    reserved 101; // used before
+    // Only used in tests. Modifying other fields of ColumnStat is hard.
+    optional string additional_data_for_test = 101;
     // TODO(vector-index) Support multiple vector index on the same column
     optional VectorIndexFileProps vector_index = 102;
 }
@@ -73,6 +74,7 @@ message ColumnStats {
 
 message StableFile {
     optional uint64 page_id = 1;
+    optional uint64 meta_version = 2;
 }
 
 message StableLayerMeta {

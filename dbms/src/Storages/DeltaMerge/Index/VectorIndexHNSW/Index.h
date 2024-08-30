@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <VectorSearch/USearch.h>
 
 namespace DB::DM

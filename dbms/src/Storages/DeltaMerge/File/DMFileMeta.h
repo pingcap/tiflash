@@ -38,6 +38,7 @@ class DMFileMetaV2Test;
 
 class DMFile;
 class DMFileWriter;
+class DMFileV3IncrementWriter;
 
 class DMFileMeta
 {
@@ -48,14 +49,14 @@ public:
         DMFileStatus status_,
         KeyspaceID keyspace_id_,
         DMConfigurationOpt configuration_,
-        DMFileFormat::Version version_)
+        DMFileFormat::Version format_version_)
         : file_id(file_id_)
         , parent_path(parent_path_)
         , status(status_)
         , keyspace_id(keyspace_id_)
         , configuration(configuration_)
         , log(Logger::get())
-        , version(version_)
+        , format_version(format_version_)
     {}
 
     virtual ~DMFileMeta() = default;
@@ -181,6 +182,12 @@ public:
         const FileProviderPtr & file_provider,
         const WriteLimiterPtr & write_limiter);
     virtual String metaPath() const { return subFilePath(metaFileName()); }
+    virtual UInt32 metaVersion() const { return 0; }
+    /**
+     * @brief metaVersion += 1. Returns the new meta version.
+     * This is only supported in MetaV2.
+     */
+    virtual UInt32 bumpMetaVersion() { RUNTIME_CHECK_MSG(false, "MetaV1 cannot bump meta version"); }
     virtual EncryptionPath encryptionMetaPath() const;
     virtual UInt64 getReadFileSize(ColId col_id, const String & filename) const;
 
@@ -196,8 +203,8 @@ protected:
     const KeyspaceID keyspace_id;
     DMConfigurationOpt configuration; // configuration
 
-    LoggerPtr log;
-    DMFileFormat::Version version;
+    const LoggerPtr log;
+    DMFileFormat::Version format_version;
 
 protected:
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
@@ -244,6 +251,7 @@ private:
 
     friend class DMFile;
     friend class DMFileWriter;
+    friend class DMFileV3IncrementWriter;
 };
 
 using DMFileMetaPtr = std::unique_ptr<DMFileMeta>;

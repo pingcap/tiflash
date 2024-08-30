@@ -15,9 +15,9 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <TiDB/Schema/VectorIndex.h>
 #include <tipb/executor.pb.h>
 

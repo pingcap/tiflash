@@ -18,9 +18,9 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
 #include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <tipb/executor.pb.h>
 
 #include <algorithm>

@@ -84,6 +84,7 @@ message ColumnFileTiny {
 message ColumnFileBig {
     uint64 page_id = 1;
     CheckpointInfo checkpoint_info = 2;
+    uint64 meta_version = 3; // Note: Only Stable cares about meta_version. ColumnFileBig does not care.
 
     // TODO: We should better recalculate these fields from local DTFile.
     uint64 valid_rows = 10;

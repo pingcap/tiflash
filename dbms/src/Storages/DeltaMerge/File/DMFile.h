@@ -17,6 +17,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFileV3IncrementWriter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
@@ -61,6 +62,7 @@ public:
         UInt64 page_id,
         const String & parent_path,
         const DMFileMeta::ReadMode & read_meta_mode,
+        UInt64 meta_version = 0,
         KeyspaceID keyspace_id = NullspaceID);
 
     struct ListOptions
@@ -89,7 +91,7 @@ public:
     // keyspaceID
     KeyspaceID keyspaceId() const { return meta->keyspace_id; }
 
-    DMFileFormat::Version version() const { return meta->version; }
+    DMFileFormat::Version version() const { return meta->format_version; }
 
     String path() const;
 
@@ -128,7 +130,7 @@ public:
     const std::unordered_set<ColId> & getColumnIndices() const { return meta->column_indices; }
 
     // only used in gtest
-    void clearPackProperties() { meta->pack_properties.clear_property(); }
+    void clearPackProperties() const { meta->pack_properties.clear_property(); }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
@@ -158,7 +160,7 @@ public:
      * Note that only the column id and type is valid.
      * @return All columns
      */
-    ColumnDefines getColumnDefines(bool sort_by_id = true)
+    ColumnDefines getColumnDefines(bool sort_by_id = true) const
     {
         ColumnDefines results{};
         results.reserve(this->meta->column_stats.size());
@@ -173,9 +175,11 @@ public:
         return results;
     }
 
-    bool useMetaV2() const { return meta->version == DMFileFormat::V3; }
+    bool useMetaV2() const { return meta->format_version == DMFileFormat::V3; }
     std::vector<String> listFilesForUpload() const;
     void switchToRemote(const S3::DMFileOID & oid);
+
+    UInt32 metaVersion() const { return meta->metaVersion(); }
 
 private:
     DMFile(
@@ -201,7 +205,8 @@ private:
                 merged_file_max_size_,
                 keyspace_id_,
                 configuration_,
-                version_);
+                version_,
+                /* meta_version= */ 0);
         }
         else
         {
@@ -218,7 +223,7 @@ private:
     // Do not gc me.
     String ngcPath() const;
 
-    String metav2Path() const { return subFilePath(DMFileMetaV2::metaFileName()); }
+    String metav2Path(UInt64 meta_version) const { return subFilePath(DMFileMetaV2::metaFileName(meta_version)); }
     UInt64 getReadFileSize(ColId col_id, const String & filename) const
     {
         return meta->getReadFileSize(col_id, filename);
@@ -270,10 +275,10 @@ private:
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
 
-    void addPack(const DMFileMeta::PackStat & pack_stat) { meta->pack_stats.push_back(pack_stat); }
+    void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
     DMFileStatus getStatus() const { return meta->status; }
-    void setStatus(DMFileStatus status_) { meta->status = status_; }
+    void setStatus(DMFileStatus status_) const { meta->status = status_; }
 
     void finalize();
 
@@ -283,8 +288,15 @@ private:
     const UInt64 page_id;
 
     LoggerPtr log;
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#else
+public:
+#endif
     DMFileMetaPtr meta;
 
+    friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
     friend class DMFileWriterRemote;
     friend class DMFileReader;

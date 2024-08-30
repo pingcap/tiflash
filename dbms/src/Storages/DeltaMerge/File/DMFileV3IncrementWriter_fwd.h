@@ -19,7 +19,8 @@
 namespace DB::DM
 {
 
-struct DMContext;
-using DMContextPtr = std::shared_ptr<DMContext>;
+class DMFileV3IncrementWriter;
+
+using DMFileV3IncrementWriterPtr = std::unique_ptr<DMFileV3IncrementWriter>;
 
 } // namespace DB::DM

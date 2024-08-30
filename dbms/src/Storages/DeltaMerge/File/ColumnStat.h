@@ -43,6 +43,11 @@ struct ColumnStat
 
     std::optional<dtpb::VectorIndexFileProps> vector_index = std::nullopt;
 
+#ifndef NDEBUG
+    // This field is only used for testing
+    String additional_data_for_test{};
+#endif
+
     dtpb::ColumnStat toProto() const
     {
         dtpb::ColumnStat stat;
@@ -60,6 +65,10 @@ struct ColumnStat
 
         if (vector_index.has_value())
             stat.mutable_vector_index()->CopyFrom(vector_index.value());
+
+#ifndef NDEBUG
+        stat.set_additional_data_for_test(additional_data_for_test);
+#endif
 
         return stat;
     }
@@ -80,6 +89,9 @@ struct ColumnStat
 
         if (proto.has_vector_index())
             vector_index = proto.vector_index();
+#ifndef NDEBUG
+        additional_data_for_test = proto.additional_data_for_test();
+#endif
     }
 
     // @deprecated. New fields should be added via protobuf. Use `toProto` instead
