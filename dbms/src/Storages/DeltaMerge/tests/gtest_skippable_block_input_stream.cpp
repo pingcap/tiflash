@@ -91,6 +91,7 @@ protected:
     static constexpr auto SEG_ID = DELTA_MERGE_FIRST_SEGMENT_ID;
     RowKeyRanges read_ranges;
 
+    String default_filter_column_name;
 
     SkippableBlockInputStreamPtr getInputStream(
         const SegmentPtr & segment,
@@ -247,7 +248,7 @@ protected:
         }
         auto late_materialization_stream = std::make_shared<LateMaterializationBlockInputStream>(
             columns_to_read,
-            "",
+            default_filter_column_name,
             filter_cloumn_stream,
             rest_column_stream,
             bitmap_filter,
