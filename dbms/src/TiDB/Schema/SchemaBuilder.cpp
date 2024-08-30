@@ -785,7 +785,6 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     // There could be a chance that the target database has been dropped in TiKV before
     // TiFlash accepts the "create database" schema diff. We need to ensure the local
     // database exist before executing renaming.
-    const auto action = fmt::format("applyRenamePhysicalTable-table_id={}", new_table_info.id);
     ensureLocalDatabaseExist(new_db_info->id, new_mapped_db_name, action);
     const auto old_mapped_tbl_name = storage->getTableName();
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_column).Increment();
