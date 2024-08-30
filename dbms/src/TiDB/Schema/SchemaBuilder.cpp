@@ -697,7 +697,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(const T
                 // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchema` -> `applyPartitionDiffOnLogicalTable` without `applyExchangeTablePartition`
                 // The physical table maybe `EXCHANGE` to another database, try to find the partition from all database
                 auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
-                applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id, /*must_must_must_update_tombstone*/ false, "exchange partition");
+                applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id, /*must_update_tombstone*/ false, "exchange partition");
             }
         }
     }
@@ -1338,18 +1338,23 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DBInfoPtr & db_info
         LOG_DEBUG(log, "table {} does not exist.", table_id);
         return;
     }
+
+    // `applyDropTable` is only called by applying schema diff. So we should update tombstone_ts.
+    // If a table is dropped at tso_1. Then the table is recorvered, then droppped again at tso_2.
+    // When tiflash meet the SchemaDiff of "drop table" at tso_2, it should update the tombstone_ts.
+    const bool update_tombstone_ts = true;
     const auto & table_info = storage->getTableInfo();
     if (table_info.isLogicalPartitionTable())
     {
         for (const auto & part_def : table_info.partition.definitions)
         {
-            applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), part_def.id, /*must_update_tombstone*/ true, action);
+            applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), part_def.id, update_tombstone_ts, action);
         }
     }
 
     // Drop logical table at last, only logical table drop will be treated as "complete".
     // Intermediate failure will hide the logical table drop so that schema syncing when restart will re-drop all (despite some physical tables may have dropped).
-    applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), table_info.id, /*must_update_tombstone*/ true, action);
+    applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), table_info.id, update_tombstone_ts, action);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1506,6 +1511,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         }
         if (table_set.count(table_info.id) == 0)
         {
+            // If the table is already tombstone, don't need to update its tombstone_ts.
             applyDropPhysicalTable(it->second->getDatabaseName(), table_info.id, /*must_update_tombstone*/ false, "SyncAllSchema");
             LOG_INFO(log, "Table {}.{} dropped during sync all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(table_info));
         }
