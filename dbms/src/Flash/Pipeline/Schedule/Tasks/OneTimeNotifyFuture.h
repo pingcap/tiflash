@@ -21,6 +21,7 @@
 
 namespace DB
 {
+/// `Finish` will notify all tasks registered in the `one-time-future` and tasks registered after "finish" are notified immediately.
 class OneTimeNotifyFuture : public NotifyFuture
 {
 public:
