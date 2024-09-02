@@ -74,16 +74,19 @@ public:
     void scheduleOrThrowOnError(Job job, ssize_t priority = 0);
 
     /// Similar to scheduleOrThrowOnError(...). Wait for specified amount of time and schedule a job or return false.
+    /// If wait_microseconds is zero, it means never wait.
     bool trySchedule(Job job, ssize_t priority = 0, uint64_t wait_microseconds = 0) noexcept;
 
     /// Similar to scheduleOrThrowOnError(...). Wait for specified amount of time and schedule a job or throw an exception.
+    /// If wait_microseconds is zero, it means never wait.
     void scheduleOrThrow(
         Job job,
         ssize_t priority = 0,
         uint64_t wait_microseconds = 0,
         bool propagate_opentelemetry_tracing_context = true);
 
-    /// Wrap job with std::packaged_task<void> and returns a std::future<void> object to check result of the job.
+    /// Wrap job with std::packaged_task<void> and returns a std::future<void> object to check if the task has finished or thrown an exception.
+    /// If wait_microseconds is zero, it means never wait.
     std::future<void> scheduleWithFuture(Job job, uint64_t wait_timeout_us = 0);
 
     /// Wait for all currently active jobs to be done.
@@ -107,6 +110,7 @@ public:
     void setMaxFreeThreads(size_t value);
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
+    size_t getQueueSize() const;
 
     std::unique_ptr<ThreadPoolWaitGroup<Thread>> waitGroup()
     {
