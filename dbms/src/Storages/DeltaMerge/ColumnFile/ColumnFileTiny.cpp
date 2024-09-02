@@ -227,25 +227,16 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
     return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context);
 }
 
-std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
+ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
     const LoggerPtr & parent_log,
     const DMContext & context,
-    ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
-    const BlockPtr & last_schema,
-    WriteBatches & wbs)
+    WriteBatches & wbs,
+    BlockPtr schema,
+    PageIdU64 data_page_id,
+    size_t rows,
+    size_t bytes)
 {
-    auto schema = deserializeSchema(buf);
-    if (!schema)
-        schema = last_schema;
-    RUNTIME_CHECK(schema != nullptr);
-
-    PageIdU64 data_page_id;
-    size_t rows, bytes;
-
-    readIntBinary(data_page_id, buf);
-    readIntBinary(rows, buf);
-    readIntBinary(bytes, buf);
     auto new_cf_id = context.storage_pool->newLogPageId();
     /// Generate a new RemotePage with an entry with data location on S3
     auto remote_page_id = UniversalPageIdFormat::toFullPageId(
@@ -273,9 +264,55 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
 
     auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);
+    return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context);
+}
+
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
+    const LoggerPtr & parent_log,
+    const DMContext & context,
+    ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    const BlockPtr & last_schema,
+    WriteBatches & wbs)
+{
+    auto schema = deserializeSchema(buf);
+    if (!schema)
+        schema = last_schema;
+    RUNTIME_CHECK(schema != nullptr);
+
+    PageIdU64 data_page_id;
+    size_t rows, bytes;
+
+    readIntBinary(data_page_id, buf);
+    readIntBinary(rows, buf);
+    readIntBinary(bytes, buf);
+
     return {
-        std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context),
-        std::move(schema),
+        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes),
+        schema,
+    };
+}
+
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
+    const LoggerPtr & parent_log,
+    const DMContext & context,
+    const dtpb::ColumnFileTiny & cf_pb,
+    UniversalPageStoragePtr temp_ps,
+    const BlockPtr & last_schema,
+    WriteBatches & wbs)
+{
+    auto schema = deserializeSchema(cf_pb.columns());
+    if (!schema)
+        schema = last_schema;
+    RUNTIME_CHECK(schema != nullptr);
+
+    PageIdU64 data_page_id = cf_pb.id();
+    size_t rows = cf_pb.rows();
+    size_t bytes = cf_pb.bytes();
+
+    return {
+        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes),
+        schema,
     };
 }
 
