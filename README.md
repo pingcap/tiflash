@@ -304,44 +304,7 @@ TSAN_OPTIONS="suppressions=tests/sanitize/tsan.suppression" ./dbms/gtests_dbms .
 
 ## Run Integration Tests
 
-1. Build your own TiFlash binary using debug profile:
-
-   ```shell
-   cd cmake-build-debug
-   cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-   ninja tiflash
-   ```
-
-2. Start a local TiDB cluster with your own TiFlash binary using TiUP:
-
-   ```shell
-   cd cmake-build-debug
-   tiup playground nightly --tiflash.binpath ./dbms/src/Server/tiflash
-
-   # Or using a more stable cluster version:
-   # tiup playground v6.1.0 --tiflash.binpath ./dbms/src/Server/tiflash
-   ```
-
-   [TiUP](https://tiup.io) is the TiDB component manager. If you don't have one, you can install it via:
-
-   ```shell
-   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-   ```
-
-   If you are not running the cluster using the default port (for example, you run multiple clusters), make sure that the port and build directory in `tests/_env.sh` are correct.
-
-3. Run integration tests:
-
-   ```shell
-   # In the TiFlash repository root:
-   cd tests
-   ./run-test.sh
-
-   # Or run specific integration test:
-   # ./run-test.sh fullstack-test2/ddl
-   ```
-
-Note: some integration tests (namely, tests under `delta-merge-test`) requires a standalone TiFlash service without a TiDB cluster, otherwise they will fail. To run these integration tests: TBD
+Check out the [Integration Test Guide](/tests/README.md) for more details.
 
 ## Run MicroBenchmark Tests
 
@@ -386,7 +349,7 @@ See [TiFlash Development Guide](/docs/DEVELOPMENT.md) and [TiFlash Design docume
 
 Before submitting a pull request, please resolve clang-tidy errors and use [format-diff.py](format-diff.py) to format source code, otherwise CI build may raise error.
 
-> **NOTE**: It is required to use clang-format 12.0.0+.
+> **NOTE**: It is required to use clang-format 17.0.0+.
 
 ```shell
 # In the TiFlash repository root:
