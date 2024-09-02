@@ -96,7 +96,10 @@ std::optional<CheckpointProto::ManifestFilePrefix> S3LockLocalManager::initStore
         }
 
         s3lock_client = std::move(s3lock_client_);
-        RUNTIME_CHECK(s3lock_client != nullptr);
+        if unlikely (s3lock_client == nullptr)
+        {
+            LOG_INFO(log, "S3 lock manager has null s3lock client");
+        }
 
         store_id = actual_store_id;
 
