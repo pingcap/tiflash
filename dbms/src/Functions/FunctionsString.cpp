@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
@@ -35,9 +36,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <magic_enum.hpp>
-
-#include "Columns/ColumnsNumber.h"
-
 
 namespace DB
 {
