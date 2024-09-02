@@ -28,7 +28,7 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     size_t concurrency)
 {
     // Currently join probe does not support fine grained shuffle.
-    RUNTIME_CHECK(!fine_grained_shuffle.enable());
+    RUNTIME_CHECK(!fine_grained_shuffle.enabled());
     if (join_ptr->isSpilled() && group_builder.concurrency() == 1)
     {
         // When the join build operator spilled, the probe operator requires at least two or more threads to restore spilled hash partitions.

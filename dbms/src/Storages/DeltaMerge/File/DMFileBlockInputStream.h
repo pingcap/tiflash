@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>

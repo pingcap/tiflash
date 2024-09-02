@@ -20,6 +20,7 @@
 #include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 
 #include <functional>

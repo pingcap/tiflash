@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Parsers/IAST_fwd.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/KVStore/Types.h>
 
@@ -33,9 +34,6 @@ class SchemaSyncTest;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-using ASTs = std::vector<ASTPtr>;
 using DBGInvokerPrinter = std::function<void(const std::string &)>;
 extern void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
 

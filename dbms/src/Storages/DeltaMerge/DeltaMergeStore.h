@@ -37,7 +37,8 @@
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
-#include <TiDB/Schema/TiDB.h>
+#include <Storages/TableNameMeta.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 
 #include <queue>
 
@@ -172,6 +173,9 @@ struct StoreStats
     UInt64 background_tasks_length = 0;
 };
 
+class DeltaMergeStore;
+using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+
 class DeltaMergeStore : private boost::noncopyable
 {
 public:
@@ -179,7 +183,7 @@ public:
     friend struct DB::CheckpointIngestInfo;
     struct Settings
     {
-        NotCompress not_compress_columns{};
+        NotCompress not_compress_columns;
     };
     static Settings EMPTY_SETTINGS;
 
@@ -259,8 +263,11 @@ public:
         BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
+private:
+    // Let the constructor be private, so that we can control the creation of DeltaMergeStore.
+    // Please use DeltaMergeStore::create to create a DeltaMergeStore
     DeltaMergeStore(
-        Context & db_context, //
+        Context & db_context,
         bool data_path_contains_database_name,
         const String & db_name,
         const String & table_name_,
@@ -273,12 +280,48 @@ public:
         size_t rowkey_column_size_,
         const Settings & settings_ = EMPTY_SETTINGS,
         ThreadPool * thread_pool = nullptr);
+
+public:
+    static DeltaMergeStorePtr create(
+        Context & db_context,
+        bool data_path_contains_database_name,
+        const String & db_name,
+        const String & table_name_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool has_replica,
+        const ColumnDefines & columns,
+        const ColumnDefine & handle,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const Settings & settings_ = EMPTY_SETTINGS,
+        ThreadPool * thread_pool = nullptr);
+
+    static std::unique_ptr<DeltaMergeStore> createUnique(
+        Context & db_context,
+        bool data_path_contains_database_name,
+        const String & db_name,
+        const String & table_name_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool has_replica,
+        const ColumnDefines & columns,
+        const ColumnDefine & handle,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const Settings & settings_ = EMPTY_SETTINGS,
+        ThreadPool * thread_pool = nullptr);
+
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const { return db_name; }
-    const String & getTableName() const { return table_name; }
+    TableNameMeta getTableMeta() const
+    {
+        auto meta = table_meta.lockShared();
+        return TableNameMeta{meta->db_name, meta->table_name};
+    }
+    String getIdent() const { return fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id); }
 
     void rename(String new_path, String new_database_name, String new_table_name);
 
@@ -500,10 +543,10 @@ public:
      *   It is ensured that there are at least 2 elements in the returned vector.
      * When there is no mergeable segment, the returned vector will be empty.
      */
-    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
+    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & base_segment);
 
     /// Apply schema change on `table_columns`
-    void applySchemaChanges(TableInfo & table_info);
+    void applySchemaChanges(TiDB::TableInfo & table_info);
 
     ColumnDefinesPtr getStoreColumns() const
     {
@@ -761,6 +804,26 @@ private:
 
 private:
     /**
+      * Remove the segment from the store's memory structure.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void removeSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
+    /**
+      * Add the segment to the store's memory structure.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void addSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
+    /**
+      * Replace the old segment with the new segment in the store's memory structure.
+      * New segment should have the same segment id as the old segment.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void replaceSegment(
+        std::unique_lock<std::shared_mutex> &,
+        const SegmentPtr & old_segment,
+        const SegmentPtr & new_segment);
+
+    /**
      * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
      * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
      * See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
@@ -796,8 +859,7 @@ public:
     Settings settings;
     StoragePoolPtr storage_pool;
 
-    String db_name;
-    String table_name;
+    SharedMutexProtected<TableNameMeta> table_meta;
 
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;
@@ -838,7 +900,7 @@ public:
     mutable std::shared_mutex read_write_mutex;
 
     LoggerPtr log;
-}; // namespace DM
+};
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 

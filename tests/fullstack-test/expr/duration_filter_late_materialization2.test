@@ -1,0 +1,190 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table if not exists test.t(a time(4), i int);
+
+# insert more than 8192 rows to make sure filter conditions can be pushed down.
+mysql> insert into test.t values('-000:10:10.123456', 1), ('000:11:11.123500', 2), ('000:12:12.123500', 3), ('000:13:13.123500', 4);
+mysql> insert into test.t values('-001:10:10.123456', 1), ('001:11:11.123500', 2), ('001:12:12.123500', 3), ('001:13:13.123500', 4);
+mysql> insert into test.t values('-002:10:10.123456', 1), ('002:11:11.123500', 2), ('002:12:12.123500', 3), ('002:13:13.123500', 4);
+mysql> insert into test.t values('-003:10:10.123456', 1), ('003:11:11.123500', 2), ('003:12:12.123500', 3), ('003:13:13.123500', 4);
+mysql> insert into test.t values('-004:10:10.123456', 1), ('004:11:11.123500', 2), ('004:12:12.123500', 3), ('004:13:13.123500', 4);
+mysql> insert into test.t values('-005:10:10.123456', 1), ('005:11:11.123500', 2), ('005:12:12.123500', 3), ('005:13:13.123500', 4);
+mysql> insert into test.t values('-006:10:10.123456', 1), ('006:11:11.123500', 2), ('006:12:12.123500', 3), ('006:13:13.123500', 4);
+mysql> insert into test.t values('-007:10:10.123456', 1), ('007:11:11.123500', 2), ('007:12:12.123500', 3), ('007:13:13.123500', 4);
+mysql> insert into test.t values('-008:10:10.123456', 1), ('008:11:11.123500', 2), ('008:12:12.123500', 3), ('008:13:13.123500', 4);
+mysql> insert into test.t values('-009:10:10.123456', 1), ('009:11:11.123500', 2), ('009:12:12.123500', 3), ('009:13:13.123500', 4);
+mysql> insert into test.t values('-010:10:10.123456', 1), ('010:11:11.123500', 2), ('010:12:12.123500', 3), ('010:13:13.123500', 4);
+mysql> insert into test.t values('-011:10:10.123456', 1), ('011:11:11.123500', 2), ('011:12:12.123500', 3), ('011:13:13.123500', 4);
+mysql> insert into test.t values('-012:10:10.123456', 1), ('012:11:11.123500', 2), ('012:12:12.123500', 3), ('012:13:13.123500', 4);
+mysql> insert into test.t values('-013:10:10.123456', 1), ('013:11:11.123500', 2), ('013:12:12.123500', 3), ('013:13:13.123500', 4);
+mysql> insert into test.t values('-014:10:10.123456', 1), ('014:11:11.123500', 2), ('014:12:12.123500', 3), ('014:13:13.123500', 4);
+mysql> insert into test.t values('-015:10:10.123456', 1), ('015:11:11.123500', 2), ('015:12:12.123500', 3), ('015:13:13.123500', 4);
+mysql> insert into test.t values('-016:10:10.123456', 1), ('016:11:11.123500', 2), ('016:12:12.123500', 3), ('016:13:13.123500', 4);
+mysql> insert into test.t values('-017:10:10.123456', 1), ('017:11:11.123500', 2), ('017:12:12.123500', 3), ('017:13:13.123500', 4);
+mysql> insert into test.t values('-018:10:10.123456', 1), ('018:11:11.123500', 2), ('018:12:12.123500', 3), ('018:13:13.123500', 4);
+mysql> insert into test.t values('-019:10:10.123456', 1), ('019:11:11.123500', 2), ('019:12:12.123500', 3), ('019:13:13.123500', 4);
+mysql> insert into test.t values('-020:10:10.123456', 1), ('020:11:11.123500', 2), ('020:12:12.123500', 3), ('020:13:13.123500', 4);
+mysql> insert into test.t values('-021:10:10.123456', 1), ('021:11:11.123500', 2), ('021:12:12.123500', 3), ('021:13:13.123500', 4);
+mysql> insert into test.t values('-022:10:10.123456', 1), ('022:11:11.123500', 2), ('022:12:12.123500', 3), ('022:13:13.123500', 4);
+mysql> insert into test.t values('-023:10:10.123456', 1), ('023:11:11.123500', 2), ('023:12:12.123500', 3), ('023:13:13.123500', 4);
+mysql> insert into test.t values('-024:10:10.123456', 1), ('024:11:11.123500', 2), ('024:12:12.123500', 3), ('024:13:13.123500', 4);
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> set tidb_isolation_read_engines='tiflash'; select hour(a), i from test.t where a = '024:11:11.123500';
++---------+------+
+| hour(a) | i    |
++---------+------+
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
+|      24 |    2 |
++---------+------+
+
+mysql> drop table test.t;

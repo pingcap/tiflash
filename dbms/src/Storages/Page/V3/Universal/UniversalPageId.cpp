@@ -15,6 +15,45 @@
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
+namespace DB
+{
+UniversalPageId::~UniversalPageId()
+{
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
+}
+
+UniversalPageId::UniversalPageId(UniversalPageId && other)
+{
+    // PS::PageStorageMemorySummary::uni_page_id_bytes has been set when `other` created
+    id = std::move(other.id);
+}
+UniversalPageId::UniversalPageId(const UniversalPageId & other)
+{
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.id.size());
+    id = other.id;
+}
+UniversalPageId & UniversalPageId::operator=(UniversalPageId && other) noexcept
+{
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
+    id = std::move(other.id);
+    return *this;
+}
+UniversalPageId & UniversalPageId::operator=(const UniversalPageId & other) noexcept
+{
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(other.id.size());
+    id = other.id;
+    return *this;
+}
+UniversalPageId & UniversalPageId::operator=(String && id_) noexcept
+{
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_sub(id.size());
+    PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id_.size());
+    id.swap(id_);
+    return *this;
+}
+} // namespace DB
+
 namespace DB::details
 {
 

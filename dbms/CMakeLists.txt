@@ -104,8 +104,7 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnVector.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
-    src/IO/Compression/CompressionCodecFOR.cpp
-    src/IO/Compression/CompressionCodecDeltaFOR.cpp
+    src/IO/Compression/EncodingUtil.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp
 )
@@ -139,6 +138,7 @@ list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions
 add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
 target_link_libraries(tiflash_common_io PUBLIC process_metrics)
 target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
+target_include_directories(tiflash_common_io PUBLIC ${TiFlash_SOURCE_DIR}/contrib/not_null/include)
 
 if (OS_FREEBSD)
     target_compile_definitions (tiflash_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
@@ -154,7 +154,6 @@ else ()
     install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT tiflash)
 endif ()
 
-target_include_directories(dbms PUBLIC ${TiFlash_SOURCE_DIR}/contrib/not_null/include)
 target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_INCLUDE_DIR}")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")

@@ -1,0 +1,98 @@
+# Copyright 2024 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table if not exists test.t(a int);
+mysql> alter table test.t add column b int as (a+1) virtual;
+mysql> alter table test.t add column c int;
+mysql> alter table test.t add column d int as (c+1) virtual;
+mysql> alter table test.t add column e int;
+
+mysql> insert into test.t(a, c, e) values(1, 10, 100), (2, 20, 200), (3, 30, 300), (4, 40, 400), (5, 50, 500), (6, 60, 600), (7, 70, 700), (8, 80, 800), (9, 90, 900);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 10;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    1 |    2 |   10 |   11 |  100 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 20;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    2 |    3 |   20 |   21 |  200 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 30;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    3 |    4 |   30 |   31 |  300 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 40;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    4 |    5 |   40 |   41 |  400 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 50;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    5 |    6 |   50 |   51 |  500 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 60;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    6 |    7 |   60 |   61 |  600 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 70;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    7 |    8 |   70 |   71 |  700 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 80;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    8 |    9 |   80 |   81 |  800 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 80;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    8 |    9 |   80 |   81 |  800 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 90;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    9 |   10 |   90 |   91 |  900 |
++------+------+------+------+------+
+
+mysql> drop table test.t;

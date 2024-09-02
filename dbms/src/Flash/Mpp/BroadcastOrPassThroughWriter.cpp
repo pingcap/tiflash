@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {
@@ -70,14 +71,15 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::isWritable() const
+WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() const
 {
-    return writer->isWritable();
+    return writer->waitForWritable();
 }
 
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
+    RUNTIME_CHECK(!block.info.selective);
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");

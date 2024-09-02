@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
+
 namespace DB
 {
 namespace DM
@@ -54,11 +55,13 @@ public:
     }
 
     Type getType() const override { return Type::DELETE_RANGE; }
-    size_t getDeletes() const override { return 1; };
+    size_t getDeletes() const override { return 1; }
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
+    void serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool save_schema) const override;
 
     static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf);
+    static ColumnFilePersistedPtr deserializeMetadata(const dtpb::ColumnFileDeleteRange & dr_pb);
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {

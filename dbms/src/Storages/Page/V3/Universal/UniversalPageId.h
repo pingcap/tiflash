@@ -18,29 +18,37 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/PageStorageMemorySummary.h>
 
 namespace DB
 {
 class UniversalPageId final
 {
 public:
-    UniversalPageId() = default;
-
+    UniversalPageId() { PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size()); }
+    UniversalPageId(const UniversalPageId & other);
+    UniversalPageId(UniversalPageId && other);
     UniversalPageId(String id_) // NOLINT(google-explicit-constructor)
         : id(std::move(id_))
-    {}
+    {
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
+    }
     UniversalPageId(const char * id_) // NOLINT(google-explicit-constructor)
         : id(id_)
-    {}
+    {
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
+    }
     UniversalPageId(const char * id_, size_t sz_)
         : id(id_, sz_)
-    {}
-
-    UniversalPageId & operator=(String && id_) noexcept
     {
-        id.swap(id_);
-        return *this;
+        PS::PageStorageMemorySummary::uni_page_id_bytes.fetch_add(id.size());
     }
+
+    ~UniversalPageId();
+
+    UniversalPageId & operator=(UniversalPageId && other) noexcept;
+    UniversalPageId & operator=(const UniversalPageId & other) noexcept;
+    UniversalPageId & operator=(String && id_) noexcept;
     bool operator==(const UniversalPageId & rhs) const noexcept { return id == rhs.id; }
     bool operator!=(const UniversalPageId & rhs) const noexcept { return id != rhs.id; }
     bool operator>=(const UniversalPageId & rhs) const noexcept { return id >= rhs.id; }

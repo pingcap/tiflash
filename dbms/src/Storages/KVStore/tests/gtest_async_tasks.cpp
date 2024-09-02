@@ -254,7 +254,7 @@ try
     auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
 
     int total = 5;
-    int max_steps = 10;
+    int max_steps = 15;
     int current_step = 0;
     std::vector<char> f(total, false);
     std::vector<char> s(total, false);

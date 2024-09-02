@@ -92,6 +92,9 @@ public:
 
     virtual IOProfileInfoPtr getIOProfileInfo() const { throw Exception("Unsupport"); }
 
+    // Return ture when this operator can accept block whose block.info.selective is not nullptr.
+    virtual bool canHandleSelectiveBlock() const { return false; }
+
 protected:
     virtual void operatePrefixImpl() {}
     virtual void operateSuffixImpl() {}

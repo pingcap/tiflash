@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Common/TiFlashException.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -27,9 +29,13 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/copyData.h>
+#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
+using TiDB::ColumnInfo;
+
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -293,6 +299,37 @@ void flashStringColToArrowCol(
 }
 
 template <bool is_nullable>
+void flashArrayFloat32ColToArrowCol(
+    TiDBColumn & dag_column,
+    const IColumn * flash_col_untyped,
+    size_t start_index,
+    size_t end_index)
+{
+    // We only unwrap the NULLABLE() part.
+    const IColumn * nested_col = getNestedCol(flash_col_untyped);
+    const auto * flash_col = checkAndGetColumn<ColumnArray>(nested_col);
+
+    RUNTIME_CHECK(checkAndGetColumn<ColumnVector<Float32>>(&flash_col->getData()));
+    RUNTIME_CHECK(flash_col->getData().isFixedAndContiguous());
+
+    for (size_t i = start_index; i < end_index; i++)
+    {
+        // todo check if we can convert flash_col to DAG col directly since the internal representation is almost the same
+        if constexpr (is_nullable)
+        {
+            if (flash_col_untyped->isNullAt(i))
+            {
+                dag_column.appendNull();
+                continue;
+            }
+        }
+
+        auto [num_elems, elem_bytes] = flash_col->getElementRef(i);
+        dag_column.appendVectorF32(num_elems, elem_bytes);
+    }
+}
+
+template <bool is_nullable>
 void flashBitColToArrowCol(
     TiDBColumn & dag_column,
     const IColumn * flash_col_untyped,
@@ -461,6 +498,20 @@ void flashColToArrowCol(
         else
             flashStringColToArrowCol<true>(dag_column, col, start_index, end_index);
         break;
+    case TiDB::TypeTiDBVectorFloat32:
+    {
+        const auto * data_type = checkAndGetDataType<DataTypeArray>(type);
+        if (!data_type || data_type->getNestedType()->getTypeId() != TypeIndex::Float32)
+            throw TiFlashException(
+                Errors::Coprocessor::Internal,
+                "Type un-matched during arrow encode, target col type is array<float32> and source column type is {}",
+                type->getName());
+        if (tidb_column_info.hasNotNullFlag())
+            flashArrayFloat32ColToArrowCol<false>(dag_column, col, start_index, end_index);
+        else
+            flashArrayFloat32ColToArrowCol<true>(dag_column, col, start_index, end_index);
+        break;
+    }
     case TiDB::TypeBit:
         if (!checkDataType<DataTypeUInt64>(type))
             throw TiFlashException(
@@ -521,6 +572,35 @@ const char * arrowStringColToFlashCol(
             continue;
         const String value = String(pos + offsets[i], pos + offsets[i + 1]);
         col.column->assumeMutable()->insert(Field(value));
+    }
+    return pos + offsets[length];
+}
+
+const char * arrowArrayFloat32ColToFlashCol(
+    const char * pos,
+    UInt8,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> & offsets,
+    const ColumnWithTypeAndName & col,
+    const ColumnInfo &,
+    UInt32 length)
+{
+    const auto * data_type = checkAndGetDataType<DataTypeArray>(&*col.type);
+    if (!data_type || data_type->getNestedType()->getTypeId() != TypeIndex::Float32)
+        throw TiFlashException(
+            Errors::Coprocessor::Internal,
+            "Type un-matched during arrow decode, target col type is array<float32> and source column type is {}",
+            col.type->getName());
+
+    for (UInt32 i = 0; i < length; i++)
+    {
+        if (checkNull(i, null_count, null_bitmap, col))
+            continue;
+
+        auto arrow_data_size = offsets[i + 1] - offsets[i];
+        const auto * base_offset = pos + offsets[i];
+        col.column->assumeMutable()->insertFromDatumData(base_offset, arrow_data_size);
     }
     return pos + offsets[length];
 }
@@ -819,6 +899,16 @@ const char * arrowColToFlashCol(
             length);
     case TiDB::TypeBit:
         return arrowBitColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, flash_col, col_info, length);
+    case TiDB::TypeTiDBVectorFloat32:
+        return arrowArrayFloat32ColToFlashCol(
+            pos,
+            field_length,
+            null_count,
+            null_bitmap,
+            offsets,
+            flash_col,
+            col_info,
+            length);
     case TiDB::TypeEnum:
         return arrowEnumColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, flash_col, col_info, length);
     default:

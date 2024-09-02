@@ -17,6 +17,7 @@
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <IO/Compression/CompressionMethod.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/dtpb/column_file.pb.h>
 
 namespace DB
 {
@@ -38,10 +39,14 @@ public:
     virtual void removeData(WriteBatches &) const {};
 
     virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
+
+    virtual void serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool save_schema) const = 0;
 };
 
 void serializeSchema(WriteBuffer & buf, const Block & schema);
 BlockPtr deserializeSchema(ReadBuffer & buf);
+void serializeSchema(dtpb::ColumnFileTiny * tiny_pb, const Block & schema);
+BlockPtr deserializeSchema(const ::google::protobuf::RepeatedPtrField<::dtpb::ColumnSchema> & schema_pb);
 
 void serializeColumn(
     WriteBuffer & buf,
@@ -78,11 +83,25 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(
     const RowKeyRange & segment_range,
     ReadBuffer & buf);
 
-ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
+ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint(
     const LoggerPtr & parent_log,
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs);
+
+void serializeSavedColumnFilesInV4Format(dtpb::DeltaLayerMeta & meta, const ColumnFilePersisteds & column_files);
+ColumnFilePersisteds deserializeSavedColumnFilesInV4Format(
+    const DMContext & context,
+    const RowKeyRange & segment_range,
+    const dtpb::DeltaLayerMeta & meta);
+
+ColumnFilePersisteds createColumnFilesInV4FormatFromCheckpoint(
+    const LoggerPtr & parent_log,
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    const dtpb::DeltaLayerMeta & meta,
     UniversalPageStoragePtr temp_ps,
     WriteBatches & wbs);
 } // namespace DM

@@ -45,7 +45,7 @@ struct CheckEqual
     static RSResult check(const Field & v, const DataTypePtr & type, const T & min, const T & max)
     {
         if (!IS_LEGAL(v, min))
-            return Some;
+            return RSResult::Some;
 
         //    if (min == max && v == min)
         //        return All;
@@ -55,11 +55,11 @@ struct CheckEqual
         //        return None;
 
         if (min == max && EQUAL(v, min))
-            return All;
+            return RSResult::All;
         else if (GREATER_EQ(v, min) && LESS_EQ(v, max))
-            return Some;
+            return RSResult::Some;
         else
-            return None;
+            return RSResult::None;
     }
 };
 
@@ -68,15 +68,16 @@ struct CheckIn
     template <typename T>
     static RSResult check(const std::vector<Field> & values, const DataTypePtr & type, const T & min, const T & max)
     {
-        RSResult result = None;
+        RSResult result = RSResult::None;
         for (const auto & v : values)
         {
-            if (result == All)
+            if (result == RSResult::All)
                 break;
-            // skip null value
+
             if (v.isNull())
-                continue;
-            result = result || CheckEqual::check<T>(v, type, min, max);
+                result = result || RSResult::NoneNull; // the result of any arithmetic comparison with NULL is also NULL
+            else
+                result = result || CheckEqual::check<T>(v, type, min, max);
         }
         return result;
     }
@@ -88,7 +89,7 @@ struct CheckGreater
     static RSResult check(const Field & v, const DataTypePtr & type, const T & min, const T & max)
     {
         if (!IS_LEGAL(v, min))
-            return Some;
+            return RSResult::Some;
 
         //    if (v >= max)
         //        return None;
@@ -97,11 +98,11 @@ struct CheckGreater
         //    return Some;
 
         if (GREATER_EQ(v, max))
-            return None;
+            return RSResult::None;
         else if (LESS(v, min))
-            return All;
+            return RSResult::All;
         else
-            return Some;
+            return RSResult::Some;
     }
 };
 
@@ -111,7 +112,7 @@ struct CheckGreaterEqual
     static RSResult check(const Field & v, const DataTypePtr & type, T min, T max)
     {
         if (!IS_LEGAL(v, min))
-            return Some;
+            return RSResult::Some;
 
         //    if (v > max)
         //        return None;
@@ -120,11 +121,11 @@ struct CheckGreaterEqual
         //    return Some;
 
         if (GREATER(v, max))
-            return None;
+            return RSResult::None;
         else if (LESS_EQ(v, min))
-            return All;
+            return RSResult::All;
         else
-            return Some;
+            return RSResult::Some;
     }
 };
 

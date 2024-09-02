@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Core/Types.h>
+#include <Parsers/IAST_fwd.h>
 #include <Parsers/StringRange.h>
 
 #include <memory>
@@ -39,9 +40,6 @@ extern const int LOGICAL_ERROR;
 
 using IdentifierNameSet = std::set<String>;
 
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-using ASTs = std::vector<ASTPtr>;
 
 class WriteBuffer;
 

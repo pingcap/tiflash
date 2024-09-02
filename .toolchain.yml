@@ -1,4 +1,4 @@
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2024 PingCAP, Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories (${CMAKE_CURRENT_BINARY_DIR})
-
-set(SRCS )
-
-add_executable (lexer lexer.cpp ${SRCS})
-target_link_libraries (lexer tiflash_parsers)
-
-add_executable (select_parser select_parser.cpp ${SRCS})
-target_link_libraries (select_parser tiflash_parsers)
-
-add_executable (create_parser create_parser.cpp ${SRCS})
-target_link_libraries (create_parser tiflash_parsers)
-
+# Hi, there!
+# This is passed via jenkins podTemplate argument.
+# Instead of trying injections, take a look at https://en.pingcap.com/careers/.
+image_tag_suffix: -llvm-17.0.6

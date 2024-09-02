@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/StringRef.h>
 
 namespace DB
@@ -29,7 +29,7 @@ NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan);
 String genNameForExchangeReceiver(Int32 col_index);
 
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);
-NamesAndTypes genNamesAndTypes(const ColumnInfos & column_infos, const StringRef & column_prefix);
+NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 

@@ -51,7 +51,9 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , prehandle_task(prehandle_task_)
     , opts(std::move(opts_))
 {
-    log = Logger::get(opts.log_prefix);
+    const size_t split_id
+        = soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
+    log = Logger::get(opts.log_prefix, fmt::format("region_id={} split_id={}", region->id(), split_id));
 
     // We have to initialize sst readers at an earlier stage,
     // due to prehandle snapshot of single region feature in raftstore v2.
@@ -62,8 +64,8 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper,
                                SSTView snap,
                                SSTReader::RegionRangeFilter range,
-                               size_t split_id) {
-        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
+                               const LoggerPtr & log_) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, log_);
     };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
@@ -91,8 +93,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_default,
             log,
-            region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
+            region->getRange());
     }
     if (!ssts_write.empty())
     {
@@ -102,8 +103,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_write,
             log,
-            region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
+            region->getRange());
     }
     if (!ssts_lock.empty())
     {
@@ -113,8 +113,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_lock,
             log,
-            region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
+            region->getRange());
     }
     LOG_INFO(
         log,
@@ -145,8 +144,6 @@ void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, Colum
         return;
     if (!reader->remained())
         return;
-    if (prehandle_task->isAbort())
-        return;
 
     // now the stream must be stopped by `soft_limit`, let's check the keys in reader
     RUNTIME_CHECK_MSG(soft_limit.has_value(), "soft_limit.has_value(), cf={}", magic_enum::enum_name(cf));
@@ -159,9 +156,13 @@ void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, Colum
 
 void SSTFilesToBlockInputStream::readSuffix()
 {
-    checkFinishedState(write_cf_reader, ColumnFamilyType::Write);
-    checkFinishedState(default_cf_reader, ColumnFamilyType::Default);
-    checkFinishedState(lock_cf_reader, ColumnFamilyType::Lock);
+    // For aborted task, we don't need to check the finish state
+    if (!prehandle_task->isAbort())
+    {
+        checkFinishedState(write_cf_reader, ColumnFamilyType::Write);
+        checkFinishedState(default_cf_reader, ColumnFamilyType::Default);
+        checkFinishedState(lock_cf_reader, ColumnFamilyType::Lock);
+    }
 
     // reset all SSTReaders and return without writting blocks any more.
     write_cf_reader.reset();
@@ -175,7 +176,7 @@ Block SSTFilesToBlockInputStream::read()
 
     while (write_cf_reader && write_cf_reader->remained())
     {
-        bool should_stop_advancing = maybeStopBySoftLimit(ColumnFamilyType::Write, write_cf_reader);
+        bool should_stop_advancing = maybeStopBySoftLimit(ColumnFamilyType::Write, write_cf_reader.get());
         if (should_stop_advancing)
         {
             // Load the last batch
@@ -237,14 +238,12 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     const DecodedTiKVKey * const rowkey_to_be_included)
 {
     SSTReader * reader;
-    SSTReaderPtr * reader_ptr;
     size_t * p_process_keys;
     size_t * p_process_keys_bytes;
     DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
         reader = default_cf_reader.get();
-        reader_ptr = &default_cf_reader;
         p_process_keys = &process_keys.default_cf;
         p_process_keys_bytes = &process_keys.default_cf_bytes;
         last_loaded_rowkey = &default_last_loaded_rowkey;
@@ -252,7 +251,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     else if (cf == ColumnFamilyType::Lock)
     {
         reader = lock_cf_reader.get();
-        reader_ptr = &lock_cf_reader;
         p_process_keys = &process_keys.lock_cf;
         p_process_keys_bytes = &process_keys.lock_cf_bytes;
         last_loaded_rowkey = &lock_last_loaded_rowkey;
@@ -262,15 +260,17 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
 
     if (reader && reader->remained())
     {
-        maybeSkipBySoftLimit(cf, *reader_ptr);
+        maybeSkipBySoftLimit(cf, reader);
     }
 
+    Stopwatch sw;
+    auto pre = *p_process_keys_bytes;
     // Simply read to the end of SST file
     if (rowkey_to_be_included == nullptr)
     {
         while (reader && reader->remained())
         {
-            if (maybeStopBySoftLimit(cf, *reader_ptr))
+            if (maybeStopBySoftLimit(cf, reader))
             {
                 break;
             }
@@ -282,20 +282,22 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             (*p_process_keys_bytes) += (key.len + value.len);
             reader->next();
         }
+        const auto sec = sw.elapsedSeconds();
         LOG_DEBUG(
             log,
             "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} split_id={} "
-            "snapshot_index={}",
+            "snapshot_index={} elapsed_sec={:.3f} speed={}",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),
             process_keys.write_cf,
             region->id(),
             getSplitId(),
-            snapshot_index);
+            snapshot_index,
+            sec,
+            ((*p_process_keys_bytes) - pre) * 1.0 / sec);
         return;
     }
-
 
     size_t process_keys_offset_end = process_keys.write_cf;
     while (reader && reader->remained())
@@ -304,10 +306,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
+            const auto sec = sw.elapsedSeconds();
             LOG_DEBUG(
                 log,
                 "Done loading, CF={} offset={} processed_bytes={} write_cf_offset={} last_loaded_rowkey={} "
-                "rowkey_to_be_included={} region_id={} snapshot_index={}",
+                "rowkey_to_be_included={} region_id={} snapshot_index={} elapsed_sec={:.3f} speed={}",
                 CFToName(cf),
                 (*p_process_keys),
                 (*p_process_keys_bytes),
@@ -317,14 +320,16 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                      ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size())
                      : "<end>"),
                 region->id(),
-                snapshot_index);
+                snapshot_index,
+                sec,
+                ((*p_process_keys_bytes) - pre) * 1.0 / sec);
             break;
         }
 
         // Let's try to load keys until process_keys_offset_end
         while (reader && reader->remained() && *p_process_keys < process_keys_offset_end)
         {
-            if (maybeStopBySoftLimit(cf, *reader_ptr))
+            if (maybeStopBySoftLimit(cf, reader))
             {
                 break;
             }
@@ -372,7 +377,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
                 log,
                 "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep "
                 "uncommitted data in region."
-                "region_id: {}, applied_index: {}, version: {}, conf_version {}, start_key: {}, end_key: {}",
+                "region_id={} applied_index={} version={} conf_version={} start_key={} end_key={}",
                 e.displayText(),
                 region->id(),
                 region->appliedIndex(),
@@ -409,13 +414,16 @@ std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits
 
 // Returning false means no skip is performed, the reader is intact.
 // Returning true means skip is performed, must read from current value.
-bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
     if (!soft_limit.has_value())
         return false;
     const auto & start_limit = soft_limit.value().getStartLimit();
     // If start is set to "", then there is no soft limit for start.
     if (!start_limit)
+        return false;
+
+    if (!reader)
         return false;
 
     if (reader && reader->remained())
@@ -427,7 +435,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
             // or it is already seeked.
             LOG_TRACE(
                 log,
-                "Re-Seek backward is forbidden, start_limit {} current {}, cf={}, split_id={}, region_id={}",
+                "Re-Seek backward is forbidden, start_limit={} current={} cf={} split_id={} region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 Redact::keyToDebugString(key.data, key.len),
                 magic_enum::enum_name(cf),
@@ -441,6 +449,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
 
     // Skip other versions of the same PK.
     // TODO(split) use seek to optimize if failed several iterations.
+    size_t skipped_times = 0;
     while (reader && reader->remained())
     {
         // Read until find the next pk.
@@ -453,17 +462,21 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
         {
             RUNTIME_CHECK_MSG(
                 current_truncated_ts > start_limit,
-                "current pk decreases as reader advances, start_raw {} start_pk {} current {}, cf={}, split_id={}, "
-                "region_id={}",
+                "current pk decreases as reader advances, skipped_times={} start_raw={} start_pk={} current_pk={} "
+                "current_raw={} cf={} split_id={} region_id={}",
+                skipped_times,
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 current_truncated_ts.toDebugString(),
+                tikv_key.toDebugString(),
                 magic_enum::enum_name(cf),
                 soft_limit.value().split_id,
                 region->id());
             LOG_INFO(
                 log,
-                "Re-Seek after start_raw {} start_pk {} to {}, current_pk = {}, cf={}, split_id={}, region_id={}",
+                "Re-Seek after skipped_times={} start_raw={} start_pk={} current_raw={} current_pk={} cf={} "
+                "split_id={} region_id={}",
+                skipped_times,
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 tikv_key.toDebugString(),
@@ -473,12 +486,13 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
                 region->id());
             return true;
         }
+        skipped_times++;
         reader->next();
     }
     // `start_limit` is the last pk of the sst file.
     LOG_INFO(
         log,
-        "Re-Seek to the last key of write cf start_raw {} start_pk {}, cf={}, split_id={}, region_id={}",
+        "Re-Seek to the last key of write cf start_raw={} start_pk={} cf={} split_id={} region_id={}",
         soft_limit.value().raw_start.toDebugString(),
         start_limit.value().toDebugString(),
         magic_enum::enum_name(cf),
@@ -487,7 +501,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
     return false;
 }
 
-bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader)
 {
     if (!soft_limit.has_value())
         return false;
@@ -495,6 +509,8 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTRe
     const auto & end_limit = soft_limit.value().getEndLimit();
     if (!end_limit)
         return false;
+
+    assert(reader != nullptr);
     auto key = reader->keyView();
     // TODO the copy could be eliminated, but with many modifications.
     auto tikv_key = TiKVKey(key.data, key.len);
@@ -503,7 +519,7 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTRe
     {
         LOG_INFO(
             log,
-            "Reach end for split {} current {} pk {} end_limit {}, cf={} split_id={} region_id={}",
+            "Reach end for split={} current={} pk={} end_limit={} cf={} split_id={} region_id={}",
             sl.toDebugString(),
             tikv_key.toDebugString(),
             current_truncated_ts.toDebugString(),

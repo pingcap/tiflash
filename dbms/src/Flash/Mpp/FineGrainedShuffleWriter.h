@@ -19,11 +19,6 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
-namespace DB::HashBaseWriterHelper
-{
-struct HashPartitionWriterHelperV1;
-}
-
 namespace DB
 {
 class DAGContext;
@@ -45,7 +40,7 @@ public:
         tipb::CompressionMode compression_mode_);
     void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
-    bool isWritable() const override;
+    WaitResult waitForWritable() const override;
     void flush() override;
 
 private:

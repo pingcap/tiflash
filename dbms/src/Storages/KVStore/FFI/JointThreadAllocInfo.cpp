@@ -17,6 +17,7 @@
 #include <Common/setThreadName.h>
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/Page/V3/PageDirectory.h>
 
 #include <magic_enum.hpp>
 #include <mutex>
@@ -47,6 +48,7 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfo()
 {
     recordThreadAllocInfoForProxy();
     recordThreadAllocInfoForStorage();
+    recordClassdAlloc();
 }
 
 JointThreadInfoJeallocMap::~JointThreadInfoJeallocMap()
@@ -268,5 +270,14 @@ void JointThreadInfoJeallocMap::accessStorageMap(std::function<void(const AllocM
     std::shared_lock l(memory_allocation_mut);
     f(storage_map);
 }
+
+void JointThreadInfoJeallocMap::recordClassdAlloc()
+{
+    GET_METRIC(tiflash_memory_usage_by_class, type_uni_page_ids)
+        .Set(PS::PageStorageMemorySummary::uni_page_id_bytes.load());
+    GET_METRIC(tiflash_memory_usage_by_class, type_versioned_entries)
+        .Set(PS::PageStorageMemorySummary::versioned_entry_or_delete_bytes.load());
+}
+
 
 } // namespace DB

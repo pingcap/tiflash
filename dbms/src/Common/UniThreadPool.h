@@ -29,7 +29,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <queue>
 #include <thread>
 
 namespace DB
@@ -83,6 +82,9 @@ public:
         ssize_t priority = 0,
         uint64_t wait_microseconds = 0,
         bool propagate_opentelemetry_tracing_context = true);
+
+    /// Wrap job with std::packaged_task<void> and returns a std::future<void> object to check result of the job.
+    std::future<void> scheduleWithFuture(Job job, uint64_t wait_timeout_us = 0);
 
     /// Wait for all currently active jobs to be done.
     /// You may call schedule and wait many times in arbitrary order.

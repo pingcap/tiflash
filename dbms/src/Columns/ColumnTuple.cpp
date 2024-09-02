@@ -191,14 +191,32 @@ void ColumnTuple::updateWeakHash32(
 {
     auto s = size();
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
-                + std::to_string(hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == s,
+        "size of WeakHash32({}) does not match size of column({})",
+        hash.getData().size(),
+        s);
 
     for (const auto & column : columns)
         column->updateWeakHash32(hash, collator, sort_key_container);
+}
+
+void ColumnTuple::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    const size_t rows = selective.size();
+
+    RUNTIME_CHECK_MSG(
+        hash.getData().size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        hash.getData().size(),
+        rows);
+
+    for (const auto & column : columns)
+        column->updateWeakHash32(hash, collator, sort_key_container, selective);
 }
 
 void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t length)
@@ -246,11 +264,34 @@ ColumnPtr ColumnTuple::replicateRange(size_t start_row, size_t end_row, const IC
 
 MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
+    return scatterImplForColumnTuple<false>(num_columns, selector, {});
+}
+
+MutableColumns ColumnTuple::scatter(
+    ColumnIndex num_columns,
+    const Selector & selector,
+    const BlockSelective & selective) const
+{
+    return scatterImplForColumnTuple<true>(num_columns, selector, selective);
+}
+
+template <bool selective_block>
+MutableColumns ColumnTuple::scatterImplForColumnTuple(
+    ColumnIndex num_columns,
+    const Selector & selector,
+    const BlockSelective & selective) const
+{
     const size_t tuple_size = columns.size();
     std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
 
     for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
-        scattered_tuple_elements[tuple_element_idx] = columns[tuple_element_idx]->scatter(num_columns, selector);
+    {
+        if constexpr (selective_block)
+            scattered_tuple_elements[tuple_element_idx]
+                = columns[tuple_element_idx]->scatter(num_columns, selector, selective);
+        else
+            scattered_tuple_elements[tuple_element_idx] = columns[tuple_element_idx]->scatter(num_columns, selector);
+    }
 
     MutableColumns res(num_columns);
 
@@ -267,6 +308,23 @@ MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & se
 
 void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const
 {
+    scatterToImplForColumnTuple<false>(scatterColumns, selector, {});
+}
+
+void ColumnTuple::scatterTo(
+    ScatterColumns & scatterColumns,
+    const Selector & selector,
+    const BlockSelective & selective) const
+{
+    scatterToImplForColumnTuple<true>(scatterColumns, selector, selective);
+}
+
+template <bool selective_block>
+void ColumnTuple::scatterToImplForColumnTuple(
+    ScatterColumns & scatterColumns,
+    const Selector & selector,
+    const BlockSelective & selective) const
+{
     const size_t tuple_size = columns.size();
     ColumnIndex scattered_num_columns = scatterColumns.size();
     std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
@@ -279,7 +337,10 @@ void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & se
                            ->assumeMutable();
             scattered_tuple_elements[tuple_element_idx].push_back(std::move(col));
         }
-        columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
+        if constexpr (selective_block)
+            columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector, selective);
+        else
+            columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
     }
 
     for (size_t scattered_idx = 0; scattered_idx < scattered_num_columns; ++scattered_idx)

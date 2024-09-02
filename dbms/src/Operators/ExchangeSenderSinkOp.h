@@ -33,6 +33,8 @@ public:
 
     String getName() const override { return "ExchangeSenderSinkOp"; }
 
+    bool canHandleSelectiveBlock() const override { return true; }
+
 protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;
@@ -42,6 +44,9 @@ protected:
     OperatorStatus prepareImpl() override;
 
     OperatorStatus awaitImpl() override;
+
+private:
+    OperatorStatus waitForWriter() const;
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;

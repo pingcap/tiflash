@@ -59,10 +59,10 @@ inline void validateSSTGeneration(
     auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper,
                               SSTView snap,
                               SSTReader::RegionRangeFilter range,
-                              size_t split_id) -> std::unique_ptr<MonoSSTReader> {
+                              const LoggerPtr & log_) -> std::unique_ptr<MonoSSTReader> {
         auto parsed_kind = MockSSTGenerator::parseSSTViewKind(buffToStrView(snap.path));
-        auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
-        assert(reader->sst_format_kind() == parsed_kind);
+        auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range, log_);
+        assert(reader->sstFormatKind() == parsed_kind);
         return reader;
     };
     MultiSSTReader<MonoSSTReader, SSTView> reader{
@@ -72,7 +72,7 @@ inline void validateSSTGeneration(
         ssts,
         Logger::get(),
         kvr1->getRange(),
-        DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT};
+    };
 
     size_t counter = 0;
     while (reader.remained())
