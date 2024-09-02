@@ -173,6 +173,13 @@ private:
         DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
+<<<<<<< HEAD
+=======
+    size_t getBuildTaskRPCTimeout() const;
+    size_t getBuildTaskIOThreadPoolTimeout() const;
+
+private:
+>>>>>>> 738aade7e5 (Disagg: Set the waiting time for thread pool. (#9393))
     Context & context;
     const TiDBTableScan & table_scan;
     LoggerPtr log;
