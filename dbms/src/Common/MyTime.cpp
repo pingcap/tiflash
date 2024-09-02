@@ -262,7 +262,7 @@ int getFracIndex(const String & format)
     int idx = -1;
     for (int i = end; i >= 0; i--)
     {
-        if (isPunctuation(format[i]))
+        if (format[i] != '+' && format[i] != '-' && isPunctuation(format[i]))
         {
             if (format[i] == '.')
             {
@@ -728,7 +728,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDa
 }
 
 // returns frac, overflow, matched. eg., "999" fsp=2 will overflow.
-std::tuple<UInt32, bool, bool> parseFrac(const String & str, int8_t fsp)
+std::tuple<UInt32, bool, bool> parseFrac(const std::string_view str, int8_t fsp)
 {
     if (str.empty())
     {
@@ -744,15 +744,27 @@ std::tuple<UInt32, bool, bool> parseFrac(const String & str, int8_t fsp)
     }
     try
     {
-        int len = str.length();
-        if (fsp >= len)
+        int end_pos = static_cast<size_t>(fsp) >= str.size() ? str.size() : (fsp + 1);
+        UInt32 tmp = 0;
+        int size = 0;
+        for (int i = 0; i < end_pos; ++i)
         {
-            UInt32 tmp = std::stoul(str);
-            return {tmp * std::pow(10, 6 - len), false, true};
+            if (auto c = str[i]; c >= '0' && c <= '9')
+            {
+                tmp = tmp * 10 + c - '0';
+                size++;
+            }
+            else
+            {
+                break;
+            }
         }
 
-        // Round when fsp < string length.
-        UInt32 tmp = std::stoul(str.substr(0, fsp + 1));
+        if (fsp >= size)
+        {
+            return {tmp * std::pow(10, 6 - size), false, true};
+        }
+
         tmp = (tmp + 5) / 10;
         if (tmp >= std::pow(10, fsp))
         {
