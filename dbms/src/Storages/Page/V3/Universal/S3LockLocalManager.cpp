@@ -96,6 +96,8 @@ std::optional<CheckpointProto::ManifestFilePrefix> S3LockLocalManager::initStore
         }
 
         s3lock_client = std::move(s3lock_client_);
+        RUNTIME_CHECK(s3lock_client != nullptr);
+
         store_id = actual_store_id;
 
         LOG_INFO(
@@ -223,10 +225,7 @@ String S3LockLocalManager::createS3Lock(
     }
     else
     {
-        if unlikely (s3lock_client == nullptr)
-        {
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "S3 Lock Client is not initialized");
-        }
+        RUNTIME_CHECK_MSG(s3lock_client, "S3 Lock Client is not initialized");
         // Try to create a lock file for the data file created by another store.
         // e.g. Ingest some pages from CheckpointDataFile or DTFile when doing FAP,
         // send rpc to S3LockService
