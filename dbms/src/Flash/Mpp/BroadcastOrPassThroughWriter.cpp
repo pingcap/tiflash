@@ -71,9 +71,9 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::isWritable() const
+WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() const
 {
-    return writer->isWritable();
+    return writer->waitForWritable();
 }
 
 template <class ExchangeWriterPtr>
