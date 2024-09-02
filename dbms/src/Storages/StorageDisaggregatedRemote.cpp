@@ -215,9 +215,16 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     auto thread_manager = newThreadManager();
     for (const auto & cop_task : batch_cop_tasks)
     {
+<<<<<<< HEAD
         thread_manager->schedule(true, "buildReadTaskForWriteNode", [&] {
             buildReadTaskForWriteNode(db_context, scan_context, cop_task, output_lock, output_seg_tasks);
         });
+=======
+        auto f = BuildReadTaskForWNPool::get().scheduleWithFuture(
+            [&] { buildReadTaskForWriteNode(db_context, scan_context, cop_task, output_lock, output_seg_tasks); },
+            getBuildTaskIOThreadPoolTimeout());
+        futures.add(std::move(f));
+>>>>>>> 738aade7e5 (Disagg: Set the waiting time for thread pool. (#9393))
     }
 
     // Let's wait for all threads to finish. Otherwise local variable references will be invalid.
@@ -248,7 +255,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(EstablishDisaggTask)> rpc(cluster->rpc_client, req->address());
     disaggregated::EstablishDisaggTaskResponse resp;
     grpc::ClientContext client_context;
-    rpc.setClientContext(client_context, db_context.getSettingsRef().disagg_build_task_timeout);
+    rpc.setClientContext(client_context, getBuildTaskRPCTimeout());
     auto status = rpc.call(&client_context, *req, &resp);
     if (status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED)
         throw Exception(
@@ -366,6 +373,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     auto thread_manager = newThreadManager();
     for (const auto & serialized_physical_table : resp.tables())
     {
+<<<<<<< HEAD
         thread_manager->schedule(true, "buildReadTaskForWriteNodeTable", [&] {
             buildReadTaskForWriteNodeTable(
                 db_context,
@@ -377,6 +385,22 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
                 output_lock,
                 output_seg_tasks);
         });
+=======
+        auto f = BuildReadTaskForWNTablePool::get().scheduleWithFuture(
+            [&] {
+                buildReadTaskForWriteNodeTable(
+                    db_context,
+                    scan_context,
+                    snapshot_id,
+                    resp.store_id(),
+                    req->address(),
+                    serialized_physical_table,
+                    output_lock,
+                    output_seg_tasks);
+            },
+            getBuildTaskIOThreadPoolTimeout());
+        futures.add(std::move(f));
+>>>>>>> 738aade7e5 (Disagg: Set the waiting time for thread pool. (#9393))
     }
     thread_manager->wait();
 }
@@ -400,6 +424,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
 
     auto table_tracing_logger = log->getChild(
         fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
+<<<<<<< HEAD
     for (size_t idx = 0; idx < n; ++idx)
     {
         const auto & remote_seg = table.segments(idx);
@@ -419,6 +444,29 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
             std::lock_guard lock(output_lock);
             output_seg_tasks.push_back(seg_read_task);
         });
+=======
+
+    IOPoolHelper::FutureContainer futures(log, table.segments().size());
+    for (const auto & remote_seg : table.segments())
+    {
+        auto f = BuildReadTaskPool::get().scheduleWithFuture(
+            [&]() {
+                auto seg_read_task = std::make_shared<DM::SegmentReadTask>(
+                    table_tracing_logger,
+                    db_context,
+                    scan_context,
+                    remote_seg,
+                    snapshot_id,
+                    store_id,
+                    store_address,
+                    table.keyspace_id(),
+                    table.table_id());
+                std::lock_guard lock(output_lock);
+                output_seg_tasks.push_back(seg_read_task);
+            },
+            getBuildTaskIOThreadPoolTimeout());
+        futures.add(std::move(f));
+>>>>>>> 738aade7e5 (Disagg: Set the waiting time for thread pool. (#9393))
     }
 
     thread_manager->wait();
@@ -705,6 +753,16 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     db_context.getDAGContext()->addOperatorProfileInfos(
         table_scan.getTableScanExecutorID(),
         group_builder.getCurProfileInfos());
+}
+
+size_t StorageDisaggregated::getBuildTaskRPCTimeout() const
+{
+    return context.getSettingsRef().disagg_build_task_timeout;
+}
+
+size_t StorageDisaggregated::getBuildTaskIOThreadPoolTimeout() const
+{
+    return context.getSettingsRef().disagg_build_task_timeout * 1000000;
 }
 
 } // namespace DB
