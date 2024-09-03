@@ -39,9 +39,9 @@ class StringLength : public DB::tests::FunctionTest
 {
 };
 
-// test string and string
-TEST_F(StringLength, strAndStrTest)
+TEST_F(StringLength, length)
 {
+<<<<<<< HEAD
     const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
@@ -50,15 +50,24 @@ TEST_F(StringLength, strAndStrTest)
     std::vector<Int64> results{3, 5, 7, 6, 9, 0};
 
     for (int i = 0; i < 2; i++)
+=======
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
     {
-        MutableColumnPtr csp;
-        csp = ColumnString::create();
+        // test const
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(0, 0), executeFunction("length", createConstColumn<String>(0, "")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, 3),
+            executeFunction("length", createConstColumn<String>(1, "aaa")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(3, 3),
+            executeFunction("length", createConstColumn<String>(3, "aaa")));
+    }
 
-        for (const auto & str : strs)
-        {
-            csp->insert(Field(str.c_str(), str.size()));
-        }
+    {
+        // test vec
+        ASSERT_COLUMN_EQ(createColumn<Int64>({}), executeFunction("length", createColumn<String>({})));
 
+<<<<<<< HEAD
         Block test_block;
         ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
         ColumnsWithTypeAndName ctns{ctn};
@@ -69,23 +78,40 @@ TEST_F(StringLength, strAndStrTest)
         auto bp = factory.tryGet("length", context);
         ASSERT_TRUE(bp != nullptr);
         ASSERT_FALSE(bp->isVariadic());
+=======
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({0, 3, 5, 7, 6, 9, 0, 9, 16, 0}),
+            executeFunction(
+                "length",
+                createColumn<String>(
+                    {"", "hi~", "23333", "pingcap", "你好", "233哈哈", "", "asdの的", "ヽ(￣▽￣)و", ""})));
+    }
 
-        auto func = bp->build(ctns);
-        test_block.insert({nullptr, func->getReturnType(), "res"});
-        func->execute(test_block, cns, 1);
-        const IColumn * res = test_block.getByPosition(1).column.get();
-        const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+    {
+        // test nullable const
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(0, {}),
+            executeFunction("length", createConstColumn<Nullable<String>>(0, "aaa")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, {3}),
+            executeFunction("length", createConstColumn<Nullable<String>>(1, "aaa")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(3, {3}),
+            executeFunction("length", createConstColumn<Nullable<String>>(3, "aaa")));
+    }
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
-        Field res_field;
-
-        for (size_t t = 0; t < results.size(); t++)
-        {
-            res_string->get(t, res_field);
-            Int64 res_val = res_field.get<Int64>();
-            EXPECT_EQ(results[t], res_val);
-        }
+    {
+        // test nullable vec
+        std::vector<Int32> null_map{1, 0, 1, 0, 0, 1};
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({0, 4, 0, 6, 6, 0}, null_map),
+            executeFunction(
+                "length",
+                createNullableColumn<String>({"a", "abcd", "嗯", "饼干", "馒头", "?？?"}, null_map)));
     }
 }
+<<<<<<< HEAD
 
 // test NULL
 TEST_F(StringLength, nullTest)
@@ -151,5 +177,7 @@ TEST_F(StringLength, nullTest)
     }
 }
 
+=======
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 } // namespace tests
 } // namespace DB
