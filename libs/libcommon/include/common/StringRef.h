@@ -8,7 +8,6 @@
 #include <cassert>
 #include <functional>
 #include <iosfwd>
-#include <stdexcept> // for std::logic_error
 #include <string>
 #include <vector>
 
@@ -157,8 +156,8 @@ inline size_t hashLessThan8(const char * data, size_t size)
 {
     if (size > 8)
     {
-        UInt64 a = unalignedLoad<UInt64>(data);
-        UInt64 b = unalignedLoad<UInt64>(data + size - 8);
+        auto a = unalignedLoad<UInt64>(data);
+        auto b = unalignedLoad<UInt64>(data + size - 8);
         return hashLen16(a, rotateByAtLeast1(b + size, size)) ^ b;
     }
 
@@ -185,13 +184,13 @@ struct CRC32Hash
 
         do
         {
-            UInt64 word = unalignedLoad<UInt64>(pos);
+            auto word = unalignedLoad<UInt64>(pos);
             res = _mm_crc32_u64(res, word);
 
             pos += 8;
         } while (pos + 8 < end);
 
-        UInt64 word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
+        auto word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
         res = _mm_crc32_u64(res, word);
 
         return res;

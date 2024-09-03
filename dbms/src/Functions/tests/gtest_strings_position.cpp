@@ -117,9 +117,15 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
         ASSERT_TRUE(bp != nullptr);
         ASSERT_FALSE(bp->isVariadic());
 
+<<<<<<< HEAD
         bp->build(ctns)->execute(testBlock, cns, 2);
         const IColumn * res = testBlock.getByPosition(2).column.get();
         const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+=======
+        bp->build(ctns)->execute(test_block, cns, 2);
+        const IColumn * res = test_block.getByPosition(2).column.get();
+        const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         Field resField;
 
@@ -224,9 +230,15 @@ TEST_F(StringPosition, utf8_str_and_fixed_str_Test)
         ASSERT_TRUE(bp != nullptr);
         ASSERT_FALSE(bp->isVariadic());
 
+<<<<<<< HEAD
         bp->build(ctns)->execute(testBlock, cns, 2);
         const IColumn * res = testBlock.getByPosition(2).column.get();
         const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+=======
+        bp->build(ctns)->execute(test_block, cns, 2);
+        const IColumn * res = test_block.getByPosition(2).column.get();
+        const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         Field resField;
 
@@ -299,8 +311,13 @@ TEST_F(StringPosition, null_Test)
     ColumnPtr result_null_map_column = static_cast<const ColumnNullable &>(*res_col).getNullMapColumnPtr();
     MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
     NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
+<<<<<<< HEAD
     const IColumn * res = testBlock.getByPosition(2).column.get();
     const ColumnNullable * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
+=======
+    const IColumn * res = test_block.getByPosition(2).column.get();
+    const auto * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
     const IColumn & res_string = res_nullable_string->getNestedColumn();
 
     Field resField;

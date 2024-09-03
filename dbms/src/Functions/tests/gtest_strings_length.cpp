@@ -25,6 +25,7 @@ class StringLength : public DB::tests::FunctionTest
 {
 };
 
+<<<<<<< HEAD
 // test string and fixed string
 TEST_F(StringLength, str_and_fixed_str_Test)
 {
@@ -49,12 +50,26 @@ TEST_F(StringLength, str_and_fixed_str_Test)
             results = fixed_strs_results;
             csp = ColumnFixedString::create(5);
         }
+=======
+TEST_F(StringLength, length)
+{
+    {
+        // test const
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(0, 0), executeFunction("length", createConstColumn<String>(0, "")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, 3),
+            executeFunction("length", createConstColumn<String>(1, "aaa")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(3, 3),
+            executeFunction("length", createConstColumn<String>(3, "aaa")));
+    }
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
-        for (const auto & str : strs)
-        {
-            csp->insert(Field(str.c_str(), str.size()));
-        }
+    {
+        // test vec
+        ASSERT_COLUMN_EQ(createColumn<Int64>({}), executeFunction("length", createColumn<String>({})));
 
+<<<<<<< HEAD
         Block testBlock;
         ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
         ColumnsWithTypeAndName ctns{ctn};
@@ -147,5 +162,38 @@ TEST_F(StringLength, null_Test)
     }
 }
 
+=======
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({0, 3, 5, 7, 6, 9, 0, 9, 16, 0}),
+            executeFunction(
+                "length",
+                createColumn<String>(
+                    {"", "hi~", "23333", "pingcap", "你好", "233哈哈", "", "asdの的", "ヽ(￣▽￣)و", ""})));
+    }
+
+    {
+        // test nullable const
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(0, {}),
+            executeFunction("length", createConstColumn<Nullable<String>>(0, "aaa")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, {3}),
+            executeFunction("length", createConstColumn<Nullable<String>>(1, "aaa")));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(3, {3}),
+            executeFunction("length", createConstColumn<Nullable<String>>(3, "aaa")));
+    }
+
+    {
+        // test nullable vec
+        std::vector<Int32> null_map{1, 0, 1, 0, 0, 1};
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({0, 4, 0, 6, 6, 0}, null_map),
+            executeFunction(
+                "length",
+                createNullableColumn<String>({"a", "abcd", "嗯", "饼干", "馒头", "?？?"}, null_map)));
+    }
+}
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 } // namespace tests
 } // namespace DB

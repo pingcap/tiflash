@@ -1,4 +1,6 @@
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
@@ -3858,12 +3860,24 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+<<<<<<< HEAD
         if (arguments.size() != 1)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                                 + ", should be 1.",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+=======
+        if unlikely (arguments.size() != 1)
+            throw Exception(
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1.",
+                    getName(),
+                    arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3871,6 +3885,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+<<<<<<< HEAD
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
         const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
@@ -3881,20 +3896,33 @@ public:
         col_res->reserve(val_num);
         if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
             throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+=======
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        if unlikely (c0_string == nullptr)
+            throw Exception(
+                fmt::format("Illegal argument of function {}", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
-        for (int i = 0; i < val_num; i++)
-        {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            Int64 res = handled_str.empty() ? 0 : static_cast<Int64>(handled_str[0]);
-            col_res->insert(res);
-        }
+        auto val_num = static_cast<ssize_t>(c0_col->size());
+        auto col_res = ColumnInt64::create();
+        ColumnInt64::Container & data = col_res->getData();
+        data.resize(val_num);
+
+        const auto & chars = c0_string->getChars();
+        const auto & offsets = c0_string->getOffsets();
+
+        for (ssize_t i = 0; i < val_num; i++)
+            data[i] = chars[offsets[i - 1]];
 
         block.getByPosition(result).column = std::move(col_res);
     }
+<<<<<<< HEAD
 
 private:
     const Context & context;
+=======
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 };
 
 class FunctionLength : public IFunction
@@ -3913,12 +3941,24 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+<<<<<<< HEAD
         if (arguments.size() != 1)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                                 + ", should be 1.",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+=======
+        if unlikely (arguments.size() != 1)
+            throw Exception(
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1.",
+                    getName(),
+                    arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3926,6 +3966,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+<<<<<<< HEAD
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
         const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
@@ -3936,13 +3977,23 @@ public:
         col_res->reserve(val_num);
         if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
             throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+=======
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        if unlikely (c0_string == nullptr)
+            throw Exception(
+                fmt::format("Illegal argument of function {}", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+>>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
-        for (int i = 0; i < val_num; i++)
-        {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            col_res->insert(static_cast<Int64>(handled_str.size()));
-        }
+        auto val_num = static_cast<ssize_t>(c0_col->size());
+        auto col_res = ColumnInt64::create();
+        ColumnInt64::Container & data = col_res->getData();
+        data.resize(val_num);
+
+        const auto & offsets = c0_string->getOffsets();
+
+        for (ssize_t i = 0; i < val_num; i++)
+            data[i] = offsets[i] - offsets[i - 1] - 1;
 
         block.getByPosition(result).column = std::move(col_res);
     }

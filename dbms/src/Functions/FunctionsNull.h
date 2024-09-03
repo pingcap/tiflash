@@ -50,7 +50,7 @@ class FunctionCoalesce : public IFunction
 public:
     static constexpr auto name = "coalesce";
     static FunctionPtr create(const Context & context);
-    FunctionCoalesce(const Context & context)
+    explicit FunctionCoalesce(const Context & context)
         : context(context)
     {}
 
