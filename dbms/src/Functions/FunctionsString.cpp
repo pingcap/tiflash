@@ -38,7 +38,6 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
-#include <thread>
 
 namespace DB
 {
@@ -4159,20 +4158,10 @@ public:
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-<<<<<<< HEAD
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr)
-            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-=======
         if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         auto val_num = static_cast<ssize_t>(c0_col->size());
         auto col_res = ColumnInt64::create();
@@ -4219,20 +4208,10 @@ public:
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-<<<<<<< HEAD
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr)
-            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-=======
         if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         auto val_num = static_cast<ssize_t>(c0_col->size());
         auto col_res = ColumnInt64::create();
