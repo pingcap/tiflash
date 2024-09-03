@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,25 +14,12 @@
 
 #pragma once
 
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-struct ProcessMetricsInfo
+namespace DB
 {
-    uint64_t cpu_total;
-    uint64_t vsize;
-    uint64_t rss;
-    uint64_t rss_anon;
-    uint64_t rss_file;
-    uint64_t rss_shared;
-    int64_t start_time;
+enum class WaitResult
+{
+    Ready,
+    WaitForPolling,
+    WaitForNotify
 };
-
-ProcessMetricsInfo get_process_metrics();
-
-#ifdef __cplusplus
-}
-#endif
+} // namespace DB

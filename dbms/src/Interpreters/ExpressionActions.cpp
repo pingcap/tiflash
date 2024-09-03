@@ -402,7 +402,7 @@ void ExpressionAction::execute(Block & block) const
                 column.name = alias;
             new_block.insert(std::move(column));
         }
-
+        new_block.setRSResult(block.getRSResult());
         block.swap(new_block);
 
         break;

@@ -14,12 +14,14 @@
 
 #include <Columns/ColumnString.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTTables.h>
@@ -37,6 +39,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
 
         {"tidb_database", std::make_shared<DataTypeString>()},
         {"tidb_table", std::make_shared<DataTypeString>()},
+        {"keyspace_id", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeUInt64>())},
         {"table_id", std::make_shared<DataTypeInt64>()},
         {"is_tombstone", std::make_shared<DataTypeUInt64>()},
 
@@ -146,11 +149,19 @@ BlockInputStreams StorageSystemDTTables::read(
             res_columns[j++]->insert(table_name);
 
             String tidb_db_name;
+            KeyspaceID keyspace_id = NullspaceID;
             if (db_tiflash)
-                tidb_db_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo());
+            {
+                tidb_db_name = db_tiflash->getDatabaseInfo().name;
+                keyspace_id = db_tiflash->getDatabaseInfo().keyspace_id;
+            }
             res_columns[j++]->insert(tidb_db_name);
-            String tidb_table_name = mapper.displayTableName(table_info);
+            String tidb_table_name = table_info.name;
             res_columns[j++]->insert(tidb_table_name);
+            if (keyspace_id == NullspaceID)
+                res_columns[j++]->insert(Field());
+            else
+                res_columns[j++]->insert(static_cast<UInt64>(keyspace_id));
             res_columns[j++]->insert(table_id);
             res_columns[j++]->insert(dm_storage->getTombstone());
 

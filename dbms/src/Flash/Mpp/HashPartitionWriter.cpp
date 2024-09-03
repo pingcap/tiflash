@@ -94,9 +94,9 @@ void HashPartitionWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
-bool HashPartitionWriter<ExchangeWriterPtr>::isWritable() const
+WaitResult HashPartitionWriter<ExchangeWriterPtr>::waitForWritable() const
 {
-    return writer->isWritable();
+    return writer->waitForWritable();
 }
 
 template <class ExchangeWriterPtr>
