@@ -55,13 +55,6 @@ TEST_F(StringLength, length)
         // test vec
         ASSERT_COLUMN_EQ(createColumn<Int64>({}), executeFunction("length", createColumn<String>({})));
 
-<<<<<<< HEAD
-        Block test_block;
-        ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
-        ColumnsWithTypeAndName ctns{ctn};
-        test_block.insert(ctn);
-        ColumnNumbers cns{0};
-=======
         ASSERT_COLUMN_EQ(
             createColumn<Int64>({0, 3, 5, 7, 6, 9, 0, 9, 16, 0}),
             executeFunction(
@@ -69,7 +62,6 @@ TEST_F(StringLength, length)
                 createColumn<String>(
                     {"", "hi~", "23333", "pingcap", "你好", "233哈哈", "", "asdの的", "ヽ(￣▽￣)و", ""})));
     }
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
     {
         // test nullable const

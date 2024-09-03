@@ -58,13 +58,6 @@ TEST_F(StringASCII, strAndStrTest)
             executeFunction("ascii", createColumn<String>({"我a", "hello", "HELLO", "23333", "#%@#^", ""})));
     }
 
-<<<<<<< HEAD
-        Block test_block;
-        ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
-        ColumnsWithTypeAndName ctns{ctn};
-        test_block.insert(ctn);
-        ColumnNumbers cns{0};
-=======
     {
         // test nullable const
         ASSERT_COLUMN_EQ(
@@ -77,7 +70,6 @@ TEST_F(StringASCII, strAndStrTest)
             createConstColumn<Int64>(3, {97}),
             executeFunction("ascii", createConstColumn<Nullable<String>>(3, "aaa")));
     }
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
     {
         // test nullable vec
