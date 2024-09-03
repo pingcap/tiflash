@@ -194,16 +194,18 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
 
 LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
 {
-    std::shared_lock lock(read_write_mutex);
-
-    if (!local_index_infos || local_index_infos->empty())
+    auto local_index_infos_snap = getLocalIndexInfosSnapshot();
+    if (!local_index_infos_snap)
         return {};
 
+    std::shared_lock lock(read_write_mutex);
+
     LocalIndexesStats stats;
-    for (const auto & index_info : *local_index_infos)
+    for (const auto & index_info : *local_index_infos_snap)
     {
         LocalIndexStats index_stats;
         index_stats.column_id = index_info.column_id;
+        index_stats.index_id = index_info.index_id;
         index_stats.column_name = index_info.column_name;
         index_stats.index_kind = "HNSW"; // TODO: Support more.
 

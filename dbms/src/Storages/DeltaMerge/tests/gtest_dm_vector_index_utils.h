@@ -15,10 +15,13 @@
 #pragma once
 
 #include <Core/ColumnWithTypeAndName.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TiDB/Decode/DatumCodec.h>
 
 
@@ -28,8 +31,8 @@ namespace DB::DM::tests
 class VectorIndexTestUtils
 {
 public:
-    const ColumnID vec_column_id = 100;
-    const String vec_column_name = "vec";
+    ColumnID vec_column_id = 100;
+    String vec_column_name = "vec";
 
     /// Create a column with values like [1], [2], [3], ...
     /// Each value is a VectorFloat32 with exactly one dimension.
@@ -73,22 +76,132 @@ public:
         return cache->cleanOutdatedCacheEntries();
     }
 
-    IndexInfosPtr indexInfo(
+    LocalIndexInfosPtr indexInfo(
         TiDB::VectorIndexDefinition definition = TiDB::VectorIndexDefinition{
             .kind = tipb::VectorIndexKind::HNSW,
             .dimension = 1,
             .distance_metric = tipb::VectorDistanceMetric::L2,
         })
     {
-        const IndexInfos index_infos = IndexInfos{
-            IndexInfo{
+        const LocalIndexInfos index_infos = LocalIndexInfos{
+            LocalIndexInfo{
                 .type = IndexType::Vector,
                 .column_id = vec_column_id,
+                .column_name = "",
                 .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(definition),
             },
         };
-        return std::make_shared<IndexInfos>(index_infos);
+        return std::make_shared<LocalIndexInfos>(index_infos);
     }
+};
+
+class DeltaMergeStoreVectorBase : public VectorIndexTestUtils
+{
+public:
+    DeltaMergeStorePtr reload()
+    {
+        auto cols = DMTestEnv::getDefaultColumns();
+        cols->push_back(cdVec());
+        ColumnDefine handle_column_define = (*cols)[0];
+
+        DeltaMergeStorePtr s = DeltaMergeStore::create(
+            *db_context,
+            false,
+            "test",
+            "t_100",
+            NullspaceID,
+            100,
+            /*pk_col_id*/ 0,
+            true,
+            *cols,
+            handle_column_define,
+            false,
+            1,
+            indexInfo(),
+            DeltaMergeStore::Settings());
+        return s;
+    }
+
+    void write(size_t num_rows_write)
+    {
+        String sequence = fmt::format("[0, {})", num_rows_write);
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of vector for test
+            block.insert(colVecFloat32(sequence, vec_column_name, vec_column_id));
+        }
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    void writeWithVecData(size_t num_rows_write)
+    {
+        String sequence = fmt::format("[0, {})", num_rows_write);
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of vector for test
+            block.insert(createVecFloat32Column<Array>(
+                {{1.0, 2.0, 3.0}, {0.0, 0.0, 0.0}, {1.0, 2.0, 3.5}},
+                vec_column_name,
+                vec_column_id));
+        }
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    void read(const RowKeyRange & range, const PushDownFilterPtr & filter, const ColumnWithTypeAndName & out)
+    {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            {cdVec()},
+            {range},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            filter,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /*keep_order=*/false)[0];
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({vec_column_name}),
+            createColumns({
+                out,
+            }));
+    }
+
+    void triggerMergeDelta() const
+    {
+        std::vector<SegmentPtr> all_segments;
+        {
+            std::shared_lock lock(store->read_write_mutex);
+            for (const auto & [_, segment] : store->id_to_segment)
+                all_segments.push_back(segment);
+        }
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        for (const auto & segment : all_segments)
+            ASSERT_TRUE(
+                store->segmentMergeDelta(*dm_context, segment, DeltaMergeStore::MergeDeltaReason::Manual) != nullptr);
+    }
+
+    void waitStableIndexReady() const
+    {
+        std::vector<SegmentPtr> all_segments;
+        {
+            std::shared_lock lock(store->read_write_mutex);
+            for (const auto & [_, segment] : store->id_to_segment)
+                all_segments.push_back(segment);
+        }
+        for (const auto & segment : all_segments)
+            ASSERT_TRUE(store->segmentWaitStableIndexReady(segment));
+    }
+
+    ContextPtr db_context;
+    DeltaMergeStorePtr store;
+
+protected:
+    constexpr static const char * TRACING_NAME = "DeltaMergeStoreVectorTest";
 };
 
 } // namespace DB::DM::tests

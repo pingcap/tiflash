@@ -45,6 +45,7 @@ StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & nam
 
         {"column_name", std::make_shared<DataTypeString>()},
         {"column_id", std::make_shared<DataTypeUInt64>()},
+        {"index_id", std::make_shared<DataTypeInt64>()},
         {"index_kind", std::make_shared<DataTypeString>()},
 
         {"rows_stable_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
@@ -120,6 +121,7 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
 
                 res_columns[j++]->insert(stat.column_name);
                 res_columns[j++]->insert(stat.column_id);
+                res_columns[j++]->insert(stat.index_id);
                 res_columns[j++]->insert(stat.index_kind);
 
                 res_columns[j++]->insert(stat.rows_stable_indexed);

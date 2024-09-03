@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
+#include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/PathPool.h>
@@ -32,14 +33,14 @@ namespace DB::DM
 {
 
 DMFileIndexWriter::LocalIndexBuildInfo DMFileIndexWriter::getLocalIndexBuildInfo(
-    const IndexInfosPtr & index_infos,
+    const LocalIndexInfosPtr & index_infos,
     const DMFiles & dm_files)
 {
     assert(index_infos != nullptr);
     static constexpr double VECTOR_INDEX_SIZE_FACTOR = 1.2;
 
     LocalIndexBuildInfo build;
-    build.indexes_to_build = std::make_shared<IndexInfos>();
+    build.indexes_to_build = std::make_shared<LocalIndexInfos>();
     build.file_ids.reserve(dm_files.size());
     for (const auto & dmfile : dm_files)
     {

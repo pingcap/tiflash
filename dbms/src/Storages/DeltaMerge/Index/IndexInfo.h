@@ -17,25 +17,48 @@
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/VectorIndex.h>
 
+namespace TiDB
+{
+struct TableInfo;
+struct ColumnInfo;
+struct IndexInfo;
+} // namespace TiDB
+
+namespace DB
+{
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+} // namespace DB
 namespace DB::DM
 {
-
 enum class IndexType
 {
     Vector = 1,
 };
 
-struct IndexInfo
+struct LocalIndexInfo
 {
     IndexType type;
-    ColumnID column_id;
+    IndexID index_id = DB::EmptyIndexID;
+    ColumnID column_id = DB::EmptyColumnID;
     String column_name;
     // Now we only support vector index.
     // In the future, we may support more types of indexes, using std::variant.
     TiDB::VectorIndexDefinitionPtr index_definition;
 };
 
-using IndexInfos = std::vector<IndexInfo>;
-using IndexInfosPtr = std::shared_ptr<IndexInfos>;
+using LocalIndexInfos = std::vector<LocalIndexInfo>;
+using LocalIndexInfosPtr = std::shared_ptr<LocalIndexInfos>;
+
+bool isVectorIndexSupported(const LoggerPtr & logger);
+LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
+TiDB::ColumnInfo getVectorIndxColumnInfo(
+    const TiDB::TableInfo & table_info,
+    const TiDB::IndexInfo & idx_info,
+    const LoggerPtr & logger);
+LocalIndexInfosPtr generateLocalIndexInfos(
+    const LocalIndexInfosPtr & existing_indexes,
+    const TiDB::TableInfo & new_table_info,
+    const LoggerPtr & logger);
 
 } // namespace DB::DM
