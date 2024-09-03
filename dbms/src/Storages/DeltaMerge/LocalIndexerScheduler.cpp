@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <common/logger_useful.h>
+
 
 namespace DB::DM
 {
@@ -306,7 +308,7 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
         last_schedule_table_id = last_schedule_table_id_by_ks[keyspace_id];
 
     // Try to finish all tasks in the last table before moving to the next table.
-    auto table_it = tasks_by_table.find(last_schedule_table_id);
+    auto table_it = tasks_by_table.lower_bound(last_schedule_table_id);
     if (table_it == tasks_by_table.end())
         table_it = tasks_by_table.begin();
     const TableID table_id = table_it->first;
@@ -348,8 +350,7 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
         return ScheduleResult::RETRY;
     }
 
-    auto ok = tryAddTaskToPool(lock, task);
-    if (!ok)
+    if (!tryAddTaskToPool(lock, task))
         // The pool is full. May be memory limit reached or concurrent task limit reached.
         // We will not try any more tasks.
         // At next retry, we will continue using this Keyspace+Table and try next task.
@@ -365,6 +366,8 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
 
 void LocalIndexerScheduler::schedulerLoop()
 {
+    setThreadName("LocalIndexScheduler-SchedulerLoop");
+
     while (true)
     {
         if (is_shutting_down)
