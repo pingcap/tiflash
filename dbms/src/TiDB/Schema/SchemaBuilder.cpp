@@ -687,6 +687,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(const T
     updated_table_info.partition = table_info->partition;
 
     /// Apply changes to physical tables.
+    auto reason = fmt::format("ApplyPartitionDiff-logical_table_id={}", orig_table_info.id);
     if (drop_part_if_not_exist)
     {
         for (const auto & orig_def : orig_defs)
@@ -697,7 +698,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(const T
                 // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchema` -> `applyPartitionDiffOnLogicalTable` without `applyExchangeTablePartition`
                 // The physical table maybe `EXCHANGE` to another database, try to find the partition from all database
                 auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
-                applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id, /*must_update_tombstone*/ false, "exchange partition");
+                applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id, /*must_update_tombstone*/ false, reason);
             }
         }
     }
