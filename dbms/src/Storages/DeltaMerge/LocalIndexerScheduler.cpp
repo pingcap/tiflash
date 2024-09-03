@@ -366,7 +366,7 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
 
 void LocalIndexerScheduler::schedulerLoop()
 {
-    setThreadName("LocalIndexScheduler-SchedulerLoop");
+    setThreadName("LocalIndexSched");
 
     while (true)
     {
