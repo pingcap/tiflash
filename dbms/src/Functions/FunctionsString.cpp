@@ -23,7 +23,6 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
-#include <thread>
 
 namespace DB
 {
@@ -3864,12 +3863,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-<<<<<<< HEAD
-        if (arguments.size() != 1)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-=======
         if unlikely (arguments.size() != 1)
             throw Exception(
                 fmt::format(
@@ -3877,7 +3870,6 @@ public:
                     getName(),
                     arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3885,24 +3877,11 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-<<<<<<< HEAD
-        const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
-            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-=======
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
         if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         auto val_num = static_cast<ssize_t>(c0_col->size());
         auto col_res = ColumnInt64::create();
@@ -3917,12 +3896,6 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
     }
-<<<<<<< HEAD
-
-private:
-    const Context & context;
-=======
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 };
 
 class FunctionLength : public IFunction
@@ -3945,12 +3918,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-<<<<<<< HEAD
-        if (arguments.size() != 1)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-=======
         if unlikely (arguments.size() != 1)
             throw Exception(
                 fmt::format(
@@ -3958,7 +3925,6 @@ public:
                     getName(),
                     arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3966,24 +3932,11 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-<<<<<<< HEAD
-        const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
-            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-=======
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
         if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
->>>>>>> b30c1f5090 (Improve the performance of `length` and `ascii` functions (#9345))
 
         auto val_num = static_cast<ssize_t>(c0_col->size());
         auto col_res = ColumnInt64::create();
