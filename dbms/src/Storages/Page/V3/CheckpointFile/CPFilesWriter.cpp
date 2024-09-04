@@ -188,7 +188,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
             RUNTIME_CHECK_MSG(
                 page.isValid(),
-                "failed to read page, record={}, elapsed={}",
+                "failed to read page, record={}, elapsed={}s",
                 rec_edit,
                 sw.elapsedSeconds());
             auto data_location
