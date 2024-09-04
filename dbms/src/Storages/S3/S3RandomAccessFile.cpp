@@ -195,11 +195,10 @@ bool S3RandomAccessFile::initialize()
             auto el = sw.elapsedSeconds();
             LOG_ERROR(
                 log,
-                "S3 GetObject failed: {}, cur_retry={}, key={}, remote_fname={}, elapsed{}={}",
+                "S3 GetObject failed: {}, cur_retry={}, key={}, elapsed{}={}",
                 S3::S3ErrorMessage(outcome.GetError()),
                 cur_retry,
                 req.GetKey(),
-                remote_fname,
                 el > 60.0 ? "(long)" : "",
                 el);
             continue;
@@ -220,11 +219,10 @@ bool S3RandomAccessFile::initialize()
         auto el = sw.elapsedSeconds();
         LOG_INFO(
             log,
-            "S3 GetObject timeout: {}, max_retry={}, key={}, remote_fname={}, elapsed{}={}",
+            "S3 GetObject timeout: {}, max_retry={}, key={}, elapsed{}={}",
             remote_fname,
             max_retry,
             req.GetKey(),
-            remote_fname,
             el > 60.0 ? "(long)" : "",
             el);
     }
