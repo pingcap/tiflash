@@ -610,7 +610,7 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).
     //   This can be avoided, as its content is useless.
-    if (checkpoint_dump_stats.value().has_new_data)
+    if (checkpoint_dump_stats->has_new_data)
     {
         // Copy back the checkpoint info to the current PageStorage.
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
