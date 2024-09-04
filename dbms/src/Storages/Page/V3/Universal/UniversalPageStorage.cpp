@@ -555,7 +555,7 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
                 .sequence = snap->sequence,
                 .last_sequence = last_checkpoint_sequence,
             });
-            PS::V3::CPFilesWriter::CompactOptions compact_opts = [&]() {
+            const PS::V3::CPFilesWriter::CompactOptions compact_opts = [&]() {
                 if (options.full_compact)
                     return PS::V3::CPFilesWriter::CompactOptions(true);
                 if (options.compact_getter == nullptr)
