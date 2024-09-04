@@ -219,8 +219,7 @@ bool S3RandomAccessFile::initialize()
         auto el = sw.elapsedSeconds();
         LOG_INFO(
             log,
-            "S3 GetObject timeout: {}, max_retry={}, key={}, elapsed{}={}",
-            remote_fname,
+            "S3 GetObject timeout: max_retry={}, key={}, elapsed{}={}s",
             max_retry,
             req.GetKey(),
             el > 60.0 ? "(long)" : "",
