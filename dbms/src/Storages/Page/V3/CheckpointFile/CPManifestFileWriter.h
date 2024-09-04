@@ -41,7 +41,7 @@ public:
     }
 
     explicit CPManifestFileWriter(Options options_)
-        : options(options_)
+        : options(std::move(options_))
         , file_writer(std::make_unique<WriteBufferFromFile>(options.file_path))
         , compressed_writer(std::make_unique<CompressedWriteBuffer<true>>(*file_writer, CompressionSettings()))
         , max_edit_records_per_part(options.max_edit_records_per_part)
