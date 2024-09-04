@@ -574,7 +574,13 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
         catch (...)
         {
             // Could be #9406, which is a soft error.
-            tryLogCurrentException(__PRETTY_FUNCTION__, fmt::format("Error dumping incremental snapshot sequence={} manifest_file_path={} data_file_path_pattern={}", sequence, manifest_file_path, options.data_file_path_pattern));
+            tryLogCurrentException(
+                __PRETTY_FUNCTION__,
+                fmt::format(
+                    "Error dumping incremental snapshot sequence={} manifest_file_path={} data_file_path_pattern={}",
+                    sequence,
+                    manifest_file_path,
+                    options.data_file_path_pattern));
             writer->abort();
             return std::nullopt;
         }
