@@ -637,8 +637,8 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
         copy_checkpoint_info_seconds,
         sw.elapsedSeconds(),
         sequence,
-        checkpoint_dump_stats.value());
-    SetMetrics(checkpoint_dump_stats.value());
+        *checkpoint_dump_stats);
+    SetMetrics(*checkpoint_dump_stats);
     return checkpoint_dump_stats;
 }
 
