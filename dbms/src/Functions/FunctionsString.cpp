@@ -3896,6 +3896,9 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
     }
+
+private:
+    const Context & context;
 };
 
 class FunctionLength : public IFunction
