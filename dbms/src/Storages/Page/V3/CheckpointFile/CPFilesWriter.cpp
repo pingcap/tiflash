@@ -213,7 +213,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         }
         catch (...)
         {
-            LOG_ERROR(log, "failed to read page, record={}, elapsed={}", rec_edit, sw.elapsedSeconds());
+            LOG_ERROR(log, "failed to read and write page, record={}, elapsed={}", rec_edit, sw.elapsedSeconds());
             tryLogCurrentException(__PRETTY_FUNCTION__);
             throw;
         }
