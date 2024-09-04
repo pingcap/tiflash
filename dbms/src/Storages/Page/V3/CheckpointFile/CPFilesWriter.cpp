@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Poco/File.h>
 #include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
@@ -284,7 +285,8 @@ void CPFilesWriter::abort()
             f.remove();
         }
     }
-    if likely (manifest_writer != nullptr) {
+    if likely (manifest_writer != nullptr)
+    {
         manifest_writer->abort();
     }
 }
