@@ -293,8 +293,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             "Upload checkpoint success,{} upload_sequence={} incremental_bytes={} compact_bytes={}",
             force_sync_data ? " sync_all=true" : "",
             upload_info.upload_sequence,
-            write_stats.value().incremental_data_bytes,
-            write_stats.value().compact_data_bytes);
+            write_stats->incremental_data_bytes,
+            write_stats->compact_data_bytes);
     }
 
     return true;
