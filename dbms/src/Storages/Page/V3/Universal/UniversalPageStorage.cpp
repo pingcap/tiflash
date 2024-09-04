@@ -587,7 +587,7 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
     }();
 
     if (!checkpoint_dump_stats.has_value())
-        return checkpoint_dump_stats;
+        return std::nullopt;
 
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
