@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/File.h>
 #include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -255,6 +256,7 @@ void CPFilesWriter::newDataWriter()
         fmt::runtime(data_file_path_pattern),
         fmt::arg("seq", sequence),
         fmt::arg("index", data_file_index)));
+
     data_writer = CPDataFileWriter::create({
         .file_path = data_file_paths.back(),
         .file_id = fmt::format(
@@ -266,6 +268,18 @@ void CPFilesWriter::newDataWriter()
     data_prefix.set_sub_file_index(data_file_index);
     data_writer->writePrefix(data_prefix);
     ++data_file_index;
+}
+
+void CPFilesWriter::abort()
+{
+    for (const auto & s : data_file_paths)
+    {
+        if (Poco::File f(s); f.exists())
+        {
+            f.remove();
+        }
+    }
+    manifest_writer->abort();
 }
 
 } // namespace DB::PS::V3
