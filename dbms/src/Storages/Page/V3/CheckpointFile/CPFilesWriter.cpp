@@ -284,7 +284,9 @@ void CPFilesWriter::abort()
             f.remove();
         }
     }
-    manifest_writer->abort();
+    if likely (manifest_writer != nullptr) {
+        manifest_writer->abort();
+    }
 }
 
 } // namespace DB::PS::V3
