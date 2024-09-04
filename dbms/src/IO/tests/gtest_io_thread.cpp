@@ -16,6 +16,7 @@
 #include <IO/IOThreadPools.h>
 #include <gtest/gtest.h>
 
+#include <array>
 #include <exception>
 #include <ext/scope_guard.h>
 #include <future>
