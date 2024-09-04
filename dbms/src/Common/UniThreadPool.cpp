@@ -90,6 +90,13 @@ void ThreadPoolImpl<Thread>::setQueueSize(size_t value)
     jobs.reserve(queue_size);
 }
 
+template <typename Thread>
+size_t ThreadPoolImpl<Thread>::getQueueSize() const
+{
+    std::lock_guard lock(mutex);
+    return queue_size;
+}
+
 
 template <typename Thread>
 template <typename ReturnType>
@@ -196,6 +203,14 @@ void ThreadPoolImpl<Thread>::scheduleOrThrow(
     bool propagate_opentelemetry_tracing_context)
 {
     scheduleImpl<void>(std::move(job), priority, wait_microseconds, propagate_opentelemetry_tracing_context);
+}
+
+template <typename Thread>
+std::future<void> ThreadPoolImpl<Thread>::scheduleWithFuture(Job job, uint64_t wait_timeout_us)
+{
+    auto task = std::make_shared<std::packaged_task<void()>>(std::move(job));
+    scheduleImpl<void>([task]() { (*task)(); }, /*priority*/ 0, wait_timeout_us);
+    return task->get_future();
 }
 
 template <typename Thread>
