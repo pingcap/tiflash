@@ -67,14 +67,14 @@ private:
 
     void applyCreatePhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
-    void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
+    void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id, std::string_view action);
 
     /// Parameter schema_name should be mapped.
-    void applyDropPhysicalTable(const String & db_name, TableID table_id);
+    void applyDropPhysicalTable(const String & db_name, TableID table_id, bool must_update_tombstone, std::string_view action);
 
     void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
-    void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage, bool drop_part_if_not_exist);
+    void applyPartitionDiffOnLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage, bool drop_part_if_not_exist);
     TiDB::DBInfoPtr tryFindDatabaseByPartitionTable(const TiDB::DBInfoPtr & db_info, const String & part_table_name);
 
     void applyAlterTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
@@ -83,11 +83,11 @@ private:
 
     void applyAlterPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
 
-    void applyRenameTable(const TiDB::DBInfoPtr & new_db_info, TiDB::TableID table_id);
+    void applyRenameTable(const TiDB::DBInfoPtr & new_db_info, TiDB::TableID table_id, std::string_view action);
 
-    void applyRenameLogicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfoPtr & new_table_info, const ManageableStoragePtr & storage);
+    void applyRenameLogicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfoPtr & new_table_info, const ManageableStoragePtr & storage, std::string_view action);
 
-    void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage);
+    void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage, std::string_view action);
 
     void applyExchangeTablePartition(const SchemaDiff & diff);
 
