@@ -602,7 +602,8 @@ try
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     FailPointHelper::enableFailPoint(FailPoints::force_checkpoint_dump_throw_datafile);
-    dumpCheckpoint();
+    EXPECT_NO_THROW(dumpCheckpoint());
+    FailPointHelper::disableFailPoint(FailPoints::force_checkpoint_dump_throw_datafile);
 }
 CATCH
 
