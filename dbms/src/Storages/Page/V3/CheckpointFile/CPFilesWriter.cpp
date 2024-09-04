@@ -181,10 +181,15 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 
         // 2. For entry edits without the checkpoint info, or it is stored on an existing data file that needs compact,
         // write the entry data to the data file, and assign a new checkpoint info.
+        Stopwatch sw;
         try
         {
             auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
-            RUNTIME_CHECK_MSG(page.isValid(), "failed to read page, record={}", rec_edit);
+            RUNTIME_CHECK_MSG(
+                page.isValid(),
+                "failed to read page, record={}, elapsed={}",
+                rec_edit,
+                sw.elapsedSeconds());
             auto data_location
                 = data_writer->write(rec_edit.page_id, rec_edit.version, page.data.begin(), page.data.size());
             // the page data size uploaded in this checkpoint
@@ -208,7 +213,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         }
         catch (...)
         {
-            LOG_ERROR(log, "failed to read page, record={}", rec_edit);
+            LOG_ERROR(log, "failed to read page, record={}, elapsed={}", rec_edit, sw.elapsedSeconds());
             tryLogCurrentException(__PRETTY_FUNCTION__);
             throw;
         }
