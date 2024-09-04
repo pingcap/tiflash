@@ -147,6 +147,12 @@ protected:
         return status;
     }
 
+    void notifyImpl() override
+    {
+        assert(cur_exec);
+        cur_exec->notify();
+    }
+
 private:
     bool popExec()
     {
