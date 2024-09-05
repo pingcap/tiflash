@@ -62,13 +62,13 @@ TEST_F(StringASCII, strAndStrTest)
     {
         // test nullable const
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(0, {}),
+            createConstColumn<Nullable<Int64>>(0, 0),
             executeFunction("ascii", createConstColumn<Nullable<String>>(0, "aaa")));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(1, {97}),
+            createConstColumn<Nullable<Int64>>(1, 97),
             executeFunction("ascii", createConstColumn<Nullable<String>>(1, "aaa")));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(3, {97}),
+            createConstColumn<Nullable<Int64>>(3, 97),
             executeFunction("ascii", createConstColumn<Nullable<String>>(3, "aaa")));
     }
 
