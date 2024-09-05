@@ -53,13 +53,13 @@ TEST_F(StringLength, length)
     {
         // test nullable const
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(0, {}),
+            createConstColumn<Nullable<Int64>>(0, {}),
             executeFunction("length", createConstColumn<Nullable<String>>(0, "aaa")));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(1, {3}),
+            createConstColumn<Nullable<Int64>>(1, {3}),
             executeFunction("length", createConstColumn<Nullable<String>>(1, "aaa")));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Int64>(3, {3}),
+            createConstColumn<Nullable<Int64>>(3, {3}),
             executeFunction("length", createConstColumn<Nullable<String>>(3, "aaa")));
     }
 
