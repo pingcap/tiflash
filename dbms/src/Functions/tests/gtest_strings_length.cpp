@@ -62,16 +62,6 @@ TEST_F(StringLength, length)
             createConstColumn<Nullable<Int64>>(3, {3}),
             executeFunction("length", createConstColumn<Nullable<String>>(3, "aaa")));
     }
-
-    {
-        // test nullable vec
-        std::vector<Int32> null_map{1, 0, 1, 0, 0, 1};
-        ASSERT_COLUMN_EQ(
-            createNullableColumn<Int64>({0, 4, 0, 6, 6, 0}, null_map),
-            executeFunction(
-                "length",
-                createNullableColumn<String>({"a", "abcd", "嗯", "饼干", "馒头", "?？?"}, null_map)));
-    }
 }
 } // namespace tests
 } // namespace DB

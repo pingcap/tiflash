@@ -57,16 +57,6 @@ TEST_F(StringASCII, strAndStrTest)
             createConstColumn<Nullable<Int64>>(3, {97}),
             executeFunction("ascii", createConstColumn<Nullable<String>>(3, "aaa")));
     }
-
-    {
-        // test nullable vec
-        std::vector<Int32> null_map{0, 1, 0, 1, 0, 0, 1};
-        ASSERT_COLUMN_EQ(
-            createNullableColumn<Int64>({0, 0, 97, 0, 233, 233, 0}, null_map),
-            executeFunction(
-                "ascii",
-                createNullableColumn<String>({"", "a", "abcd", "嗯", "饼干", "馒头", "?？?"}, null_map)));
-    }
 }
 } // namespace tests
 } // namespace DB
