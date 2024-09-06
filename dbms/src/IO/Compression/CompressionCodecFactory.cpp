@@ -25,7 +25,6 @@
 #include <magic_enum.hpp>
 #include <shared_mutex>
 
-#include "IO/Compression/CompressionMethod.h"
 
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
