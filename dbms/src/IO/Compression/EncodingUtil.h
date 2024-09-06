@@ -75,6 +75,7 @@ static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
 template <std::integral T>
 size_t runLengthEncodedApproximateSize(const T * source, UInt32 source_size);
 
+// After run-length encoding, the values stored in `dest` are:
 // [val1, val2, val3, ..., valn, cnt1, cnt2, ..., cntn]
 template <std::integral T>
 size_t runLengthEncoding(const T * source, UInt32 source_size, char * dest);

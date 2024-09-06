@@ -30,62 +30,60 @@ char * writeSameValueMultipleTime(T value, UInt32 count, char * dest)
     {
         memset(dest, value, count);
         dest += count;
+        return dest;
     }
-    else
-    {
-        UInt32 j = 0;
+    UInt32 j = 0;
 #if defined(__AVX2__)
-        // avx2
-        while (j + sizeof(__m256i) / sizeof(T) <= count)
+    // avx2
+    while (j + sizeof(__m256i) / sizeof(T) <= count)
+    {
+        if constexpr (sizeof(T) == 2)
         {
-            if constexpr (sizeof(T) == 2)
-            {
-                auto value_avx2 = _mm256_set1_epi16(value);
-                _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
-            }
-            else if constexpr (sizeof(T) == 4)
-            {
-                auto value_avx2 = _mm256_set1_epi32(value);
-                _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
-            }
-            else if constexpr (sizeof(T) == 8)
-            {
-                auto value_avx2 = _mm256_set1_epi64x(value);
-                _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
-            }
-            j += sizeof(__m256i) / sizeof(T);
-            dest += sizeof(__m256i);
+            auto value_avx2 = _mm256_set1_epi16(value);
+            _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
         }
+        else if constexpr (sizeof(T) == 4)
+        {
+            auto value_avx2 = _mm256_set1_epi32(value);
+            _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
+        }
+        else if constexpr (sizeof(T) == 8)
+        {
+            auto value_avx2 = _mm256_set1_epi64x(value);
+            _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest), value_avx2);
+        }
+        j += sizeof(__m256i) / sizeof(T);
+        dest += sizeof(__m256i);
+    }
 #endif
 #if defined(__SSE2__)
-        // sse
-        while (j + sizeof(__m128i) / sizeof(T) <= count)
+    // sse
+    while (j + sizeof(__m128i) / sizeof(T) <= count)
+    {
+        if constexpr (sizeof(T) == 2)
         {
-            if constexpr (sizeof(T) == 2)
-            {
-                auto value_sse = _mm_set1_epi16(value);
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
-            }
-            else if constexpr (sizeof(T) == 4)
-            {
-                auto value_sse = _mm_set1_epi32(value);
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
-            }
-            else if constexpr (sizeof(T) == 8)
-            {
-                auto value_sse = _mm_set1_epi64x(value);
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
-            }
-            j += sizeof(__m128i) / sizeof(T);
-            dest += sizeof(__m128i);
+            auto value_sse = _mm_set1_epi16(value);
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
         }
+        else if constexpr (sizeof(T) == 4)
+        {
+            auto value_sse = _mm_set1_epi32(value);
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
+        }
+        else if constexpr (sizeof(T) == 8)
+        {
+            auto value_sse = _mm_set1_epi64x(value);
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(dest), value_sse);
+        }
+        j += sizeof(__m128i) / sizeof(T);
+        dest += sizeof(__m128i);
+    }
 #endif
-        // scalar
-        for (; j < count; ++j)
-        {
-            unalignedStore<T>(dest, value);
-            dest += sizeof(T);
-        }
+    // scalar
+    for (; j < count; ++j)
+    {
+        unalignedStore<T>(dest, value);
+        dest += sizeof(T);
     }
     return dest;
 }

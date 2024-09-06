@@ -726,8 +726,7 @@ public:
 
         if (value < CompressionMethod::LZ4 || value > compression_method_last)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
-#if USE_QPL
-#else
+#if !USE_QPL
         if (unlikely(value == CompressionMethod::QPL))
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 #endif
