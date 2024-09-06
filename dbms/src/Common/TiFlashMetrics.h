@@ -885,7 +885,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_lz4_uncompressed_bytes, {"type", "lz4_uncompressed_bytes"}),                                                           \
       F(type_lightweight_compressed_bytes, {"type", "lightweight_compressed_bytes"}),                                               \
       F(type_lightweight_uncompressed_bytes, {"type", "lightweight_uncompressed_bytes"}))
-      
+
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
 struct ExpBuckets
