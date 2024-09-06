@@ -34,13 +34,13 @@ namespace DB
 class CompressionCodecLightweight : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecLightweight(CompressionDataType data_type_);
+    explicit CompressionCodecLightweight(CompressionDataType data_type_, int level_);
 
     UInt8 getMethodByte() const override;
 
-    bool isCompression() const override { return true; }
+    ~CompressionCodecLightweight() override = default;
 
-    ~CompressionCodecLightweight() override;
+    bool isCompression() const override { return true; }
 
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
@@ -55,22 +55,19 @@ private:
     enum class IntegerMode : UInt8
     {
         Invalid = 0,
-        CONSTANT = 1, // all values are the same
-        CONSTANT_DELTA = 2, // the difference between two adjacent values is the same
-        RunLength = 3, // run-length encoding
+        Constant = 1, // all values are the same
+        ConstantDelta = 2, // the difference between two adjacent values is the same
+        RunLength = 3, // the same value appears multiple times
         FOR = 4, // Frame of Reference encoding
-        DELTA_FOR = 5, // delta encoding and then FOR encoding
+        DeltaFOR = 5, // delta encoding and then FOR encoding
         LZ4 = 6, // the above modes are not suitable, use LZ4 instead
     };
 
     // Constant or ConstantDelta
-    template <typename T>
+    template <std::integral T>
     using ConstantState = T;
 
-    template <typename T>
-    using RunLengthState = std::vector<std::pair<T, UInt8>>;
-
-    template <typename T>
+    template <std::integral T>
     struct FORState
     {
         std::vector<T> values;
@@ -78,63 +75,59 @@ private:
         UInt8 bit_width;
     };
 
-    template <typename T>
+    template <std::integral T>
     struct DeltaFORState
     {
-        using TS = typename std::make_signed_t<T>;
-        std::vector<TS> deltas;
-        TS min_delta_value;
+        std::vector<T> deltas;
+        T min_delta_value;
         UInt8 bit_width;
     };
 
     // State is a union of different states for different modes
-    template <typename T>
-    using IntegerState = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
+    template <std::integral T>
+    using IntegerState = std::variant<ConstantState<T>, FORState<T>, DeltaFORState<T>>;
 
     class IntegerCompressContext
     {
     public:
-        IntegerCompressContext() = default;
+        explicit IntegerCompressContext(int round_count_)
+            : round_count(round_count_)
+        {}
 
-        template <typename T>
+        template <std::integral T>
         void analyze(std::span<const T> & values, IntegerState<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
-
-        String toDebugString() const;
-        bool isCompression() const { return lz4_counter > 0 || lw_counter > 0; }
 
         IntegerMode mode = IntegerMode::LZ4;
 
     private:
         bool needAnalyze() const;
+
+        template <std::integral T>
         bool needAnalyzeDelta() const;
+
+        template <std::integral T>
+        static constexpr bool needAnalyzeFOR();
+
         bool needAnalyzeRunLength() const;
 
-    private:
-        // The threshold for the number of blocks to decide whether need to analyze.
-        // For example:
-        // If lz4 is used more than COUNT_THRESHOLD times and the compression ratio is better than lightweight codec, do not analyze anymore.
-        static constexpr size_t COUNT_THRESHOLD = 5;
-        // Assume that the compression ratio of LZ4 is 3.0
-        // The official document says that the compression ratio of LZ4 is 2.1, https://github.com/lz4/lz4
-        static constexpr size_t ESRTIMATE_LZ4_COMPRESSION_RATIO = 3;
+        void resetIfNeed();
 
-        size_t lw_uncompressed_size = 0;
-        size_t lw_compressed_size = 0;
-        size_t lw_counter = 0;
-        size_t lz4_uncompressed_size = 0;
-        size_t lz4_compressed_size = 0;
-        size_t lz4_counter = 0;
-        size_t constant_delta_counter = 0;
-        size_t delta_for_counter = 0;
-        size_t rle_counter = 0;
+    private:
+        // Every round_count blocks as a round, decide whether to analyze the mode.
+        const int round_count;
+        int compress_count = 0;
+        bool used_lz4 = false;
+        bool used_constant_delta = false;
+        bool used_delta_for = false;
+        bool used_rle = false;
     };
 
-    template <typename T>
+    template <std::integral T>
     size_t compressDataForInteger(const char * source, UInt32 source_size, char * dest) const;
 
-    template <typename T>
+    template <std::integral T>
     void decompressDataForInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size) const;
 
     /// Non-integer data

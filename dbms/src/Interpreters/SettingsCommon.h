@@ -56,12 +56,12 @@ struct SettingInt
 public:
     bool changed = false;
 
-    SettingInt(IntType x = 0)
+    SettingInt(IntType x = 0) // NOLINT(google-explicit-constructor)
         : value(x)
     {}
     SettingInt(const SettingInt & setting);
 
-    operator IntType() const { return value.load(); }
+    operator IntType() const { return value.load(); } // NOLINT(google-explicit-constructor)
     SettingInt & operator=(IntType x)
     {
         set(x);
@@ -113,12 +113,12 @@ public:
     bool is_auto;
     bool changed = false;
 
-    SettingMaxThreads(UInt64 x = 0)
+    SettingMaxThreads(UInt64 x = 0) // NOLINT(google-explicit-constructor)
         : is_auto(x == 0)
         , value(x ? x : getAutoValue())
     {}
 
-    operator UInt64() const { return value; }
+    operator UInt64() const { return value; } // NOLINT(google-explicit-constructor)
     SettingMaxThreads & operator=(UInt64 x)
     {
         set(x);
@@ -187,11 +187,11 @@ struct SettingSeconds
 public:
     bool changed = false;
 
-    SettingSeconds(UInt64 seconds = 0)
+    SettingSeconds(UInt64 seconds = 0) // NOLINT(google-explicit-constructor)
         : value(seconds, 0)
     {}
 
-    operator Poco::Timespan() const { return value; }
+    operator Poco::Timespan() const { return value; } // NOLINT(google-explicit-constructor)
     SettingSeconds & operator=(const Poco::Timespan & x)
     {
         set(x);
@@ -235,11 +235,11 @@ struct SettingMilliseconds
 public:
     bool changed = false;
 
-    SettingMilliseconds(UInt64 milliseconds = 0)
+    SettingMilliseconds(UInt64 milliseconds = 0) // NOLINT(google-explicit-constructor)
         : value(milliseconds * 1000)
     {}
 
-    operator Poco::Timespan() const { return value; }
+    operator Poco::Timespan() const { return value; } // NOLINT(google-explicit-constructor)
     SettingMilliseconds & operator=(const Poco::Timespan & x)
     {
         set(x);
@@ -283,11 +283,11 @@ struct SettingFloat
 public:
     bool changed = false;
 
-    SettingFloat(float x = 0)
+    SettingFloat(float x = 0) // NOLINT(google-explicit-constructor)
         : value(x)
     {}
     SettingFloat(const SettingFloat & setting) { value.store(setting.value.load()); }
-    operator float() const { return value.load(); }
+    operator float() const { return value.load(); } // NOLINT(google-explicit-constructor)
     SettingFloat & operator=(float x)
     {
         set(x);
@@ -390,11 +390,11 @@ struct SettingDouble
 public:
     bool changed = false;
 
-    SettingDouble(double x = 0)
+    SettingDouble(double x = 0) // NOLINT(google-explicit-constructor)
         : value(x)
     {}
     SettingDouble(const SettingDouble & setting) { value.store(setting.value.load()); }
-    operator double() const { return value.load(); }
+    operator double() const { return value.load(); } // NOLINT(google-explicit-constructor)
     SettingDouble & operator=(double x)
     {
         set(x);
@@ -473,11 +473,11 @@ struct SettingLoadBalancing
 public:
     bool changed = false;
 
-    SettingLoadBalancing(LoadBalancing x)
+    explicit SettingLoadBalancing(LoadBalancing x)
         : value(x)
     {}
 
-    operator LoadBalancing() const { return value; }
+    operator LoadBalancing() const { return value; } // NOLINT(google-explicit-constructor)
     SettingLoadBalancing & operator=(LoadBalancing x)
     {
         set(x);
@@ -537,11 +537,11 @@ struct SettingOverflowMode
 public:
     bool changed = false;
 
-    SettingOverflowMode(OverflowMode x = OverflowMode::THROW)
+    explicit SettingOverflowMode(OverflowMode x = OverflowMode::THROW)
         : value(x)
     {}
 
-    operator OverflowMode() const { return value; }
+    operator OverflowMode() const { return value; } // NOLINT(google-explicit-constructor)
     SettingOverflowMode & operator=(OverflowMode x)
     {
         set(x);
@@ -602,7 +602,7 @@ struct SettingChecksumAlgorithm
 public:
     bool changed = false;
 
-    SettingChecksumAlgorithm(ChecksumAlgo x = ChecksumAlgo::XXH3) // NOLINT(google-explicit-constructor)
+    explicit SettingChecksumAlgorithm(ChecksumAlgo x = ChecksumAlgo::XXH3)
         : value(x)
     {}
 
@@ -678,11 +678,11 @@ struct SettingCompressionMethod
 public:
     bool changed = false;
 
-    SettingCompressionMethod(CompressionMethod x = CompressionMethod::LZ4)
+    explicit SettingCompressionMethod(CompressionMethod x = CompressionMethod::LZ4)
         : value(x)
     {}
 
-    operator CompressionMethod() const { return value; }
+    operator CompressionMethod() const { return value; } // NOLINT(google-explicit-constructor)
     SettingCompressionMethod & operator=(CompressionMethod x)
     {
         set(x);
@@ -701,28 +701,35 @@ public:
 #if USE_QPL
         if (lower_str == "qpl")
             return CompressionMethod::QPL;
+#endif
+        if (lower_str == "none")
+            return CompressionMethod::NONE;
+        if (lower_str == "lightweight")
+            return CompressionMethod::Lightweight;
+#if USE_QPL
         throw Exception(
-            "Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'",
-            ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+            ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
+            "Unknown compression method: '{}', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl', 'none', 'lightweight'",
+            s);
 #else
         throw Exception(
-            "Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'",
-            ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+            ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
+            "Unknown compression method: '{}', must be one of 'lz4', 'lz4hc', 'zstd', 'none', 'lightweight'",
+            s);
 #endif
     }
 
     String toString() const
     {
-#if USE_QPL
-        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd", "qpl"};
-        auto compression_method_last = CompressionMethod::QPL;
-#else
-        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd"};
-        auto compression_method_last = CompressionMethod::ZSTD;
-#endif
+        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd", "qpl", "none", "lightweight"};
+        auto compression_method_last = CompressionMethod::Lightweight;
 
         if (value < CompressionMethod::LZ4 || value > compression_method_last)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#if !USE_QPL
+        if (unlikely(value == CompressionMethod::QPL))
+            throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#endif
 
         return strings[static_cast<size_t>(value)];
     }
@@ -757,11 +764,11 @@ struct SettingTaskQueueType
 public:
     bool changed = false;
 
-    SettingTaskQueueType(TaskQueueType x = TaskQueueType::DEFAULT)
+    explicit SettingTaskQueueType(TaskQueueType x = TaskQueueType::DEFAULT)
         : value(x)
     {}
 
-    operator TaskQueueType() const { return value; }
+    operator TaskQueueType() const { return value; } // NOLINT(google-explicit-constructor)
     SettingTaskQueueType & operator=(TaskQueueType x)
     {
         set(x);
@@ -811,11 +818,11 @@ struct SettingString
 public:
     bool changed = false;
 
-    SettingString(const String & x = String{})
+    explicit SettingString(const String & x = String{})
         : value(x)
     {}
 
-    operator String() const { return value; }
+    operator String() const { return value; } // NOLINT(google-explicit-constructor)
     SettingString & operator=(const String & x)
     {
         set(x);

@@ -174,10 +174,10 @@ public:
     }
 
 protected:
-    std::unique_ptr<DMContext> dm_context{};
+    std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::shared_ptr<StoragePathPool> path_pool{};
-    std::shared_ptr<StoragePool> storage_pool{};
+    std::shared_ptr<StoragePathPool> path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
@@ -363,7 +363,6 @@ try
 CATCH
 
 // test multiple data  into v3, and read it
-// check there are only index and mrk and null.data in merged
 TEST_F(DMFileMetaV2Test, CheckDMFileV3WithMultiData)
 try
 {
@@ -386,7 +385,6 @@ try
 
         ASSERT_EQ(dm_file->getPackProperties().property_size(), 1);
     }
-
 
     {
         // Test read
@@ -415,7 +413,7 @@ try
                 files.insert(itr.name());
             }
         }
-        ASSERT_EQ(files.size(), 3); // handle data / col data and merged file
+        ASSERT_EQ(files.size(), 3); // handle, col data and merged file
         ASSERT(files.find("0.merged") != files.end());
         ASSERT(files.find("%2D1.dat") != files.end());
         ASSERT(files.find("1.dat") != files.end());
@@ -636,11 +634,13 @@ try
     const size_t num_rows_write = 128;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
@@ -733,16 +733,19 @@ try
     const size_t num_rows_write = 8192;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
     };
     DMFileBlockOutputStream::BlockProperty block_property3{
+        .not_clean_rows = 0,
         .deleted_rows = 3,
         .effective_num_rows = 3,
         .gc_hint_version = 3,
@@ -1046,16 +1049,19 @@ try
     const size_t num_rows_write = 8192;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
     };
     DMFileBlockOutputStream::BlockProperty block_property3{
+        .not_clean_rows = 0,
         .deleted_rows = 3,
         .effective_num_rows = 3,
         .gc_hint_version = 3,
@@ -1139,16 +1145,19 @@ try
     const size_t num_rows_write = 1024;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
     };
     DMFileBlockOutputStream::BlockProperty block_property3{
+        .not_clean_rows = 0,
         .deleted_rows = 3,
         .effective_num_rows = 3,
         .gc_hint_version = 3,
@@ -1981,10 +1990,10 @@ public:
 
 private:
     String path;
-    std::unique_ptr<DMContext> dm_context{};
+    std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::shared_ptr<StoragePathPool> path_pool{};
-    std::shared_ptr<StoragePool> storage_pool{};
+    std::shared_ptr<StoragePathPool> path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
