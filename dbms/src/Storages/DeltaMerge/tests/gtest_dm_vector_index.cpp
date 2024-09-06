@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -30,18 +31,21 @@
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
 
 #include <cassert>
 #include <ext/scope_guard.h>
 #include <filesystem>
+#include <memory>
 
 
 namespace CurrentMetrics
@@ -124,6 +128,21 @@ public:
     DMFilePtr buildIndex(TiDB::VectorIndexDefinition definition)
     {
         auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(indexInfo(definition), {dm_file});
+        DMFileIndexWriter iw(DMFileIndexWriter::Options{
+            .path_pool = path_pool,
+            .index_infos = build_info.indexes_to_build,
+            .dm_files = {dm_file},
+            .dm_context = *dm_context,
+        });
+        auto new_dmfiles = iw.build();
+        assert(new_dmfiles.size() == 1);
+        return new_dmfiles[0];
+    }
+
+    DMFilePtr buildMultiIndex(const LocalIndexInfosPtr & index_infos)
+    {
+        assert(index_infos != nullptr);
+        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(index_infos, {dm_file});
         DMFileIndexWriter iw(DMFileIndexWriter::Options{
             .path_pool = path_pool,
             .index_infos = build_info.indexes_to_build,
@@ -390,7 +409,8 @@ try
         }
         catch (const DB::Exception & ex)
         {
-            ASSERT_STREQ("Query vector size 1 does not match index dimensions 3", ex.message().c_str());
+            EXPECT_TRUE(ex.message().find("Query vector size 1 does not match index dimensions 3") != std::string::npos)
+                << ex.message();
         }
         catch (...)
         {
@@ -449,7 +469,10 @@ try
         }
         catch (const DB::Exception & ex)
         {
-            ASSERT_STREQ("Query distance metric COSINE does not match index distance metric L2", ex.message().c_str());
+            EXPECT_TRUE(
+                ex.message().find("Query distance metric COSINE does not match index distance metric L2")
+                != std::string::npos)
+                << ex.message();
         }
         catch (...)
         {
@@ -482,6 +505,328 @@ try
                 createColumn<Int64>({0, 1, 2}),
                 createVecFloat32Column<Array>({{1.0, 2.0, 3.0}, {0.0, 0.0, 0.0}, {1.0, 2.0, 3.5}}),
             }));
+    }
+}
+CATCH
+
+TEST_P(VectorIndexDMFileTest, OnePackWithMultipleVecIndexes)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto vec_cd = ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
+    cols->emplace_back(vec_cd);
+
+    ColumnDefines read_cols = *cols;
+    if (test_only_vec_column)
+        read_cols = {vec_cd};
+
+    // Prepare DMFile
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, 3);
+        block.insert(
+            createVecFloat32Column<Array>({{1.0, 2.0, 3.0}, {0.0, 0.0, 0.0}, {1.0, 2.0, 3.5}}, vec_cd.name, vec_cd.id));
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block, DMFileBlockOutputStream::BlockProperty{0, 0, 0, 0});
+        stream->writeSuffix();
+    }
+
+    // Generate vec indexes
+    dm_file = restoreDMFile();
+    auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
+        // index with index_id == 3
+        LocalIndexInfo{
+            .type = IndexType::Vector,
+            .index_id = 3,
+            .column_id = vec_column_id,
+            .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                .kind = tipb::VectorIndexKind::HNSW,
+                .dimension = 3,
+                .distance_metric = tipb::VectorDistanceMetric::L2,
+            }),
+        },
+        // index with index_id == 4
+        LocalIndexInfo{
+            .type = IndexType::Vector,
+            .index_id = 4,
+            .column_id = vec_column_id,
+            .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                .kind = tipb::VectorIndexKind::HNSW,
+                .dimension = 3,
+                .distance_metric = tipb::VectorDistanceMetric::COSINE,
+            }),
+        },
+        // index with index_id == EmptyIndexID, column_id = vec_column_id
+        LocalIndexInfo{
+            .type = IndexType::Vector,
+            .index_id = EmptyIndexID,
+            .column_id = vec_column_id,
+            .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                .kind = tipb::VectorIndexKind::HNSW,
+                .dimension = 3,
+                .distance_metric = tipb::VectorDistanceMetric::L2,
+            }),
+        },
+    });
+    dm_file = buildMultiIndex(index_infos);
+
+    {
+        EXPECT_TRUE(dm_file->isLocalIndexExist(vec_column_id, EmptyIndexID));
+        EXPECT_TRUE(dm_file->isLocalIndexExist(vec_column_id, 3));
+        EXPECT_TRUE(dm_file->isLocalIndexExist(vec_column_id, 4));
+    }
+
+    {
+        /// ===== index_id=3 ==== ///
+
+        // Read with approximate match
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(3);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({2}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}),
+                }));
+        }
+
+        // Read multiple rows
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(3);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(2);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({0, 2}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.0}, {1.0, 2.0, 3.5}}),
+                }));
+        }
+
+        // Read with MVCC filter
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(3);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
+            bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({0}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.0}}),
+                }));
+        }
+    }
+
+    {
+        /// ===== index_id=4 ==== ///
+
+        // Read with approximate match
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(4);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({2}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}),
+                }));
+        }
+
+        // Read multiple rows
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(4);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
+            ann_query_info->set_top_k(2);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({0, 2}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.0}, {1.0, 2.0, 3.5}}),
+                }));
+        }
+
+        // Read with MVCC filter
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(4);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
+            bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({0}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.0}}),
+                }));
+        }
+    }
+
+
+    {
+        /// ===== column_id=100, index_id not set ==== ///
+
+        // Read with approximate match
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({2}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}),
+                }));
+        }
+
+        // Read multiple rows
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(2);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({0, 2}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.0}, {1.0, 2.0, 3.5}}),
+                }));
+        }
+
+        // Read with MVCC filter
+        {
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
+            bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
+
+            DMFileBlockInputStreamBuilder builder(dbContext());
+            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                              .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
+                              .tryBuildWithVectorIndex(
+                                  dm_file,
+                                  read_cols,
+                                  RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                                  std::make_shared<ScanContext>());
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                createColumnNames(),
+                createColumnData({
+                    createColumn<Int64>({0}),
+                    createVecFloat32Column<Array>({{1.0, 2.0, 3.0}}),
+                }));
+        }
     }
 }
 CATCH
@@ -1519,9 +1864,44 @@ public:
         RUNTIME_CHECK(file_cache->getAll().empty());
 
         auto dm_files = segment->getStable()->getDMFiles();
-        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(indexInfo(index_info), dm_files);
+        auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
+            // index with index_id == 3
+            LocalIndexInfo{
+                .type = IndexType::Vector,
+                .index_id = 3,
+                .column_id = vec_column_id,
+                .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                    .kind = tipb::VectorIndexKind::HNSW,
+                    .dimension = 1,
+                    .distance_metric = tipb::VectorDistanceMetric::L2,
+                }),
+            },
+            // index with index_id == 4
+            LocalIndexInfo{
+                .type = IndexType::Vector,
+                .index_id = 4,
+                .column_id = vec_column_id,
+                .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                    .kind = tipb::VectorIndexKind::HNSW,
+                    .dimension = 1,
+                    .distance_metric = tipb::VectorDistanceMetric::COSINE,
+                }),
+            },
+            // index with index_id == EmptyIndexID, column_id = vec_column_id
+            LocalIndexInfo{
+                .type = IndexType::Vector,
+                .index_id = EmptyIndexID,
+                .column_id = vec_column_id,
+                .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                    .kind = tipb::VectorIndexKind::HNSW,
+                    .dimension = 1,
+                    .distance_metric = tipb::VectorDistanceMetric::L2,
+                }),
+            },
+        });
+        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(index_infos, dm_files);
 
-        // Build index
+        // Build multiple index
         DMFileIndexWriter iw(DMFileIndexWriter::Options{
             .path_pool = storage_path_pool,
             .index_infos = build_info.indexes_to_build,
@@ -1548,10 +1928,12 @@ public:
 
     BlockInputStreamPtr computeNodeANNQuery(
         const std::vector<Float32> ref_vec,
+        IndexID index_id,
         UInt32 top_k = 1,
         const ScanContextPtr & read_scan_context = nullptr)
     {
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_index_id(index_id);
         ann_query_info->set_column_id(vec_column_id);
         ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
         ann_query_info->set_top_k(top_k);
@@ -1618,7 +2000,7 @@ try
     prepareWriteNodeStable();
 
     FileCache::shutdown();
-    auto stream = computeNodeANNQuery({5.0});
+    auto stream = computeNodeANNQuery({5.0}, EmptyIndexID);
 
     try
     {
@@ -1673,7 +2055,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1695,7 +2077,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1711,6 +2093,99 @@ try
 }
 CATCH
 
+TEST_F(VectorIndexSegmentOnS3Test, ReadFromIndexWithMultipleVecIndexes)
+try
+{
+    prepareWriteNodeStable();
+    {
+        auto * file_cache = FileCache::instance();
+        ASSERT_EQ(0, file_cache->getAll().size());
+    }
+    {
+        // index_id == EmptyIndexID
+        IndexID query_index_id = EmptyIndexID;
+        {
+            auto scan_context = std::make_shared<ScanContext>();
+            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                Strings({DMTestEnv::pk_name, vec_column_name}),
+                createColumns({
+                    colInt64("[5, 6)"),
+                    colVecFloat32("[5, 6)"),
+                }));
+
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        }
+        {
+            auto * file_cache = FileCache::instance();
+            ASSERT_FALSE(file_cache->getAll().empty());
+            ASSERT_FALSE(std::filesystem::is_empty(file_cache->cache_dir));
+        }
+        {
+            // Read again, we should be reading from memory cache.
+
+            auto scan_context = std::make_shared<ScanContext>();
+            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                Strings({DMTestEnv::pk_name, vec_column_name}),
+                createColumns({
+                    colInt64("[5, 6)"),
+                    colVecFloat32("[5, 6)"),
+                }));
+
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+        }
+    }
+    {
+        // index_id == 3
+        IndexID query_index_id = 3;
+        {
+            auto scan_context = std::make_shared<ScanContext>();
+            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                Strings({DMTestEnv::pk_name, vec_column_name}),
+                createColumns({
+                    colInt64("[5, 6)"),
+                    colVecFloat32("[5, 6)"),
+                }));
+
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        }
+        {
+            auto * file_cache = FileCache::instance();
+            ASSERT_FALSE(file_cache->getAll().empty());
+            ASSERT_FALSE(std::filesystem::is_empty(file_cache->cache_dir));
+        }
+        {
+            // Read again, we should be reading from memory cache.
+
+            auto scan_context = std::make_shared<ScanContext>();
+            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            ASSERT_INPUTSTREAM_COLS_UR(
+                stream,
+                Strings({DMTestEnv::pk_name, vec_column_name}),
+                createColumns({
+                    colInt64("[5, 6)"),
+                    colVecFloat32("[5, 6)"),
+                }));
+
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+        }
+    }
+}
+CATCH
+
 TEST_F(VectorIndexSegmentOnS3Test, FileCacheEvict)
 try
 {
@@ -1721,7 +2196,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1752,7 +2227,7 @@ try
     {
         // When cache is evicted (but memory cache exists), the query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1769,7 +2244,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1795,7 +2270,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1831,7 +2306,7 @@ try
     {
         // When cache is evicted (and memory cache is dropped), the query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1848,7 +2323,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1874,7 +2349,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1898,7 +2373,7 @@ try
     {
         // Query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1915,7 +2390,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1941,7 +2416,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1971,7 +2446,7 @@ try
     {
         // Query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -1988,7 +2463,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2018,7 +2493,7 @@ try
 
     auto th_1 = std::async([&]() {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2040,7 +2515,7 @@ try
 
     auto th_2 = std::async([&]() {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({7.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({7.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2083,7 +2558,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
 
         ASSERT_THROW(
             {

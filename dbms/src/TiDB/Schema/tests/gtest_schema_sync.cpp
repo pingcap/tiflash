@@ -37,6 +37,7 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
+#include <gtest/gtest.h>
 
 #include <ext/scope_guard.h>
 #include <limits>
@@ -833,6 +834,7 @@ try
     {
         // check stable index has built for all segments
         dmsv.waitStableIndexReady();
+        LOG_INFO(Logger::get(), "waitStableIndexReady done");
         const auto range = DM::RowKeyRange::newAll(dmsv.store->is_common_handle, dmsv.store->rowkey_column_size);
 
         // read from store
@@ -847,11 +849,13 @@ try
         }
 
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_index_id(idx_id);
         ann_query_info->set_column_id(dmsv.vec_column_id);
         ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
 
         // read with ANN query
         {
+            SCOPED_TRACE(fmt::format("after add vector index, read with ANN query 1"));
             ann_query_info->set_top_k(1);
             ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.5}));
 
@@ -862,6 +866,7 @@ try
 
         // read with ANN query
         {
+            SCOPED_TRACE(fmt::format("after add vector index, read with ANN query 2"));
             ann_query_info->set_top_k(1);
             ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.8}));
 

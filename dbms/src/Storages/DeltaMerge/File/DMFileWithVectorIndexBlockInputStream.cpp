@@ -92,10 +92,11 @@ DMFileWithVectorIndexBlockInputStream::~DMFileWithVectorIndexBlockInputStream()
     LOG_DEBUG( //
         log,
         "Finished read DMFile with vector index for column dmf_{}/{}(id={}), "
-        "query_top_k={} load_index+result={:.2f}s read_from_index={:.2f}s read_from_others={:.2f}s",
+        "index_id={} query_top_k={} load_index+result={:.2f}s read_from_index={:.2f}s read_from_others={:.2f}s",
         dmfile->fileId(),
         vec_cd.name,
         vec_cd.id,
+        ann_query_info->index_id(),
         ann_query_info->top_k(),
         duration_load_vec_index_and_results_seconds,
         duration_read_from_vec_index_seconds,
@@ -273,19 +274,20 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorIndex()
 
     double duration_load_index = 0; // include download from s3 and load from fs
 
-    auto col_id = ann_query_info->column_id();
+    const auto col_id = ann_query_info->column_id();
+    const auto index_id = ann_query_info->index_id() > 0 ? ann_query_info->index_id() : EmptyIndexID;
 
     RUNTIME_CHECK(dmfile->useMetaV2()); // v3
 
     // Check vector index exists on the column
-    const auto & column_stat = dmfile->getColumnStat(col_id);
-    RUNTIME_CHECK(column_stat.index_bytes > 0);
-    RUNTIME_CHECK(column_stat.vector_index.has_value());
+    auto vector_index = dmfile->getLocalIndex(col_id, index_id);
+    RUNTIME_CHECK(vector_index.has_value(), col_id, index_id);
 
     // If local file is invalidated, cache is not valid anymore. So we
     // need to ensure file exists on local fs first.
-    const auto file_name_base = DMFile::getFileNameBase(col_id);
-    const auto index_file_path = dmfile->colIndexPath(file_name_base);
+    const auto index_file_path = index_id > 0 //
+        ? dmfile->vectorIndexPath(index_id) //
+        : dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
     String local_index_file_path;
     FileSegmentPtr file_guard = nullptr;
     if (auto s3_file_name = S3::S3FilenameView::fromKeyWithPrefix(index_file_path); s3_file_name.isValid())
@@ -305,7 +307,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorIndex()
             {
                 file_guard = file_cache->downloadFileForLocalRead( //
                     s3_file_name,
-                    column_stat.index_bytes);
+                    vector_index->index_bytes());
                 if (file_guard)
                 {
                     local_index_file_path = file_guard->getLocalFileName();
@@ -342,7 +344,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorIndex()
 
     auto load_from_file = [&]() {
         has_load_from_file = true;
-        return VectorIndexViewer::view(*column_stat.vector_index, local_index_file_path);
+        return VectorIndexViewer::view(*vector_index, local_index_file_path);
     };
 
     Stopwatch watch;
@@ -370,12 +372,13 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorIndex()
 
     LOG_DEBUG( //
         log,
-        "Loaded vector index for column dmf_{}/{}(id={}), index_size={} kind={} cost={:.2f}s {} {}",
+        "Loaded vector index for column dmf_{}/{}(id={}), index_id={} index_size={} kind={} cost={:.2f}s {} {}",
         dmfile->fileId(),
         vec_cd.name,
         vec_cd.id,
-        column_stat.index_bytes,
-        column_stat.vector_index->index_kind(),
+        vector_index->index_id(),
+        vector_index->index_bytes(),
+        vector_index->index_kind(),
         duration_load_index,
         has_s3_download ? "(S3)" : "",
         has_load_from_file ? "(LoadFile)" : "");
@@ -446,7 +449,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
 
     LOG_DEBUG( //
         log,
-        "Finished vector search over column dmf_{}/{}(id={}), cost={:.2f}s "
+        "Finished vector search over column dmf_{}/{}(id={}), index_id={} cost={:.3f}s "
         "top_k_[query/visited/discarded/result]={}/{}/{}/{} "
         "rows_[file/after_search]={}/{} "
         "pack_[total/before_search/after_search]={}/{}/{}",
@@ -454,6 +457,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
         dmfile->fileId(),
         vec_cd.name,
         vec_cd.id,
+        ann_query_info->index_id(),
         search_duration,
 
         ann_query_info->top_k(),

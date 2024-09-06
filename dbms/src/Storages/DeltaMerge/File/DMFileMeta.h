@@ -40,6 +40,11 @@ class DMFile;
 class DMFileWriter;
 class DMFileV3IncrementWriter;
 
+struct DMFileMetaChangeset
+{
+    std::unordered_map<ColId, std::vector<dtpb::VectorIndexFileProps>> new_indexes_on_cols;
+};
+
 class DMFileMeta
 {
 public:
@@ -187,9 +192,34 @@ public:
      * @brief metaVersion += 1. Returns the new meta version.
      * This is only supported in MetaV2.
      */
-    virtual UInt32 bumpMetaVersion() { RUNTIME_CHECK_MSG(false, "MetaV1 cannot bump meta version"); }
+    virtual UInt32 bumpMetaVersion(DMFileMetaChangeset &&)
+    {
+        RUNTIME_CHECK_MSG(false, "MetaV1 cannot bump meta version");
+    }
     virtual EncryptionPath encryptionMetaPath() const;
     virtual UInt64 getReadFileSize(ColId col_id, const String & filename) const;
+
+
+public:
+    enum LocalIndexState
+    {
+        NoNeed,
+        IndexPending,
+        IndexBuilt
+    };
+    virtual std::tuple<LocalIndexState, size_t> getLocalIndexState(ColId, IndexID) const
+    {
+        RUNTIME_CHECK_MSG(false, "MetaV1 does not support getLocalIndexState");
+    }
+
+    // Try to get the local index of given col_id and index_id.
+    // Return std::nullopt if
+    // - the col_id is not exist in the dmfile
+    // - the index has not been built
+    virtual std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId, IndexID) const
+    {
+        RUNTIME_CHECK_MSG(false, "MetaV1 does not support getLocalIndexState");
+    }
 
 protected:
     PackStats pack_stats;

@@ -86,8 +86,8 @@ public:
         const LocalIndexInfos index_infos = LocalIndexInfos{
             LocalIndexInfo{
                 .type = IndexType::Vector,
+                .index_id = EmptyIndexID,
                 .column_id = vec_column_id,
-                .column_name = "",
                 .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(definition),
             },
         };

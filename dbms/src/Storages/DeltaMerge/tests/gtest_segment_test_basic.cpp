@@ -736,7 +736,7 @@ bool SegmentTestBasic::replaceSegmentStableData(PageIdU64 segment_id, const DMFi
     return success;
 }
 
-bool SegmentTestBasic::ensureSegmentStableIndex(PageIdU64 segment_id, LocalIndexInfosPtr local_index_infos)
+bool SegmentTestBasic::ensureSegmentStableIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos)
 {
     LOG_INFO(logger_op, "EnsureSegmentStableIndex, segment_id={}", segment_id);
 

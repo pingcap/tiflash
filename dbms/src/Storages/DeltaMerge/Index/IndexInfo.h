@@ -39,9 +39,10 @@ enum class IndexType
 struct LocalIndexInfo
 {
     IndexType type;
+    // If the index is defined on TiDB::ColumnInfo, use EmptyIndexID as index_id
     IndexID index_id = DB::EmptyIndexID;
+    // Which column_id the index is built on
     ColumnID column_id = DB::EmptyColumnID;
-    String column_name;
     // Now we only support vector index.
     // In the future, we may support more types of indexes, using std::variant.
     TiDB::VectorIndexDefinitionPtr index_definition;
@@ -49,15 +50,11 @@ struct LocalIndexInfo
 
 using LocalIndexInfos = std::vector<LocalIndexInfo>;
 using LocalIndexInfosPtr = std::shared_ptr<LocalIndexInfos>;
+using LocalIndexInfosSnapshot = std::shared_ptr<const LocalIndexInfos>;
 
-bool isVectorIndexSupported(const LoggerPtr & logger);
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
-TiDB::ColumnInfo getVectorIndxColumnInfo(
-    const TiDB::TableInfo & table_info,
-    const TiDB::IndexInfo & idx_info,
-    const LoggerPtr & logger);
 LocalIndexInfosPtr generateLocalIndexInfos(
-    const LocalIndexInfosPtr & existing_indexes,
+    const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
     const LoggerPtr & logger);
 

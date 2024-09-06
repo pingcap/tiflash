@@ -18,10 +18,9 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
+#include <Storages/KVStore/Types.h>
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 struct ColumnStat
 {
@@ -29,7 +28,7 @@ struct ColumnStat
     DataTypePtr type;
     // The average size of values. A hint for speeding up deserialize.
     double avg_size;
-    // The serialized size of the column data on disk.
+    // The serialized size of the column data on disk. (including column data and nullmap)
     size_t serialized_bytes = 0;
 
     // These members are only useful when using metav2
@@ -41,7 +40,7 @@ struct ColumnStat
     size_t array_sizes_bytes = 0;
     size_t array_sizes_mark_bytes = 0;
 
-    std::optional<dtpb::VectorIndexFileProps> vector_index = std::nullopt;
+    std::vector<dtpb::VectorIndexFileProps> vector_index;
 
 #ifndef NDEBUG
     // This field is only used for testing
@@ -63,8 +62,11 @@ struct ColumnStat
         stat.set_array_sizes_bytes(array_sizes_bytes);
         stat.set_array_sizes_mark_bytes(array_sizes_mark_bytes);
 
-        if (vector_index.has_value())
-            stat.mutable_vector_index()->CopyFrom(vector_index.value());
+        for (const auto & vec_idx : vector_index)
+        {
+            auto * pb_idx = stat.add_vector_indexes();
+            pb_idx->CopyFrom(vec_idx);
+        }
 
 #ifndef NDEBUG
         stat.set_additional_data_for_test(additional_data_for_test);
@@ -88,14 +90,29 @@ struct ColumnStat
         array_sizes_mark_bytes = proto.array_sizes_mark_bytes();
 
         if (proto.has_vector_index())
-            vector_index = proto.vector_index();
+        {
+            // For backward compatibility, loaded `vector_index` into `vector_indexes`
+            // with index_id == EmptyIndexID
+            vector_index.emplace_back(proto.vector_index());
+            auto & idx = vector_index.back();
+            idx.set_index_id(EmptyIndexID);
+            idx.set_index_bytes(index_bytes);
+        }
+        vector_index.reserve(vector_index.size() + proto.vector_indexes_size());
+        for (const auto & pb_idx : proto.vector_indexes())
+        {
+            vector_index.emplace_back(pb_idx);
+        }
+
 #ifndef NDEBUG
         additional_data_for_test = proto.additional_data_for_test();
 #endif
     }
 
-    // @deprecated. New fields should be added via protobuf. Use `toProto` instead
-    void serializeToBuffer(WriteBuffer & buf) const
+    // New fields should be added via protobuf. Use `toProto` instead
+    [[deprecated("Use ColumnStat::toProto instead")]] //
+    void
+    serializeToBuffer(WriteBuffer & buf) const
     {
         writeIntBinary(col_id, buf);
         writeStringBinary(type->getName(), buf);
@@ -108,8 +125,10 @@ struct ColumnStat
         writeIntBinary(index_bytes, buf);
     }
 
-    // @deprecated. This only presents for reading with old data. Use `mergeFromProto` instead
-    void parseFromBuffer(ReadBuffer & buf)
+    // This only presents for reading with old data. Use `mergeFromProto` instead
+    [[deprecated("Use ColumnStat::mergeFromProto instead")]] //
+    void
+    parseFromBuffer(ReadBuffer & buf)
     {
         readIntBinary(col_id, buf);
         String type_name;
@@ -127,7 +146,9 @@ struct ColumnStat
 
 using ColumnStats = std::unordered_map<ColId, ColumnStat>;
 
-inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
+[[deprecated("Used by DMFileMeta v1. Use ColumnStat::mergeFromProto instead")]] //
+inline void
+readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
 {
     DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
@@ -155,11 +176,23 @@ inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadB
         DB::assertChar('\n', buf);
 
         auto type = data_type_factory.getOrSet(type_name);
-        column_sats.emplace(id, ColumnStat{id, type, avg_size, serialized_bytes});
+        column_sats.emplace(
+            id,
+            ColumnStat{
+                .col_id = id,
+                .type = type,
+                .avg_size = avg_size,
+                .serialized_bytes = serialized_bytes,
+                // ... here ignore some fields with default initializers
+                .vector_index = {},
+                .additional_data_for_test = {},
+            });
     }
 }
 
-inline void writeText(const ColumnStats & column_sats, DMFileFormat::Version ver, WriteBuffer & buf)
+[[deprecated("Used by DMFileMeta v1. Use ColumnStat::toProto instead")]] //
+inline void
+writeText(const ColumnStats & column_sats, DMFileFormat::Version ver, WriteBuffer & buf)
 {
     DB::writeString("Columns: ", buf);
     DB::writeText(column_sats.size(), buf);
@@ -182,5 +215,4 @@ inline void writeText(const ColumnStats & column_sats, DMFileFormat::Version ver
     }
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
