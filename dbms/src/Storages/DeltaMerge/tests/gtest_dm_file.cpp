@@ -363,7 +363,6 @@ try
 CATCH
 
 // test multiple data  into v3, and read it
-// check there are only index and mrk and null.data in merged
 TEST_F(DMFileMetaV2Test, CheckDMFileV3WithMultiData)
 try
 {
@@ -386,7 +385,6 @@ try
 
         ASSERT_EQ(dm_file->getPackProperties().property_size(), 1);
     }
-
 
     {
         // Test read
