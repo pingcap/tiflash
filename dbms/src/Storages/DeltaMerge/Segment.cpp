@@ -441,65 +441,80 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     PageIdU64 current_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
-    auto lock = end_to_segment_id_cache->lock();
-    bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
-    if (is_cache_ready)
+    bool is_cache_ready = false;
     {
-        current_segment_id
-            = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
+        auto lock = end_to_segment_id_cache->readLock();
+        is_cache_ready = end_to_segment_id_cache->isReady(lock);
     }
-    LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
-    std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
-    SegmentMetaInfos segment_infos;
-    while (current_segment_id != 0)
-    {
-        Segment::SegmentMetaInfo segment_info;
-        auto target_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
-            current_segment_id);
-        auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false);
-        if unlikely (!page.isValid())
+
+    auto protected_logic = [&]() {
+        if (is_cache_ready)
         {
-            // After #7642, DELTA_MERGE_FIRST_SEGMENT_ID may not exist, however, such checkpoint won't be selected.
-            // If it were to be selected, the FAP task could fallback to regular snapshot.
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={}",
-                target_id,
-                context.keyspace_id,
-                context.physical_table_id,
-                current_segment_id,
-                target_range.toDebugString());
+            current_segment_id
+                = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
         }
-        segment_info.segment_id = current_segment_id;
-        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        readSegmentMetaInfo(buf, segment_info);
+        LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
+        std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
+        SegmentMetaInfos segment_infos;
+        while (current_segment_id != 0)
+        {
+            Segment::SegmentMetaInfo segment_info;
+            auto target_id = UniversalPageIdFormat::toFullPageId(
+                UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
+                current_segment_id);
+            auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false);
+            if unlikely (!page.isValid())
+            {
+                // After #7642, DELTA_MERGE_FIRST_SEGMENT_ID may not exist, however, such checkpoint won't be selected.
+                // If it were to be selected, the FAP task could fallback to regular snapshot.
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={}",
+                    target_id,
+                    context.keyspace_id,
+                    context.physical_table_id,
+                    current_segment_id,
+                    target_range.toDebugString());
+            }
+            segment_info.segment_id = current_segment_id;
+            ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+            readSegmentMetaInfo(buf, segment_info);
+            if (!is_cache_ready)
+            {
+                end_key_and_segment_ids.emplace_back(segment_info.range.getEnd().toRowKeyValue(), segment_info.segment_id);
+            }
+            current_segment_id = segment_info.next_segment_id;
+            if (!(segment_info.range.shrink(target_range).none()))
+            {
+                segment_infos.emplace_back(segment_info);
+            }
+            // if not build cache, stop as early as possible.
+            if (is_cache_ready && segment_info.range.end.value->compare(*target_range.end.value) >= 0)
+            {
+                break;
+            }
+        }
         if (!is_cache_ready)
         {
-            end_key_and_segment_ids.emplace_back(segment_info.range.getEnd().toRowKeyValue(), segment_info.segment_id);
+            LOG_DEBUG(
+                Logger::get(),
+                "Build cache for keyspace {} table {} with {} segments",
+                context.keyspace_id,
+                context.physical_table_id,
+                end_key_and_segment_ids.size());
+            end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
         }
-        current_segment_id = segment_info.next_segment_id;
-        if (!(segment_info.range.shrink(target_range).none()))
-        {
-            segment_infos.emplace_back(segment_info);
-        }
-        // if not build cache, stop as early as possible.
-        if (is_cache_ready && segment_info.range.end.value->compare(*target_range.end.value) >= 0)
-        {
-            break;
-        }
+        return segment_infos;
     }
-    if (!is_cache_ready)
-    {
-        LOG_DEBUG(
-            Logger::get(),
-            "Build cache for keyspace {} table {} with {} segments",
-            context.keyspace_id,
-            context.physical_table_id,
-            end_key_and_segment_ids.size());
-        end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
+
+    if (is_cache_ready) {
+        auto lock = end_to_segment_id_cache->readLock();
+        return protected_logic();
     }
-    return segment_infos;
+    else {
+        auto lock = end_to_segment_id_cache->writeLock();
+        return protected_logic();
+    }
 }
 
 Segments Segment::createTargetSegmentsFromCheckpoint( //

@@ -34,9 +34,11 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 class EndToSegmentId
 {
 public:
-    [[nodiscard]] std::unique_lock<std::mutex> lock();
+    [[nodiscard]] std::unique_lock<std::mutex> writeLock();
+    [[nodiscard]] std::shared_lock<std::mutex> readLock();
 
     bool isReady(std::unique_lock<std::mutex> & lock) const;
+    bool isReady(std::shared_lock<std::mutex> & lock) const;
 
     // The caller must ensure `end_key_and_segment_id` is ordered.
     // Called in `Segment::readAllSegmentsMetaInfoInRange`.
@@ -48,7 +50,7 @@ public:
     UInt64 getSegmentIdContainingKey(std::unique_lock<std::mutex> & lock, const DM::RowKeyValue & key);
 
 private:
-    std::mutex mu;
+    std::shared_mutex mu;
     bool is_ready = false;
 
     // Store the mapping from end key to segment id

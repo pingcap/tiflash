@@ -37,12 +37,23 @@
 
 namespace DB
 {
-[[nodiscard]] std::unique_lock<std::mutex> EndToSegmentId::lock()
+[[nodiscard]] std::unique_lock<std::mutex> EndToSegmentId::writeLock()
 {
     return std::unique_lock(mu);
 }
 
+[[nodiscard]] std::unique_lock<std::mutex> EndToSegmentId::readLock()
+{
+    return std::shared_lock(mu);
+}
+
 bool EndToSegmentId::isReady(std::unique_lock<std::mutex> & lock) const
+{
+    UNUSED(lock);
+    return is_ready;
+}
+
+bool EndToSegmentId::isReady(std::shared_lock<std::mutex> & lock) const
 {
     UNUSED(lock);
     return is_ready;
