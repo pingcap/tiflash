@@ -65,10 +65,7 @@ CompressionSetting CompressionSetting::create(T method, int level, const IDataTy
     if (type.isValueRepresentedByInteger())
     {
         auto data_type = magic_enum::enum_cast<CompressionDataType>(type.getSizeOfValueInMemory());
-        if (data_type.has_value())
-            setting.data_type = data_type.value();
-        else
-            setting.data_type = CompressionDataType::Unknown;
+        setting.data_type = data_type ? *data_type : CompressionDataType::Unknown;
     }
     else if (type.isFloatingPoint() && type.getSizeOfValueInMemory() == 4)
         setting.data_type = CompressionDataType::Float32;
