@@ -88,6 +88,12 @@ OperatorStatus Operator::executeIO()
     return op_status;
 }
 
+void Operator::notify()
+{
+    profile_info.update();
+    notifyImpl();
+}
+
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED

@@ -143,6 +143,9 @@ private:
         DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
+    size_t getBuildTaskRPCTimeout() const;
+    size_t getBuildTaskIOThreadPoolTimeout() const;
+
 private:
     Context & context;
     const TiDBTableScan & table_scan;
