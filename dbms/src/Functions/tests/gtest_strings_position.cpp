@@ -92,7 +92,7 @@ TEST_F(StringPosition, strAndStrTest)
 
         bp->build(ctns)->execute(test_block, cns, 2);
         const IColumn * res = test_block.getByPosition(2).column.get();
-        const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+        const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
 
         Field res_field;
 
@@ -159,7 +159,7 @@ TEST_F(StringPosition, utf8StrAndStrTest)
 
         bp->build(ctns)->execute(test_block, cns, 2);
         const IColumn * res = test_block.getByPosition(2).column.get();
-        const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+        const auto * res_string = checkAndGetColumn<ColumnInt64>(res);
 
         Field res_field;
 
@@ -233,7 +233,7 @@ TEST_F(StringPosition, nullTest)
     MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
     NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
     const IColumn * res = test_block.getByPosition(2).column.get();
-    const ColumnNullable * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
+    const auto * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
     const IColumn & res_string = res_nullable_string->getNestedColumn();
 
     Field res_field;
