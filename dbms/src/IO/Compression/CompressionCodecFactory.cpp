@@ -25,6 +25,8 @@
 #include <magic_enum.hpp>
 #include <shared_mutex>
 
+#include "IO/Compression/CompressionMethod.h"
+
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
 #endif
@@ -180,7 +182,13 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         if (!isInteger(setting.data_type))
         {
             if (setting.method_byte == CompressionMethodByte::Lightweight)
+            {
+                // Use LZ4 codec for non-integral types
+                // TODO: maybe we can use zstd?
+                auto method = CompressionMethod::LZ4;
+                CompressionSetting setting(method, CompressionSetting::getDefaultLevel(method));
                 return getStaticCodec<CompressionCodecLZ4>(setting);
+            }
             else
                 return nullptr;
         }
