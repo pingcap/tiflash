@@ -169,6 +169,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
     if (pool_finished)
     {
         q.finish();
+        LOG_INFO(log, "pool_id={} finished", pool_id);
     }
 }
 
