@@ -1332,6 +1332,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
+        // There is no compute task in write node.
+        // Set the pool size to 80% of logical cores and 60% of memory
+        // to take full advantage of the resources and avoid blocking other tasks like writes and compactions.
         global_context->initializeGlobalLocalIndexerScheduler(
             server_info.cpu_info.logical_cores * 8 / 10,
             server_info.memory_info.capacity * 6 / 10);
