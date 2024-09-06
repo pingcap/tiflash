@@ -19,6 +19,7 @@
 
 #include <condition_variable>
 #include <deque>
+#include <mutex>
 
 namespace DB
 {
@@ -218,6 +219,17 @@ public:
         if unlikely (status != MPMCQueueStatus::NORMAL)
             return true;
         return !isFullWithoutLock();
+    }
+
+    void triggerPipelineNotify()
+    {
+        auto should_notify = false;
+        {
+            std::lock_guard lock(mu);
+            should_notify = status != MPMCQueueStatus::CANCELLED && !isFullWithoutLock();
+        }
+        if (should_notify)
+            pipe_writer_cv.notifyOne();
     }
 
     MPMCQueueStatus getStatus() const

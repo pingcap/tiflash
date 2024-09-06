@@ -39,7 +39,7 @@ public:
         tipb::CompressionMode compression_mode_);
     void write(const Block & block) override;
     WaitResult waitForWritable() const override;
-    void flush() override;
+    bool flushImpl() override;
 
 private:
     void writeImpl(const Block & block);

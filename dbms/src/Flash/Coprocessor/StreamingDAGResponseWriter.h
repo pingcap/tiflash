@@ -38,7 +38,7 @@ public:
         DAGContext & dag_context_);
     void write(const Block & block) override;
     WaitResult waitForWritable() const override;
-    void flush() override;
+    bool flushImpl() override;
 
 private:
     void encodeThenWriteBlocks();

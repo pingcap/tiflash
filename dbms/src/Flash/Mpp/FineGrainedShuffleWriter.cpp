@@ -90,10 +90,14 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
 }
 
 template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
+bool FineGrainedShuffleWriter<ExchangeWriterPtr>::flushImpl()
 {
     if (rows_in_blocks > 0)
+    {
         batchWriteFineGrainedShuffle();
+        return true;
+    }
+    return false;
 }
 
 template <class ExchangeWriterPtr>
@@ -148,8 +152,7 @@ template <class ExchangeWriterPtr>
 template <MPPDataPacketVersion version>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleImpl()
 {
-    if (blocks.empty())
-        return;
+    assert(!blocks.empty());
 
     {
         assert(rows_in_blocks > 0);

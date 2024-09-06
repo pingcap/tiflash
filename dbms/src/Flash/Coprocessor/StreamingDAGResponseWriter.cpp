@@ -61,10 +61,14 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
+bool StreamingDAGResponseWriter<StreamWriterPtr>::flushImpl()
 {
     if (rows_in_blocks > 0)
+    {
         encodeThenWriteBlocks();
+        return true;
+    }
+    return false;
 }
 
 template <class StreamWriterPtr>
@@ -93,8 +97,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
-    if (unlikely(blocks.empty()))
-        return;
+    assert(!blocks.empty());
 
     TrackedSelectResp response;
     response.setEncodeType(dag_context.encode_type);

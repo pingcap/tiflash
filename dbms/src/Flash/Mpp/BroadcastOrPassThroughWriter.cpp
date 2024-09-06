@@ -64,10 +64,14 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
+bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flushImpl()
 {
     if (rows_in_blocks > 0)
+    {
         writeBlocks();
+        return true;
+    }
+    return false;
 }
 
 template <class ExchangeWriterPtr>
@@ -97,8 +101,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
 {
-    if unlikely (blocks.empty())
-        return;
+    assert(!blocks.empty());
 
     // check schema
     if (!expected_types.empty())

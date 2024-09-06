@@ -40,7 +40,15 @@ public:
     virtual WaitResult waitForWritable() const { throw Exception("Unsupport"); }
 
     /// flush cached blocks for batch writer
-    virtual void flush() = 0;
+    void flush() 
+    {
+        if (!flushImpl()) {
+            triggerPipelineNotify();
+        }
+    }
+    // return true if flush is actually flush data
+    virtual bool flushImpl() = 0;
+    virtual void triggerPipelineNotify() const {}
     virtual ~DAGResponseWriter() = default;
 
 protected:

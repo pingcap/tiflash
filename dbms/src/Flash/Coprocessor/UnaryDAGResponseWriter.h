@@ -34,7 +34,7 @@ public:
     UnaryDAGResponseWriter(tipb::SelectResponse * response_, Int64 records_per_chunk_, DAGContext & dag_context_);
 
     void write(const Block & block) override;
-    void flush() override;
+    bool flushImpl() override;
     void encodeChunkToDAGResponse();
     void appendWarningsToDAGResponse();
 

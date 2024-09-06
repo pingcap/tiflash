@@ -72,10 +72,10 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::flush()
+bool HashPartitionWriter<ExchangeWriterPtr>::flushImpl()
 {
     if (0 == rows_in_blocks)
-        return;
+        return false;
 
     switch (data_codec_version)
     {
@@ -91,6 +91,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::flush()
         break;
     }
     }
+    return true;
 }
 
 template <class ExchangeWriterPtr>
@@ -228,8 +229,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
 {
-    if unlikely (blocks.empty())
-        return;
+    assert(!blocks.empty());
 
     std::vector<Blocks> partition_blocks;
     partition_blocks.resize(partition_num);
@@ -282,11 +282,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePartitionBlocks(std::vector<Bl
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
         auto & blocks = partition_blocks[part_id];
-        if (likely(!blocks.empty()))
-        {
-            writer->partitionWrite(blocks, part_id);
-            blocks.clear();
-        }
+        writer->partitionWrite(blocks, part_id);
+        blocks.clear();
     }
 }
 
