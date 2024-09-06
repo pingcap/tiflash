@@ -1064,7 +1064,7 @@ try
         {
             auto index_info_json = index_arr->getObject(i);
             IndexInfo index_info(index_info_json);
-            // We only keep the "primary index" in tiflash now
+            // We only keep the "primary index" or "vector index" in tiflash now
             if (index_info.is_primary)
             {
                 has_primary_index = true;
