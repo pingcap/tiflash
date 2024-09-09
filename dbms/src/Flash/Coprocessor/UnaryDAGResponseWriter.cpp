@@ -71,7 +71,7 @@ void UnaryDAGResponseWriter::appendWarningsToDAGResponse()
     dag_response->set_warning_count(dag_context.getWarningCount());
 }
 
-bool UnaryDAGResponseWriter::flushImpl()
+bool UnaryDAGResponseWriter::doFlush()
 {
     if (current_records_num > 0)
     {
@@ -89,7 +89,7 @@ bool UnaryDAGResponseWriter::flushImpl()
     return true;
 }
 
-void UnaryDAGResponseWriter::write(const Block & block)
+bool UnaryDAGResponseWriter::doWrite(const Block & block)
 {
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
@@ -117,5 +117,6 @@ void UnaryDAGResponseWriter::write(const Block & block)
             row_index = upper;
         }
     }
+    return true;
 }
 } // namespace DB

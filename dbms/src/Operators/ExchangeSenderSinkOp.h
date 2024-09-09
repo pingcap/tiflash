@@ -29,7 +29,9 @@ public:
         std::unique_ptr<DAGResponseWriter> && writer)
         : SinkOp(exec_context_, req_id)
         , writer(std::move(writer))
-    {}
+    {
+        writer->setNeedNotifyPipelineWriter(true);
+    }
 
     String getName() const override { return "ExchangeSenderSinkOp"; }
 

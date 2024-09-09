@@ -33,8 +33,8 @@ class UnaryDAGResponseWriter : public DAGResponseWriter
 public:
     UnaryDAGResponseWriter(tipb::SelectResponse * response_, Int64 records_per_chunk_, DAGContext & dag_context_);
 
-    void write(const Block & block) override;
-    bool flushImpl() override;
+    bool doWrite(const Block & block) override;
+    bool doFlush() override;
     void triggerPipelineWriterNotify() override {};
     void encodeChunkToDAGResponse();
     void appendWarningsToDAGResponse();

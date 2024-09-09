@@ -94,6 +94,7 @@ struct MockStreamWriter
 
     void write(tipb::SelectResponse & response) { checker(response); }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
+    static void triggerPipelineWriterNotify() {}
 
 private:
     MockStreamWriterChecker checker;
@@ -137,7 +138,7 @@ try
             batch_send_min_limit,
             *dag_context_ptr);
         for (const auto & block : blocks)
-            dag_writer->write(block);
+            dag_writer->doWrite(block);
         dag_writer->flush();
 
         // 4. Start to check write_report.

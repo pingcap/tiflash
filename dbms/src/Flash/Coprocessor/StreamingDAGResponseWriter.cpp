@@ -61,7 +61,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 }
 
 template <class StreamWriterPtr>
-bool StreamingDAGResponseWriter<StreamWriterPtr>::flushImpl()
+bool StreamingDAGResponseWriter<StreamWriterPtr>::doFlush()
 {
     if (rows_in_blocks > 0)
     {
@@ -84,7 +84,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::triggerPipelineWriterNotify()
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
+bool StreamingDAGResponseWriter<StreamWriterPtr>::doWrite(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -97,7 +97,11 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    {
         encodeThenWriteBlocks();
+        return true;
+    }
+    return false;
 }
 
 template <class StreamWriterPtr>

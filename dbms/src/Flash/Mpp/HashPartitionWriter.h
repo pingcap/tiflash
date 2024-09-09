@@ -37,14 +37,14 @@ public:
         DAGContext & dag_context_,
         MPPDataPacketVersion data_codec_version_,
         tipb::CompressionMode compression_mode_);
-    void write(const Block & block) override;
+    bool doWrite(const Block & block) override;
     WaitResult waitForWritable() const override;
-    bool flushImpl() override;
+    bool doFlush() override;
     void triggerPipelineWriterNotify() override;
 
 private:
-    void writeImpl(const Block & block);
-    void writeImplV1(const Block & block);
+    bool writeImpl(const Block & block);
+    bool writeImplV1(const Block & block);
     void partitionAndWriteBlocks();
     void partitionAndWriteBlocksV1();
 

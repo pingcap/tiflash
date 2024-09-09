@@ -72,7 +72,7 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
 }
 
 template <class ExchangeWriterPtr>
-bool HashPartitionWriter<ExchangeWriterPtr>::flushImpl()
+bool HashPartitionWriter<ExchangeWriterPtr>::doFlush()
 {
     if (0 == rows_in_blocks)
         return false;
@@ -107,7 +107,7 @@ WaitResult HashPartitionWriter<ExchangeWriterPtr>::waitForWritable() const
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
+bool HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
 {
     size_t rows = 0;
     if (block.info.selective)
@@ -123,11 +123,15 @@ void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
     }
     if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit
         || mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE)
+    {
         partitionAndWriteBlocksV1();
+        return true;
+    }
+    return false;
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writeImpl(const Block & block)
+bool HashPartitionWriter<ExchangeWriterPtr>::writeImpl(const Block & block)
 {
     size_t rows = 0;
     if (block.info.selective)
@@ -141,11 +145,15 @@ void HashPartitionWriter<ExchangeWriterPtr>::writeImpl(const Block & block)
         blocks.push_back(block);
     }
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    {
         partitionAndWriteBlocks();
+        return true;
+    }
+    return false;
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
+bool HashPartitionWriter<ExchangeWriterPtr>::doWrite(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),

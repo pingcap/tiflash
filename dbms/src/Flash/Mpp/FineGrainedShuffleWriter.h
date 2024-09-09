@@ -39,9 +39,9 @@ public:
         MPPDataPacketVersion data_codec_version_,
         tipb::CompressionMode compression_mode_);
     void prepare(const Block & sample_block) override;
-    void write(const Block & block) override;
+    bool doWrite(const Block & block) override;
     WaitResult waitForWritable() const override;
-    bool flushImpl() override;
+    bool doFlush() override;
     void triggerPipelineWriterNotify() override;
 
 private:

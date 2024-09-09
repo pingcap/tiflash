@@ -148,6 +148,7 @@ struct MockWriter
     }
     static uint16_t getPartitionNum() { return 1; }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
+    static void triggerPipelineWriterNotify() {}
 
     std::vector<tipb::FieldType> result_field_types;
 
@@ -352,7 +353,7 @@ public:
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
-            dag_writer->write(block);
+            dag_writer->doWrite(block);
         dag_writer->flush();
 
         // 3. send execution summary
@@ -378,7 +379,7 @@ public:
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
-            dag_writer->write(block);
+            dag_writer->doWrite(block);
         dag_writer->flush();
 
         // 3. send execution summary

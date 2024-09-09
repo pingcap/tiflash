@@ -28,8 +28,17 @@ class DAGResponseWriter
 public:
     DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_);
     /// prepared with sample block
-    virtual void prepare(const Block &){};
-    virtual void write(const Block & block) = 0;
+    virtual void prepare(const Block &) {};
+    // return true if write is actually write the data
+    virtual bool doWrite(const Block & block) = 0;
+    void write(const Block & block)
+    {
+        if (!doWrite(block))
+        {
+            if (need_notify_pipeline_writer)
+                triggerPipelineWriterNotify();
+        }
+    }
 
     // For async writer, `waitForWritable` need to be called before calling `write`.
     // ```
@@ -40,20 +49,28 @@ public:
     virtual WaitResult waitForWritable() const { throw Exception("Unsupport"); }
 
     /// flush cached blocks for batch writer
-    void flush() 
+    void flush()
     {
-        if (!flushImpl()) {
-            triggerPipelineWriterNotify();
+        if (!doFlush())
+        {
+            if (need_notify_pipeline_writer)
+                triggerPipelineWriterNotify();
         }
     }
+
+    void setNeedNotifyPipelineWriter(bool need_notify_pipeline_writer_)
+    {
+        need_notify_pipeline_writer = need_notify_pipeline_writer_;
+    }
     // return true if flush is actually flush data
-    virtual bool flushImpl() = 0;
+    virtual bool doFlush() = 0;
     virtual void triggerPipelineWriterNotify() = 0;
     virtual ~DAGResponseWriter() = default;
 
 protected:
     Int64 records_per_chunk;
     DAGContext & dag_context;
+    bool need_notify_pipeline_writer = false;
 };
 
 } // namespace DB

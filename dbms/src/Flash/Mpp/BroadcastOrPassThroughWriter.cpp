@@ -64,7 +64,7 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 }
 
 template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flushImpl()
+bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doFlush()
 {
     if (rows_in_blocks > 0)
     {
@@ -87,7 +87,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::triggerPipelineWriterNotif
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
+bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doWrite(const Block & block)
 {
     RUNTIME_CHECK(!block.info.selective);
     RUNTIME_CHECK_MSG(
@@ -101,7 +101,11 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    {
         writeBlocks();
+        return true;
+    }
+    return false;
 }
 
 template <class ExchangeWriterPtr>
