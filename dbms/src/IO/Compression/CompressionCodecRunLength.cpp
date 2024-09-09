@@ -53,23 +53,11 @@ UInt32 compressDataForInteger(const char * source, UInt32 source_size, char * de
     constexpr auto bytes_size = sizeof(T);
     if unlikely (source_size % bytes_size != 0)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
-    const char * source_end = source + source_size;
-    DB::Compression::RunLengthPairs<T> rle_vec;
-    rle_vec.reserve(source_size / bytes_size);
-    for (const auto * src = source; src < source_end; src += bytes_size)
-    {
-        T value = unalignedLoad<T>(src);
-        // If the value is different from the previous one or the counter is at the maximum value (255 + 1 = 0),
-        // we need to start a new run.
-        // Otherwise, we can just increment the counter.
-        if (rle_vec.empty() || rle_vec.back().first != value
-            || rle_vec.back().second == std::numeric_limits<UInt8>::max())
-            rle_vec.emplace_back(value, 1);
-        else
-            ++rle_vec.back().second;
-    }
 
-    return DB::Compression::runLengthEncoding<T>(rle_vec, dest);
+    const auto * typed_source = reinterpret_cast<const T *>(source);
+    const auto source_count = source_size / bytes_size;
+
+    return DB::Compression::runLengthEncoding<T>(typed_source, source_count, dest);
 }
 } // namespace
 
