@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <stdint.h>
 
 #include <cassert>
@@ -30,13 +31,8 @@ class WorkQueue
     std::condition_variable reader_cv;
     std::condition_variable writer_cv;
     std::condition_variable finish_cv;
-<<<<<<< HEAD
-    std::queue<T> queue;
-=======
-    PipeConditionVariable pipe_cv;
     // <value, push_timestamp_ns>
     std::queue<std::pair<T, UInt64>> queue;
->>>>>>> 954f147701 (Storages: Add Block pop-up latency metrics (#9260))
     bool done;
     std::size_t max_size;
 
