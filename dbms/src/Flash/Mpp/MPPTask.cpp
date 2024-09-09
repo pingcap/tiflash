@@ -510,11 +510,14 @@ void MPPTask::runImpl()
     }
 
     Stopwatch stopwatch;
+    const auto & resource_group = dag_context->getResourceGroupName();
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_run_mpp_task, resource_group).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_run_mpp_task, resource_group).Decrement();
     });
 
     String err_msg;

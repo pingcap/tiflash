@@ -80,6 +80,10 @@ public:
     const mpp::EstablishMPPConnectionRequest & getRequest() const { return request; }
     grpc::ServerContext * getGrpcContext() { return &ctx; }
 
+    String getResourceGroupName() const
+    {
+        return resource_group_name;
+    }
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
     /// thread, it's EXTREMELY DANGEROUS to read/write any data after calling a grpc function
@@ -133,6 +137,7 @@ private:
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::unique_ptr<Stopwatch> stopwatch;
     String query_id;
+    String resource_group_name;
     String connection_id;
     double waiting_task_time_ms = 0;
 };

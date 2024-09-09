@@ -856,7 +856,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
-      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}),                                                                     \
+      F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                                                                     \
+      F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),                                                                   \
+      F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                                                                         \
+      F(type_run_mpp_task, {"type", "run_mpp_task"}))                                                                               \
     M(tiflash_storage_io_limiter_pending_count,                                                                                     \
       "I/O limiter pending count",                                                                                                  \
       Counter,                                                                                                                      \
