@@ -161,7 +161,7 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         if (!value_from_tidb.empty())
         {
             context->setSetting(names.second, value_from_tidb);
-            LOG_DEBUG(log, "set context setting {} to {}", names.second, value_from_tidb);
+            LOG_INFO(log, "set context setting {} to {}", names.second, value_from_tidb);
         }
     }
 }
