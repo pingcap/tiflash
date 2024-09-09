@@ -78,6 +78,12 @@ WaitResult StreamingDAGResponseWriter<StreamWriterPtr>::waitForWritable() const
 }
 
 template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::triggerPipelineNotify() const
+{
+    return writer->triggerPipelineNotify();
+}
+
+template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(

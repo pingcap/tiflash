@@ -48,7 +48,7 @@ public:
     }
     // return true if flush is actually flush data
     virtual bool flushImpl() = 0;
-    virtual void triggerPipelineNotify() const {}
+    virtual void triggerPipelineNotify() {}
     virtual ~DAGResponseWriter() = default;
 
 protected:

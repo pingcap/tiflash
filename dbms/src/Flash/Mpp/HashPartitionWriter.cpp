@@ -95,6 +95,12 @@ bool HashPartitionWriter<ExchangeWriterPtr>::flushImpl()
 }
 
 template <class ExchangeWriterPtr>
+void HashPartitionWriter<ExchangeWriterPtr>::triggerPipelineNotify()
+{
+    writer->triggerPipelineNotify();
+}
+
+template <class ExchangeWriterPtr>
 WaitResult HashPartitionWriter<ExchangeWriterPtr>::waitForWritable() const
 {
     return writer->waitForWritable();

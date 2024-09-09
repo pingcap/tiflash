@@ -81,6 +81,12 @@ WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() co
 }
 
 template <class ExchangeWriterPtr>
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::triggerPipelineNotify()
+{
+    writer->triggerPipelineNotify();
+}
+
+template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK(!block.info.selective);

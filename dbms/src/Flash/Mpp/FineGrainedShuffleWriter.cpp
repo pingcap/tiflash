@@ -101,6 +101,12 @@ bool FineGrainedShuffleWriter<ExchangeWriterPtr>::flushImpl()
 }
 
 template <class ExchangeWriterPtr>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::triggerPipelineNotify()
+{
+    writer->triggerPipelineNotify();
+}
+
+template <class ExchangeWriterPtr>
 WaitResult FineGrainedShuffleWriter<ExchangeWriterPtr>::waitForWritable() const
 {
     return writer->waitForWritable();

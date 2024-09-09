@@ -39,6 +39,7 @@ public:
     void write(const Block & block) override;
     WaitResult waitForWritable() const override;
     bool flushImpl() override;
+    void triggerPipelineNotify() override;
 
 private:
     void encodeThenWriteBlocks();
