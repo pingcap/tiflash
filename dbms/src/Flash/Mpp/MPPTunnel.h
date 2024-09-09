@@ -119,7 +119,7 @@ public:
     virtual bool finish() = 0;
 
     virtual bool isWritable() const = 0;
-    virtual void triggerPipelineNotify() = 0;
+    virtual void triggerPipelineWriterNotify() = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg() { return consumer_state.getMsg(); }
@@ -198,7 +198,7 @@ public:
 
     bool isWritable() const override { return send_queue.isWritable(); }
 
-    void triggerPipelineNotify() override { send_queue.triggerPipelineNotify(); }
+    void triggerPipelineWriterNotify() override { send_queue.triggerPipelineWriterNotify(); }
 
     void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
 
@@ -252,7 +252,7 @@ public:
 
     bool isWritable() const override { return queue.isWritable(); }
 
-    void triggerPipelineNotify() override { queue.triggerPipelineNotify(); }
+    void triggerPipelineWriterNotify() override { queue.triggerPipelineWriterNotify(); }
 
     void cancelWith(const String & reason) override { queue.cancelWith(reason); }
 
@@ -324,14 +324,14 @@ public:
         }
     }
 
-    void triggerPipelineNotify() override 
+    void triggerPipelineWriterNotify() override 
     {
         if constexpr (local_only)
-            local_request_handler.triggerPipelineNotify();
+            local_request_handler.triggerPipelineWriterNotify();
         else 
         {
             std::lock_guard lock(mu);
-            local_request_handler.triggerPipelineNotify();
+            local_request_handler.triggerPipelineWriterNotify();
         }
     }
 
@@ -439,7 +439,7 @@ public:
     bool finish() override { return send_queue.finish(); }
 
     bool isWritable() const override { return send_queue.isWritable(); }
-    void triggerPipelineNotify() override { send_queue.triggerPipelineNotify(); }
+    void triggerPipelineWriterNotify() override { send_queue.triggerPipelineWriterNotify(); }
 
     void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
 
@@ -519,9 +519,9 @@ public:
     WaitResult waitForWritable() const;
     void forceWrite(TrackedMppDataPacketPtr && data);
 
-    void triggerPipelineNotify() {
+    void triggerPipelineWriterNotify() {
         assert(tunnel_sender != nullptr);
-        tunnel_sender->triggerPipelineNotify();
+        tunnel_sender->triggerPipelineWriterNotify();
     };
 
     // finish the writing, and wait until the sender finishes.

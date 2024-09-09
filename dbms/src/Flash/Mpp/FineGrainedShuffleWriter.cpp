@@ -101,9 +101,9 @@ bool FineGrainedShuffleWriter<ExchangeWriterPtr>::flushImpl()
 }
 
 template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::triggerPipelineNotify()
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::triggerPipelineWriterNotify()
 {
-    writer->triggerPipelineNotify();
+    writer->triggerPipelineWriterNotify();
 }
 
 template <class ExchangeWriterPtr>

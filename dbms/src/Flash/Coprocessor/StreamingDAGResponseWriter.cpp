@@ -78,9 +78,9 @@ WaitResult StreamingDAGResponseWriter<StreamWriterPtr>::waitForWritable() const
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::triggerPipelineNotify()
+void StreamingDAGResponseWriter<StreamWriterPtr>::triggerPipelineWriterNotify()
 {
-    return writer->triggerPipelineNotify();
+    return writer->triggerPipelineWriterNotify();
 }
 
 template <class StreamWriterPtr>

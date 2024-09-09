@@ -98,7 +98,7 @@ public:
     }
 
     bool isWritable() const { return grpc_recv_queue.isWritable(); }
-    void triggerPipelineNotify() { grpc_recv_queue.triggerPipelineNotify(); }
+    void triggerPipelineWriterNotify() { grpc_recv_queue.triggerPipelineWriterNotify(); }
 
     void registerPipeReadTask(TaskPtr && task) { grpc_recv_queue.registerPipeReadTask(std::move(task)); }
     void registerPipeWriteTask(TaskPtr && task) { grpc_recv_queue.registerPipeWriteTask(std::move(task)); }

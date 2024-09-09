@@ -43,12 +43,12 @@ public:
     void flush() 
     {
         if (!flushImpl()) {
-            triggerPipelineNotify();
+            triggerPipelineWriterNotify();
         }
     }
     // return true if flush is actually flush data
     virtual bool flushImpl() = 0;
-    virtual void triggerPipelineNotify() {}
+    virtual void triggerPipelineWriterNotify() = 0;
     virtual ~DAGResponseWriter() = default;
 
 protected:

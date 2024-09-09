@@ -35,6 +35,7 @@ public:
 
     void write(const Block & block) override;
     bool flushImpl() override;
+    void triggerPipelineWriterNotify() override {};
     void encodeChunkToDAGResponse();
     void appendWarningsToDAGResponse();
 

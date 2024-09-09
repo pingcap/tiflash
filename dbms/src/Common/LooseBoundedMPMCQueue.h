@@ -19,7 +19,6 @@
 
 #include <condition_variable>
 #include <deque>
-#include <mutex>
 
 namespace DB
 {
@@ -221,7 +220,7 @@ public:
         return !isFullWithoutLock();
     }
 
-    void triggerPipelineNotify()
+    void triggerPipelineWriterNotify()
     {
         auto should_notify = false;
         {

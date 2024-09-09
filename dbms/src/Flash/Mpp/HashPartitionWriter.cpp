@@ -95,9 +95,9 @@ bool HashPartitionWriter<ExchangeWriterPtr>::flushImpl()
 }
 
 template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::triggerPipelineNotify()
+void HashPartitionWriter<ExchangeWriterPtr>::triggerPipelineWriterNotify()
 {
-    writer->triggerPipelineNotify();
+    writer->triggerPipelineWriterNotify();
 }
 
 template <class ExchangeWriterPtr>
