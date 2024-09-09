@@ -657,25 +657,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_send, {{"type", "send_queue"}}),                                                                                       \
       F(type_receive, {{"type", "recv_queue"}}))                                                                                    \
-    M(tiflash_compute_request_unit,                                                                                                 \
-      "Request Unit used by tiflash compute",                                                                                       \
-      Counter,                                                                                                                      \
-      F(type_mpp,                                                                                                                   \
-        {{"type", "mpp"},                                                                                                           \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_cop,                                                                                                                   \
-        {{"type", "cop"},                                                                                                           \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_cop_stream,                                                                                                            \
-        {{"type", "cop_stream"},                                                                                                    \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_batch,                                                                                                                 \
-        {{"type", "batch"},                                                                                                         \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}))                                                                      \
     M(tiflash_shared_block_schemas,                                                                                                 \
       "statistics about shared block schemas of ColumnFiles",                                                                       \
       Gauge,                                                                                                                        \
@@ -861,6 +842,14 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),                                                                   \
       F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                                                                         \
       F(type_run_mpp_task, {"type", "run_mpp_task"}))                                                                               \
+    M(tiflash_compute_request_unit,                                                                                                 \
+      "Request Unit used by tiflash compute for each resource group",                                                                                       \
+      Counter,                                                                                                                      \
+      F(type_mpp, {"type", "mpp"}), \
+      F(type_cop, {"type", "cop"}), \
+      F(type_cop_stream, {"type", "cop_stream"}), \
+      F(type_batch, {"type", "batch"}), \
+            )                                                                                                           \
     M(tiflash_storage_io_limiter_pending_count,                                                                                     \
       "I/O limiter pending count",                                                                                                  \
       Counter,                                                                                                                      \
