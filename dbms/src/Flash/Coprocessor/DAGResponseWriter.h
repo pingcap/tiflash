@@ -28,7 +28,7 @@ class DAGResponseWriter
 public:
     DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_);
     /// prepared with sample block
-    virtual void prepare(const Block &) {};
+    virtual void prepare(const Block &){};
     // return true if write is actually write the data
     virtual bool doWrite(const Block & block) = 0;
     void write(const Block & block)

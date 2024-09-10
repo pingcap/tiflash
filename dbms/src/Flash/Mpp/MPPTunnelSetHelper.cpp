@@ -73,7 +73,7 @@ TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::Fiel
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     for (auto & block : blocks)
     {
-        if (block) 
+        if (block)
         {
             codec_stream->encode(block, 0, block.rows());
             block.clear();

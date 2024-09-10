@@ -324,11 +324,11 @@ public:
         }
     }
 
-    void triggerPipelineWriterNotify() override 
+    void triggerPipelineWriterNotify() override
     {
         if constexpr (local_only)
             local_request_handler.triggerPipelineWriterNotify();
-        else 
+        else
         {
             std::lock_guard lock(mu);
             local_request_handler.triggerPipelineWriterNotify();
@@ -519,10 +519,11 @@ public:
     WaitResult waitForWritable() const;
     void forceWrite(TrackedMppDataPacketPtr && data);
 
-    void triggerPipelineWriterNotify() {
+    void triggerPipelineWriterNotify()
+    {
         assert(tunnel_sender != nullptr);
         tunnel_sender->triggerPipelineWriterNotify();
-    };
+    }
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();
