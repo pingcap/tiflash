@@ -220,7 +220,7 @@ public:
         return !isFullWithoutLock();
     }
 
-    void triggerPipelineWriterNotify()
+    void notifyNextPipelineWriter()
     {
         auto should_notify = false;
         {

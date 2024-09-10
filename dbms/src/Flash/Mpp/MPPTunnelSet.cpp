@@ -79,11 +79,11 @@ WaitResult MPPTunnelSetBase<Tunnel>::waitForWritable() const
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::triggerPipelineWriterNotify() const
+void MPPTunnelSetBase<Tunnel>::notifyNextPipelineWriter() const
 {
     for (const auto & tunnel : tunnels)
     {
-        tunnel->triggerPipelineWriterNotify();
+        tunnel->notifyNextPipelineWriter();
     }
 }
 

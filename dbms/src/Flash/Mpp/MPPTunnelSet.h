@@ -61,7 +61,7 @@ public:
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
     WaitResult waitForWritable() const;
-    void triggerPipelineWriterNotify() const;
+    void notifyNextPipelineWriter() const;
 
     bool isLocal(size_t index) const;
 

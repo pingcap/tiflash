@@ -99,7 +99,7 @@ bool HashPartitionWriter<ExchangeWriterPtr>::doFlush()
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
 {
-    writer->triggerPipelineWriterNotify();
+    writer->notifyNextPipelineWriter();
 }
 
 template <class ExchangeWriterPtr>

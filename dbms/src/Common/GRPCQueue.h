@@ -138,7 +138,7 @@ public:
     }
 
     bool isWritable() const { return send_queue.isWritable(); }
-    void triggerPipelineWriterNotify() { send_queue.triggerPipelineWriterNotify(); }
+    void notifyNextPipelineWriter() { send_queue.notifyNextPipelineWriter(); }
 
     void registerPipeReadTask(TaskPtr && task) { send_queue.registerPipeReadTask(std::move(task)); }
     void registerPipeWriteTask(TaskPtr && task) { send_queue.registerPipeWriteTask(std::move(task)); }
@@ -300,7 +300,7 @@ public:
     }
 
     bool isWritable() const { return recv_queue.isWritable(); }
-    void triggerPipelineWriterNotify() { return recv_queue.triggerPipelineWriterNotify(); }
+    void notifyNextPipelineWriter() { return recv_queue.notifyNextPipelineWriter(); }
 
     void registerPipeReadTask(TaskPtr && task) { recv_queue.registerPipeReadTask(std::move(task)); }
     void registerPipeWriteTask(TaskPtr && task) { recv_queue.registerPipeWriteTask(std::move(task)); }

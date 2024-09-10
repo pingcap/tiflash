@@ -148,7 +148,7 @@ struct MockWriter
     }
     static uint16_t getPartitionNum() { return 1; }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
-    static void triggerPipelineWriterNotify() {}
+    static void notifyNextPipelineWriter() {}
 
     std::vector<tipb::FieldType> result_field_types;
 

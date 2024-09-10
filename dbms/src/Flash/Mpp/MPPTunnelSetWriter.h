@@ -70,7 +70,7 @@ public:
     uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
     virtual WaitResult waitForWritable() const = 0;
-    virtual void triggerPipelineWriterNotify() const = 0;
+    virtual void notifyNextPipelineWriter() const = 0;
 
 protected:
     virtual void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) = 0;
@@ -94,7 +94,7 @@ public:
 
     // For sync writer, `waitForWritable` will not be called, so an exception is thrown here.
     WaitResult waitForWritable() const override { throw Exception("Unsupport sync writer"); }
-    void triggerPipelineWriterNotify() const override {}
+    void notifyNextPipelineWriter() const override {}
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
@@ -113,7 +113,7 @@ public:
     {}
 
     WaitResult waitForWritable() const override { return mpp_tunnel_set->waitForWritable(); }
-    void triggerPipelineWriterNotify() const override { mpp_tunnel_set->triggerPipelineWriterNotify(); }
+    void notifyNextPipelineWriter() const override { mpp_tunnel_set->notifyNextPipelineWriter(); }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
