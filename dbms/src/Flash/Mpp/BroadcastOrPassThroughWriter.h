@@ -39,7 +39,7 @@ public:
     bool doWrite(const Block & block) override;
     WaitResult waitForWritable() const override;
     bool doFlush() override;
-    void triggerPipelineWriterNotify() override;
+    void notifyNextPipelineWriter() override;
 
 private:
     void writeBlocks();

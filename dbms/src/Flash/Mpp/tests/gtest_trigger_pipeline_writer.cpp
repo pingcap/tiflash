@@ -45,20 +45,18 @@ public:
         auto next = dist(rng);
         return next % 3 == 0;
     }
-    void triggerPipelineWriterNotify() override { writer_notify_count--; }
+    void notifyNextPipelineWriter() override { writer_notify_count--; }
     WaitResult waitForWritable() const override
     {
         std::uniform_int_distribution<Int32> dist;
         auto next = dist(rng);
-        if (next % 3 == 1 && need_notify_pipeline_writer)
+        if (next % 3 == 1)
         {
             writer_notify_count++;
             return WaitResult::WaitForNotify;
         }
         return WaitResult::Ready;
     }
-    bool needNotifyPipelineWriter() const { return need_notify_pipeline_writer; }
-
     Int64 getPipelineNotifyCount() const { return writer_notify_count; }
 
 private:
@@ -111,36 +109,7 @@ public:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-TEST_F(TestTriggerPipelineWriter, testPipelineWriterOff)
-try
-{
-    const size_t block_rows = 1024;
-    // 1. Build Block.
-    auto block = prepareRandomBlock(block_rows);
-
-    // 2. Build MockWriter.
-    auto mock_writer = std::make_shared<MockPipelineTriggerWriter>(-1, *dag_context_ptr);
-
-    // 3. disable pipeline writer trigger
-    ASSERT_EQ(false, mock_writer->needNotifyPipelineWriter());
-
-    // 4. write something
-    for (int i = 0; i < 100; i++)
-    {
-        mock_writer->waitForWritable();
-        mock_writer->write(block);
-    }
-
-    // 5. flush
-    mock_writer->waitForWritable();
-    mock_writer->flush();
-
-    // 6. check results
-    ASSERT_EQ(0, mock_writer->getPipelineNotifyCount());
-}
-CATCH
-
-TEST_F(TestTriggerPipelineWriter, testPipelineWriterOn)
+TEST_F(TestTriggerPipelineWriter, testPipelineWriter)
 try
 {
     const size_t block_rows = 1024;
@@ -152,21 +121,18 @@ try
         // 2. Build MockWriter.
         auto mock_writer = std::make_shared<MockPipelineTriggerWriter>(-1, *dag_context_ptr);
 
-        // 3. enable pipeline writer trigger
-        mock_writer->setNeedNotifyPipelineWriter(true);
-
-        // 4. write something
+        // 3. write something
         for (int i = 0; i < 100; i++)
         {
             mock_writer->waitForWritable();
             mock_writer->write(block);
         }
 
-        // 5. flush
+        // 4. flush
         mock_writer->waitForWritable();
         mock_writer->flush();
 
-        // 6. check results, note redudent notify is allowed
+        // 5. check results, note redudent notify is allowed
         ASSERT_EQ(true, mock_writer->getPipelineNotifyCount() <= 0);
     }
 }

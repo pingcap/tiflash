@@ -35,8 +35,7 @@ public:
     {
         if (!doWrite(block))
         {
-            if (need_notify_pipeline_writer)
-                triggerPipelineWriterNotify();
+            notifyNextPipelineWriter();
         }
     }
 
@@ -53,24 +52,18 @@ public:
     {
         if (!doFlush())
         {
-            if (need_notify_pipeline_writer)
-                triggerPipelineWriterNotify();
+            notifyNextPipelineWriter();
         }
     }
 
-    void setNeedNotifyPipelineWriter(bool need_notify_pipeline_writer_)
-    {
-        need_notify_pipeline_writer = need_notify_pipeline_writer_;
-    }
     // return true if flush is actually flush data
     virtual bool doFlush() = 0;
-    virtual void triggerPipelineWriterNotify() = 0;
+    virtual void notifyNextPipelineWriter() = 0;
     virtual ~DAGResponseWriter() = default;
 
 protected:
     Int64 records_per_chunk;
     DAGContext & dag_context;
-    bool need_notify_pipeline_writer = false;
 };
 
 } // namespace DB

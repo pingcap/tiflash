@@ -81,7 +81,7 @@ WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() co
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::triggerPipelineWriterNotify()
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
 {
     writer->triggerPipelineWriterNotify();
 }
