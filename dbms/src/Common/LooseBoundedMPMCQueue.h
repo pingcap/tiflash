@@ -220,6 +220,8 @@ public:
         return !isFullWithoutLock();
     }
 
+    void notifyNextPipelineWriter() { pipe_writer_cv.notifyOne(); }
+
     MPMCQueueStatus getStatus() const
     {
         std::lock_guard lock(mu);
