@@ -520,8 +520,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     }
     else
     {
-        auto lock = end_to_segment_id_cache->writeLock();
-        return protected_logic(end_to_segment_id_cache->readLock());
+        return protected_logic(end_to_segment_id_cache->writeLock());
     }
 }
 
