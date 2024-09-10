@@ -29,8 +29,6 @@ public:
     DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_);
     /// prepared with sample block
     virtual void prepare(const Block &){};
-    // return true if write is actually write the data
-    virtual bool doWrite(const Block & block) = 0;
     void write(const Block & block)
     {
         if (!doWrite(block))
@@ -56,12 +54,15 @@ public:
         }
     }
 
-    // return true if flush is actually flush data
-    virtual bool doFlush() = 0;
-    virtual void notifyNextPipelineWriter() = 0;
     virtual ~DAGResponseWriter() = default;
 
 protected:
+    // return true if write is actually write the data
+    virtual bool doWrite(const Block & block) = 0;
+    // return true if flush is actually flush data
+    virtual bool doFlush() = 0;
+    virtual void notifyNextPipelineWriter() = 0;
+
     Int64 records_per_chunk;
     DAGContext & dag_context;
 };

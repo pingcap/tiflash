@@ -220,16 +220,7 @@ public:
         return !isFullWithoutLock();
     }
 
-    void notifyNextPipelineWriter()
-    {
-        auto should_notify = false;
-        {
-            std::lock_guard lock(mu);
-            should_notify = status != MPMCQueueStatus::CANCELLED && !isFullWithoutLock();
-        }
-        if (should_notify)
-            pipe_writer_cv.notifyOne();
-    }
+    void notifyNextPipelineWriter() { pipe_writer_cv.notifyOne(); }
 
     MPMCQueueStatus getStatus() const
     {

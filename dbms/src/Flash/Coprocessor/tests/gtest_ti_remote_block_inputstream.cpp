@@ -353,7 +353,7 @@ public:
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
-            dag_writer->doWrite(block);
+            dag_writer->write(block);
         dag_writer->flush();
 
         // 3. send execution summary
@@ -379,7 +379,7 @@ public:
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
-            dag_writer->doWrite(block);
+            dag_writer->write(block);
         dag_writer->flush();
 
         // 3. send execution summary

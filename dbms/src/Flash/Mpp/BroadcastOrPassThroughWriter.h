@@ -36,8 +36,10 @@ public:
         MPPDataPacketVersion data_codec_version_,
         tipb::CompressionMode compression_mode_,
         tipb::ExchangeType exchange_type_);
-    bool doWrite(const Block & block) override;
     WaitResult waitForWritable() const override;
+
+protected:
+    bool doWrite(const Block & block) override;
     bool doFlush() override;
     void notifyNextPipelineWriter() override;
 
