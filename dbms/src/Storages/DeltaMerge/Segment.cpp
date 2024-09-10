@@ -429,6 +429,8 @@ SegmentPtr Segment::restoreSegment( //
     return segment;
 }
 
+using GenericLock = std::variant<std::shared_lock<std::shared_mutex>, std::unique_lock<std::shared_mutex>>;
+
 Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     DMContext & context,
     const RowKeyRange & target_range,
@@ -447,11 +449,12 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         is_cache_ready = end_to_segment_id_cache->isReady(lock);
     }
 
-    auto protected_logic = [&]() {
+    auto protected_logic = [&](GenericLock && lock) {
         if (is_cache_ready)
         {
-            current_segment_id
-                = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
+            current_segment_id = end_to_segment_id_cache->getSegmentIdContainingKey(
+                std::get<std::shared_lock<std::shared_mutex>>(lock),
+                target_range.getStart().toRowKeyValue());
         }
         LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
@@ -481,7 +484,9 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             readSegmentMetaInfo(buf, segment_info);
             if (!is_cache_ready)
             {
-                end_key_and_segment_ids.emplace_back(segment_info.range.getEnd().toRowKeyValue(), segment_info.segment_id);
+                end_key_and_segment_ids.emplace_back(
+                    segment_info.range.getEnd().toRowKeyValue(),
+                    segment_info.segment_id);
             }
             current_segment_id = segment_info.next_segment_id;
             if (!(segment_info.range.shrink(target_range).none()))
@@ -502,18 +507,21 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 context.keyspace_id,
                 context.physical_table_id,
                 end_key_and_segment_ids.size());
-            end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
+            end_to_segment_id_cache->build(
+                std::get<std::unique_lock<std::shared_mutex>>(lock),
+                std::move(end_key_and_segment_ids));
         }
         return segment_infos;
-    }
+    };
 
-    if (is_cache_ready) {
-        auto lock = end_to_segment_id_cache->readLock();
-        return protected_logic();
+    if (is_cache_ready)
+    {
+        return protected_logic(end_to_segment_id_cache->readLock());
     }
-    else {
+    else
+    {
         auto lock = end_to_segment_id_cache->writeLock();
-        return protected_logic();
+        return protected_logic(end_to_segment_id_cache->readLock());
     }
 }
 

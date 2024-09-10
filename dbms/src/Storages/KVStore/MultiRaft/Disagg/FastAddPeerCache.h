@@ -34,20 +34,37 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 class EndToSegmentId
 {
 public:
-    [[nodiscard]] std::unique_lock<std::mutex> writeLock();
-    [[nodiscard]] std::shared_lock<std::mutex> readLock();
+    [[nodiscard]] std::unique_lock<std::shared_mutex> writeLock();
+    [[nodiscard]] std::shared_lock<std::shared_mutex> readLock();
 
-    bool isReady(std::unique_lock<std::mutex> & lock) const;
-    bool isReady(std::shared_lock<std::mutex> & lock) const;
+    bool isReady(std::unique_lock<std::shared_mutex> & lock) const;
+    bool isReady(std::shared_lock<std::shared_mutex> & lock) const;
 
     // The caller must ensure `end_key_and_segment_id` is ordered.
     // Called in `Segment::readAllSegmentsMetaInfoInRange`.
     void build(
-        std::unique_lock<std::mutex> & lock,
+        std::unique_lock<std::shared_mutex> & lock,
         std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
 
     // Given a key, return the segment_id that may contain the key
-    UInt64 getSegmentIdContainingKey(std::unique_lock<std::mutex> & lock, const DM::RowKeyValue & key);
+    template <typename LOCK>
+    UInt64 getSegmentIdContainingKey(LOCK & lock, const DM::RowKeyValue & key)
+    {
+        UNUSED(lock);
+        RUNTIME_CHECK(is_ready);
+        auto iter = std::upper_bound(
+            end_to_segment_id.begin(),
+            end_to_segment_id.end(),
+            key,
+            [](const DM::RowKeyValue & key1, const std::pair<DM::RowKeyValue, UInt64> & element2) {
+                return key1.toRowKeyValueRef() < element2.first.toRowKeyValueRef();
+            });
+        RUNTIME_CHECK(
+            iter != end_to_segment_id.end(),
+            key.toDebugString(),
+            end_to_segment_id.rbegin()->first.toDebugString());
+        return iter->second;
+    }
 
 private:
     std::shared_mutex mu;
