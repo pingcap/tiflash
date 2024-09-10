@@ -44,6 +44,8 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
     switch (data_codec_version)
     {
     case MPPDataPacketV0:
+        if (batch_send_min_limit <= 0)
+            batch_send_min_limit = 1;
         break;
     case MPPDataPacketV1:
     default:
@@ -100,7 +102,7 @@ bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doWrite(const Block & bloc
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit)
     {
         writeBlocks();
         return true;
