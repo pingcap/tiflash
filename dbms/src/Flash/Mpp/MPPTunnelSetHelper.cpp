@@ -34,12 +34,13 @@ TrackedMppDataPacketPtr ToPacket(
     };
 
     auto && res = codec.encode(std::move(part_columns), method);
-    if unlikely (res.empty())
-        return nullptr;
 
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
-    tracked_packet->addChunk(std::move(res));
-    original_size += codec.original_size;
+    if likely (!res.empty())
+    {
+        tracked_packet->addChunk(std::move(res));
+        original_size += codec.original_size;
+    }
     return tracked_packet;
 }
 
@@ -72,10 +73,13 @@ TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::Fiel
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     for (auto & block : blocks)
     {
-        codec_stream->encode(block, 0, block.rows());
-        block.clear();
-        tracked_packet->addChunk(codec_stream->getString());
-        codec_stream->clear();
+        if (block) 
+        {
+            codec_stream->encode(block, 0, block.rows());
+            block.clear();
+            tracked_packet->addChunk(codec_stream->getString());
+            codec_stream->clear();
+        }
     }
     return tracked_packet;
 }
