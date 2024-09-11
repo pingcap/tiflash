@@ -47,9 +47,8 @@ namespace DB
     return std::shared_lock(mu);
 }
 
-bool EndToSegmentId::isReady(std::unique_lock<std::shared_mutex> & lock) const
+bool EndToSegmentId::isReady(std::unique_lock<std::shared_mutex> &) const
 {
-    UNUSED(lock);
     return is_ready;
 }
 
