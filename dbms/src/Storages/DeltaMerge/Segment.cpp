@@ -456,7 +456,11 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 std::get<std::shared_lock<std::shared_mutex>>(lock),
                 target_range.getStart().toRowKeyValue());
         }
-        LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
+        LOG_DEBUG(
+            Logger::get(),
+            "Read segment meta info from segment {}, region_id={}",
+            current_segment_id,
+            checkpoint_info->region_id);
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
         SegmentMetaInfos segment_infos;
         while (current_segment_id != 0)
@@ -472,12 +476,13 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 // If it were to be selected, the FAP task could fallback to regular snapshot.
                 throw Exception(
                     ErrorCodes::LOGICAL_ERROR,
-                    "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={}",
+                    "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={} region_id={}",
                     target_id,
                     context.keyspace_id,
                     context.physical_table_id,
                     current_segment_id,
-                    target_range.toDebugString());
+                    target_range.toDebugString(),
+                    checkpoint_info->region_id);
             }
             segment_info.segment_id = current_segment_id;
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -503,10 +508,11 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         {
             LOG_DEBUG(
                 Logger::get(),
-                "Build cache for keyspace {} table {} with {} segments",
+                "Build cache for keyspace {} table {} with {} segments, region_id={}",
                 context.keyspace_id,
                 context.physical_table_id,
-                end_key_and_segment_ids.size());
+                end_key_and_segment_ids.size(),
+                checkpoint_info->region_id);
             end_to_segment_id_cache->build(
                 std::get<std::unique_lock<std::shared_mutex>>(lock),
                 std::move(end_key_and_segment_ids));
@@ -526,6 +532,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
 
 Segments Segment::createTargetSegmentsFromCheckpoint( //
     const LoggerPtr & parent_log,
+    UInt64 region_id,
     DMContext & context,
     StoreID remote_store_id,
     const SegmentMetaInfos & meta_infos,
@@ -539,12 +546,15 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     {
         LOG_DEBUG(
             parent_log,
-            "Create segment begin. Delta id {} stable id {} range {} epoch {} next_segment_id {}",
+            "Create segment begin. Delta id {} stable id {} range {} epoch {} next_segment_id {}, remote_store_id={}, "
+            "region_id={}",
             segment_info.delta_id,
             segment_info.stable_id,
             segment_info.range.toDebugString(),
             segment_info.epoch,
-            segment_info.next_segment_id);
+            segment_info.next_segment_id,
+            remote_store_id,
+            region_id);
         auto stable = StableValueSpace::createFromCheckpoint(parent_log, context, temp_ps, segment_info.stable_id, wbs);
         auto delta = DeltaValueSpace::createFromCheckpoint(
             parent_log,
@@ -564,12 +574,15 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
         segments.push_back(segment);
         LOG_DEBUG(
             parent_log,
-            "Create segment end. Delta id {} stable id {} range {} epoch {} next_segment_id {}",
+            "Create segment end. Delta id {} stable id {} range {} epoch {} next_segment_id {}, remote_store_id={}, "
+            "region_id={}",
             segment_info.delta_id,
             segment_info.stable_id,
             segment_info.range.toDebugString(),
             segment_info.epoch,
-            segment_info.next_segment_id);
+            segment_info.next_segment_id,
+            remote_store_id,
+            region_id);
     }
     return segments;
 }

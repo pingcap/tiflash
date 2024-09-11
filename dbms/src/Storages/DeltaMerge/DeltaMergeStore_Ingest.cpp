@@ -1151,6 +1151,7 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
         auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
         auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
             log,
+            checkpoint_info->region_id,
             *dm_context,
             checkpoint_info->remote_store_id,
             segment_meta_infos,

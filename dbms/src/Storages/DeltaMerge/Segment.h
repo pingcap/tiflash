@@ -181,6 +181,7 @@ public:
     // The data of these temp segments will be included in `wbs`.
     static Segments createTargetSegmentsFromCheckpoint( //
         const LoggerPtr & parent_log,
+        UInt64 region_id,
         DMContext & context,
         StoreID remote_store_id,
         const SegmentMetaInfos & meta_infos,
@@ -527,7 +528,7 @@ public:
 
     PageIdU64 segmentId() const { return segment_id; }
     PageIdU64 nextSegmentId() const { return next_segment_id; }
-    UInt64 segmentEpoch() const { return epoch; };
+    UInt64 segmentEpoch() const { return epoch; }
 
     void check(DMContext & dm_context, const String & when) const;
 
