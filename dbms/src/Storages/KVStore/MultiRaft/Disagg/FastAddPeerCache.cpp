@@ -47,23 +47,20 @@ namespace DB
     return std::shared_lock(mu);
 }
 
-bool EndToSegmentId::isReady(std::unique_lock<std::shared_mutex> & lock) const
+bool EndToSegmentId::isReady(std::unique_lock<std::shared_mutex> &) const
 {
-    UNUSED(lock);
     return is_ready;
 }
 
-bool EndToSegmentId::isReady(std::shared_lock<std::shared_mutex> & lock) const
+bool EndToSegmentId::isReady(std::shared_lock<std::shared_mutex> &) const
 {
-    UNUSED(lock);
     return is_ready;
 }
 
 void EndToSegmentId::build(
-    std::unique_lock<std::shared_mutex> & lock,
+    std::unique_lock<std::shared_mutex> &,
     std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids)
 {
-    UNUSED(lock);
     end_to_segment_id = std::move(end_key_and_segment_ids);
     is_ready = true;
 }
