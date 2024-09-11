@@ -436,8 +436,6 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     const RowKeyRange & target_range,
     const CheckpointInfoPtr & checkpoint_info)
 {
-    auto fap_context = context.global_context.getSharedContextDisagg()->fap_context;
-
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
     PageIdU64 current_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
