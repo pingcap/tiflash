@@ -54,6 +54,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -121,7 +122,10 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
-
+namespace FailPoints
+{
+extern const char pause_when_building_fap_segments[];
+} // namespace FailPoints
 namespace DM
 {
 String SegmentSnapshot::detailInfo() const
@@ -433,6 +437,7 @@ using GenericLock = std::variant<std::shared_lock<std::shared_mutex>, std::uniqu
 
 Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     DMContext & context,
+    std::shared_ptr<GeneralCancelHandle> cancel_handle,
     const RowKeyRange & target_range,
     const CheckpointInfoPtr & checkpoint_info)
 {
@@ -450,6 +455,8 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     bool is_cache_ready = false;
     // If there is a table building cache, then other table may block to read the built cache.
     // If the remote reader causes much time to retrieve data, then these tasks could block here.
+    // However, when the execlusive holder is canceled due to timeout, the readers could eventually get the lock.
+    FAIL_POINT_PAUSE(FailPoints::pause_when_building_fap_segments);
     {
         auto sec = sw.elapsedSecondsFromLastTime();
         auto lock = end_to_segment_id_cache->readLock();
@@ -482,6 +489,18 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         SegmentMetaInfos segment_infos;
         while (current_segment_id != 0)
         {
+            if (cancel_handle->isCanceled())
+            {
+                LOG_INFO(
+                    Logger::get(),
+                    "FAP is canceled when building segments, region_id={} keyspace={} table_id={}",
+                    checkpoint_info->region_id,
+                    context.keyspace_id,
+                    context.physical_table_id);
+                // FAP task would be cleaned in FastAddPeerImplWrite. So returning incompelete result could be OK.
+                end_key_and_segment_ids.clear();
+                return segment_infos;
+            }
             Segment::SegmentMetaInfo segment_info;
             auto target_id = UniversalPageIdFormat::toFullPageId(
                 UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
@@ -537,6 +556,17 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         return segment_infos;
     };
 
+    if (cancel_handle->isCanceled())
+    {
+        LOG_INFO(
+            Logger::get(),
+            "FAP is canceled when building segments, region_id={} keyspace={} table_id={}",
+            checkpoint_info->region_id,
+            context.keyspace_id,
+            context.physical_table_id);
+        // FAP task would be cleaned in FastAddPeerImplWrite. So returning incompelete result could be OK.
+        return {};
+    }
     if (is_cache_ready)
     {
         return protected_logic(end_to_segment_id_cache->readLock());

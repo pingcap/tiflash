@@ -31,6 +31,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -376,6 +377,7 @@ try
 
     auto segments = store->buildSegmentsFromCheckpointInfo(
         *db_context,
+        GeneralCancelHandle::genNotCanceled(),
         db_context->getSettingsRef(),
         RowKeyRange::newAll(false, 1),
         checkpoint_info);
@@ -506,6 +508,7 @@ try
     {
         auto segments = store->buildSegmentsFromCheckpointInfo(
             *db_context,
+            GeneralCancelHandle::genNotCanceled(),
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)),
             checkpoint_info);
@@ -530,6 +533,7 @@ try
     {
         auto segments = store->buildSegmentsFromCheckpointInfo(
             *db_context,
+            GeneralCancelHandle::genNotCanceled(),
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(num_rows_write / 2, num_rows_write)),
             checkpoint_info);

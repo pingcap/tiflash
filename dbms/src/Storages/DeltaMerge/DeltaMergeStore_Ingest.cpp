@@ -1133,6 +1133,7 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
 
 Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
+    std::shared_ptr<GeneralCancelHandle> cancel_handle,
     const DM::RowKeyRange & range,
     const CheckpointInfoPtr & checkpoint_info) const
 {
@@ -1149,7 +1150,8 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     WriteBatches wbs{*dm_context->storage_pool};
     try
     {
-        auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
+        auto segment_meta_infos
+            = Segment::readAllSegmentsMetaInfoInRange(*dm_context, cancel_handle, range, checkpoint_info);
         LOG_INFO(
             log,
             "Finish read all segments meta info in range, region_id={} segments_num={}",

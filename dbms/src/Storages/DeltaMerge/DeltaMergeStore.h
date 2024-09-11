@@ -44,7 +44,7 @@
 
 namespace DB
 {
-
+struct GeneralCancelHandle;
 struct Settings;
 
 class Logger;
@@ -388,17 +388,19 @@ public:
 
     Segments buildSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
+        std::shared_ptr<GeneralCancelHandle> cancel_handle,
         const DM::RowKeyRange & range,
         const CheckpointInfoPtr & checkpoint_info) const;
 
     Segments buildSegmentsFromCheckpointInfo(
         const Context & db_context,
+        std::shared_ptr<GeneralCancelHandle> cancel_handle,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
         const CheckpointInfoPtr & checkpoint_info)
     {
         auto dm_context = newDMContext(db_context, db_settings);
-        return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
+        return buildSegmentsFromCheckpointInfo(dm_context, cancel_handle, range, checkpoint_info);
     }
 
     UInt64 ingestSegmentsFromCheckpointInfo(

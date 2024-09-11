@@ -1014,11 +1014,13 @@ UInt64 StorageDeltaMerge::ingestFiles(
 }
 
 DM::Segments StorageDeltaMerge::buildSegmentsFromCheckpointInfo(
+    std::shared_ptr<GeneralCancelHandle> cancel_handle,
     const DM::RowKeyRange & range,
     CheckpointInfoPtr checkpoint_info,
     const Settings & settings)
 {
-    return getAndMaybeInitStore()->buildSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
+    return getAndMaybeInitStore()
+        ->buildSegmentsFromCheckpointInfo(global_context, cancel_handle, settings, range, checkpoint_info);
 }
 
 UInt64 StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(

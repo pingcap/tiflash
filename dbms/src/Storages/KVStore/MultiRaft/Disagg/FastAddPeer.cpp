@@ -344,7 +344,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     DM::Segments segments;
     try
     {
-        segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+        segments = dm_storage->buildSegmentsFromCheckpointInfo(cancel_handle, new_key_range, checkpoint_info, settings);
     }
     catch (...)
     {
@@ -356,6 +356,20 @@ FastAddPeerRes FastAddPeerImplWrite(
         throw;
     }
     GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_build).Observe(watch.elapsedSecondsFromLastTime());
+
+    // Note that `buildSegmentsFromCheckpointInfo` would also cancel. So we must check here before further operations.
+    if (cancel_handle->isCanceled())
+    {
+        LOG_INFO(
+            log,
+            "FAP is canceled after build segments, region_id={} keyspace={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+    }
 
     fap_ctx->insertCheckpointIngestInfo(
         tmt,

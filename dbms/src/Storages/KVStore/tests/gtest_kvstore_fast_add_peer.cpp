@@ -45,6 +45,7 @@ extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 extern const char force_not_clean_fap_on_destroy[];
 extern const char force_checkpoint_dump_throw_datafile[];
+extern const char pause_when_building_fap_segments[];
 } // namespace FailPoints
 
 namespace tests
@@ -811,6 +812,46 @@ try
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
+
+// Test cancel when building segments
+TEST_F(RegionKVStoreTestFAP, Cancel5)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    RegionPtr kv_region = std::get<1>(mock_data);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(region_id, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
+    FailPointHelper::enableFailPoint(FailPoints::pause_when_building_fap_segments);
+    std::packaged_task<FastAddPeerRes()> task([&]() {
+        return FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            std::move(mock_data),
+            0);
+    });
+    auto result = task.get_future();
+    std::thread t([&]() { task(); });
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(1s);
+    fap_context->tasks_trace->asyncCancelTask(region_id);
+    FailPointHelper::disableFailPoint(FailPoints::pause_when_building_fap_segments);
+    t.join();
+    exe_lock.unlock();
+    ASSERT_EQ(result.get().status, FastAddPeerStatus::Canceled);
+}
+CATCH
+
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try

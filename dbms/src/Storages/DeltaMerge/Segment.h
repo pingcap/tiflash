@@ -30,7 +30,10 @@
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <Storages/Page/PageDefinesBase.h>
 
-namespace DB::DM
+namespace DB
+{
+struct GeneralCancelHandle;
+namespace DM
 {
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
@@ -174,6 +177,7 @@ public:
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
     static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
         DMContext & context,
+        std::shared_ptr<GeneralCancelHandle> cancel_handle,
         const RowKeyRange & target_range,
         const CheckpointInfoPtr & checkpoint_info);
 
@@ -768,4 +772,5 @@ public:
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);
-} // namespace DB::DM
+} // namespace DM
+} // namespace DB

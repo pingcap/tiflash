@@ -21,6 +21,7 @@
 
 namespace DB
 {
+struct GeneralCancelHandle;
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
