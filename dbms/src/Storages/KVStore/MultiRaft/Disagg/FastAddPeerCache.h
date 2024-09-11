@@ -43,7 +43,7 @@ public:
     // The caller must ensure `end_key_and_segment_id` is ordered.
     // Called in `Segment::readAllSegmentsMetaInfoInRange`.
     void build(
-        std::unique_lock<std::shared_mutex> & lock,
+        std::unique_lock<std::shared_mutex> &,
         std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
 
     // Given a key, return the segment_id that may contain the key
