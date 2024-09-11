@@ -52,9 +52,8 @@ bool EndToSegmentId::isReady(std::unique_lock<std::shared_mutex> &) const
     return is_ready;
 }
 
-bool EndToSegmentId::isReady(std::shared_lock<std::shared_mutex> & lock) const
+bool EndToSegmentId::isReady(std::shared_lock<std::shared_mutex> &) const
 {
-    UNUSED(lock);
     return is_ready;
 }
 
