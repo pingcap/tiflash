@@ -186,7 +186,7 @@ try
         bool need_send = false;
         auto ru_info = update_ru_statistics();
         LOG_INFO(log, "cop stream finish with request unit: cpu={} read={}", ru_info.cpu_ru, ru_info.read_ru);
-        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_cop, resource_group)
+        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_cop_stream, resource_group)
             .Increment(ru_info.cpu_ru + ru_info.read_ru);
         if (dag_context.collect_execution_summaries)
         {
@@ -240,7 +240,7 @@ try
         bool need_send = false;
         auto ru_info = update_ru_statistics();
         LOG_INFO(log, "batch cop finish with request unit: cpu={} read={}", ru_info.cpu_ru, ru_info.read_ru);
-        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_cop, resource_group)
+        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_batch, resource_group)
             .Increment(ru_info.cpu_ru + ru_info.read_ru);
         if (dag_context.collect_execution_summaries)
         {

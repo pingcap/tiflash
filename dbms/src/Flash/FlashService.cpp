@@ -515,7 +515,7 @@ grpc::Status FlashService::DispatchMPPTask(
 
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_dispatch_mpp_task, resource_group).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_dispatch, resource_group).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
     GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
     if (!tryToResetMaxThreadsMetrics())
@@ -535,7 +535,7 @@ grpc::Status FlashService::DispatchMPPTask(
         GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
         GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_dispatch_mpp_task, resource_group).Decrement();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_dispatch, resource_group).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task)
             .Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes, type_dispatch_mpp_task).Increment(response->ByteSizeLong());
@@ -613,7 +613,10 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(EstablishCallData * 
 
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_mpp_establish_conn, call_data->getResourceGroupName())
+    GET_RESOURCE_GROUP_METRIC(
+        tiflash_resource_group,
+        type_handling_mpp_task_establish,
+        call_data->getResourceGroupName())
         .Increment();
 
     call_data->startEstablishConnection();
@@ -657,7 +660,7 @@ grpc::Status FlashService::EstablishMPPConnection(
 
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_mpp_establish_conn, resource_group).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_establish, resource_group).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
     GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
     if (!tryToResetMaxThreadsMetrics())
@@ -676,7 +679,7 @@ grpc::Status FlashService::EstablishMPPConnection(
         GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
         GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_mpp_establish_conn, resource_group).Decrement();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_establish, resource_group).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn)
             .Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
@@ -734,11 +737,11 @@ grpc::Status FlashService::CancelMPPTask(
     const auto & resource_group = request->meta().resource_group_name();
     GET_METRIC(tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_cancel_mpp_task, resource_group).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_cancel, resource_group).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_cancel_mpp_task, resource_group).Decrement();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_cancel, resource_group).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes, type_cancel_mpp_task).Increment(response->ByteSizeLong());
     });

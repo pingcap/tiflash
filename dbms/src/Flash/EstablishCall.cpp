@@ -65,7 +65,8 @@ EstablishCallData::~EstablishCallData()
     if (stopwatch)
     {
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_mpp_establish_conn, resource_group_name).Decrement();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_establish, resource_group_name)
+            .Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn)
             .Observe(stopwatch->elapsedSeconds());
     }
