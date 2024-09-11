@@ -846,6 +846,7 @@ try
     std::this_thread::sleep_for(1s);
     fap_context->tasks_trace->asyncCancelTask(region_id);
     FailPointHelper::disableFailPoint(FailPoints::pause_when_building_fap_segments);
+    // Can see log "FAP is canceled when building segments" and "FAP is canceled after build segments".
     t.join();
     exe_lock.unlock();
     ASSERT_EQ(result.get().status, FastAddPeerStatus::Canceled);

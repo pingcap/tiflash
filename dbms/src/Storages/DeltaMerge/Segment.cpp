@@ -459,6 +459,10 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     FAIL_POINT_PAUSE(FailPoints::pause_when_building_fap_segments);
     {
         auto sec = sw.elapsedSecondsFromLastTime();
+        // Lock acquires when:
+        // 1. No writer.
+        // 2. The writer finishes.
+        // 3. The writer is canceled.
         auto lock = end_to_segment_id_cache->readLock();
         is_cache_ready = end_to_segment_id_cache->isReady(lock);
         auto el = sw.elapsedSecondsFromLastTime() - sec;
