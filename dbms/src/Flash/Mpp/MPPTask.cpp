@@ -579,7 +579,8 @@ void MPPTask::runImpl()
         auto read_bytes = dag_context->getReadBytes();
         auto read_ru = bytesToRU(read_bytes);
         LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
-        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_mpp, dag_context->getResourceGroupName()).Increment(cpu_ru + read_ru);
+        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_mpp, dag_context->getResourceGroupName())
+            .Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRUInfo(
             RUConsumption{.cpu_ru = cpu_ru, .cpu_time_ns = cpu_time_ns, .read_ru = read_ru, .read_bytes = read_bytes});
         mpp_task_statistics.setExtraInfo(query_executor_holder->getExtraJsonInfo());

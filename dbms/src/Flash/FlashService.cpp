@@ -613,7 +613,8 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(EstablishCallData * 
 
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_mpp_establish_conn, call_data->getResourceGroupName()).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_mpp_establish_conn, call_data->getResourceGroupName())
+        .Increment();
 
     call_data->startEstablishConnection();
     call_data->tryConnectTunnel();

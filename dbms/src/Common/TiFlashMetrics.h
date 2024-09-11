@@ -838,18 +838,17 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
       F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}),                                                                     \
-      F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                                                                     \
-      F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),                                                                   \
-      F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                                                                         \
-      F(type_run_mpp_task, {"type", "run_mpp_task"}))                                                                               \
+      F(type_handling_mpp_task_dispatch, {"type", "handling_mpp_task_dispatch"}),                                                   \
+      F(type_handling_mpp_task_establish, {"type", "handling_mpp_task_establish"}),                                                 \
+      F(type_handling_mpp_task_cancel, {"type", "handling_mpp_task_cancel"}),                                                       \
+      F(type_handling_mpp_task_run, {"type", "handling_mpp_task_run"}))                                                             \
     M(tiflash_compute_request_unit,                                                                                                 \
-      "Request Unit used by tiflash compute for each resource group",                                                                                       \
+      "Request Unit used by tiflash compute for each resource group",                                                               \
       Counter,                                                                                                                      \
-      F(type_mpp, {"type", "mpp"}), \
-      F(type_cop, {"type", "cop"}), \
-      F(type_cop_stream, {"type", "cop_stream"}), \
-      F(type_batch, {"type", "batch"}), \
-            )                                                                                                           \
+      F(type_mpp, {"type", "mpp"}),                                                                                                 \
+      F(type_cop, {"type", "cop"}),                                                                                                 \
+      F(type_cop_stream, {"type", "cop_stream"}),                                                                                   \
+      F(type_batch, {"type", "batch"}), )                                                                                           \
     M(tiflash_storage_io_limiter_pending_count,                                                                                     \
       "I/O limiter pending count",                                                                                                  \
       Counter,                                                                                                                      \

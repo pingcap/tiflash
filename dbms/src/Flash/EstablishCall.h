@@ -80,10 +80,8 @@ public:
     const mpp::EstablishMPPConnectionRequest & getRequest() const { return request; }
     grpc::ServerContext * getGrpcContext() { return &ctx; }
 
-    String getResourceGroupName() const
-    {
-        return resource_group_name;
-    }
+    String getResourceGroupName() const { return resource_group_name; }
+
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
     /// thread, it's EXTREMELY DANGEROUS to read/write any data after calling a grpc function
