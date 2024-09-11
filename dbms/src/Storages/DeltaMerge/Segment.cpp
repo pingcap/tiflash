@@ -436,15 +436,34 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     const RowKeyRange & target_range,
     const CheckpointInfoPtr & checkpoint_info)
 {
+    Stopwatch sw;
+    SCOPE_EXIT(
+        { GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_read_segment).Observe(sw.elapsedSeconds()); });
+    static constexpr UInt64 WAIT_TIME_THRESHOLD = 20;
+    // We have a cache that records all segments which map to a certain table identified by (keyspace_id, physical_table_id).
+    // We can thus avoid reading from the very beginning for every different regions in this table.
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
     PageIdU64 current_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
     bool is_cache_ready = false;
+    // If there is a table building cache, then other table may block to read the built cache.
+    // If the remote reader causes much time to retrieve data, then these tasks could block here.
     {
+        auto sec = sw.elapsedSecondsFromLastTime();
         auto lock = end_to_segment_id_cache->readLock();
         is_cache_ready = end_to_segment_id_cache->isReady(lock);
+        auto el = sw.elapsedSecondsFromLastTime() - sec;
+        if (el > WAIT_TIME_THRESHOLD)
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Wait building segmend id cache for {:.3f}s, current_segment_id={}, region_id={}",
+                el,
+                current_segment_id,
+                checkpoint_info->region_id);
+        }
     }
 
     auto protected_logic = [&](GenericLock && lock) {

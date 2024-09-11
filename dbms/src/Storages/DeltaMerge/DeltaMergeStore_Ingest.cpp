@@ -1142,13 +1142,19 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     }
     LOG_INFO(
         log,
-        "Build checkpoint from remote, store_id={} region_id={}",
+        "Build checkpoint from remote, store_id={} region_id={} range={}",
         checkpoint_info->remote_store_id,
-        checkpoint_info->region_id);
+        checkpoint_info->region_id,
+        range.toDebugString());
     WriteBatches wbs{*dm_context->storage_pool};
     try
     {
         auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
+        LOG_INFO(
+            log,
+            "Finish read all segments meta info in range, region_id={} segments_num={}",
+            checkpoint_info->region_id,
+            segment_meta_infos.size());
         auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
             log,
             checkpoint_info->region_id,
