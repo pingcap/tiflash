@@ -169,6 +169,7 @@ struct MockExchangeWriter
         return index == 0;
     }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
+    static void notifyNextPipelineWriter() {}
 
 private:
     MockExchangeWriterChecker checker;
