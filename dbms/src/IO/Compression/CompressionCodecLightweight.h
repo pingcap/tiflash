@@ -91,7 +91,7 @@ private:
     {
     public:
         explicit IntegerCompressContext(int round_count_)
-            : round_count(round_count_)
+            : round_count(std::min(1, round_count_))
         {}
 
         template <std::integral T>

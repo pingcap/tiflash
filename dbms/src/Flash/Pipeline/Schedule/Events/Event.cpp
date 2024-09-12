@@ -79,7 +79,10 @@ void Event::onInputFinish()
     auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
     RUNTIME_ASSERT(cur_value >= 0, log, "unfinished_inputs cannot < 0, but actual value is {}", cur_value);
     if (0 == cur_value)
+    {
         schedule();
+        LOG_INFO(log, "Event is scheduled");
+    }
 }
 
 bool Event::prepare()
