@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <Poco/File.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileWriter.h>
 #include <Storages/Page/V3/CheckpointFile/ProtoHelper.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
@@ -145,6 +146,16 @@ void CPManifestFileWriter::writeSuffix()
     // Currently we do nothing in write suffix.
 
     write_stage = WriteStage::WritingFinished;
+}
+
+void CPManifestFileWriter::abort()
+{
+    if (options.file_path.empty())
+        return;
+    if (Poco::File f(options.file_path); f.exists())
+    {
+        f.remove();
+    }
 }
 
 } // namespace DB::PS::V3
