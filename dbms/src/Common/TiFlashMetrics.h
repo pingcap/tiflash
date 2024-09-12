@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/ComputeLabelHolder.h>
 #include <Common/Exception.h>
 #include <Common/ProcessCollector_fwd.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -657,25 +656,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_send, {{"type", "send_queue"}}),                                                                                       \
       F(type_receive, {{"type", "recv_queue"}}))                                                                                    \
-    M(tiflash_compute_request_unit,                                                                                                 \
-      "Request Unit used by tiflash compute",                                                                                       \
-      Counter,                                                                                                                      \
-      F(type_mpp,                                                                                                                   \
-        {{"type", "mpp"},                                                                                                           \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_cop,                                                                                                                   \
-        {{"type", "cop"},                                                                                                           \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_cop_stream,                                                                                                            \
-        {{"type", "cop_stream"},                                                                                                    \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_batch,                                                                                                                 \
-        {{"type", "batch"},                                                                                                         \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}))                                                                      \
     M(tiflash_shared_block_schemas,                                                                                                 \
       "statistics about shared block schemas of ColumnFiles",                                                                       \
       Gauge,                                                                                                                        \
@@ -856,7 +836,18 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
-      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}),                                                                     \
+      F(type_handling_mpp_task_dispatch, {"type", "handling_mpp_task_dispatch"}),                                                   \
+      F(type_handling_mpp_task_establish, {"type", "handling_mpp_task_establish"}),                                                 \
+      F(type_handling_mpp_task_cancel, {"type", "handling_mpp_task_cancel"}),                                                       \
+      F(type_handling_mpp_task_run, {"type", "handling_mpp_task_run"}))                                                             \
+    M(tiflash_compute_request_unit,                                                                                                 \
+      "Request Unit used by tiflash compute for each resource group",                                                               \
+      Counter,                                                                                                                      \
+      F(type_mpp, {"type", "mpp"}),                                                                                                 \
+      F(type_cop, {"type", "cop"}),                                                                                                 \
+      F(type_cop_stream, {"type", "cop_stream"}),                                                                                   \
+      F(type_batch, {"type", "batch"}), )                                                                                           \
     M(tiflash_storage_io_limiter_pending_count,                                                                                     \
       "I/O limiter pending count",                                                                                                  \
       Counter,                                                                                                                      \

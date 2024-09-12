@@ -510,11 +510,14 @@ void MPPTask::runImpl()
     }
 
     Stopwatch stopwatch;
+    const auto & resource_group = dag_context->getResourceGroupName();
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_run, resource_group).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_run, resource_group).Decrement();
     });
 
     String err_msg;
@@ -576,7 +579,8 @@ void MPPTask::runImpl()
         auto read_bytes = dag_context->getReadBytes();
         auto read_ru = bytesToRU(read_bytes);
         LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
-        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
+        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_mpp, dag_context->getResourceGroupName())
+            .Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRUInfo(
             RUConsumption{.cpu_ru = cpu_ru, .cpu_time_ns = cpu_time_ns, .read_ru = read_ru, .read_bytes = read_bytes});
         mpp_task_statistics.setExtraInfo(query_executor_holder->getExtraJsonInfo());
