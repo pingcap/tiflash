@@ -97,6 +97,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     //    and collect the lock files from applied entries.
     auto & records = edits.getMutRecords();
     write_down_stats.num_records = records.size();
+    LOG_DEBUG(log, "Prepare to dump {} records, sequence={}, manifest_file_id={}", write_down_stats.num_records, sequence, manifest_file_id);
     for (auto & rec_edit : records)
     {
         StorageType id_storage_type = StorageType::Unknown;
