@@ -75,7 +75,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         }
 
         {
-            LOG_INFO(log, "{} set state to `Applying`", old_region->toString());
+            LOG_INFO(log, "{} set state to `Applying`, lastAppliedTime={}", old_region->toString(), old_region->lastSnapshotAppliedTime());
             // Set original region state to `Applying` and any read request toward this region should be rejected because
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
@@ -351,7 +351,7 @@ void KVStore::onSnapshot(
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
-
+    new_region->updateSnapshotAppliedTime();
     prehandling_trace.deregisterTask(new_region->id());
 }
 

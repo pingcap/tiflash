@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1718272201438,
+  "iteration": 1726237973256,
   "links": [],
   "panels": [
     {
@@ -8413,7 +8413,10 @@
               "id": "filterFieldsByName",
               "options": {
                 "include": {
-                  "names": ["Time", "mark cache effectiveness"]
+                  "names": [
+                    "Time",
+                    "mark cache effectiveness"
+                  ]
                 }
               }
             }
@@ -8595,7 +8598,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.17",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -8661,7 +8664,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:222",
               "format": "µs",
               "label": null,
               "logBase": 1,
@@ -8670,7 +8672,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:223",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -9374,7 +9375,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.17",
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -9413,7 +9414,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:304",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -9422,7 +9422,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:305",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -9475,7 +9474,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.17",
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -12350,6 +12349,113 @@
           }
         },
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 44
+          },
+          "hiddenSeries": false,
+          "id": 295,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.1, sum(rate(tiflash_raft_long_term_event_duration_seconds{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"apply_snapshot_gap\"}[1m])) by (le, type))",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "10%-{{type}}",
+              "refId": "D",
+              "step": 4
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Long-term Raft Events Duration",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 2,
+            "value_type": "cumulative"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
           "cards": {
             "cardPadding": null,
             "cardRound": null
@@ -12373,7 +12479,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 44
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12443,7 +12549,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 44
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12513,7 +12619,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 51
+            "y": 58
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12585,7 +12691,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 51
+            "y": 58
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12647,7 +12753,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 58
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 235,
@@ -12747,7 +12853,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 58
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 241,
@@ -12855,7 +12961,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 65
+            "y": 72
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12936,7 +13042,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 65
+            "y": 72
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13009,7 +13115,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 72
+            "y": 79
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13085,7 +13191,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 72
+            "y": 79
           },
           "hiddenSeries": false,
           "id": 249,
@@ -13191,7 +13297,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 79
+            "y": 86
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13264,7 +13370,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 79
+            "y": 86
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13337,7 +13443,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 86
+            "y": 93
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13410,7 +13516,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 86
+            "y": 93
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13475,7 +13581,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 93
+            "y": 100
           },
           "hiddenSeries": false,
           "id": 240,
@@ -13579,7 +13685,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 93
+            "y": 100
           },
           "hiddenSeries": false,
           "id": 239,
@@ -13716,7 +13822,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 100
+            "y": 107
           },
           "hiddenSeries": false,
           "id": 75,
@@ -13840,7 +13946,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 114
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13910,7 +14016,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 114
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13973,7 +14079,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 121
           },
           "hiddenSeries": false,
           "id": 263,
@@ -14071,7 +14177,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 121
           },
           "hiddenSeries": false,
           "id": 272,
@@ -14186,7 +14292,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 128
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14258,7 +14364,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 128
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14324,7 +14430,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 128
+            "y": 135
           },
           "height": "",
           "hiddenSeries": false,
@@ -14434,7 +14540,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 135
+            "y": 142
           },
           "height": "",
           "hiddenSeries": false,
@@ -14550,7 +14656,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 142
+            "y": 149
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14619,7 +14725,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 142
+            "y": 149
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14689,7 +14795,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 149
+            "y": 156
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14755,7 +14861,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 149
+            "y": 156
           },
           "hiddenSeries": false,
           "id": 91,
@@ -19779,7 +19885,7 @@
       "type": "row"
     }
   ],
-  "refresh": "30s",
+  "refresh": "5s",
   "schemaVersion": 27,
   "style": "dark",
   "tags": [],
@@ -19885,7 +19991,17 @@
       "2h",
       "1d"
     ],
-    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+    "time_options": [
+      "5m",
+      "15m",
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d"
+    ]
   },
   "timezone": "",
   "title": "Test-Cluster-TiFlash-Summary",
