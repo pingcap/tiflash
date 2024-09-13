@@ -12404,7 +12404,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.1, sum(rate(tiflash_raft_long_term_event_duration_seconds{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"apply_snapshot_gap\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(0.1, sum(rate(tiflash_raft_long_term_event_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"apply_snapshot_gap\"}[1m])) by (le, type))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
