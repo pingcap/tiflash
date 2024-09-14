@@ -469,7 +469,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         if (el > WAIT_TIME_THRESHOLD)
         {
             LOG_INFO(
-                Logger::get(),
+                log,
                 "Wait building segmend id cache for {:.3f}s, current_segment_id={}, region_id={}",
                 el,
                 current_segment_id,
@@ -485,7 +485,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 target_range.getStart().toRowKeyValue());
         }
         LOG_DEBUG(
-            Logger::get(),
+            log,
             "Read segment meta info from segment {}, region_id={}",
             current_segment_id,
             checkpoint_info->region_id);
@@ -496,7 +496,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             if (cancel_handle->isCanceled())
             {
                 LOG_INFO(
-                    Logger::get(),
+                    log,
                     "FAP is canceled when building segments, region_id={} keyspace={} table_id={}",
                     checkpoint_info->region_id,
                     context.keyspace_id,
@@ -547,7 +547,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         if (!is_cache_ready)
         {
             LOG_DEBUG(
-                Logger::get(),
+                log,
                 "Build cache for keyspace {} table {} with {} segments, region_id={}",
                 context.keyspace_id,
                 context.physical_table_id,
@@ -563,7 +563,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     if (cancel_handle->isCanceled())
     {
         LOG_INFO(
-            Logger::get(),
+            log,
             "FAP is canceled when building segments, region_id={} keyspace={} table_id={}",
             checkpoint_info->region_id,
             context.keyspace_id,
