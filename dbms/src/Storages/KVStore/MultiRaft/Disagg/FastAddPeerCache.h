@@ -48,24 +48,7 @@ public:
         std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
 
     // Given a key, return the segment_id that may contain the key
-    template <typename LOCK>
-    UInt64 getSegmentIdContainingKey(LOCK & lock, const DM::RowKeyValue & key)
-    {
-        UNUSED(lock);
-        RUNTIME_CHECK(is_ready);
-        auto iter = std::upper_bound(
-            end_to_segment_id.begin(),
-            end_to_segment_id.end(),
-            key,
-            [](const DM::RowKeyValue & key1, const std::pair<DM::RowKeyValue, UInt64> & element2) {
-                return key1.toRowKeyValueRef() < element2.first.toRowKeyValueRef();
-            });
-        RUNTIME_CHECK(
-            iter != end_to_segment_id.end(),
-            key.toDebugString(),
-            end_to_segment_id.rbegin()->first.toDebugString());
-        return iter->second;
-    }
+    UInt64 getSegmentIdContainingKey(std::shared_lock<std::shared_mutex> & lock, const DM::RowKeyValue & key);
 
 private:
     std::shared_mutex mu;

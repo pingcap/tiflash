@@ -433,14 +433,13 @@ SegmentPtr Segment::restoreSegment( //
     return segment;
 }
 
-using GenericLock = std::variant<std::shared_lock<std::shared_mutex>, std::unique_lock<std::shared_mutex>>;
-
 Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     DMContext & context,
     std::shared_ptr<GeneralCancelHandle> cancel_handle,
     const RowKeyRange & target_range,
     const CheckpointInfoPtr & checkpoint_info)
 {
+    auto log = DB::Logger::get();
     Stopwatch sw;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_read_segment).Observe(sw.elapsedSeconds()); });
@@ -476,13 +475,21 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 checkpoint_info->region_id);
         }
     }
-
-    auto protected_logic = [&](GenericLock && lock) {
+    {
+        using GenericLock = std::variant<std::shared_lock<std::shared_mutex>, std::unique_lock<std::shared_mutex>>;
+        GenericLock lock;
         if (is_cache_ready)
         {
+            // If the cache is ready, requires a read lock.
+            lock = end_to_segment_id_cache->readLock();
             current_segment_id = end_to_segment_id_cache->getSegmentIdContainingKey(
                 std::get<std::shared_lock<std::shared_mutex>>(lock),
                 target_range.getStart().toRowKeyValue());
+        }
+        else
+        {
+            // Otherwise, requires a write lock to build cache.
+            lock = end_to_segment_id_cache->writeLock();
         }
         LOG_DEBUG(
             log,
@@ -558,7 +565,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 std::move(end_key_and_segment_ids));
         }
         return segment_infos;
-    };
+    }
 
     if (cancel_handle->isCanceled())
     {
@@ -570,14 +577,6 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             context.physical_table_id);
         // FAP task would be cleaned in FastAddPeerImplWrite. So returning incompelete result could be OK.
         return {};
-    }
-    if (is_cache_ready)
-    {
-        return protected_logic(end_to_segment_id_cache->readLock());
-    }
-    else
-    {
-        return protected_logic(end_to_segment_id_cache->writeLock());
     }
 }
 
