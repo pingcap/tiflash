@@ -268,7 +268,10 @@ struct RegionPtrWithSnapshotFiles
     using Base = RegionPtr;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<DM::ExternalDTFileInfo> && external_files_ = {});
+    RegionPtrWithSnapshotFiles(
+        const Base & base_,
+        PrehandleResult::Stats && prehandle_stats_,
+        std::vector<DM::ExternalDTFileInfo> && external_files_ = {});
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }
@@ -277,7 +280,13 @@ struct RegionPtrWithSnapshotFiles
     /// make it could be cast into RegionPtr implicitly.
     operator const Base &() const { return base; }
 
+
+    UInt64 getPrehandleElapsedMillis() const { return prehandle_stats.end_time - prehandle_stats.start_time; }
+
+    UInt64 getPrehandleEndMillis() const { return prehandle_stats.end_time; }
+
     const Base & base;
+    PrehandleResult::Stats prehandle_stats;
     const std::vector<DM::ExternalDTFileInfo> external_files;
 };
 
@@ -294,6 +303,14 @@ struct RegionPtrWithCheckpointInfo
 
     /// make it could be cast into RegionPtr implicitly.
     operator const Base &() const { return base; }
+
+    UInt64 getPrehandleElapsedMillis() const
+    {
+        // FAP has no prehandle stage
+        return 0;
+    }
+
+    UInt64 getPrehandleEndMillis() const { return 0; }
 
     const Base & base;
     CheckpointIngestInfoPtr checkpoint_info;

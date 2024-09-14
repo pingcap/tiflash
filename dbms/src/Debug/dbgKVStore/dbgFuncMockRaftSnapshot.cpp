@@ -907,7 +907,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(
     auto [new_region, external_files] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
-        RegionPtrWithSnapshotFiles{new_region, std::move(external_files)},
+        RegionPtrWithSnapshotFiles{new_region, PrehandleResult::Stats(), std::move(external_files)},
         tmt);
 
     output(fmt::format("success apply region {} with dt files", new_region->id()));

@@ -437,8 +437,10 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
 
 RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
     const Base & base_,
+    PrehandleResult::Stats && prehandle_stats_,
     std::vector<DM::ExternalDTFileInfo> && external_files_)
     : base(base_)
+    , prehandle_stats(std::move(prehandle_stats_))
     , external_files(std::move(external_files_))
 {}
 

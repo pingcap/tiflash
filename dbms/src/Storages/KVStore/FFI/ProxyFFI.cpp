@@ -699,7 +699,10 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         {
             auto & kvstore = server->tmt->getKVStore();
             kvstore->applyPreHandledSnapshot(
-                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)},
+                RegionPtrWithSnapshotFiles{
+                    snap->region,
+                    std::move(snap->prehandle_result.stats),
+                    std::move(snap->prehandle_result.ingest_ids)},
                 *server->tmt);
             uint64_t end_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                                     std::chrono::system_clock::now().time_since_epoch())
@@ -746,7 +749,10 @@ void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, R
     auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
     try
     {
-        auto s = RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)};
+        auto s = RegionPtrWithSnapshotFiles{
+            snap->region,
+            std::move(snap->prehandle_result.stats),
+            std::move(snap->prehandle_result.ingest_ids)};
         auto & kvstore = server->tmt->getKVStore();
         kvstore->releasePreHandledSnapshot(s, *server->tmt);
     }

@@ -314,7 +314,7 @@ private:
     // Applied index since last restart. Should only be set after restart.
     UInt64 last_restart_log_applied{0};
     // Time since last restart.
-    mutable std::atomic<uint64_t> last_snapshot_applied_time{0};
+    mutable std::atomic<UInt64> last_snapshot_applied_time{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
     mutable std::atomic<Timestamp> last_observed_read_tso{0};

@@ -75,7 +75,11 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         }
 
         {
-            LOG_INFO(log, "{} set state to `Applying`, lastAppliedTime={}", old_region->toString(), old_region->lastSnapshotAppliedTime());
+            LOG_INFO(
+                log,
+                "{} set state to `Applying`, lastAppliedTime={}",
+                old_region->toString(),
+                old_region->lastSnapshotAppliedTime());
             // Set original region state to `Applying` and any read request toward this region should be rejected because
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
@@ -351,7 +355,8 @@ void KVStore::onSnapshot(
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
-    if (old_region != nullptr) {
+    if (old_region != nullptr)
+    {
         new_region->updateSnapshotAppliedTime(old_region->lastSnapshotAppliedTime());
     }
     prehandling_trace.deregisterTask(new_region->id());
@@ -375,7 +380,13 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
         FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
         // `new_region` may change in the previous function, just log the region_id down
-        LOG_INFO(log, "Finish apply snapshot, cost={:.3f}s region_id={}", watch.elapsedSeconds(), new_region->id());
+        LOG_INFO(
+            log,
+            "Finish apply snapshot, cost={:.3f}s region_id={} prehandle_cost={:.3f}s worker_queue_cost={:.3f}s",
+            watch.elapsedSeconds(),
+            new_region->id(),
+            new_region.getPrehandleElapsedMillis() / 1000.0,
+            (watch.getStartMillis() - new_region.getPrehandleEndMillis()) / 1000.0);
     }
     catch (Exception & e)
     {
