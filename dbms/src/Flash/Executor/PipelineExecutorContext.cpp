@@ -18,6 +18,7 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Operators/SharedQueue.h>
 
 #include <exception>
@@ -176,6 +177,7 @@ void PipelineExecutorContext::cancel()
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
         cancelSharedQueues();
+        cancelOneTimeFutures();
         if (likely(dag_context))
         {
             // Cancel the tunnel_set here to prevent pipeline tasks waiting in the WAIT_FOR_NOTIFY state from never being notified.
@@ -214,6 +216,25 @@ void PipelineExecutorContext::cancelSharedQueues()
     }
     for (const auto & shared_queue : tmp)
         shared_queue->cancel();
+}
+
+void PipelineExecutorContext::addOneTimeFuture(const OneTimeNotifyFuturePtr & future)
+{
+    std::lock_guard lock(mu);
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
+    assert(future);
+    one_time_futures.push_back(future);
+}
+
+void PipelineExecutorContext::cancelOneTimeFutures()
+{
+    std::vector<OneTimeNotifyFuturePtr> tmp;
+    {
+        std::lock_guard lock(mu);
+        std::swap(tmp, one_time_futures);
+    }
+    for (const auto & future : tmp)
+        future->finish();
 }
 
 void PipelineExecutorContext::cancelResultQueueIfNeed()
