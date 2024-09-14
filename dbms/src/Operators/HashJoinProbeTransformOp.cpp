@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/HashJoinProbeTransformOp.h>
 
 #include <magic_enum.hpp>
@@ -20,6 +21,7 @@
 namespace DB
 {
 #define BREAK                                \
+    assert(!current_notify_future);          \
     if unlikely (exec_context.isCancelled()) \
         return OperatorStatus::CANCELLED;    \
     break
@@ -124,22 +126,22 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             scan_hash_map_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
         case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->quickCheckProbeFinished())
+            if (probe_transform->isProbeFinishedForPipeline())
             {
                 onWaitProbeFinishDone();
                 BREAK;
             }
-            return OperatorStatus::WAITING;
+            return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::GET_RESTORE_JOIN:
             onGetRestoreJoin();
             BREAK;
         case ProbeStatus::RESTORE_BUILD:
-            if (probe_transform->quickCheckBuildFinished())
+            if (probe_transform->isBuildFinishedForPipeline())
             {
                 onRestoreBuildFinish();
                 BREAK;
             }
-            return OperatorStatus::WAITING;
+            return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::FINISHED:
             block = {};
             return OperatorStatus::HAS_OUTPUT;
@@ -206,39 +208,6 @@ void HashJoinProbeTransformOp::onGetRestoreJoin()
     }
 }
 
-OperatorStatus HashJoinProbeTransformOp::awaitImpl()
-{
-    while (true)
-    {
-        switch (status)
-        {
-        case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->quickCheckProbeFinished())
-            {
-                onWaitProbeFinishDone();
-                BREAK;
-            }
-            return OperatorStatus::WAITING;
-        case ProbeStatus::GET_RESTORE_JOIN:
-            onGetRestoreJoin();
-            BREAK;
-        case ProbeStatus::RESTORE_BUILD:
-            if (probe_transform->quickCheckBuildFinished())
-            {
-                onRestoreBuildFinish();
-                BREAK;
-            }
-            return OperatorStatus::WAITING;
-        case ProbeStatus::RESTORE_PROBE:
-        case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
-        case ProbeStatus::FINISHED:
-            return OperatorStatus::HAS_OUTPUT;
-        default:
-            throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
-        }
-    }
-}
-
 OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
 {
     switch (status)
@@ -251,7 +220,7 @@ OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
         probe_transform->flushMarkedSpillData();
         probe_transform->finalizeProbe();
         switchStatus(ProbeStatus::WAIT_PROBE_FINISH);
-        return OperatorStatus::WAITING;
+        return OperatorStatus::HAS_OUTPUT;
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
