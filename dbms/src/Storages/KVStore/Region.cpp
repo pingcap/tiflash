@@ -235,7 +235,7 @@ UInt64 Region::lastCompactLogApplied() const
 
 UInt64 Region::lastSnapshotAppliedTime() const
 {
-    return last_snapshot_applied_time.load();
+    return last_snapshot_applied_time.load(std::memory_order_relaxed);
 }
 
 void Region::updateSnapshotAppliedTime(UInt64 old) const
