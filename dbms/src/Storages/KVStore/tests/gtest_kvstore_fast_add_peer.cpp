@@ -449,7 +449,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -517,7 +517,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -550,7 +550,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     // Will generate and persist some information in local ps, which will not be uploaded.
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
@@ -822,7 +822,7 @@ try
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
     fap_context->tasks_trace->addTask(region_id, []() {
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     EXPECT_THROW(
         FastAddPeerImplWrite(
@@ -869,7 +869,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
