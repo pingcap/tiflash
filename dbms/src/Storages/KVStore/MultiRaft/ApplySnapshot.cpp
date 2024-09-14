@@ -351,7 +351,9 @@ void KVStore::onSnapshot(
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
-    new_region->updateSnapshotAppliedTime();
+    if (old_region != nullptr) {
+        new_region->updateSnapshotAppliedTime(old_region->lastSnapshotAppliedTime());
+    }
     prehandling_trace.deregisterTask(new_region->id());
 }
 

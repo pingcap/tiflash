@@ -238,12 +238,11 @@ UInt64 Region::lastSnapshotAppliedTime() const
     return last_snapshot_applied_time.load();
 }
 
-void Region::updateSnapshotAppliedTime() const
+void Region::updateSnapshotAppliedTime(UInt64 old) const
 {
     auto secs = std::chrono::duration_cast<std::chrono::seconds>(
                    std::chrono::system_clock::now().time_since_epoch())
             .count();
-    auto old = last_snapshot_applied_time.exchange(secs);
     if (old != 0) {
         GET_METRIC(tiflash_raft_long_term_event_duration_seconds, type_apply_snapshot_gap).Observe(secs - old);
     }

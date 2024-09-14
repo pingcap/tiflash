@@ -167,7 +167,7 @@ public: // Stats
     UInt64 lastSnapshotAppliedTime() const;
     void setLastCompactLogApplied(UInt64 new_value) const;
     void updateLastCompactLogApplied(const RegionTaskLock &) const;
-    void updateSnapshotAppliedTime() const;
+    void updateSnapshotAppliedTime(UInt64 old) const;
 
     // Return <last_eager_truncated_index, applied_index> of this Region
     std::pair<UInt64, UInt64> getRaftLogEagerGCRange() const;
