@@ -413,9 +413,8 @@ try
                 files.insert(itr.name());
             }
         }
-        ASSERT_EQ(files.size(), 3); // handle, col data and merged file
+        ASSERT_EQ(files.size(), 2); // col data and merged file
         ASSERT(files.find("0.merged") != files.end());
-        ASSERT(files.find("%2D1.dat") != files.end());
         ASSERT(files.find("1.dat") != files.end());
     }
 
