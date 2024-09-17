@@ -265,6 +265,15 @@ try
         std::iota(expected.begin(), expected.end(), 1);
         ASSERT_EQ(tmp_buf, expected);
     }
+    {
+        std::vector<char> tmp_buf(10);
+        auto n = file.read(tmp_buf.data(), tmp_buf.size());
+        ASSERT_EQ(n, tmp_buf.size());
+
+        std::vector<char> expected(256);
+        std::iota(expected.begin(), expected.end(), 11);
+        ASSERT_EQ(tmp_buf, expected);
+    }
 }
 CATCH
 

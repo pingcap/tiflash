@@ -48,7 +48,9 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
     // TODO Update parameters
     prefetch = std::make_unique<PrefetchCache>(
         1,
-        std::bind(&S3RandomAccessFile::readImpl, this, std::placeholders::_1, std::placeholders::_2),
+        [this](auto && arg1, auto && arg2) {
+            readImpl(std::forward<decltype(arg1)>(arg1), std::forward<decltype(arg2)>(arg2));
+        },
         10240);
 }
 
