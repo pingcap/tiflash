@@ -109,7 +109,8 @@ struct PrefetchCache
         }
     }
 
-    size_t skip(size_t ignore_count) {
+    size_t skip(size_t ignore_count)
+    {
         if (hit_count++ < hit_limit)
         {
             return ignore_count;

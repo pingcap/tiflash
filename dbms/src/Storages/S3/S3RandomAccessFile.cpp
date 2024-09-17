@@ -46,7 +46,10 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
     RUNTIME_CHECK(client_ptr != nullptr);
     RUNTIME_CHECK(initialize(), remote_fname);
     // TODO Update parameters
-    prefetch = std::make_unique<PrefetchCache>(1, std::bind(&S3RandomAccessFile::readImpl, this, std::placeholders::_1, std::placeholders::_2), 10240);
+    prefetch = std::make_unique<PrefetchCache>(
+        1,
+        std::bind(&S3RandomAccessFile::readImpl, this, std::placeholders::_1, std::placeholders::_2),
+        10240);
 }
 
 std::string S3RandomAccessFile::getFileName() const
