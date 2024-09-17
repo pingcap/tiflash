@@ -67,12 +67,6 @@ struct PrefetchCache
         maybePrefetch();
         if (pos + size > buffer_limit)
         {
-            // LOG_INFO(
-            //     DB::Logger::get(),
-            //     "!!!! try read {} from cache + direct buffer_limit={} pos={}",
-            //     size,
-            //     buffer_limit,
-            //     pos);
             // No enough data in cache.
             ::memcpy(buf, write_buffer.data() + pos, buffer_limit);
             auto read_from_cache = buffer_limit - pos;
@@ -80,28 +74,14 @@ struct PrefetchCache
             pos = buffer_limit;
             auto expected_direct_read_bytes = size - read_from_cache;
             auto res = read_func(buf + read_from_cache, expected_direct_read_bytes);
-            // LOG_INFO(
-            //     DB::Logger::get(),
-            //     "!!!! refill pos={} size={} buffer_size={} buffer_limit={} expected_direct_read_bytes={} "
-            //     "read_from_cache={} res={} direct={}",
-            //     pos,
-            //     size,
-            //     buffer_size,
-            //     buffer_limit,
-            //     expected_direct_read_bytes,
-            //     read_from_cache,
-            //     res,
-            //     direct_read);
             if (res < 0)
                 return res;
             direct_read += res;
             // We may not read `size` data.
-            // LOG_INFO(DB::Logger::get(), "!!!! result res={} buffer_limit={} pos={}", res, buffer_limit, pos);
             return res + read_from_cache;
         }
         else
         {
-            // LOG_INFO(DB::Logger::get(), "!!!! try read {} from cache", size);
             ::memcpy(buf, write_buffer.data() + pos, size);
             cache_read += size;
             pos += size;
@@ -148,7 +128,6 @@ struct PrefetchCache
             write_buffer.reserve(buffer_size);
             // TODO Check if it is OK to read when the rest of the chars are less than size.
             auto res = read_func(write_buffer.data(), buffer_size);
-            // LOG_INFO(DB::Logger::get(), "!!!! prefetch res res={}", res);
             if (res < 0)
             {
                 // Error state.
@@ -166,6 +145,10 @@ struct PrefetchCache
 
     size_t getCacheRead() const { return cache_read; }
     size_t getDirectRead() const { return direct_read; }
+    size_t getRevertCount() const {
+        if (hit_count < hit_limit) return 0;
+        return buffer_limit;
+    }
     bool needsRefill() const { return pos >= buffer_limit; }
 
 private:

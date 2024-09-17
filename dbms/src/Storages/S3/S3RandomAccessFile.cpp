@@ -51,7 +51,7 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
         [this](auto && arg1, auto && arg2) {
             return readImpl(std::forward<decltype(arg1)>(arg1), std::forward<decltype(arg2)>(arg2));
         },
-        10240);
+        10);
 }
 
 std::string S3RandomAccessFile::getFileName() const
@@ -187,6 +187,12 @@ bool S3RandomAccessFile::initialize()
 {
     Stopwatch sw;
     bool request_succ = false;
+    if (prefetch != nullptr) {
+        auto to_revert = prefetch->getRevertCount();
+        LOG_INFO(log, "S3 revert cache {}", to_revert);
+        cur_offset -= to_revert;
+    }
+    prefetch = std::make_unique<PrefetchCache>(10, std::bind(&S3RandomAccessFile::readImpl, this, std::placeholders::_1, std::placeholders::_2), 1024 * 1024);
     Aws::S3::Model::GetObjectRequest req;
     req.SetRange(readRangeOfObject());
     client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
