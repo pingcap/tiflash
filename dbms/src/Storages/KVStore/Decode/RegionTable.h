@@ -280,11 +280,12 @@ struct RegionPtrWithSnapshotFiles
     /// make it could be cast into RegionPtr implicitly.
     operator const Base &() const { return base; }
 
-
     UInt64 getPrehandleElapsedMillis() const { return prehandle_stats.end_time - prehandle_stats.start_time; }
 
     UInt64 getPrehandleStartMillis() const { return prehandle_stats.start_time; }
     UInt64 getPrehandleEndMillis() const { return prehandle_stats.end_time; }
+
+    String snapshotType() const { return "normal"; }
 
     const Base & base;
     PrehandleResult::Stats prehandle_stats;
@@ -305,14 +306,12 @@ struct RegionPtrWithCheckpointInfo
     /// make it could be cast into RegionPtr implicitly.
     operator const Base &() const { return base; }
 
-    UInt64 getPrehandleElapsedMillis() const
-    {
-        // FAP has no prehandle stage
-        return 0;
-    }
+    // We consider the "prehandle" phase of FAP snapshot from its
+    UInt64 getPrehandleElapsedMillis() const;
+    UInt64 getPrehandleStartMillis() const;
+    UInt64 getPrehandleEndMillis() const;
 
-    UInt64 getPrehandleStartMillis() const { return 0; }
-    UInt64 getPrehandleEndMillis() const { return 0; }
+    String snapshotType() const { return "fap"; }
 
     const Base & base;
     CheckpointIngestInfoPtr checkpoint_info;

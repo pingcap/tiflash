@@ -379,14 +379,20 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
 
         FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-        // `new_region` may change in the previous function, just log the region_id down
+        // `new_region` may change in the previous function, just log the region_id down.
+        // `worker_queue_cost` is the time since prehandle finished, to we actually pop the snapshot from region worker.
+        // - For normal snapshot, it is the time since prehandle finished.
+        // - For FAP snapshot, it is the time since CheckpointIngestInfo is built. So it includes the time of MsgSnapshot.
+        //   We can not observe the timepoint when the task is pushed into region worker queue, because FAP snapshot has no prehandling stage.
         LOG_INFO(
             log,
-            "Finish apply snapshot, cost={:.3f}s region_id={} prehandle_cost={:.3f}s worker_queue_cost={:.3f}s",
+            "Finish apply snapshot, cost={:.3f}s region_id={} prehandle_cost={:.3f}s worker_queue_cost={:.3f}s "
+            "snapshot_type={}",
             watch.elapsedSeconds(),
             new_region->id(),
             new_region.getPrehandleElapsedMillis() / 1000.0,
-            (watch.getStartMillis() - new_region.getPrehandleEndMillis()) / 1000.0);
+            (watch.getStartMillis() - new_region.getPrehandleEndMillis()) / 1000.0,
+            new_region.snapshotType());
     }
     catch (Exception & e)
     {

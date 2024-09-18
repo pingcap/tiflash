@@ -449,6 +449,26 @@ RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(const Base & base_, Che
     , checkpoint_info(std::move(checkpoint_info_))
 {}
 
+UInt64 RegionPtrWithCheckpointInfo::getPrehandleElapsedMillis() const
+{
+    if (checkpoint_info->beginTime() != 0 && checkpoint_info->createdTime() != 0
+        && checkpoint_info->createdTime() > checkpoint_info->beginTime())
+    {
+        return checkpoint_info->createdTime() - checkpoint_info->beginTime();
+    }
+    return 0;
+}
+
+UInt64 RegionPtrWithCheckpointInfo::getPrehandleStartMillis() const
+{
+    return checkpoint_info->beginTime();
+}
+UInt64 RegionPtrWithCheckpointInfo::getPrehandleEndMillis() const
+{
+    return checkpoint_info->createdTime();
+}
+
+
 bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts)
 {
     {

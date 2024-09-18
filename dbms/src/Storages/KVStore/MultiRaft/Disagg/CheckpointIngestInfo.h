@@ -42,6 +42,7 @@ struct CheckpointIngestInfo
     UInt64 regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
     UInt64 beginTime() const { return begin_time; }
+    UInt64 createdTime() const { return begin_time; }
 
     CheckpointIngestInfo(
         TMTContext & tmt_,
@@ -58,8 +59,13 @@ struct CheckpointIngestInfo
         , region(region_)
         , restored_segments(std::move(restored_segments_))
         , begin_time(begin_time_)
+        , created_time(
+              std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                  .count())
         , log(DB::Logger::get("CheckpointIngestInfo"))
     {}
+
+    CheckpointIngestInfo(const CheckpointIngestInfo &) = delete;
 
     static CheckpointIngestInfoPtr restore(
         TMTContext & tmt,
@@ -101,8 +107,10 @@ private:
     const UInt64 remote_store_id;
     const RegionPtr region;
     const DM::Segments restored_segments;
+    // The time the FAP task is added into async tasks pool.
     // If restored, `beginTime` is no longer meaningful.
     const UInt64 begin_time;
+    const UInt64 created_time;
     DB::LoggerPtr log;
 };
 } // namespace DB
