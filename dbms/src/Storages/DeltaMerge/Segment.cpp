@@ -625,7 +625,7 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
         segments.push_back(segment);
         LOG_DEBUG(
             parent_log,
-            "Create segment end. Delta id {} stable id {} range {} epoch {} next_segment_id {}, remote_store_id={}, "
+            "Create segment end. delta_id={} stable_id={} range={} epoch={} next_segment_id={} remote_store_id={} "
             "region_id={}",
             segment_info.delta_id,
             segment_info.stable_id,
