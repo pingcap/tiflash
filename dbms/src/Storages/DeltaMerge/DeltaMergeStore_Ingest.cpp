@@ -1133,7 +1133,7 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
 
 Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
-    std::shared_ptr<GeneralCancelHandle> cancel_handle,
+    const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
     const DM::RowKeyRange & range,
     const CheckpointInfoPtr & checkpoint_info) const
 {
