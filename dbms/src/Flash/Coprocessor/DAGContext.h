@@ -351,6 +351,8 @@ public:
     UInt64 getConnectionID() const { return connection_id; }
     const String & getConnectionAlias() const { return connection_alias; }
 
+    MPPReceiverSetPtr getMPPReceiverSet() const { return mpp_receiver_set; }
+
 public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -374,8 +376,6 @@ public:
     /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is used later.
     MPPTunnelSetPtr tunnel_set;
-    // `mpp_receiver_set` is always set by `MPPTask` and is used later.
-    MPPReceiverSetPtr mpp_receiver_set;
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
@@ -445,6 +445,8 @@ private:
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
 
+    // `mpp_receiver_set` is always set by `MPPTask` and is used later.
+    MPPReceiverSetPtr mpp_receiver_set;
     std::vector<CoprocessorReaderPtr> coprocessor_readers;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
