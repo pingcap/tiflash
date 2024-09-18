@@ -283,6 +283,7 @@ struct RegionPtrWithSnapshotFiles
 
     UInt64 getPrehandleElapsedMillis() const { return prehandle_stats.end_time - prehandle_stats.start_time; }
 
+    UInt64 getPrehandleStartMillis() const { return prehandle_stats.start_time; }
     UInt64 getPrehandleEndMillis() const { return prehandle_stats.end_time; }
 
     const Base & base;
@@ -310,6 +311,7 @@ struct RegionPtrWithCheckpointInfo
         return 0;
     }
 
+    UInt64 getPrehandleStartMillis() const { return 0; }
     UInt64 getPrehandleEndMillis() const { return 0; }
 
     const Base & base;

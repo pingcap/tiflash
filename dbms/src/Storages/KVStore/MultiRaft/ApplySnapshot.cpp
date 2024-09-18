@@ -369,7 +369,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
     {
         LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
 
-        Stopwatch watch;
+        Stopwatch watch(CLOCK_REALTIME);
         SCOPE_EXIT({
             GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
                 .Observe(watch.elapsedSeconds());

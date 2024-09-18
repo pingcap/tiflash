@@ -240,11 +240,14 @@ UInt64 Region::lastSnapshotAppliedTime() const
 
 void Region::updateSnapshotAppliedTime(UInt64 old) const
 {
-    auto secs = std::chrono::duration_cast<std::chrono::seconds>(
-                   std::chrono::system_clock::now().time_since_epoch())
-            .count();
+    // If a region is removed and then replicated to TiFlash again, we can't record the time,
+    // because the previous region is cleared.
+    // However, if a region lags, then TiKV leader could send a snapshot, we can observe here.
+    auto secs
+        = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     last_snapshot_applied_time.store(secs, std::memory_order_relaxed);
-    if (old != 0) {
+    if (old != 0)
+    {
         GET_METRIC(tiflash_raft_long_term_event_duration_seconds, type_apply_snapshot_gap).Observe(secs - old);
     }
     return;
