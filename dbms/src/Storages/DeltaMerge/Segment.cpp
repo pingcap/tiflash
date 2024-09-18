@@ -43,6 +43,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
+#include <Storages/DeltaMerge/RestoreDMFile.h>
 #include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -1426,10 +1427,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
     {
         if (auto * t = column_file->tryToTinyFile(); t)
         {
-            // This column file may be ingested into multiple segments, so we cannot reuse its page id here.
-            auto new_cf_id = storage_pool->newLogPageId();
-            wbs.log.putRefPage(new_cf_id, t->getDataPageId());
-            new_column_file_persisteds.push_back(t->cloneWith(new_cf_id));
+            new_column_file_persisteds.push_back(column_file);
         }
         else if (auto * d = column_file->tryToDeleteRange(); d)
         {
@@ -1437,24 +1435,9 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
         }
         else if (auto * b = column_file->tryToBigFile(); b)
         {
-            auto new_data_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-            auto old_data_page_id = b->getDataPageId();
-            wbs.data.putRefPage(new_data_page_id, old_data_page_id);
-            auto wn_ps = dm_context.global_context.getWriteNodePageStorage();
-            auto full_page_id = UniversalPageIdFormat::toFullPageId(
-                UniversalPageIdFormat::toFullPrefix(
-                    dm_context.keyspace_id,
-                    StorageType::Data,
-                    dm_context.physical_table_id),
-                old_data_page_id);
-            auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
-            auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
-            auto file_oid = data_key_view.getDMFileOID();
-            RUNTIME_CHECK(file_oid.file_id == b->getFile()->fileId(), file_oid.file_id, b->getFile()->fileId());
             auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
             RUNTIME_CHECK(remote_data_store != nullptr);
-            auto prepared = remote_data_store->prepareDMFile(file_oid, new_data_page_id);
-            auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+            auto dmfile = restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, b->getDataPageId());
             auto new_column_file = b->cloneWith(dm_context, dmfile, rowkey_range);
             new_column_file_persisteds.push_back(new_column_file);
         }
