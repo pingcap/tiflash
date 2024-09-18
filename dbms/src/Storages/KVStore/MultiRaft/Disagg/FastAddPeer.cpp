@@ -357,7 +357,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     }
     GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_build).Observe(watch.elapsedSecondsFromLastTime());
 
-    // Note that `buildSegmentsFromCheckpointInfo` would also cancel. So we must check here before further operations.
+    // Note that the task may be canceled during `buildSegmentsFromCheckpointInfo`. So we must check here before further operations.
     if (cancel_handle->isCanceled())
     {
         LOG_INFO(
