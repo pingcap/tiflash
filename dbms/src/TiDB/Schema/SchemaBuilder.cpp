@@ -402,7 +402,11 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             return;
         }
 
-        applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
+        // We can not mark the table is safe to be physically drop from the tiflash instances when
+        // the number of tiflash replica is set to be 0.
+        // There could be a concurrent issue that cause data loss. Check the following link for details:
+        // https://github.com/pingcap/tiflash/issues/9438#issuecomment-2360370761
+        // applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
         return;
     }
 
