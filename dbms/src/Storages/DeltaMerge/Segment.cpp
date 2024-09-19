@@ -213,6 +213,8 @@ DMFilePtr writeIntoNewDMFile(
     return dmfile;
 }
 
+// Create a new stable, the DMFile will write as External Page to disk, but the meta will not be written to disk.
+// The caller should write the meta to disk if needed.
 StableValueSpacePtr createNewStable( //
     DMContext & dm_context,
     const ColumnDefinesPtr & schema_snap,
@@ -231,7 +233,6 @@ StableValueSpacePtr createNewStable( //
 
         auto stable = std::make_shared<StableValueSpace>(stable_id);
         stable->setFiles({dtfile}, RowKeyRange::newAll(dm_context.is_common_handle, dm_context.rowkey_column_size));
-        stable->saveMeta(wbs.meta);
         if (auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store; !data_store)
         {
             wbs.data.putExternal(dtfile_id, 0);
@@ -595,7 +596,7 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     {
         LOG_DEBUG(
             parent_log,
-            "Create segment begin. Delta id {} stable id {} range {} epoch {} next_segment_id {}, remote_store_id={}, "
+            "Create segment begin. delta_id={} stable_id={} range={} epoch={} next_segment_id={} remote_store_id={} "
             "region_id={}",
             segment_info.delta_id,
             segment_info.stable_id,
@@ -623,7 +624,7 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
         segments.push_back(segment);
         LOG_DEBUG(
             parent_log,
-            "Create segment end. Delta id {} stable id {} range {} epoch {} next_segment_id {}, remote_store_id={}, "
+            "Create segment end. delta_id={} stable_id={} range={} epoch={} next_segment_id={} remote_store_id={} "
             "region_id={}",
             segment_info.delta_id,
             segment_info.stable_id,
@@ -1393,7 +1394,6 @@ SegmentPtr Segment::applyMergeDelta(
         delta->getId(),
         persisted_column_files,
         in_memory_files);
-    new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>( //
         parent_log,
@@ -1408,6 +1408,8 @@ SegmentPtr Segment::applyMergeDelta(
     new_me->setLastCheckGCSafePoint(context.min_version);
 
     // Store new meta data
+    new_delta->saveMeta(wbs);
+    new_me->stable->saveMeta(wbs.meta);
     new_me->serialize(wbs.meta);
 
     // Remove old segment's delta.
