@@ -988,12 +988,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (storage_config.format_version != 0)
     {
         if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier
-            && storage_config.format_version != STORAGE_FORMAT_V101.identifier)
+            && storage_config.format_version != STORAGE_FORMAT_V101.identifier
+            && storage_config.format_version != STORAGE_FORMAT_V102.identifier)
         {
-            LOG_WARNING(log, "'storage.format_version' must be set to 100 or 101 when S3 is enabled!");
+            LOG_WARNING(log, "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
             throw Exception(
                 ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'storage.format_version' must be set to 100 or 101 when S3 is enabled!");
+                "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
@@ -1004,8 +1005,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // If the user does not explicitly set format_version in the config file but
             // enables S3, then we set up a proper format version to support S3.
-            setStorageFormat(STORAGE_FORMAT_V101.identifier);
-            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V101.identifier);
+            setStorageFormat(STORAGE_FORMAT_V102.identifier);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V102.identifier);
         }
         else
         {
@@ -1336,15 +1337,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // Set the pool size to 80% of logical cores and 60% of memory
         // to take full advantage of the resources and avoid blocking other tasks like writes and compactions.
         global_context->initializeGlobalLocalIndexerScheduler(
-            server_info.cpu_info.logical_cores * 8 / 10,
-            server_info.memory_info.capacity * 6 / 10);
+            std::max(1, server_info.cpu_info.logical_cores * 8 / 10), // at least 1 thread
+            std::max(256 * 1024 * 1024ULL, server_info.memory_info.capacity * 6 / 10)); // at least 256MB
     }
     else
     {
         // There could be compute tasks, reserve more memory for computes.
         global_context->initializeGlobalLocalIndexerScheduler(
-            server_info.cpu_info.logical_cores * 4 / 10,
-            server_info.memory_info.capacity * 4 / 10);
+            std::max(1, server_info.cpu_info.logical_cores * 4 / 10), // at least 1 thread
+            std::max(256 * 1024 * 1024ULL, server_info.memory_info.capacity * 4 / 10)); // at least 256MB
     }
 
     /// PageStorage run mode has been determined above
