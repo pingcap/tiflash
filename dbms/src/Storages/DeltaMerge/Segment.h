@@ -177,7 +177,7 @@ public:
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
     static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
         DMContext & context,
-        std::shared_ptr<GeneralCancelHandle> cancel_handle,
+        const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
         const RowKeyRange & target_range,
         const CheckpointInfoPtr & checkpoint_info);
 
