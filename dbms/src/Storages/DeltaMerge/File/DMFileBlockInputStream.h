@@ -82,7 +82,7 @@ public:
     // - current settings from this context
     // - current read limiter form this context
     // - current file provider from this context
-    explicit DMFileBlockInputStreamBuilder(const Context & dm_context);
+    explicit DMFileBlockInputStreamBuilder(const Context & context);
 
     // Build the final stream ptr.
     // Empty `rowkey_ranges` means not filter by rowkey

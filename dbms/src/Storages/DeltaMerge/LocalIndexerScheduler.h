@@ -220,6 +220,9 @@ struct fmt::formatter<DB::DM::LocalIndexerScheduler::FileID>
     template <typename FormatContext>
     auto format(const DB::DM::LocalIndexerScheduler::FileID & id, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "{}", std::visit([](const auto & id) { return id.id; }, id));
+        if (std::holds_alternative<DB::DM::LocalIndexerScheduler::DMFileID>(id))
+            return fmt::format_to(ctx.out(), "DM_{}", std::get<DB::DM::LocalIndexerScheduler::DMFileID>(id).id);
+        else
+            return fmt::format_to(ctx.out(), "CT_{}", std::get<DB::DM::LocalIndexerScheduler::ColumnFileTinyID>(id).id);
     }
 };

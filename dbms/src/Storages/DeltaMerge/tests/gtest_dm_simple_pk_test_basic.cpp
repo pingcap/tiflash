@@ -59,6 +59,7 @@ void SimplePKTestBasic::reload()
         (*cols)[0],
         is_common_handle,
         1,
+        nullptr,
         DeltaMergeStore::Settings());
     dm_context = store->newDMContext(
         *db_context,

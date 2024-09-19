@@ -39,6 +39,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
@@ -61,6 +62,7 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+
 
 namespace ProfileEvents
 {
@@ -216,6 +218,7 @@ DeltaMergeStore::DeltaMergeStore(
     const ColumnDefine & handle,
     bool is_common_handle_,
     size_t rowkey_column_size_,
+    IndexInfosPtr local_index_infos_,
     const Settings & settings_,
     ThreadPool * thread_pool)
     : global_context(db_context.getGlobalContext())
@@ -230,6 +233,7 @@ DeltaMergeStore::DeltaMergeStore(
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
+    , local_index_infos(std::move(local_index_infos_))
     , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
     {
@@ -332,6 +336,7 @@ DeltaMergeStorePtr DeltaMergeStore::create(
     const ColumnDefine & handle,
     bool is_common_handle_,
     size_t rowkey_column_size_,
+    IndexInfosPtr local_index_infos_,
     const Settings & settings_,
     ThreadPool * thread_pool)
 {
@@ -347,9 +352,11 @@ DeltaMergeStorePtr DeltaMergeStore::create(
         handle,
         is_common_handle_,
         rowkey_column_size_,
+        local_index_infos_,
         settings_,
         thread_pool);
     std::shared_ptr<DeltaMergeStore> store_shared_ptr(store);
+    store_shared_ptr->checkAllSegmentsLocalIndex();
     return store_shared_ptr;
 }
 
@@ -365,6 +372,7 @@ std::unique_ptr<DeltaMergeStore> DeltaMergeStore::createUnique(
     const ColumnDefine & handle,
     bool is_common_handle_,
     size_t rowkey_column_size_,
+    IndexInfosPtr local_index_infos_,
     const Settings & settings_,
     ThreadPool * thread_pool)
 {
@@ -380,9 +388,11 @@ std::unique_ptr<DeltaMergeStore> DeltaMergeStore::createUnique(
         handle,
         is_common_handle_,
         rowkey_column_size_,
+        local_index_infos_,
         settings_,
         thread_pool);
     std::unique_ptr<DeltaMergeStore> store_unique_ptr(store);
+    store_unique_ptr->checkAllSegmentsLocalIndex();
     return store_unique_ptr;
 }
 
@@ -504,6 +514,11 @@ void DeltaMergeStore::shutdown()
         return;
 
     LOG_TRACE(log, "Shutdown DeltaMerge start");
+
+    auto indexer_scheulder = global_context.getGlobalLocalIndexerScheduler();
+    RUNTIME_CHECK(indexer_scheulder != nullptr);
+    indexer_scheulder->dropTasks(keyspace_id, physical_table_id);
+
     // Must shutdown storage path pool to make sure the DMFile remove callbacks
     // won't remove dmfiles unexpectly.
     path_pool->shutdown();
@@ -2032,9 +2047,9 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
+    // TODO(local index): There could be some local indexes added/dropped after DDL
     std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }
-
 
 SortDescription DeltaMergeStore::getPrimarySortDescription() const
 {

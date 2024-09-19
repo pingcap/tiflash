@@ -79,6 +79,7 @@ public:
             handle_column_define,
             is_common_handle,
             rowkey_column_size,
+            nullptr,
             DeltaMergeStore::Settings());
         return s;
     }
@@ -195,6 +196,7 @@ public:
             handle_column_define,
             is_common_handle,
             rowkey_column_size,
+            nullptr,
             DeltaMergeStore::Settings());
         return s;
     }

@@ -65,6 +65,8 @@ public:
         UInt64 meta_version = 0,
         KeyspaceID keyspace_id = NullspaceID);
 
+    static String info(const DMFiles & dm_files);
+
     struct ListOptions
     {
         // Only return the DTFiles id list that can be GC
@@ -176,10 +178,12 @@ public:
     }
 
     bool useMetaV2() const { return meta->format_version == DMFileFormat::V3; }
+
     std::vector<String> listFilesForUpload() const;
-    void switchToRemote(const S3::DMFileOID & oid);
+    void switchToRemote(const S3::DMFileOID & oid) const;
 
     UInt32 metaVersion() const { return meta->metaVersion(); }
+    UInt32 bumpMetaVersion() const { return meta->bumpMetaVersion(); }
 
 private:
     DMFile(
@@ -298,7 +302,7 @@ public:
 
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
-    friend class DMFileWriterRemote;
+    friend class DMFileIndexWriter;
     friend class DMFileReader;
     friend class MarkLoader;
     friend class ColumnReadStream;

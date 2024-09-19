@@ -122,7 +122,8 @@ bool checkMatch(
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
         is_common_handle,
-        1);
+        1,
+        nullptr);
 
     store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);

@@ -279,12 +279,7 @@ size_t StableValueSpace::getDMFilesBytes() const
 
 String StableValueSpace::getDMFilesString()
 {
-    String s;
-    for (auto & file : files)
-        s += "dmf_" + DB::toString(file->fileId()) + ",";
-    if (!s.empty())
-        s.erase(s.length() - 1);
-    return s;
+    return DMFile::info(files);
 }
 
 void StableValueSpace::enableDMFilesGC(DMContext & dm_context)

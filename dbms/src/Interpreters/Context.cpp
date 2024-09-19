@@ -55,6 +55,7 @@
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -171,6 +172,7 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalPageIdAllocatorPtr global_page_id_allocator;
     DM::GlobalStoragePoolPtr global_storage_pool;
+    DM::LocalIndexerSchedulerPtr global_local_indexer_scheduler;
 
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
@@ -1748,6 +1750,27 @@ DM::GlobalPageIdAllocatorPtr Context::getGlobalPageIdAllocator() const
 {
     auto lock = getLock();
     return shared->global_page_id_allocator;
+}
+
+bool Context::initializeGlobalLocalIndexerScheduler(size_t pool_size, size_t memory_limit)
+{
+    auto lock = getLock();
+    if (!shared->global_local_indexer_scheduler)
+    {
+        shared->global_local_indexer_scheduler
+            = std::make_shared<DM::LocalIndexerScheduler>(DM::LocalIndexerScheduler::Options{
+                .pool_size = pool_size,
+                .memory_limit = memory_limit,
+                .auto_start = true,
+            });
+    }
+    return true;
+}
+
+DM::LocalIndexerSchedulerPtr Context::getGlobalLocalIndexerScheduler() const
+{
+    auto lock = getLock();
+    return shared->global_local_indexer_scheduler;
 }
 
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)

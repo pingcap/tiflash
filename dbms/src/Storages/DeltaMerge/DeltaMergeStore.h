@@ -187,10 +187,13 @@ struct LocalIndexStats
 };
 using LocalIndexesStats = std::vector<LocalIndexStats>;
 
+
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
-class DeltaMergeStore : private boost::noncopyable
+class DeltaMergeStore
+    : private boost::noncopyable
+    , public std::enable_shared_from_this<DeltaMergeStore>
 {
 public:
     friend class ::DB::DM::tests::DeltaMergeStoreTest;
@@ -292,6 +295,7 @@ private:
         const ColumnDefine & handle,
         bool is_common_handle_,
         size_t rowkey_column_size_,
+        IndexInfosPtr local_index_infos_,
         const Settings & settings_ = EMPTY_SETTINGS,
         ThreadPool * thread_pool = nullptr);
 
@@ -308,6 +312,7 @@ public:
         const ColumnDefine & handle,
         bool is_common_handle_,
         size_t rowkey_column_size_,
+        IndexInfosPtr local_index_infos_,
         const Settings & settings_ = EMPTY_SETTINGS,
         ThreadPool * thread_pool = nullptr);
 
@@ -323,6 +328,7 @@ public:
         const ColumnDefine & handle,
         bool is_common_handle_,
         size_t rowkey_column_size_,
+        IndexInfosPtr local_index_infos_,
         const Settings & settings_ = EMPTY_SETTINGS,
         ThreadPool * thread_pool = nullptr);
 
@@ -726,6 +732,12 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
+    void segmentEnsureStableIndex(
+        DMContext & dm_context,
+        const IndexInfosPtr & index_info,
+        const DMFiles & dm_files,
+        const String & source_segment_info);
+
     /**
      * Ingest a DMFile into the segment, optionally causing a new segment being created.
      *
@@ -854,11 +866,45 @@ private:
         const SegmentPtr & segment,
         ThreadType thread_type,
         InputType input_type);
+
+    /**
+     * Segment update meta with new DMFiles. A lock must be provided, so that it is
+     * possible to update the meta for multiple segments all at once.
+     */
+    SegmentPtr segmentUpdateMeta(
+        std::unique_lock<std::shared_mutex> & read_write_lock,
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const DMFiles & new_dm_files);
+
+    /**
+     * Check whether there are new local indexes should be built for all segments.
+     */
+    void checkAllSegmentsLocalIndex();
+
+    /**
+     * Ensure the segment has stable index.
+     * If the segment has no stable index, it will be built in background.
+     * Note: This function can not be called in constructor, since shared_from_this() is not available.
+     *
+     * @returns true if index is missing and a build task is added in background.
+     */
+    bool segmentEnsureStableIndexAsync(const SegmentPtr & segment);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
 public:
 #endif
+    /**
+     * Wait until the segment has stable index.
+     * If the index is ready or no need to build, it will return immediately.
+     * Only used for testing.
+     *
+     * @returns false if index is still missing after wait timed out.
+     */
+    bool segmentWaitStableIndexReady(const SegmentPtr & segment) const;
+
     void dropAllSegments(bool keep_first_segment);
     String getLogTracingId(const DMContext & dm_ctx);
     // Returns segment that contains start_key and whether 'segments' is empty.
@@ -916,13 +962,30 @@ public:
     // of resources to build, so they will be built in separated background pool.
     IndexInfosPtr local_index_infos;
 
+    struct DMFileIDToSegmentIDs
+    {
+    public:
+        using Key = PageIdU64; // dmfile_id
+        using Value = std::unordered_set<PageIdU64>; // segment_ids
+
+        void remove(const SegmentPtr & segment);
+
+        void add(const SegmentPtr & segment);
+
+        const Value & get(PageIdU64 dmfile_id) const;
+
+    private:
+        std::unordered_map<Key, Value> u_map;
+    };
+    // dmfile_id -> segment_ids
+    // This map is not protected by lock, should be accessed under read_write_mutex.
+    DMFileIDToSegmentIDs dmfile_id_to_segment_ids;
+
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
 
     LoggerPtr log;
 };
-
-using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
 } // namespace DM
 } // namespace DB
