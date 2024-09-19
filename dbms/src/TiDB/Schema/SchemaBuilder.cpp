@@ -407,6 +407,9 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         // There could be a concurrent issue that cause data loss. Check the following link for details:
         // https://github.com/pingcap/tiflash/issues/9438#issuecomment-2360370761
         // applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
+        // Now only update the replica number to be 0
+        auto action = fmt::format("SetTiFlashReplica-{}", table_info->replica_info.count);
+        updateTiFlashReplicaNumOnStorage(database_id, table_id, storage, table_info);
         return;
     }
 
