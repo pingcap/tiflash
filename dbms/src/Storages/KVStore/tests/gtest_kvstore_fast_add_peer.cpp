@@ -974,7 +974,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
 
     // Mock that the storage instance have been dropped
