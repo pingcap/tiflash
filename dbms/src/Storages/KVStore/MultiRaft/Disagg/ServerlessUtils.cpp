@@ -48,47 +48,47 @@ String makeRegionPrefix(uint64_t region_id, uint8_t suffix)
 
 #if SERVERLESS_PROXY == 0
 // pub const KEYSPACE_INNER_KEY_OFF_SUFFIX: u8 = 0x01;
-String getKeyspaceInnerKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id)
+String getKeyspaceInnerKey(UniversalPageStoragePtr, uint32_t keyspace_id)
 {
     return "";
 }
 
 // pub const REGION_INNER_KEY_OFF_SUFFIX: u8 = 0x06;
-String getRegionInnerKey(UniversalPageStoragePtr uni_ps, uint64_t region_id)
+String getRegionInnerKey(UniversalPageStoragePtr, uint64_t region_id)
 {
     return "";
 }
 
-String getCompactibleInnerKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id, uint64_t region_id)
+String getCompactibleInnerKey(UniversalPageStoragePtr, uint32_t keyspace_id, uint64_t region_id)
 {
     return "";
 }
 
 // pub const REGION_ENCRYPTION_KEY_SUFFIX: u8 = 0x07;
-String getRegionEncKey(UniversalPageStoragePtr uni_ps, uint64_t region_id)
+String getRegionEncKey(UniversalPageStoragePtr, uint64_t region_id)
 {
     return "";
 }
 
 // pub const KEYSPACE_ENCRYPTION_KEY_SUFFIX: u8 = 0x02;
-String getKeyspaceEncKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id)
+String getKeyspaceEncKey(UniversalPageStoragePtr, uint32_t keyspace_id)
 {
     return "";
 }
 
-String getCompactibleEncKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id, uint64_t region_id)
+String getCompactibleEncKey(UniversalPageStoragePtr, uint32_t keyspace_id, uint64_t region_id)
 {
     return "";
 }
 
 // pub const REGION_META_VERSION_SUFFIX: u8 = 0x09;
-UInt64 getShardVer(UniversalPageStoragePtr uni_ps, uint64_t region_id)
+UInt64 getShardVer(UniversalPageStoragePtr, uint64_t region_id)
 {
     return 0;
 }
 
 // pub const REGION_TXN_FILE_LOCKS_SUFFIX: u8 = 0x08;
-String getTxnFileRef(UniversalPageStoragePtr uni_ps, uint64_t region_id)
+String getTxnFileRef(UniversalPageStoragePtr, uint64_t region_id)
 {
     return "";
 }
