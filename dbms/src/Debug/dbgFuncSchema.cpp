@@ -86,16 +86,20 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
 
 // Trigger gc on all databases / tables.
 // Usage:
-//   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point])"
+//   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point, ignore_remain_regions])"
 void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     auto & service = context.getSchemaSyncService();
     Timestamp gc_safe_point = 0;
+    bool ignore_remain_regions = false;
     if (args.empty())
         gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
-    else
+    if (!args.empty())
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    service->gc(gc_safe_point, NullspaceID);
+    if (args.size() >= 2)
+        ignore_remain_regions = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value) == "true";
+    // Note that only call it in tests, we need to ignore remain regions
+    service->gcImpl(gc_safe_point, NullspaceID, ignore_remain_regions);
 
     output("schemas gc done");
 }

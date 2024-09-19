@@ -142,7 +142,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
     LOG_IMPL(log, log_level, "remove sync schema task for keyspaces done, num_remove_tasks={}", num_remove_tasks);
 }
 
-SchemaSyncService::~SchemaSyncService()
+void SchemaSyncService::shutdown()
 {
     background_pool.removeTask(handle);
     for (auto const & iter : ks_handle_map)
@@ -151,6 +151,11 @@ SchemaSyncService::~SchemaSyncService()
         background_pool.removeTask(task_handle);
     }
     LOG_INFO(log, "SchemaSyncService stopped");
+}
+
+SchemaSyncService::~SchemaSyncService()
+{
+    shutdown();
 }
 
 bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
@@ -187,6 +192,11 @@ void SchemaSyncService::updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp 
 }
 
 bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
+{
+    return gcImpl(gc_safepoint, keyspace_id, /*ignore_remain_regions*/ false);
+}
+
+bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, bool ignore_remain_regions)
 {
     const std::optional<Timestamp> last_gc_safepoint = lastGcSafePoint(keyspace_id);
     // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
@@ -242,6 +252,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }
     }
 
+    auto & tmt_context = context.getTMTContext();
     // Physically drop tables
     bool succeeded = true;
     for (auto & storage_ptr : storages_to_gc)
@@ -267,6 +278,37 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                 *database_id,
                 table_info.id);
         }();
+
+        auto & region_table = tmt_context.getRegionTable();
+        if (auto remain_regions = region_table.getRegionIdsByTable(keyspace_id, table_info.id); //
+            !remain_regions.empty())
+        {
+            if (likely(!ignore_remain_regions))
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is skip, regions are not totally removed from TiFlash, remain_region_ids={}"
+                    " table_tombstone={} safepoint={} {}",
+                    remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+                continue;
+            }
+            else
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is executed while regions are not totally removed from TiFlash,"
+                    " remain_region_ids={} ignore_remain_regions={} table_tombstone={} safepoint={} {} ",
+                    remain_regions,
+                    ignore_remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+            }
+        }
+
         LOG_INFO(
             keyspace_log,
             "Physically drop table begin, table_tombstone={} safepoint={} {}",
