@@ -1422,32 +1422,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
     new_stable->setFiles({ref_file}, rowkey_range, &dm_context);
     new_stable->saveMeta(wbs.meta);
 
-    ColumnFilePersisteds new_column_file_persisteds;
-    for (const auto & column_file : column_file_persisteds)
-    {
-        if (auto * t = column_file->tryToTinyFile(); t)
-        {
-            new_column_file_persisteds.push_back(column_file);
-        }
-        else if (auto * d = column_file->tryToDeleteRange(); d)
-        {
-            new_column_file_persisteds.push_back(column_file);
-        }
-        else if (auto * b = column_file->tryToBigFile(); b)
-        {
-            auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-            RUNTIME_CHECK(remote_data_store != nullptr);
-            auto dmfile = restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, b->getDataPageId());
-            auto new_column_file = b->cloneWith(dm_context, dmfile, rowkey_range);
-            new_column_file_persisteds.push_back(new_column_file);
-        }
-        else
-        {
-            RUNTIME_CHECK(false);
-        }
-    }
-
-    auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId(), new_column_file_persisteds);
+    auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId(), column_file_persisteds);
     new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>( //
