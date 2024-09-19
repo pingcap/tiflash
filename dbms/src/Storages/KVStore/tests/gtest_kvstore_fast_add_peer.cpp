@@ -821,9 +821,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, []() {
-        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
-    });
+    fap_context->tasks_trace->addTask(region_id, []() { return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable); });
     EXPECT_THROW(
         FastAddPeerImplWrite(
             global_context.getTMTContext(),
