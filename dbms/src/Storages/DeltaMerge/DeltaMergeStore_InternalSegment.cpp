@@ -42,7 +42,7 @@ extern const Metric DT_SnapshotOfSegmentIngestIndex;
 namespace DB::DM
 {
 
-void DeltaMergeStore::DMFileIDToSegmentIDs::remove(SegmentPtr segment)
+void DeltaMergeStore::DMFileIDToSegmentIDs::remove(const SegmentPtr & segment)
 {
     RUNTIME_CHECK(segment != nullptr);
     for (const auto & dmfile : segment->getStable()->getDMFiles())
@@ -54,7 +54,7 @@ void DeltaMergeStore::DMFileIDToSegmentIDs::remove(SegmentPtr segment)
     }
 }
 
-void DeltaMergeStore::DMFileIDToSegmentIDs::add(SegmentPtr segment)
+void DeltaMergeStore::DMFileIDToSegmentIDs::add(const SegmentPtr & segment)
 {
     RUNTIME_CHECK(segment != nullptr);
     for (const auto & dmfile : segment->getStable()->getDMFiles())
@@ -489,7 +489,7 @@ void DeltaMergeStore::checkAllSegmentsLocalIndex()
         }
         LOG_INFO(
             log,
-            "CheckAllSegmentsLocalIndex - Finish, updated_meta={}, elapsed={}",
+            "CheckAllSegmentsLocalIndex - Finish, updated_meta={}, elapsed={:.3f}s",
             segments_updated_meta,
             watch.elapsedSeconds());
     }

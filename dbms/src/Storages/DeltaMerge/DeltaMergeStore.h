@@ -968,9 +968,9 @@ public:
         using Key = PageIdU64; // dmfile_id
         using Value = std::unordered_set<PageIdU64>; // segment_ids
 
-        void remove(SegmentPtr segment);
+        void remove(const SegmentPtr & segment);
 
-        void add(SegmentPtr segment);
+        void add(const SegmentPtr & segment);
 
         const Value & get(PageIdU64 dmfile_id) const;
 

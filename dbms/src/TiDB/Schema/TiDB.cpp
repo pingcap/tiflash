@@ -1290,8 +1290,7 @@ String genJsonNull()
 
 String genVectorFloat32Empty()
 {
-    String v(4, '\0'); // Length=0 vector
-    return v;
+    return String(4, '\0'); // Length=0 vector
 }
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)

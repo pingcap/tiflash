@@ -285,7 +285,7 @@ try
     ASSERT_EQ(1, dm_file_2->meta->bumpMetaVersion());
     ASSERT_NO_THROW({
         iw->finalize();
-    }); // No exception should be thrown because it may be a broken file left behind by previous failed writes.
+    }); // No exception should be thrown because it may be a file left by previous writes but segment failed to update meta version.
 
     // Read out meta v1 again.
     auto dm_file_for_read = DMFile::restore(
