@@ -391,7 +391,6 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     auto & tmt_context = context.getTMTContext();
     if (table_info->replica_info.count == 0)
     {
-        // Replicat number is to 0, mark the table as tombstone in TiFlash
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
@@ -407,8 +406,8 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         // There could be a concurrent issue that cause data loss. Check the following link for details:
         // https://github.com/pingcap/tiflash/issues/9438#issuecomment-2360370761
         // applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
-        // Now only update the replica number to be 0
-        auto action = fmt::format("SetTiFlashReplica-{}", table_info->replica_info.count);
+
+        // Now only update the replica number to be 0 instead
         updateTiFlashReplicaNumOnStorage(database_id, table_id, storage, table_info);
         return;
     }
