@@ -36,10 +36,6 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
     probe_exec.set(HashJoinProbeExec::build(req_id, original_join, stream_index, input, max_block_size_));
     probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
-    if (stream_index == 0)
-    {
-        original_join->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
-    }
 
     ProbeProcessInfo header_probe_process_info(0, 0);
     header_probe_process_info.resetBlock(input->getHeader());

@@ -27,6 +27,7 @@
 #include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -180,6 +181,7 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
+    std::atomic_bool is_cancelled{false};
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
     /// Use copy constructor or createGlobal() instead
@@ -237,8 +239,8 @@ public:
     /// Compute and set actual user settings, client_info.current_user should be set
     void calculateUserSettings();
 
-    ClientInfo & getClientInfo() { return client_info; };
-    const ClientInfo & getClientInfo() const { return client_info; };
+    ClientInfo & getClientInfo() { return client_info; }
+    const ClientInfo & getClientInfo() const { return client_info; }
 
     void setQuota(
         const String & name,
@@ -375,6 +377,9 @@ public:
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
 
+    bool isCancelled() const { return is_cancelled; }
+    void cancelContext() { is_cancelled.store(true); }
+
     /// List all queries.
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
@@ -505,8 +510,8 @@ public:
 
     SharedQueriesPtr getSharedQueries();
 
-    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
-    TimezoneInfo & getTimezoneInfo() { return timezone_info; };
+    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; }
+    TimezoneInfo & getTimezoneInfo() { return timezone_info; }
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;

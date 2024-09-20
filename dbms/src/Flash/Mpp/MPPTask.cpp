@@ -776,6 +776,8 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             return;
         }
     }
+    if (context != nullptr)
+        context->cancelContext();
 }
 
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
