@@ -565,7 +565,6 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     UniversalPageStoragePtr temp_ps,
     WriteBatches & wbs)
 {
-    UNUSED(remote_store_id);
     Segments segments;
     for (const auto & segment_info : meta_infos)
     {
@@ -589,7 +588,7 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
             segment_info.delta_id,
             wbs);
         auto segment = std::make_shared<Segment>(
-            Logger::get("Checkpoint"),
+            Logger::get(fmt::format("Checkpoint(region_id={})", region_id)),
             segment_info.epoch,
             segment_info.range.shrink(range),
             segment_info.segment_id,
