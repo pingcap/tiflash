@@ -34,7 +34,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs & args, DBGInvoker::Pri
 
 // Trigger gc on all databases / tables.
 // Usage:
-//   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point])"
+//   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point, ignore_remain_regions])"
 void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Reset schemas.

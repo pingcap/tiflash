@@ -154,8 +154,21 @@ public:
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
 
+<<<<<<< HEAD
     void handleInternalRegionsByTable(TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(TableID table_id) const;
+=======
+    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
+    // Only one thread can do this at the same time.
+    // The original name for this function is tryFlushRegion.
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist = false);
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist);
+
+    void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
+
+    std::vector<RegionID> getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const;
+    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
+>>>>>>> 62809fe010 (ddl: Fix the physically drop storage instance may block removing regions (#9442))
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,
