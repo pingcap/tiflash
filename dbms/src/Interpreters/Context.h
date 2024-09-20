@@ -19,6 +19,7 @@
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
 #include <IO/FileProvider/FileProvider_fwd.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
@@ -34,6 +35,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+
 
 namespace pingcap
 {
@@ -181,7 +183,9 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-    std::atomic_bool is_cancelled{false};
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
     /// Use copy constructor or createGlobal() instead
@@ -377,8 +381,8 @@ public:
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
 
-    bool isCancelled() const { return is_cancelled; }
-    void cancelContext() { is_cancelled.store(true); }
+    bool isCancelled() const { return is_cancelled(); }
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
 
     /// List all queries.
     ProcessList & getProcessList();
