@@ -57,16 +57,23 @@ public:
         const DMContext & dm_context;
     };
 
+    using ProceedCheckFn = std::function<bool()>;
+
     explicit DMFileIndexWriter(const Options & options)
         : logger(Logger::get())
         , options(options)
     {}
 
-    // Note: This method can only be called once.
-    DMFiles build() const;
+    // Note: You cannot call build() multiple times, as duplicate meta version will result in exceptions.
+    DMFiles build(ProceedCheckFn should_proceed) const;
+
+    DMFiles build() const
+    {
+        return build([]() { return true; });
+    }
 
 private:
-    size_t buildIndexForFile(const DMFilePtr & dm_file_mutable) const;
+    size_t buildIndexForFile(const DMFilePtr & dm_file_mutable, ProceedCheckFn should_proceed) const;
 
 private:
     const LoggerPtr logger;

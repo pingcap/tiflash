@@ -31,6 +31,7 @@ namespace DB::ErrorCodes
 extern const int INCORRECT_DATA;
 extern const int INCORRECT_QUERY;
 extern const int CANNOT_ALLOCATE_MEMORY;
+extern const int ABORTED;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
@@ -62,11 +63,14 @@ VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinition
           definition_->dimension,
           getUSearchMetricKind(definition->distance_metric))))
 {
-    RUNTIME_CHECK(definition_->kind == tipb::VectorIndexKind::HNSW);
+    RUNTIME_CHECK(definition_->kind == kind());
     GET_METRIC(tiflash_vector_index_active_instances, type_build).Increment();
 }
 
-void VectorIndexHNSWBuilder::addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark)
+void VectorIndexHNSWBuilder::addBlock(
+    const IColumn & column,
+    const ColumnVector<UInt8> * del_mark,
+    ProceedCheckFn should_proceed)
 {
     // Note: column may be nullable.
     const ColumnArray * col_array;
@@ -80,18 +84,25 @@ void VectorIndexHNSWBuilder::addBlock(const IColumn & column, const ColumnVector
 
     const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
 
-    if (!index.reserve(unum::usearch::ceil2(index.size() + column.size())))
-    {
-        throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Could not reserve memory for HNSW index");
-    }
+    index.reserve(unum::usearch::ceil2(index.size() + column.size()));
 
     Stopwatch w;
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
+
+    Stopwatch w_proceed_check(CLOCK_MONOTONIC_COARSE);
 
     for (int i = 0, i_max = col_array->size(); i < i_max; ++i)
     {
         auto row_offset = added_rows;
         added_rows++;
+
+        if (unlikely(i % 100 == 0 && w_proceed_check.elapsedSeconds() > 0.5))
+        {
+            // The check of should_proceed could be non-trivial, so do it not too often.
+            w_proceed_check.restart();
+            if (!should_proceed())
+                throw Exception(ErrorCodes::ABORTED, "Index build is interrupted");
+        }
 
         // Ignore rows with del_mark, as the column values are not meaningful.
         if (del_mark_data != nullptr && (*del_mark_data)[i])
@@ -139,9 +150,14 @@ VectorIndexHNSWBuilder::~VectorIndexHNSWBuilder()
     GET_METRIC(tiflash_vector_index_active_instances, type_build).Decrement();
 }
 
+tipb::VectorIndexKind VectorIndexHNSWBuilder::kind()
+{
+    return tipb::VectorIndexKind::HNSW;
+}
+
 VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProps & file_props, std::string_view path)
 {
-    RUNTIME_CHECK(file_props.index_kind() == tipb::VectorIndexKind_Name(tipb::VectorIndexKind::HNSW));
+    RUNTIME_CHECK(file_props.index_kind() == tipb::VectorIndexKind_Name(kind()));
 
     tipb::VectorDistanceMetric metric;
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
@@ -151,9 +167,20 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProp
     SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
 
     auto vi = std::make_shared<VectorIndexHNSWViewer>(file_props);
-    vi->index = USearchImplType::make(unum::usearch::metric_punned_t( //
-        file_props.dimensions(),
-        getUSearchMetricKind(metric)));
+
+    vi->index = USearchImplType::make(
+        unum::usearch::metric_punned_t( //
+            file_props.dimensions(),
+            getUSearchMetricKind(metric)),
+        unum::usearch::index_dense_config_t(
+            unum::usearch::default_connectivity(),
+            unum::usearch::default_expansion_add(),
+            16 /* default is 64 */));
+
+    // Currently may have a lot of threads querying concurrently
+    auto limit = unum::usearch::index_limits_t(0, /* threads */ std::thread::hardware_concurrency() * 10);
+    vi->index.reserve(limit);
+
     auto result = vi->index.view(unum::usearch::memory_mapped_file_t(path.data()));
     RUNTIME_CHECK_MSG(result, "Failed to load vector index: {}", result.error.what());
 
@@ -236,6 +263,11 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
     return keys;
 }
 
+size_t VectorIndexHNSWViewer::size() const
+{
+    return index.size();
+}
+
 void VectorIndexHNSWViewer::get(Key key, std::vector<Float32> & out) const
 {
     out.resize(file_props.dimensions());
@@ -252,6 +284,11 @@ VectorIndexHNSWViewer::~VectorIndexHNSWViewer()
 {
     GET_METRIC(tiflash_vector_index_memory_usage, type_view).Decrement(static_cast<double>(last_reported_memory_usage));
     GET_METRIC(tiflash_vector_index_active_instances, type_view).Decrement();
+}
+
+tipb::VectorIndexKind VectorIndexHNSWViewer::kind()
+{
+    return tipb::VectorIndexKind::HNSW;
 }
 
 } // namespace DB::DM

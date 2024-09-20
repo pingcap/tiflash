@@ -262,7 +262,7 @@ try
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(left_segment_range, filter, createVecFloat32Column<Array>({})); // FIXME: should be 63.0
+        read(left_segment_range, filter, createVecFloat32Column<Array>({{63.0}}));
     }
 
     // merge segment

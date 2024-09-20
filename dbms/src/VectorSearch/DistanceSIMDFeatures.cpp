@@ -16,7 +16,7 @@
 // polluting all compile units.
 
 #include <VectorSearch/DistanceSIMDFeatures.h>
-#include <VectorSearch/simdsimd-internals.h>
+#include <VectorSearch/SimSIMD.h>
 
 namespace simsimd_details
 {
@@ -52,21 +52,39 @@ std::vector<std::string> VectorDistanceSIMDFeatures::get()
     simsimd_capability_t cap_l2 = simsimd_details::actual_capability(simsimd_datatype_f32_k, simsimd_metric_l2sq_k);
     simsimd_capability_t cap_cos = simsimd_details::actual_capability(simsimd_datatype_f32_k, simsimd_metric_cos_k);
 
-    auto cap_to_string = [](simsimd_capability_t cap) -> std::string {
-        switch (cap)
+    auto cap_to_string = [](simsimd_capability_t isa_kind) -> std::string {
+        switch (isa_kind)
         {
-        case simsimd_cap_sve2_k:
-            return "sve2";
-        case simsimd_cap_sve_k:
-            return "sve";
+        case simsimd_cap_serial_k:
+            return "serial";
         case simsimd_cap_neon_k:
             return "neon";
-        case simsimd_cap_skylake_k:
-            return "skylake";
+        case simsimd_cap_neon_i8_k:
+            return "neon_i8";
+        case simsimd_cap_neon_f16_k:
+            return "neon_f16";
+        case simsimd_cap_neon_bf16_k:
+            return "neon_bf16";
+        case simsimd_cap_sve_k:
+            return "sve";
+        case simsimd_cap_sve_i8_k:
+            return "sve_i8";
+        case simsimd_cap_sve_f16_k:
+            return "sve_f16";
+        case simsimd_cap_sve_bf16_k:
+            return "sve_bf16";
         case simsimd_cap_haswell_k:
             return "haswell";
+        case simsimd_cap_skylake_k:
+            return "skylake";
+        case simsimd_cap_ice_k:
+            return "ice";
+        case simsimd_cap_genoa_k:
+            return "genoa";
+        case simsimd_cap_sapphire_k:
+            return "sapphire";
         default:
-            return "serial";
+            return "unknown";
         }
     };
 
