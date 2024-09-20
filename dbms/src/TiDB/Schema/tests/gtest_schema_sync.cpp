@@ -168,6 +168,11 @@ public:
         drop_interpreter.execute();
     }
 
+    static std::optional<Timestamp> lastGcSafePoint(const SchemaSyncServicePtr & sync_service, KeyspaceID keyspace_id)
+    {
+        return sync_service->lastGcSafePoint(keyspace_id);
+    }
+
 private:
     static void recreateMetadataPath()
     {
@@ -264,8 +269,21 @@ try
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_num_regions_for_table); });
 
     auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
-    ASSERT_TRUE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));
+    {
+        // ensure gc_safe_point cache is empty
+        auto last_gc_safe_point = lastGcSafePoint(sync_service, NullspaceID);
+        ASSERT_FALSE(last_gc_safe_point.has_value());
+    }
 
+    // Run GC, but the table is not physically dropped because `force_set_num_regions_for_table`
+    ASSERT_FALSE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));
+    {
+        // gc_safe_point cache is not updated
+        auto last_gc_safe_point = lastGcSafePoint(sync_service, NullspaceID);
+        ASSERT_FALSE(last_gc_safe_point.has_value());
+    }
+
+    // ensure the table is not physically dropped
     size_t num_remain_tables = 0;
     for (auto table_id : table_ids)
     {

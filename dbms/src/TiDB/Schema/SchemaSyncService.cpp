@@ -391,6 +391,8 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
     }
 
+    // TODO: Optimize it after `BackgroundProcessingPool` can the task return how many seconds to sleep
+    //       before next round.
     if (succeeded)
     {
         updateLastGcSafepoint(keyspace_id, gc_safepoint);
@@ -400,6 +402,11 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
             num_tables_removed,
             num_databases_removed,
             gc_safepoint);
+        // This round of GC could run for a long time. Run immediately to check whether
+        // the latest gc_safepoint has been updated in PD.
+        // - gc_safepoint is not updated, it will be skipped because gc_safepoint == last_gc_safepoint
+        // - gc_safepoint is updated, run again immediately to cleanup other dropped data
+        return true;
     }
     else
     {
@@ -409,9 +416,10 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
             "Schema GC meet error, will try again later, last_safepoint={} safepoint={}",
             last_gc_safepoint_str,
             gc_safepoint);
+        // Return false to let it run again after `ddl_sync_interval_seconds` even if the gc_safepoint
+        // on PD is not updated.
+        return false;
     }
-
-    return true;
 }
 
 } // namespace DB
