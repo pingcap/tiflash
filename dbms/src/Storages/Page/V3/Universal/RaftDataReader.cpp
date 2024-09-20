@@ -84,6 +84,7 @@ void RaftDataReader::traverse(
 
 void RaftDataReader::traverseRemoteRaftLogForRegion(
     UInt64 region_id,
+    const std::function<bool(size_t)> precheck,
     const std::function<
         void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> & acceptor)
 {
@@ -91,6 +92,10 @@ void RaftDataReader::traverseRemoteRaftLogForRegion(
     auto end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);
     auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
     const auto page_ids = uni_ps.page_directory->getAllPageIdsInRange(start, end, snapshot);
+    if (!precheck(page_ids.size()))
+    {
+        return;
+    }
     for (const auto & page_id : page_ids)
     {
         // TODO: change it when support key space

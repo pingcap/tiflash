@@ -492,6 +492,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Histogram,                                                                                                                    \
       F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 100, 15}),                                            \
       F(type_eager_gc_applied_index, {{"type", "eager_gc_applied_index"}}, EqualWidthBuckets{0, 100, 10}),                          \
+      F(type_unhandled_fap_raft_log, {{"type", "unhandled_fap_raft_log"}}, EqualWidthBuckets{0, 25, 80}),                           \
       F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 100, 15}))                        \
     M(tiflash_raft_raft_events_count,                                                                                               \
       "Raft event counter",                                                                                                         \

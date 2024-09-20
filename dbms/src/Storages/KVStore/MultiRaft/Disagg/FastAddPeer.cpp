@@ -401,8 +401,19 @@ FastAddPeerRes FastAddPeerImplWrite(
     UniversalWriteBatch wb;
     RUNTIME_CHECK(checkpoint_info->temp_ps != nullptr);
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
+
+    bool raft_log_added_succeed = true;
     raft_data_reader.traverseRemoteRaftLogForRegion(
         region_id,
+        [](size_t raft_log_count) {
+            GET_METRIC(tiflash_raft_raft_log_gap_count, type_unhandled_fap_raft_log).Observe(raft_log_count);
+            if (raft_log_count > 1500)
+            {
+                raft_log_added_succeed = false;
+                return false;
+            }
+            return true;
+        },
         [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
             LOG_DEBUG(
                 log,
@@ -412,6 +423,19 @@ FastAddPeerRes FastAddPeerImplWrite(
                 UniversalPageIdFormat::getU64ID(page_id));
             wb.putRemotePage(page_id, 0, size, location, {});
         });
+
+    if (!raft_log_added_succeed)
+    {
+        LOG_INFO(
+            log,
+            "FAP is canceled for too many raft log, region_id={} keyspace={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+    }
     GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_raft).Observe(watch.elapsedSecondsFromLastTime());
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     RUNTIME_CHECK(wn_ps != nullptr);
