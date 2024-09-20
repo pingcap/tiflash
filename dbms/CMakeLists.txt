@@ -377,7 +377,6 @@ if (ENABLE_TESTS)
     add_check(gtests_dbms)
 
     add_target_pch("pch-dbms.h" gtests_dbms)
-
     grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
     add_executable(bench_dbms EXCLUDE_FROM_ALL
         ${dbms_bench_sources}
@@ -391,8 +390,7 @@ if (ENABLE_TESTS)
     target_link_libraries(bench_dbms
         gtest
         benchmark
-        tiflash_contrib::highfive
-
+    
         dbms
         test_util_bench_main
         tiflash_functions
@@ -400,6 +398,10 @@ if (ENABLE_TESTS)
         delta_merge
         tiflash_aggregate_functions
         kvstore)
+
+    if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+        target_link_libraries(bench_dbms tiflash_contrib::highfive)
+    endif()
 
     add_check(bench_dbms)
 endif ()

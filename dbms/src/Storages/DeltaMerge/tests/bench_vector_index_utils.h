@@ -7,7 +7,7 @@
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,n
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -16,8 +16,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <TiDB/Schema/VectorIndex.h>
 #include <benchmark/benchmark.h>
@@ -27,7 +27,6 @@
 #include <filesystem>
 #include <highfive/highfive.hpp>
 #include <optional>
-#include <random>
 
 namespace DB::DM::bench
 {
