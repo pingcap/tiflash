@@ -294,7 +294,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time)
 {
-    auto log = Logger::get("FastAddPeer");
+    auto log = Logger::get("FastAddPeer(region_id={} keyspace={} table_id={})");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
@@ -311,12 +311,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region_id, keyspace_id, table_id, tmt);
     if (!storage)
     {
-        LOG_WARNING(
-            log,
-            "FAP failed because the table can not be found, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_WARNING(log, "FAP failed because the table can not be found");
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
     UNUSED(schema_snap);
@@ -330,12 +325,7 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled before write, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_INFO(log, "FAP is canceled before write");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -360,12 +350,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     // Note that the task may be canceled during `buildSegmentsFromCheckpointInfo`. So we must check here before further operations.
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled after build segments, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_INFO(log, "FAP is canceled after build segments");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -384,54 +369,55 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled after write segments, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_INFO(log, "FAP is canceled after write segments");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
 
-    // Write raft log to uni ps, we do this here because we store raft log seperately.
-    // Currently, FAP only handle when the peer is newly created in this store.
-    // TODO(fap) However, Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
+    // Now, the FAP snapshot is persisted. And we will later send it to ourselves to have is acked by the raftstore.
+    // Later, we directly write the raft log into formal unips. We do this here because we store raft log seperately.
+
+    // TODO(fap) Currently, FAP only handle when the peer is newly created in this store,
+    // Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
     UniversalWriteBatch wb;
     RUNTIME_CHECK(checkpoint_info->temp_ps != nullptr);
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
 
-    bool raft_log_added_succeed = true;
+    auto expected_index = UniversalPageIdFormat::toRaftLogKey(region_id, apply_state.applied_index());
+    bool too_many_raft_logs = false;
+    bool got_expected_index = false;
+    size_t written_raft_count = 0;
     raft_data_reader.traverseRemoteRaftLogForRegion(
         region_id,
-        [](size_t raft_log_count) {
+        [&](size_t raft_log_count) {
             GET_METRIC(tiflash_raft_raft_log_gap_count, type_unhandled_fap_raft_log).Observe(raft_log_count);
             if (raft_log_count > 1500)
             {
-                raft_log_added_succeed = false;
+                too_many_raft_logs = true;
+                // Will early abort.
                 return false;
             }
+            written_raft_count = raft_log_count;
             return true;
         },
         [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
-            LOG_DEBUG(
-                log,
-                "Write raft log size {}, region_id={} index={}",
-                size,
-                region_id,
-                UniversalPageIdFormat::getU64ID(page_id));
+            LOG_DEBUG(log, "Write raft log size {} index={}", size, UniversalPageIdFormat::getU64ID(page_id));
+            if (page_id == expected_index)
+            {
+                got_expected_index = true;
+            }
             wb.putRemotePage(page_id, 0, size, location, {});
         });
 
-    if (!raft_log_added_succeed)
+    if (too_many_raft_logs || !got_expected_index)
     {
         LOG_INFO(
             log,
-            "FAP is canceled for too many raft log, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+            "FAP is canceled when write raft log, too_many_raft_logs={}, got_expected_index={}, applied_index={}",
+            too_many_raft_logs,
+            got_expected_index,
+            apply_state.applied_index());
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -443,17 +429,12 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled after write raft log, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_INFO(log, "FAP is canceled after write raft log");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
-    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={} keyspace={} table_id={}", region_id, keyspace_id, table_id);
+    LOG_DEBUG(log, "Finish write FAP snapshot, written_raft_count={}", written_raft_count);
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
         apply_state.SerializeAsString(),

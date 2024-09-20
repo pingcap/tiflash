@@ -1152,6 +1152,11 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     {
         auto segment_meta_infos
             = Segment::readAllSegmentsMetaInfoInRange(*dm_context, cancel_handle, range, checkpoint_info);
+        if (cancel_handle->isCanceled())
+        {
+            // Will be cleared in `FastAddPeerWrite`.
+            return {};
+        }
         LOG_INFO(
             log,
             "Finish read all segments meta info in range, region_id={} segments_num={}",

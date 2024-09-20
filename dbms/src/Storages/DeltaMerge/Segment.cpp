@@ -440,7 +440,12 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     const RowKeyRange & target_range,
     const CheckpointInfoPtr & checkpoint_info)
 {
-    auto log = DB::Logger::get();
+    RUNTIME_CHECK(checkpoint_info != nullptr);
+    auto log = DB::Logger::get(fmt::format(
+        "region_id={} keyspace={} table_id={}",
+        checkpoint_info->region_id,
+        context.keyspace_id,
+        context.physical_table_id));
     Stopwatch sw;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_read_segment).Observe(sw.elapsedSeconds()); });
@@ -464,16 +469,8 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         // 3. The writer is canceled.
         auto lock = end_to_segment_id_cache->readLock();
         is_cache_ready = end_to_segment_id_cache->isReady(lock);
-        auto el = sw.elapsedSecondsFromLastTime();
-        if (el > WAIT_TIME_THRESHOLD)
-        {
-            LOG_INFO(
-                log,
-                "Wait building segmend id cache for {:.3f}s, current_segment_id={}, region_id={}",
-                el,
-                current_segment_id,
-                checkpoint_info->region_id);
-        }
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_wait_build)
+            .Observe(sw.elapsedSecondsFromLastTime());
     }
     {
         using GenericLock = std::variant<std::shared_lock<std::shared_mutex>, std::unique_lock<std::shared_mutex>>;
@@ -491,26 +488,17 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             // Otherwise, requires a write lock to build cache.
             lock = end_to_segment_id_cache->writeLock();
         }
-        LOG_DEBUG(
-            log,
-            "Read segment meta info from segment {}, region_id={}",
-            current_segment_id,
-            checkpoint_info->region_id);
+        LOG_DEBUG(log, "Read segment meta info from segment {}", current_segment_id);
+        // Caches all built segments.
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
         SegmentMetaInfos segment_infos;
         while (current_segment_id != 0)
         {
             if (cancel_handle->isCanceled())
             {
-                LOG_INFO(
-                    log,
-                    "FAP is canceled when building segments, region_id={} keyspace={} table_id={}",
-                    checkpoint_info->region_id,
-                    context.keyspace_id,
-                    context.physical_table_id);
-                // FAP task would be cleaned in FastAddPeerImplWrite. So returning incompelete result could be OK.
-                end_key_and_segment_ids.clear();
-                return segment_infos;
+                LOG_INFO(log, "FAP is canceled when building segments, built={}", end_key_and_segment_ids.size());
+                // FAP task would be cleaned in FastAddPeerImplWrite. So returning empty result is OK.
+                return {};
             }
             Segment::SegmentMetaInfo segment_info;
             auto target_id = UniversalPageIdFormat::toFullPageId(
@@ -523,13 +511,10 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 // If it were to be selected, the FAP task could fallback to regular snapshot.
                 throw Exception(
                     ErrorCodes::LOGICAL_ERROR,
-                    "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={} region_id={}",
+                    "Can't find page id {}, current_segment_id={} range={}",
                     target_id,
-                    context.keyspace_id,
-                    context.physical_table_id,
                     current_segment_id,
-                    target_range.toDebugString(),
-                    checkpoint_info->region_id);
+                    target_range.toDebugString());
             }
             segment_info.segment_id = current_segment_id;
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -551,15 +536,11 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 break;
             }
         }
+        // After all segments are scanned, we try to build a cache,
+        // so other FAP tasks that share the same checkpoint could reuse the cache.
         if (!is_cache_ready)
         {
-            LOG_DEBUG(
-                log,
-                "Build cache for keyspace {} table {} with {} segments, region_id={}",
-                context.keyspace_id,
-                context.physical_table_id,
-                end_key_and_segment_ids.size(),
-                checkpoint_info->region_id);
+            LOG_DEBUG(log, "Build cache for with {} segments", end_key_and_segment_ids.size());
             end_to_segment_id_cache->build(
                 std::get<std::unique_lock<std::shared_mutex>>(lock),
                 std::move(end_key_and_segment_ids));
@@ -569,12 +550,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
 
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled when building segments, region_id={} keyspace={} table_id={}",
-            checkpoint_info->region_id,
-            context.keyspace_id,
-            context.physical_table_id);
+        LOG_INFO(log, "FAP is canceled when building segments");
         // FAP task would be cleaned in FastAddPeerImplWrite. So returning incompelete result could be OK.
         return {};
     }

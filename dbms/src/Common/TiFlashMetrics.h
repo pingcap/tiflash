@@ -428,6 +428,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_write_stage, {{"type", "write_stage"}}, ExpBucketsWithRange{0.2, 2, 120}),                                             \
       F(type_write_stage_build, {{"type", "write_stage_build"}}, ExpBucketsWithRange{0.2, 2, 120}),                                 \
       F(type_write_stage_raft, {{"type", "write_stage_raft"}}, ExpBucketsWithRange{0.2, 2, 30}),                                    \
+      F(type_write_stage_wait_build, {{"type", "write_stage_wait_build"}}, ExpBucketsWithRange{0.2, 4, 120}),                       \
       F(type_write_stage_insert, {{"type", "write_stage_insert"}}, ExpBucketsWithRange{0.2, 2, 30}),                                \
       F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBucketsWithRange{0.2, 2, 30}),                                            \
       F(type_total, {{"type", "total"}}, ExpBucketsWithRange{0.2, 4, 300}),                                                         \
