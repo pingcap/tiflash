@@ -1489,9 +1489,7 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
     while (true)
     {
         if (is_cancelled())
-        {
             return {};
-        }
         Block block = doJoinBlockCross(probe_process_info);
         assert(block);
         block = removeUselessColumn(block);
