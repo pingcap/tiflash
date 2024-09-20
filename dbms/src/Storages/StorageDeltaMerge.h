@@ -277,7 +277,7 @@ private:
     size_t rowkey_column_size = 0;
     /// The user-defined PK column. If multi-column PK, or no PK, it is 0.
     /// Note that user-defined PK will never be _tidb_rowid.
-    ColumnID pk_col_id;
+    ColumnID pk_col_id = 0;
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB

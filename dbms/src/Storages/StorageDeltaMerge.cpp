@@ -314,7 +314,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         else
             pk_col_id = 0;
 
-        // TODO: Handle with PK change?
+        // TODO: Handle with PK change: drop old PK column cache rather than let LRU evict it.
     }
 
     LOG_INFO(
