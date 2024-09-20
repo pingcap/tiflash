@@ -449,7 +449,6 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     Stopwatch sw;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_read_segment).Observe(sw.elapsedSeconds()); });
-    static constexpr UInt64 WAIT_TIME_THRESHOLD = 20;
     // We have a cache that records all segments which map to a certain table identified by (keyspace_id, physical_table_id).
     // We can thus avoid reading from the very beginning for every different regions in this table.
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
