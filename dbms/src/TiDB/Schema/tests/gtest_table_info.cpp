@@ -131,6 +131,98 @@ try
 }
 CATCH
 
+TEST(TiDBTableInfoTest, ParseVectorIndexJSON)
+try
+{
+    auto cases = {
+        ParseCase{
+            R"json({"cols":[{"default":null,"default_bit":null,"id":1,"name":{"L":"col1","O":"col1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},{"default":null,"default_bit":null,"id":2,"name":{"L":"vec","O":"vec"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":225}}],"id":30,"index_info":[{"id":3,"idx_cols":[{"length":-1,"name":{"L":"vec","O":"vec"},"offset":0}],"idx_name":{"L":"idx1","O":"idx1"},"index_type":-1,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"state":5,"vector_index":{"dimension":3,"distance_metric":"L2","kind":"HNSW"}}],"is_common_handle":false,"name":{"L":"t1","O":"t1"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":0,"update_timestamp":1723778704444603})json",
+            [](const TableInfo & table_info) {
+                ASSERT_EQ(table_info.index_infos.size(), 1);
+                auto idx = table_info.index_infos[0];
+                ASSERT_EQ(idx.id, 3);
+                ASSERT_EQ(idx.idx_cols.size(), 1);
+                ASSERT_EQ(idx.idx_cols[0].name, "vec");
+                ASSERT_EQ(idx.idx_cols[0].offset, 0);
+                ASSERT_EQ(idx.idx_cols[0].length, -1);
+                ASSERT_NE(idx.vector_index, nullptr);
+                ASSERT_EQ(idx.vector_index->kind, tipb::VectorIndexKind::HNSW);
+                ASSERT_EQ(idx.vector_index->dimension, 3);
+                ASSERT_EQ(idx.vector_index->distance_metric, tipb::VectorDistanceMetric::L2);
+                ASSERT_EQ(table_info.columns.size(), 2);
+                auto col0 = table_info.columns[0];
+                ASSERT_EQ(col0.name, "col1");
+                ASSERT_EQ(col0.tp, TiDB::TP::TypeLongLong);
+                ASSERT_EQ(col0.id, 1);
+                auto col1 = table_info.columns[1];
+                ASSERT_EQ(col1.name, "vec");
+                ASSERT_EQ(col1.tp, TiDB::TP::TypeTiDBVectorFloat32);
+                ASSERT_EQ(col1.id, 2);
+            },
+        },
+        // VectorIndex defined in the ColumnInfo
+        ParseCase{
+            R"json({"cols":[{"comment":"hnsw(distance=l2)","default":null,"default_bit":null,"id":1,"name":{"L":"v","O":"v"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":128,"Flen":5,"Tp":225},"vector_index":{"dimension":5,"distance_metric":"L2","kind":"HNSW"}}],"comment":"","id":96,"index_info":[],"is_common_handle":false,"keyspace_id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":451956855279976452})json",
+            [](const TableInfo & table_info) {
+                ASSERT_EQ(table_info.index_infos.size(), 0);
+                ASSERT_EQ(table_info.columns.size(), 1);
+                auto col = table_info.columns[0];
+                ASSERT_EQ(col.name, "v");
+                ASSERT_EQ(col.tp, TiDB::TP::TypeTiDBVectorFloat32);
+                ASSERT_EQ(col.id, 1);
+                auto vector_index_on_col = col.vector_index;
+                ASSERT_NE(vector_index_on_col, nullptr);
+                ASSERT_EQ(vector_index_on_col->kind, tipb::VectorIndexKind::HNSW);
+                ASSERT_EQ(vector_index_on_col->dimension, 5);
+                ASSERT_EQ(vector_index_on_col->distance_metric, tipb::VectorDistanceMetric::L2);
+            },
+        },
+        ParseCase{
+            R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col","O":"col"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4099,"Flen":20,"Tp":8}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"v","O":"v"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":128,"Flen":5,"Tp":225}}],"comment":"","id":96,"index_info":[{"id":4,"idx_cols":[{"length":-1,"name":{"L":"v","O":"v"},"offset":1}],"idx_name":{"L":"idx_v_l2","O":"idx_v_l2"},"index_type":5,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"state":3,"vector_index":{"dimension":5,"distance_metric":"L2","kind":"HNSW"}},{"id":3,"idx_cols":[{"length":-1,"name":{"L":"col","O":"col"},"offset":0}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5}],"is_common_handle":false,"keyspace_id":1,"name":{"L":"ti","O":"ti"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":452024291984670725})json",
+            [](const TableInfo & table_info) {
+                // vector index && primary index
+                // primary index alwasy be put at the first
+                ASSERT_EQ(table_info.index_infos.size(), 2);
+                auto idx0 = table_info.index_infos[0];
+                ASSERT_TRUE(idx0.is_primary);
+                ASSERT_TRUE(idx0.is_unique);
+                ASSERT_EQ(idx0.id, 3);
+                ASSERT_EQ(idx0.idx_name, "primary");
+                ASSERT_EQ(idx0.idx_cols.size(), 1);
+                ASSERT_EQ(idx0.idx_cols[0].name, "col");
+                ASSERT_EQ(idx0.idx_cols[0].offset, 0);
+                ASSERT_EQ(idx0.vector_index, nullptr);
+                // vec index
+                auto idx1 = table_info.index_infos[1];
+                ASSERT_EQ(idx1.id, 4);
+                ASSERT_EQ(idx1.idx_name, "idx_v_l2");
+                ASSERT_EQ(idx1.idx_cols.size(), 1);
+                ASSERT_EQ(idx1.idx_cols[0].name, "v");
+                ASSERT_EQ(idx1.idx_cols[0].offset, 1);
+                ASSERT_NE(idx1.vector_index, nullptr);
+                ASSERT_EQ(idx1.vector_index->kind, tipb::VectorIndexKind::HNSW);
+                ASSERT_EQ(idx1.vector_index->dimension, 5);
+                ASSERT_EQ(idx1.vector_index->distance_metric, tipb::VectorDistanceMetric::L2);
+
+                ASSERT_EQ(table_info.columns.size(), 2);
+                auto col0 = table_info.columns[0];
+                ASSERT_EQ(col0.name, "col");
+                ASSERT_EQ(col0.tp, TiDB::TP::TypeLongLong);
+                ASSERT_EQ(col0.id, 1);
+                auto col1 = table_info.columns[1];
+                ASSERT_EQ(col1.name, "v");
+                ASSERT_EQ(col1.tp, TiDB::TP::TypeTiDBVectorFloat32);
+                ASSERT_EQ(col1.id, 2);
+            }}};
+
+    for (const auto & c : cases)
+    {
+        TableInfo table_info(c.table_info_json, NullspaceID);
+        c.check(table_info);
+    }
+}
+CATCH
+
 struct StmtCase
 {
     TableID table_or_partition_id;

@@ -261,6 +261,8 @@ struct IndexInfo
     bool is_primary = false;
     bool is_invisible = false;
     bool is_global = false;
+
+    VectorIndexDefinitionPtr vector_index = nullptr;
 };
 
 struct TableInfo
@@ -331,6 +333,7 @@ struct TableInfo
 
     /// should not be called if is_common_handle = false.
     const IndexInfo & getPrimaryIndexInfo() const;
+
     size_t numColumnsInKey() const;
 };
 
