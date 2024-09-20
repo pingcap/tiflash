@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Common/StringUtils/StringRefUtils.h>
 #include <Databases/DatabaseTiFlash.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -23,7 +21,6 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Poco/File.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
@@ -32,7 +29,6 @@
 #include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
-#include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
