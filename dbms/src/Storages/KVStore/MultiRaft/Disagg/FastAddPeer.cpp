@@ -294,10 +294,18 @@ FastAddPeerRes FastAddPeerImplWrite(
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time)
 {
-    auto log = Logger::get("FastAddPeer(region_id={} keyspace={} table_id={})");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
+    auto keyspace_id = region->getKeyspaceID();
+    auto table_id = region->getMappedTableID();
+
+    auto log = Logger::get(fmt::format(
+        "FastAddPeer(region_id={} keyspace={} table_id={} new_peer_id={})",
+        region_id,
+        keyspace_id,
+        table_id,
+        new_peer_id));
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage).Observe(watch.elapsedSeconds()); });
@@ -306,8 +314,6 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     auto [checkpoint_info, region, apply_state, region_state] = checkpoint;
 
-    auto keyspace_id = region->getKeyspaceID();
-    auto table_id = region->getMappedTableID();
     const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region_id, keyspace_id, table_id, tmt);
     if (!storage)
     {
