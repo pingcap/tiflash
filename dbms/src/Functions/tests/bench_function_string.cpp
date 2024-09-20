@@ -17,8 +17,8 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <benchmark/benchmark.h>
 
-/// this is a hack, include the cpp file so we can test MatchImpl directly
-#include <Functions/FunctionsString.cpp>
+/// this is a hack, include the cpp file so we can test functions directly
+#include <Functions/FunctionsString.cpp> // NOLINT
 #include <Functions/FunctionsStringSearch.cpp> // NOLINT
 
 namespace DB
@@ -305,6 +305,66 @@ BENCH_LIKE_COLLATOR(UTF8_UNICODE_CI);
 BENCH_LIKE_COLLATOR(ASCII_BIN);
 BENCH_LIKE_COLLATOR(BINARY);
 BENCH_LIKE_COLLATOR(LATIN1_BIN);
+
+class LengthBench : public benchmark::Fixture
+{
+public:
+    using ColStringType = typename TypeTraits<String>::FieldType;
+
+    ColumnsWithTypeAndName data1{toVec<String>("col", std::vector<ColStringType>(data_num, ""))};
+    ColumnsWithTypeAndName data2{toVec<String>("col", std::vector<ColStringType>(data_num, "aaaaaaaaaa"))};
+    ColumnsWithTypeAndName data3{toVec<String>("col", std::vector<ColStringType>(data_num, "啊aaaaaaaa"))};
+
+    void SetUp(const benchmark::State &) override {}
+};
+
+BENCHMARK_DEFINE_F(LengthBench, bench)
+(benchmark::State & state)
+try
+{
+    FunctionLength function_length;
+    std::vector<Block> blocks{Block(data1), Block(data2), Block(data3)};
+    for (auto & block : blocks)
+        block.insert({nullptr, std::make_shared<DataTypeNumber<UInt8>>(), "res"});
+    ColumnNumbers arguments{0};
+    for (auto _ : state)
+    {
+        for (auto & block : blocks)
+            function_length.executeImpl(block, arguments, 1);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LengthBench, bench)->Iterations(10);
+
+class ASCIIBench : public benchmark::Fixture
+{
+public:
+    using ColStringType = typename TypeTraits<String>::FieldType;
+
+    ColumnsWithTypeAndName data1{toVec<String>("col", std::vector<ColStringType>(data_num, ""))};
+    ColumnsWithTypeAndName data2{toVec<String>("col", std::vector<ColStringType>(data_num, "aaaaaaaaaa"))};
+    ColumnsWithTypeAndName data3{toVec<String>("col", std::vector<ColStringType>(data_num, "啊aaaaaaaa"))};
+
+    void SetUp(const benchmark::State &) override {}
+};
+
+BENCHMARK_DEFINE_F(ASCIIBench, bench)
+(benchmark::State & state)
+try
+{
+    FunctionASCII function_ascii;
+    std::vector<Block> blocks{Block(data1), Block(data2), Block(data3)};
+    for (auto & block : blocks)
+        block.insert({nullptr, std::make_shared<DataTypeNumber<UInt8>>(), "res"});
+    ColumnNumbers arguments{0};
+    for (auto _ : state)
+    {
+        for (auto & block : blocks)
+            function_ascii.executeImpl(block, arguments, 1);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(ASCIIBench, bench)->Iterations(10);
 
 } // namespace tests
 } // namespace DB
