@@ -457,23 +457,6 @@ ColumnPtr DMFileReader::readExtraColumn(
 {
     assert(cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == TAG_COLUMN_ID || cd.id == VERSION_COLUMN_ID);
 
-    if (column_cache_long_term && cd.id == pk_col_id && ColumnCacheLongTerm::isCacheableColumn(cd))
-    {
-        // ColumnCacheLongTerm only caches user assigned PrimaryKey column.
-        auto column_all_data
-            = column_cache_long_term->get(dmfile->parentPath(), dmfile->fileId(), cd.id, [&]() -> IColumn::Ptr {
-                  // Always read all packs when filling cache
-                  ColumnPtr column;
-                  readFromDiskOrSharingCache(cd, column, 0, dmfile->getPacks(), dmfile->getRows());
-                  return column;
-              });
-
-        auto column = cd.type->createColumn();
-        column->reserve(read_rows);
-        column->insertRangeFrom(*column_all_data, next_row_offset - read_rows, read_rows);
-        return column;
-    }
-
     const auto & pack_stats = dmfile->getPackStats();
     auto read_strategy = ColumnCache::getReadStrategy(start_pack_id, pack_count, clean_read_packs);
     if (read_strategy.size() != 1 && cd.id == EXTRA_HANDLE_COLUMN_ID)
@@ -533,6 +516,24 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
     // New column after ddl is not exist in this DMFile, fill with default value
     if (!column_streams.contains(DMFile::getFileNameBase(cd.id)))
         return createColumnWithDefaultValue(cd, read_rows);
+
+    if (column_cache_long_term && cd.id == pk_col_id && ColumnCacheLongTerm::isCacheableColumn(cd))
+    {
+        // ColumnCacheLongTerm only caches user assigned PrimaryKey column.
+        auto data_type = dmfile->getColumnStat(cd.id).type;
+        auto column_all_data
+            = column_cache_long_term->get(dmfile->parentPath(), dmfile->fileId(), cd.id, [&]() -> IColumn::Ptr {
+                  // Always read all packs when filling cache
+                  ColumnPtr column;
+                  readFromDiskOrSharingCache(cd, column, 0, dmfile->getPacks(), dmfile->getRows());
+                  return column;
+              });
+
+        auto column = data_type->createColumn();
+        column->reserve(read_rows);
+        column->insertRangeFrom(*column_all_data, next_row_offset - read_rows, read_rows);
+        return convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+    }
 
     // Not cached
     if (!enable_column_cache || !isCacheableColumn(cd))

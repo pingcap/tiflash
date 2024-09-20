@@ -45,19 +45,6 @@ public:
     inline UInt32 size() const { return filter_size; }
 
     inline UInt32 offset() const { return filter_offset; }
-
-    String toDebugString() const
-    {
-        String s(size(), '1');
-        for (UInt32 i = 0; i < size(); i++)
-        {
-            if (!get(i))
-            {
-                s[i] = '0';
-            }
-        }
-        return s;
-    }
 };
 
 } // namespace DB::DM
