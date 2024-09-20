@@ -65,7 +65,7 @@ public:
         return wb.str();
     }
 
-    ColumnDefine cdVec()
+    ColumnDefine cdVec() const
     {
         // When used in read, no need to assign vector_index.
         return ColumnDefine(vec_column_id, vec_column_name, ::DB::tests::typeFromString("Array(Float32)"));
@@ -157,7 +157,7 @@ public:
             {cdVec()},
             {range},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             filter,
             std::vector<RuntimeFilterPtr>{},
             0,
