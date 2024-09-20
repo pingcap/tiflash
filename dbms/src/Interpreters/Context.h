@@ -28,7 +28,6 @@
 #include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
 
-#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
