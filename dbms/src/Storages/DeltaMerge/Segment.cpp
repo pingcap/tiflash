@@ -456,6 +456,8 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     PageIdU64 current_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
+    // - Set to `true`: The building task is done.
+    // - Set to `false`: It is not build yet, or it is building.
     bool is_cache_ready = false;
     // If there is a table building cache, then other table may block to read the built cache.
     // If the remote reader causes much time to retrieve data, then these tasks could block here.
@@ -485,8 +487,13 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         else
         {
             // Otherwise, requires a write lock to build cache.
+            // Multiple builders could block on this write lock.
             lock = end_to_segment_id_cache->writeLock();
+            // When a builder get the write lock, we have to check again whether the cache is ready now.
+            is_cache_ready = end_to_segment_id_cache->isReady(lock);
         }
+        // - is_cache_ready = true, we could hold a write lock or a read lock.
+        // - is_cache_ready = false, we must hold a write lock.
         LOG_DEBUG(log, "Read segment meta info from segment {}", current_segment_id);
         // Caches all built segments.
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
