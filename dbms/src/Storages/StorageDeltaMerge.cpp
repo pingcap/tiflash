@@ -302,6 +302,21 @@ void StorageDeltaMerge::updateTableColumnInfo()
     }
     rowkey_column_size = rowkey_column_defines.size();
 
+    {
+        std::vector<ColumnID> pk_col_ids;
+        for (const auto & col : tidb_table_info.columns)
+        {
+            if (col.hasPriKeyFlag())
+                pk_col_ids.push_back(col.id);
+        }
+        if (pk_col_ids.size() == 1)
+            pk_col_id = pk_col_ids[0];
+        else
+            pk_col_id = 0;
+
+        // TODO: Handle with PK change: drop old PK column cache rather than let LRU evict it.
+    }
+
     LOG_INFO(
         log,
         "updateTableColumnInfo finished, table_name={} table_column_defines={}",
@@ -1837,6 +1852,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
             table_column_info->table_name,
             tidb_table_info.keyspace_id,
             tidb_table_info.id,
+            pk_col_id,
             tidb_table_info.replica_info.count > 0,
             std::move(table_column_info->table_column_defines),
             std::move(table_column_info->handle_column_define),

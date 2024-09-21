@@ -71,6 +71,7 @@ std::pair<Block, bool> readBlockWithReturnFilter(
         stable = nullptr;
         if (delta != nullptr)
         {
+            filter = nullptr;
             block = delta->read(filter, true);
         }
         return {block, true};

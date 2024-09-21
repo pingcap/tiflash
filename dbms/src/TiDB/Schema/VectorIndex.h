@@ -69,7 +69,7 @@ struct fmt::formatter<TiDB::VectorIndexDefinitionPtr>
     auto format(const TiDB::VectorIndexDefinitionPtr & vi, FormatContext & ctx) const -> decltype(ctx.out())
     {
         if (!vi)
-            return fmt::format_to(ctx.out(), "<no_idx>");
+            return fmt::format_to(ctx.out(), "");
         return fmt::format_to(ctx.out(), "{}", *vi);
     }
 };

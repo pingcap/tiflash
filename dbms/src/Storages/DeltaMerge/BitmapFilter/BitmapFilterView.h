@@ -53,15 +53,6 @@ public:
     inline UInt32 size() const { return filter_size; }
 
     inline UInt32 offset() const { return filter_offset; }
-
-    // Return how many valid rows.
-    size_t count() const
-    {
-        return std::count(
-            filter->filter.cbegin() + filter_offset,
-            filter->filter.cbegin() + filter_offset + filter_size,
-            true);
-    }
 };
 
 } // namespace DB::DM

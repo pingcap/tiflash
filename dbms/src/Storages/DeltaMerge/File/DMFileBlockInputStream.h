@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
@@ -179,6 +180,16 @@ public:
         return *this;
     }
 
+    /**
+     * @note To really enable the long term cache, you also need to ensure
+     * ColumnCacheLongTerm is initialized in the global context.
+     */
+    DMFileBlockInputStreamBuilder & enableColumnCacheLongTerm(ColumnID pk_col_id_)
+    {
+        pk_col_id = pk_col_id_;
+        return *this;
+    }
+
 private:
     // These methods are called by the ctor
 
@@ -187,11 +198,13 @@ private:
     DMFileBlockInputStreamBuilder & setCaches(
         const MarkCachePtr & mark_cache_,
         const MinMaxIndexCachePtr & index_cache_,
-        const VectorIndexCachePtr & vector_index_cache_)
+        const VectorIndexCachePtr & vector_index_cache_,
+        const ColumnCacheLongTermPtr & column_cache_long_term_)
     {
         mark_cache = mark_cache_;
         index_cache = index_cache_;
         vector_index_cache = vector_index_cache_;
+        column_cache_long_term = column_cache_long_term_;
         return *this;
     }
 
@@ -224,6 +237,10 @@ private:
     VectorIndexCachePtr vector_index_cache;
     // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig
     std::optional<BitmapFilterView> bitmap_filter;
+
+    // Note: column_cache_long_term is currently only filled when performing Vector Search.
+    ColumnCacheLongTermPtr column_cache_long_term = nullptr;
+    ColumnID pk_col_id = 0;
 };
 
 /**

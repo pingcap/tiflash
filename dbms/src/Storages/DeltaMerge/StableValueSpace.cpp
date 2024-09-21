@@ -489,6 +489,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     {
         DMFileBlockInputStreamBuilder builder(context.global_context);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
+            .enableColumnCacheLongTerm(context.pk_col_id)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)

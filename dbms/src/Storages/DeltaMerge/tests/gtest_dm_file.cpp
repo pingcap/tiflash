@@ -135,6 +135,7 @@ public:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             false,
             1,
             db_context->getSettingsRef());
@@ -1969,6 +1970,7 @@ public:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             is_common_handle,
             rowkey_column_size,
             db_context->getSettingsRef());

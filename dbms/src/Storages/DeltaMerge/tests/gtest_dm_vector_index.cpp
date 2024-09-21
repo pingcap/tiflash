@@ -16,6 +16,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
@@ -99,6 +100,7 @@ public:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             false,
             1,
             db_context->getSettingsRef());
@@ -808,6 +810,14 @@ class VectorIndexSegmentTestBase
     , public SegmentTestBasic
 {
 public:
+    void SetUp() override
+    {
+        auto options = SegmentTestBasic::SegmentTestOptions{};
+        if (enable_column_cache_long_term)
+            options.pk_col_id = EXTRA_HANDLE_COLUMN_ID;
+        SegmentTestBasic::SetUp(options);
+    }
+
     BlockInputStreamPtr annQuery(
         PageIdU64 segment_id,
         Int64 begin,
@@ -880,6 +890,7 @@ protected:
     // DMFile has different logic when there is only vec column.
     // So we test it independently.
     bool test_only_vec_column = false;
+    bool enable_column_cache_long_term = false;
     int pack_size = 10;
 
     ColumnsWithTypeAndName createColumnData(const ColumnsWithTypeAndName & columns) const
@@ -1108,6 +1119,158 @@ try
     assertStreamOut(stream, "[20, 30)|[15, 18)|[50, 60)");
 }
 CATCH
+
+class ColumnCacheLongTermTestCacheNotEnabled
+    : public VectorIndexSegmentTestBase
+    , public testing::WithParamInterface<bool>
+{
+public:
+    ColumnCacheLongTermTestCacheNotEnabled()
+    {
+        enable_column_cache_long_term = false;
+        test_only_vec_column = GetParam();
+    }
+};
+
+INSTANTIATE_TEST_CASE_P( //
+    VectorIndex,
+    ColumnCacheLongTermTestCacheNotEnabled,
+    /* vec_only */ ::testing::Bool());
+
+TEST_P(ColumnCacheLongTermTestCacheNotEnabled, Basic)
+try
+{
+    // When cache is not enabled, no matter we read from vec column or not, we should not record
+    // any cache hit or miss.
+
+    ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0, /* clear */ false);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+
+    size_t cache_hit = 0;
+    size_t cache_miss = 0;
+    db_context->getColumnCacheLongTerm()->clear();
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 0);
+    ASSERT_EQ(cache_miss, 0);
+
+    auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
+    assertStreamOut(stream, "[99, 100)");
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 0);
+    ASSERT_EQ(cache_miss, 0);
+}
+CATCH
+
+class ColumnCacheLongTermTestCacheEnabledAndNoReadPK
+    : public VectorIndexSegmentTestBase
+    , public testing::WithParamInterface<bool /* unused */>
+{
+public:
+    ColumnCacheLongTermTestCacheEnabledAndNoReadPK()
+    {
+        enable_column_cache_long_term = true;
+        test_only_vec_column = true;
+    }
+};
+
+INSTANTIATE_TEST_CASE_P( //
+    VectorIndex,
+    ColumnCacheLongTermTestCacheEnabledAndNoReadPK,
+    /* unused */ ::testing::Bool());
+
+TEST_P(ColumnCacheLongTermTestCacheEnabledAndNoReadPK, Basic)
+try
+{
+    // When cache is enabled, if we do not read PK, we should not record
+    // any cache hit or miss.
+
+    ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0, /* clear */ false);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+
+    size_t cache_hit = 0;
+    size_t cache_miss = 0;
+    db_context->getColumnCacheLongTerm()->clear();
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 0);
+    ASSERT_EQ(cache_miss, 0);
+
+    auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
+    assertStreamOut(stream, "[99, 100)");
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 0);
+    ASSERT_EQ(cache_miss, 0);
+}
+CATCH
+
+class ColumnCacheLongTermTestCacheEnabledAndReadPK
+    : public VectorIndexSegmentTestBase
+    , public testing::WithParamInterface<int /* pack_size */>
+{
+public:
+    ColumnCacheLongTermTestCacheEnabledAndReadPK()
+    {
+        enable_column_cache_long_term = true;
+        test_only_vec_column = false;
+        pack_size = GetParam();
+    }
+};
+
+INSTANTIATE_TEST_CASE_P( //
+    VectorIndex,
+    ColumnCacheLongTermTestCacheEnabledAndReadPK,
+    /* pack_size */ ::testing::Values(1, 2, 3, 4, 5));
+
+
+TEST_P(ColumnCacheLongTermTestCacheEnabledAndReadPK, Basic)
+try
+{
+    // When cache is enabled, if we read from PK column, we could record
+    // cache hit and miss.
+
+    ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0, /* clear */ false);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+
+    size_t cache_hit = 0;
+    size_t cache_miss = 0;
+    db_context->getColumnCacheLongTerm()->clear();
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 0);
+    ASSERT_EQ(cache_miss, 0);
+
+    auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
+    assertStreamOut(stream, "[99, 100)");
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 0);
+    ASSERT_EQ(cache_miss, 1);
+
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
+    assertStreamOut(stream, "[99, 100)");
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 1);
+    ASSERT_EQ(cache_miss, 1);
+
+    // Read from possibly another pack, should still hit cache.
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {0.0});
+    assertStreamOut(stream, "[0, 1)");
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 2);
+    ASSERT_EQ(cache_miss, 1);
+
+    // Query over multiple packs (for example, when pack_size=1, this should query over 10 packs)
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 10, {100.0});
+    assertStreamOut(stream, "[90, 100)");
+    db_context->getColumnCacheLongTerm()->getStats(cache_hit, cache_miss);
+    ASSERT_EQ(cache_hit, 3);
+    ASSERT_EQ(cache_miss, 1);
+}
+CATCH
+
 
 class VectorIndexSegmentExtraColumnTest
     : public VectorIndexSegmentTestBase
@@ -1417,6 +1580,7 @@ protected:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             false,
             1,
             db_context->getSettingsRef(),

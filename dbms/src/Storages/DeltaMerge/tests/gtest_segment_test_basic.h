@@ -27,25 +27,25 @@
 #include <random>
 #include <vector>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 class SegmentTestBasic : public DB::base::TiFlashStorageTestBasic
 {
 public:
     struct SegmentTestOptions
     {
         bool is_common_handle = false;
+        ColumnID pk_col_id = 0;
         DB::Settings db_settings;
     };
 
-    void SetUp() override
+    void SetUp() override { SetUp({}); }
+
+    void SetUp(const SegmentTestOptions & options)
     {
         TiFlashStorageTestBasic::SetUp();
-        reloadWithOptions({});
+        reloadWithOptions(options);
     }
 
 public:
@@ -188,6 +188,5 @@ protected:
     LoggerPtr logger_op;
     LoggerPtr logger;
 };
-} // namespace tests
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM::tests

@@ -103,11 +103,7 @@ public:
     }
 
     void insertDefault() override;
-    void insertManyDefaults(size_t length) override
-    {
-        for (size_t i = 0; i < length; ++i)
-            insertDefault();
-    }
+    void insertManyDefaults(size_t length) override;
     void popBack(size_t n) override;
     /// TODO: If result_size_hint < 0, makes reserve() using size of filtered column, not source column to avoid some OOM issues.
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;

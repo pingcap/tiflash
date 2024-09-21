@@ -109,6 +109,7 @@ namespace DM
 {
 class MinMaxIndexCache;
 class VectorIndexCache;
+class ColumnCacheLongTerm;
 class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
@@ -396,6 +397,10 @@ public:
     void setVectorIndexCache(size_t cache_entities);
     std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
     void dropVectorIndexCache() const;
+
+    void setColumnCacheLongTerm(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::ColumnCacheLongTerm> getColumnCacheLongTerm() const;
+    void dropColumnCacheLongTerm() const;
 
     bool isDeltaIndexLimited() const;
     void setDeltaIndexManager(size_t cache_size_in_bytes);

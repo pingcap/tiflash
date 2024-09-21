@@ -290,6 +290,7 @@ private:
         const String & table_name_,
         KeyspaceID keyspace_id_,
         TableID physical_table_id_,
+        ColumnID pk_col_id_,
         bool has_replica,
         const ColumnDefines & columns,
         const ColumnDefine & handle,
@@ -307,22 +308,7 @@ public:
         const String & table_name_,
         KeyspaceID keyspace_id_,
         TableID physical_table_id_,
-        bool has_replica,
-        const ColumnDefines & columns,
-        const ColumnDefine & handle,
-        bool is_common_handle_,
-        size_t rowkey_column_size_,
-        IndexInfosPtr local_index_infos_,
-        const Settings & settings_ = EMPTY_SETTINGS,
-        ThreadPool * thread_pool = nullptr);
-
-    static std::unique_ptr<DeltaMergeStore> createUnique(
-        Context & db_context,
-        bool data_path_contains_database_name,
-        const String & db_name,
-        const String & table_name_,
-        KeyspaceID keyspace_id_,
-        TableID physical_table_id_,
+        ColumnID pk_col_id_,
         bool has_replica,
         const ColumnDefines & columns,
         const ColumnDefine & handle,
@@ -931,6 +917,10 @@ public:
     ColumnDefines original_table_columns;
     BlockPtr original_table_header; // Used to speed up getHeader()
     ColumnDefine original_table_handle_define;
+
+    /// The user-defined PK column. If multi-column PK, or no PK, it is 0.
+    /// Note that user-defined PK will never be _tidb_rowid.
+    ColumnID pk_col_id;
 
     // The columns we actually store.
     // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK

@@ -410,7 +410,8 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
                     store_id,
                     store_address,
                     table.keyspace_id(),
-                    table.table_id());
+                    table.table_id(),
+                    table.pk_col_id());
                 std::lock_guard lock(output_lock);
                 output_seg_tasks.push_back(seg_read_task);
             },
