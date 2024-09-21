@@ -1620,6 +1620,8 @@ void Join::joinBlockNullAwareImpl(
         right_side_info);
 
     RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+    if (is_cancelled())
+        return {};
 
     size_t right_columns = block.columns() - left_columns;
 
