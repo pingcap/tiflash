@@ -167,9 +167,18 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
+<<<<<<< HEAD
     String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, scan_hash_map_after_probe = {}", execId(), needScanHashMapAfterProbe(join_ptr->getKind()));
     join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(),
                         probe_pipeline.streams.size());
+=======
+    String join_probe_extra_info = fmt::format(
+        "join probe, join_executor_id = {}, scan_hash_map_after_probe = {}",
+        execId(),
+        needScanHashMapAfterProbe(join_ptr->getKind()));
+    join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(), probe_pipeline.streams.size());
+    join_ptr->setCancellationHook([&] { return context.isCancelled(); });
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
     size_t probe_index = 0;
     for (auto & stream : probe_pipeline.streams)
     {

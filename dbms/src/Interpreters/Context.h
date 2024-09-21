@@ -18,8 +18,13 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
+<<<<<<< HEAD
 #include <Encryption/FileProvider_fwd.h>
 #include <IO/CompressionSettings.h>
+=======
+#include <IO/FileProvider/FileProvider_fwd.h>
+#include <Interpreters/CancellationHook.h>
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
@@ -35,6 +40,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_set>
+
 
 namespace pingcap
 {
@@ -179,6 +185,9 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
     /// Use copy constructor or createGlobal() instead
@@ -231,8 +240,8 @@ public:
     /// Compute and set actual user settings, client_info.current_user should be set
     void calculateUserSettings();
 
-    ClientInfo & getClientInfo() { return client_info; };
-    const ClientInfo & getClientInfo() const { return client_info; };
+    ClientInfo & getClientInfo() { return client_info; }
+    const ClientInfo & getClientInfo() const { return client_info; }
 
     void setQuota(const String & name, const String & quota_key, const String & user_name, const Poco::Net::IPAddress & address);
     QuotaForIntervals & getQuota();
@@ -355,6 +364,9 @@ public:
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
 
+    bool isCancelled() const { return is_cancelled(); }
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
+
     /// List all queries.
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
@@ -474,8 +486,8 @@ public:
 
     SharedQueriesPtr getSharedQueries();
 
-    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
-    TimezoneInfo & getTimezoneInfo() { return timezone_info; };
+    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; }
+    TimezoneInfo & getTimezoneInfo() { return timezone_info; }
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;

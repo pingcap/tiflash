@@ -16,7 +16,15 @@
 
 namespace DB
 {
+<<<<<<< HEAD
 void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook)
+=======
+void AggregateContext::initBuild(
+    const Aggregator::Params & params,
+    size_t max_threads_,
+    CancellationHook && hook,
+    const RegisterOperatorSpillContext & register_operator_spill_context)
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 {
     RUNTIME_CHECK(!inited_build && !inited_convergent);
     max_threads = max_threads_;

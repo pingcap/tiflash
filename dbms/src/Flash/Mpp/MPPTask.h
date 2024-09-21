@@ -121,7 +121,12 @@ private:
     ContextPtr context;
 
     MPPTaskManager * manager;
+<<<<<<< HEAD
     std::atomic<bool> registered{false};
+=======
+    std::atomic<bool> is_registered{false};
+    std::atomic<bool> is_cancelled{false};
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 
     MPPTaskScheduleEntry schedule_entry;
 

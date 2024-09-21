@@ -22,6 +22,12 @@
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+<<<<<<< HEAD
+=======
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
+#include <Interpreters/AggregationCommon.h>
+#include <Interpreters/CancellationHook.h>
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
@@ -250,6 +256,25 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
+<<<<<<< HEAD
+=======
+    // std::unordered_map<partition_index, Blocks>
+    using MarkedSpillData = std::unordered_map<size_t, Blocks>;
+
+    MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index) const;
+    bool hasBuildSideMarkedSpillData(size_t stream_index) const;
+    void flushBuildSideMarkedSpillData(size_t stream_index);
+
+    MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index) const;
+    bool hasProbeSideMarkedSpillData(size_t stream_index) const;
+    void flushProbeSideMarkedSpillData(size_t stream_index);
+    size_t getProbeCacheColumnThreshold() const { return probe_cache_column_threshold; }
+
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
+
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -365,6 +390,17 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+<<<<<<< HEAD
+=======
+    // the index of vector is the stream_index.
+    std::vector<MarkedSpillData> build_side_marked_spilled_data;
+    std::vector<MarkedSpillData> probe_side_marked_spilled_data;
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
+
+private:
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
       */

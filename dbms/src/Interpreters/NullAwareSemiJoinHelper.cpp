@@ -206,13 +206,15 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     const BlocksList & right_blocks_,
     const std::vector<RowsNotInsertToMap *> & null_rows_,
     size_t max_block_size_,
-    const JoinNonEqualConditions & non_equal_conditions_)
+    const JoinNonEqualConditions & non_equal_conditions_,
+    CancellationHook is_cancelled_)
     : block(block_)
     , left_columns(left_columns_)
     , right_columns(right_columns_)
     , right_blocks(right_blocks_)
     , null_rows(null_rows_)
     , max_block_size(max_block_size_)
+    , is_cancelled(is_cancelled_)
     , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti
@@ -242,17 +244,17 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
         res_list.swap(next_step_res_list);
     }
 
-    if (res_list.empty())
+    if (is_cancelled() || res_list.empty())
         return;
 
     runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list);
     res_list.swap(next_step_res_list);
-    if (res_list.empty())
+    if (is_cancelled() || res_list.empty())
         return;
 
     runStep<NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list);
     res_list.swap(next_step_res_list);
-    if (res_list.empty())
+    if (is_cancelled() || res_list.empty())
         return;
 
     runStepAllBlocks(res_list);
@@ -282,6 +284,8 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
 
     while (!res_list.empty())
     {
+        if (is_cancelled())
+            return;
         MutableColumns columns(block_columns);
         for (size_t i = 0; i < block_columns; ++i)
         {
@@ -337,6 +341,8 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
         NASemiJoinHelper::Result * res = *res_list.begin();
         for (const auto & right_block : right_blocks)
         {
+            if (is_cancelled())
+                return;
             if (res->getStep() == NASemiJoinStep::DONE)
                 break;
 
