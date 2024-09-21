@@ -520,6 +520,9 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
 
+    // set cancellation hook
+    context->setCancellationHook([this] { return is_cancelled.load(); });
+
     String err_msg;
     try
     {
@@ -746,7 +749,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         if (previous_status == FINISHED || previous_status == CANCELLED || previous_status == FAILED)
         {
             LOG_WARNING(log, "task already in {} state", magic_enum::enum_name(previous_status));
-            return;
+            break;
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))
         {
@@ -755,7 +758,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// so just close all tunnels here
             abortTunnels("", false);
             LOG_WARNING(log, "Finish abort task from uninitialized");
-            return;
+            break;
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, next_task_status))
         {
@@ -769,9 +772,10 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish abort task from running");
-            return;
+            break;
         }
     }
+    is_cancelled = true;
 }
 
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
