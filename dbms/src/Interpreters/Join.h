@@ -25,6 +25,7 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/HashJoinSpillContext.h>
 #include <Interpreters/JoinHashMap.h>
@@ -314,6 +315,8 @@ public:
     void flushProbeSideMarkedSpillData(size_t stream_index);
     size_t getProbeCacheColumnThreshold() const { return probe_cache_column_threshold; }
 
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
+
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -452,6 +455,9 @@ private:
     // the index of vector is the stream_index.
     std::vector<MarkedSpillData> build_side_marked_spilled_data;
     std::vector<MarkedSpillData> probe_side_marked_spilled_data;
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
 
 private:
     /** Set information about structure of right hand of JOIN (joined data).

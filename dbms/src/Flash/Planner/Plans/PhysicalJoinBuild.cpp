@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalJoinBuild.h>
 #include <Interpreters/Context.h>
@@ -39,6 +40,7 @@ void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     join_execute_info.join_build_profile_infos = group_builder.getCurProfileInfos();
     join_ptr->initBuild(group_builder.getCurrentHeader(), group_builder.concurrency());
     join_ptr->setInitActiveBuildThreads();
+    join_ptr->setCancellationHook([&]() { return exec_context.isCancelled(); });
     join_ptr.reset();
 }
 } // namespace DB
