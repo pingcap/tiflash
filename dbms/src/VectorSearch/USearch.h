@@ -23,10 +23,10 @@
 
 // Force enable all target features.
 #define SIMSIMD_TARGET_NEON 1
-#define SIMSIMD_TARGET_SVE 0 // Clang13's header does not support enableing SVE for region
+#define SIMSIMD_TARGET_SVE 1
 #define SIMSIMD_TARGET_HASWELL 1
-#define SIMSIMD_TARGET_SKYLAKE 0 // Clang13 does not support AVX512
-#define SIMSIMD_TARGET_ICE 0
+#define SIMSIMD_TARGET_SKYLAKE 1
+#define SIMSIMD_TARGET_ICE 1
 #define SIMSIMD_TARGET_GENOA 0
 #define SIMSIMD_TARGET_SAPPHIRE 0
 
