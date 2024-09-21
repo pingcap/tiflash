@@ -1714,7 +1714,6 @@ void Join::joinBlockNullAwareImpl(
         for (size_t i = 0; i < left_columns; ++i)
             block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, rows_for_anti);
     }
-    return block;
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
