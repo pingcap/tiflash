@@ -1634,9 +1634,160 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// handle other conditions
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
+<<<<<<< HEAD
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
+=======
+        assert(offsets_to_replicate != nullptr);
+        handleOtherConditions(block, nullptr, offsets_to_replicate.get());
+
+        if (useRowFlaggedHashMap(kind, has_other_condition))
+        {
+            // set hash table used flag using SemiMapped column
+            auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
+            const auto & ptr_col = static_cast<const PointerHelper::ColumnType &>(*mapped_column);
+            const auto & container = static_cast<const PointerHelper::ArrayType &>(ptr_col.getData());
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                auto ptr_value = container[i];
+                auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
+                current->setUsed();
+            }
+
+            if (isRightSemiFamily(kind))
+            {
+                // Return build table header for right semi/anti join
+                block = right_sample_block;
+            }
+            else if (kind == ASTTableJoin::Kind::RightOuter)
+            {
+                block.erase(flag_mapped_entry_helper_name);
+            }
+        }
+    }
+
+    return block;
+}
+
+Block Join::removeUselessColumn(Block & block) const
+{
+    Block projected_block;
+    for (const auto & name_and_type : output_columns_after_finalize)
+    {
+        auto & column = block.getByName(name_and_type.name);
+        projected_block.insert(std::move(column));
+    }
+    return projected_block;
+}
+
+Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
+{
+    std::vector<Block> result_blocks;
+    size_t result_rows = 0;
+    JoinBuildInfo join_build_info{
+        enable_fine_grained_shuffle,
+        fine_grained_shuffle_count,
+        isEnableSpill(),
+        hash_join_spill_context->isSpilled(),
+        build_concurrency,
+        restore_config.restore_round};
+    probe_process_info.prepareForHashProbe(
+        key_names_left,
+        non_equal_conditions.left_filter_column,
+        kind,
+        strictness,
+        join_build_info.needVirtualDispatchForProbeBlock(),
+        collators,
+        restore_config.restore_round);
+    while (true)
+    {
+        if (is_cancelled())
+            return {};
+        auto block = doJoinBlockHash(probe_process_info, join_build_info);
+        assert(block);
+        block = removeUselessColumn(block);
+        result_rows += block.rows();
+        result_blocks.push_back(std::move(block));
+        /// exit the while loop if
+        /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
+        /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
+        if (probe_process_info.all_rows_joined_finish
+            || (may_probe_side_expanded_after_join && result_rows >= probe_process_info.min_result_block_size))
+            break;
+    }
+    assert(!result_blocks.empty());
+    return vstackBlocks(std::move(result_blocks));
+}
+
+Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
+{
+    assert(probe_process_info.prepare_for_probe_done);
+    if (cross_probe_mode == CrossProbeMode::DEEP_COPY_RIGHT_BLOCK)
+    {
+        probe_process_info.updateStartRow<false>();
+        auto block = crossProbeBlockDeepCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
+        if (non_equal_conditions.other_cond_expr != nullptr)
+        {
+            assert(probe_process_info.offsets_to_replicate != nullptr);
+            if (probe_process_info.end_row - probe_process_info.start_row != probe_process_info.block.rows())
+            {
+                probe_process_info.cutFilterAndOffsetVector(probe_process_info.start_row, probe_process_info.end_row);
+            }
+            handleOtherConditions(
+                block,
+                probe_process_info.filter.get(),
+                probe_process_info.offsets_to_replicate.get());
+        }
+        return block;
+    }
+    else if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
+    {
+        probe_process_info.updateStartRow<true>();
+        auto [block, is_matched_rows]
+            = crossProbeBlockShallowCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
+        if (is_matched_rows)
+        {
+            if (non_equal_conditions.other_cond_expr != nullptr)
+            {
+                probe_process_info.cutFilterAndOffsetVector(0, 1);
+                /// for matched rows, each call to `doJoinBlockCross` only handle part of the probed data for one left row, the internal
+                /// state is saved in `probe_process_info`
+                handleOtherConditionsForOneProbeRow(block, probe_process_info);
+            }
+            for (size_t i = 0; i < probe_process_info.cross_join_data->left_column_index_in_left_block.size(); ++i)
+            {
+                auto & name = probe_process_info.block
+                                  .getByPosition(probe_process_info.cross_join_data->left_column_index_in_left_block[i])
+                                  .name;
+                if (block.has(name))
+                {
+                    auto & column_and_name = block.getByName(name);
+                    if (column_and_name.column->isColumnConst())
+                        column_and_name.column = column_and_name.column->convertToFullColumnIfConst();
+                }
+            }
+            if (isLeftOuterSemiFamily(kind))
+            {
+                auto & help_column = block.getByName(match_helper_name);
+                if (help_column.column->isColumnConst())
+                    help_column.column = help_column.column->convertToFullColumnIfConst();
+            }
+        }
+        else if (non_equal_conditions.other_cond_expr != nullptr)
+        {
+            probe_process_info.cutFilterAndOffsetVector(0, block.rows());
+            handleOtherConditions(
+                block,
+                probe_process_info.filter.get(),
+                probe_process_info.offsets_to_replicate.get());
+        }
+        return block;
+    }
+    else
+    {
+        throw Exception(fmt::format("Unsupported cross probe mode: {}", magic_enum::enum_name(cross_probe_mode)));
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
     }
 }
 
@@ -1645,6 +1796,7 @@ namespace
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder;
 
+<<<<<<< HEAD
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
 {
@@ -1652,6 +1804,389 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
     {
         size_t expanded_row_size = 0;
         for (const Block & block_right : blocks)
+=======
+    std::vector<Block> result_blocks;
+    size_t result_rows = 0;
+
+    while (true)
+    {
+        if (is_cancelled())
+            return {};
+        Block block = doJoinBlockCross(probe_process_info);
+        assert(block);
+        block = removeUselessColumn(block);
+        result_rows += block.rows();
+        result_blocks.push_back(std::move(block));
+        if (probe_process_info.all_rows_joined_finish
+            || (may_probe_side_expanded_after_join && result_rows >= probe_process_info.min_result_block_size))
+            break;
+    }
+
+    assert(!result_blocks.empty());
+    return vstackBlocks(std::move(result_blocks));
+}
+
+void Join::checkTypes(const Block & block) const
+{
+    checkTypesOfKeys(block, right_sample_block_only_keys);
+}
+
+Block Join::joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const
+{
+    probe_process_info.prepareForNullAware(key_names_left, non_equal_conditions.left_filter_column);
+
+    Block block{};
+#define CALL(KIND, STRICTNESS, MAP) block = joinBlockNullAwareSemiImpl<KIND, STRICTNESS, MAP>(probe_process_info);
+
+
+    using enum ASTTableJoin::Strictness;
+    using enum ASTTableJoin::Kind;
+    if (kind == NullAware_Anti && strictness == All)
+        CALL(NullAware_Anti, All, MapsAll)
+    else if (kind == NullAware_Anti && strictness == Any)
+        CALL(NullAware_Anti, Any, MapsAny)
+    else if (kind == NullAware_LeftOuterSemi && strictness == All)
+        CALL(NullAware_LeftOuterSemi, All, MapsAll)
+    else if (kind == NullAware_LeftOuterSemi && strictness == Any)
+        CALL(NullAware_LeftOuterSemi, Any, MapsAny)
+    else if (kind == NullAware_LeftOuterAnti && strictness == All)
+        CALL(NullAware_LeftOuterAnti, All, MapsAll)
+    else if (kind == NullAware_LeftOuterAnti && strictness == Any)
+        CALL(NullAware_LeftOuterAnti, Any, MapsAny)
+    else
+        throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
+#undef CALL
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
+
+    /// Null-aware semi join never expand the left block, just handle the whole block at one time is enough
+    probe_process_info.all_rows_joined_finish = true;
+
+    return removeUselessColumn(block);
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_info) const
+{
+    size_t rows = probe_process_info.block.rows();
+    std::vector<RowsNotInsertToMap *> null_rows(partitions.size(), nullptr);
+    for (size_t i = 0; i < partitions.size(); ++i)
+        null_rows[i] = partitions[i]->getRowsNotInsertedToMap();
+
+    NALeftSideInfo left_side_info(
+        probe_process_info.null_map,
+        probe_process_info.null_aware_join_data->filter_map,
+        probe_process_info.null_aware_join_data->all_key_null_map);
+    NARightSideInfo right_side_info(
+        right_has_all_key_null_row.load(std::memory_order_relaxed),
+        right_table_is_empty.load(std::memory_order_relaxed),
+        null_key_check_all_blocks_directly,
+        null_rows);
+    auto [res, res_list] = JoinPartition::probeBlockNullAwareSemi<KIND, STRICTNESS, Maps>(
+        partitions,
+        rows,
+        probe_process_info.null_aware_join_data->key_columns,
+        key_sizes,
+        collators,
+        left_side_info,
+        right_side_info);
+
+    RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+
+    if (is_cancelled())
+        return {};
+
+    Block block{};
+    for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
+    {
+        const auto & column = probe_process_info.block.getByPosition(i);
+        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
+            block.insert(column);
+    }
+
+    size_t left_columns = block.columns();
+
+    /// Add new columns to the block.
+    std::vector<size_t> right_column_indices_to_add;
+
+    for (size_t i = 0; i < right_sample_block.columns(); ++i)
+    {
+        const auto & column = right_sample_block.getByPosition(i);
+        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
+        {
+            RUNTIME_CHECK_MSG(
+                !block.has(column.name),
+                "block from probe side has a column with the same name: {} as a column in right_sample_block",
+                column.name);
+            block.insert(column);
+            right_column_indices_to_add.push_back(i);
+        }
+    }
+
+    if (!res_list.empty())
+    {
+        NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType> helper(
+            block,
+            left_columns,
+            right_column_indices_to_add,
+            blocks,
+            null_rows,
+            max_block_size,
+            non_equal_conditions,
+            is_cancelled);
+
+        helper.joinResult(res_list);
+
+        RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
+    }
+
+    if (is_cancelled())
+        return {};
+
+    /// Now all results are known.
+
+    std::unique_ptr<IColumn::Filter> filter;
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        filter = std::make_unique<IColumn::Filter>(rows);
+
+    MutableColumnPtr left_semi_column_ptr = nullptr;
+    ColumnInt8::Container * left_semi_column_data = nullptr;
+    ColumnUInt8::Container * left_semi_null_map = nullptr;
+
+    if constexpr (
+        KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti)
+    {
+        left_semi_column_ptr = block.getByPosition(block.columns() - 1).column->cloneEmpty();
+        auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
+        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
+        left_semi_column_data->reserve(rows);
+        left_semi_null_map->reserve(rows);
+    }
+
+    size_t rows_for_anti = 0;
+    for (size_t i = 0; i < rows; ++i)
+    {
+        auto result = res[i].getResult();
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        {
+            if (result == SemiJoinResultType::TRUE_VALUE)
+            {
+                // If the result is true, this row should be kept.
+                (*filter)[i] = 1;
+                ++rows_for_anti;
+            }
+            else
+            {
+                // If the result is null or false, this row should be filtered.
+                (*filter)[i] = 0;
+            }
+        }
+        else
+        {
+            switch (result)
+            {
+            case SemiJoinResultType::FALSE_VALUE:
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(0);
+                break;
+            case SemiJoinResultType::TRUE_VALUE:
+                left_semi_column_data->push_back(1);
+                left_semi_null_map->push_back(0);
+                break;
+            case SemiJoinResultType::NULL_VALUE:
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(1);
+                break;
+            }
+        }
+    }
+
+    if constexpr (
+        KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti)
+    {
+        block.getByPosition(block.columns() - 1).column = std::move(left_semi_column_ptr);
+    }
+
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+    {
+        for (size_t i = 0; i < left_columns; ++i)
+        {
+            auto & column = block.getByPosition(i);
+            if (output_column_names_set_after_finalize.contains(column.name))
+                column.column = column.column->filter(*filter, rows_for_anti);
+        }
+    }
+    return block;
+}
+
+Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
+{
+    JoinBuildInfo join_build_info{
+        enable_fine_grained_shuffle,
+        fine_grained_shuffle_count,
+        isEnableSpill(),
+        hash_join_spill_context->isSpilled(),
+        build_concurrency,
+        restore_config.restore_round};
+
+    probe_process_info.prepareForHashProbe(
+        key_names_left,
+        non_equal_conditions.left_filter_column,
+        kind,
+        strictness,
+        join_build_info.needVirtualDispatchForProbeBlock(),
+        collators,
+        restore_config.restore_round);
+
+    Block block{};
+#define CALL(KIND, STRICTNESS, MAP) \
+    block = joinBlockSemiImpl<KIND, STRICTNESS, MAP>(join_build_info, probe_process_info);
+
+    using enum ASTTableJoin::Strictness;
+    using enum ASTTableJoin::Kind;
+    if (kind == Semi && strictness == All)
+        CALL(Semi, All, MapsAll)
+    else if (kind == Semi && strictness == Any)
+        CALL(Semi, Any, MapsAny)
+    else if (kind == Anti && strictness == All)
+        CALL(Anti, All, MapsAll)
+    else if (kind == Anti && strictness == Any)
+        CALL(Anti, Any, MapsAny)
+    else if (kind == LeftOuterSemi && strictness == All)
+        CALL(LeftOuterSemi, All, MapsAll)
+    else if (kind == LeftOuterSemi && strictness == Any)
+        CALL(LeftOuterSemi, Any, MapsAny)
+    else if (kind == LeftOuterAnti && strictness == All)
+        CALL(LeftOuterAnti, All, MapsAll)
+    else if (kind == LeftOuterAnti && strictness == Any)
+        CALL(LeftOuterAnti, Any, MapsAny)
+    else
+        throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
+#undef CALL
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
+
+    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
+    probe_process_info.all_rows_joined_finish = true;
+
+    return removeUselessColumn(block);
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const ProbeProcessInfo & probe_process_info) const
+{
+    size_t rows = probe_process_info.block.rows();
+
+    auto [res, res_list] = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
+        partitions,
+        rows,
+        key_sizes,
+        collators,
+        join_build_info,
+        probe_process_info);
+
+    RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+    if (is_cancelled())
+        return {};
+
+    const NameSet & probe_output_name_set = has_other_condition
+        ? output_columns_names_set_for_other_condition_after_finalize
+        : output_column_names_set_after_finalize;
+    Block block{};
+    for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
+    {
+        const auto & column = probe_process_info.block.getByPosition(i);
+        if (probe_output_name_set.contains(column.name))
+            block.insert(column);
+    }
+
+    size_t left_columns = block.columns();
+    /// Add new columns to the block.
+    std::vector<size_t> right_column_indices_to_add;
+
+    for (size_t i = 0; i < right_sample_block.columns(); ++i)
+    {
+        const auto & column = right_sample_block.getByPosition(i);
+        if (probe_output_name_set.contains(column.name))
+        {
+            RUNTIME_CHECK_MSG(
+                !block.has(column.name),
+                "block from probe side has a column with the same name: {} as a column in right_sample_block",
+                column.name);
+            block.insert(column);
+            right_column_indices_to_add.push_back(i);
+        }
+    }
+
+    if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+    {
+        if (!res_list.empty())
+        {
+            SemiJoinHelper<KIND, typename Maps::MappedType> helper(
+                block,
+                left_columns,
+                right_column_indices_to_add,
+                max_block_size,
+                non_equal_conditions,
+                is_cancelled);
+
+            helper.joinResult(res_list);
+
+            RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty after calculating join result");
+        }
+    }
+
+    if (is_cancelled())
+        return {};
+
+    /// Now all results are known.
+
+    std::unique_ptr<IColumn::Filter> filter;
+    if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
+        filter = std::make_unique<IColumn::Filter>(rows);
+
+    MutableColumnPtr left_semi_column_ptr = nullptr;
+    ColumnInt8::Container * left_semi_column_data = nullptr;
+    ColumnUInt8::Container * left_semi_null_map = nullptr;
+
+    if constexpr (KIND == ASTTableJoin::Kind::LeftOuterSemi || KIND == ASTTableJoin::Kind::LeftOuterAnti)
+    {
+        left_semi_column_ptr = block.getByPosition(block.columns() - 1).column->cloneEmpty();
+        auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
+        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_column_data->reserve(rows);
+        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        {
+            left_semi_null_map->resize_fill(rows, 0);
+        }
+        else
+        {
+            left_semi_null_map->reserve(rows);
+        }
+    }
+
+    size_t rows_for_semi_anti = 0;
+    for (size_t i = 0; i < rows; ++i)
+    {
+        auto result = res[i].getResult();
+        if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
+        {
+            if (isTrueSemiJoinResult(result))
+            {
+                // If the result is true, this row should be kept.
+                (*filter)[i] = 1;
+                ++rows_for_semi_anti;
+            }
+            else
+            {
+                // If the result is null or false, this row should be filtered.
+                (*filter)[i] = 0;
+            }
+        }
+        else
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
         {
             size_t rows_right = block_right.rows();
             if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
@@ -2287,8 +2822,85 @@ private:
 
             if (rows_added >= max_block_size)
             {
+<<<<<<< HEAD
                 ++(*it);
                 break;
+=======
+                return {};
+            }
+
+            // build new restore infos.
+            auto spilled_partition_index = remaining_partition_indexes_to_restore.front();
+            RUNTIME_CHECK_MSG(
+                hash_join_spill_context->isPartitionSpilled(spilled_partition_index),
+                "should not restore unspilled partition.");
+
+            if (restore_join_build_concurrency <= 0)
+                restore_join_build_concurrency = getRestoreJoinBuildConcurrency(
+                    partitions.size(),
+                    remaining_partition_indexes_to_restore.size(),
+                    restore_config.join_restore_concurrency,
+                    probe_concurrency);
+            /// for restore join we make sure that the restore_join_build_concurrency is at least 2, so it can be spill again.
+            /// And restore_join_build_concurrency should not be greater than probe_concurrency, Otherwise some restore_stream will never be executed.
+            RUNTIME_CHECK_MSG(
+                2 <= restore_join_build_concurrency
+                    && restore_join_build_concurrency <= static_cast<Int64>(probe_concurrency),
+                "restore_join_build_concurrency must in [2, {}], but the current value is {}",
+                probe_concurrency,
+                restore_join_build_concurrency);
+            LOG_INFO(
+                log,
+                "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.",
+                spilled_partition_index,
+                restore_config.restore_round,
+                restore_join_build_concurrency);
+
+            auto restore_build_streams = hash_join_spill_context->getBuildSpiller()->restoreBlocks(
+                spilled_partition_index,
+                restore_join_build_concurrency,
+                true);
+            RUNTIME_CHECK_MSG(
+                restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency),
+                "restore streams size must equal to restore_join_build_concurrency");
+            auto restore_probe_streams = hash_join_spill_context->getProbeSpiller()->restoreBlocks(
+                spilled_partition_index,
+                restore_join_build_concurrency,
+                true);
+            auto new_max_bytes_before_external_join = hash_join_spill_context->getOperatorSpillThreshold();
+            /// have operator level threshold
+            if (new_max_bytes_before_external_join > 0)
+                new_max_bytes_before_external_join = std::max(
+                    1,
+                    static_cast<UInt64>(
+                        new_max_bytes_before_external_join
+                        * (static_cast<double>(restore_join_build_concurrency) / build_concurrency)));
+            restore_join = createRestoreJoin(new_max_bytes_before_external_join, spilled_partition_index);
+            restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
+            restore_join->setInitActiveBuildThreads();
+            restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
+            restore_join->setCancellationHook(is_cancelled);
+            BlockInputStreams restore_scan_hash_map_streams;
+            restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
+            if (needScanHashMapAfterProbe(kind))
+            {
+                auto header = restore_probe_streams.back()->getHeader();
+                for (Int64 i = 0; i < restore_join_build_concurrency; ++i)
+                    restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(
+                        header,
+                        i,
+                        restore_join_build_concurrency,
+                        max_block_size_);
+            }
+            for (Int64 i = 0; i < restore_join_build_concurrency; ++i)
+            {
+                restore_infos.emplace_back(
+                    restore_join,
+                    i,
+                    std::move(restore_scan_hash_map_streams[i]),
+                    std::move(restore_build_streams[i]),
+                    std::move(restore_probe_streams[i]));
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
             }
         }
         return rows_added;

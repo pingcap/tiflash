@@ -34,8 +34,13 @@
 #include <Encryption/FileProvider.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
+<<<<<<< HEAD
 #include <Poco/TemporaryFile.h>
 #include <Storages/Transaction/Collator.h>
+=======
+#include <Interpreters/CancellationHook.h>
+#include <TiDB/Collation/Collator.h>
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 
@@ -1105,6 +1110,114 @@ protected:
     };
 
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
+<<<<<<< HEAD
+=======
+    struct AggProcessInfo
+    {
+        explicit AggProcessInfo(Aggregator * aggregator_)
+            : aggregator(aggregator_)
+        {
+            assert(aggregator);
+        }
+        Block block;
+        size_t start_row = 0;
+        size_t end_row = 0;
+        bool prepare_for_agg_done = false;
+        Columns materialized_columns;
+        Columns input_columns;
+        ColumnRawPtrs key_columns;
+        AggregateColumns aggregate_columns;
+        AggregateFunctionInstructions aggregate_functions_instructions;
+        Aggregator * aggregator;
+
+        bool only_lookup = false;
+        size_t hit_row_cnt = 0;
+        std::vector<UInt64> not_found_rows;
+
+        void prepareForAgg();
+        bool allBlockDataHandled() const
+        {
+            assert(start_row <= end_row);
+            return start_row == end_row || aggregator->isCancelled();
+        }
+        void resetBlock(const Block & block_)
+        {
+            RUNTIME_CHECK_MSG(allBlockDataHandled(), "Previous block is not processed yet");
+            block = block_;
+            start_row = 0;
+            end_row = 0;
+            materialized_columns.clear();
+            prepare_for_agg_done = false;
+
+            hit_row_cnt = 0;
+            not_found_rows.clear();
+            not_found_rows.reserve(block_.rows() / 2);
+        }
+    };
+
+    /// Process one block. Return false if the processing should be aborted.
+    bool executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+    bool executeOnBlockCollectHitRate(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
+    bool executeOnBlockOnlyLookup(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
+
+    template <bool collect_hit_rate, bool only_lookup>
+    bool executeOnBlockImpl(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+
+    /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
+      * Return nullptr if there are no non empty data_variant.
+      */
+    MergingBucketsPtr mergeAndConvertToBlocks(
+        ManyAggregatedDataVariants & data_variants,
+        bool final,
+        size_t max_threads) const;
+
+    /// Merge several partially aggregated blocks into one.
+    BlocksList vstackBlocks(BlocksList & blocks, bool final);
+
+    bool isConvertibleToTwoLevel() { return AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen); }
+    /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
+      * This is needed to simplify merging of that data with other results, that are already two-level.
+      */
+    Blocks convertBlockToTwoLevel(const Block & block);
+
+    /** Set a function that checks whether the current task can be aborted.
+      */
+    void setCancellationHook(CancellationHook cancellation_hook);
+
+    /// For external aggregation.
+    void spill(AggregatedDataVariants & data_variants, size_t thread_num);
+    void finishSpill();
+    BlockInputStreams restoreSpilledData();
+    bool hasSpilledData() const { return agg_spill_context->hasSpilledData(); }
+    void useTwoLevelHashTable() { use_two_level_hash_table = true; }
+    void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
+    AggSpillContextPtr & getAggSpillContext() { return agg_spill_context; }
+
+    /// Get data structure of the result.
+    Block getHeader(bool final) const;
+    Block getSourceHeader() const;
+
+    const Params & getParams() const { return params; }
+
+protected:
+    friend struct AggregatedDataVariants;
+    friend class MergingBuckets;
+
+    Params params;
+
+    AggregatedDataVariants::Type method_chosen;
+
+
+    Sizes key_sizes;
+
+    AggregateFunctionsPlainPtrs aggregate_functions;
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 
     Sizes offsets_of_aggregate_states; /// The offset to the n-th aggregate function in a row of aggregate functions.
     size_t total_size_of_aggregate_states = 0; /// The total size of the row from the aggregate functions.
