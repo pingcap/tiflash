@@ -35,7 +35,6 @@
 #include <mutex>
 #include <thread>
 
-
 namespace pingcap
 {
 struct ClusterConfig;
