@@ -1368,9 +1368,9 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     probe_process_info.prepareForHashProbe(key_names_left, non_equal_conditions.left_filter_column, kind, strictness);
     while (true)
     {
-        auto block = doJoinBlockHash(probe_process_info);
         if (is_cancelled())
             return {};
+        auto block = doJoinBlockHash(probe_process_info);
         assert(block);
         block = removeUselessColumn(block);
         result_rows += block.rows();
