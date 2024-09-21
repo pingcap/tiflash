@@ -227,6 +227,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
         execId(),
         needScanHashMapAfterProbe(join_ptr->getKind()));
     join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(), probe_pipeline.streams.size());
+    join_ptr->setCancellationHook([&] { return context.isCancelled(); });
     size_t probe_index = 0;
     for (auto & stream : probe_pipeline.streams)
     {

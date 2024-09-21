@@ -1415,6 +1415,8 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         restore_config.restore_round);
     while (true)
     {
+        if (is_cancelled())
+            return {};
         auto block = doJoinBlockHash(probe_process_info, join_build_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1519,6 +1521,8 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 
     while (true)
     {
+        if (is_cancelled())
+            return {};
         Block block = doJoinBlockCross(probe_process_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1600,6 +1604,9 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
 
     RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
+    if (is_cancelled())
+        return {};
+
     Block block{};
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
@@ -1636,12 +1643,16 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
             blocks,
             null_rows,
             max_block_size,
-            non_equal_conditions);
+            non_equal_conditions,
+            is_cancelled);
 
         helper.joinResult(res_list);
 
         RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
+
+    if (is_cancelled())
+        return {};
 
     /// Now all results are known.
 
@@ -1787,6 +1798,8 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
         probe_process_info);
 
     RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+    if (is_cancelled())
+        return {};
 
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
@@ -1821,14 +1834,22 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
     {
         if (!res_list.empty())
         {
-            SemiJoinHelper<KIND, typename Maps::MappedType>
-                helper(block, left_columns, right_column_indices_to_add, max_block_size, non_equal_conditions);
+            SemiJoinHelper<KIND, typename Maps::MappedType> helper(
+                block,
+                left_columns,
+                right_column_indices_to_add,
+                max_block_size,
+                non_equal_conditions,
+                is_cancelled);
 
             helper.joinResult(res_list);
 
             RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty after calculating join result");
         }
     }
+
+    if (is_cancelled())
+        return {};
 
     /// Now all results are known.
 
@@ -2488,6 +2509,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
+            restore_join->setCancellationHook(is_cancelled);
             BlockInputStreams restore_scan_hash_map_streams;
             restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
             if (needScanHashMapAfterProbe(kind))
