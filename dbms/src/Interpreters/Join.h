@@ -22,6 +22,7 @@
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -271,6 +272,8 @@ public:
     using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
     using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
 
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
+
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
 
@@ -354,6 +357,7 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+<<<<<<< HEAD
     size_t getBuildConcurrencyInternal() const
     {
         if (unlikely(build_concurrency == 0))
@@ -367,6 +371,14 @@ private:
 
     /// Initialize map implementations for various join types.
     void initMapImpl(Type type_);
+=======
+    // the index of vector is the stream_index.
+    std::vector<MarkedSpillData> build_side_marked_spilled_data;
+    std::vector<MarkedSpillData> probe_side_marked_spilled_data;
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
+>>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
