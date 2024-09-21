@@ -1626,7 +1626,7 @@ void Join::joinBlockNullAwareImpl(
     if (!res_list.empty())
     {
         NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType::Base_t>
-            helper(block, left_columns, right_columns, blocks, null_rows, max_block_size, non_equal_conditions);
+            helper(block, left_columns, right_columns, blocks, null_rows, max_block_size, non_equal_conditions, is_cancelled);
 
         helper.joinResult(res_list);
 
