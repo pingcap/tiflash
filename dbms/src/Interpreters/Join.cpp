@@ -1352,6 +1352,8 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 
 Block Join::removeUselessColumn(Block & block) const
 {
+    if (!block)
+        return block;
     Block projected_block;
     for (const auto & name : tidb_output_column_names)
     {
@@ -1586,6 +1588,8 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
 
     /// Null aware join never expand the left block, just handle the whole block at one time is enough
     probe_process_info.all_rows_joined_finish = true;
+    if (is_cancelled())
+        return {};
 
     return removeUselessColumn(block);
 }
@@ -1621,7 +1625,7 @@ void Join::joinBlockNullAwareImpl(
 
     RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
     if (is_cancelled())
-        return {};
+        return;
 
     size_t right_columns = block.columns() - left_columns;
 
@@ -1636,7 +1640,7 @@ void Join::joinBlockNullAwareImpl(
     }
 
     if (is_cancelled())
-        return {};
+        return;
 
     /// Now all results are known.
 
@@ -2014,7 +2018,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
         block = joinBlockHash(probe_process_info);
 
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
-    if (kind == LeftOuterAnti || kind == Cross_LeftOuterAnti)
+    if (block && (kind == LeftOuterAnti || kind == Cross_LeftOuterAnti))
     {
         const auto * nullable_column
             = checkAndGetColumn<ColumnNullable>(block.getByName(match_helper_name).column.get());
