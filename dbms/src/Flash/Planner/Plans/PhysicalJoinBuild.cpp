@@ -40,7 +40,6 @@ void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     join_execute_info.join_build_profile_infos = group_builder.getCurProfileInfos();
     join_ptr->initBuild(group_builder.getCurrentHeader(), group_builder.concurrency());
     join_ptr->setInitActiveBuildThreads();
-    join_ptr->setCancellationHook([&]() { return exec_context.isCancelled(); });
     join_ptr.reset();
 }
 } // namespace DB
