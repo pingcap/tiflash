@@ -387,7 +387,7 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
     }
     // Write some data, and persist meta.
 
-    auto prepare_region = [&](UInt64 id, UInt64 k) {
+    auto prepare_region = [&](UInt64 id, UInt64 peer_id, UInt64 k) {
         UInt64 index = 0;
         if (!opt.persist_empty_segment)
         {
@@ -405,16 +405,16 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
         kvs.setRegionCompactLogConfig(0, 0, 0, 0);
         if (opt.mock_add_new_peer)
         {
-            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(2333, true);
-            proxy_instance->getRegion(id)->addPeer(store_id, 2333, metapb::PeerRole::Learner);
+            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(peer_id, true);
+            proxy_instance->getRegion(id)->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
         }
         persistAfterWrite(global_context, kvs, proxy_instance, page_storage, id, index);
     };
 
-    prepare_region(1, 888);
+    prepare_region(1, 2333, 888);
     if (opt.second_region)
     {
-        prepare_region(2, 888 + 2000000);
+        prepare_region(2, 2334, 888 + 2000000);
     }
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -906,7 +906,11 @@ try
     t2.join();
     exe_lock.unlock();
     exe_lock2.unlock();
+    // ["FAP is canceled when building segments, built=0"]
     ASSERT_EQ(result.get().status, FastAddPeerStatus::Canceled);
+    // region 2 shared the same checkpoint with region 1, however, after region 1 failed with cancel,
+    // region 2 will rebuild the segment id cache.
+    // ["Build cache for with 1 segments"] [source="region_id=1002 keyspace=4294967295 table_id=31"]
     ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
 }
 CATCH
