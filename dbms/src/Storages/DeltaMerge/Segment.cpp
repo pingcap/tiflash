@@ -544,6 +544,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         auto lock = end_to_segment_id_cache->readLock();
         bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
         RUNTIME_CHECK(is_cache_ready, checkpoint_info->region_id, context.keyspace_id, context.physical_table_id);
+        GET_METRIC(tiflash_fap_task_result, type_reuse_chkpt_cache).Increment();
         // ... then we could seek to `current_segment_id` in cache to avoid some read.
         auto current_segment_id
             = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
