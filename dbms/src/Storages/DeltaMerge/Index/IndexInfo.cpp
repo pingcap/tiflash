@@ -140,7 +140,7 @@ LocalIndexInfosPtr generateLocalIndexInfos(
     if (!existing_indexes)
     {
         auto index_infos = initLocalIndexInfos(new_table_info, logger);
-        if (index_infos && index_infos->empty())
+        if (!index_infos || index_infos->empty())
             return nullptr;
         new_index_infos = std::move(index_infos);
         return new_index_infos;
