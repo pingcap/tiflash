@@ -61,6 +61,7 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     // it is only necessary to add it during the "restore build stage."
     // The order of build/probe here is ensured by the event.
     exec_context.addOneTimeFuture(join_ptr->wait_probe_finished_future);
+    join_ptr->setCancellationHook([&]() { return exec_context.isCancelled(); });
     join_ptr.reset();
 }
 } // namespace DB

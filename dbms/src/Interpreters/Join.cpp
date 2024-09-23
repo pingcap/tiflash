@@ -1352,6 +1352,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
 
 Block Join::removeUselessColumn(Block & block) const
 {
+    // cancelled
+    if (!block)
+        return block;
+
     Block projected_block;
     for (const auto & name_and_type : output_columns_after_finalize)
     {
@@ -2218,6 +2222,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     else
         block = joinBlockHash(probe_process_info);
 
+    // if cancelled, just return empty block
+    if (!block)
+        return block;
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == Cross_LeftOuterAnti)
     {
