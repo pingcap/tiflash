@@ -56,6 +56,7 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
             max_block_size,
             input_header));
     });
+    join_ptr->setCancellationHook([&]() { return exec_context.isCancelled(); });
     join_ptr.reset();
 }
 } // namespace DB
