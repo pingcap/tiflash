@@ -449,54 +449,20 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     Stopwatch sw;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_read_segment).Observe(sw.elapsedSeconds()); });
-    // We have a cache that records all segments which map to a certain table identified by (keyspace_id, physical_table_id).
-    // We can thus avoid reading from the very beginning for every different regions in this table.
-    // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
-    // Otherwise, we just read the segment that cover the range.
-    PageIdU64 current_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
-    // - Set to `true`: The building task is done.
-    // - Set to `false`: It is not build yet, or it is building.
-    bool is_cache_ready = false;
-    // If there is a table building cache, then other table may block to read the built cache.
-    // If the remote reader causes much time to retrieve data, then these tasks could block here.
-    // However, when the execlusive holder is canceled due to timeout, the readers could eventually get the lock.
-    FAIL_POINT_PAUSE(FailPoints::pause_when_building_fap_segments);
-    {
-        // Lock acquires when:
-        // 1. No writer.
-        // 2. The writer finishes.
-        // 3. The writer is canceled.
-        auto lock = end_to_segment_id_cache->readLock();
-        is_cache_ready = end_to_segment_id_cache->isReady(lock);
-        GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_wait_build)
-            .Observe(sw.elapsedSecondsFromLastTime());
-    }
 
-    {
-        using GenericLock = std::variant<std::shared_lock<std::shared_mutex>, std::unique_lock<std::shared_mutex>>;
-        GenericLock lock;
-        if (is_cache_ready)
-        {
-            // If the cache is ready, requires a read lock.
-            lock = end_to_segment_id_cache->readLock();
-            current_segment_id = end_to_segment_id_cache->getSegmentIdContainingKey(
-                std::get<std::shared_lock<std::shared_mutex>>(lock),
-                target_range.getStart().toRowKeyValue());
-        }
-        else
-        {
-            // Otherwise, requires a write lock to build cache.
-            // Multiple builders could block on this write lock.
-            lock = end_to_segment_id_cache->writeLock();
-            // When a builder get the write lock, we have to check again whether the cache is ready now.
-            is_cache_ready = end_to_segment_id_cache->isReady(std::get<std::unique_lock<std::shared_mutex>>(lock));
-        }
-        // - is_cache_ready = true, we could hold a write lock or a read lock.
-        // - is_cache_ready = false, we must hold a write lock.
+    // Protected by whatever lock.
+    auto build_segments = [&](bool is_cache_ready, PageIdU64 current_segment_id)
+        -> std::optional<std::pair<std::vector<std::pair<DM::RowKeyValue, UInt64>>, SegmentMetaInfos>> {
+        // We have a cache that records all segments which map to a certain table identified by (keyspace_id, physical_table_id).
+        // We can thus avoid reading from the very beginning for every different regions in this table.
+        // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
+        // Otherwise, we just read the segment that cover the range.
         LOG_DEBUG(log, "Read segment meta info from segment {}", current_segment_id);
-        // Caches all built segments.
+
+        // The map is used to build cache.
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
         SegmentMetaInfos segment_infos;
         while (current_segment_id != 0)
@@ -505,7 +471,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             {
                 LOG_INFO(log, "FAP is canceled when building segments, built={}", end_key_and_segment_ids.size());
                 // FAP task would be cleaned in FastAddPeerImplWrite. So returning empty result is OK.
-                return {};
+                return std::nullopt;
             }
             Segment::SegmentMetaInfo segment_info;
             auto target_id = UniversalPageIdFormat::toFullPageId(
@@ -543,15 +509,48 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
                 break;
             }
         }
-        // After all segments are scanned, we try to build a cache,
-        // so other FAP tasks that share the same checkpoint could reuse the cache.
+        return std::make_pair(end_key_and_segment_ids, segment_infos);
+    };
+
+    {
+        // If there is a table building cache, then other table may block to read the built cache.
+        // If the remote reader causes much time to retrieve data, then these tasks could block here.
+        // However, when the execlusive holder is canceled due to timeout, the readers could eventually get the lock.
+        auto lock = end_to_segment_id_cache->writeLock();
+        // - Set to `true`: The building task is done.
+        // - Set to `false`: It is not build yet, or it is building.
+        bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_wait_build)
+            .Observe(sw.elapsedSecondsFromLastTime());
+
         if (!is_cache_ready)
         {
+            // We are the cache builder.
+            FAIL_POINT_PAUSE(FailPoints::pause_when_building_fap_segments);
+
+            auto res = build_segments(is_cache_ready, DELTA_MERGE_FIRST_SEGMENT_ID);
+            // After all segments are scanned, we try to build a cache,
+            // so other FAP tasks that share the same checkpoint could reuse the cache.
+            if (!res)
+                return {};
+            auto [end_key_and_segment_ids, segment_infos] = *res;
             LOG_DEBUG(log, "Build cache for with {} segments", end_key_and_segment_ids.size());
-            end_to_segment_id_cache->build(
-                std::get<std::unique_lock<std::shared_mutex>>(lock),
-                std::move(end_key_and_segment_ids));
+            end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
+            return segment_infos;
         }
+    }
+    {
+        // If we found the cache is built, which could be normal cases when the checkpoint is reused.
+        auto lock = end_to_segment_id_cache->readLock();
+        bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
+        RUNTIME_CHECK(is_cache_ready, checkpoint_info->region_id, context.keyspace_id, context.physical_table_id);
+        // ... then we could seek to `current_segment_id` in cache to avoid some read.
+        auto current_segment_id
+            = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
+        auto res = build_segments(is_cache_ready, current_segment_id);
+        if (!res)
+            return {};
+        auto [end_key_and_segment_ids, segment_infos] = *res;
         return segment_infos;
     }
 
