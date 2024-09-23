@@ -473,6 +473,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_wait_build)
             .Observe(sw.elapsedSecondsFromLastTime());
     }
+
     {
         using GenericLock = std::variant<std::shared_lock<std::shared_mutex>, std::unique_lock<std::shared_mutex>>;
         GenericLock lock;
@@ -490,7 +491,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             // Multiple builders could block on this write lock.
             lock = end_to_segment_id_cache->writeLock();
             // When a builder get the write lock, we have to check again whether the cache is ready now.
-            is_cache_ready = end_to_segment_id_cache->isReady(lock);
+            is_cache_ready = end_to_segment_id_cache->isReady(std::get<std::unique_lock<std::shared_mutex>>(lock));
         }
         // - is_cache_ready = true, we could hold a write lock or a read lock.
         // - is_cache_ready = false, we must hold a write lock.

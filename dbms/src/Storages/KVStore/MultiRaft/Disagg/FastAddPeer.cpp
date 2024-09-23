@@ -410,39 +410,33 @@ FastAddPeerRes FastAddPeerImplWrite(
     RUNTIME_CHECK(checkpoint_info->temp_ps != nullptr);
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
 
-    auto expected_index = UniversalPageIdFormat::toRaftLogKey(region_id, apply_state.applied_index());
     bool too_many_raft_logs = false;
-    bool got_expected_index = false;
-    size_t written_raft_count = 0;
+    size_t log_count = 0;
     raft_data_reader.traverseRemoteRaftLogForRegion(
         region_id,
         [&](size_t raft_log_count) {
             GET_METRIC(tiflash_raft_raft_log_gap_count, type_unhandled_fap_raft_log).Observe(raft_log_count);
+            log_count = raft_log_count;
             if (raft_log_count > 1500)
             {
                 too_many_raft_logs = true;
                 // Will early abort.
                 return false;
             }
-            written_raft_count = raft_log_count;
             return true;
         },
         [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
             LOG_DEBUG(log, "Write raft log size {} index={}", size, UniversalPageIdFormat::getU64ID(page_id));
-            if (page_id == expected_index)
-            {
-                got_expected_index = true;
-            }
             wb.putRemotePage(page_id, 0, size, location, {});
         });
 
-    if (too_many_raft_logs || !got_expected_index)
+    if (too_many_raft_logs)
     {
         LOG_INFO(
             log,
-            "FAP is canceled when write raft log, too_many_raft_logs={}, got_expected_index={}, applied_index={}",
+            "FAP is canceled when write raft log, too_many_raft_logs={}, log_count={}, applied_index={}",
             too_many_raft_logs,
-            got_expected_index,
+            log_count,
             apply_state.applied_index());
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
@@ -460,7 +454,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
     }
-    LOG_DEBUG(log, "Finish write FAP snapshot, written_raft_count={}", written_raft_count);
+    LOG_DEBUG(log, "Finish write FAP snapshot, log_count={}", log_count);
     auto tmp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
