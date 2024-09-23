@@ -101,7 +101,11 @@ void serializeColumn(
     CompressionMethod compression_method,
     Int64 compression_level)
 {
-    CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
+    // Do not use lightweight compression in ColumnFile whose write performance is the bottleneck.
+    auto settings = compression_method == CompressionMethod::Lightweight
+        ? CompressionSettings(CompressionMethod::LZ4)
+        : CompressionSettings(compression_method, compression_level);
+    CompressedWriteBuffer compressed(buf, settings);
     type->serializeBinaryBulkWithMultipleStreams(
         column,
         [&](const IDataType::SubstreamPath &) { return &compressed; },

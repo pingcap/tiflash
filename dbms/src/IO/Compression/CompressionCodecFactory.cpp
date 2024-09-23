@@ -25,6 +25,7 @@
 #include <magic_enum.hpp>
 #include <shared_mutex>
 
+
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
 #endif
@@ -76,7 +77,6 @@ template CompressionCodecPtr CompressionCodecFactory::getStaticCodec<Compression
     const CompressionSetting & setting);
 template CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecRunLength>(
     const CompressionSetting & setting);
-
 
 template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>(const CompressionSetting & setting)
@@ -154,7 +154,6 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecDefl
 }
 #endif
 
-
 template <bool IS_COMPRESS>
 CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & setting)
 {
@@ -182,7 +181,13 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         if (!isInteger(setting.data_type))
         {
             if (setting.method_byte == CompressionMethodByte::Lightweight)
+            {
+                // Use LZ4 codec for non-integral types
+                // TODO: maybe we can use zstd?
+                auto method = CompressionMethod::LZ4;
+                CompressionSetting setting(method, CompressionSetting::getDefaultLevel(method));
                 return getStaticCodec<CompressionCodecLZ4>(setting);
+            }
             else
                 return nullptr;
         }
@@ -192,7 +197,7 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
     switch (setting.method_byte)
     {
     case CompressionMethodByte::Lightweight:
-        return std::make_unique<CompressionCodecLightweight>(setting.data_type);
+        return std::make_unique<CompressionCodecLightweight>(setting.data_type, setting.level);
     case CompressionMethodByte::DeltaFOR:
         return getStaticCodec<CompressionCodecDeltaFOR>(setting);
     case CompressionMethodByte::RunLength:

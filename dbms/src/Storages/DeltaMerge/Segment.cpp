@@ -209,6 +209,8 @@ DMFilePtr writeIntoNewDMFile(
     return dmfile;
 }
 
+// Create a new stable, the DMFile will write as External Page to disk, but the meta will not be written to disk.
+// The caller should write the meta to disk if needed.
 StableValueSpacePtr createNewStable( //
     DMContext & dm_context,
     const ColumnDefinesPtr & schema_snap,
@@ -227,7 +229,6 @@ StableValueSpacePtr createNewStable( //
 
         auto stable = std::make_shared<StableValueSpace>(stable_id);
         stable->setFiles({dtfile}, RowKeyRange::newAll(dm_context.is_common_handle, dm_context.rowkey_column_size));
-        stable->saveMeta(wbs.meta);
         if (auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store; !data_store)
         {
             wbs.data.putExternal(dtfile_id, 0);
@@ -1309,7 +1310,6 @@ SegmentPtr Segment::applyMergeDelta(
         delta->getId(),
         persisted_column_files,
         in_memory_files);
-    new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>( //
         parent_log,
@@ -1324,6 +1324,8 @@ SegmentPtr Segment::applyMergeDelta(
     new_me->setLastCheckGCSafePoint(context.min_version);
 
     // Store new meta data
+    new_delta->saveMeta(wbs);
+    new_me->stable->saveMeta(wbs.meta);
     new_me->serialize(wbs.meta);
 
     // Remove old segment's delta.

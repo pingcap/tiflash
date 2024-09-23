@@ -159,6 +159,7 @@ public:
     }
 
     bool isWritable() const { return grpc_recv_queue.isWritable(); }
+    void notifyNextPipelineWriter() { grpc_recv_queue.notifyNextPipelineWriter(); }
 
     void registerPipeWriteTask(TaskPtr && task) { grpc_recv_queue.registerPipeWriteTask(std::move(task)); }
 

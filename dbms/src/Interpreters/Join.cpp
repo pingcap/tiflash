@@ -23,6 +23,7 @@
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
 #include <Interpreters/Join.h>
@@ -132,6 +133,8 @@ Join::Join(
     : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
+    , wait_build_finished_future(std::make_shared<OneTimeNotifyFuture>())
+    , wait_probe_finished_future(std::make_shared<OneTimeNotifyFuture>())
     , kind(kind_)
     , join_req_id(req_id)
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
@@ -218,6 +221,8 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
     error_message = error_message_.empty() ? "Join meet error" : error_message_;
     build_cv.notify_all();
     probe_cv.notify_all();
+    // wait_build/probe_finished_future does not need to call finish here
+    // because it is called in PipelineExecutorContext.
 }
 
 size_t Join::getTotalRowCount() const
@@ -1347,6 +1352,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
 
 Block Join::removeUselessColumn(Block & block) const
 {
+    // cancelled
+    if (!block)
+        return block;
+
     Block projected_block;
     for (const auto & name_and_type : output_columns_after_finalize)
     {
@@ -1377,6 +1386,8 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         restore_config.restore_round);
     while (true)
     {
+        if (is_cancelled())
+            return {};
         auto block = doJoinBlockHash(probe_process_info, join_build_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1481,6 +1492,8 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 
     while (true)
     {
+        if (is_cancelled())
+            return {};
         Block block = doJoinBlockCross(probe_process_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1562,6 +1575,9 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
 
     RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
+    if (is_cancelled())
+        return {};
+
     Block block{};
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
@@ -1598,12 +1614,16 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
             blocks,
             null_rows,
             max_block_size,
-            non_equal_conditions);
+            non_equal_conditions,
+            is_cancelled);
 
         helper.joinResult(res_list);
 
         RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
+
+    if (is_cancelled())
+        return {};
 
     /// Now all results are known.
 
@@ -1749,6 +1769,8 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
         probe_process_info);
 
     RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+    if (is_cancelled())
+        return {};
 
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
@@ -1783,14 +1805,22 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
     {
         if (!res_list.empty())
         {
-            SemiJoinHelper<KIND, typename Maps::MappedType>
-                helper(block, left_columns, right_column_indices_to_add, max_block_size, non_equal_conditions);
+            SemiJoinHelper<KIND, typename Maps::MappedType> helper(
+                block,
+                left_columns,
+                right_column_indices_to_add,
+                max_block_size,
+                non_equal_conditions,
+                is_cancelled);
 
             helper.joinResult(res_list);
 
             RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty after calculating join result");
         }
     }
+
+    if (is_cancelled())
+        return {};
 
     /// Now all results are known.
 
@@ -1925,8 +1955,9 @@ void Join::finalizeBuild()
             hash_join_spill_context->getBuildSpiller()->finishSpill();
         assert(active_build_threads == 0);
         build_finished = true;
-        build_cv.notify_all();
     }
+    build_cv.notify_all();
+    wait_build_finished_future->finish();
     LOG_INFO(log, "build finalize with {} entries from {} rows.", getTotalRowCount(), getTotalBuildInputRows());
 }
 
@@ -2103,12 +2134,15 @@ bool Join::finishOneProbe(size_t stream_index)
 
 void Join::finalizeProbe()
 {
-    std::unique_lock lock(build_probe_mutex);
-    if (hash_join_spill_context->getProbeSpiller())
-        hash_join_spill_context->getProbeSpiller()->finishSpill();
-    assert(active_probe_threads == 0);
-    probe_finished = true;
+    {
+        std::unique_lock lock(build_probe_mutex);
+        if (hash_join_spill_context->getProbeSpiller())
+            hash_join_spill_context->getProbeSpiller()->finishSpill();
+        assert(active_probe_threads == 0);
+        probe_finished = true;
+    }
     probe_cv.notify_all();
+    wait_probe_finished_future->finish();
 }
 
 void Join::waitUntilAllProbeFinished() const
@@ -2119,14 +2153,24 @@ void Join::waitUntilAllProbeFinished() const
         throw Exception(error_message);
 }
 
-bool Join::quickCheckProbeFinished() const
+bool Join::isProbeFinishedForPipeline() const
 {
-    return probe_finished;
+    if (!probe_finished)
+    {
+        setNotifyFuture(wait_probe_finished_future);
+        return false;
+    }
+    return true;
 }
 
-bool Join::quickCheckBuildFinished() const
+bool Join::isBuildFinishedForPipeline() const
 {
-    return build_finished;
+    if (!build_finished)
+    {
+        setNotifyFuture(wait_build_finished_future);
+        return false;
+    }
+    return true;
 }
 
 void Join::finishOneNonJoin(size_t partition_index)
@@ -2178,6 +2222,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     else
         block = joinBlockHash(probe_process_info);
 
+    // if cancelled, just return empty block
+    if (!block)
+        return block;
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == Cross_LeftOuterAnti)
     {
@@ -2450,6 +2497,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
+            restore_join->setCancellationHook(is_cancelled);
             BlockInputStreams restore_scan_hash_map_streams;
             restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
             if (needScanHashMapAfterProbe(kind))
@@ -2526,6 +2574,8 @@ void Join::wakeUpAllWaitingThreads()
     probe_cv.notify_all();
     build_cv.notify_all();
     cancelRuntimeFilter("Join has been cancelled.");
+    // wait_build/probe_finished_future does not need to call finish here
+    // because it is called in PipelineExecutorContext.
 }
 
 void Join::finalize(const Names & parent_require)

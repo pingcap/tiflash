@@ -44,6 +44,7 @@ namespace FailPoints
 extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 extern const char force_not_clean_fap_on_destroy[];
+extern const char force_checkpoint_dump_throw_datafile[];
 } // namespace FailPoints
 
 namespace tests
@@ -448,7 +449,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -516,7 +517,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -549,7 +550,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     // Will generate and persist some information in local ps, which will not be uploaded.
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
@@ -574,6 +575,35 @@ try
     auto latest_upload_seq = latest_manifest_key_view.getUploadSequence();
 
     buildParsedCheckpointData(global_context, latest_manifest_key, latest_upload_seq);
+}
+CATCH
+
+
+TEST_F(RegionKVStoreTestFAP, DumpCheckpointError)
+try
+{
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    uint64_t region_id = 1;
+    auto peer_id = 1;
+    KVStore & kvs = getKVS();
+    auto page_storage = global_context.getWriteNodePageStorage();
+
+    proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
+    auto region = proxy_instance->getRegion(region_id);
+    auto store_id = kvs.getStore().store_id.load();
+    region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
+
+    // Write some data, and persist meta.
+    auto [index, term]
+        = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
+
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+    FailPointHelper::enableFailPoint(FailPoints::force_checkpoint_dump_throw_datafile);
+    EXPECT_NO_THROW(dumpCheckpoint());
+    FailPointHelper::disableFailPoint(FailPoints::force_checkpoint_dump_throw_datafile);
 }
 CATCH
 
@@ -791,9 +821,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, []() {
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-    });
+    fap_context->tasks_trace->addTask(region_id, []() { return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable); });
     EXPECT_THROW(
         FastAddPeerImplWrite(
             global_context.getTMTContext(),
@@ -839,7 +867,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -944,7 +972,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
 
     // Mock that the storage instance have been dropped

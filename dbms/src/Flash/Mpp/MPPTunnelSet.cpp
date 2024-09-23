@@ -79,6 +79,15 @@ WaitResult MPPTunnelSetBase<Tunnel>::waitForWritable() const
 }
 
 template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::notifyNextPipelineWriter() const
+{
+    for (const auto & tunnel : tunnels)
+    {
+        tunnel->notifyNextPipelineWriter();
+    }
+}
+
+template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id, const TunnelPtr & tunnel)
 {
     RUNTIME_CHECK_MSG(
