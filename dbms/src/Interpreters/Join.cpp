@@ -1634,9 +1634,164 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// handle other conditions
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
+<<<<<<< HEAD
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
+=======
+        assert(offsets_to_replicate != nullptr);
+        handleOtherConditions(block, nullptr, offsets_to_replicate.get());
+
+        if (useRowFlaggedHashMap(kind, has_other_condition))
+        {
+            // set hash table used flag using SemiMapped column
+            auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
+            const auto & ptr_col = static_cast<const PointerHelper::ColumnType &>(*mapped_column);
+            const auto & container = static_cast<const PointerHelper::ArrayType &>(ptr_col.getData());
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                auto ptr_value = container[i];
+                auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
+                current->setUsed();
+            }
+
+            if (isRightSemiFamily(kind))
+            {
+                // Return build table header for right semi/anti join
+                block = right_sample_block;
+            }
+            else if (kind == ASTTableJoin::Kind::RightOuter)
+            {
+                block.erase(flag_mapped_entry_helper_name);
+            }
+        }
+    }
+
+    return block;
+}
+
+Block Join::removeUselessColumn(Block & block) const
+{
+    // cancelled
+    if (!block)
+        return block;
+
+    Block projected_block;
+    for (const auto & name_and_type : output_columns_after_finalize)
+    {
+        auto & column = block.getByName(name_and_type.name);
+        projected_block.insert(std::move(column));
+    }
+    return projected_block;
+}
+
+Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
+{
+    std::vector<Block> result_blocks;
+    size_t result_rows = 0;
+    JoinBuildInfo join_build_info{
+        enable_fine_grained_shuffle,
+        fine_grained_shuffle_count,
+        isEnableSpill(),
+        hash_join_spill_context->isSpilled(),
+        build_concurrency,
+        restore_config.restore_round};
+    probe_process_info.prepareForHashProbe(
+        key_names_left,
+        non_equal_conditions.left_filter_column,
+        kind,
+        strictness,
+        join_build_info.needVirtualDispatchForProbeBlock(),
+        collators,
+        restore_config.restore_round);
+    while (true)
+    {
+        if (is_cancelled())
+            return {};
+        auto block = doJoinBlockHash(probe_process_info, join_build_info);
+        assert(block);
+        block = removeUselessColumn(block);
+        result_rows += block.rows();
+        result_blocks.push_back(std::move(block));
+        /// exit the while loop if
+        /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
+        /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
+        if (probe_process_info.all_rows_joined_finish
+            || (may_probe_side_expanded_after_join && result_rows >= probe_process_info.min_result_block_size))
+            break;
+    }
+    assert(!result_blocks.empty());
+    return vstackBlocks(std::move(result_blocks));
+}
+
+Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
+{
+    assert(probe_process_info.prepare_for_probe_done);
+    if (cross_probe_mode == CrossProbeMode::DEEP_COPY_RIGHT_BLOCK)
+    {
+        probe_process_info.updateStartRow<false>();
+        auto block = crossProbeBlockDeepCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
+        if (non_equal_conditions.other_cond_expr != nullptr)
+        {
+            assert(probe_process_info.offsets_to_replicate != nullptr);
+            if (probe_process_info.end_row - probe_process_info.start_row != probe_process_info.block.rows())
+            {
+                probe_process_info.cutFilterAndOffsetVector(probe_process_info.start_row, probe_process_info.end_row);
+            }
+            handleOtherConditions(
+                block,
+                probe_process_info.filter.get(),
+                probe_process_info.offsets_to_replicate.get());
+        }
+        return block;
+    }
+    else if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
+    {
+        probe_process_info.updateStartRow<true>();
+        auto [block, is_matched_rows]
+            = crossProbeBlockShallowCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
+        if (is_matched_rows)
+        {
+            if (non_equal_conditions.other_cond_expr != nullptr)
+            {
+                probe_process_info.cutFilterAndOffsetVector(0, 1);
+                /// for matched rows, each call to `doJoinBlockCross` only handle part of the probed data for one left row, the internal
+                /// state is saved in `probe_process_info`
+                handleOtherConditionsForOneProbeRow(block, probe_process_info);
+            }
+            for (size_t i = 0; i < probe_process_info.cross_join_data->left_column_index_in_left_block.size(); ++i)
+            {
+                auto & name = probe_process_info.block
+                                  .getByPosition(probe_process_info.cross_join_data->left_column_index_in_left_block[i])
+                                  .name;
+                if (block.has(name))
+                {
+                    auto & column_and_name = block.getByName(name);
+                    if (column_and_name.column->isColumnConst())
+                        column_and_name.column = column_and_name.column->convertToFullColumnIfConst();
+                }
+            }
+            if (isLeftOuterSemiFamily(kind))
+            {
+                auto & help_column = block.getByName(match_helper_name);
+                if (help_column.column->isColumnConst())
+                    help_column.column = help_column.column->convertToFullColumnIfConst();
+            }
+        }
+        else if (non_equal_conditions.other_cond_expr != nullptr)
+        {
+            probe_process_info.cutFilterAndOffsetVector(0, block.rows());
+            handleOtherConditions(
+                block,
+                probe_process_info.filter.get(),
+                probe_process_info.offsets_to_replicate.get());
+        }
+        return block;
+    }
+    else
+    {
+        throw Exception(fmt::format("Unsupported cross probe mode: {}", magic_enum::enum_name(cross_probe_mode)));
+>>>>>>> 78bd3f04dc (fix tiflash assert failure  (#9456))
     }
 }
 
@@ -1983,6 +2138,9 @@ void Join::joinBlock(Block & block) const
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
+    // if cancelled, just return empty block
+    if (!block)
+        return block;
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti)
     {
