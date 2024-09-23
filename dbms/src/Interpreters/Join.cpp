@@ -1352,6 +1352,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 
 Block Join::removeUselessColumn(Block & block) const
 {
+    // cancelled
+    if (!block)
+        return block;
+
     Block projected_block;
     for (const auto & name : tidb_output_column_names)
     {
@@ -2004,6 +2008,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     else
         block = joinBlockHash(probe_process_info);
 
+    // if cancelled, just return empty block
+    if (!block)
+        return block;
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == LeftOuterAnti || kind == Cross_LeftOuterAnti)
     {

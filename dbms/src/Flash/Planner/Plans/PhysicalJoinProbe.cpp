@@ -56,6 +56,14 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
             max_block_size,
             input_header));
     });
+<<<<<<< HEAD
+=======
+    // The `join_ptr->wait_build_finished_future` does not need to be added to exec_context here;
+    // it is only necessary to add it during the "restore build stage."
+    // The order of build/probe here is ensured by the event.
+    exec_context.addOneTimeFuture(join_ptr->wait_probe_finished_future);
+    join_ptr->setCancellationHook([&]() { return exec_context.isCancelled(); });
+>>>>>>> 78bd3f04dc (fix tiflash assert failure  (#9456))
     join_ptr.reset();
 }
 } // namespace DB
