@@ -17,7 +17,7 @@ mysql> create table test.t(id int(11) NOT NULL, a bit(4) DEFAULT b'0', b bit(12)
 mysql> insert into test.t (id) values (1),(2),(3);
 mysql> alter table test.t set tiflash replica 1;
 
-func> wait_table test a1
+func> wait_table test t
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
 +----+------------+------------+------------+
