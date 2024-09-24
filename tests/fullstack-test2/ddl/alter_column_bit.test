@@ -47,3 +47,16 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t o
 |  2 | 0x00       | 0x0707     | 0x0F08     |
 |  3 | 0x00       | 0x0707     | 0x0F08     |
 +----+------------+------------+------------+
+
+mysql> insert into test.t (id) values (4);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++----+------------+------------+------------+
+| id | a          | b          | c          |
++----+------------+------------+------------+
+|  1 | 0x00       | 0x0707     | 0x0F08     |
+|  2 | 0x00       | 0x0707     | 0x0F08     |
+|  3 | 0x00       | 0x0707     | 0x0F08     |
+|  4 | 0x07       | 0x0707     | 0x0F08     |
++----+------------+------------+------------+
+
+mysql> drop table if exists test.t;
