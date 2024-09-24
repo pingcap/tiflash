@@ -114,7 +114,7 @@ void MPPTaskStatistics::logTracingJson()
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
         R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
         R"(,"local_input_bytes":{},"remote_input_bytes":{},"output_bytes":{})"
-        R"(,"status":"{}","error_message":"{}","cpu_ru":{},"read_ru":{},"memory_peak":{}}})",
+        R"(,"status":"{}","error_message":"{}","cpu_ru":{},"read_ru":{},"memory_peak":{},"extra_info":{}}})",
         id.gather_id.query_id.start_ts,
         id.task_id,
         is_root,
@@ -135,7 +135,8 @@ void MPPTaskStatistics::logTracingJson()
         error_message,
         ru_info.cpu_ru,
         ru_info.read_ru,
-        memory_peak);
+        memory_peak,
+        extra_info);
 }
 
 void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
@@ -153,6 +154,11 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
 {
     compile_start_timestamp = start_timestamp;
     compile_end_timestamp = end_timestamp;
+}
+
+void MPPTaskStatistics::setExtraInfo(const String & extra_info_)
+{
+    extra_info = extra_info_;
 }
 
 void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
