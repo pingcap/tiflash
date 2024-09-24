@@ -105,7 +105,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
         physical_table_ids.emplace_back(remote_table_range.first);
         ranges_for_each_physical_table.emplace_back(remote_table_range.second);
     }
-
+    bool has_ann_query = table_scan.getANNQueryInfo().query_type() != tipb::ANNQueryType::InvalidQueryType;
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
@@ -118,7 +118,8 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
         ranges_for_each_physical_table,
         store_type,
         label_filter,
-        &Poco::Logger::get("pingcap/coprocessor"));
+        &Poco::Logger::get("pingcap/coprocessor"),
+        has_ann_query);
     LOG_DEBUG(log, "batch cop tasks(nums: {}) build finish for tiflash_storage node", batch_cop_tasks.size());
     return batch_cop_tasks;
 }
