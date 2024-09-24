@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <Operators/HashJoinProbeTransformOp.h>
