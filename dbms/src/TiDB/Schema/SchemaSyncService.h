@@ -35,6 +35,11 @@ using ASTs = std::vector<ASTPtr>;
 using DBGInvokerPrinter = std::function<void(const std::string &)>;
 extern void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
 
+namespace tests
+{
+class SchemaSyncTest;
+}
+
 class SchemaSyncService
     : public std::enable_shared_from_this<SchemaSyncService>
     , private boost::noncopyable
@@ -43,17 +48,22 @@ public:
     explicit SchemaSyncService(Context & context_);
     ~SchemaSyncService();
 
+    friend class tests::SchemaSyncTest;
+    bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
+
+    void shutdown();
+
 private:
     bool syncSchemas(KeyspaceID keyspace_id);
     void removeCurrentVersion(KeyspaceID keyspace_id);
 
-    bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
 
     void addKeyspaceGCTasks();
     void removeKeyspaceGCTasks();
 
     std::optional<Timestamp> lastGcSafePoint(KeyspaceID keyspace_id) const;
     void updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint);
+    bool gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, bool ignore_remain_regions);
 
 private:
     Context & context;
