@@ -1,0 +1,49 @@
+# Copyright 2024 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table test.t(id int(11) NOT NULL, a bit(4) DEFAULT b'0', b bit(12) DEFAULT b'11100000111', c bit(12) DEFAULT b'111100001000', PRIMARY KEY (id));
+mysql> insert into test.t (id) values (1),(2),(3);
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test a1
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++----+------------+------------+------------+
+| id | a          | b          | c          |
++----+------------+------------+------------+
+|  1 | 0x00       | 0x0707     | 0x0F08     |
+|  2 | 0x00       | 0x0707     | 0x0F08     |
+|  3 | 0x00       | 0x0707     | 0x0F08     |
++----+------------+------------+------------+
+
+mysql> alter table test.t modify column a bit(4) default b'1';
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++----+------------+------------+------------+
+| id | a          | b          | c          |
++----+------------+------------+------------+
+|  1 | 0x00       | 0x0707     | 0x0F08     |
+|  2 | 0x00       | 0x0707     | 0x0F08     |
+|  3 | 0x00       | 0x0707     | 0x0F08     |
++----+------------+------------+------------+
+
+mysql> alter table test.t modify column a bit(4) default b'0111';
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++----+------------+------------+------------+
+| id | a          | b          | c          |
++----+------------+------------+------------+
+|  1 | 0x00       | 0x0707     | 0x0F08     |
+|  2 | 0x00       | 0x0707     | 0x0F08     |
+|  3 | 0x00       | 0x0707     | 0x0F08     |
++----+------------+------------+------------+
