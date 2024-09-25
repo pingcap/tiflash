@@ -533,7 +533,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             // so other FAP tasks that share the same checkpoint could reuse the cache.
             if (!res)
                 return {};
-            auto [end_key_and_segment_ids, segment_infos] = *res;
+            auto & [end_key_and_segment_ids, segment_infos] = *res;
             LOG_DEBUG(log, "Build cache for with {} segments", end_key_and_segment_ids.size());
             end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
             return segment_infos;
