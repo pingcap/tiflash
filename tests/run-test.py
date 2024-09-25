@@ -191,14 +191,17 @@ def compare_line(line, template):
 # MySQL outputs binary data in hex format, we need to convert it to string
 def convert_hex(word):
     if word.startswith("0x"):
-        return codecs.decode(word[2:], 'hex').decode('unicode-escape')
+        value_bytes = codecs.decode(word[2:], 'hex')
+        if value_bytes == b'\x00':
+            return '\\0'
+        return value_bytes.decode('unicode-escape')
     else:
         return word
 
 class MySQLCompare:
     @staticmethod
     def parse_output_line(line):
-        words = [w.strip().encode().decode('unicode-escape') for w in line.split("\t") if w.strip() != ""]
+        words = [w.strip() for w in line.split("\t") if w.strip() != ""]
         return "@".join(words)
 
     @staticmethod
