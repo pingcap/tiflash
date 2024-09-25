@@ -24,7 +24,7 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>

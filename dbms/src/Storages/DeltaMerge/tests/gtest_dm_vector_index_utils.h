@@ -16,7 +16,7 @@
 
 #include <Core/ColumnWithTypeAndName.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>

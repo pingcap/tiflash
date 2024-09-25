@@ -43,7 +43,6 @@ StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & nam
         {"table_id", std::make_shared<DataTypeInt64>()},
         {"belonging_table_id", std::make_shared<DataTypeInt64>()},
 
-        {"column_name", std::make_shared<DataTypeString>()},
         {"column_id", std::make_shared<DataTypeUInt64>()},
         {"index_id", std::make_shared<DataTypeInt64>()},
         {"index_kind", std::make_shared<DataTypeString>()},
@@ -52,6 +51,10 @@ StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & nam
         {"rows_stable_not_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
         {"rows_delta_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
         {"rows_delta_not_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
+
+        // Fatal message when building local index
+        // when this is not an empty string, it means the build job of this local is aborted
+        {"error_message", std::make_shared<DataTypeString>()},
     }));
 }
 
@@ -119,7 +122,6 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
                 res_columns[j++]->insert(table_id);
                 res_columns[j++]->insert(table_info.belonging_table_id);
 
-                res_columns[j++]->insert(String("")); // TODO: let tidb set the column_name and index_name by itself
                 res_columns[j++]->insert(stat.column_id);
                 res_columns[j++]->insert(stat.index_id);
                 res_columns[j++]->insert(stat.index_kind);
@@ -128,6 +130,8 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
                 res_columns[j++]->insert(stat.rows_stable_not_indexed);
                 res_columns[j++]->insert(stat.rows_delta_indexed);
                 res_columns[j++]->insert(stat.rows_delta_not_indexed);
+
+                res_columns[j++]->insert(stat.error_message);
             }
         }
     }

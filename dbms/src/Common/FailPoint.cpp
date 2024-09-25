@@ -71,6 +71,8 @@ namespace DB
     M(force_remote_read_for_batch_cop_once)                       \
     M(exception_new_dynamic_thread)                               \
     M(force_wait_index_timeout)                                   \
+    M(force_local_index_task_memory_limit_exceeded)               \
+    M(exception_build_local_index_for_file)                       \
     M(force_not_support_vector_index)                             \
     M(sync_schema_request_failure)
 

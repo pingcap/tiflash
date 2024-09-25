@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -206,7 +207,7 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
         LocalIndexStats index_stats;
         index_stats.column_id = index_info.column_id;
         index_stats.index_id = index_info.index_id;
-        index_stats.index_kind = "HNSW"; // TODO: Support more.
+        index_stats.index_kind = tipb::VectorIndexKind_Name(index_info.index_definition->kind);
 
         for (const auto & [handle, segment] : segments)
         {
@@ -240,6 +241,14 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
             else
             {
                 index_stats.rows_stable_not_indexed += stable->getRows();
+            }
+
+            const auto index_build_error = segment->getIndexBuildError();
+            // Set error_message to the first error_message we meet among all segments
+            if (auto err_iter = index_build_error.find(index_info.index_id);
+                err_iter != index_build_error.end() && index_stats.error_message.empty())
+            {
+                index_stats.error_message = err_iter->second;
             }
         }
 

@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/ScanContext.h>
