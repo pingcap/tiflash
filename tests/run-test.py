@@ -22,6 +22,7 @@ import re
 import sys
 import time
 import datetime
+import codecs
 
 if sys.version_info.major == 2:
     # print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
@@ -190,7 +191,7 @@ def compare_line(line, template):
 # MySQL outputs binary data in hex format, we need to convert it to string
 def convert_hex(word):
     if word.startswith("0x"):
-        return word[2:].decode('hex').decode('unicode-escape')
+        return codecs.decode(word[2:], 'hex').decode('unicode-escape')
     else:
         return word
 
