@@ -150,10 +150,13 @@ set -e
 # called from subprocess.
 if [ -x "$(command -v python3)" ]; then
 	export PY="python3"
+	echo "Using python3"
 elif [ -x "$(command -v python2)" ]; then
 	export PY="python2"
+	echo "Using python2"
 elif [ -x "$(command -v python)" ]; then
 	export PY="python"
+	echo "Using python"
 else
 	echo 'Error: python not found in PATH.' >&2
 	exit 1
