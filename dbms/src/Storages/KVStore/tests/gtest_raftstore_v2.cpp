@@ -299,79 +299,81 @@ try
 }
 CATCH
 
-// // Test if one subtask throws.
-// TEST_F(RegionKVStoreTest, KVStoreSingleSnap4)
-// try
-// {
-//     auto ctx = TiFlashTestEnv::getGlobalContext();
-//     proxy_instance->cluster_ver = RaftstoreVer::V2;
-//     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
-//     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
-//     UInt64 region_id = 1;
-//     TableID table_id;
-//     FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, static_cast<size_t>(0));
-//     SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_set_parallel_prehandle_threshold"); });
-//     {
-//         region_id = 2;
-//         initStorages();
-//         KVStore & kvs = getKVS();
-//         HandleID table_limit = 90;
-//         HandleID sst_limit = 100;
-//         table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-//         auto start = RecordKVFormat::genKey(table_id, 0);
-//         auto end = RecordKVFormat::genKey(table_id, table_limit);
-//         proxy_instance->bootstrapWithRegion(
-//             kvs,
-//             ctx.getTMTContext(),
-//             region_id,
-//             std::make_pair(start.toString(), end.toString()));
-//         auto r1 = proxy_instance->getRegion(region_id);
+#if 0
+// Test if one subtask throws.
+TEST_F(RegionKVStoreTest, KVStoreSingleSnap4)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+    FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, static_cast<size_t>(0));
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_set_parallel_prehandle_threshold"); });
+    {
+        region_id = 2;
+        initStorages();
+        KVStore & kvs = getKVS();
+        HandleID table_limit = 90;
+        HandleID sst_limit = 100;
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, table_limit);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
 
-//         auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
-//         {
-//             MockSSTReader::getMockSSTData().clear();
-//             MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
-//             for (HandleID h = 1; h < sst_limit; h++)
-//             {
-//                 auto k = RecordKVFormat::genKey(table_id, h, 111);
-//                 default_cf.insert_raw(k, value_default);
-//             }
-//             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
-//             default_cf.freeze();
-//             MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
-//             for (HandleID h = 1; h < sst_limit; h++)
-//             {
-//                 auto k = RecordKVFormat::genKey(table_id, h, 111);
-//                 write_cf.insert_raw(k, value_write);
-//             }
-//             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
-//             write_cf.freeze();
+        auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        {
+            MockSSTReader::getMockSSTData().clear();
+            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            for (HandleID h = 1; h < sst_limit; h++)
+            {
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
+                default_cf.insert_raw(k, value_default);
+            }
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            for (HandleID h = 1; h < sst_limit; h++)
+            {
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
+                write_cf.insert_raw(k, value_write);
+            }
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
 
-//             auto fpv = std::make_shared<std::atomic_uint64_t>(0);
-//             FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
-//             SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_raise_prehandle_exception"); });
-//             {
-//                 LOG_INFO(log, "Try decode when meet the first ErrUpdateSchema");
-//                 fpv->store(1);
-//                 FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
-//                 auto [kvr1, res]
-//                     = proxy_instance
-//                           ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
-//                 // After retried.
-//                 ASSERT_EQ(res.stats.parallels, 4);
-//             }
-//             {
-//                 LOG_INFO(log, "Try decode when always meet ErrUpdateSchema");
-//                 fpv->store(2);
-//                 EXPECT_THROW(
-//                     proxy_instance
-//                         ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt),
-//                     Exception);
-//             }
-//         }
-//     }
-// }
-// CATCH
+            auto fpv = std::make_shared<std::atomic_uint64_t>(0);
+            FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
+            SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_raise_prehandle_exception"); });
+            {
+                LOG_INFO(log, "Try decode when meet the first ErrUpdateSchema");
+                fpv->store(1);
+                FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
+                auto [kvr1, res]
+                    = proxy_instance
+                          ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+                // After retried.
+                ASSERT_EQ(res.stats.parallels, 4);
+            }
+            {
+                LOG_INFO(log, "Try decode when always meet ErrUpdateSchema");
+                fpv->store(2);
+                EXPECT_THROW(
+                    proxy_instance
+                        ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt),
+                    Exception);
+            }
+        }
+    }
+}
+CATCH
+#endif
 
 // Test if default has significantly more kvs than write cf.
 TEST_F(RegionKVStoreTest, KVStoreSingleSnap5)
