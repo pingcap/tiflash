@@ -190,7 +190,7 @@ def compare_line(line, template):
 # MySQL outputs binary data in hex format, we need to convert it to string
 def convert_hex(word):
     if word.startswith("0x"):
-        return bytes.fromhex(word[2:]).decode('unicode-escape')
+        return word[2:].decode('hex').decode('unicode-escape')
     else:
         return word
 
