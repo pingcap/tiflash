@@ -68,4 +68,6 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     const TiDB::TableInfo & new_table_info,
     const LoggerPtr & logger);
 
+
+bool containsLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
 } // namespace DB::DM

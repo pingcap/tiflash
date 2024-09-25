@@ -314,4 +314,23 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     };
 }
 
+bool containsLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger)
+{
+    if (!isVectorIndexSupported(logger))
+        return false;
+
+    for (const auto & col : table_info.columns)
+    {
+        if (col.vector_index)
+        {
+            return true;
+        }
+    }
+    for (const auto & idx : table_info.index_infos)
+    {
+        if (idx.vector_index)
+            return true;
+    }
+    return false;
+}
 } // namespace DB::DM

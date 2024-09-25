@@ -93,11 +93,10 @@ StorageDeltaMerge::StorageDeltaMerge(
     , global_context(global_context_.getGlobalContext())
     , log(Logger::get(fmt::format("{}.{}", db_name_, table_name_)))
 {
-    if (primary_expr_ast_->children.empty())
-        throw Exception("No primary key");
+    RUNTIME_CHECK_MSG(!primary_expr_ast_->children.empty(), "No primary key, ident={}", log->identifier());
 
     // save schema from TiDB
-    if (table_info_)
+    if (likely(table_info_))
     {
         tidb_table_info = table_info_->get();
         is_common_handle = tidb_table_info.is_common_handle;
@@ -113,6 +112,11 @@ StorageDeltaMerge::StorageDeltaMerge(
     table_column_info = std::make_unique<TableColumnInfo>(db_name_, table_name_, primary_expr_ast_);
 
     updateTableColumnInfo();
+
+    if (table_info_ && containsLocalIndexInfos(table_info_.value(), log))
+    {
+        getAndMaybeInitStore();
+    }
 }
 
 void StorageDeltaMerge::updateTableColumnInfo()
@@ -1394,16 +1398,34 @@ void StorageDeltaMerge::alterSchemaChange(
     LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
 
     {
-        std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
+        // In order to avoid concurrent issue between init store and DDL,
+        // we must acquire the lock before schema changes is applied.
+        std::lock_guard lock(store_mutex);
         if (storeInited())
         {
             _store->applySchemaChanges(table_info);
         }
-        else // it seems we will never come into this branch ?
+        else
         {
-            updateTableColumnInfo();
+            if (containsLocalIndexInfos(table_info, log))
+            {
+                // If there exist vector index, then we must init the store to create
+                // at least 1 segment. So that tidb can detect the index is added.
+                initStore(lock);
+                _store->applySchemaChanges(table_info);
+            }
+            else
+            {
+                // If there is no data need to be stored for this table, the _store instance
+                // is not inited to reduce fragmentation files that may exhaust the inode of
+                // disk.
+                // Under this case, we update some in-memory variables to ensure the correctness.
+                updateTableColumnInfo();
+            }
         }
     }
+
+    // Should generate new decoding snapshot and cache block
     decoding_schema_changed = true;
 
     SortDescription pk_desc = getPrimarySortDescription();
@@ -1802,14 +1824,9 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
     return desc;
 }
 
-DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread_pool)
+DeltaMergeStorePtr & StorageDeltaMerge::initStore(const std::lock_guard<std::mutex> &, ThreadPool * thread_pool)
 {
-    if (storeInited())
-    {
-        return _store;
-    }
-    std::lock_guard lock(store_mutex);
-    if (_store == nullptr)
+    if (likely(_store == nullptr))
     {
         auto index_infos = initLocalIndexInfos(tidb_table_info, log);
         _store = DeltaMergeStore::create(
@@ -1834,8 +1851,20 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
     return _store;
 }
 
-bool StorageDeltaMerge::initStoreIfDataDirExist(ThreadPool * thread_pool)
+DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread_pool)
 {
+    if (storeInited())
+    {
+        return _store;
+    }
+    std::lock_guard lock(store_mutex);
+    return initStore(lock, thread_pool);
+}
+
+bool StorageDeltaMerge::initStoreIfNeed(ThreadPool * thread_pool)
+{
+    // If the table is tombstone, then wait for it exceeds the gc_safepoint and
+    // get physically drop without initing the instance.
     if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
     {
         return false;
@@ -1845,12 +1874,16 @@ bool StorageDeltaMerge::initStoreIfDataDirExist(ThreadPool * thread_pool)
     {
         return true;
     }
-    if (!dataDirExist())
+    if (dataDirExist() || containsLocalIndexInfos(tidb_table_info, log))
     {
-        return false;
+        // - there exist some data stored on disk
+        // - there exist tiflash local index
+        // We need to init the DeltaMergeStore instance for reporting the disk usage, local index
+        // status, etc.
+        getAndMaybeInitStore(thread_pool);
+        return true;
     }
-    getAndMaybeInitStore(thread_pool);
-    return true;
+    return false;
 }
 
 bool StorageDeltaMerge::dataDirExist()

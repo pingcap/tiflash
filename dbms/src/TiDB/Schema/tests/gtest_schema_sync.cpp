@@ -796,7 +796,7 @@ try
 
     DM::tests::DeltaMergeStoreVectorBase dmsv;
     StorageDeltaMergePtr storage = std::static_pointer_cast<StorageDeltaMerge>(mustGetSyncedTable(t1_id));
-    dmsv.store = storage->getStore();
+    dmsv.store = storage->getAndMaybeInitStore();
     dmsv.db_context = std::make_shared<Context>(global_ctx.getGlobalContext());
     dmsv.vec_column_name = cols.getAllPhysical().back().name;
     dmsv.vec_column_id = mustGetSyncedTable(t1_id)->getTableInfo().getColumnID(dmsv.vec_column_name);
@@ -818,7 +818,6 @@ try
     // sync table schema, the VectorIndex in TableInfo should be updated
     refreshTableSchema(t1_id);
     auto tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
-    tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
     idx_infos = tbl_info.index_infos;
     ASSERT_EQ(idx_infos.size(), 1);
     for (const auto & idx : idx_infos)
@@ -900,6 +899,97 @@ try
         refreshTableSchema(t1_id);
         idx_infos = mustGetSyncedTable(t1_id)->getTableInfo().index_infos;
         ASSERT_EQ(idx_infos.size(), 0);
+    }
+}
+CATCH
+
+
+TEST_F(SchemaSyncTest, SyncTableWithVectorIndexCase1)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("Int64")},
+        {"vec", typeFromString("Array(Float32)")},
+    });
+    auto t1_id = MockTiDB::instance().newTable(db_name, "t1", cols, pd_client->getTS(), "");
+    refreshSchema();
+
+    // The `StorageDeltaMerge` is created but `DeltaMergeStore` is not inited
+    StorageDeltaMergePtr storage = std::static_pointer_cast<StorageDeltaMerge>(mustGetSyncedTable(t1_id));
+    ASSERT_EQ(nullptr,storage->getStoreIfInited());
+    
+    // add a vector index
+    IndexID idx_id = 11;
+    auto vector_index = std::make_shared<const TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 3,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+    MockTiDB::instance().addVectorIndexToTable(db_name, "t1", idx_id, cols.getAllPhysical().back(), 0, vector_index);
+
+    // sync table schema, the VectorIndex in TableInfo should be updated
+    refreshTableSchema(t1_id);
+    // The `DeltaMergeStore` instanced should be inited
+    ASSERT_NE(nullptr,storage->getStoreIfInited());
+
+    auto tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
+    auto idx_infos = tbl_info.index_infos;
+    ASSERT_EQ(idx_infos.size(), 1);
+    for (const auto & idx : idx_infos)
+    {
+        ASSERT_EQ(idx.id, idx_id);
+        ASSERT_NE(idx.vector_index, nullptr);
+        ASSERT_EQ(idx.vector_index->kind, vector_index->kind);
+        ASSERT_EQ(idx.vector_index->dimension, vector_index->dimension);
+        ASSERT_EQ(idx.vector_index->distance_metric, vector_index->distance_metric);
+    }
+
+}
+CATCH
+
+TEST_F(SchemaSyncTest, SyncTableWithVectorIndexCase2)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    // The table is created and vector index is added. After that, the table info is synced to TiFlash
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("Int64")},
+        {"vec", typeFromString("Array(Float32)")},
+    });
+    auto t1_id = MockTiDB::instance().newTable(db_name, "t1", cols, pd_client->getTS(), "");
+    IndexID idx_id = 11;
+    auto vector_index = std::make_shared<const TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 3,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+    MockTiDB::instance().addVectorIndexToTable(db_name, "t1", idx_id, cols.getAllPhysical().back(), 0, vector_index);
+
+    // Synced with mock tidb, and create the StorageDeltaMerge instance
+    refreshTableSchema(t1_id);
+    // The `DeltaMergeStore` instanced should be inited
+    StorageDeltaMergePtr storage = std::static_pointer_cast<StorageDeltaMerge>(mustGetSyncedTable(t1_id));
+    ASSERT_NE(nullptr, storage->getStoreIfInited());
+
+    auto tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
+    auto idx_infos = tbl_info.index_infos;
+    ASSERT_EQ(idx_infos.size(), 1);
+    for (const auto & idx : idx_infos)
+    {
+        ASSERT_EQ(idx.id, idx_id);
+        ASSERT_NE(idx.vector_index, nullptr);
+        ASSERT_EQ(idx.vector_index->kind, vector_index->kind);
+        ASSERT_EQ(idx.vector_index->dimension, vector_index->dimension);
+        ASSERT_EQ(idx.vector_index->distance_metric, vector_index->distance_metric);
     }
 }
 CATCH

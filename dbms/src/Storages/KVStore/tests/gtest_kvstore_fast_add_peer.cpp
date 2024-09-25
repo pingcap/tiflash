@@ -246,7 +246,8 @@ void assertNoSegment(
     auto storage = storages.get(keyspace_id, table_id);
     RUNTIME_CHECK(storage && storage->engineType() == TiDB::StorageEngine::DT);
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-    auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+    auto dm_context
+        = dm_storage->getAndMaybeInitStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
     for (const auto & seg_persisted : ingest_info_persisted.segments())
     {
         ReadBufferFromString buf(seg_persisted.segment_meta());
@@ -485,7 +486,7 @@ try
         auto storage = global_context.getTMTContext().getStorages().get(keyspace_id, table_id);
         ASSERT_TRUE(storage && storage->engineType() == TiDB::StorageEngine::DT);
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        auto store = dm_storage->getStore();
+        auto store = dm_storage->getAndMaybeInitStore();
         ASSERT_EQ(store->getRowKeyColumnSize(), 1);
         verifyRows(
             global_context,

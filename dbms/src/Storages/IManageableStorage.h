@@ -90,8 +90,8 @@ public:
     /// `limit` is the max number of segments to gc, return value is the number of segments gced
     virtual UInt64 onSyncGc(Int64 /*limit*/, const DM::GCOptions &) { throw Exception("Unsupported"); }
 
-    /// Return true is data dir exist
-    virtual bool initStoreIfDataDirExist(ThreadPool * /*thread_pool*/) { throw Exception("Unsupported"); }
+    /// Return true if the DeltaMergeStore instance need to be inited
+    virtual bool initStoreIfNeed(ThreadPool * /*thread_pool*/) { throw Exception("Unsupported"); }
 
     virtual TiDB::StorageEngine engineType() const = 0;
 

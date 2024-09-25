@@ -162,7 +162,7 @@ try
             EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_write)));
         }
     }
-    auto delta_store = storage->getStore();
+    auto delta_store = storage->getAndMaybeInitStore();
     size_t total_segment_rows = 0;
     auto segment_stats = delta_store->getSegmentsStats();
     for (auto & stat : segment_stats)
@@ -308,7 +308,7 @@ try
     auto sort_desc = storage->getPrimarySortDescription();
     ASSERT_FALSE(storage->storeInited());
 
-    const auto & store = storage->getStore();
+    const auto & store = storage->getAndMaybeInitStore();
     ASSERT_TRUE(storage->storeInited());
     auto pk_type2 = store->getPKDataType();
     auto sort_desc2 = store->getPrimarySortDescription();
@@ -826,11 +826,11 @@ try
     {
         write_data(num_rows_write, 1000);
         num_rows_write += 1000;
-        if (storage->getStore()->getSegmentsStats().size() > 1)
+        if (storage->getAndMaybeInitStore()->getSegmentsStats().size() > 1)
             break;
     }
     {
-        ASSERT_GT(storage->getStore()->getSegmentsStats().size(), 1);
+        ASSERT_GT(storage->getAndMaybeInitStore()->getSegmentsStats().size(), 1);
         ASSERT_EQ(read_data(), num_rows_write);
     }
     storage->flushCache(*ctx);
@@ -847,13 +847,13 @@ try
     // write more data make sure segments more than 1
     for (size_t i = 0; i < 100000; i++)
     {
-        if (storage->getStore()->getSegmentsStats().size() > 1)
+        if (storage->getAndMaybeInitStore()->getSegmentsStats().size() > 1)
             break;
         write_data(num_rows_write, 1000);
         num_rows_write += 1000;
     }
     {
-        ASSERT_GT(storage->getStore()->getSegmentsStats().size(), 1);
+        ASSERT_GT(storage->getAndMaybeInitStore()->getSegmentsStats().size(), 1);
         ASSERT_EQ(read_data(), num_rows_write);
     }
     storage->flushCache(*ctx);
@@ -873,7 +873,7 @@ try
     // restore the table and make sure there is just one segment left
     create_table();
     {
-        ASSERT_EQ(storage->getStore()->getSegmentsStats().size(), 1);
+        ASSERT_EQ(storage->getAndMaybeInitStore()->getSegmentsStats().size(), 1);
         ASSERT_LT(read_data(), num_rows_write);
     }
     storage->drop();
