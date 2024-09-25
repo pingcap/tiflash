@@ -551,8 +551,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         auto res = build_segments(is_cache_ready, current_segment_id);
         if (!res)
             return {};
-        auto [end_key_and_segment_ids, segment_infos] = *res;
-        return segment_infos;
+        return std::move(res->second);
     }
 
     if (cancel_handle->isCanceled())
