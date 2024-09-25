@@ -213,7 +213,7 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
                 pb_idx.set_dimensions(index_builder->definition->dimension);
                 pb_idx.set_index_id(index_id);
                 pb_idx.set_index_bytes(Poco::File(index_path).getSize());
-                new_indexes.emplace_back(std::move(pb_idx));
+                new_indexes.emplace_back(pb_idx);
 
                 total_built_index_bytes += pb_idx.index_bytes();
                 iw->include(index_file_name);
