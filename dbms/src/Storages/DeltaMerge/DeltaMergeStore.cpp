@@ -39,6 +39,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
@@ -62,6 +63,8 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 
 
 namespace ProfileEvents
@@ -219,7 +222,7 @@ DeltaMergeStore::DeltaMergeStore(
     const ColumnDefine & handle,
     bool is_common_handle_,
     size_t rowkey_column_size_,
-    IndexInfosPtr local_index_infos_,
+    LocalIndexInfosPtr local_index_infos_,
     const Settings & settings_,
     ThreadPool * thread_pool)
     : global_context(db_context.getGlobalContext())
@@ -339,7 +342,7 @@ DeltaMergeStorePtr DeltaMergeStore::create(
     const ColumnDefine & handle,
     bool is_common_handle_,
     size_t rowkey_column_size_,
-    IndexInfosPtr local_index_infos_,
+    LocalIndexInfosPtr local_index_infos_,
     const Settings & settings_,
     ThreadPool * thread_pool)
 {
@@ -2017,8 +2020,29 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
-    // TODO(local index): There could be some local indexes added/dropped after DDL
+    // copy the local_index_infos to check whether any new index is created
+    LocalIndexInfosPtr local_index_infos_copy = nullptr;
+    {
+        std::shared_lock index_read_lock(mtx_local_index_infos);
+        local_index_infos_copy = std::shared_ptr<LocalIndexInfos>(local_index_infos);
+    }
+
     std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+
+    // release the lock because `checkAllSegmentsLocalIndex` will try to acquire the lock
+    // and generate tasks on segments
+    lock.unlock();
+
+    auto new_local_index_infos = generateLocalIndexInfos(local_index_infos_copy, table_info, log);
+    if (new_local_index_infos)
+    {
+        {
+            // new index created, update the info in-memory
+            std::unique_lock index_write_lock(mtx_local_index_infos);
+            local_index_infos.swap(new_local_index_infos);
+        }
+        checkAllSegmentsLocalIndex();
+    } // else no new index is created
 }
 
 SortDescription DeltaMergeStore::getPrimarySortDescription() const

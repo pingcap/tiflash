@@ -452,7 +452,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(
 
 void DeltaMergeStore::checkAllSegmentsLocalIndex()
 {
-    if (!local_index_infos || local_index_infos->empty())
+    if (!getLocalIndexInfosSnapshot())
         return;
 
     LOG_INFO(log, "CheckAllSegmentsLocalIndex - Begin");
@@ -529,12 +529,13 @@ bool DeltaMergeStore::segmentEnsureStableIndexAsync(const SegmentPtr & segment)
     RUNTIME_CHECK(segment != nullptr);
 
     // TODO(local index): There could be some indexes are built while some indexes is not yet built after DDL
-    if (!local_index_infos || local_index_infos->empty())
+    auto local_index_infos_snap = getLocalIndexInfosSnapshot();
+    if (!local_index_infos_snap)
         return false;
 
     // No lock is needed, stable meta is immutable.
     auto dm_files = segment->getStable()->getDMFiles();
-    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos, dm_files);
+    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, dm_files);
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
         return false;
 
@@ -569,13 +570,14 @@ bool DeltaMergeStore::segmentWaitStableIndexReady(const SegmentPtr & segment) co
     RUNTIME_CHECK(segment != nullptr);
 
     // TODO(local index): There could be some indexes are built while some indexes is not yet built after DDL
-    if (!local_index_infos || local_index_infos->empty())
+    auto local_index_infos_snap = getLocalIndexInfosSnapshot();
+    if (!local_index_infos_snap)
         return true;
 
     // No lock is needed, stable meta is immutable.
     auto segment_id = segment->segmentId();
     auto dm_files = segment->getStable()->getDMFiles();
-    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos, dm_files);
+    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, dm_files);
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
         return true;
 
@@ -653,7 +655,7 @@ SegmentPtr DeltaMergeStore::segmentUpdateMeta(
 
 void DeltaMergeStore::segmentEnsureStableIndex(
     DMContext & dm_context,
-    const IndexInfosPtr & index_info,
+    const LocalIndexInfosPtr & index_info,
     const DMFiles & dm_files,
     const String & source_segment_info)
 {

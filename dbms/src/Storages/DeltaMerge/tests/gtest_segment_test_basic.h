@@ -104,7 +104,7 @@ public:
     /**
      * Returns whether segment stable index is created.
      */
-    bool ensureSegmentStableIndex(PageIdU64 segment_id, IndexInfosPtr local_index_infos);
+    bool ensureSegmentStableIndex(PageIdU64 segment_id, LocalIndexInfosPtr local_index_infos);
 
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
     Block prepareWriteBlockInSegmentRange(

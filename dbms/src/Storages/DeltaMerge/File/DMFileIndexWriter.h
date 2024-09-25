@@ -44,15 +44,15 @@ public:
     {
         std::vector<LocalIndexerScheduler::FileID> file_ids;
         size_t estimated_memory_bytes = 0;
-        IndexInfosPtr indexes_to_build;
+        LocalIndexInfosPtr indexes_to_build;
     };
 
-    static LocalIndexBuildInfo getLocalIndexBuildInfo(const IndexInfosPtr & index_infos, const DMFiles & dm_files);
+    static LocalIndexBuildInfo getLocalIndexBuildInfo(const LocalIndexInfosPtr & index_infos, const DMFiles & dm_files);
 
     struct Options
     {
         const StoragePathPoolPtr path_pool;
-        const IndexInfosPtr index_infos;
+        const LocalIndexInfosPtr index_infos;
         const DMFiles dm_files;
         const DMContext & dm_context;
     };
