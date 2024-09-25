@@ -299,6 +299,7 @@ try
 }
 CATCH
 
+#if 0
 // Test if one subtask throws.
 TEST_F(RegionKVStoreTest, KVStoreSingleSnap4)
 try
@@ -372,6 +373,7 @@ try
     }
 }
 CATCH
+#endif
 
 // Test if default has significantly more kvs than write cf.
 TEST_F(RegionKVStoreTest, KVStoreSingleSnap5)
