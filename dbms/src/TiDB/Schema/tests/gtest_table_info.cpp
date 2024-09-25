@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Debug/MockSchemaNameMapper.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTLiteral.h>
@@ -19,11 +20,13 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/Logger.h>
 #include <Storages/KVStore/StorageEngineType.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDB.h>
+#include <gtest/gtest.h>
 
 
 using TableInfo = TiDB::TableInfo;
@@ -213,12 +216,50 @@ try
                 ASSERT_EQ(col1.name, "v");
                 ASSERT_EQ(col1.tp, TiDB::TP::TypeTiDBVectorFloat32);
                 ASSERT_EQ(col1.id, 2);
-            }}};
+            },
+        },
+        // VectorIndex defined without "kind" field
+        ParseCase{
+            R"json({"Lock":null,"ShardRowIDBits":0,"auto_id_cache":0,"auto_inc_id":0,"auto_rand_id":0,"auto_random_bits":0,"auto_random_range_bits":0,"cache_table_status":0,"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":4099,"Flen":11,"Tp":3},"version":2},{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":2,"name":{"L":"vec","O":"vec"},"offset":1,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":128,"Flen":3,"Tp":225},"version":2}],"comment":"","common_handle_version":0,"compression":"","constraint_info":null,"exchange_partition_info":null,"fk_info":null,"id":104,
+            "index_info":[{"backfill_state":0,"comment":"","id":1,"idx_cols":[{"length":-1,"name":{"L":"vec","O":"vec"},"offset":1}],"idx_name":{"L":"v","O":"v"},"index_type":5,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"mv_index":false,"state":3,"tbl_name":{"L":"","O":""},"vector_index":{"dimension":3,"distance_metric":"COSINE"}}],
+            "is_columnar":false,"is_common_handle":false,"max_col_id":2,"max_cst_id":0,"max_fk_id":0,"max_idx_id":1,"max_shard_row_id_bits":0,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":true,"revision":5,"sequence":null,"state":5,"stats_options":null,"temp_table_type":0,"update_timestamp":452784611061923843,"version":5,"view":null})json",
+            [](const TableInfo & table_info) {
+                ASSERT_EQ(table_info.index_infos.size(), 1);
+                auto idx0 = table_info.index_infos[0];
+                ASSERT_EQ(idx0.id, 1);
+                ASSERT_EQ(idx0.idx_name, "v");
+                ASSERT_EQ(idx0.idx_cols.size(), 1);
+                ASSERT_EQ(idx0.idx_cols[0].name, "vec");
+                ASSERT_EQ(idx0.idx_cols[0].offset, 1);
+                ASSERT_NE(idx0.vector_index, nullptr);
+                ASSERT_EQ(idx0.index_type, 5); // HNSW
+                ASSERT_EQ(idx0.vector_index->kind, tipb::VectorIndexKind::HNSW);
+                ASSERT_EQ(idx0.vector_index->dimension, 3);
+                ASSERT_EQ(idx0.vector_index->distance_metric, tipb::VectorDistanceMetric::COSINE);
+            },
+        },
+    };
 
     for (const auto & c : cases)
     {
         TableInfo table_info(c.table_info_json, NullspaceID);
         c.check(table_info);
+    }
+
+    Strings failure_case = {
+        // Suppose invalid index_type (index_type=4) for vector index is set, should throw exception
+        R"json({"Lock":null,"ShardRowIDBits":0,"auto_id_cache":0,"auto_inc_id":0,"auto_rand_id":0,"auto_random_bits":0,"auto_random_range_bits":0,"cache_table_status":0,"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":4099,"Flen":11,"Tp":3},"version":2},{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":2,"name":{"L":"vec","O":"vec"},"offset":1,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":128,"Flen":3,"Tp":225},"version":2}],"comment":"","common_handle_version":0,"compression":"","constraint_info":null,"exchange_partition_info":null,"fk_info":null,"id":104,
+        "index_info":[{"backfill_state":0,"comment":"","id":1,"idx_cols":[{"length":-1,"name":{"L":"vec","O":"vec"},"offset":1}],"idx_name":{"L":"v","O":"v"},"index_type":4,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"mv_index":false,"state":3,"tbl_name":{"L":"","O":""},"vector_index":{"dimension":3,"distance_metric":"COSINE"}}],
+        "is_columnar":false,"is_common_handle":false,"max_col_id":2,"max_cst_id":0,"max_fk_id":0,"max_idx_id":1,"max_shard_row_id_bits":0,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":true,"revision":5,"sequence":null,"state":5,"stats_options":null,"temp_table_type":0,"update_timestamp":452784611061923843,"version":5,"view":null})json",
+        // Suppose we add new algorithm type for vector index. Parsing unknown algorithm (index_type=99) should throw exception
+        R"json({"Lock":null,"ShardRowIDBits":0,"auto_id_cache":0,"auto_inc_id":0,"auto_rand_id":0,"auto_random_bits":0,"auto_random_range_bits":0,"cache_table_status":0,"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":4099,"Flen":11,"Tp":3},"version":2},{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":2,"name":{"L":"vec","O":"vec"},"offset":1,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":128,"Flen":3,"Tp":225},"version":2}],"comment":"","common_handle_version":0,"compression":"","constraint_info":null,"exchange_partition_info":null,"fk_info":null,"id":104,
+        "index_info":[{"backfill_state":0,"comment":"","id":1,"idx_cols":[{"length":-1,"name":{"L":"vec","O":"vec"},"offset":1}],"idx_name":{"L":"v","O":"v"},"index_type":99,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"mv_index":false,"state":3,"tbl_name":{"L":"","O":""},"vector_index":{"dimension":3,"distance_metric":"COSINE"}}],
+        "is_columnar":false,"is_common_handle":false,"max_col_id":2,"max_cst_id":0,"max_fk_id":0,"max_idx_id":1,"max_shard_row_id_bits":0,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":true,"revision":5,"sequence":null,"state":5,"stats_options":null,"temp_table_type":0,"update_timestamp":452784611061923843,"version":5,"view":null})json",
+    };
+
+    for (const auto & c : failure_case)
+    {
+        ASSERT_THROW({ TableInfo table_info(c, NullspaceID); }, DB::Exception) << c;
     }
 }
 CATCH
