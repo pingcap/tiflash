@@ -426,7 +426,6 @@ FastAddPeerRes FastAddPeerImplWrite(
             return true;
         },
         [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
-            LOG_DEBUG(log, "Write raft log size {} index={}", size, UniversalPageIdFormat::getU64ID(page_id));
             wb.putRemotePage(page_id, 0, size, location, {});
         });
 
