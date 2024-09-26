@@ -16,6 +16,15 @@
 # Preparation.
 mysql> drop table if exists test.t;
 
+# Build vector index on empty table, it should return quickly
+mysql> CREATE TABLE test.t (`v` vector(5) DEFAULT NULL);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> ALTER TABLE test.t ADD VECTOR INDEX idx_v_l2 ((VEC_L2_DISTANCE(v))) USING HNSW;
+mysql> ALTER TABLE test.t ADD VECTOR INDEX idx_v_cos ((VEC_COSINE_DISTANCE(v))) USING HNSW;
+mysql> drop table if exists test.t;
+
+# Build vector index on table with data on the stable layer
 mysql> CREATE TABLE test.t (`v` vector(5) DEFAULT NULL);
 mysql> INSERT INTO test.t VALUES ('[8.7, 5.7, 7.7, 9.8, 1.5]'),('[3.6, 9.7, 2.4, 6.6, 4.9]'),('[4.7, 4.9, 2.6, 5.2, 7.4]'),('[7.7, 6.7, 8.3, 7.8, 5.7]'),('[1.4, 4.5, 8.5, 7.7, 6.2]');
 mysql> alter table test.t set tiflash replica 1;
