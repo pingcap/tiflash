@@ -19,7 +19,7 @@ mysql> alter table test.t set tiflash replica 1;
 
 func> wait_table test t
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
+mysql_bin_as_hex> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
 +----+------------+------------+------------+
 | id | a          | b          | c          |
 +----+------------+------------+------------+
@@ -29,7 +29,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t o
 +----+------------+------------+------------+
 
 mysql> alter table test.t modify column a bit(4) default b'1';
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
+mysql_bin_as_hex> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
 +----+------------+------------+------------+
 | id | a          | b          | c          |
 +----+------------+------------+------------+
@@ -39,7 +39,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t o
 +----+------------+------------+------------+
 
 mysql> alter table test.t modify column a bit(4) default b'0111';
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
+mysql_bin_as_hex> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
 +----+------------+------------+------------+
 | id | a          | b          | c          |
 +----+------------+------------+------------+
@@ -49,7 +49,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t o
 +----+------------+------------+------------+
 
 mysql> insert into test.t (id) values (4);
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
+mysql_bin_as_hex> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
 +----+------------+------------+------------+
 | id | a          | b          | c          |
 +----+------------+------------+------------+

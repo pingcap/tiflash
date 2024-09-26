@@ -36,6 +36,7 @@ else:
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
 CMD_PREFIX_TIDB = 'mysql> '
+CMD_PREFIX_TIDB_BINALY_AS_HEX = 'mysql_bin_as_hex> '
 CMD_PREFIX_FUNC = 'func> '
 RETURN_PREFIX = '#RETURN'
 SLEEP_PREFIX = 'SLEEP '
@@ -70,9 +71,10 @@ class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd, unescape = True):
-        if unescape:
-            cmd = self.dbc + ' "' + to_unescaped_str(cmd) + '" 2>&1'
+    def exe(self, cmd, unescape = True, binary_as_hex = False):
+        cmd = to_unescaped_str(cmd) if unescape else cmd
+        if binary_as_hex:
+            cmd = self.dbc + ' "' + cmd + '" --binary-as-hex=true 2>&1'
         else:
             cmd = self.dbc + ' "' + cmd + '" 2>&1'
         return exec_func(cmd)
@@ -187,6 +189,7 @@ def compare_line(line, template):
                 template = template[i + len(WORD_PH):]
                 line = line[i + j:]
 
+
 class MySQLCompare:
     @staticmethod
     def parse_output_line(line):
@@ -277,7 +280,7 @@ class Matcher:
     def on_line(self, line, line_number):
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
-        elif line.startswith(CMD_PREFIX_TIDB):
+        elif line.startswith(CMD_PREFIX_TIDB) or line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX):
             unescape_flag = True
             if line.endswith(NO_UNESCAPE_SUFFIX):
                 unescape_flag = False
@@ -288,9 +291,12 @@ class Matcher:
                 return False
             self.query_line_number = line_number
             self.is_mysql = True
-            self.query = line[len(CMD_PREFIX_TIDB):]
+            if line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX):
+                self.query = line[len(CMD_PREFIX_TIDB_BINALY_AS_HEX):]
+            else:
+                self.query = line[len(CMD_PREFIX_TIDB):]
             # for mysql commands ignore errors since they may be part of the test logic.
-            self.outputs, _ = self.executor_tidb.exe(self.query, unescape_flag)
+            self.outputs, _ = self.executor_tidb.exe(self.query, unescape_flag, line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX))
             self.outputs = [x.strip() for x in self.outputs if len(x.strip()) != 0]
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
