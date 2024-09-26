@@ -536,7 +536,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             auto & [end_key_and_segment_ids, segment_infos] = *res;
             LOG_DEBUG(log, "Build cache for with {} segments", end_key_and_segment_ids.size());
             end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
-            return segment_infos;
+            return std::move(segment_infos);
         }
     }
     {
