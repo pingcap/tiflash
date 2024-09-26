@@ -37,7 +37,6 @@
 #include <thread>
 #include <unordered_set>
 
-
 namespace pingcap
 {
 struct ClusterConfig;
