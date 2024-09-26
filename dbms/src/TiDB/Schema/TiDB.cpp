@@ -30,6 +30,7 @@
 #include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/VectorIndex.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
 #include <algorithm>
@@ -104,18 +105,45 @@ using DB::Exception;
 using DB::Field;
 using DB::SchemaNameMapper;
 
-VectorIndexDefinitionPtr parseVectorIndexFromJSON(const Poco::JSON::Object::Ptr & json)
+// The IndexType defined in TiDB
+// https://github.com/pingcap/tidb/blob/a5e07a2ed360f29216c912775ce482f536f4102b/pkg/parser/model/model.go#L193-L219
+enum class IndexType
+{
+    INVALID = 0,
+    BTREE = 1,
+    HASH = 2,
+    RTREE = 3,
+    HYPO = 4,
+    HNSW = 5,
+};
+
+VectorIndexDefinitionPtr parseVectorIndexFromJSON(IndexType index_type, const Poco::JSON::Object::Ptr & json)
 {
     assert(json); // not nullptr
 
     tipb::VectorIndexKind kind = tipb::VectorIndexKind::INVALID_INDEX_KIND;
-    auto kind_field = json->getValue<String>("kind");
-    RUNTIME_CHECK_MSG(tipb::VectorIndexKind_Parse(kind_field, &kind), "invalid kind of vector index, {}", kind_field);
-    RUNTIME_CHECK(kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
+    if (unlikely(json->has("kind")))
+    {
+        // TODO(vector-index): remove this deadcode
+        auto kind_field = json->getValue<String>("kind");
+        RUNTIME_CHECK_MSG(
+            tipb::VectorIndexKind_Parse(kind_field, &kind),
+            "invalid kind of vector index, {}",
+            kind_field);
+        RUNTIME_CHECK(kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
+    }
+    else
+    {
+        RUNTIME_CHECK_MSG(
+            index_type == IndexType::HNSW,
+            "Invalid index_type for vector index, {}({})",
+            magic_enum::enum_name(index_type),
+            fmt::underlying(index_type));
+        kind = tipb::VectorIndexKind::HNSW;
+    }
 
     auto dimension = json->getValue<UInt64>("dimension");
-    RUNTIME_CHECK(dimension > 0);
-    RUNTIME_CHECK(dimension <= TiDB::MAX_VECTOR_DIMENSION); // Just a protection
+    RUNTIME_CHECK(dimension > 0 && dimension <= TiDB::MAX_VECTOR_DIMENSION, dimension); // Just a protection
 
     tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
     auto distance_metric_field = json->getValue<String>("distance_metric");
@@ -509,9 +537,10 @@ try
     }
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
 
+    // TODO(vector-index): remove this deadcode
     if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
     {
-        vector_index = parseVectorIndexFromJSON(vector_index_json);
+        vector_index = parseVectorIndexFromJSON(IndexType::HNSW, vector_index_json);
     }
 }
 catch (const Poco::Exception & e)
@@ -902,7 +931,7 @@ try
 
     if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
     {
-        vector_index = parseVectorIndexFromJSON(vector_index_json);
+        vector_index = parseVectorIndexFromJSON(static_cast<IndexType>(index_type), vector_index_json);
     }
 }
 catch (const Poco::Exception & e)
