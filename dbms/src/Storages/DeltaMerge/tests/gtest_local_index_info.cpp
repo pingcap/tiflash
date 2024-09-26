@@ -19,10 +19,10 @@
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
 
-namespace DB::tests
+namespace DB::DM::tests
 {
 
-TEST(LocalIndexInfo, CheckIndexChanged)
+TEST(LocalIndexInfoTest, CheckIndexChanged)
 try
 {
     TiDB::TableInfo table_info;
@@ -34,7 +34,7 @@ try
     }
 
     auto logger = Logger::get();
-    DM::LocalIndexInfosPtr index_info = nullptr;
+    LocalIndexInfosPtr index_info = nullptr;
     // check the same
     {
         auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger);
@@ -69,7 +69,7 @@ try
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 1);
         const auto & idx = (*new_index_info)[0];
-        ASSERT_EQ(DM::IndexType::Vector, idx.type);
+        ASSERT_EQ(IndexType::Vector, idx.type);
         ASSERT_EQ(expect_idx.id, idx.index_id);
         ASSERT_EQ(100, idx.column_id);
         ASSERT_NE(nullptr, idx.index_definition);
@@ -102,7 +102,7 @@ try
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
-        ASSERT_EQ(DM::IndexType::Vector, idx0.type);
+        ASSERT_EQ(IndexType::Vector, idx0.type);
         ASSERT_EQ(expect_idx.id, idx0.index_id);
         ASSERT_EQ(100, idx0.column_id);
         ASSERT_NE(nullptr, idx0.index_definition);
@@ -110,7 +110,7 @@ try
         ASSERT_EQ(expect_idx.vector_index->dimension, idx0.index_definition->dimension);
         ASSERT_EQ(expect_idx.vector_index->distance_metric, idx0.index_definition->distance_metric);
         const auto & idx1 = (*new_index_info)[1];
-        ASSERT_EQ(DM::IndexType::Vector, idx1.type);
+        ASSERT_EQ(IndexType::Vector, idx1.type);
         ASSERT_EQ(expect_idx2.id, idx1.index_id);
         ASSERT_EQ(100, idx1.column_id);
         ASSERT_NE(nullptr, idx1.index_definition);
@@ -146,7 +146,7 @@ try
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
-        ASSERT_EQ(DM::IndexType::Vector, idx0.type);
+        ASSERT_EQ(IndexType::Vector, idx0.type);
         ASSERT_EQ(expect_idx.id, idx0.index_id);
         ASSERT_EQ(100, idx0.column_id);
         ASSERT_NE(nullptr, idx0.index_definition);
@@ -154,7 +154,7 @@ try
         ASSERT_EQ(expect_idx.vector_index->dimension, idx0.index_definition->dimension);
         ASSERT_EQ(expect_idx.vector_index->distance_metric, idx0.index_definition->distance_metric);
         const auto & idx1 = (*new_index_info)[1];
-        ASSERT_EQ(DM::IndexType::Vector, idx1.type);
+        ASSERT_EQ(IndexType::Vector, idx1.type);
         ASSERT_EQ(expect_idx3.id, idx1.index_id);
         ASSERT_EQ(100, idx1.column_id);
         ASSERT_NE(nullptr, idx1.index_definition);
@@ -168,7 +168,7 @@ try
 }
 CATCH
 
-TEST(LocalIndexInfo, CheckIndexAddWithVecIndexOnColumnInfo)
+TEST(LocalIndexInfoTest, CheckIndexAddWithVecIndexOnColumnInfo)
 try
 {
     // The serverless branch, vector index may directly defined on the ColumnInfo.
@@ -211,15 +211,15 @@ try
 
     // check the different
     auto logger = Logger::get();
-    DM::LocalIndexInfosPtr index_info = nullptr;
+    LocalIndexInfosPtr index_info = nullptr;
     {
         auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger);
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
 
         const auto & idx0 = (*new_index_info)[0];
-        ASSERT_EQ(DM::IndexType::Vector, idx0.type);
-        ASSERT_EQ(EmptyIndexID, idx0.index_id);
+        ASSERT_EQ(IndexType::Vector, idx0.type);
+        ASSERT_EQ(EmptyIndexID, idx0.index_id); // defined on TiDB::ColumnInfo
         ASSERT_EQ(99, idx0.column_id);
         ASSERT_NE(nullptr, idx0.index_definition);
         ASSERT_EQ(col_vector_index->kind, idx0.index_definition->kind);
@@ -227,7 +227,7 @@ try
         ASSERT_EQ(col_vector_index->distance_metric, idx0.index_definition->distance_metric);
 
         const auto & idx1 = (*new_index_info)[1];
-        ASSERT_EQ(DM::IndexType::Vector, idx1.type);
+        ASSERT_EQ(IndexType::Vector, idx1.type);
         ASSERT_EQ(expect_idx.id, idx1.index_id);
         ASSERT_EQ(98, idx1.column_id);
         ASSERT_NE(nullptr, idx1.index_definition);
@@ -235,8 +235,10 @@ try
         ASSERT_EQ(expect_idx.vector_index->dimension, idx1.index_definition->dimension);
         ASSERT_EQ(expect_idx.vector_index->distance_metric, idx1.index_definition->distance_metric);
         // check again, table_info.index_infos doesn't change and return them
-        DM::LocalIndexInfosPtr empty_index_info = nullptr;
+        LocalIndexInfosPtr empty_index_info = nullptr;
         ASSERT_EQ(2, generateLocalIndexInfos(empty_index_info, table_info, logger)->size());
+        // check again with the same table_info, nothing changed, return nullptr
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger));
 
         // update
         index_info = new_index_info;
@@ -264,8 +266,8 @@ try
         ASSERT_EQ(new_index_info->size(), 2);
 
         const auto & idx0 = (*new_index_info)[0];
-        ASSERT_EQ(DM::IndexType::Vector, idx0.type);
-        ASSERT_EQ(EmptyIndexID, idx0.index_id);
+        ASSERT_EQ(IndexType::Vector, idx0.type);
+        ASSERT_EQ(EmptyIndexID, idx0.index_id); // defined on TiDB::ColumnInfo
         ASSERT_EQ(99, idx0.column_id);
         ASSERT_NE(nullptr, idx0.index_definition);
         ASSERT_EQ(col_vector_index->kind, idx0.index_definition->kind);
@@ -273,7 +275,7 @@ try
         ASSERT_EQ(col_vector_index->distance_metric, idx0.index_definition->distance_metric);
 
         const auto & idx1 = (*new_index_info)[1];
-        ASSERT_EQ(DM::IndexType::Vector, idx1.type);
+        ASSERT_EQ(IndexType::Vector, idx1.type);
         ASSERT_EQ(expect_idx2.id, idx1.index_id);
         ASSERT_EQ(98, idx1.column_id);
         ASSERT_NE(nullptr, idx1.index_definition);
@@ -287,4 +289,4 @@ try
 }
 CATCH
 
-} // namespace DB::tests
+} // namespace DB::DM::tests

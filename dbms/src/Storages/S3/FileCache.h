@@ -44,10 +44,15 @@ public:
         Failed,
     };
 
+    // The smaller the enum value, the higher the cache priority.
     enum class FileType : UInt64
     {
         Unknow = 0,
         Meta,
+        // Vector index is always stored as a separate file and requires to be read through `mmap`
+        // which must be downloaded to the local disk.
+        // So the priority of caching is relatively high
+        VectorIndex,
         Merged,
         Index,
         Mark, // .mkr, .null.mrk
@@ -293,6 +298,7 @@ public:
     static constexpr UInt64 estimated_size_of_file_type[] = {
         0, // Unknow type, currently never cache it.
         8 * 1024, // Estimated size of meta.
+        12 * 1024 * 1024, // Estimated size of vector index
         1 * 1024 * 1024, // Estimated size of merged.
         8 * 1024, // Estimated size of index.
         8 * 1024, // Estimated size of mark.

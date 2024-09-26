@@ -180,7 +180,7 @@ private:
 
     const LoggerPtr logger;
 
-    /// The thread pool for creating indices in the background.
+    /// The thread pool for creating indexes in the background.
     std::unique_ptr<ThreadPool> pool;
     /// The current memory usage of the pool. It is not accurate and the memory
     /// is determined when task is adding to the pool.

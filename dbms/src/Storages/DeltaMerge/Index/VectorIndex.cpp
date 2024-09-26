@@ -24,6 +24,7 @@
 namespace DB::ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
+extern const int INCORRECT_QUERY;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
@@ -38,7 +39,7 @@ bool VectorIndexBuilder::isSupportedType(const IDataType & type)
     return checkDataTypeArray<DataTypeFloat32>(&type);
 }
 
-VectorIndexBuilderPtr VectorIndexBuilder::create(const TiDB::VectorIndexDefinitionPtr & definition)
+VectorIndexBuilderPtr VectorIndexBuilder::create(IndexID index_id, const TiDB::VectorIndexDefinitionPtr & definition)
 {
     RUNTIME_CHECK(definition->dimension > 0);
     RUNTIME_CHECK(definition->dimension <= TiDB::MAX_VECTOR_DIMENSION);
@@ -46,11 +47,12 @@ VectorIndexBuilderPtr VectorIndexBuilder::create(const TiDB::VectorIndexDefiniti
     switch (definition->kind)
     {
     case tipb::VectorIndexKind::HNSW:
-        return std::make_shared<VectorIndexHNSWBuilder>(definition);
+        return std::make_shared<VectorIndexHNSWBuilder>(index_id, definition);
     default:
-        throw Exception(
-            ErrorCodes::BAD_ARGUMENTS,
-            "Unsupported vector index {}",
+        throw Exception( //
+            ErrorCodes::INCORRECT_QUERY,
+            "Unsupported vector index, index_id={} def={}",
+            index_id,
             tipb::VectorIndexKind_Name(definition->kind));
     }
 }

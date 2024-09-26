@@ -162,6 +162,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     bool is_matching_ann_query = false;
     for (const auto & cd : read_columns)
     {
+        // Note that it requires ann_query_info->column_id match
         if (cd.id == ann_query_info->column_id())
         {
             is_matching_ann_query = true;
@@ -191,8 +192,10 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
 
     RUNTIME_CHECK(rest_columns.size() + 1 == read_columns.size(), rest_columns.size(), read_columns.size());
 
-    const auto & vec_column_stat = dmfile->getColumnStat(vec_column->id);
-    if (vec_column_stat.index_bytes == 0 || !vec_column_stat.vector_index.has_value())
+    const IndexID ann_query_info_index_id = ann_query_info->index_id() > 0 //
+        ? ann_query_info->index_id()
+        : EmptyIndexID;
+    if (!dmfile->isLocalIndexExist(vec_column->id, ann_query_info_index_id))
         // Vector index is defined but does not exist on the data file,
         // or there is no data at all
         return fallback();

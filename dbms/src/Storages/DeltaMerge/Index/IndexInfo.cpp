@@ -95,7 +95,6 @@ LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const
             index_infos->emplace_back(LocalIndexInfo{
                 .type = IndexType::Vector,
                 .column_id = col.id,
-                .column_name = col.name,
                 .index_definition = col.vector_index,
             });
             LOG_INFO(logger, "Add a new index by column comments, column_id={}, table_id={}.", col.id, table_info.id);
@@ -121,7 +120,6 @@ LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const
             .type = IndexType::Vector,
             .index_id = idx.id,
             .column_id = column.id,
-            .column_name = column.name,
             .index_definition = idx.vector_index,
         });
     }
@@ -131,7 +129,7 @@ LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const
 }
 
 LocalIndexInfosPtr generateLocalIndexInfos(
-    const LocalIndexInfosPtr & existing_indexes,
+    const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
     const LoggerPtr & logger)
 {
@@ -172,7 +170,6 @@ LocalIndexInfosPtr generateLocalIndexInfos(
                     .type = IndexType::Vector,
                     .index_id = idx.id,
                     .column_id = column.id,
-                    .column_name = column.name,
                     .index_definition = idx.vector_index,
                 };
                 new_index_infos->emplace_back(std::move(index_info));
@@ -189,7 +186,7 @@ LocalIndexInfosPtr generateLocalIndexInfos(
         }
     }
 
-    // drop nonexistent indices
+    // drop nonexistent indexes
     for (auto & iter : original_local_index_id_map)
     {
         // It means this index is create by column comments which we don't support drop index.

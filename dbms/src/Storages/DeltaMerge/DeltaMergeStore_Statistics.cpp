@@ -206,7 +206,6 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
         LocalIndexStats index_stats;
         index_stats.column_id = index_info.column_id;
         index_stats.index_id = index_info.index_id;
-        index_stats.column_name = index_info.column_name;
         index_stats.index_kind = "HNSW"; // TODO: Support more.
 
         for (const auto & [handle, segment] : segments)
@@ -221,13 +220,14 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
             bool is_stable_indexed = true;
             for (const auto & dmfile : stable->getDMFiles())
             {
-                if (!dmfile->isColumnExist(index_info.column_id))
-                    continue; // Regard as indexed, because column does not need any index
-
-                auto column_stat = dmfile->getColumnStat(index_info.column_id);
-
-                if (column_stat.index_bytes == 0 && column_stat.data_bytes > 0)
+                const auto [state, bytes] = dmfile->getLocalIndexState(index_info.column_id, index_info.index_id);
+                UNUSED(bytes);
+                switch (state)
                 {
+                case DMFileMeta::LocalIndexState::NoNeed: // Regard as indexed, because column does not need any index
+                case DMFileMeta::LocalIndexState::IndexBuilt:
+                    break;
+                case DMFileMeta::LocalIndexState::IndexPending:
                     is_stable_indexed = false;
                     break;
                 }

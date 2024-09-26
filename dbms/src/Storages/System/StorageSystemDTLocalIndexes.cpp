@@ -119,7 +119,7 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
                 res_columns[j++]->insert(table_id);
                 res_columns[j++]->insert(table_info.belonging_table_id);
 
-                res_columns[j++]->insert(stat.column_name);
+                res_columns[j++]->insert(String("")); // TODO: let tidb set the column_name and index_name by itself
                 res_columns[j++]->insert(stat.column_id);
                 res_columns[j++]->insert(stat.index_id);
                 res_columns[j++]->insert(stat.index_kind);

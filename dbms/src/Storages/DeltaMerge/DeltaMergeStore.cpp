@@ -2020,12 +2020,8 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
-    // copy the local_index_infos to check whether any new index is created
-    LocalIndexInfosPtr local_index_infos_copy = nullptr;
-    {
-        std::shared_lock index_read_lock(mtx_local_index_infos);
-        local_index_infos_copy = std::shared_ptr<LocalIndexInfos>(local_index_infos);
-    }
+    // Get a snapshot on the local_index_infos to check whether any new index is created
+    LocalIndexInfosSnapshot local_index_infos_snap = getLocalIndexInfosSnapshot();
 
     std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 
@@ -2033,11 +2029,11 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
     // and generate tasks on segments
     lock.unlock();
 
-    auto new_local_index_infos = generateLocalIndexInfos(local_index_infos_copy, table_info, log);
+    auto new_local_index_infos = generateLocalIndexInfos(local_index_infos_snap, table_info, log);
     if (new_local_index_infos)
     {
         {
-            // new index created, update the info in-memory
+            // new index created, update the info in-memory thread safety between `getLocalIndexInfosSnapshot`
             std::unique_lock index_write_lock(mtx_local_index_infos);
             local_index_infos.swap(new_local_index_infos);
         }

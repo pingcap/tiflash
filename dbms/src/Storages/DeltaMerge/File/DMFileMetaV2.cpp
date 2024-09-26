@@ -412,4 +412,59 @@ UInt64 DMFileMetaV2::getMergedFileSizeOfColumn(const MergedSubFileInfo & file_in
     return itr->size;
 }
 
+UInt32 DMFileMetaV2::bumpMetaVersion(DMFileMetaChangeset && changeset)
+{
+    std::scoped_lock lock(mtx_bump);
+
+    for (auto & [col_id, col_stat] : column_stats)
+    {
+        auto changed_col_iter = changeset.new_indexes_on_cols.find(col_id);
+        if (changed_col_iter == changeset.new_indexes_on_cols.end())
+            continue;
+        col_stat.vector_index.insert(
+            col_stat.vector_index.end(),
+            changed_col_iter->second.begin(),
+            changed_col_iter->second.end());
+    }
+
+    // bump the version
+    ++meta_version;
+    return meta_version;
+}
+
+std::tuple<DMFileMeta::LocalIndexState, size_t> DMFileMetaV2::getLocalIndexState(ColId col_id, IndexID index_id) const
+{
+    // acquire a lock on meta to ensure the atomically on col_stat.vector_index
+    std::scoped_lock lock(mtx_bump);
+    auto it = column_stats.find(col_id);
+    if (unlikely(it == column_stats.end()))
+        return {LocalIndexState::NoNeed, 0};
+
+    const auto & col_stat = it->second;
+    bool built = std::any_of( //
+        col_stat.vector_index.cbegin(),
+        col_stat.vector_index.cend(),
+        [index_id](const auto & idx) { return idx.index_id() == index_id; });
+    if (built)
+        return {LocalIndexState::IndexBuilt, 0};
+    // index is pending for build, return the column data bytes
+    return {LocalIndexState::IndexPending, col_stat.data_bytes};
+}
+
+std::optional<dtpb::VectorIndexFileProps> DMFileMetaV2::getLocalIndex(ColId col_id, IndexID index_id) const
+{
+    // acquire a lock on meta to ensure the atomically on col_stat.vector_index
+    std::scoped_lock lock(mtx_bump);
+    auto it = column_stats.find(col_id);
+    if (unlikely(it == column_stats.end()))
+        return std::nullopt;
+
+    const auto & col_stat = it->second;
+    for (const auto & vec_idx : col_stat.vector_index)
+    {
+        if (vec_idx.index_id() == index_id)
+            return vec_idx;
+    }
+    return std::nullopt;
+}
 } // namespace DB::DM

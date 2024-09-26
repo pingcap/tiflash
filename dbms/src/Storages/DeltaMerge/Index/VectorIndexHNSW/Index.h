@@ -29,7 +29,7 @@ class VectorIndexHNSWBuilder : public VectorIndexBuilder
 public:
     static tipb::VectorIndexKind kind();
 
-    explicit VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_);
+    explicit VectorIndexHNSWBuilder(IndexID index_id_, const TiDB::VectorIndexDefinitionPtr & definition_);
 
     ~VectorIndexHNSWBuilder() override;
 

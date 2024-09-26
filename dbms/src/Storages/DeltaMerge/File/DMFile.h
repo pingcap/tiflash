@@ -14,9 +14,12 @@
 
 #pragma once
 
+#include <DataTypes/IDataType.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFileUtil.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/FormatVersion.h>
@@ -144,6 +147,29 @@ public:
     }
     bool isColumnExist(ColId col_id) const { return meta->column_stats.contains(col_id); }
 
+    std::tuple<DMFileMeta::LocalIndexState, size_t> getLocalIndexState(ColId col_id, IndexID index_id) const
+    {
+        return meta->getLocalIndexState(col_id, index_id);
+    }
+
+    // Check whether the local index of given col_id and index_id has been built on this dmfile.
+    // Return false if
+    // - the col_id is not exist in the dmfile
+    // - the index has not been built
+    bool isLocalIndexExist(ColId col_id, IndexID index_id) const
+    {
+        return std::get<0>(meta->getLocalIndexState(col_id, index_id)) == DMFileMeta::LocalIndexState::IndexBuilt;
+    }
+
+    // Try to get the local index of given col_id and index_id.
+    // Return std::nullopt if
+    // - the col_id is not exist in the dmfile
+    // - the index has not been built
+    std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId col_id, IndexID index_id) const
+    {
+        return meta->getLocalIndex(col_id, index_id);
+    }
+
     /*
      * TODO: This function is currently unused. We could use it when:
      *   1. The content is polished (e.g. including at least file ID, and use a format easy for grep).
@@ -183,7 +209,6 @@ public:
     void switchToRemote(const S3::DMFileOID & oid) const;
 
     UInt32 metaVersion() const { return meta->metaVersion(); }
-    UInt32 bumpMetaVersion() const { return meta->bumpMetaVersion(); }
 
 private:
     DMFile(
@@ -278,6 +303,9 @@ private:
     {
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
+
+    static String vectorIndexFileName(IndexID index_id) { return fmt::format("idx_{}.vector", index_id); }
+    String vectorIndexPath(IndexID index_id) const { return subFilePath(vectorIndexFileName(index_id)); }
 
     void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
