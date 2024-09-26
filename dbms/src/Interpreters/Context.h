@@ -18,13 +18,9 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
-<<<<<<< HEAD
 #include <Encryption/FileProvider_fwd.h>
 #include <IO/CompressionSettings.h>
-=======
-#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/CancellationHook.h>
->>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
