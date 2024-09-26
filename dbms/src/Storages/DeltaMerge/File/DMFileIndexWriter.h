@@ -39,13 +39,13 @@ struct LocalIndexBuildInfo
     LocalIndexInfosPtr indexes_to_build;
 
 public:
-    std::vector<PageIdU64> filesIDs() const
+    std::vector<LocalIndexerScheduler::FileID> filesIDs() const
     {
-        std::vector<PageIdU64> ids;
+        std::vector<LocalIndexerScheduler::FileID> ids;
         ids.reserve(dm_files.size());
         for (const auto & dmf : dm_files)
         {
-            ids.emplace_back(dmf->fileId());
+            ids.emplace_back(LocalIndexerScheduler::DMFileID(dmf->fileId()));
         }
         return ids;
     }
