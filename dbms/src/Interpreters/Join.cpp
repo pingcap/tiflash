@@ -1352,6 +1352,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 
 Block Join::removeUselessColumn(Block & block) const
 {
+    // cancelled
+    if (!block)
+        return block;
+
     Block projected_block;
     for (const auto & name : tidb_output_column_names)
     {
@@ -1368,6 +1372,8 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     probe_process_info.prepareForHashProbe(key_names_left, non_equal_conditions.left_filter_column, kind, strictness);
     while (true)
     {
+        if (is_cancelled())
+            return {};
         auto block = doJoinBlockHash(probe_process_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1468,6 +1474,8 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 
     while (true)
     {
+        if (is_cancelled())
+            return {};
         Block block = doJoinBlockCross(probe_process_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1582,6 +1590,8 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
 
     /// Null aware join never expand the left block, just handle the whole block at one time is enough
     probe_process_info.all_rows_joined_finish = true;
+    if (is_cancelled())
+        return {};
 
     return removeUselessColumn(block);
 }
@@ -1616,18 +1626,30 @@ void Join::joinBlockNullAwareImpl(
         right_side_info);
 
     RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+    if (is_cancelled())
+        return;
 
     size_t right_columns = block.columns() - left_columns;
 
     if (!res_list.empty())
     {
-        NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType::Base_t>
-            helper(block, left_columns, right_columns, blocks, null_rows, max_block_size, non_equal_conditions);
+        NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType::Base_t> helper(
+            block,
+            left_columns,
+            right_columns,
+            blocks,
+            null_rows,
+            max_block_size,
+            non_equal_conditions,
+            is_cancelled);
 
         helper.joinResult(res_list);
 
         RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
+
+    if (is_cancelled())
+        return;
 
     /// Now all results are known.
 
@@ -2004,6 +2026,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     else
         block = joinBlockHash(probe_process_info);
 
+    // if cancelled, just return empty block
+    if (!block)
+        return block;
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == LeftOuterAnti || kind == Cross_LeftOuterAnti)
     {
@@ -2275,6 +2300,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
+            restore_join->setCancellationHook(is_cancelled);
             BlockInputStreams restore_scan_hash_map_streams;
             restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
             if (needScanHashMapAfterProbe(kind))
