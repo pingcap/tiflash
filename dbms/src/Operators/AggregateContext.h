@@ -46,17 +46,7 @@ public:
     {
     }
 
-<<<<<<< HEAD
-    void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook);
-=======
-    void initBuild(
-        const Aggregator::Params & params,
-        size_t max_threads_,
-        CancellationHook && hook,
-        const RegisterOperatorSpillContext & register_operator_spill_context);
-
-    size_t getBuildConcurrency() const { return max_threads; }
->>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
+    void initBuild(const Aggregator::Params & params, size_t max_threads_, CancellationHook && hook);
 
     void buildOnBlock(size_t task_index, const Block & block);
 
@@ -81,29 +71,8 @@ private:
     bool keys_size = false;
     bool empty_result_for_aggregation_by_empty_set = false;
 
-<<<<<<< HEAD
     std::atomic_bool inited_build = false;
     std::atomic_bool inited_convergent = false;
-=======
-    /**
-     * init────►build───┬───►convergent
-     *                  │
-     *                  ▼
-     *               restore
-     */
-    enum class AggStatus
-    {
-        init,
-        build,
-        convergent,
-        restore,
-    };
-    std::atomic<AggStatus> status{AggStatus::init};
-
-    CancellationHook is_cancelled{[]() {
-        return false;
-    }};
->>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;
