@@ -18,7 +18,7 @@ services:
   # for tests under fullstack-test directory
   # (engine DeltaTree)
   tiflash0:
-    image: hub.pingcap.net/tiflash/tiflash-ci-base
+    image: hub.pingcap.net/tiflash/tiflash-ci-base:py3
     volumes:
       - ./config/tiflash_dt_lightweight_compression.toml:/config.toml:ro
       - ./data/tiflash:/tmp/tiflash/data
