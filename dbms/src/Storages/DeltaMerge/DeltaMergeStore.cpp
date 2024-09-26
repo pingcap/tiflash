@@ -2022,7 +2022,7 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
 
     std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 
-    // release the lock because `checkAllSegmentsLocalIndex` will try to acquire the lock
+    // release the lock because `applyLocalIndexChange ` will try to acquire the lock
     // and generate tasks on segments
     lock.unlock();
 
