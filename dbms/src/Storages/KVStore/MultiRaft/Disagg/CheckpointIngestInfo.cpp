@@ -80,8 +80,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        auto dm_context
-            = dm_storage->getAndMaybeInitStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
         for (const auto & seg_persisted : ingest_info_persisted.segments())
         {
             ReadBufferFromString buf(seg_persisted.segment_meta());
@@ -198,8 +197,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        auto dm_context
-            = dm_storage->getAndMaybeInitStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
         for (const auto & segment_to_drop : segments)
         {
             DM::WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());

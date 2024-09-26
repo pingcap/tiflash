@@ -1085,7 +1085,7 @@ try
     {
         if (ingest_using_split)
         {
-            auto stats = storage->getAndMaybeInitStore()->getStoreStats();
+            auto stats = storage->getStore()->getStoreStats();
             // Including 0..20, 20..100, 100..inf.
             ASSERT_EQ(3, stats.segment_count);
         }
@@ -1128,7 +1128,7 @@ try
         }
     }
     {
-        auto stats = storage->getAndMaybeInitStore()->getStoreStats();
+        auto stats = storage->getStore()->getStoreStats();
         ASSERT_NE(0, stats.total_stable_size_on_disk);
         ASSERT_NE(0, stats.total_rows);
         ASSERT_NE(0, stats.total_size);
@@ -1150,7 +1150,7 @@ try
         auto gc_n = storage->onSyncGc(100, DM::GCOptions::newAllForTest());
         ASSERT_EQ(0, gc_n);
 
-        auto stats = storage->getAndMaybeInitStore()->getStoreStats();
+        auto stats = storage->getStore()->getStoreStats();
         // The data of [20, 100), is not reclaimed during Apply Snapshot.
         if (ingest_using_split)
         {

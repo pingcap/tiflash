@@ -243,6 +243,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
             || (managed_storage->engineType() != ::TiDB::StorageEngine::DT
                 && managed_storage->engineType() != ::TiDB::StorageEngine::TMT))
         {
+            LOG_DEBUG(log, "{}.{} is not ManageableStorage", database_name, table_name);
             storage = storage_tmp;
             table_lock = storage->lockForShare(context.getCurrentQueryId());
             return;

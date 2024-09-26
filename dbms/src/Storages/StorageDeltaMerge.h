@@ -191,16 +191,9 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
-    // Return the DeltaMergeStore instance if it has been inited
-    // Else return nullptr
+    const DM::DeltaMergeStorePtr & getStore() { return getAndMaybeInitStore(); }
+
     DM::DeltaMergeStorePtr getStoreIfInited() const;
-
-    // Return the DeltaMergeStore instance
-    // If the instance is not inited, this method will initialize the instance
-    // and return it.
-    DM::DeltaMergeStorePtr & getAndMaybeInitStore(ThreadPool * thread_pool = nullptr);
-
-    bool initStoreIfNeed(ThreadPool * thread_pool) override;
 
     bool isCommonHandle() const override { return is_common_handle; }
 
@@ -212,6 +205,8 @@ public:
         bool with_version_column) override;
 
     void releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block) override;
+
+    bool initStoreIfDataDirExist(ThreadPool * thread_pool) override;
 
     DM::DMConfigurationOpt createChecksumConfig() const { return DM::DMChecksumConfig::fromDBContext(global_context); }
 
@@ -243,7 +238,7 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
-    DM::DeltaMergeStorePtr & initStore(const std::lock_guard<std::mutex> &, ThreadPool * thread_pool = nullptr);
+    DM::DeltaMergeStorePtr & getAndMaybeInitStore(ThreadPool * thread_pool = nullptr);
     bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
     void updateTableColumnInfo();
     ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info);

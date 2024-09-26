@@ -53,7 +53,7 @@ void doInitStores(Context & global_context, const LoggerPtr & log)
         const auto & [ks_id, table_id] = ks_table_id;
         try
         {
-            init_cnt += storage->initStoreIfNeed(restore_segments_thread_pool) ? 1 : 0;
+            init_cnt += storage->initStoreIfDataDirExist(restore_segments_thread_pool) ? 1 : 0;
             LOG_INFO(log, "Storage inited done, keyspace={} table_id={}", ks_id, table_id);
         }
         catch (...)
