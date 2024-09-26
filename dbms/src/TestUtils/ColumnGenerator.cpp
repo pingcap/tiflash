@@ -13,9 +13,14 @@
 // limitations under the License.
 #include <Columns/ColumnNullable.h>
 #include <Common/RandomData.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <TestUtils/ColumnGenerator.h>
+
+#include "Common/Exception.h"
+#include "Core/Types.h"
+#include "magic_enum.hpp"
 
 namespace DB::tests
 {
@@ -134,8 +139,24 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         for (size_t i = 0; i < opts.size; ++i)
             genEnumValue(col, type);
         break;
+    case TypeIndex::Array:
+    {
+        auto nested_type = typeid_cast<const DataTypeArray *>(type.get())->getNestedType();
+        size_t elems_size = opts.array_elems_max_size;
+        for (size_t i = 0; i < opts.size; ++i)
+        {
+            if (opts.array_elems_distribution == DataDistribution::RANDOM)
+                elems_size = static_cast<UInt64>(rand_gen()) % opts.array_elems_max_size;
+            genVector(col, nested_type, elems_size);
+        }
+        break;
+    }
     default:
         throw std::invalid_argument("RandomColumnGenerator invalid type");
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "RandomColumnGenerator invalid type, type_id={}",
+            magic_enum::enum_name(type_id));
     }
 
     return {std::move(col), type, opts.name};
@@ -246,4 +267,27 @@ void ColumnGenerator::genDecimal(MutableColumnPtr & col, DataTypePtr & data_type
             fmt::format("RandomColumnGenerator parseDecimal({}, {}) prec {} scale {} fail", s, negative, prec, scale));
     }
 }
+
+void ColumnGenerator::genVector(MutableColumnPtr & col, DataTypePtr & nested_type, size_t num_vals)
+{
+    switch (nested_type->getTypeId())
+    {
+    case TypeIndex::Float32:
+    case TypeIndex::Float64:
+    {
+        Array arr;
+        for (size_t i = 0; i < num_vals; ++i)
+            // arr.push_back(static_cast<Float64>(real_rand_gen(rand_gen)));
+            arr.push_back(static_cast<Float64>(2.5));
+        col->insert(arr);
+        break;
+    }
+    default:
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "RandomColumnGenerator invalid nested type in Array(...), type_id={}",
+            magic_enum::enum_name(nested_type->getTypeId()));
+    }
+}
+
 } // namespace DB::tests

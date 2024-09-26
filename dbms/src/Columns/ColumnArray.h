@@ -35,6 +35,7 @@ class ColumnArray final : public COWPtrHelper<IColumn, ColumnArray>
 {
 private:
     friend class COWPtrHelper<IColumn, ColumnArray>;
+    friend class DataTypeArray;
 
     /** Create an array column with specified values and offsets. */
     ColumnArray(MutableColumnPtr && nested_column, MutableColumnPtr && offsets_column);
@@ -62,6 +63,8 @@ public:
     {
         return Base::create(std::forward<Args>(args)...);
     }
+
+    void check() const override;
 
     /** On the index i there is an offset to the beginning of the i + 1 -th element. */
     using ColumnOffsets = ColumnVector<Offset>;

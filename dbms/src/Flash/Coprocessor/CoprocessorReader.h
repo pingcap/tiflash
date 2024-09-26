@@ -244,6 +244,7 @@ public:
             /// CHBlockChunkCodec::decode already checked the schema.
             if (resp->encode_type() != tipb::EncodeType::TypeCHBlock)
                 assertBlockSchema(header, block, "CoprocessorReader decode chunks");
+            block.ffff();
             block_queue.push(std::move(block));
         }
         return detail;

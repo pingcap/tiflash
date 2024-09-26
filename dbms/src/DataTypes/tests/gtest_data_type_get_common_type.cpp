@@ -20,6 +20,8 @@
 
 #include <sstream>
 
+#include "DataTypes/DataTypeNullable.h"
+
 namespace DB
 {
 namespace tests
@@ -329,6 +331,19 @@ try
         ASSERT_TRUE(ntype->isNullable()) << "type: " + type->getName();
         // not true for nullable
         ASSERT_FALSE(ntype->isDateOrDateTime()) << "type: " + type->getName();
+    }
+
+    {
+        // array can be wrapped by Nullable
+        auto type = typeFromString("Array(Float32)");
+        ASSERT_NE(type, nullptr);
+        auto ntype = DataTypeNullable(type);
+        ASSERT_TRUE(ntype.isNullable());
+    }
+
+    {
+        auto type = typeFromString("Nullable(Array(Float32))");
+        ASSERT_TRUE(type->isNullable());
     }
 }
 CATCH

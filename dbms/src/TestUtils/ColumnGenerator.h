@@ -25,6 +25,7 @@ namespace DB::tests
 enum DataDistribution
 {
     RANDOM,
+    FIXED,
     // TODO support zipf and more distribution.
 };
 
@@ -35,6 +36,8 @@ struct ColumnGeneratorOpts
     DataDistribution distribution;
     String name = ""; // NOLINT
     size_t string_max_size = 128;
+    DataDistribution array_elems_distribution = DataDistribution::RANDOM;
+    size_t array_elems_max_size = 10;
 };
 
 class ColumnGenerator : public ext::Singleton<ColumnGenerator>
@@ -61,5 +64,6 @@ private:
     static void genDuration(MutableColumnPtr & col);
     void genDecimal(MutableColumnPtr & col, DataTypePtr & data_type);
     void genEnumValue(MutableColumnPtr & col, DataTypePtr & enum_type);
+    void genVector(MutableColumnPtr & col, DataTypePtr & nested_type, size_t num_vals);
 };
 } // namespace DB::tests

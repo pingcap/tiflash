@@ -14,8 +14,11 @@
 
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Compression/CompressionMethod.h>
 #include <TestUtils/ColumnGenerator.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -27,13 +30,25 @@ namespace DB::tests
 static Block prepareBlock(size_t rows)
 {
     Block block;
-    for (size_t i = 0; i < 5; ++i)
-    {
-        DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
-        auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
-        block.insert(
-            ColumnWithTypeAndName{std::move(int64_column), int64_data_type, String("col") + std::to_string(i)});
-    }
+    size_t col_idx = 0;
+    block.insert(ColumnGenerator::instance().generate({
+        //
+        rows,
+        "Array(Float64)",
+        RANDOM,
+        fmt::format("col{}", col_idx),
+        128,
+        // DataDistribution::RANDOM,
+        DataDistribution::FIXED,
+        3,
+    }));
+    ++col_idx;
+
+    // for (; col_idx < 5; ++col_idx)
+    // {
+    //     DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
+    //     block.insert(ColumnGenerator::instance().generate({rows, "Int64", RANDOM, fmt::format("col{}", col_idx)}));
+    // }
     return block;
 }
 
@@ -69,7 +84,7 @@ void test_enocde_release_data(VecCol && batch_columns, const Block & header, con
     }
 }
 
-TEST(CHBlockChunkCodec, ChunkCodecV1)
+TEST(CHBlockChunkCodecTest, ChunkCodecV1)
 try
 {
     size_t block_num = 10;
@@ -98,6 +113,7 @@ try
             ASSERT_EQ(codec.original_size, 0);
         }
         {
+            // test encode one block
             auto codec = CHBlockChunkCodecV1{
                 header,
             };
@@ -140,6 +156,7 @@ try
                     ASSERT_TRUE(col.column);
                 }
             }
+            // test encode moved blocks
             auto codec = CHBlockChunkCodecV1{
                 header,
             };
@@ -229,5 +246,20 @@ try
     }
 }
 CATCH
+
+TEST(CHBlockChunkCodecTest, ChunkDecodeAndSquash)
+{
+    auto header = prepareBlock(0);
+    Blocks blocks = {prepareBlock(11), prepareBlock(17), prepareBlock(23)};
+
+    CHBlockChunkCodecV1 codec(header);
+    CHBlockChunkDecodeAndSquash decoder(header, 13);
+    for (const auto & b : blocks)
+    {
+        LOG_INFO(Logger::get(), "ser/deser block {}", getColumnsContent(b.getColumnsWithTypeAndName()));
+        auto str = codec.encode(b, CompressionMethod::LZ4);
+        decoder.decodeAndSquashV1(str);
+    }
+}
 
 } // namespace DB::tests
