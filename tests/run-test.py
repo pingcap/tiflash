@@ -62,7 +62,7 @@ class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd, unescape=True, binary_as_hex=False):
+    def exe(self, cmd, unescape=True, binary_as_hex=False) -> list[str]:
         cmd = to_unescaped_str(cmd) if unescape else cmd
         if binary_as_hex:
             cmd = f'{self.dbc} "{cmd}" --binary-as-hex=true 2>&1'
@@ -75,7 +75,7 @@ class ShellFuncExecutor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd, unescape=False):
+    def exe(self, cmd, unescape=False) -> list[str]:
         return exec_func(f'{cmd} "{self.dbc}" 2>&1')
 
 
@@ -83,7 +83,7 @@ class CurlTiDBExecutor:
     def __init__(self):
         self.tidb_status_addr = f'{os.getenv("tidb_server", "127.0.0.1")}:{os.getenv("tidb_status_port", 10080)}'
 
-    def exe(self, context):
+    def exe(self, context) -> list[str]:
         context = [e for e in context.split(' ') if e]
         method = context[0].upper()
         uri = f'http://{self.tidb_status_addr}/{context[1]}'
@@ -93,6 +93,8 @@ class CurlTiDBExecutor:
             request.data = context[2].encode()
         try:
             response = urlopen(request).read().strip()
+            if response:
+                response = response.decode('utf-8')
             return [response] if method == 'GET' and response else None, None
         except HTTPError as e:
             return [f'Error: {e}. Uri: {uri}'], e
