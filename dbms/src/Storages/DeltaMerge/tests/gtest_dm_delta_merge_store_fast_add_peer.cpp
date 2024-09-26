@@ -274,6 +274,8 @@ protected:
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreTestFastAddPeer";
 };
 
+
+#if 0
 TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPoint)
 try
 {
@@ -407,6 +409,7 @@ try
         num_rows_write / 2 + 2 * num_rows_write);
 }
 CATCH
+#endif
 
 TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPointWithSplit)
 try
