@@ -193,6 +193,24 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
     return stats;
 }
 
+std::optional<LocalIndexesStats> DeltaMergeStore::genLocalIndexStatsByTableInfo(const TiDB::TableInfo & table_info)
+{
+    auto local_index_infos = DM::generateLocalIndexInfos(nullptr, table_info, Logger::get());
+    if (!local_index_infos)
+        return std::nullopt;
+
+    DM::LocalIndexesStats stats;
+    for (const auto & index_info : *local_index_infos)
+    {
+        DM::LocalIndexStats index_stats;
+        index_stats.column_id = index_info.column_id;
+        index_stats.index_id = index_info.index_id;
+        index_stats.index_kind = "HNSW";
+        stats.emplace_back(std::move(index_stats));
+    }
+    return stats;
+}
+
 LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
 {
     auto local_index_infos_snap = getLocalIndexInfosSnapshot();

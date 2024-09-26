@@ -61,26 +61,6 @@ StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & nam
     }));
 }
 
-DM::LocalIndexesStats generateLocalIndexesStatsFromTableInfo(const TiDB::TableInfo & table_info)
-{
-    auto local_index_infos = DM::generateLocalIndexInfos(nullptr, table_info, Logger::get());
-
-    DM::LocalIndexesStats stats;
-    if (!local_index_infos)
-        return stats;
-
-    for (const auto & index_info : *local_index_infos)
-    {
-        DM::LocalIndexStats index_stats;
-        index_stats.column_id = index_info.column_id;
-        index_stats.index_id = index_info.index_id;
-        index_stats.column_name = index_info.column_name;
-        index_stats.index_kind = "HNSW";
-        stats.emplace_back(std::move(index_stats));
-    }
-    return stats;
-}
-
 std::optional<DM::LocalIndexesStats> getLocalIndexesStatsFromStorage(const StorageDeltaMergePtr & dm_storage)
 {
     if (dm_storage->isTombstone())
@@ -89,7 +69,7 @@ std::optional<DM::LocalIndexesStats> getLocalIndexesStatsFromStorage(const Stora
     const auto & table_info = dm_storage->getTableInfo();
     auto store = dm_storage->getStoreIfInited();
     if (!store)
-        return generateLocalIndexesStatsFromTableInfo(table_info);
+        return DM::DeltaMergeStore::genLocalIndexStatsByTableInfo(table_info);
 
     return store->getLocalIndexStats();
 }
