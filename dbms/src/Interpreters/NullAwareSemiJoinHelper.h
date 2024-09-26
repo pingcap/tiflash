@@ -17,11 +17,7 @@
 #include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
-<<<<<<< HEAD
-=======
 #include <Interpreters/CancellationHook.h>
-#include <Interpreters/SemiJoinHelper.h>
->>>>>>> 8aba9f0ce3 (join be aware of cancel signal (#9450))
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 
