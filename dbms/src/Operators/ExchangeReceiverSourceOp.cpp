@@ -24,8 +24,7 @@ void ExchangeReceiverSourceOp::operateSuffixImpl()
 Block ExchangeReceiverSourceOp::popFromBlockQueue()
 {
     assert(!block_queue.empty());
-    Block block;
-    block = std::move(block_queue.front());
+    Block block = std::move(block_queue.front());
     block_queue.pop();
     return block;
 }

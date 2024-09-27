@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/formatReadable.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
@@ -21,12 +22,9 @@
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <gtest/gtest.h>
+#include <common/logger_useful.h>
 
 #include <random>
-
-#include "Common/formatReadable.h"
-#include "common/logger_useful.h"
 
 
 namespace DB::tests
@@ -278,6 +276,7 @@ try
 CATCH
 
 TEST(CHBlockChunkCodecTest, ChunkDecodeAndSquash)
+try
 {
     auto header = prepareBlockWithFixedVecF32(0);
     Blocks blocks = {
@@ -313,9 +312,11 @@ TEST(CHBlockChunkCodecTest, ChunkDecodeAndSquash)
     auto decoded_block = vstackBlocks(std::move(blocks_decoded));
     ASSERT_BLOCK_EQ(input_block, decoded_block);
 }
+CATCH
 
 
 TEST(CHBlockChunkCodecTest, ChunkDecodeAndSquashRandom)
+try
 {
     std::mt19937_64 rand_gen;
 
@@ -365,5 +366,6 @@ TEST(CHBlockChunkCodecTest, ChunkDecodeAndSquashRandom)
     auto decoded_block = vstackBlocks(std::move(blocks_decoded));
     ASSERT_BLOCK_EQ(input_block, decoded_block);
 }
+CATCH
 
 } // namespace DB::tests
