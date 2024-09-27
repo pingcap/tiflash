@@ -26,7 +26,7 @@
 namespace DB::tests
 {
 
-// Return a block with **rows** and 5 Int64 column.
+// Return a block with **rows**, containing a random elems size array(f32) and 5 Int64 column.
 static Block prepareBlock(size_t rows)
 {
     Block block;
@@ -34,11 +34,35 @@ static Block prepareBlock(size_t rows)
     block.insert(ColumnGenerator::instance().generate({
         //
         rows,
-        "Array(Float64)",
+        "Array(Float32)",
         RANDOM,
         fmt::format("col{}", col_idx),
         128,
-        // DataDistribution::RANDOM,
+        DataDistribution::RANDOM,
+        3,
+    }));
+    ++col_idx;
+
+    for (; col_idx < 5; ++col_idx)
+    {
+        DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
+        block.insert(ColumnGenerator::instance().generate({rows, "Int64", RANDOM, fmt::format("col{}", col_idx)}));
+    }
+    return block;
+}
+
+// Return a block with **rows**, containing a fixed elems size array(f32) and 5 Int64 column.
+static Block prepareBlockWithFixedVecF32(size_t rows)
+{
+    Block block;
+    size_t col_idx = 0;
+    block.insert(ColumnGenerator::instance().generate({
+        //
+        rows,
+        "Array(Float32)",
+        RANDOM,
+        fmt::format("col{}", col_idx),
+        128,
         DataDistribution::FIXED,
         3,
     }));
@@ -249,8 +273,12 @@ CATCH
 
 TEST(CHBlockChunkCodecTest, ChunkDecodeAndSquash)
 {
-    auto header = prepareBlock(0);
-    Blocks blocks = {prepareBlock(11), prepareBlock(17), prepareBlock(23)};
+    auto header = prepareBlockWithFixedVecF32(0);
+    Blocks blocks = {
+        prepareBlockWithFixedVecF32(11),
+        prepareBlockWithFixedVecF32(17),
+        prepareBlockWithFixedVecF32(23),
+    };
 
     CHBlockChunkCodecV1 codec(header);
     CHBlockChunkDecodeAndSquash decoder(header, 13);

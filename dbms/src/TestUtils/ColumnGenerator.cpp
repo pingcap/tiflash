@@ -37,6 +37,7 @@ ColumnWithTypeAndName ColumnGenerator::generateNullMapColumn(const ColumnGenerat
 
 ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts)
 {
+    RUNTIME_CHECK(opts.distribution == DataDistribution::RANDOM);
     DataTypePtr type;
     if (opts.type_name == "Decimal")
         type = createDecimalType();
@@ -152,7 +153,6 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         break;
     }
     default:
-        throw std::invalid_argument("RandomColumnGenerator invalid type");
         throw DB::Exception(
             ErrorCodes::LOGICAL_ERROR,
             "RandomColumnGenerator invalid type, type_id={}",
@@ -263,8 +263,13 @@ void ColumnGenerator::genDecimal(MutableColumnPtr & col, DataTypePtr & data_type
     }
     else
     {
-        throw std::invalid_argument(
-            fmt::format("RandomColumnGenerator parseDecimal({}, {}) prec {} scale {} fail", s, negative, prec, scale));
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "RandomColumnGenerator parseDecimal({}, {}) prec {} scale {} fail",
+            s,
+            negative,
+            prec,
+            scale);
     }
 }
 
@@ -277,8 +282,10 @@ void ColumnGenerator::genVector(MutableColumnPtr & col, DataTypePtr & nested_typ
     {
         Array arr;
         for (size_t i = 0; i < num_vals; ++i)
-            // arr.push_back(static_cast<Float64>(real_rand_gen(rand_gen)));
-            arr.push_back(static_cast<Float64>(2.5));
+        {
+            arr.push_back(static_cast<Float64>(real_rand_gen(rand_gen)));
+            // arr.push_back(static_cast<Float64>(2.5));
+        }
         col->insert(arr);
         break;
     }
