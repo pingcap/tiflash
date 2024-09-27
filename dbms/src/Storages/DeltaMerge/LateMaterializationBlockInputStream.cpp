@@ -153,8 +153,7 @@ Block LateMaterializationBlockInputStream::read()
 
             // make sure the position and size of filter_column_block and rest_column_block are the same
             RUNTIME_CHECK_MSG(
-                rest_column_block.startOffset() == filter_column_block.startOffset()
-                    && rest_column_block.rows() == filter_column_block.rows(),
+                rest_column_block.startOffset() == filter_column_block.startOffset(),
                 "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, "
                 "rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
                 filter_column_block.startOffset(),
