@@ -112,13 +112,12 @@ void serializeArraySizesPositionIndependent(const IColumn & column, WriteBuffer 
 {
     const ColumnArray & column_array = typeid_cast<const ColumnArray &>(column);
     const ColumnArray::Offsets & offset_values = column_array.getOffsets();
-    size_t size = offset_values.size();
 
-    if (!size)
+    size_t size = offset_values.size();
+    if (size == 0)
         return;
 
     size_t end = limit && (offset + limit < size) ? offset + limit : size;
-
     ColumnArray::Offset prev_offset = offset == 0 ? 0 : offset_values[offset - 1];
     for (size_t i = offset; i < end; ++i)
     {
@@ -174,6 +173,12 @@ void DataTypeArray::serializeBinaryBulkWithMultipleStreams(
     path.push_back(Substream::ArraySizes);
     if (auto * stream = getter(path))
     {
+        // `position_independent_encoding == false` indicates that the `column_array.offsets`
+        // is serialized as is, which can provide better performance but only supports
+        // deserialization into an empty column. Conversely, when `position_independent_encoding == true`,
+        // the `column_array.offsets` is encoded into a format that supports deserializing
+        // and appending data into a column containing existing data.
+        // If you are unsure, set position_independent_encoding to true.
         if (position_independent_encoding)
             serializeArraySizesPositionIndependent(column, *stream, offset, limit);
         else
@@ -225,11 +230,20 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     path.push_back(Substream::ArraySizes);
     if (auto * stream = getter(path))
     {
+        // `position_independent_encoding == false` indicates that the `column_array.offsets`
+        // is serialized as is, which can provide better performance but only supports
+        // deserialization into an empty column. Conversely, when `position_independent_encoding == true`,
+        // the `column_array.offsets` is encoded into a format that supports deserializing
+        // and appending data into a column containing existing data.
+        // If you are unsure, set position_independent_encoding to true.
         if (position_independent_encoding)
             deserializeArraySizesPositionIndependent(column, *stream, limit);
         else
+        {
+            
             DataTypeNumber<ColumnArray::Offset>()
                 .deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0);
+        }
     }
 
     path.back() = Substream::ArrayElements;

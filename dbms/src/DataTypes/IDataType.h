@@ -124,6 +124,8 @@ public:
       * offset must be not greater than size of column.
       * offset + limit could be greater than size of column
       *  - in that case, column is serialized till the end.
+      * `position_independent_encoding` - provide better performance when it is false, but it requires not to be
+      *     deserialized the data into a column with existing data.
       */
     virtual void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
@@ -149,7 +151,9 @@ public:
     }
 
     /** Read no more than limit values and append them into column.
-      * avg_value_size_hint - if not zero, may be used to avoid reallocations while reading column of String type.
+      * `avg_value_size_hint` - if not zero, may be used to avoid reallocations while reading column of String type.
+      * `position_independent_encoding` - provide better performance when it is false, but it requires not to be
+      *     deserialized the data into a column with existing data.
       */
     virtual void deserializeBinaryBulkWithMultipleStreams(
         IColumn & column,

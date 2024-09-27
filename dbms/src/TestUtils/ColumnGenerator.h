@@ -36,6 +36,10 @@ struct ColumnGeneratorOpts
     DataDistribution distribution;
     String name = ""; // NOLINT
     size_t string_max_size = 128;
+    // - `array_elems_distribution == RANDOM` generate array with random num of elems
+    //    the range for num of elems is [0, array_elems_max_size)
+    // - `array_elems_distribution == RANDOM` generate array with fixed num of elems
+    //    the num of elems == array_elems_max_size
     DataDistribution array_elems_distribution = DataDistribution::RANDOM;
     size_t array_elems_max_size = 10;
 };
