@@ -327,7 +327,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
                 table_column_defines.begin(),
                 table_column_defines.end(),
                 [](const ColumnDefine & col, FmtBuffer & fb) {
-                    fb.fmtAppend("{} {} {}", col.name, col.type->getFamilyName(), col.vector_index);
+                    fb.fmtAppend("{} {}", col.name, col.type->getFamilyName());
                 },
                 ", ");
             return fmt_buf.toString();

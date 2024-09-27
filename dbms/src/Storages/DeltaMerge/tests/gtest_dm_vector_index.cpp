@@ -206,7 +206,7 @@ try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
     auto vec_cd = ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
-    vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+    auto vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
         .kind = tipb::VectorIndexKind::HNSW,
         .dimension = 3,
         .distance_metric = tipb::VectorDistanceMetric::L2,
@@ -229,7 +229,7 @@ try
     }
 
     dm_file = restoreDMFile();
-    dm_file = buildIndex(*vec_cd.vector_index);
+    dm_file = buildIndex(*vector_index);
 
     // Read with exact match
     {
@@ -836,7 +836,7 @@ try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
     auto vec_cd = ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
-    vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+    auto vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
         .kind = tipb::VectorIndexKind::HNSW,
         .dimension = 3,
         .distance_metric = tipb::VectorDistanceMetric::L2,
@@ -866,7 +866,7 @@ try
     }
 
     dm_file = restoreDMFile();
-    dm_file = buildIndex(*vec_cd.vector_index);
+    dm_file = buildIndex(*vector_index);
 
     {
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
@@ -904,7 +904,7 @@ try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
     auto vec_cd = ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
-    vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+    auto vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
         .kind = tipb::VectorIndexKind::HNSW,
         .dimension = 3,
         .distance_metric = tipb::VectorDistanceMetric::L2,
@@ -933,7 +933,7 @@ try
     }
 
     dm_file = restoreDMFile();
-    dm_file = buildIndex(*vec_cd.vector_index);
+    dm_file = buildIndex(*vector_index);
 
     // Pack #0 is filtered out according to VecIndex
     {
@@ -1045,7 +1045,7 @@ try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
     auto vec_cd = ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
-    vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+    auto vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
         .kind = tipb::VectorIndexKind::HNSW,
         .dimension = 1,
         .distance_metric = tipb::VectorDistanceMetric::L2,
@@ -1076,7 +1076,7 @@ try
     }
 
     dm_file = restoreDMFile();
-    dm_file = buildIndex(*vec_cd.vector_index);
+    dm_file = buildIndex(*vector_index);
 
     // Pack Filter using RowKeyRange
     {
@@ -1223,11 +1223,6 @@ protected:
     void prepareColumns(const ColumnDefinesPtr & columns) override
     {
         auto vec_cd = ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
-        vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
-            .kind = tipb::VectorIndexKind::HNSW,
-            .dimension = 1,
-            .distance_metric = tipb::VectorDistanceMetric::L2,
-        });
         columns->emplace_back(vec_cd);
     }
 
@@ -1752,9 +1747,7 @@ public:
         FileCache::initialize(global_context.getPathCapacity(), file_cache_config);
 
         auto cols = DMTestEnv::getDefaultColumns();
-        auto vec_cd = cdVec();
-        vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(index_info);
-        cols->emplace_back(vec_cd);
+        cols->emplace_back(cdVec());
         setColumns(cols);
 
         auto dm_context = dmContext();

@@ -89,22 +89,11 @@ struct ColumnDefine
     DataTypePtr type;
     Field default_value;
 
-    /// Note: ColumnDefine is used in both Write path and Read path.
-    /// In the read path, vector_index is usually not available. Use AnnQueryInfo for
-    /// read related vector index information.
-    TiDB::VectorIndexDefinitionPtr vector_index;
-
-    explicit ColumnDefine(
-        ColId id_ = 0,
-        String name_ = "",
-        DataTypePtr type_ = nullptr,
-        Field default_value_ = Field{},
-        TiDB::VectorIndexDefinitionPtr vector_index_ = nullptr)
+    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr, Field default_value_ = Field{})
         : id(id_)
         , name(std::move(name_))
         , type(std::move(type_))
         , default_value(std::move(default_value_))
-        , vector_index(vector_index_)
     {}
 };
 
