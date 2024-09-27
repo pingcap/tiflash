@@ -43,6 +43,9 @@ DMFileIndexWriter::LocalIndexBuildInfo DMFileIndexWriter::getLocalIndexBuildInfo
     assert(index_infos != nullptr);
     static constexpr double VECTOR_INDEX_SIZE_FACTOR = 1.2;
 
+    // TODO(vector-index): Now we only generate the build info when new index is added.
+    //    The built indexes will be dropped (lazily) after the segment instance is updated.
+    //    We can support dropping the vector index more quickly later.
     LocalIndexBuildInfo build;
     build.indexes_to_build = std::make_shared<LocalIndexInfos>();
     build.file_ids.reserve(dm_files.size());

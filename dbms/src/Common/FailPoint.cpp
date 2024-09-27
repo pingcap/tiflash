@@ -71,6 +71,7 @@ namespace DB
     M(force_remote_read_for_batch_cop_once)                       \
     M(exception_new_dynamic_thread)                               \
     M(force_wait_index_timeout)                                   \
+    M(force_not_support_vector_index)                             \
     M(sync_schema_request_failure)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/KVStore/Types.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -19,8 +20,63 @@
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
 
+namespace DB::FailPoints
+{
+extern const char force_not_support_vector_index[];
+} // namespace DB::FailPoints
 namespace DB::DM::tests
 {
+
+TEST(LocalIndexInfoTest, StorageFormatNotSupport)
+try
+{
+    TiDB::TableInfo table_info;
+    {
+        TiDB::ColumnInfo column_info;
+        column_info.name = "vec";
+        column_info.id = 100;
+        table_info.columns.emplace_back(column_info);
+    }
+
+    auto logger = Logger::get();
+    LocalIndexInfosPtr index_info = nullptr;
+    // check the same
+    {
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger);
+        ASSERT_EQ(new_index_info, nullptr);
+        // check again, nothing changed, return nullptr
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger));
+
+        // update
+        index_info = new_index_info;
+    }
+
+    // Add a vector index to the TableInfo.
+    TiDB::IndexColumnInfo default_index_col_info;
+    default_index_col_info.name = "vec";
+    default_index_col_info.length = -1;
+    default_index_col_info.offset = 0;
+    TiDB::IndexInfo expect_idx;
+    {
+        expect_idx.id = 1;
+        expect_idx.idx_cols.emplace_back(default_index_col_info);
+        expect_idx.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
+            .kind = tipb::VectorIndexKind::HNSW,
+            .dimension = 1,
+            .distance_metric = tipb::VectorDistanceMetric::L2,
+        });
+        table_info.index_infos.emplace_back(expect_idx);
+    }
+
+    FailPointHelper::enableFailPoint(FailPoints::force_not_support_vector_index);
+
+    // check the result when storage format not support
+    auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger);
+    ASSERT_NE(new_index_info, nullptr);
+    // always return empty index_info, we need to drop all existing indexes
+    ASSERT_TRUE(new_index_info->empty());
+}
+CATCH
 
 TEST(LocalIndexInfoTest, CheckIndexChanged)
 try
@@ -288,5 +344,71 @@ try
     }
 }
 CATCH
+
+TEST(LocalIndexInfoTest, CheckIndexDropDefinedInColumnInfo)
+{
+    auto logger = Logger::get();
+
+    TiDB::TableInfo table_info;
+    {
+        // The serverless branch, vector index may directly defined
+        // on the ColumnInfo
+        TiDB::ColumnInfo column_info_v1;
+        column_info_v1.name = "vec1";
+        column_info_v1.id = 99;
+        column_info_v1.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
+            .kind = tipb::VectorIndexKind::HNSW,
+            .dimension = 3,
+            .distance_metric = tipb::VectorDistanceMetric::INNER_PRODUCT,
+        });
+        table_info.columns.emplace_back(column_info_v1);
+
+        // A column without vector index
+        TiDB::ColumnInfo column_info_v2;
+        column_info_v2.name = "vec2";
+        column_info_v2.id = 100;
+        table_info.columns.emplace_back(column_info_v2);
+    }
+
+    LocalIndexInfosPtr index_info = nullptr;
+    {
+        // check the different with nullptr
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger);
+        ASSERT_NE(nullptr, new_index_info);
+        ASSERT_EQ(new_index_info->size(), 1);
+        const auto & idx0 = (*new_index_info)[0];
+        ASSERT_EQ(IndexType::Vector, idx0.type);
+        ASSERT_EQ(EmptyIndexID, idx0.index_id); // the vector index defined on ColumnInfo
+        ASSERT_EQ(99, idx0.column_id);
+        ASSERT_NE(nullptr, idx0.index_definition);
+        ASSERT_EQ(tipb::VectorIndexKind::HNSW, idx0.index_definition->kind);
+        ASSERT_EQ(3, idx0.index_definition->dimension);
+        ASSERT_EQ(tipb::VectorDistanceMetric::INNER_PRODUCT, idx0.index_definition->distance_metric);
+
+        // check again, nothing changed, return nullptr
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger));
+
+        // update
+        index_info = new_index_info;
+    }
+
+    // drop column along with index info defined in column info
+    table_info.columns.erase(table_info.columns.begin());
+    {
+        // check the different with existing index_info
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger);
+        ASSERT_NE(nullptr, new_index_info);
+        // not null
+        ASSERT_NE(new_index_info, nullptr);
+        // has been dropped
+        ASSERT_EQ(new_index_info->size(), 0);
+
+        // check again, nothing changed, return nullptr
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger));
+
+        // update
+        index_info = new_index_info;
+    }
+}
 
 } // namespace DB::DM::tests
