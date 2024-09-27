@@ -22,7 +22,11 @@
 #include <Storages/DeltaMerge/Index/IndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/PathPool.h>
+#include <tipb/executor.pb.h>
+
+#include <unordered_map>
 
 namespace DB::ErrorCodes
 {
@@ -33,12 +37,15 @@ namespace DB::DM
 {
 
 DMFileIndexWriter::LocalIndexBuildInfo DMFileIndexWriter::getLocalIndexBuildInfo(
-    const LocalIndexInfosPtr & index_infos,
+    const LocalIndexInfosSnapshot & index_infos,
     const DMFiles & dm_files)
 {
     assert(index_infos != nullptr);
     static constexpr double VECTOR_INDEX_SIZE_FACTOR = 1.2;
 
+    // TODO(vector-index): Now we only generate the build info when new index is added.
+    //    The built indexes will be dropped (lazily) after the segment instance is updated.
+    //    We can support dropping the vector index more quickly later.
     LocalIndexBuildInfo build;
     build.indexes_to_build = std::make_shared<LocalIndexInfos>();
     build.file_ids.reserve(dm_files.size());
@@ -48,18 +55,22 @@ DMFileIndexWriter::LocalIndexBuildInfo DMFileIndexWriter::getLocalIndexBuildInfo
         for (const auto & index : *index_infos)
         {
             auto col_id = index.column_id;
-            // The dmfile may be built before col_id is added. Skip build indexes for it
-            if (!dmfile->isColumnExist(col_id))
-                continue;
+            const auto [state, data_bytes] = dmfile->getLocalIndexState(col_id, index.index_id);
+            switch (state)
+            {
+            case DMFileMeta::LocalIndexState::NoNeed:
+            case DMFileMeta::LocalIndexState::IndexBuilt:
+                // The dmfile may be built before col_id is added, or has been built. Skip build indexes for it
+                break;
+            case DMFileMeta::LocalIndexState::IndexPending:
+            {
+                any_new_index_build = true;
 
-            if (dmfile->getColumnStat(col_id).index_bytes > 0)
-                continue;
-
-            any_new_index_build = true;
-
-            auto col_stat = dmfile->getColumnStat(col_id);
-            build.indexes_to_build->emplace_back(index);
-            build.estimated_memory_bytes += col_stat.serialized_bytes * VECTOR_INDEX_SIZE_FACTOR;
+                build.indexes_to_build->emplace_back(index);
+                build.estimated_memory_bytes += data_bytes * VECTOR_INDEX_SIZE_FACTOR;
+                break;
+            }
+            }
         }
 
         if (any_new_index_build)
@@ -82,36 +93,50 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
         dm_file_mutable->path());
 
     // read_columns are: DEL_MARK, COL_A, COL_B, ...
-    // index_builders are: COL_A, COL_B, ...
+    // index_builders are: COL_A -> {idx_M, idx_N}, COL_B -> {idx_O}, ...
 
     ColumnDefines read_columns{*del_cd_iter};
     read_columns.reserve(options.index_infos->size() + 1);
 
-    std::vector<VectorIndexBuilderPtr> index_builders;
-    index_builders.reserve(options.index_infos->size());
+    std::unordered_map<ColId, std::vector<VectorIndexBuilderPtr>> index_builders;
 
-    // The caller should avoid building index for the same column multiple times.
+    std::unordered_map<ColId, std::vector<LocalIndexInfo>> col_indexes;
     for (const auto & index_info : *options.index_infos)
     {
+        if (index_info.type != IndexType::Vector)
+            continue;
+        col_indexes[index_info.column_id].emplace_back(index_info);
+    }
+
+    for (const auto & [col_id, index_infos] : col_indexes)
+    {
         const auto cd_iter = std::find_if(column_defines.cbegin(), column_defines.cend(), [&](const auto & cd) {
-            return cd.id == index_info.column_id;
+            return cd.id == col_id;
         });
         RUNTIME_CHECK_MSG(
             cd_iter != column_defines.cend(),
             "Cannot find column_id={} in file={}",
-            index_info.column_id,
+            col_id,
             dm_file_mutable->path());
 
-        // Index already built. We don't allow. The caller should filter away.
-        RUNTIME_CHECK(dm_file_mutable->getColumnStat(index_info.column_id).index_bytes == 0, index_info.column_id);
-
+        for (const auto & idx_info : index_infos)
+        {
+            // Index already built. We don't allow. The caller should filter away,
+            RUNTIME_CHECK(
+                !dm_file_mutable->isLocalIndexExist(idx_info.column_id, idx_info.index_id),
+                idx_info.column_id,
+                idx_info.index_id);
+            index_builders[col_id].emplace_back(
+                VectorIndexBuilder::create(idx_info.index_id, idx_info.index_definition));
+        }
         read_columns.push_back(*cd_iter);
-        index_builders.push_back(VectorIndexBuilder::create(index_info.index_definition));
     }
 
-    // If no index to build.
-    if (index_builders.empty())
+    if (read_columns.size() == 1 || index_builders.empty())
+    {
+        // No index to build.
         return 0;
+    }
 
     DMFileV3IncrementWriter::Options iw_options{
         .dm_file = dm_file_mutable,
@@ -133,6 +158,7 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
         scan_context);
 
     // Read all blocks and build index
+    const size_t num_cols = read_columns.size();
     while (true)
     {
         if (!should_proceed())
@@ -142,7 +168,7 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
         if (!block)
             break;
 
-        RUNTIME_CHECK(block.columns() == read_columns.size());
+        RUNTIME_CHECK(block.columns() == num_cols);
         RUNTIME_CHECK(block.getByPosition(0).column_id == TAG_COLUMN_ID);
 
         auto del_mark_col = block.safeGetByPosition(0).column;
@@ -150,49 +176,61 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
         const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
         RUNTIME_CHECK(del_mark != nullptr);
 
-        for (size_t col_idx = 0, col_idx_max = index_builders.size(); col_idx < col_idx_max; ++col_idx)
+        for (size_t col_idx = 1; col_idx < num_cols; ++col_idx)
         {
-            const auto & index_builder = index_builders[col_idx];
-            const auto & col_with_type_and_name = block.safeGetByPosition(col_idx + 1);
-            RUNTIME_CHECK(col_with_type_and_name.column_id == read_columns[col_idx + 1].id);
+            const auto & col_with_type_and_name = block.safeGetByPosition(col_idx);
+            RUNTIME_CHECK(col_with_type_and_name.column_id == read_columns[col_idx].id);
             const auto & col = col_with_type_and_name.column;
-            index_builder->addBlock(*col, del_mark, should_proceed);
+            for (const auto & index_builder : index_builders[read_columns[col_idx].id])
+            {
+                index_builder->addBlock(*col, del_mark, should_proceed);
+            }
         }
     }
 
     // Write down the index
     size_t total_built_index_bytes = 0;
-    for (size_t col_idx = 0, col_idx_max = index_builders.size(); col_idx < col_idx_max; col_idx++)
+    std::unordered_map<ColId, std::vector<dtpb::VectorIndexFileProps>> new_indexes_on_cols;
+    for (size_t col_idx = 1; col_idx < num_cols; ++col_idx)
     {
-        const auto & index_builder = index_builders[col_idx];
-        const auto & cd = read_columns[col_idx + 1];
-
+        const auto & cd = read_columns[col_idx];
         // Save index and update column stats
         auto callback = [&](const IDataType::SubstreamPath & substream_path) -> void {
             if (IDataType::isNullMap(substream_path) || IDataType::isArraySizes(substream_path))
                 return;
 
-            const auto stream_name = DMFile::getFileNameBase(cd.id, substream_path);
-            const auto index_file_name = colIndexFileName(stream_name);
-            const auto index_path = iw->localPath() + "/" + index_file_name;
-            index_builder->save(index_path);
+            std::vector<dtpb::VectorIndexFileProps> new_indexes;
+            for (const auto & index_builder : index_builders[cd.id])
+            {
+                const IndexID index_id = index_builder->index_id;
+                const auto index_file_name = index_id > 0
+                    ? dm_file_mutable->vectorIndexFileName(index_id)
+                    : colIndexFileName(DMFile::getFileNameBase(cd.id, substream_path));
+                const auto index_path = iw->localPath() + "/" + index_file_name;
+                index_builder->save(index_path);
 
-            auto & col_stat = dm_file_mutable->meta->getColumnStats().at(cd.id);
-            col_stat.index_bytes = Poco::File(index_path).getSize();
-            total_built_index_bytes += col_stat.index_bytes;
-            // Memorize what kind of vector index it is, so that we can correctly restore it when reading.
-            col_stat.vector_index.emplace();
-            col_stat.vector_index->set_index_kind(tipb::VectorIndexKind_Name(index_builder->definition->kind));
-            col_stat.vector_index->set_distance_metric(
-                tipb::VectorDistanceMetric_Name(index_builder->definition->distance_metric));
-            col_stat.vector_index->set_dimensions(index_builder->definition->dimension);
+                // Memorize what kind of vector index it is, so that we can correctly restore it when reading.
+                dtpb::VectorIndexFileProps pb_idx;
+                pb_idx.set_index_kind(tipb::VectorIndexKind_Name(index_builder->definition->kind));
+                pb_idx.set_distance_metric(tipb::VectorDistanceMetric_Name(index_builder->definition->distance_metric));
+                pb_idx.set_dimensions(index_builder->definition->dimension);
+                pb_idx.set_index_id(index_id);
+                auto index_bytes = Poco::File(index_path).getSize();
+                pb_idx.set_index_bytes(index_bytes);
+                new_indexes.emplace_back(std::move(pb_idx));
 
-            iw->include(index_file_name);
+                total_built_index_bytes += index_bytes;
+                iw->include(index_file_name);
+            }
+            // Inorder to avoid concurrency reading on ColumnStat, the new added indexes
+            // will be insert into DMFile instance in `bumpMetaVersion`.
+            new_indexes_on_cols.emplace(cd.id, std::move(new_indexes));
         };
+
         cd.type->enumerateStreams(callback);
     }
 
-    dm_file_mutable->meta->bumpMetaVersion();
+    dm_file_mutable->meta->bumpMetaVersion(DMFileMetaChangeset{new_indexes_on_cols});
     iw->finalize(); // Note: There may be S3 uploads here.
     return total_built_index_bytes;
 }

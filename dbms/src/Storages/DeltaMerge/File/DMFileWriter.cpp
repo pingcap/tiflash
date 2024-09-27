@@ -65,7 +65,16 @@ DMFileWriter::DMFileWriter(
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
 
         addStreams(cd.id, cd.type, do_index);
-        dmfile->meta->getColumnStats().emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
+        dmfile->meta->getColumnStats().emplace(
+            cd.id,
+            ColumnStat{
+                .col_id = cd.id,
+                .type = cd.type,
+                .avg_size = 0,
+                // ... here ignore some fields with default initializers
+                .vector_index = {},
+                .additional_data_for_test = {},
+            });
     }
 }
 

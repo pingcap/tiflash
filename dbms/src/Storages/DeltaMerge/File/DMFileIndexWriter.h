@@ -47,7 +47,9 @@ public:
         LocalIndexInfosPtr indexes_to_build;
     };
 
-    static LocalIndexBuildInfo getLocalIndexBuildInfo(const LocalIndexInfosPtr & index_infos, const DMFiles & dm_files);
+    static LocalIndexBuildInfo getLocalIndexBuildInfo(
+        const LocalIndexInfosSnapshot & index_infos,
+        const DMFiles & dm_files);
 
     struct Options
     {

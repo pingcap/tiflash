@@ -2020,29 +2020,32 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
-    // copy the local_index_infos to check whether any new index is created
-    LocalIndexInfosPtr local_index_infos_copy = nullptr;
-    {
-        std::shared_lock index_read_lock(mtx_local_index_infos);
-        local_index_infos_copy = std::shared_ptr<LocalIndexInfos>(local_index_infos);
-    }
-
     std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 
-    // release the lock because `checkAllSegmentsLocalIndex` will try to acquire the lock
+    // release the lock because `applyLocalIndexChange ` will try to acquire the lock
     // and generate tasks on segments
     lock.unlock();
 
-    auto new_local_index_infos = generateLocalIndexInfos(local_index_infos_copy, table_info, log);
-    if (new_local_index_infos)
+    applyLocalIndexChange(table_info);
+}
+
+void DeltaMergeStore::applyLocalIndexChange(const TiDB::TableInfo & new_table_info)
+{
+    // Get a snapshot on the local_index_infos to check whether any new index is created
+    auto new_local_index_infos = generateLocalIndexInfos(getLocalIndexInfosSnapshot(), new_table_info, log);
+
+    // no index is created or dropped
+    if (!new_local_index_infos)
+        return;
+
     {
-        {
-            // new index created, update the info in-memory
-            std::unique_lock index_write_lock(mtx_local_index_infos);
-            local_index_infos.swap(new_local_index_infos);
-        }
-        checkAllSegmentsLocalIndex();
-    } // else no new index is created
+        // new index created, update the info in-memory thread safety between `getLocalIndexInfosSnapshot`
+        std::unique_lock index_write_lock(mtx_local_index_infos);
+        local_index_infos.swap(new_local_index_infos);
+    }
+
+    // generate async tasks for building local index for all segments
+    checkAllSegmentsLocalIndex();
 }
 
 SortDescription DeltaMergeStore::getPrimarySortDescription() const

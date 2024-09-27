@@ -103,7 +103,7 @@ protected:
             RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
             column_stats[::DB::TiDBPkColumnID].additional_data_for_test = pk_additiona_data;
 
-            new_dm_file->meta->bumpMetaVersion();
+            new_dm_file->meta->bumpMetaVersion({});
             iw->finalize();
 
             new_dm_files.emplace_back(new_dm_file);
@@ -572,7 +572,7 @@ try
         RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
         column_stats[::DB::TiDBPkColumnID].additional_data_for_test = "tiflash_foo";
 
-        new_dm_file->meta->bumpMetaVersion();
+        new_dm_file->meta->bumpMetaVersion({});
         iw->finalize();
 
         auto lock = wn_segment->mustGetUpdateLock();

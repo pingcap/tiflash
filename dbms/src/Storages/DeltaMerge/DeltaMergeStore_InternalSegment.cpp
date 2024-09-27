@@ -528,7 +528,6 @@ bool DeltaMergeStore::segmentEnsureStableIndexAsync(const SegmentPtr & segment)
 {
     RUNTIME_CHECK(segment != nullptr);
 
-    // TODO(local index): There could be some indexes are built while some indexes is not yet built after DDL
     auto local_index_infos_snap = getLocalIndexInfosSnapshot();
     if (!local_index_infos_snap)
         return false;
@@ -569,7 +568,6 @@ bool DeltaMergeStore::segmentWaitStableIndexReady(const SegmentPtr & segment) co
 {
     RUNTIME_CHECK(segment != nullptr);
 
-    // TODO(local index): There could be some indexes are built while some indexes is not yet built after DDL
     auto local_index_infos_snap = getLocalIndexInfosSnapshot();
     if (!local_index_infos_snap)
         return true;
@@ -597,12 +595,11 @@ bool DeltaMergeStore::segmentWaitStableIndexReady(const SegmentPtr & segment) co
         bool all_indexes_built = true;
         for (const auto & index : *build_info.indexes_to_build)
         {
-            auto col_id = index.column_id;
-            // The dmfile may be built before col_id is added. Skip build indexes for it
-            if (!dmfile->isColumnExist(col_id))
-                continue;
-
-            all_indexes_built = all_indexes_built && dmfile->getColumnStat(col_id).index_bytes > 0;
+            const auto [state, bytes] = dmfile->getLocalIndexState(index.column_id, index.index_id);
+            UNUSED(bytes);
+            all_indexes_built = all_indexes_built
+                // dmfile built before the column_id added or index already built
+                && (state == DMFileMeta::LocalIndexState::NoNeed || state == DMFileMeta::LocalIndexState::IndexBuilt);
         }
         if (all_indexes_built)
             return true;

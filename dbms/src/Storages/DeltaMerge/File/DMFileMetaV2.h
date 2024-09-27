@@ -102,16 +102,20 @@ public:
     EncryptionPath encryptionMergedPath(UInt32 number) const;
     static String mergedFilename(UInt32 number) { return fmt::format("{}.merged", number); }
 
+public:
+    std::tuple<LocalIndexState, size_t> getLocalIndexState(ColId col_id, IndexID index_id) const override;
+
+    std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId col_id, IndexID index_id) const override;
+
+public:
     UInt32 metaVersion() const override { return meta_version; }
-    UInt32 bumpMetaVersion() override
-    {
-        ++meta_version;
-        return meta_version;
-    }
+    UInt32 bumpMetaVersion(DMFileMetaChangeset && changeset) override;
 
     UInt64 small_file_size_threshold;
     UInt64 merged_file_max_size;
     UInt64 meta_version = 0; // Note: meta_version affects the output file name.
+
+    mutable std::mutex mtx_bump;
 
 private:
     UInt64 getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const;
