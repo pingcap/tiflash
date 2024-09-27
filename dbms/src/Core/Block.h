@@ -180,6 +180,9 @@ using BucketBlocksListMap = std::map<Int32, BlocksList>;
 /// Join blocks by columns
 /// The schema of the output block is the same as the header block.
 /// The columns not in the header block will be ignored.
+/// NOTE: The input blocks can have columns with different sizes,
+///       but the columns in the header block must have the same size,
+///       Otherwise, the returned block will contain columns with the different size.
 /// For example:
 /// header: (a UInt32, b UInt32, c UInt32, d UInt32)
 /// block1: (a UInt32, b UInt32, c UInt32, e UInt32), rows: 3
