@@ -17,7 +17,8 @@
 #include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/Page/PageDefinesBase.h>
 
@@ -27,26 +28,45 @@ class StoragePathPool;
 using StoragePathPoolPtr = std::shared_ptr<StoragePathPool>;
 } // namespace DB
 
-namespace DB::DM
-{
-class DMFile;
-using DMFilePtr = std::shared_ptr<DMFile>;
-using DMFiles = std::vector<DMFilePtr>;
-} // namespace DB::DM
 
 namespace DB::DM
 {
+
+struct LocalIndexBuildInfo
+{
+    DMFiles dm_files;
+    size_t estimated_memory_bytes = 0;
+    LocalIndexInfosPtr indexes_to_build;
+
+public:
+    std::vector<LocalIndexerScheduler::FileID> filesIDs() const
+    {
+        std::vector<LocalIndexerScheduler::FileID> ids;
+        ids.reserve(dm_files.size());
+        for (const auto & dmf : dm_files)
+        {
+            ids.emplace_back(LocalIndexerScheduler::DMFileID(dmf->fileId()));
+        }
+        return ids;
+    }
+    std::vector<IndexID> indexesIDs() const
+    {
+        std::vector<IndexID> ids;
+        if (indexes_to_build)
+        {
+            ids.reserve(indexes_to_build->size());
+            for (const auto & index : *indexes_to_build)
+            {
+                ids.emplace_back(index.index_id);
+            }
+        }
+        return ids;
+    }
+};
 
 class DMFileIndexWriter
 {
 public:
-    struct LocalIndexBuildInfo
-    {
-        std::vector<LocalIndexerScheduler::FileID> file_ids;
-        size_t estimated_memory_bytes = 0;
-        LocalIndexInfosPtr indexes_to_build;
-    };
-
     static LocalIndexBuildInfo getLocalIndexBuildInfo(
         const LocalIndexInfosSnapshot & index_infos,
         const DMFiles & dm_files);

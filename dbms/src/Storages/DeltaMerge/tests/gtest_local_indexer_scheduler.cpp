@@ -225,26 +225,26 @@ try
         .auto_start = false,
     });
 
-    ASSERT_THROW(
-        {
-            scheduler->pushTask({
-                .keyspace_id = 1,
-                .table_id = 1,
-                .file_ids = {LocalIndexerScheduler::DMFileID(1)},
-                .request_memory = 100,
-                .workload = [&]() { pushResult("foo"); },
-            });
-        },
-        DB::Exception);
-    ASSERT_NO_THROW({
-        scheduler->pushTask({
+    {
+        auto [ok, reason] = scheduler->pushTask({
+            .keyspace_id = 1,
+            .table_id = 1,
+            .file_ids = {LocalIndexerScheduler::DMFileID(1)},
+            .request_memory = 100, // exceed memory limit
+            .workload = [&]() { pushResult("foo"); },
+        });
+        ASSERT_FALSE(ok);
+    }
+    {
+        auto [ok, reason] = scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
             .file_ids = {LocalIndexerScheduler::DMFileID(2)},
             .request_memory = 0,
             .workload = [&]() { pushResult("bar"); },
         });
-    });
+        ASSERT_TRUE(ok);
+    }
 
     scheduler->start();
     scheduler->waitForFinish();
@@ -259,24 +259,26 @@ try
         .memory_limit = 0,
     });
 
-    ASSERT_NO_THROW({
-        scheduler->pushTask({
+    {
+        auto [ok, reason] = scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
             .file_ids = {LocalIndexerScheduler::DMFileID(3)},
             .request_memory = 100,
             .workload = [&]() { pushResult("foo"); },
         });
-    });
-    ASSERT_NO_THROW({
-        scheduler->pushTask({
+        ASSERT_TRUE(ok);
+    }
+    {
+        auto [ok, reason] = scheduler->pushTask({
             .keyspace_id = 1,
             .table_id = 1,
             .file_ids = {LocalIndexerScheduler::DMFileID(4)},
             .request_memory = 0,
             .workload = [&]() { pushResult("bar"); },
         });
-    });
+        ASSERT_TRUE(ok);
+    };
 
     scheduler->start();
     scheduler->waitForFinish();

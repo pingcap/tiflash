@@ -39,7 +39,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
@@ -363,7 +363,7 @@ DeltaMergeStorePtr DeltaMergeStore::create(
         settings_,
         thread_pool);
     std::shared_ptr<DeltaMergeStore> store_shared_ptr(store);
-    store_shared_ptr->checkAllSegmentsLocalIndex();
+    store_shared_ptr->checkAllSegmentsLocalIndex({});
     return store_shared_ptr;
 }
 
@@ -2032,20 +2032,20 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
 void DeltaMergeStore::applyLocalIndexChange(const TiDB::TableInfo & new_table_info)
 {
     // Get a snapshot on the local_index_infos to check whether any new index is created
-    auto new_local_index_infos = generateLocalIndexInfos(getLocalIndexInfosSnapshot(), new_table_info, log);
+    auto changeset = generateLocalIndexInfos(getLocalIndexInfosSnapshot(), new_table_info, log);
 
     // no index is created or dropped
-    if (!new_local_index_infos)
+    if (!changeset.new_local_index_infos)
         return;
 
     {
         // new index created, update the info in-memory thread safety between `getLocalIndexInfosSnapshot`
         std::unique_lock index_write_lock(mtx_local_index_infos);
-        local_index_infos.swap(new_local_index_infos);
+        local_index_infos.swap(changeset.new_local_index_infos);
     }
 
     // generate async tasks for building local index for all segments
-    checkAllSegmentsLocalIndex();
+    checkAllSegmentsLocalIndex(std::move(changeset.dropped_indexes));
 }
 
 SortDescription DeltaMergeStore::getPrimarySortDescription() const

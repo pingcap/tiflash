@@ -29,7 +29,7 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -70,6 +70,7 @@ using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 struct ExternalDTFileInfo;
 struct GCOptions;
+struct LocalIndexBuildInfo;
 
 namespace tests
 {
@@ -184,6 +185,9 @@ struct LocalIndexStats
     UInt64 rows_stable_not_indexed{}; // Total rows
     UInt64 rows_delta_indexed{}; // Total rows
     UInt64 rows_delta_not_indexed{}; // Total rows
+
+    // If the index is finally failed to be built, then this is not empty
+    String error_message{};
 };
 using LocalIndexesStats = std::vector<LocalIndexStats>;
 
@@ -730,11 +734,9 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
-    void segmentEnsureStableIndex(
-        DMContext & dm_context,
-        const LocalIndexInfosPtr & index_info,
-        const DMFiles & dm_files,
-        const String & source_segment_info);
+    void segmentEnsureStableIndex(DMContext & dm_context, const LocalIndexBuildInfo & index_build_info);
+
+    void segmentEnsureStableIndexWithErrorReport(DMContext & dm_context, const LocalIndexBuildInfo & index_build_info);
 
     /**
      * Ingest a DMFile into the segment, optionally causing a new segment being created.
@@ -877,8 +879,9 @@ private:
 
     /**
      * Check whether there are new local indexes should be built for all segments.
+     * If dropped_indexes is not empty, try to cleanup the dropped_indexes
      */
-    void checkAllSegmentsLocalIndex();
+    void checkAllSegmentsLocalIndex(std::vector<IndexID> && dropped_indexes);
 
     /**
      * Ensure the segment has stable index.
