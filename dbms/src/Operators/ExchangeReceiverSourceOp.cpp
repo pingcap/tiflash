@@ -25,10 +25,8 @@ Block ExchangeReceiverSourceOp::popFromBlockQueue()
 {
     assert(!block_queue.empty());
     Block block;
-    block.ffff();
     block = std::move(block_queue.front());
     block_queue.pop();
-    block.ffff();
     return block;
 }
 
@@ -37,7 +35,6 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
     if (!block_queue.empty())
     {
         block = popFromBlockQueue();
-        block.ffff();
         return OperatorStatus::HAS_OUTPUT;
     }
 
@@ -91,7 +88,6 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
                 continue;
 
             block = popFromBlockQueue();
-            block.ffff();
             return OperatorStatus::HAS_OUTPUT;
         }
         return await_status;

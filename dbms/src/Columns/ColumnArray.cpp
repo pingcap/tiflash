@@ -32,10 +32,6 @@
 
 #include <memory>
 
-#include "Common/FmtUtils.h"
-#include "Common/Logger.h"
-#include "common/logger_useful.h"
-
 namespace DB
 {
 namespace ErrorCodes
@@ -55,16 +51,6 @@ ColumnArray::ColumnArray(MutableColumnPtr && nested_column, MutableColumnPtr && 
 {
     if (!typeid_cast<const ColumnOffsets *>(offsets.get()))
         throw Exception("offsets_column must be a ColumnUInt64", ErrorCodes::ILLEGAL_COLUMN);
-
-    if (offsets->size() > 1)
-    {
-        for (size_t i = 1; i < offsets->size(); ++i)
-        {
-            auto prev_off = static_cast<ColumnOffsets &>(offsets->assumeMutableRef()).getData()[i - 1];
-            auto curr_off = static_cast<ColumnOffsets &>(offsets->assumeMutableRef()).getData()[i];
-            RUNTIME_CHECK(curr_off >= prev_off, i, prev_off, curr_off);
-        }
-    }
 
     /** NOTE
       * Arrays with constant value are possible and used in implementation of higher order functions (see FunctionReplicate).
@@ -121,7 +107,6 @@ MutableColumnPtr ColumnArray::cloneResized(size_t to_size) const
             res->getOffsets()[i] = offset;
     }
 
-    res->check();
     return res;
 }
 
@@ -198,8 +183,6 @@ void ColumnArray::insertData(const char * pos, size_t length)
         throw Exception("Incorrect length argument for method ColumnArray::insertData", ErrorCodes::BAD_ARGUMENTS);
 
     getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + elems);
-
-    check();
 }
 
 
@@ -212,17 +195,6 @@ StringRef ColumnArray::serializeValueIntoArena(
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
-
-    if (array_size > 4294967295)
-    {
-        auto col_sz = size();
-        FmtBuffer fmt_buf;
-        for (size_t o = 0; o < col_sz; ++o)
-        {
-            fmt_buf.fmtAppend("i={} offset={},", o, offsetAt(o));
-        }
-        LOG_WARNING(Logger::get(), "!!!!! n={} array_size={} offset={} {}", n, array_size, offset, fmt_buf.toString());
-    }
 
     char * pos = arena.allocContinue(sizeof(array_size), begin);
     memcpy(pos, &array_size, sizeof(array_size));
@@ -244,9 +216,6 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
         pos = getData().deserializeAndInsertFromArena(pos, collator);
 
     getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + array_size);
-
-
-    check();
     return pos;
 }
 
@@ -364,8 +333,6 @@ void ColumnArray::insert(const Field & x)
     for (size_t i = 0; i < size; ++i)
         getData().insert(array[i]);
     getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + size);
-
-    check();
 }
 
 
@@ -377,16 +344,12 @@ void ColumnArray::insertFrom(const IColumn & src_, size_t n)
 
     getData().insertRangeFrom(src.getData(), offset, size);
     getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + size);
-
-    check();
 }
 
 
 void ColumnArray::insertDefault()
 {
     getOffsets().push_back(getOffsets().empty() ? 0 : getOffsets().back());
-
-    check();
 }
 
 void ColumnArray::insertManyDefaults(size_t length)
@@ -396,9 +359,6 @@ void ColumnArray::insertManyDefaults(size_t length)
     if (!offsets.empty())
         v = offsets.back();
     offsets.resize_fill(offsets.size() + length, v);
-
-
-    check();
 }
 
 void ColumnArray::popBack(size_t n)
@@ -408,8 +368,6 @@ void ColumnArray::popBack(size_t n)
     if (nested_n)
         getData().popBack(nested_n);
     offsets.resize_assume_reserved(offsets.size() - n);
-
-    check();
 }
 
 
@@ -491,7 +449,6 @@ bool ColumnArray::hasEqualOffsets(const ColumnArray & other) const
 
 ColumnPtr ColumnArray::convertToFullColumnIfConst() const
 {
-    check();
     ColumnPtr new_data;
 
     if (ColumnPtr full_column = getData().convertToFullColumnIfConst())
@@ -499,7 +456,6 @@ ColumnPtr ColumnArray::convertToFullColumnIfConst() const
     else
         new_data = data;
 
-    check();
     return ColumnArray::create(new_data, offsets);
 }
 
@@ -568,9 +524,6 @@ void ColumnArray::insertRangeFrom(const IColumn & src, size_t start, size_t leng
         for (size_t i = 0; i < length; ++i)
             cur_offsets[old_size + i] = src_offsets[start + i] - nested_offset + prev_max_offset;
     }
-
-
-    check();
 }
 
 
@@ -623,7 +576,6 @@ ColumnPtr ColumnArray::filterNumber(const Filter & filt, ssize_t result_size_hin
         res_offsets,
         filt,
         result_size_hint);
-res->check();
     return res;
 }
 
@@ -693,7 +645,6 @@ ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hin
         }
     }
 
-res->check();
     return res;
 }
 
@@ -739,7 +690,6 @@ ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hi
         }
     }
 
-    res->check();
     return res;
 }
 
@@ -764,11 +714,9 @@ ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_h
         filt,
         result_size_hint);
 
-    auto a =ColumnArray::create(
+    return ColumnArray::create(
         ColumnNullable::create(filtered_array_of_nested.getDataPtr(), std::move(res_null_map)),
         filtered_offsets);
-        a->check();
-        return a;
 }
 
 ColumnPtr ColumnArray::filterTuple(const Filter & filt, ssize_t result_size_hint) const
@@ -794,11 +742,9 @@ ColumnPtr ColumnArray::filterTuple(const Filter & filt, ssize_t result_size_hint
     for (size_t i = 0; i < tuple_size; ++i)
         tuple_columns[i] = static_cast<const ColumnArray &>(*temporary_arrays[i]).getDataPtr();
 
-    auto a= ColumnArray::create(
+    return ColumnArray::create(
         ColumnTuple::create(tuple_columns),
         static_cast<const ColumnArray &>(*temporary_arrays.front()).getOffsetsPtr());
-    a->check();
-    return a;
 }
 
 
@@ -835,8 +781,6 @@ ColumnPtr ColumnArray::permute(const Permutation & perm, size_t limit) const
 
     if (current_offset != 0)
         res->data = data->permute(nested_perm, current_offset);
-
-    res->check();
 
     return res;
 }
@@ -953,8 +897,6 @@ ColumnPtr ColumnArray::replicateNumber(const Offsets & replicate_offsets) const
         prev_data_offset = src_offsets[i];
     }
 
-    array_res.check();
-
     return res;
 }
 
@@ -1032,8 +974,6 @@ ColumnPtr ColumnArray::replicateString(const Offsets & replicate_offsets) const
         prev_src_offset = src_offsets[i];
         prev_src_string_offset += sum_chars_size;
     }
-
-    array_res.check();
 
     return res;
 }
@@ -1176,35 +1116,11 @@ void ColumnArray::insertFromDatumData(const char * data, size_t length)
     auto precise_data_size = n * sizeof(Float32);
     RUNTIME_CHECK(length >= sizeof(UInt32) + precise_data_size, n, length);
     insertData(data, precise_data_size);
-
-    check();
 }
 
 std::pair<UInt32, StringRef> ColumnArray::getElementRef(size_t element_idx) const
 {
     return {static_cast<UInt32>(sizeAt(element_idx)), getDataAt(element_idx)};
-}
-
-void ColumnArray::check() const
-{
-    if (size() > 1)
-    {
-        for (size_t i = 1; i < size(); ++i)
-        {
-            auto prev_off = offsetAt(i - 1);
-            auto curr_off = offsetAt(i);
-            if (curr_off < prev_off)
-            {
-                FmtBuffer fmt_buf;
-                for (size_t o = 0; o < size(); ++o)
-                {
-                    fmt_buf.fmtAppend("i={} offset={}, ", o, offsetAt(o));
-                }
-                LOG_WARNING(Logger::get(), "!!!!! check failure!!! {}", fmt_buf.toString());
-            }
-            RUNTIME_CHECK(curr_off >= prev_off, i, prev_off, curr_off);
-        }
-    }
 }
 
 } // namespace DB

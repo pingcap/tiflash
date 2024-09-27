@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Columns/ColumnNullable.h>
+#include <Common/Exception.h>
 #include <Common/RandomData.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <TestUtils/ColumnGenerator.h>
 
-#include "Common/Exception.h"
-#include "Core/Types.h"
-#include "magic_enum.hpp"
+#include <magic_enum.hpp>
 
 namespace DB::tests
 {

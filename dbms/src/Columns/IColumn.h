@@ -488,7 +488,6 @@ public:
     /// Can be inside ColumnNullable.
     virtual bool canBeInsideNullable() const { return false; }
 
-    virtual void check() const {}
 
     virtual ~IColumn() = default;
 

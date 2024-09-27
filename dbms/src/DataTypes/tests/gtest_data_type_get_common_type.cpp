@@ -13,14 +13,11 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include <sstream>
-
-#include "DataTypes/DataTypeNullable.h"
 
 namespace DB
 {

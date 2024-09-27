@@ -57,7 +57,6 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuff
         if (rows)
         {
             DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
-            block.ffff();
             accumulated_block.emplace(std::move(block));
         }
     }
@@ -66,12 +65,10 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuff
         size_t rows{};
         DecodeHeader(istr, codec.header, rows);
         DecodeColumns(istr, *accumulated_block, rows, 0);
-        accumulated_block->ffff();
     }
 
     if (accumulated_block && accumulated_block->rows() >= rows_limit)
     {
-        accumulated_block->ffff();
         /// Return accumulated data and reset accumulated_block
         res.swap(accumulated_block);
         return res;
@@ -96,10 +93,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
         /// so it should be larger than 1.0, just use 1.5 here, no special meaning
         Block block = codec.decodeImpl(istr, static_cast<size_t>(rows_limit * 1.5));
         if (block)
-        {
-            block.ffff();
             accumulated_block.emplace(std::move(block));
-        }
     }
     else
     {
@@ -110,7 +104,6 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
 
         if (rows)
         {
-            accumulated_block->ffff();
             auto mutable_columns = accumulated_block->mutateColumns();
             for (size_t i = 0; i < columns; ++i)
             {
@@ -119,7 +112,6 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
                 CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows);
             }
             accumulated_block->setColumns(std::move(mutable_columns));
-            accumulated_block->ffff();
         }
     }
 

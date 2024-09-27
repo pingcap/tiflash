@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
+#include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -22,10 +23,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/IAST.h>
-
-#include "Common/Exception.h"
-#include "Common/FmtUtils.h"
-#include "common/logger_useful.h"
 
 
 namespace DB
@@ -224,19 +221,6 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     SubstreamPath & path) const
 {
     ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
-    column_array.check();
-
-    {
-        const size_t last_offset = (column_array.getOffsets().empty() ? 0 : column_array.getOffsets().back());
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("column@{} data->size={} offsets=[", fmt::ptr(&column), column_array.data->size());
-        for (size_t o = 0; o < column_array.size(); ++o)
-        {
-            fmt_buf.fmtAppend("i={} offset={}, ", o, column_array.offsetAt(o));
-        }
-        fmt_buf.fmtAppend("] last_offset={}", last_offset);
-        LOG_WARNING(Logger::get(), "!!!!! check deserialize 1 !!! {}", fmt_buf.toString());
-    }
 
     path.push_back(Substream::ArraySizes);
     if (auto * stream = getter(path))
@@ -252,28 +236,6 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
 
     ColumnArray::Offsets & offset_values = column_array.getOffsets();
     IColumn & nested_column = column_array.getData();
-
-    try
-    {
-        const size_t last_offset = (offset_values.empty() ? 0 : offset_values.back());
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("column@{} data->size={} offsets=[", fmt::ptr(&column), column_array.data->size());
-        for (size_t o = 0; o < column_array.size(); ++o)
-        {
-            fmt_buf.fmtAppend("i={} offset={}, ", o, column_array.offsetAt(o));
-        }
-        fmt_buf.fmtAppend("] last_offset={}", last_offset);
-        LOG_WARNING(Logger::get(), "!!!!! check deserialize 2 !!! {}", fmt_buf.toString());
-
-        // column_array.check();
-    }
-    catch (DB::Exception & e)
-    {
-        tryLogCurrentException(
-            Logger::get(),
-            fmt::format("position_independent_encoding={}", position_independent_encoding));
-        throw;
-    }
 
     /// Number of values corresponding with `offset_values` must be read.
     const size_t last_offset = (offset_values.empty() ? 0 : offset_values.back());
@@ -292,17 +254,6 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
         position_independent_encoding,
         path);
 
-    column_array.check();
-    {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("column@{} data->size={} offsets=[", fmt::ptr(&column), column_array.data->size());
-        for (size_t o = 0; o < column_array.size(); ++o)
-        {
-            fmt_buf.fmtAppend("i={} offset={}, ", o, column_array.offsetAt(o));
-        }
-        fmt_buf.fmtAppend("] last_offset={}", last_offset);
-        LOG_WARNING(Logger::get(), "!!!!! check deserialize 3 !!! {}", fmt_buf.toString());
-    }
     /// Check consistency between offsets and elements subcolumns.
     /// But if elements column is empty - it's ok for columns of Nested types that was added by ALTER.
     if (!nested_column.empty() && nested_column.size() != last_offset)

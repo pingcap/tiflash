@@ -44,11 +44,11 @@ static Block prepareBlock(size_t rows)
     }));
     ++col_idx;
 
-    // for (; col_idx < 5; ++col_idx)
-    // {
-    //     DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
-    //     block.insert(ColumnGenerator::instance().generate({rows, "Int64", RANDOM, fmt::format("col{}", col_idx)}));
-    // }
+    for (; col_idx < 5; ++col_idx)
+    {
+        DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
+        block.insert(ColumnGenerator::instance().generate({rows, "Int64", RANDOM, fmt::format("col{}", col_idx)}));
+    }
     return block;
 }
 

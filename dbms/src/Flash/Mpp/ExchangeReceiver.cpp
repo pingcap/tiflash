@@ -743,7 +743,6 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
             detail.rows += result->rows();
             if likely (result->rows() > 0)
             {
-                result.value().ffff();
                 block_queue.push(std::move(result.value()));
             }
         }
@@ -757,7 +756,6 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
             if (!result || !result->rows())
                 continue;
             detail.rows += result->rows();
-            result->ffff();
             block_queue.push(std::move(*result));
         }
         return detail;
@@ -845,8 +843,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     std::optional<Block> last_block = decoder_ptr->flush();
-    if (last_block)
-        last_block->ffff();
     std::lock_guard lock(mu);
     if (this->state != DB::ExchangeReceiverState::NORMAL)
     {
@@ -864,7 +860,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
             auto result = ExchangeReceiverResult::newOk(nullptr, 0, "");
             result.decode_detail.packets = 0;
             result.decode_detail.rows = last_block->rows();
-            last_block->ffff();
             block_queue.push(std::move(last_block.value()));
             return result;
         }

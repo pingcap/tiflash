@@ -1327,7 +1327,6 @@ public:
         void resetBlock(const Block & block_)
         {
             RUNTIME_CHECK_MSG(allBlockDataHandled(), "Previous block is not processed yet");
-            block_.ffff();
             block = block_;
             start_row = 0;
             end_row = 0;

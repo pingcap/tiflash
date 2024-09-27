@@ -160,7 +160,6 @@ OperatorStatus PipelineExec::fetchBlock(Block & block, size_t & start_transform_
     }
     start_transform_op_index = 0;
     op_status = source_op->read(block);
-    block.ffff();
     HANDLE_LAST_OP_STATUS(source_op, op_status);
 }
 

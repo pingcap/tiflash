@@ -100,7 +100,6 @@ OperatorStatus SourceOp::read(Block & block)
     profile_info.anchor();
     assert(!block);
     auto op_status = readImpl(block);
-    block.ffff();
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {

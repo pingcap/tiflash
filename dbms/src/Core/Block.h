@@ -57,14 +57,6 @@ private:
 public:
     BlockInfo info;
 
-    void ffff() const
-    {
-        for (const auto & c : data)
-        {
-          c.column->check();
-        }
-    }
-
     Block() = default;
     Block(std::initializer_list<ColumnWithTypeAndName> il);
     explicit Block(const ColumnsWithTypeAndName & data_);
