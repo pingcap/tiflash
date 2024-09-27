@@ -76,9 +76,10 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
 
     if (block.getRSResult().allMatch())
     {
-        auto filter_column = block.safeGetByPosition(filter_column_position);
+        auto filter_column = header.safeGetByPosition(filter_column_position).cloneEmpty();
         filter_column.column = filter_column.type->createColumnConst(block.rows(), static_cast<UInt64>(1));
-        block.insert(filter_column_position, filter_column); // Make some checks on block structure happy.
+        // Make some checks on block structure happy.
+        block.insert(filter_column_position, std::move(filter_column));
         if (return_filter)
             res_filter = nullptr;
         return true;
@@ -140,7 +141,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     {
         /// Replace the column with the filter by a constant.
         auto filter_column = block.safeGetByPosition(filter_column_position);
-        filter_column.column = filter_column.type->createColumnConst(rows, static_cast<UInt64>(1));
+        filter_column.column = filter_column.type->createColumnConst(filtered_rows, static_cast<UInt64>(1));
         /// No need to touch the rest of the columns.
         return true;
     }
