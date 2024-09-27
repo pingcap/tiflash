@@ -34,7 +34,7 @@ class ReceivedMessage
     /// used for fine grained shuffle, remaining_consumers will be nullptr for non fine grained shuffle
     std::vector<std::vector<const String *>> fine_grained_chunks;
     std::atomic<size_t> remaining_consumers;
-    bool fine_grained_consumer_size;
+    size_t fine_grained_consumer_size;
 
 public:
     // Constructor that move chunks.
