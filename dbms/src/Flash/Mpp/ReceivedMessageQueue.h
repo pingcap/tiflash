@@ -145,7 +145,7 @@ private:
     /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
     /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumers` in msg, if `remaining_consumers` is 0, then
     ///       remove the msg from msg_channel/grpc_recv_queue
-    std::vector<std::shared_ptr<MSGChannel>> msg_channels_for_fine_grained_shuffle;
+    std::vector<std::unique_ptr<MSGChannel>> msg_channels_for_fine_grained_shuffle;
     GRPCNotifyRecvQueue grpc_recv_queue;
 };
 

@@ -38,8 +38,8 @@ ReceivedMessage::ReceivedMessage(
     , error_ptr(error_ptr_)
     , resp_ptr(resp_ptr_)
     , chunks(chunks_)
-    , fine_grained_consumer_size(fine_grained_consumer_size_)
     , remaining_consumers(fine_grained_consumer_size_)
+    , fine_grained_consumer_size(fine_grained_consumer_size_)
 {
     if (fine_grained_consumer_size > 0)
     {

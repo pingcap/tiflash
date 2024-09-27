@@ -114,7 +114,7 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         assert(fine_grained_channel_size > 0);
         msg_channels_for_fine_grained_shuffle.reserve(fine_grained_channel_size);
         for (size_t i = 0; i < fine_grained_channel_size; ++i)
-            msg_channels_for_fine_grained_shuffle.emplace_back();
+            msg_channels_for_fine_grained_shuffle.emplace_back(std::make_unique<MSGChannel>());
     }
 }
 
