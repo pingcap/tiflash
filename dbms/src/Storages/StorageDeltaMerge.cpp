@@ -186,7 +186,6 @@ void StorageDeltaMerge::updateTableColumnInfo()
             if (itr != columns.end())
             {
                 col_def.default_value = itr->defaultValueToField();
-                col_def.vector_index = itr->vector_index;
             }
 
             if (col_def.id != TiDBPkColumnID && col_def.id != VersionColumnID && col_def.id != DelMarkColumnID

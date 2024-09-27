@@ -159,31 +159,6 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     std::vector<ComplexIndexID> newly_added;
     std::vector<ComplexIndexID> newly_dropped;
 
-    // In the serverless branch, previously we define vector index on TiDB::ColumnInfo
-    for (const auto & col : new_table_info.columns)
-    {
-        if (!col.vector_index)
-            continue;
-
-        // We do the check at the beginning, only assert check under debug mode
-        // is enough
-        assert(isVectorIndexSupported(logger));
-
-        const ComplexIndexID cindex_id{.index_id = EmptyIndexID, .column_id = col.id};
-        index_ids_in_new_table.emplace(cindex_id);
-        // already exist in `existing_indexes`
-        if (original_local_index_id_map.contains(cindex_id))
-            continue;
-        // newly added
-        new_index_infos->emplace_back(LocalIndexInfo{
-            .type = IndexType::Vector,
-            .index_id = EmptyIndexID, // the vector index created on ColumnInfo, use EmptyIndexID as the index_id
-            .column_id = col.id,
-            .index_definition = col.vector_index,
-        });
-        newly_added.emplace_back(cindex_id);
-    }
-
     for (const auto & idx : new_table_info.index_infos)
     {
         if (!idx.vector_index)

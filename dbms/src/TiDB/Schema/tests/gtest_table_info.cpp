@@ -139,7 +139,7 @@ try
 {
     auto cases = {
         ParseCase{
-            R"json({"cols":[{"default":null,"default_bit":null,"id":1,"name":{"L":"col1","O":"col1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},{"default":null,"default_bit":null,"id":2,"name":{"L":"vec","O":"vec"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":225}}],"id":30,"index_info":[{"id":3,"idx_cols":[{"length":-1,"name":{"L":"vec","O":"vec"},"offset":0}],"idx_name":{"L":"idx1","O":"idx1"},"index_type":-1,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"state":5,"vector_index":{"dimension":3,"distance_metric":"L2","kind":"HNSW"}}],"is_common_handle":false,"name":{"L":"t1","O":"t1"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":0,"update_timestamp":1723778704444603})json",
+            R"json({"cols":[{"default":null,"default_bit":null,"id":1,"name":{"L":"col1","O":"col1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},{"default":null,"default_bit":null,"id":2,"name":{"L":"vec","O":"vec"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":225}}],"id":30,"index_info":[{"id":3,"idx_cols":[{"length":-1,"name":{"L":"vec","O":"vec"},"offset":0}],"idx_name":{"L":"idx1","O":"idx1"},"index_type":5,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"state":5,"vector_index":{"dimension":3,"distance_metric":"L2"}}],"is_common_handle":false,"name":{"L":"t1","O":"t1"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":0,"update_timestamp":1723778704444603})json",
             [](const TableInfo & table_info) {
                 ASSERT_EQ(table_info.index_infos.size(), 1);
                 auto idx = table_info.index_infos[0];
@@ -163,25 +163,8 @@ try
                 ASSERT_EQ(col1.id, 2);
             },
         },
-        // VectorIndex defined in the ColumnInfo
         ParseCase{
-            R"json({"cols":[{"comment":"hnsw(distance=l2)","default":null,"default_bit":null,"id":1,"name":{"L":"v","O":"v"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":128,"Flen":5,"Tp":225},"vector_index":{"dimension":5,"distance_metric":"L2","kind":"HNSW"}}],"comment":"","id":96,"index_info":[],"is_common_handle":false,"keyspace_id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":451956855279976452})json",
-            [](const TableInfo & table_info) {
-                ASSERT_EQ(table_info.index_infos.size(), 0);
-                ASSERT_EQ(table_info.columns.size(), 1);
-                auto col = table_info.columns[0];
-                ASSERT_EQ(col.name, "v");
-                ASSERT_EQ(col.tp, TiDB::TP::TypeTiDBVectorFloat32);
-                ASSERT_EQ(col.id, 1);
-                auto vector_index_on_col = col.vector_index;
-                ASSERT_NE(vector_index_on_col, nullptr);
-                ASSERT_EQ(vector_index_on_col->kind, tipb::VectorIndexKind::HNSW);
-                ASSERT_EQ(vector_index_on_col->dimension, 5);
-                ASSERT_EQ(vector_index_on_col->distance_metric, tipb::VectorDistanceMetric::L2);
-            },
-        },
-        ParseCase{
-            R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col","O":"col"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4099,"Flen":20,"Tp":8}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"v","O":"v"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":128,"Flen":5,"Tp":225}}],"comment":"","id":96,"index_info":[{"id":4,"idx_cols":[{"length":-1,"name":{"L":"v","O":"v"},"offset":1}],"idx_name":{"L":"idx_v_l2","O":"idx_v_l2"},"index_type":5,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"state":3,"vector_index":{"dimension":5,"distance_metric":"L2","kind":"HNSW"}},{"id":3,"idx_cols":[{"length":-1,"name":{"L":"col","O":"col"},"offset":0}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5}],"is_common_handle":false,"keyspace_id":1,"name":{"L":"ti","O":"ti"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":452024291984670725})json",
+            R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col","O":"col"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4099,"Flen":20,"Tp":8}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"v","O":"v"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":128,"Flen":5,"Tp":225}}],"comment":"","id":96,"index_info":[{"id":4,"idx_cols":[{"length":-1,"name":{"L":"v","O":"v"},"offset":1}],"idx_name":{"L":"idx_v_l2","O":"idx_v_l2"},"index_type":5,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"state":3,"vector_index":{"dimension":5,"distance_metric":"L2"}},{"id":3,"idx_cols":[{"length":-1,"name":{"L":"col","O":"col"},"offset":0}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5}],"is_common_handle":false,"keyspace_id":1,"name":{"L":"ti","O":"ti"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":452024291984670725})json",
             [](const TableInfo & table_info) {
                 // vector index && primary index
                 // primary index alwasy be put at the first
@@ -218,7 +201,6 @@ try
                 ASSERT_EQ(col1.id, 2);
             },
         },
-        // VectorIndex defined without "kind" field
         ParseCase{
             R"json({"Lock":null,"ShardRowIDBits":0,"auto_id_cache":0,"auto_inc_id":0,"auto_rand_id":0,"auto_random_bits":0,"auto_random_range_bits":0,"cache_table_status":0,"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":4099,"Flen":11,"Tp":3},"version":2},{"change_state_info":null,"comment":"","default":null,"default_bit":null,"default_is_expr":false,"dependences":null,"generated_expr_string":"","generated_stored":false,"hidden":false,"id":2,"name":{"L":"vec","O":"vec"},"offset":1,"origin_default":null,"origin_default_bit":null,"state":5,"type":{"Array":false,"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"ElemsIsBinaryLit":null,"Flag":128,"Flen":3,"Tp":225},"version":2}],"comment":"","common_handle_version":0,"compression":"","constraint_info":null,"exchange_partition_info":null,"fk_info":null,"id":104,
             "index_info":[{"backfill_state":0,"comment":"","id":1,"idx_cols":[{"length":-1,"name":{"L":"vec","O":"vec"},"offset":1}],"idx_name":{"L":"v","O":"v"},"index_type":5,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"mv_index":false,"state":3,"tbl_name":{"L":"","O":""},"vector_index":{"dimension":3,"distance_metric":"COSINE"}}],
