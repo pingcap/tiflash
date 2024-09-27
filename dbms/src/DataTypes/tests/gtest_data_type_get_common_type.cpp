@@ -13,12 +13,11 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include <sstream>
 
 namespace DB
 {
@@ -329,6 +328,19 @@ try
         ASSERT_TRUE(ntype->isNullable()) << "type: " + type->getName();
         // not true for nullable
         ASSERT_FALSE(ntype->isDateOrDateTime()) << "type: " + type->getName();
+    }
+
+    {
+        // array can be wrapped by Nullable
+        auto type = typeFromString("Array(Float32)");
+        ASSERT_NE(type, nullptr);
+        auto ntype = DataTypeNullable(type);
+        ASSERT_TRUE(ntype.isNullable());
+    }
+
+    {
+        auto type = typeFromString("Nullable(Array(Float32))");
+        ASSERT_TRUE(type->isNullable());
     }
 }
 CATCH
