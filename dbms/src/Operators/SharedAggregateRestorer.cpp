@@ -203,7 +203,7 @@ bool SharedAggregateRestorer::tryPop(Block & block)
     case SharedLoadResult::FINISHED:
         return true;
     case SharedLoadResult::WAIT:
-        setNotifyFuture(loader);
+        setNotifyFuture(loader.get());
         return false;
     }
 }
