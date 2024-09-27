@@ -371,7 +371,7 @@ try
     json->set("origin_default", origin_default_value);
     json->set("default", default_value);
     json->set("default_bit", default_bit_value);
-<<<<<<< HEAD
+    json->set("origin_default_bit", origin_default_bit_value);
     Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
     tp_json->set("Tp", static_cast<Int32>(tp));
     tp_json->set("Flag", flag);
@@ -380,9 +380,6 @@ try
     tp_json->set("Charset", charset);
     tp_json->set("Collate", collate);
     if (!elems.empty())
-=======
-    json->set("origin_default_bit", origin_default_bit_value);
->>>>>>> 1ce2f11124 (ddl: fix TypeBit default value (#9467))
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
         for (const auto & elem : elems)
@@ -424,17 +421,14 @@ try
         default_value = json->get("default");
     if (!json->isNull("default_bit"))
         default_bit_value = json->get("default_bit");
-<<<<<<< HEAD
     auto type_json = json->getObject("type");
     tp = static_cast<TP>(type_json->getValue<Int32>("Tp"));
     flag = type_json->getValue<UInt32>("Flag");
     flen = type_json->getValue<Int64>("Flen");
     decimal = type_json->getValue<Int64>("Decimal");
-    if (!type_json->isNull("Elems"))
-=======
     if (!json->isNull("origin_default_bit"))
         origin_default_bit_value = json->get("origin_default_bit");
->>>>>>> 1ce2f11124 (ddl: fix TypeBit default value (#9467))
+    if (!type_json->isNull("Elems"))
     {
         auto elems_arr = type_json->getArray("Elems");
         size_t elems_size = elems_arr->size();
