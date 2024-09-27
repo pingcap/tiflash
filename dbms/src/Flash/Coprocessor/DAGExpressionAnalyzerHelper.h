@@ -49,6 +49,11 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
+    static String buildNullEqFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
     static String buildLogicalFunction(
         DAGExpressionAnalyzer * analyzer,
         const tipb::Expr & expr,
