@@ -34,9 +34,7 @@ struct ComplexIndexID
 
 bool operator==(const ComplexIndexID & lhs, const ComplexIndexID & rhs)
 {
-    if (lhs.index_id != rhs.index_id)
-        return false;
-    return lhs.column_id == rhs.column_id;
+    return lhs.index_id == rhs.index_id && lhs.column_id == rhs.column_id;
 }
 
 struct ComplexIndexIDHasher
