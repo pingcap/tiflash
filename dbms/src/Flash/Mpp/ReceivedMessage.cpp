@@ -18,7 +18,7 @@ namespace DB
 {
 const std::vector<const String *> & ReceivedMessage::getChunks(size_t stream_id) const
 {
-    if (remaining_consumers != nullptr)
+    if (fine_grained_consumer_size > 0)
         return fine_grained_chunks[stream_id];
     else
         return chunks;
@@ -31,17 +31,18 @@ ReceivedMessage::ReceivedMessage(
     const mpp::Error * error_ptr_,
     const String * resp_ptr_,
     std::vector<const String *> && chunks_,
-    size_t fine_grained_consumer_size)
+    size_t fine_grained_consumer_size_)
     : source_index(source_index_)
     , req_info(req_info_)
     , packet(packet_)
     , error_ptr(error_ptr_)
     , resp_ptr(resp_ptr_)
     , chunks(chunks_)
+    , fine_grained_consumer_size(fine_grained_consumer_size_)
+    , remaining_consumers(fine_grained_consumer_size_)
 {
     if (fine_grained_consumer_size > 0)
     {
-        remaining_consumers = std::make_shared<std::atomic<size_t>>(fine_grained_consumer_size);
         fine_grained_chunks.resize(fine_grained_consumer_size);
         if (packet->packet.chunks_size() > 0)
         {

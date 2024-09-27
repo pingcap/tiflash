@@ -2157,7 +2157,7 @@ bool Join::isProbeFinishedForPipeline() const
 {
     if (!probe_finished)
     {
-        setNotifyFuture(wait_probe_finished_future);
+        setNotifyFuture(wait_probe_finished_future.get());
         return false;
     }
     return true;
@@ -2167,7 +2167,7 @@ bool Join::isBuildFinishedForPipeline() const
 {
     if (!build_finished)
     {
-        setNotifyFuture(wait_build_finished_future);
+        setNotifyFuture(wait_build_finished_future.get());
         return false;
     }
     return true;

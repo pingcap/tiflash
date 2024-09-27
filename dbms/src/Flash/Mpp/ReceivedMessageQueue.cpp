@@ -104,7 +104,7 @@ ReceivedMessageQueue::ReceivedMessageQueue(
               : std::function<void(const ReceivedMessagePtr &)>([this](const ReceivedMessagePtr & element) {
                     for (size_t i = 0; i < fine_grained_channel_size; ++i)
                     {
-                        auto result = msg_channels_for_fine_grained_shuffle[i].forcePush(element);
+                        auto result = msg_channels_for_fine_grained_shuffle[i]->forcePush(element);
                         RUNTIME_CHECK_MSG(result == MPMCQueueResult::OK, "push to fine grained channel must success");
                     }
                 }))
@@ -125,13 +125,13 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
     if (fine_grained_channel_size > 0)
     {
         if constexpr (need_wait)
-            res = msg_channels_for_fine_grained_shuffle[stream_id].pop(recv_msg);
+            res = msg_channels_for_fine_grained_shuffle[stream_id]->pop(recv_msg);
         else
-            res = msg_channels_for_fine_grained_shuffle[stream_id].tryPop(recv_msg);
+            res = msg_channels_for_fine_grained_shuffle[stream_id]->tryPop(recv_msg);
 
         if (res == MPMCQueueResult::OK)
         {
-            if (recv_msg->getRemainingConsumers()->fetch_sub(1) == 1)
+            if (recv_msg->getRemainingConsumers().fetch_sub(1) == 1)
             {
 #ifndef NDEBUG
                 ReceivedMessagePtr original_msg;
@@ -143,9 +143,9 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
                     "The result of 'grpc_recv_queue->tryPop' is definitely not EMPTY.");
                 if likely (original_msg != nullptr)
                     RUNTIME_CHECK_MSG(
-                        *original_msg->getRemainingConsumers() == 0,
+                        original_msg->getRemainingConsumers() == 0,
                         "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}",
-                        *original_msg->getRemainingConsumers());
+                        original_msg->getRemainingConsumers());
 #else
                 grpc_recv_queue.tryDequeue();
 #endif
@@ -157,7 +157,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
             if constexpr (!need_wait)
             {
                 if (res == MPMCQueueResult::EMPTY)
-                    setNotifyFuture(&msg_channels_for_fine_grained_shuffle[stream_id]);
+                    setNotifyFuture(msg_channels_for_fine_grained_shuffle[stream_id].get());
             }
         }
     }
