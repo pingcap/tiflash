@@ -195,7 +195,7 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
 
 std::optional<LocalIndexesStats> DeltaMergeStore::genLocalIndexStatsByTableInfo(const TiDB::TableInfo & table_info)
 {
-    auto local_index_infos = DM::generateLocalIndexInfos(nullptr, table_info, Logger::get());
+    auto local_index_infos = DM::initLocalIndexInfos(table_info, Logger::get());
     if (!local_index_infos)
         return std::nullopt;
 

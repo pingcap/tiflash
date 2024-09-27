@@ -21,7 +21,7 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/KVStore/TMTStorages.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
