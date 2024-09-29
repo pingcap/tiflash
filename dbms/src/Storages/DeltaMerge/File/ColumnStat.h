@@ -185,7 +185,9 @@ readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
                 .serialized_bytes = serialized_bytes,
                 // ... here ignore some fields with default initializers
                 .vector_index = {},
+#ifndef NDEBUG
                 .additional_data_for_test = {},
+#endif
             });
     }
 }
