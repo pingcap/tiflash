@@ -371,7 +371,8 @@ try
     json->set("origin_default", origin_default_value);
     json->set("default", default_value);
     json->set("default_bit", default_bit_value);
-    json->set("origin_default_bit", origin_default_bit_value);
+    if (!origin_default_bit_value.isEmpty())
+        json->set("origin_default_bit", origin_default_bit_value);
     Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
     tp_json->set("Tp", static_cast<Int32>(tp));
     tp_json->set("Flag", flag);
