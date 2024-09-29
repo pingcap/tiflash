@@ -185,6 +185,7 @@ private:
 TEST(TiDBTableInfoTest, GenCreateTableStatement)
 try
 {
+    // clang-format off
     auto cases = {
         StmtCase{
             1145, //
@@ -250,6 +251,7 @@ try
             R"stmt(CREATE TABLE `db_2`.`t_546`(`col_86` Nullable(String), `col_87` MyDateTime(0), `col_88` Nullable(UInt64), `col_89` String, `col_90` UInt8, `col_91` Nullable(UInt64), `col_92` String, `col_93` Nullable(String), `_tidb_rowid` Int64) Engine = DeltaMerge((`_tidb_rowid`), '{"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_86","O":"col_86"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":128,"Flen":65535,"Tp":252}},{"comment":"","default":"1994-05-0600:00:00","default_bit":null,"id":2,"name":{"L":"col_87","O":"col_87"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":129,"Flen":19,"Tp":12}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"col_88","O":"col_88"},"offset":2,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":32,"Flen":42,"Tp":16}},{"comment":"","default":"\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000","default_bit":null,"id":4,"name":{"L":"col_89","O":"col_89"},"offset":3,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":129,"Flen":21,"Tp":254}},{"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_90","O":"col_90"},"offset":4,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4129,"Flen":3,"Tp":1}},{"comment":"","default":"\\u0007\\u0007","default_bit":"Bwc=","id":6,"name":{"L":"col_91","O":"col_91"},"offset":5,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":32,"Flen":12,"Tp":16}},{"comment":"","default":"kY~6to6H4ut*QAPrj@&","default_bit":null,"id":7,"name":{"L":"col_92","O":"col_92"},"offset":6,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":129,"Flen":343,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":8,"name":{"L":"col_93","O":"col_93"},"offset":7,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":128,"Flen":-1,"Tp":245}}],"comment":"","id":546,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"tcfc7825f","O":"tcfc7825f"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":false,"Count":1},"update_timestamp":452653255976550448}', 0))stmt", //
         },
     };
+    // clang-format on
 
     for (const auto & c : cases)
     {
