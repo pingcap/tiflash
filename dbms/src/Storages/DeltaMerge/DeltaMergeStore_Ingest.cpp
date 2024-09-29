@@ -1039,16 +1039,17 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
          */
         WriteBatches wbs{*dm_context.storage_pool};
         auto dm_files = segment_to_ingest->getStable()->getDMFiles();
-        auto [in_memory_files, column_file_persisteds] = segment_to_ingest->getDelta()->cloneAllColumnFiles(
+        // clone all column files from the segment_to_ingest, all ColumnFiles have new page_id.
+        auto [new_in_memory_files, new_column_file_persisteds] = segment_to_ingest->getDelta()->cloneAllColumnFiles(
             segment_to_ingest->mustGetUpdateLock(),
             dm_context,
             ingest_range,
             wbs);
         wbs.writeLogAndData();
-        RUNTIME_CHECK(in_memory_files.empty());
+        RUNTIME_CHECK(new_in_memory_files.empty());
         RUNTIME_CHECK(dm_files.size() == 1);
         const auto new_segment_or_null
-            = segmentDangerouslyReplaceDataFromCheckpoint(dm_context, segment, dm_files[0], column_file_persisteds);
+            = segmentDangerouslyReplaceDataFromCheckpoint(dm_context, segment, dm_files[0], new_column_file_persisteds);
         const bool succeeded = new_segment_or_null != nullptr;
         if (!succeeded)
         {
