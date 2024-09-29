@@ -46,7 +46,7 @@ bool MPPTaskScheduleEntry::schedule(ScheduleState state)
             log,
             log_level,
             "task is {}.",
-            state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
+            state == ScheduleState::SCHEDULED ? "scheduled" : "failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
         return true;
