@@ -133,7 +133,6 @@ Block LateMaterializationBlockInputStream::read()
                 // so only if the number of rows left after filtering out is large enough,
                 // we can skip some packs of the next block, call readWithFilter to get the next block.
                 rest_column_block = rest_column_stream->readWithFilter(*filter);
-                ColumnPtr filter_column;
                 filterFilterColumnBlock(header, filter_column_block, *filter, passed_count, filter_column_name);
             }
             else if (filter_out_count > 0)
