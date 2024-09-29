@@ -555,6 +555,13 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
     }
     res.setRSResult(rs_result);
 
+    size_t rows = res.rows();
+    for (auto & elem : res)
+    {
+        RUNTIME_CHECK(elem.column);
+        RUNTIME_CHECK(elem.column->size() == rows);
+    }
+
     return res;
 }
 
