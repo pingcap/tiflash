@@ -105,34 +105,6 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
                 return get_nothing_or_throw(" because some of them are Nothing");
     }
 
-    /// For Arrays
-    {
-        bool have_array = false;
-        bool all_arrays = true;
-
-        DataTypes nested_types;
-        nested_types.reserve(types.size());
-
-        for (const auto & type : types)
-        {
-            if (const auto * const type_array = typeid_cast<const DataTypeArray *>(type.get()))
-            {
-                have_array = true;
-                nested_types.emplace_back(type_array->getNestedType());
-            }
-            else
-                all_arrays = false;
-        }
-
-        if (have_array)
-        {
-            if (!all_arrays)
-                return get_nothing_or_throw(" because some of them are Array and some of them are not");
-
-            return std::make_shared<DataTypeArray>(getMostSubtype(nested_types, false, force_support_conversion));
-        }
-    }
-
     /// For tuples
     {
         bool have_tuple = false;
@@ -207,6 +179,34 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
                     getMostSubtype(nested_types, false, force_support_conversion));
 
             return getMostSubtype(nested_types, throw_if_result_is_nothing, force_support_conversion);
+        }
+    }
+
+    /// For Arrays, canBeInsideNullable = true, should check it after handling Nullable
+    {
+        bool have_array = false;
+        bool all_arrays = true;
+
+        DataTypes nested_types;
+        nested_types.reserve(types.size());
+
+        for (const auto & type : types)
+        {
+            if (const auto * const type_array = typeid_cast<const DataTypeArray *>(type.get()))
+            {
+                have_array = true;
+                nested_types.emplace_back(type_array->getNestedType());
+            }
+            else
+                all_arrays = false;
+        }
+
+        if (have_array)
+        {
+            if (!all_arrays)
+                return get_nothing_or_throw(" because some of them are Array and some of them are not");
+
+            return std::make_shared<DataTypeArray>(getMostSubtype(nested_types, false, force_support_conversion));
         }
     }
 
