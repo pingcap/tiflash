@@ -27,7 +27,7 @@ namespace
 void filterFilterColumnBlock(
     const Block & header,
     Block & block,
-    const FilterPtr & filter,
+    const IColumn::Filter & filter,
     size_t passed_count,
     const String & filter_column_name)
 {
@@ -39,10 +39,10 @@ void filterFilterColumnBlock(
             filter_column = col.column;
             continue;
         }
-        col.column = col.column->filter(*filter, passed_count);
+        col.column = col.column->filter(filter, passed_count);
     }
     if (header.has(filter_column_name))
-        filter_column = filter_column->filter(*filter, passed_count);
+        filter_column = filter_column->filter(filter, passed_count);
 }
 
 } // namespace
@@ -95,10 +95,7 @@ Block LateMaterializationBlockInputStream::read()
                 {
                     col.column = col.column->filter(col_filter, passed_count);
                 }
-                for (auto & col : filter_column_block)
-                {
-                    col.column = col.column->filter(col_filter, passed_count);
-                }
+                filterFilterColumnBlock(header, filter_column_block, col_filter, passed_count, filter_column_name);
             }
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
@@ -137,7 +134,7 @@ Block LateMaterializationBlockInputStream::read()
                 // we can skip some packs of the next block, call readWithFilter to get the next block.
                 rest_column_block = rest_column_stream->readWithFilter(*filter);
                 ColumnPtr filter_column;
-                filterFilterColumnBlock(header, filter_column_block, filter, passed_count, filter_column_name);
+                filterFilterColumnBlock(header, filter_column_block, *filter, passed_count, filter_column_name);
             }
             else if (filter_out_count > 0)
             {
@@ -148,7 +145,7 @@ Block LateMaterializationBlockInputStream::read()
                 {
                     col.column = col.column->filter(*filter, passed_count);
                 }
-                filterFilterColumnBlock(header, filter_column_block, filter, passed_count, filter_column_name);
+                filterFilterColumnBlock(header, filter_column_block, *filter, passed_count, filter_column_name);
             }
             else
             {
