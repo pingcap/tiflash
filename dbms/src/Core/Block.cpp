@@ -541,10 +541,13 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
         return {};
 
     Block res = header.cloneEmpty();
+<<<<<<< HEAD
     size_t num_rows = blocks.front().rows();
+=======
+    auto rs_result = DM::RSResult::All;
+>>>>>>> 69dd6134e1 (storage: fix block rows not match when filter column is the first non-empty column in the block (#9483))
     for (const auto & block : blocks)
     {
-        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot hstack blocks with different number of rows");
         for (const auto & elem : block)
         {
             if (likely(res.has(elem.name)))
@@ -553,6 +556,11 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
             }
         }
     }
+<<<<<<< HEAD
+=======
+    res.setRSResult(rs_result);
+    res.checkNumberOfRows();
+>>>>>>> 69dd6134e1 (storage: fix block rows not match when filter column is the first non-empty column in the block (#9483))
 
     return res;
 }
