@@ -456,18 +456,16 @@ try
         tp_json->set("Flag", flag);
         tp_json->set("Flen", flen);
         tp_json->set("Decimal", decimal);
-        tp_json->set("Charset", charset);
-        tp_json->set("Collate", collate);
+        if (!charset.isEmpty())
+            tp_json->set("Charset", charset);
+        if (!collate.isEmpty())
+            tp_json->set("Collate", collate);
         if (!elems.empty())
         {
             Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
             for (const auto & elem : elems)
                 elem_arr->add(elem.first);
             tp_json->set("Elems", elem_arr);
-        }
-        else
-        {
-            tp_json->set("Elems", Poco::Dynamic::Var());
         }
         json->set("type", tp_json);
     }
