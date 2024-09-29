@@ -40,8 +40,8 @@ FilterTransformAction::FilterTransformAction(
     /// Determine position of filter column.
     expression->execute(header);
 
-    filter_column = header.getPositionByName(filter_column_name);
-    auto & column_elem = header.safeGetByPosition(filter_column);
+    filter_column_position = header.getPositionByName(filter_column_name);
+    auto & column_elem = header.safeGetByPosition(filter_column_position);
 
     /// Isn't the filter already constant?
     if (column_elem.column)
@@ -75,6 +75,20 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     if (unlikely(!block))
         return true;
 
+<<<<<<< HEAD
+=======
+    if (block.getRSResult().allMatch())
+    {
+        auto filter_column = header.safeGetByPosition(filter_column_position).cloneEmpty();
+        filter_column.column = filter_column.type->createColumnConst(block.rows(), static_cast<UInt64>(1));
+        // Make some checks on block structure happy.
+        block.insert(filter_column_position, std::move(filter_column));
+        if (return_filter)
+            res_filter = nullptr;
+        return true;
+    }
+
+>>>>>>> 69dd6134e1 (storage: fix block rows not match when filter column is the first non-empty column in the block (#9483))
     expression->execute(block);
 
     if (constant_filter_description.always_true)
@@ -86,7 +100,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
 
     size_t columns = block.columns();
     size_t rows = block.rows();
-    ColumnPtr column_of_filter = block.safeGetByPosition(filter_column).column;
+    ColumnPtr column_of_filter = block.safeGetByPosition(filter_column_position).column;
 
     /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
         *  and now - are calculated. That is, not all cases are covered by the code above.
@@ -130,8 +144,13 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     if (filtered_rows == rows)
     {
         /// Replace the column with the filter by a constant.
+<<<<<<< HEAD
         block.safeGetByPosition(filter_column).column
             = block.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, UInt64(1));
+=======
+        auto filter_column = block.safeGetByPosition(filter_column_position);
+        filter_column.column = filter_column.type->createColumnConst(filtered_rows, static_cast<UInt64>(1));
+>>>>>>> 69dd6134e1 (storage: fix block rows not match when filter column is the first non-empty column in the block (#9483))
         /// No need to touch the rest of the columns.
         return true;
     }
@@ -141,7 +160,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     {
         ColumnWithTypeAndName & current_column = block.safeGetByPosition(i);
 
-        if (i == filter_column)
+        if (i == filter_column_position)
         {
             /// The column with filter itself is replaced with a column with a constant `1`, since after filtering, nothing else will remain.
             /// NOTE User could pass column with something different than 0 and 1 for filter.
