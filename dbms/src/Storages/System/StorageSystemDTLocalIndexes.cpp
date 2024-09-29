@@ -21,11 +21,14 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/KVStore/TMTStorages.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTLocalIndexes.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
@@ -43,7 +46,6 @@ StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & nam
         {"table_id", std::make_shared<DataTypeInt64>()},
         {"belonging_table_id", std::make_shared<DataTypeInt64>()},
 
-        {"column_name", std::make_shared<DataTypeString>()},
         {"column_id", std::make_shared<DataTypeUInt64>()},
         {"index_id", std::make_shared<DataTypeInt64>()},
         {"index_kind", std::make_shared<DataTypeString>()},
@@ -52,7 +54,24 @@ StorageSystemDTLocalIndexes::StorageSystemDTLocalIndexes(const std::string & nam
         {"rows_stable_not_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
         {"rows_delta_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
         {"rows_delta_not_indexed", std::make_shared<DataTypeUInt64>()}, // Total rows
+
+        // Fatal message when building local index
+        // when this is not an empty string, it means the build job of this local is aborted
+        {"error_message", std::make_shared<DataTypeString>()},
     }));
+}
+
+std::optional<DM::LocalIndexesStats> getLocalIndexesStatsFromStorage(const StorageDeltaMergePtr & dm_storage)
+{
+    if (dm_storage->isTombstone())
+        return std::nullopt;
+
+    const auto & table_info = dm_storage->getTableInfo();
+    auto store = dm_storage->getStoreIfInited();
+    if (!store)
+        return DM::DeltaMergeStore::genLocalIndexStatsByTableInfo(table_info);
+
+    return store->getLocalIndexStats();
 }
 
 BlockInputStreams StorageSystemDTLocalIndexes::read(
@@ -87,16 +106,12 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
             const auto & table_info = dm_storage->getTableInfo();
-            auto table_id = table_info.id;
-            auto store = dm_storage->getStoreIfInited();
-            if (!store)
-                continue;
+            const auto table_id = table_info.id;
 
-            if (dm_storage->isTombstone())
+            const auto index_stats = getLocalIndexesStatsFromStorage(dm_storage);
+            if (!index_stats)
                 continue;
-
-            auto index_stats = store->getLocalIndexStats();
-            for (auto & stat : index_stats)
+            for (const auto & stat : *index_stats)
             {
                 size_t j = 0;
                 res_columns[j++]->insert(database_name);
@@ -119,7 +134,6 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
                 res_columns[j++]->insert(table_id);
                 res_columns[j++]->insert(table_info.belonging_table_id);
 
-                res_columns[j++]->insert(String("")); // TODO: let tidb set the column_name and index_name by itself
                 res_columns[j++]->insert(stat.column_id);
                 res_columns[j++]->insert(stat.index_id);
                 res_columns[j++]->insert(stat.index_kind);
@@ -128,6 +142,8 @@ BlockInputStreams StorageSystemDTLocalIndexes::read(
                 res_columns[j++]->insert(stat.rows_stable_not_indexed);
                 res_columns[j++]->insert(stat.rows_delta_indexed);
                 res_columns[j++]->insert(stat.rows_delta_not_indexed);
+
+                res_columns[j++]->insert(stat.error_message);
             }
         }
     }

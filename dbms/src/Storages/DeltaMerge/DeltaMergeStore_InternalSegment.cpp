@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
@@ -21,6 +22,7 @@
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
 
@@ -450,7 +452,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(
     return merged;
 }
 
-void DeltaMergeStore::checkAllSegmentsLocalIndex()
+void DeltaMergeStore::checkAllSegmentsLocalIndex(std::vector<IndexID> && dropped_indexes)
 {
     if (!getLocalIndexInfosSnapshot())
         return;
@@ -512,6 +514,9 @@ void DeltaMergeStore::checkAllSegmentsLocalIndex()
         for (const auto & [end, segment] : segments)
         {
             UNUSED(end);
+            // cleanup the index error messaage for dropped indexes
+            segment->clearIndexBuildError(dropped_indexes);
+
             if (segmentEnsureStableIndexAsync(segment))
                 ++segments_missing_indexes;
         }
@@ -533,14 +538,15 @@ bool DeltaMergeStore::segmentEnsureStableIndexAsync(const SegmentPtr & segment)
         return false;
 
     // No lock is needed, stable meta is immutable.
-    auto dm_files = segment->getStable()->getDMFiles();
-    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, dm_files);
-    if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
+    const auto build_info
+        = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, segment->getStable()->getDMFiles());
+    if (!build_info.indexes_to_build || build_info.indexes_to_build->empty() || build_info.dm_files.empty())
         return false;
 
     auto store_weak_ptr = weak_from_this();
-    auto tracing_id = fmt::format("segmentEnsureStableIndex<{}>", log->identifier());
-    auto workload = [store_weak_ptr, build_info, dm_files, segment, tracing_id]() -> void {
+    auto tracing_id
+        = fmt::format("segmentEnsureStableIndex<{}> source_segment={}", log->identifier(), segment->simpleInfo());
+    auto workload = [store_weak_ptr, build_info, tracing_id]() -> void {
         auto store = store_weak_ptr.lock();
         if (store == nullptr) // Store is destroyed before the task is executed.
             return;
@@ -548,20 +554,45 @@ bool DeltaMergeStore::segmentEnsureStableIndexAsync(const SegmentPtr & segment)
             store->global_context,
             store->global_context.getSettingsRef(),
             tracing_id);
-        const auto source_segment_info = segment->simpleInfo();
-        store->segmentEnsureStableIndex(*dm_context, build_info.indexes_to_build, dm_files, source_segment_info);
+        store->segmentEnsureStableIndexWithErrorReport(*dm_context, build_info);
     };
 
     auto indexer_scheduler = global_context.getGlobalLocalIndexerScheduler();
     RUNTIME_CHECK(indexer_scheduler != nullptr);
-    indexer_scheduler->pushTask(LocalIndexerScheduler::Task{
-        .keyspace_id = keyspace_id,
-        .table_id = physical_table_id,
-        .file_ids = build_info.file_ids,
-        .request_memory = build_info.estimated_memory_bytes,
-        .workload = workload,
-    });
-    return true;
+    try
+    {
+        // new task of these index are generated, clear existing error_message in segment
+        segment->clearIndexBuildError(build_info.indexesIDs());
+
+        auto [ok, reason] = indexer_scheduler->pushTask(LocalIndexerScheduler::Task{
+            .keyspace_id = keyspace_id,
+            .table_id = physical_table_id,
+            .file_ids = build_info.filesIDs(),
+            .request_memory = build_info.estimated_memory_bytes,
+            .workload = workload,
+        });
+        if (ok)
+            return true;
+
+        segment->setIndexBuildError(build_info.indexesIDs(), reason);
+        LOG_ERROR(
+            log->getChild(tracing_id),
+            "Failed to generate async segment stable index task, index_ids={} reason={}",
+            build_info.indexesIDs(),
+            reason);
+        return false;
+    }
+    catch (...)
+    {
+        const auto message = getCurrentExceptionMessage(false, false);
+        segment->setIndexBuildError(build_info.indexesIDs(), message);
+
+        tryLogCurrentException(log);
+
+        // catch and ignore the exception
+        // not able to push task to index scheduler
+        return false;
+    }
 }
 
 bool DeltaMergeStore::segmentWaitStableIndexReady(const SegmentPtr & segment) const
@@ -574,8 +605,8 @@ bool DeltaMergeStore::segmentWaitStableIndexReady(const SegmentPtr & segment) co
 
     // No lock is needed, stable meta is immutable.
     auto segment_id = segment->segmentId();
-    auto dm_files = segment->getStable()->getDMFiles();
-    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, dm_files);
+    auto build_info
+        = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, segment->getStable()->getDMFiles());
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
         return true;
 
@@ -650,11 +681,7 @@ SegmentPtr DeltaMergeStore::segmentUpdateMeta(
     return new_segment;
 }
 
-void DeltaMergeStore::segmentEnsureStableIndex(
-    DMContext & dm_context,
-    const LocalIndexInfosPtr & index_info,
-    const DMFiles & dm_files,
-    const String & source_segment_info)
+void DeltaMergeStore::segmentEnsureStableIndex(DMContext & dm_context, const LocalIndexBuildInfo & index_build_info)
 {
     // 1. Acquire a snapshot for PageStorage, and keep the snapshot until index is built.
     // This helps keep DMFile valid during the index build process.
@@ -674,8 +701,10 @@ void DeltaMergeStore::segmentEnsureStableIndex(
         dm_context.tracing_id,
         /*snapshot_read*/ true);
 
-    RUNTIME_CHECK(dm_files.size() == 1); // size > 1 is currently not supported.
-    const auto & dm_file = dm_files[0];
+    auto tracing_logger = log->getChild(getLogTracingId(dm_context));
+
+    RUNTIME_CHECK(index_build_info.dm_files.size() == 1); // size > 1 is currently not supported.
+    const auto & dm_file = index_build_info.dm_files[0];
 
     auto is_file_valid = [this, dm_file] {
         std::shared_lock lock(read_write_mutex);
@@ -686,24 +715,20 @@ void DeltaMergeStore::segmentEnsureStableIndex(
     // 2. Check whether the DMFile has been referenced by any valid segment.
     if (!is_file_valid())
     {
-        LOG_DEBUG(
-            log,
-            "EnsureStableIndex - Give up because no segment to update, source_segment={}",
-            source_segment_info);
+        LOG_DEBUG(tracing_logger, "EnsureStableIndex - Give up because no segment to update");
         return;
     }
 
     LOG_INFO(
-        log,
-        "EnsureStableIndex - Begin building index, dm_files={} source_segment={}",
-        DMFile::info(dm_files),
-        source_segment_info);
+        tracing_logger,
+        "EnsureStableIndex - Begin building index, dm_files={}",
+        DMFile::info(index_build_info.dm_files));
 
     // 2. Build the index.
     DMFileIndexWriter iw(DMFileIndexWriter::Options{
         .path_pool = path_pool,
-        .index_infos = index_info,
-        .dm_files = dm_files,
+        .index_infos = index_build_info.indexes_to_build,
+        .dm_files = index_build_info.dm_files,
         .dm_context = dm_context,
     });
 
@@ -719,11 +744,9 @@ void DeltaMergeStore::segmentEnsureStableIndex(
         if (e.code() == ErrorCodes::ABORTED)
         {
             LOG_INFO(
-                log,
-                "EnsureStableIndex - Build index aborted because DMFile is no longer valid, dm_files={} "
-                "source_segment={}",
-                DMFile::info(dm_files),
-                source_segment_info);
+                tracing_logger,
+                "EnsureStableIndex - Build index aborted because DMFile is no longer valid, dm_files={}",
+                DMFile::info(index_build_info.dm_files));
             return;
         }
         throw;
@@ -732,10 +755,9 @@ void DeltaMergeStore::segmentEnsureStableIndex(
     RUNTIME_CHECK(!new_dmfiles.empty());
 
     LOG_INFO(
-        log,
-        "EnsureStableIndex - Finish building index, dm_files={} source_segment={}",
-        DMFile::info(dm_files),
-        source_segment_info);
+        tracing_logger,
+        "EnsureStableIndex - Finish building index, dm_files={}",
+        DMFile::info(index_build_info.dm_files));
 
     // 3. Update the meta version of the segments to the latest one.
     // To avoid logical split between step 2 and 3, get lastest segments to update again.
@@ -751,8 +773,66 @@ void DeltaMergeStore::segmentEnsureStableIndex(
             auto segment = id_to_segment[seg_id];
             auto new_segment = segmentUpdateMeta(lock, dm_context, segment, new_dmfiles);
             // Expect update meta always success, because the segment must be valid and bump meta should succeed.
-            RUNTIME_CHECK_MSG(new_segment != nullptr, "Update meta failed for segment {}", segment->simpleInfo());
+            RUNTIME_CHECK_MSG(
+                new_segment != nullptr,
+                "Update meta failed for segment {} ident={}",
+                segment->simpleInfo(),
+                tracing_logger->identifier());
         }
+    }
+}
+
+// A wrapper of `segmentEnsureStableIndex`
+// If any exception thrown, the error message will be recorded to
+// the related segment(s)
+void DeltaMergeStore::segmentEnsureStableIndexWithErrorReport(
+    DMContext & dm_context,
+    const LocalIndexBuildInfo & index_build_info)
+{
+    auto handle_error = [this, &index_build_info](const std::vector<IndexID> & index_ids) {
+        const auto message = getCurrentExceptionMessage(false, false);
+        std::unordered_map<PageIdU64, SegmentPtr> segment_to_add_msg;
+        {
+            std::unique_lock lock(read_write_mutex);
+            for (const auto & dmf : index_build_info.dm_files)
+            {
+                const auto segment_ids = dmfile_id_to_segment_ids.get(dmf->fileId());
+                for (const auto & seg_id : segment_ids)
+                {
+                    if (segment_to_add_msg.contains(seg_id))
+                        continue;
+                    segment_to_add_msg.emplace(seg_id, id_to_segment[seg_id]);
+                }
+            }
+        }
+
+        for (const auto & [seg_id, seg] : segment_to_add_msg)
+        {
+            UNUSED(seg_id);
+            seg->setIndexBuildError(index_ids, message);
+        }
+    };
+
+    try
+    {
+        segmentEnsureStableIndex(dm_context, index_build_info);
+    }
+    catch (DB::Exception & e)
+    {
+        const auto index_ids = index_build_info.indexesIDs();
+        e.addMessage(fmt::format("while building stable index for index_ids={}", index_ids));
+        handle_error(index_ids);
+
+        // rethrow
+        throw;
+    }
+    catch (...)
+    {
+        const auto index_ids = index_build_info.indexesIDs();
+        handle_error(index_ids);
+
+        // rethrow
+        throw;
     }
 }
 

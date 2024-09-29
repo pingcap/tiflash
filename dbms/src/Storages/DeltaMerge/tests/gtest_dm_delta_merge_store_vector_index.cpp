@@ -13,13 +13,20 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/KVStore/Types.h>
 #include <TestUtils/InputStreamTestUtils.h>
 
+namespace DB::FailPoints
+{
+extern const char force_local_index_task_memory_limit_exceeded[];
+extern const char exception_build_local_index_for_file[];
+} // namespace DB::FailPoints
 
 namespace DB::DM::tests
 {
@@ -683,6 +690,115 @@ try
         // apply local index change, shuold drop the local index
         store->applyLocalIndexChange(new_table_info_with_vector_index);
         ASSERT_EQ(store->local_index_infos->size(), 0);
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, DDLAddVectorIndexErrorMemoryExceed)
+try
+{
+    {
+        auto indexes = std::make_shared<LocalIndexInfos>();
+        store = reload(indexes);
+        ASSERT_EQ(store->getLocalIndexInfosSnapshot(), nullptr);
+    }
+
+    const size_t num_rows_write = 128;
+
+    // write to store before index built
+    write(num_rows_write);
+    // trigger mergeDelta for all segments
+    triggerMergeDelta();
+
+    IndexID index_id = 2;
+    // Add vecotr index
+    TiDB::TableInfo new_table_info_with_vector_index;
+    TiDB::ColumnInfo column_info;
+    column_info.name = VectorIndexTestUtils::vec_column_name;
+    column_info.id = VectorIndexTestUtils::vec_column_id;
+    new_table_info_with_vector_index.columns.emplace_back(column_info);
+    TiDB::IndexInfo index;
+    index.id = index_id;
+    TiDB::IndexColumnInfo index_col_info;
+    index_col_info.name = VectorIndexTestUtils::vec_column_name;
+    index_col_info.offset = 0;
+    index.idx_cols.emplace_back(index_col_info);
+    index.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 1,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+    new_table_info_with_vector_index.index_infos.emplace_back(index);
+
+    // enable failpoint to mock fail to build index due to memory limit
+    FailPointHelper::enableFailPoint(FailPoints::force_local_index_task_memory_limit_exceeded);
+    store->applyLocalIndexChange(new_table_info_with_vector_index);
+    ASSERT_EQ(store->local_index_infos->size(), 1);
+
+    {
+        auto indexes_stat = store->getLocalIndexStats();
+        ASSERT_EQ(indexes_stat.size(), 1);
+        auto index_stat = indexes_stat[0];
+        ASSERT_EQ(index_id, index_stat.index_id);
+        ASSERT_EQ(VectorIndexTestUtils::vec_column_id, index_stat.column_id);
+        ASSERT_FALSE(index_stat.error_message.empty()) << index_stat.error_message;
+        ASSERT_NE(index_stat.error_message.find("exceeds limit"), std::string::npos) << index_stat.error_message;
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, DDLAddVectorIndexErrorBuildException)
+try
+{
+    {
+        auto indexes = std::make_shared<LocalIndexInfos>();
+        store = reload(indexes);
+        ASSERT_EQ(store->getLocalIndexInfosSnapshot(), nullptr);
+    }
+
+    const size_t num_rows_write = 128;
+
+    // write to store before index built
+    write(num_rows_write);
+    // trigger mergeDelta for all segments
+    triggerMergeDelta();
+
+    IndexID index_id = 2;
+    // Add vecotr index
+    TiDB::TableInfo new_table_info_with_vector_index;
+    TiDB::ColumnInfo column_info;
+    column_info.name = VectorIndexTestUtils::vec_column_name;
+    column_info.id = VectorIndexTestUtils::vec_column_id;
+    new_table_info_with_vector_index.columns.emplace_back(column_info);
+    TiDB::IndexInfo index;
+    index.id = index_id;
+    TiDB::IndexColumnInfo index_col_info;
+    index_col_info.name = VectorIndexTestUtils::vec_column_name;
+    index_col_info.offset = 0;
+    index.idx_cols.emplace_back(index_col_info);
+    index.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 1,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+    new_table_info_with_vector_index.index_infos.emplace_back(index);
+
+    // enable failpoint to mock fail to build index due to memory limit
+    FailPointHelper::enableFailPoint(FailPoints::exception_build_local_index_for_file);
+    store->applyLocalIndexChange(new_table_info_with_vector_index);
+    ASSERT_EQ(store->local_index_infos->size(), 1);
+
+    auto scheduler = db_context->getGlobalLocalIndexerScheduler();
+    scheduler->waitForFinish();
+
+    {
+        auto indexes_stat = store->getLocalIndexStats();
+        ASSERT_EQ(indexes_stat.size(), 1);
+        auto index_stat = indexes_stat[0];
+        ASSERT_EQ(index_id, index_stat.index_id);
+        ASSERT_EQ(VectorIndexTestUtils::vec_column_id, index_stat.column_id);
+        ASSERT_FALSE(index_stat.error_message.empty()) << index_stat.error_message;
+        ASSERT_NE(index_stat.error_message.find("Fail point"), std::string::npos) << index_stat.error_message;
     }
 }
 CATCH

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
-#include <Storages/DeltaMerge/Index/IndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/TiDB.h>
@@ -120,10 +120,10 @@ ColumnID getVectorIndxColumnID(
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger)
 {
     // The same as generate local index infos with no existing_indexes
-    return generateLocalIndexInfos(nullptr, table_info, logger);
+    return generateLocalIndexInfos(nullptr, table_info, logger).new_local_index_infos;
 }
 
-LocalIndexInfosPtr generateLocalIndexInfos(
+LocalIndexInfosChangeset generateLocalIndexInfos(
     const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
     const LoggerPtr & logger)
@@ -135,7 +135,9 @@ LocalIndexInfosPtr generateLocalIndexInfos(
         bool is_storage_format_support = isVectorIndexSupported(logger);
         fiu_do_on(FailPoints::force_not_support_vector_index, { is_storage_format_support = false; });
         if (!is_storage_format_support)
-            return new_index_infos;
+            return LocalIndexInfosChangeset{
+                .new_local_index_infos = new_index_infos,
+            };
     }
 
     // Keep a map of "indexes in existing_indexes" -> "offset in new_index_infos"
@@ -253,7 +255,9 @@ LocalIndexInfosPtr generateLocalIndexInfos(
             return buf.toString();
         };
         LOG_DEBUG(logger, "Local index info does not changed, {}", get_logging());
-        return nullptr;
+        return LocalIndexInfosChangeset{
+            .new_local_index_infos = nullptr,
+        };
     }
 
     auto get_changed_logging = [&]() -> String {
@@ -295,7 +299,19 @@ LocalIndexInfosPtr generateLocalIndexInfos(
         return buf.toString();
     };
     LOG_INFO(logger, "Local index info generated, {}", get_changed_logging());
-    return new_index_infos;
+
+    // only return the newly dropped index with index_id > EmptyIndexID
+    std::vector<IndexID> dropped_indexes;
+    for (const auto & i : newly_dropped)
+    {
+        if (i.index_id <= EmptyIndexID)
+            continue;
+        dropped_indexes.emplace_back(i.index_id);
+    }
+    return LocalIndexInfosChangeset{
+        .new_local_index_infos = new_index_infos,
+        .dropped_indexes = std::move(dropped_indexes),
+    };
 }
 
 } // namespace DB::DM

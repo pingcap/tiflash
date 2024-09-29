@@ -622,6 +622,30 @@ public:
         last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed);
     }
 
+    void setIndexBuildError(const std::vector<IndexID> & index_ids, const String & err_msg)
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        for (const auto & id : index_ids)
+        {
+            local_indexed_build_error.emplace(id, err_msg);
+        }
+    }
+
+    std::unordered_map<IndexID, String> getIndexBuildError() const
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        return local_indexed_build_error;
+    }
+
+    void clearIndexBuildError(const std::vector<IndexID> & index_ids)
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        for (const auto & id : index_ids)
+        {
+            local_indexed_build_error.erase(id);
+        }
+    }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -777,6 +801,9 @@ public:
     // This involves to check the valid data ratio in the background gc thread,
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
+
+    mutable std::mutex mtx_local_index_message;
+    std::unordered_map<IndexID, String> local_indexed_build_error;
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;

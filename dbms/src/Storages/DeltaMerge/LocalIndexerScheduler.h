@@ -107,10 +107,10 @@ public:
 
     /**
      * @brief Push a task to the pool. The task may not be scheduled immediately.
-     * Support adding the same task multiple times, but they are not allowed to execute at the same time.
-     * If the request_memory of task is larger than the memory_limit, will throw an exception.
+     * Return <true, ""> if pushing the task is done.
+     * Return <false, reason> if the task is not valid.
      */
-    void pushTask(const Task & task);
+    std::tuple<bool, String> pushTask(const Task & task);
 
     /**
     * @brief Drop all tasks matching specified keyspace id and table id.

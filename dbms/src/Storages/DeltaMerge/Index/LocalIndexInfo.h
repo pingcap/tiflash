@@ -53,7 +53,17 @@ using LocalIndexInfosPtr = std::shared_ptr<LocalIndexInfos>;
 using LocalIndexInfosSnapshot = std::shared_ptr<const LocalIndexInfos>;
 
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
-LocalIndexInfosPtr generateLocalIndexInfos(
+
+struct LocalIndexInfosChangeset
+{
+    LocalIndexInfosPtr new_local_index_infos;
+    std::vector<IndexID> dropped_indexes;
+};
+
+// Generate a changeset according to `existing_indexes` and `new_table_info`
+// If there are newly added or dropped indexes according to `new_table_info`,
+// return a changeset with changeset.new_local_index_infos != nullptr
+LocalIndexInfosChangeset generateLocalIndexInfos(
     const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
     const LoggerPtr & logger);

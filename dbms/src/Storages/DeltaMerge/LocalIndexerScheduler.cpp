@@ -16,6 +16,12 @@
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
+
+namespace DB::FailPoints
+{
+extern const char force_local_index_task_memory_limit_exceeded[];
+} // namespace DB::FailPoints
 
 
 namespace DB::DM
@@ -99,13 +105,19 @@ void LocalIndexerScheduler::waitForFinish()
     }
 }
 
-void LocalIndexerScheduler::pushTask(const Task & task)
+std::tuple<bool, String> LocalIndexerScheduler::pushTask(const Task & task)
 {
-    if (pool_max_memory_limit > 0 && task.request_memory > pool_max_memory_limit)
-        throw Exception(fmt::format(
-            "Requests memory exceeds limit (request={} limit={})",
-            task.request_memory,
-            pool_max_memory_limit));
+    bool memory_limit_exceed = pool_max_memory_limit > 0 && task.request_memory > pool_max_memory_limit;
+    fiu_do_on(FailPoints::force_local_index_task_memory_limit_exceeded, { memory_limit_exceed = true; });
+
+    if (unlikely(memory_limit_exceed))
+        return {
+            false,
+            fmt::format(
+                "Requests memory to build local index exceeds limit (request={} limit={})",
+                task.request_memory,
+                pool_max_memory_limit),
+        };
 
     std::unique_lock lock(mutex);
 
@@ -123,6 +135,7 @@ void LocalIndexerScheduler::pushTask(const Task & task)
 
     scheduler_need_wakeup = true;
     scheduler_notifier.notify_all();
+    return {true, ""};
 }
 
 size_t LocalIndexerScheduler::dropTasks(KeyspaceID keyspace_id, TableID table_id)
