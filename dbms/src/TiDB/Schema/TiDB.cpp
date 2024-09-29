@@ -441,9 +441,12 @@ try
     name_json->set("L", name);
     json->set("name", name_json);
     json->set("offset", offset);
-    json->set("origin_default", origin_default_value);
-    json->set("default", default_value);
-    json->set("default_bit", default_bit_value);
+    if (!origin_default_value.isEmpty())
+        json->set("origin_default", origin_default_value);
+    if (!default_value.isEmpty())
+        json->set("default", default_value);
+    if (!default_bit_value.isEmpty())
+        json->set("default_bit", default_bit_value);
     if (!origin_default_bit_value.isEmpty())
         json->set("origin_default_bit", origin_default_bit_value);
     {
@@ -1025,9 +1028,8 @@ try
     }
     name = obj->getObject("name")->getValue<String>("L");
 
-    auto cols_arr = obj->getArray("cols");
     columns.clear();
-    if (!cols_arr.isNull())
+    if (auto cols_arr = obj->getArray("cols"); !cols_arr.isNull())
     {
         for (size_t i = 0; i < cols_arr->size(); i++)
         {
