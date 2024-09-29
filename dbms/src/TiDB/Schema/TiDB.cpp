@@ -978,20 +978,13 @@ try
     if (is_partition_table)
     {
         json->set("belonging_table_id", belonging_table_id);
-        if (belonging_table_id != DB::InvalidTableID)
+        if (belonging_table_id == DB::InvalidTableID)
         {
-            json->set("is_partition_sub_table", true);
-            json->set("partition", Poco::Dynamic::Var());
-        }
-        else
-        {
-            // only record partition info in LogicalPartitionTable
+            // We use `belonging_table_id == DB::InvalidTableID` for the
+            // logical partition table.
+            // Only record partition info in LogicalPartitionTable
             json->set("partition", partition.getJSONObject());
         }
-    }
-    else
-    {
-        json->set("partition", Poco::Dynamic::Var());
     }
 
     json->set("schema_version", schema_version);
