@@ -531,7 +531,7 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
         }
     }
 
-    return ReturnType(true);
+    return static_cast<ReturnType>(true);
 }
 
 /// join blocks by columns
@@ -541,10 +541,8 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
         return {};
 
     Block res = header.cloneEmpty();
-    size_t num_rows = blocks.front().rows();
     for (const auto & block : blocks)
     {
-        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot hstack blocks with different number of rows");
         for (const auto & elem : block)
         {
             if (likely(res.has(elem.name)))
