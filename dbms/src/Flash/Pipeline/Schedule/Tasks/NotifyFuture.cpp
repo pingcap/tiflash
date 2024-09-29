@@ -16,9 +16,9 @@
 
 namespace DB
 {
-thread_local NotifyFuturePtr current_notify_future = nullptr;
+thread_local NotifyFuture * current_notify_future = nullptr;
 
-void setNotifyFuture(NotifyFuturePtr new_future)
+void setNotifyFuture(NotifyFuture * new_future)
 {
     assert(current_notify_future == nullptr);
     current_notify_future = std::move(new_future);
@@ -26,13 +26,13 @@ void setNotifyFuture(NotifyFuturePtr new_future)
 
 void clearNotifyFuture()
 {
-    current_notify_future.reset();
+    current_notify_future = nullptr;
 }
 
 void registerTaskToFuture(TaskPtr && task)
 {
     assert(current_notify_future != nullptr);
     current_notify_future->registerTask(std::move(task));
-    current_notify_future.reset();
+    current_notify_future = nullptr;
 }
 } // namespace DB

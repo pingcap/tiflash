@@ -131,7 +131,7 @@ bool HashProbeTransformExec::prepareProbeRestoredBlock()
     case MPMCQueueResult::OK:
         return true;
     case MPMCQueueResult::EMPTY:
-        setNotifyFuture(probe_source_holder);
+        setNotifyFuture(probe_source_holder.get());
         return false;
     case MPMCQueueResult::FINISHED:
     case MPMCQueueResult::CANCELLED:

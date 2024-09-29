@@ -18,7 +18,7 @@ services:
   # for tests under fullstack-test directory
   # (engine DeltaTree)
   tiflash0:
-    image: hub.pingcap.net/tiflash/tiflash-ci-base
+    image: hub.pingcap.net/tiflash/tiflash-ci-base:py3
     security_opt:
       - seccomp:unconfined
     volumes:
