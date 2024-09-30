@@ -217,17 +217,9 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     };
     LOG_INFO(logger, "Local index info generated, {}", get_changed_logging());
 
-    // only return the newly dropped index with index_id > EmptyIndexID
-    std::vector<IndexID> dropped_indexes;
-    for (const auto & idx_id : newly_dropped)
-    {
-        if (idx_id <= EmptyIndexID)
-            continue;
-        dropped_indexes.emplace_back(idx_id);
-    }
     return LocalIndexInfosChangeset{
         .new_local_index_infos = new_index_infos,
-        .dropped_indexes = std::move(dropped_indexes),
+        .dropped_indexes = std::move(newly_dropped),
     };
 }
 
