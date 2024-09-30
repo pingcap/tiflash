@@ -214,7 +214,7 @@ try
                 ASSERT_EQ(idx0.idx_cols[0].name, "vec");
                 ASSERT_EQ(idx0.idx_cols[0].offset, 1);
                 ASSERT_NE(idx0.vector_index, nullptr);
-                ASSERT_EQ(idx0.index_type, 5); // HNSW
+                ASSERT_EQ(idx0.index_type, TiDB::IndexType::HNSW);
                 ASSERT_EQ(idx0.vector_index->kind, tipb::VectorIndexKind::HNSW);
                 ASSERT_EQ(idx0.vector_index->dimension, 3);
                 ASSERT_EQ(idx0.vector_index->distance_metric, tipb::VectorDistanceMetric::COSINE);

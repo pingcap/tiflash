@@ -282,7 +282,7 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             index_info.is_primary = true;
             index_info.idx_name = "PRIMARY";
             index_info.is_unique = true;
-            index_info.index_type = 1;
+            index_info.index_type = TiDB::IndexType::BTREE;
             index_info.idx_cols.resize(string_tokens.count());
             for (size_t index = 0; index < string_tokens.count(); index++)
             {
@@ -569,6 +569,7 @@ IndexInfo reverseGetIndexInfo(
     TiDB::IndexColumnInfo idx_col(idx_col_json);
     index_info.idx_cols.push_back(idx_col);
     index_info.vector_index = vector_index;
+    index_info.index_type = TiDB::toIndexType(vector_index->kind);
 
     return index_info;
 }

@@ -240,6 +240,21 @@ struct IndexColumnInfo
     Int32 length = 0;
     Int32 offset = 0;
 };
+
+// The IndexType defined in TiDB
+// https://github.com/pingcap/tidb/blob/a5e07a2ed360f29216c912775ce482f536f4102b/pkg/parser/model/model.go#L193-L219
+enum class IndexType : Int32
+{
+    INVALID = 0,
+    BTREE = 1,
+    HASH = 2,
+    RTREE = 3,
+    HYPO = 4,
+    HNSW = 5,
+};
+
+IndexType toIndexType(tipb::VectorIndexKind kind);
+
 struct IndexInfo
 {
     IndexInfo() = default;
@@ -254,7 +269,7 @@ struct IndexInfo
     String idx_name;
     std::vector<IndexColumnInfo> idx_cols;
     SchemaState state = StatePublic;
-    Int32 index_type = -1;
+    IndexType index_type = IndexType::INVALID;
     bool is_unique = false;
     bool is_primary = false;
     bool is_invisible = false;

@@ -105,18 +105,6 @@ using DB::Exception;
 using DB::Field;
 using DB::SchemaNameMapper;
 
-// The IndexType defined in TiDB
-// https://github.com/pingcap/tidb/blob/a5e07a2ed360f29216c912775ce482f536f4102b/pkg/parser/model/model.go#L193-L219
-enum class IndexType
-{
-    INVALID = 0,
-    BTREE = 1,
-    HASH = 2,
-    RTREE = 3,
-    HYPO = 4,
-    HNSW = 5,
-};
-
 inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
 {
     switch (index_type)
@@ -128,6 +116,17 @@ inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
             DB::ErrorCodes::LOGICAL_ERROR,
             "Invalid index type for vector index {}",
             magic_enum::enum_name(index_type));
+    }
+}
+
+IndexType toIndexType(tipb::VectorIndexKind kind)
+{
+    switch (kind)
+    {
+    case tipb::VectorIndexKind::HNSW:
+        return IndexType::HNSW;
+    default:
+        throw Exception(DB::ErrorCodes::LOGICAL_ERROR, "Invalid vector index kind {}", magic_enum::enum_name(kind));
     }
 }
 
@@ -161,7 +160,6 @@ Poco::JSON::Object::Ptr vectorIndexToJSON(const VectorIndexDefinitionPtr & vecto
     RUNTIME_CHECK(vector_index->distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
     Poco::JSON::Object::Ptr vector_index_json = new Poco::JSON::Object();
-    vector_index_json->set("kind", tipb::VectorIndexKind_Name(vector_index->kind));
     vector_index_json->set("dimension", vector_index->dimension);
     vector_index_json->set("distance_metric", tipb::VectorDistanceMetric_Name(vector_index->distance_metric));
     return vector_index_json;
@@ -856,7 +854,7 @@ try
     }
     json->set("idx_cols", cols_array);
     json->set("state", static_cast<Int32>(state));
-    json->set("index_type", index_type);
+    json->set("index_type", magic_enum::enum_integer(index_type));
     json->set("is_unique", is_unique);
     json->set("is_primary", is_primary);
     json->set("is_invisible", is_invisible);
@@ -900,7 +898,7 @@ try
     }
 
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
-    index_type = json->getValue<Int32>("index_type");
+    index_type = magic_enum::enum_cast<IndexType>(json->getValue<Int32>("index_type")).value_or(IndexType::INVALID);
     is_unique = json->getValue<bool>("is_unique");
     is_primary = json->getValue<bool>("is_primary");
     if (json->has("is_invisible"))
@@ -910,7 +908,7 @@ try
 
     if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
     {
-        vector_index = parseVectorIndexFromJSON(static_cast<IndexType>(index_type), vector_index_json);
+        vector_index = parseVectorIndexFromJSON(index_type, vector_index_json);
     }
 }
 catch (const Poco::Exception & e)
