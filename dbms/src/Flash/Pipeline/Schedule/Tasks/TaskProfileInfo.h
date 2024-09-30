@@ -57,7 +57,7 @@ protected:
 class TaskProfileInfo : public ProfileInfo<UInt64>
 {
 public:
-    ALWAYS_INLINE void startTimer() { stopwatch.start(); }
+    //ALWAYS_INLINE void startTimer() { stopwatch.start(); }
 
     ALWAYS_INLINE UInt64 elapsedFromPrev() { return stopwatch.elapsedFromLastTime(); }
 
