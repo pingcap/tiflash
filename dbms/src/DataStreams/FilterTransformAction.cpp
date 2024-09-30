@@ -19,7 +19,6 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterTransformAction.h>
 
-#include <algorithm>
 
 namespace DB
 {
