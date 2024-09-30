@@ -215,7 +215,7 @@ target_link_libraries(tiflash_vector_search
     tiflash_contrib::usearch
     tiflash_contrib::simsimd
 
-    fmt 
+    fmt
 )
 
 target_link_libraries (dbms

@@ -22,8 +22,13 @@
 #define SIMSIMD_NATIVE_BF16 0
 
 // Force enable all target features.
+#if defined (__APPLE__)
+#define SIMSIMD_TARGET_NEON 0
+#define SIMSIMD_TARGET_SVE 0
+#else
 #define SIMSIMD_TARGET_NEON 1
 #define SIMSIMD_TARGET_SVE 1
+#endif
 #define SIMSIMD_TARGET_HASWELL 1
 #define SIMSIMD_TARGET_SKYLAKE 1
 #define SIMSIMD_TARGET_ICE 1
@@ -34,7 +39,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpass-failed"
 
-#include <type_traits>
+// #include <type_traits>
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
