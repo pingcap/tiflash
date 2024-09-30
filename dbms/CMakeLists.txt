@@ -96,6 +96,8 @@ add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
+add_headers_and_sources(tiflash_vector_search src/VectorSearch)
+
 check_then_add_sources_compile_flag (
     TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
     "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
@@ -203,12 +205,25 @@ target_link_libraries (tiflash_common_io
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
-target_compile_definitions(tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
+target_compile_definitions (tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
+
+add_library(tiflash_vector_search
+    ${tiflash_vector_search_headers}
+    ${tiflash_vector_search_sources}
+)
+target_link_libraries(tiflash_vector_search
+    tiflash_contrib::usearch
+    tiflash_contrib::simsimd
+
+    fmt 
+)
+
 target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
     tiflash_contrib::aws_s3
+    tiflash_vector_search
 
     etcdpb
     tiflash_parsers
@@ -362,7 +377,6 @@ if (ENABLE_TESTS)
     add_check(gtests_dbms)
 
     add_target_pch("pch-dbms.h" gtests_dbms)
-
     grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
     add_executable(bench_dbms EXCLUDE_FROM_ALL
         ${dbms_bench_sources}
@@ -373,7 +387,21 @@ if (ENABLE_TESTS)
         )
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark tiflash_functions server_for_test delta_merge kvstore tiflash_aggregate_functions)
+    target_link_libraries(bench_dbms
+        gtest
+        benchmark
+    
+        dbms
+        test_util_bench_main
+        tiflash_functions
+        server_for_test
+        delta_merge
+        tiflash_aggregate_functions
+        kvstore)
+
+    if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+        target_link_libraries(bench_dbms tiflash_contrib::highfive)
+    endif()
 
     add_check(bench_dbms)
 endif ()

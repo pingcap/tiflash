@@ -101,6 +101,7 @@ DM::PushDownFilterPtr generatePushDownFilter(
         }
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
+            tipb::ANNQueryInfo{},
             pushed_down_filters,
             table_info.columns,
             std::vector<int>(), // don't care runtime filter
@@ -716,7 +717,7 @@ try
     String datetime = "1970-01-01 00:00:01.000000";
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
-    tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
+    ASSERT_TRUE(tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer));
     const auto & time_zone_utc = DateLUT::instance("UTC");
     UInt64 converted_time = origin_time_stamp;
     std::cout << "origin_time_stamp: " << origin_time_stamp << std::endl;

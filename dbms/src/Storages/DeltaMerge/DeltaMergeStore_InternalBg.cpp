@@ -136,6 +136,7 @@ public:
                     /* page_id= */ 0,
                     path,
                     DMFileMeta::ReadMode::none(),
+                    0 /* a meta version that must exist */,
                     path_pool->getKeyspaceID());
                 if (unlikely(!dmfile))
                 {
@@ -389,7 +390,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
     if (updateGCSafePoint())
     {
-        /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
+        /// Note that `task.dm_context->global_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
         LOG_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
     }

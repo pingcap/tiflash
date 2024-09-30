@@ -28,7 +28,6 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB::DM
 {
@@ -487,6 +486,22 @@ public:
         const DMFilePtr & data_file,
         SegmentSnapshotPtr segment_snap_opt = nullptr) const;
 
+    /**
+     * Replace the stable layer using the DMFile with a new meta version.
+     * Delta layer is unchanged.
+     *
+     * This API can be used to make a newly added index visible.
+     *
+     * This API does not have a prepare & apply pair, as it should be quick enough.
+     *
+     * @param new_stable_files Must be the same as the current stable DMFiles (except for the meta version).
+     *                         Otherwise replace will be failed and nullptr will be returned.
+     */
+    [[nodiscard]] SegmentPtr replaceStableMetaVersion(
+        const Lock &,
+        DMContext & dm_context,
+        const DMFiles & new_stable_files);
+
     [[nodiscard]] SegmentPtr dangerouslyReplaceDataFromCheckpoint(
         const Lock &,
         DMContext & dm_context,
@@ -527,7 +542,7 @@ public:
 
     PageIdU64 segmentId() const { return segment_id; }
     PageIdU64 nextSegmentId() const { return next_segment_id; }
-    UInt64 segmentEpoch() const { return epoch; };
+    UInt64 segmentEpoch() const { return epoch; }
 
     void check(DMContext & dm_context, const String & when) const;
 
@@ -538,6 +553,8 @@ public:
 
     String logId() const;
     String simpleInfo() const;
+    // Detail information of segment.
+    // Do not use it in read path since the segment may not in local.
     String info() const;
 
     static String simpleInfo(const std::vector<SegmentPtr> & segments);
@@ -603,6 +620,30 @@ public:
     void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point)
     {
         last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed);
+    }
+
+    void setIndexBuildError(const std::vector<IndexID> & index_ids, const String & err_msg)
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        for (const auto & id : index_ids)
+        {
+            local_indexed_build_error.emplace(id, err_msg);
+        }
+    }
+
+    std::unordered_map<IndexID, String> getIndexBuildError() const
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        return local_indexed_build_error;
+    }
+
+    void clearIndexBuildError(const std::vector<IndexID> & index_ids)
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        for (const auto & id : index_ids)
+        {
+            local_indexed_build_error.erase(id);
+        }
     }
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -735,7 +776,6 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -761,6 +801,9 @@ public:
     // This involves to check the valid data ratio in the background gc thread,
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
+
+    mutable std::mutex mtx_local_index_message;
+    std::unordered_map<IndexID, String> local_indexed_build_error;
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;

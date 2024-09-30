@@ -59,18 +59,20 @@ DTWorkload::DTWorkload(
     context->initializeGlobalPageIdAllocator();
     context->initializeGlobalStoragePoolIfNeed(context->getPathPool());
     Stopwatch sw;
-    store = DeltaMergeStore::createUnique(
+    store = DeltaMergeStore::create(
         *context,
         true,
         table_info->db_name,
         table_info->table_name,
         NullspaceID,
         table_info->table_id,
+        /*pk_col_id*/ 0,
         true,
         *table_info->columns,
         table_info->handle,
         table_info->is_common_handle,
         table_info->rowkey_column_indexes.size(),
+        nullptr,
         DeltaMergeStore::Settings());
     stat.init_ms = sw.elapsedMilliseconds();
     LOG_INFO(log, "Init store {} ms", stat.init_ms);

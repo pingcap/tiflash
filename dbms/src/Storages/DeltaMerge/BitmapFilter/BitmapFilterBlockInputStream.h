@@ -45,10 +45,16 @@ protected:
         FilterPtr filter_ignored;
         return read(filter_ignored, false);
     }
-    // When all rows in block are not filtered out,
-    // `res_filter` will be set to null.
+
+    // When all rows in block are not filtered out, `res_filter` will be set to null.
     // The caller needs to do handle this situation.
     Block read(FilterPtr & res_filter, bool return_filter) override;
+
+private:
+    // When all rows in block are not filtered out, `res_filter` will be set to null.
+    // The caller needs to do handle this situation.
+    // This function always returns the filter to the caller. It does not filter the block.
+    Block readImpl(FilterPtr & res_filter);
 
 private:
     Block header;
@@ -57,7 +63,7 @@ private:
     size_t stable_rows;
     BitmapFilterPtr bitmap_filter;
     const LoggerPtr log;
-    IColumn::Filter filter{};
+    IColumn::Filter filter;
 };
 
 } // namespace DB::DM

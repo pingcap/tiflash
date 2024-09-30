@@ -26,14 +26,12 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
-namespace DM
+namespace DB::DM
 {
 void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, const DMContext * dm_context)
 {
@@ -93,7 +91,13 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
         writeIntBinary(valid_bytes, buf);
         writeIntBinary(static_cast<UInt64>(files.size()), buf);
         for (const auto & f : files)
+        {
+            RUNTIME_CHECK_MSG(
+                f->metaVersion() == 0,
+                "StableFormat::V1 cannot persist meta_version={}",
+                f->metaVersion());
             writeIntBinary(f->pageId(), buf);
+        }
     }
     else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
     {
@@ -101,7 +105,11 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
         meta.set_valid_rows(valid_rows);
         meta.set_valid_bytes(valid_bytes);
         for (const auto & f : files)
-            meta.add_files()->set_page_id(f->pageId());
+        {
+            auto * mf = meta.add_files();
+            mf->set_page_id(f->pageId());
+            mf->set_meta_version(f->metaVersion());
+        }
 
         auto data = meta.SerializeAsString();
         writeStringBinary(data, buf);
@@ -182,10 +190,11 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
     for (int i = 0; i < metapb.files().size(); ++i)
     {
         UInt64 page_id = metapb.files(i).page_id();
-        if (remote_data_store)
-            stable->files.push_back(restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, page_id));
-        else
-            stable->files.push_back(restoreDMFileFromLocal(dm_context, page_id));
+        UInt64 meta_version = metapb.files(i).meta_version();
+        auto dmfile = remote_data_store
+            ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, page_id, meta_version)
+            : restoreDMFileFromLocal(dm_context, page_id, meta_version);
+        stable->files.push_back(dmfile);
     }
 
     stable->valid_rows = metapb.valid_rows();
@@ -215,7 +224,8 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     for (int i = 0; i < metapb.files().size(); ++i)
     {
         UInt64 page_id = metapb.files(i).page_id();
-        auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, page_id);
+        UInt64 meta_version = metapb.files(i).meta_version();
+        auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, page_id, meta_version);
         stable->files.push_back(dmfile);
     }
 
@@ -269,12 +279,7 @@ size_t StableValueSpace::getDMFilesBytes() const
 
 String StableValueSpace::getDMFilesString()
 {
-    String s;
-    for (auto & file : files)
-        s += "dmf_" + DB::toString(file->fileId()) + ",";
-    if (!s.empty())
-        s.erase(s.length() - 1);
-    return s;
+    return DMFile::info(files);
 }
 
 void StableValueSpace::enableDMFilesGC(DMContext & dm_context)
@@ -463,7 +468,8 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     bool is_fast_scan,
     bool enable_del_clean_read,
     const std::vector<IdSetPtr> & read_packs,
-    bool need_row_id)
+    bool need_row_id,
+    BitmapFilterPtr bitmap_filter)
 {
     LOG_DEBUG(
         log,
@@ -476,17 +482,32 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     std::vector<size_t> rows;
     streams.reserve(stable->files.size());
     rows.reserve(stable->files.size());
+
+    size_t last_rows = 0;
+
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.global_context);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
+            .enableColumnCacheLongTerm(context.pk_col_id)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
             .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr)
             .setReadTag(read_tag);
-        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        if (bitmap_filter)
+        {
+            builder = builder.setBitmapFilter(
+                BitmapFilterView(bitmap_filter, last_rows, last_rows + stable->files[i]->getRows()));
+            last_rows += stable->files[i]->getRows();
+        }
+
+        streams.push_back(builder.tryBuildWithVectorIndex( //
+            stable->files[i],
+            read_columns,
+            rowkey_ranges,
+            context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }
     if (need_row_id)
@@ -659,5 +680,4 @@ size_t StableValueSpace::avgRowBytes(const ColumnDefines & read_columns)
     return avg_bytes;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

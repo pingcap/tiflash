@@ -118,6 +118,8 @@ void TiFlashTestEnv::addGlobalContext(
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
 
+    global_context->initializeGlobalLocalIndexerScheduler(1, 0);
+
     // initialize background & blockable background thread pool
     global_context->setSettings(settings_);
     Settings & settings = global_context->getSettingsRef();
@@ -168,6 +170,7 @@ void TiFlashTestEnv::addGlobalContext(
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
+    global_context->setColumnCacheLongTerm(1024 * 1024 * 100 /*100MB*/);
 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);

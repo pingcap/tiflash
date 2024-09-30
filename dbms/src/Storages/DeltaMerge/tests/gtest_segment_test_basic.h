@@ -27,25 +27,25 @@
 #include <random>
 #include <vector>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 class SegmentTestBasic : public DB::base::TiFlashStorageTestBasic
 {
 public:
     struct SegmentTestOptions
     {
         bool is_common_handle = false;
+        ColumnID pk_col_id = 0;
         DB::Settings db_settings;
     };
 
-    void SetUp() override
+    void SetUp() override { SetUp({}); }
+
+    void SetUp(const SegmentTestOptions & options)
     {
         TiFlashStorageTestBasic::SetUp();
-        reloadWithOptions({});
+        reloadWithOptions(options);
     }
 
 public:
@@ -95,6 +95,17 @@ public:
     void replaceSegmentData(PageIdU64 segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot = nullptr);
     void replaceSegmentData(PageIdU64 segment_id, const Block & block, SegmentSnapshotPtr snapshot = nullptr);
 
+    /**
+     * This function does not check rows.
+     * Returns whether replace is successful.
+     */
+    bool replaceSegmentStableData(PageIdU64 segment_id, const DMFilePtr & file);
+
+    /**
+     * Returns whether segment stable index is created.
+     */
+    bool ensureSegmentStableIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos);
+
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
     Block prepareWriteBlockInSegmentRange(
         PageIdU64 segment_id,
@@ -143,6 +154,10 @@ protected:
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
+    virtual Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted);
+
+    virtual void prepareColumns(const ColumnDefinesPtr &) {}
+
     /**
      * Reload a new DMContext according to latest storage status.
      * For example, if you have changed the settings, you should grab a new DMContext.
@@ -173,6 +188,5 @@ protected:
     LoggerPtr logger_op;
     LoggerPtr logger;
 };
-} // namespace tests
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM::tests
