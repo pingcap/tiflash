@@ -100,36 +100,6 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
             return getLeastSupertype(non_nothing_types);
     }
 
-    /// For Arrays
-    {
-        bool have_array = false;
-        bool all_arrays = true;
-
-        DataTypes nested_types;
-        nested_types.reserve(types.size());
-
-        for (const auto & type : types)
-        {
-            if (const auto * type_array = typeid_cast<const DataTypeArray *>(type.get()))
-            {
-                have_array = true;
-                nested_types.emplace_back(type_array->getNestedType());
-            }
-            else
-                all_arrays = false;
-        }
-
-        if (have_array)
-        {
-            if (!all_arrays)
-                throw Exception(
-                    getExceptionMessagePrefix(types) + " because some of them are Array and some of them are not",
-                    ErrorCodes::NO_COMMON_TYPE);
-
-            return std::make_shared<DataTypeArray>(getLeastSupertype(nested_types));
-        }
-    }
-
     /// For tuples
     {
         bool have_tuple = false;
@@ -201,6 +171,36 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         if (have_nullable)
         {
             return std::make_shared<DataTypeNullable>(getLeastSupertype(nested_types));
+        }
+    }
+
+    /// For Arrays, canBeInsideNullable = true, should check it after handling Nullable
+    {
+        bool have_array = false;
+        bool all_arrays = true;
+
+        DataTypes nested_types;
+        nested_types.reserve(types.size());
+
+        for (const auto & type : types)
+        {
+            if (const auto * type_array = typeid_cast<const DataTypeArray *>(type.get()))
+            {
+                have_array = true;
+                nested_types.emplace_back(type_array->getNestedType());
+            }
+            else
+                all_arrays = false;
+        }
+
+        if (have_array)
+        {
+            if (!all_arrays)
+                throw Exception(
+                    getExceptionMessagePrefix(types) + " because some of them are Array and some of them are not",
+                    ErrorCodes::NO_COMMON_TYPE);
+
+            return std::make_shared<DataTypeArray>(getLeastSupertype(nested_types));
         }
     }
 

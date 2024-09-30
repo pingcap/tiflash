@@ -575,7 +575,10 @@ public:
 
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
+
     LocalIndexesStats getLocalIndexStats();
+    // Generate local index stats for non inited DeltaMergeStore
+    static std::optional<LocalIndexesStats> genLocalIndexStatsByTableInfo(const TiDB::TableInfo & table_info);
 
     bool isCommonHandle() const { return is_common_handle; }
     size_t getRowKeyColumnSize() const { return rowkey_column_size; }

@@ -114,9 +114,10 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
 
     for (const auto & [col_id, index_infos] : col_indexes)
     {
-        const auto cd_iter = std::find_if(column_defines.cbegin(), column_defines.cend(), [&](const auto & cd) {
-            return cd.id == col_id;
-        });
+        const auto cd_iter
+            = std::find_if(column_defines.cbegin(), column_defines.cend(), [col_id = col_id](const auto & cd) {
+                  return cd.id == col_id;
+              });
         RUNTIME_CHECK_MSG(
             cd_iter != column_defines.cend(),
             "Cannot find column_id={} in file={}",
