@@ -222,14 +222,7 @@ Field ColumnInfo::defaultValueToField() const
         });
     case TypeBit:
     {
-        // TODO: We shall use something like `orig_default_bit`, which will never change once created,
-        //  rather than `default_bit`, which could be altered.
-        //  See https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
-        const auto & bit_value = default_bit_value;
-        // TODO: There might be cases that `orig_default` is not null but `default_bit` is null,
-        //  i.e. bit column added with an default value but later modified to another.
-        //  For these cases, neither `orig_default` (may get corrupted) nor `default_bit` (modified) is correct.
-        //  This is a bug anyway, we choose to make it simple, i.e. use `default_bit`.
+        const auto & bit_value = origin_default_bit_value;
         if (bit_value.isEmpty())
         {
             if (hasNotNullFlag())
@@ -450,6 +443,7 @@ try
     json->set("origin_default", origin_default_value);
     json->set("default", default_value);
     json->set("default_bit", default_bit_value);
+    json->set("origin_default_bit", origin_default_bit_value);
     {
         // "type" field
         Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
@@ -501,6 +495,8 @@ try
         default_value = json->get("default");
     if (!json->isNull("default_bit"))
         default_bit_value = json->get("default_bit");
+    if (!json->isNull("origin_default_bit"))
+        origin_default_bit_value = json->get("origin_default_bit");
     {
         // type
         auto type_json = json->getObject("type");
@@ -1374,7 +1370,11 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     // TiFlash get default value from origin_default_value, check `Field ColumnInfo::defaultValueToField() const`
     // So we need to set origin_default_value to tipb_column_info.default_val()
     // Related logic in tidb, https://github.com/pingcap/tidb/blob/45318da24d8e4c0c6aab836d291a33f949dd18bf/pkg/table/tables/tables.go#L2303-L2329
-    tidb_column_info.origin_default_value = tipb_column_info.default_val();
+    // For TypeBit, we need to set origin_default_bit_value to tipb_column_info.default_val().
+    if (tidb_column_info.tp == TypeBit)
+        tidb_column_info.origin_default_bit_value = tipb_column_info.default_val();
+    else
+        tidb_column_info.origin_default_value = tipb_column_info.default_val();
     tidb_column_info.collate = tipb_column_info.collation();
     for (int i = 0; i < tipb_column_info.elems_size(); ++i)
         tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);

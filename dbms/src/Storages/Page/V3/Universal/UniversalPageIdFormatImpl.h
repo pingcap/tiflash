@@ -291,7 +291,13 @@ public:
         return StorageType::Unknown;
     }
 
-private:
+public:
+    static inline void encodeUInt32(const UInt32 x, WriteBuffer & ss)
+    {
+        auto u = toBigEndian(x);
+        ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
+    }
+
     static inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
     {
         auto u = toBigEndian(x);
@@ -304,6 +310,7 @@ private:
         return toBigEndian(v);
     }
 
+private:
     static String getSubPrefix(StorageType type)
     {
         switch (type)

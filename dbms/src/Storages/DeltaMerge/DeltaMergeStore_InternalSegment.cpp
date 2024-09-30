@@ -955,15 +955,12 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
         }
 
         auto segment_lock = segment->mustGetUpdateLock();
-
         new_segment = segment->applyMergeDelta(segment_lock, dm_context, segment_snap, wbs, new_stable);
-
         wbs.writeMeta();
 
         // The instance of PKRange::End is closely linked to instance of PKRange. So we cannot reuse it.
         // Replace must be done by erase + insert.
         replaceSegment(lock, segment, new_segment);
-
         segment->abandon(dm_context);
 
         if constexpr (DM_RUN_CHECK)

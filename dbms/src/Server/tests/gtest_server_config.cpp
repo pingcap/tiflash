@@ -287,6 +287,16 @@ dt_compression_level = 1
 [profiles.default]
 dt_compression_method = "LZ4"
 dt_compression_level = 1
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "Lightweight"
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "lightweight"
         )"};
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
@@ -345,6 +355,14 @@ dt_compression_level = 1
         {
             ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::LZ4);
             ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 1);
+        }
+        if (i == 6)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::Lightweight);
+        }
+        if (i == 7)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::Lightweight);
         }
     }
     global_ctx.setSettings(origin_settings);

@@ -19,6 +19,9 @@
 namespace DB
 {
 
+class CompressionCodecFactory;
+
+
 class CompressionCodecZSTD : public ICompressionCodec
 {
 public:
@@ -38,6 +41,7 @@ protected:
 
 private:
     const int level;
+    friend class CompressionCodecFactory;
 };
 
 } // namespace DB

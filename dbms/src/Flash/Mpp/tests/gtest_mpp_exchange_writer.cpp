@@ -168,7 +168,8 @@ struct MockExchangeWriter
         // make only part 0 use local tunnel
         return index == 0;
     }
-    bool isWritable() const { throw Exception("Unsupport async write"); }
+    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
+    static void notifyNextPipelineWriter() {}
 
 private:
     MockExchangeWriterChecker checker;

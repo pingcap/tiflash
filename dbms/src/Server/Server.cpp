@@ -14,7 +14,6 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
-#include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
@@ -922,9 +921,6 @@ void syncSchemaWithTiDB(
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
-
-    /// Initialize the labels of tiflash compute node.
-    ComputeLabelHolder::instance().init(config());
 
     UseSSL ssl_holder;
 

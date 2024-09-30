@@ -44,6 +44,8 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
     switch (data_codec_version)
     {
     case MPPDataPacketV0:
+        if (batch_send_min_limit <= 0)
+            batch_send_min_limit = 1;
         break;
     case MPPDataPacketV1:
     default:
@@ -64,20 +66,30 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
+bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doFlush()
 {
     if (rows_in_blocks > 0)
+    {
         writeBlocks();
+        return true;
+    }
+    return false;
 }
 
 template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::isWritable() const
+WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() const
 {
-    return writer->isWritable();
+    return writer->waitForWritable();
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
+void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
+{
+    writer->notifyNextPipelineWriter();
+}
+
+template <class ExchangeWriterPtr>
+bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doWrite(const Block & block)
 {
     RUNTIME_CHECK(!block.info.selective);
     RUNTIME_CHECK_MSG(
@@ -90,15 +102,18 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit)
+    {
         writeBlocks();
+        return true;
+    }
+    return false;
 }
 
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
 {
-    if unlikely (blocks.empty())
-        return;
+    assert(!blocks.empty());
 
     // check schema
     if (!expected_types.empty())
