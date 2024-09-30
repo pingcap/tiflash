@@ -557,6 +557,7 @@ IndexInfo reverseGetIndexInfo(
     IndexInfo index_info;
     index_info.id = id;
     index_info.state = TiDB::StatePublic;
+    index_info.index_type = 5; // HNSW
 
     std::vector<TiDB::IndexColumnInfo> idx_cols;
     Poco::JSON::Object::Ptr idx_col_json = new Poco::JSON::Object();
