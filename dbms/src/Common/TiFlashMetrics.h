@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/ComputeLabelHolder.h>
 #include <Common/Exception.h>
 #include <Common/ProcessCollector_fwd.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -657,25 +656,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_send, {{"type", "send_queue"}}),                                                                                       \
       F(type_receive, {{"type", "recv_queue"}}))                                                                                    \
-    M(tiflash_compute_request_unit,                                                                                                 \
-      "Request Unit used by tiflash compute",                                                                                       \
-      Counter,                                                                                                                      \
-      F(type_mpp,                                                                                                                   \
-        {{"type", "mpp"},                                                                                                           \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_cop,                                                                                                                   \
-        {{"type", "cop"},                                                                                                           \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_cop_stream,                                                                                                            \
-        {{"type", "cop_stream"},                                                                                                    \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
-      F(type_batch,                                                                                                                 \
-        {{"type", "batch"},                                                                                                         \
-         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
-         ComputeLabelHolder::instance().getProcessIdLabel()}))                                                                      \
     M(tiflash_shared_block_schemas,                                                                                                 \
       "statistics about shared block schemas of ColumnFiles",                                                                       \
       Gauge,                                                                                                                        \
@@ -856,7 +836,18 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
-      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}),                                                                     \
+      F(type_handling_mpp_task_dispatch, {"type", "handling_mpp_task_dispatch"}),                                                   \
+      F(type_handling_mpp_task_establish, {"type", "handling_mpp_task_establish"}),                                                 \
+      F(type_handling_mpp_task_cancel, {"type", "handling_mpp_task_cancel"}),                                                       \
+      F(type_handling_mpp_task_run, {"type", "handling_mpp_task_run"}))                                                             \
+    M(tiflash_compute_request_unit,                                                                                                 \
+      "Request Unit used by tiflash compute for each resource group",                                                               \
+      Counter,                                                                                                                      \
+      F(type_mpp, {"type", "mpp"}),                                                                                                 \
+      F(type_cop, {"type", "cop"}),                                                                                                 \
+      F(type_cop_stream, {"type", "cop_stream"}),                                                                                   \
+      F(type_batch, {"type", "batch"}), )                                                                                           \
     M(tiflash_vector_index_memory_usage,                                                                                            \
       "Vector index memory usage",                                                                                                  \
       Gauge,                                                                                                                        \
@@ -884,7 +875,24 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_read_thread_internal_us,                                                                                              \
       "Durations of read thread internal components",                                                                               \
       Histogram,                                                                                                                    \
-      F(type_block_queue_pop_latency, {{"type", "block_queue_pop_latency"}}, ExpBuckets{1, 2, 20}))
+      F(type_block_queue_pop_latency, {{"type", "block_queue_pop_latency"}}, ExpBuckets{1, 2, 20}),                                 \
+      F(type_schedule_one_round, {{"type", "schedule_one_round"}}, ExpBuckets{1, 2, 20}))                                           \
+    M(tiflash_storage_pack_compression_algorithm_count,                                                                             \
+      "The count of the compression algorithm used by each data part",                                                              \
+      Counter,                                                                                                                      \
+      F(type_constant, {"type", "constant"}),                                                                                       \
+      F(type_constant_delta, {"type", "constant_delta"}),                                                                           \
+      F(type_runlength, {"type", "runlength"}),                                                                                     \
+      F(type_for, {"type", "for"}),                                                                                                 \
+      F(type_delta_for, {"type", "delta_for"}),                                                                                     \
+      F(type_lz4, {"type", "lz4"}))                                                                                                 \
+    M(tiflash_storage_pack_compression_bytes,                                                                                       \
+      "The uncompression/compression bytes of lz4 and lightweight",                                                                 \
+      Counter,                                                                                                                      \
+      F(type_lz4_compressed_bytes, {"type", "lz4_compressed_bytes"}),                                                               \
+      F(type_lz4_uncompressed_bytes, {"type", "lz4_uncompressed_bytes"}),                                                           \
+      F(type_lightweight_compressed_bytes, {"type", "lightweight_compressed_bytes"}),                                               \
+      F(type_lightweight_uncompressed_bytes, {"type", "lightweight_uncompressed_bytes"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

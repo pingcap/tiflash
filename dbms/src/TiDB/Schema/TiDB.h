@@ -127,9 +127,6 @@ struct ColumnInfo
     std::vector<std::pair<std::string, Int16>> elems;
     SchemaState state = StateNone;
 
-    // TODO(vector-index): This index will be moved to the table level later
-    VectorIndexDefinitionPtr vector_index = nullptr;
-
 #ifdef M
 #error "Please undefine macro M first."
 #endif

@@ -186,7 +186,6 @@ void StorageDeltaMerge::updateTableColumnInfo()
             if (itr != columns.end())
             {
                 col_def.default_value = itr->defaultValueToField();
-                col_def.vector_index = itr->vector_index;
             }
 
             if (col_def.id != TiDBPkColumnID && col_def.id != VersionColumnID && col_def.id != DelMarkColumnID
@@ -328,7 +327,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
                 table_column_defines.begin(),
                 table_column_defines.end(),
                 [](const ColumnDefine & col, FmtBuffer & fb) {
-                    fb.fmtAppend("{} {} {}", col.name, col.type->getFamilyName(), col.vector_index);
+                    fb.fmtAppend("{} {}", col.name, col.type->getFamilyName());
                 },
                 ", ");
             return fmt_buf.toString();

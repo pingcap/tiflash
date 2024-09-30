@@ -117,31 +117,25 @@ enum class IndexType
     HNSW = 5,
 };
 
+inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
+{
+    switch (index_type)
+    {
+    case IndexType::HNSW:
+        return tipb::VectorIndexKind::HNSW;
+    default:
+        throw Exception(
+            DB::ErrorCodes::LOGICAL_ERROR,
+            "Invalid index type for vector index {}",
+            magic_enum::enum_name(index_type));
+    }
+}
+
 VectorIndexDefinitionPtr parseVectorIndexFromJSON(IndexType index_type, const Poco::JSON::Object::Ptr & json)
 {
     assert(json); // not nullptr
 
-    tipb::VectorIndexKind kind = tipb::VectorIndexKind::INVALID_INDEX_KIND;
-    if (unlikely(json->has("kind")))
-    {
-        // TODO(vector-index): remove this deadcode
-        auto kind_field = json->getValue<String>("kind");
-        RUNTIME_CHECK_MSG(
-            tipb::VectorIndexKind_Parse(kind_field, &kind),
-            "invalid kind of vector index, {}",
-            kind_field);
-        RUNTIME_CHECK(kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
-    }
-    else
-    {
-        RUNTIME_CHECK_MSG(
-            index_type == IndexType::HNSW,
-            "Invalid index_type for vector index, {}({})",
-            magic_enum::enum_name(index_type),
-            fmt::underlying(index_type));
-        kind = tipb::VectorIndexKind::HNSW;
-    }
-
+    auto kind = toVectorIndexKind(index_type);
     auto dimension = json->getValue<UInt64>("dimension");
     RUNTIME_CHECK(dimension > 0 && dimension <= TiDB::MAX_VECTOR_DIMENSION, dimension); // Just a protection
 
@@ -480,11 +474,6 @@ try
     }
     json->set("state", static_cast<Int32>(state));
 
-    if (vector_index)
-    {
-        json->set("vector_index", vectorIndexToJSON(vector_index));
-    }
-
 #ifndef NDEBUG
     // Check stringify in Debug mode
     std::stringstream str;
@@ -536,12 +525,6 @@ try
             collate = type_json->get("Collate");
     }
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
-
-    // TODO(vector-index): remove this deadcode
-    if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
-    {
-        vector_index = parseVectorIndexFromJSON(IndexType::HNSW, vector_index_json);
-    }
 }
 catch (const Poco::Exception & e)
 {
