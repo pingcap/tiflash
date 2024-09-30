@@ -39,6 +39,9 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpass-failed"
 
+#if !defined(__APPLE__)
+#include <type_traits>
+#endif
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
