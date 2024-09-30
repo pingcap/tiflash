@@ -41,7 +41,7 @@ public:
 private:
     Block header;
     ExpressionActionsPtr expression;
-    size_t filter_column_position;
+    size_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
     IColumn::Filter * filter = nullptr;
