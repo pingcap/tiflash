@@ -26,40 +26,6 @@ extern const char force_not_support_vector_index[];
 namespace DB::DM
 {
 
-struct ComplexIndexID
-{
-    IndexID index_id;
-    ColumnID column_id;
-};
-
-bool operator==(const ComplexIndexID & lhs, const ComplexIndexID & rhs)
-{
-    return lhs.index_id == rhs.index_id && lhs.column_id == rhs.column_id;
-}
-
-struct ComplexIndexIDHasher
-{
-    std::size_t operator()(const ComplexIndexID & id) const
-    {
-        using boost::hash_combine;
-        using boost::hash_value;
-
-        std::size_t seed = 0;
-        if (id.index_id > EmptyIndexID)
-        {
-            hash_combine(seed, hash_value(0x01));
-            hash_combine(seed, hash_value(id.index_id));
-        }
-        else
-        {
-            hash_combine(seed, hash_value(0x02));
-            hash_combine(seed, hash_value(id.column_id));
-        }
-        return seed;
-    }
-};
-
-
 bool isVectorIndexSupported(const LoggerPtr & logger)
 {
     // Vector Index requires a specific storage format to work.
@@ -141,23 +107,21 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     }
 
     // Keep a map of "indexes in existing_indexes" -> "offset in new_index_infos"
-    std::unordered_map<ComplexIndexID, size_t, ComplexIndexIDHasher> original_local_index_id_map;
+    std::unordered_map<IndexID, size_t> original_local_index_id_map;
     if (existing_indexes)
     {
         // Create a copy of existing indexes
         for (size_t offset = 0; offset < existing_indexes->size(); ++offset)
         {
             const auto & index = (*existing_indexes)[offset];
-            original_local_index_id_map.emplace(
-                ComplexIndexID{.index_id = index.index_id, .column_id = index.column_id},
-                offset);
+            original_local_index_id_map.emplace(index.index_id, offset);
             new_index_infos->emplace_back(index);
         }
     }
 
-    std::unordered_set<ComplexIndexID, ComplexIndexIDHasher> index_ids_in_new_table;
-    std::vector<ComplexIndexID> newly_added;
-    std::vector<ComplexIndexID> newly_dropped;
+    std::unordered_set<IndexID> index_ids_in_new_table;
+    std::vector<IndexID> newly_added;
+    std::vector<IndexID> newly_dropped;
 
     for (const auto & idx : new_table_info.index_infos)
     {
@@ -168,9 +132,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
         if (column_id <= EmptyColumnID)
             continue;
 
-        const ComplexIndexID cindex_id{.index_id = idx.id, .column_id = column_id};
-        auto iter = original_local_index_id_map.find(cindex_id);
-        if (iter == original_local_index_id_map.end())
+        if (!original_local_index_id_map.contains(idx.id))
         {
             if (idx.state == TiDB::StatePublic || idx.state == TiDB::StateWriteReorganization)
             {
@@ -181,15 +143,15 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
                     .column_id = column_id,
                     .index_definition = idx.vector_index,
                 });
-                newly_added.emplace_back(cindex_id);
-                index_ids_in_new_table.emplace(cindex_id);
+                newly_added.emplace_back(idx.id);
+                index_ids_in_new_table.emplace(idx.id);
             }
             // else the index is not public or write reorg, consider this index as not exist
         }
         else
         {
             if (idx.state != TiDB::StateDeleteReorganization)
-                index_ids_in_new_table.emplace(cindex_id);
+                index_ids_in_new_table.emplace(idx.id);
             // else exist in both `existing_indexes` and `new_table_info`, but enter "delete reorg". We consider this
             // index as not exist in the `new_table_info` and drop it later
         }
@@ -219,12 +181,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
             buf.joinStr(
                 original_local_index_id_map.begin(),
                 original_local_index_id_map.end(),
-                [](const auto & id, FmtBuffer & fb) {
-                    if (id.first.index_id != EmptyIndexID)
-                        fb.fmtAppend("index_id={}", id.first.index_id);
-                    else
-                        fb.fmtAppend("index_on_column_id={}", id.first.column_id);
-                },
+                [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id.first); },
                 ",");
             buf.append("]");
             return buf.toString();
@@ -241,34 +198,19 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
         buf.joinStr(
             original_local_index_id_map.begin(),
             original_local_index_id_map.end(),
-            [](const auto & id, FmtBuffer & fb) {
-                if (id.first.index_id != EmptyIndexID)
-                    fb.fmtAppend("index_id={}", id.first.index_id);
-                else
-                    fb.fmtAppend("index_on_column_id={}", id.first.column_id);
-            },
+            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id.first); },
             ",");
         buf.append("] added=[");
         buf.joinStr(
             newly_added.begin(),
             newly_added.end(),
-            [](const ComplexIndexID & id, FmtBuffer & fb) {
-                if (id.index_id != EmptyIndexID)
-                    fb.fmtAppend("index_id={}", id.index_id);
-                else
-                    fb.fmtAppend("index_on_column_id={}", id.column_id);
-            },
+            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
             ",");
         buf.append("] dropped=[");
         buf.joinStr(
             newly_dropped.begin(),
             newly_dropped.end(),
-            [](const ComplexIndexID & id, FmtBuffer & fb) {
-                if (id.index_id != EmptyIndexID)
-                    fb.fmtAppend("index_id={}", id.index_id);
-                else
-                    fb.fmtAppend("index_on_column_id={}", id.column_id);
-            },
+            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
             ",");
         buf.append("]");
         return buf.toString();
@@ -277,11 +219,11 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
 
     // only return the newly dropped index with index_id > EmptyIndexID
     std::vector<IndexID> dropped_indexes;
-    for (const auto & i : newly_dropped)
+    for (const auto & idx_id : newly_dropped)
     {
-        if (i.index_id <= EmptyIndexID)
+        if (idx_id <= EmptyIndexID)
             continue;
-        dropped_indexes.emplace_back(i.index_id);
+        dropped_indexes.emplace_back(idx_id);
     }
     return LocalIndexInfosChangeset{
         .new_local_index_infos = new_index_infos,
