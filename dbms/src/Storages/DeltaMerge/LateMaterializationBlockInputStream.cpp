@@ -95,14 +95,7 @@ Block LateMaterializationBlockInputStream::readImpl()
                 {
                     col.column = col.column->filter(col_filter, passed_count);
                 }
-<<<<<<< HEAD
-                for (auto & col : filter_column_block)
-                {
-                    col.column = col.column->filter(col_filter, passed_count);
-                }
-=======
                 filterFilterColumnBlock(header, filter_column_block, col_filter, passed_count, filter_column_name);
->>>>>>> 69dd6134e1 (storage: fix block rows not match when filter column is the first non-empty column in the block (#9483))
             }
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
