@@ -22,7 +22,7 @@
 #define SIMSIMD_NATIVE_BF16 0
 
 // Force enable all target features.
-#if defined (__APPLE__)
+#if defined(__APPLE__)
 #define SIMSIMD_TARGET_NEON 0
 #define SIMSIMD_TARGET_SVE 0
 #else
