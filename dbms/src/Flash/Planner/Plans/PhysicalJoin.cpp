@@ -167,15 +167,24 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
+<<<<<<< HEAD
     String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, scan_hash_map_after_probe = {}", execId(), needScanHashMapAfterProbe(join_ptr->getKind()));
     join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(),
                         probe_pipeline.streams.size());
+=======
+    String join_probe_extra_info = fmt::format(
+        "join probe, join_executor_id = {}, scan_hash_map_after_probe = {}",
+        execId(),
+        needScanHashMapAfterProbe(join_ptr->getKind()));
+    join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(), probe_pipeline.streams.size());
+>>>>>>> 78bd3f04dc (fix tiflash assert failure  (#9456))
     size_t probe_index = 0;
     for (auto & stream : probe_pipeline.streams)
     {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);
         stream->setExtraInfo(join_probe_extra_info);
     }
+    join_ptr->setCancellationHook([&] { return context.isCancelled(); });
 }
 
 void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams)
