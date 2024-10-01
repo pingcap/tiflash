@@ -122,6 +122,7 @@ private:
 
     MPPTaskManager * manager;
     std::atomic<bool> registered{false};
+    std::atomic<bool> is_cancelled{false};
 
     MPPTaskScheduleEntry schedule_entry;
 
