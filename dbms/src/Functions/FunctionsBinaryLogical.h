@@ -23,11 +23,8 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionUnaryArithmetic.h>
 #include <Functions/IFunction.h>
-#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -35,18 +32,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
-
-/** Behaviour in presence of NULLs:
-  *
-  * Functions AND, XOR, NOT use default implementation for NULLs:
-  * - if one of arguments is Nullable, they return Nullable result where NULLs are returned when at least one argument was NULL.
-  *
-  * But function OR is different.
-  * It always return non-Nullable result and NULL are equivalent to 0 (false).
-  * For example, 1 OR NULL returns 1, not NULL.
-  */
-
+extern const int ILLEGAL_COLUMN;
+} // namespace ErrorCodes
 
 struct BinaryAndImpl
 {
@@ -179,7 +166,7 @@ private:
         bool constant_value,
         bool is_constant_null,
         UInt8Container & res,
-        UInt8Container & result_null_map)
+        UInt8Container & result_null_map) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
@@ -190,7 +177,8 @@ private:
         {
             if (is_constant_null)
             {
-                Impl::evaluateOneNullable(constant_value, true, vec[i], res[i], result_null_map[i]);
+                for (size_t i = 0; i < n; i++)
+                    Impl::evaluateOneNullable(constant_value, true, vec[i], res[i], result_null_map[i]);
             }
             else
             {
@@ -226,9 +214,10 @@ private:
                 }
             }
         }
+        return true;
     }
     template <typename T>
-    bool executeConstantVectorNotNull(const IColumn * column, bool constant_value, UInt8Container & res)
+    bool executeConstantVectorNotNull(const IColumn * column, bool constant_value, UInt8Container & res) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
@@ -239,6 +228,7 @@ private:
         {
             Impl::evaluate(vec[i], constant_value, res[i]);
         }
+        return true;
     }
 
     void executeConstantVector(
@@ -246,7 +236,7 @@ private:
         size_t result,
         ColumnPtr & column,
         bool is_constant_null,
-        bool constant_value)
+        bool constant_value) const
     {
         ColumnPtr not_null_column = column;
         ConstNullMapPtr null_map_ptr = nullptr;
@@ -363,8 +353,8 @@ private:
     template <typename LeftType, typename RightType>
     bool executeVectorVectorNotNullRight(
         const ColumnVector<LeftType> * column_a,
-        IColumn * column_b,
-        UInt8Container & res)
+        const IColumn * column_b,
+        UInt8Container & res) const
     {
         auto col = checkAndGetColumn<ColumnVector<RightType>>(column_b);
         if (!col)
@@ -374,16 +364,17 @@ private:
         size_t n = res.size();
         for (size_t i = 0; i < n; ++i)
             Impl::evaluate(data_a[i], data_b[i], res[i]);
+        return true;
     }
 
     template <typename LeftType, typename RightType>
     bool executeVectorVectorNullableRight(
         const ColumnVector<LeftType> * column_a,
         ConstNullMapPtr column_a_null_map,
-        IColumn * column_b,
+        const IColumn * column_b,
         ConstNullMapPtr column_b_null_map,
         UInt8Container & res,
-        UInt8Container & res_null_map_data)
+        UInt8Container & res_null_map_data) const
     {
         auto col = checkAndGetColumn<ColumnVector<RightType>>(column_b);
         if (!col)
@@ -408,16 +399,17 @@ private:
             for (size_t i = 0; i < n; ++i)
                 Impl::evaluateTwoNullable(
                     data_a[i],
-                    column_a_null_map[i],
+                    (*column_a_null_map)[i],
                     data_b[i],
-                    column_b_null_map[i],
+                    (*column_b_null_map)[i],
                     res[i],
                     res_null_map_data[i]);
         }
+        return true;
     }
 
     template <typename T>
-    bool executeVectorVectorNotNullLeft(IColumn * column_a, IColumn * column_b, UInt8Container & res)
+    bool executeVectorVectorNotNullLeft(const IColumn * column_a, const IColumn * column_b, UInt8Container & res) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column_a);
         if (!col)
@@ -433,16 +425,17 @@ private:
             && !executeVectorVectorNotNullRight<T, Float32>(col, column_b, res)
             && !executeVectorVectorNotNullRight<T, Float64>(col, column_b, res))
             throw Exception("Unexpected type of column: " + column_b->getName(), ErrorCodes::ILLEGAL_COLUMN);
+        return true;
     }
 
     template <typename T>
     bool executeVectorVectorNullableLeft(
-        IColumn * column_a,
+        const IColumn * column_a,
         ConstNullMapPtr column_a_null_map,
-        IColumn * column_b,
+        const IColumn * column_b,
         ConstNullMapPtr column_b_null_map,
         UInt8Container & res,
-        UInt8Container & res_null_map_data)
+        UInt8Container & res_null_map_data) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column_a);
         if (!col)
@@ -518,9 +511,10 @@ private:
                 res,
                 res_null_map_data))
             throw Exception("Unexpected type of column: " + column_b->getName(), ErrorCodes::ILLEGAL_COLUMN);
+        return true;
     }
 
-    void executeVectorVector(Block & block, size_t result, ColumnPtr & column_a, ColumnPtr & column_b)
+    void executeVectorVector(Block & block, size_t result, ColumnPtr & column_a, ColumnPtr & column_b) const
     {
         ColumnPtr not_null_column_a = column_a;
         ConstNullMapPtr column_a_null_map_ptr = nullptr;
@@ -668,12 +662,6 @@ public:
         }
         else
         {
-            if (column_b->isColumnNullable())
-            {
-                // If only one input column is nullable, make sure that column_a is nullable
-                column_a = block.getByPosition(arguments[1]).column;
-                column_b = block.getByPosition(arguments[0]).column;
-            }
             // vectorVector
             executeVectorVector(block, result, column_a, column_b);
         }
