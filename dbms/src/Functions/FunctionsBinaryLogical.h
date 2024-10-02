@@ -460,10 +460,105 @@ public:
         }
     }
 
-    template <typename T>
-    bool executeVectorVectorNullableLeft()
+    template <typename LeftType, typename RightType>
+    bool executeVectorVectorNotNullRight(
+        const ColumnVector<LeftType> * column_a,
+        IColumn * column_b,
+        UInt8Container & res)
+    {
+        auto col = checkAndGetColumn<ColumnVector<RightType>>(column_b);
+        if (!col)
+            return false;
+        auto & data_a = column_a->getData();
+        auto & data_b = col->getData();
+        size_t n = res.size();
+        for (size_t i = 0; i < n; ++i)
+            Impl::evaluate(data_a[i], data_b[i], res[i]);
+    }
 
-    void executeVectorVector(Block & block, size_t result, ColumnPtr & column_a, ColumnPtr & column_b) 
+    template <typename LeftType, typename RightType>
+    bool executeVectorVectorNullableRight(
+        const ColumnVector<LeftType> * column_a,
+        ConstNullMapPtr column_a_null_map,
+        IColumn * column_b,
+        ConstNullMapPtr column_b_null_map,
+        UInt8Container & res,
+        UInt8Container & res_null_map_data)
+    {
+        auto col = checkAndGetColumn<ColumnVector<RightType>>(column_b);
+        if (!col)
+            return false;
+        auto & data_a = column_a->getData();
+        auto & data_b = col->getData();
+        size_t n = res.size();
+        if (column_a_null_map == nullptr)
+        {
+            for (size_t i = 0; i < n; ++i)
+                Impl::evaluateNullable(data_a[i], false, data_b[i], column_b_null_map[i], res[i], res_null_map_data[i]);
+        }
+        else if (column_b_null_map == nullptr)
+        {
+            for (size_t i = 0; i < n; ++i)
+                Impl::evaluateNullable(data_a[i], column_a_null_map[i], data_b[i], false, res[i], res_null_map_data[i]);
+        }
+        else
+        {
+            for (size_t i = 0; i < n; ++i)
+                Impl::evaluateNullable(
+                    data_a[i],
+                    column_a_null_map[i],
+                    data_b[i],
+                    column_b_null_map[i],
+                    res[i],
+                    res_null_map_data[i]);
+        }
+    }
+
+    template <typename T>
+    bool executeVectorVectorNotNullLeft(IColumn * column_a, IColumn * column_b, UInt8Container & res)
+    {
+        auto col = checkAndGetColumn<ColumnVector<T>>(column_a);
+        if (!col)
+            return false;
+        if (!executeVectorVectorNotNullRight<T, Int8>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Int16>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Int32>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Int64>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt8>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt16>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt32>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt64>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Float32>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Float64>(col, column_b, res))
+            throw Exception("Unexpected type of column: " + column_b->getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    template <typename T>
+    bool executeVectorVectorNullableLeft(
+        IColumn * column_a,
+        ConstNullMapPtr column_a_null_map,
+        IColumn * column_b,
+        ConstNullMapPtr column_b_null_map,
+        UInt8Container & res,
+        UInt8Container & res_null_map_data)
+    {
+        auto col = checkAndGetColumn<ColumnVector<T>>(column_a);
+        if (!col)
+            return false;
+        if (!executeVectorVectorNotNullRight<T, Int8>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Int16>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Int32>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Int64>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt8>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt16>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt32>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, UInt64>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Float32>(col, column_b, res)
+            && !executeVectorVectorNotNullRight<T, Float64>(col, column_b, res))
+            throw Exception("Unexpected type of column: " + column_b->getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    void executeVectorVector(Block & block, size_t result, ColumnPtr & column_a, ColumnPtr & column_b)
     {
         ColumnPtr not_null_column_a = column_a;
         ConstNullMapPtr column_a_null_map_ptr = nullptr;
@@ -485,17 +580,27 @@ public:
                 column_b_null_map_ptr = &col_nullable->getNullMapData();
             }
         }
-        auto result_is_nullable = !defaultImplForNull && (column_a_null_map_ptr != nullptr || column_b_null_map_ptr != nullptr);
+        auto result_is_nullable
+            = !defaultImplForNull && (column_a_null_map_ptr != nullptr || column_b_null_map_ptr != nullptr);
 
         size_t rows = block.rows();
         auto result_vec = ColumnUInt8::create(rows);
         auto & result_vec_data = result_vec->getData();
         if (!result_is_nullable)
         {
-
+            if (!executeVectorVectorNotNullLeft<Int8>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<Int16>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<Int32>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<Int64>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt8>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt16>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt32>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt64>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<Float32>(column_a.get(), column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<Float64>(column_a.get(), column_b.get(), result_vec_data))
+                throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
         }
-        else
-        {}
+        else {}
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
