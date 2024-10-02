@@ -16,21 +16,18 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
+#include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionUnaryArithmetic.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
-
-#include <type_traits>
-
-#include "Columns/ColumnVector.h"
-#include "Columns/IColumn.h"
-#include "Common/FieldVisitors.h"
-#include "Functions/FunctionBinaryArithmetic.h"
 
 
 namespace DB
@@ -53,29 +50,74 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 
 struct BinaryAndImpl
 {
-    static inline void evaluate(bool a, bool b, UInt8 & res) { res=  a && b; }
-    static inline void evaluateNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null) 
-    { 
-        res =  a && b; 
+    static inline void evaluate(bool a, bool b, UInt8 & res) { res = a && b; }
+    static inline void evaluateOneNullable(bool a, bool a_is_null, bool b, UInt8 & res, UInt8 & res_is_null)
+    {
+        // result is null if a is null and b is true
+        res_is_null = a_is_null && b;
+        res = a && b;
+    }
+    static inline void evaluateTwoNullable(
+        bool a,
+        bool a_is_null,
+        bool b,
+        bool b_is_null,
+        UInt8 & res,
+        UInt8 & res_is_null)
+    {
+        // result is null if
+        // 1. both a and b is null
+        // 2. a is null and b is true
+        // 3. b is null and a is true
+        res_is_null = (a_is_null && b_is_null) || (a_is_null && b) || (b_is_null && a);
+        res = a && b;
     }
 };
 
 struct BinaryOrImpl
 {
     static inline void evaluate(bool a, bool b, UInt8 & res) { res = a || b; }
-    static inline void evaluateNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null) 
-    { 
-        res = a || b; 
+    static inline void evaluateOneNullable(bool a, bool a_is_null, bool b, UInt8 & res, UInt8 & res_is_null)
+    {
+        // result is null if a is null and b is false
+        res_is_null = a_is_null && !b;
+        res = a || b;
+    }
+    static inline void evaluateTwoNullable(
+        bool a,
+        bool a_is_null,
+        bool b,
+        bool b_is_null,
+        UInt8 & res,
+        UInt8 & res_is_null)
+    {
+        // result is null if
+        // 1. both a and b is null
+        // 2. a is null and b is false
+        // 3. b is null and a is false
+        res_is_null = (a_is_null && b_is_null) || (a_is_null && !b) || (b_is_null && !a);
+        res = a || b;
     }
 };
 
 struct BinaryXorImpl
 {
     static inline void evaluate(bool a, bool b, UInt8 & res) { res = a != b; }
-    static inline void evaluateNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null) 
-    { 
+    static inline void evaluateOneNullable(bool a, bool a_is_null, bool b, UInt8 & res, UInt8 & res_is_null)
+    {
+        res_is_null = a_is_null;
+        res = a != b;
+    }
+    static inline void evaluateTwoNullable(
+        bool a,
+        bool a_is_null,
+        bool b,
+        bool b_is_null,
+        UInt8 & res,
+        UInt8 & res_is_null)
+    {
         res_is_null = a_is_null || b_is_null;
-        res = a != b; 
+        res = a != b;
     }
 };
 
@@ -146,22 +188,42 @@ private:
         size_t n = res.size();
         if (column_null_map == nullptr)
         {
-            for (size_t i = 0; i < n; ++i)
+            if (is_constant_null)
             {
-                Impl::evaluateNullable(vec[i], false, constant_value, is_constant_null, res[i], result_null_map[i]);
+                Impl::evaluateOneNullable(constant_value, true, vec[i], res[i], result_null_map[i]);
+            }
+            else
+            {
+                for (size_t i = 0; i < n; ++i)
+                {
+                    result_null_map[i] = 0;
+                    Impl::evaluate(vec[i], constant_value, res[i]);
+                }
             }
         }
         else
         {
             for (size_t i = 0; i < n; ++i)
             {
-                Impl::evaluateNullable(
-                    vec[i],
-                    (*column_null_map)[i],
-                    constant_value,
-                    is_constant_null,
-                    res[i],
-                    result_null_map[i]);
+                if (is_constant_null)
+                {
+                    Impl::evaluateTwoNullable(
+                        vec[i],
+                        (*column_null_map)[i],
+                        constant_value,
+                        is_constant_null,
+                        res[i],
+                        result_null_map[i]);
+                }
+                else
+                {
+                    Impl::evaluateOneNullable(
+                        vec[i],
+                        (*column_null_map)[i],
+                        constant_value,
+                        res[i],
+                        result_null_map[i]);
+                }
             }
         }
     }
@@ -331,18 +393,20 @@ private:
         size_t n = res.size();
         if (column_a_null_map == nullptr)
         {
+            // column_b_null_map must be not null
             for (size_t i = 0; i < n; ++i)
-                Impl::evaluateNullable(data_a[i], false, data_b[i], column_b_null_map[i], res[i], res_null_map_data[i]);
+                Impl::evaluateOneNullable(data_b[i], (*column_b_null_map)[i], data_a[i], res[i], res_null_map_data[i]);
         }
         else if (column_b_null_map == nullptr)
         {
+            // column_a_null_map must be not null
             for (size_t i = 0; i < n; ++i)
-                Impl::evaluateNullable(data_a[i], column_a_null_map[i], data_b[i], false, res[i], res_null_map_data[i]);
+                Impl::evaluateOneNullable(data_a[i], (*column_a_null_map)[i], data_b[i], res[i], res_null_map_data[i]);
         }
         else
         {
             for (size_t i = 0; i < n; ++i)
-                Impl::evaluateNullable(
+                Impl::evaluateTwoNullable(
                     data_a[i],
                     column_a_null_map[i],
                     data_b[i],
@@ -383,16 +447,76 @@ private:
         auto col = checkAndGetColumn<ColumnVector<T>>(column_a);
         if (!col)
             return false;
-        if (!executeVectorVectorNullableRight<T, Int8>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Int16>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Int32>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Int64>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt8>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt16>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt32>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt64>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Float32>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Float64>(col, column_a_null_map, column_b, column_b_null_map, res, res_null_map_data))
+        if (!executeVectorVectorNullableRight<T, Int8>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, Int16>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, Int32>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, Int64>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, UInt8>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, UInt16>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, UInt32>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, UInt64>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, Float32>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data)
+            && !executeVectorVectorNullableRight<T, Float64>(
+                col,
+                column_a_null_map,
+                column_b,
+                column_b_null_map,
+                res,
+                res_null_map_data))
             throw Exception("Unexpected type of column: " + column_b->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -439,20 +563,80 @@ private:
                 throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
             block.getByPosition(result).column = std::move(result_vec);
         }
-        else 
+        else
         {
             auto result_null_map_vec = ColumnUInt8::create(rows);
             auto & result_null_map_vec_data = result_null_map_vec->getData();
-            if (!executeVectorVectorNullableLeft<Int8>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Int16>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Int32>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Int64>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt8>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt16>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt32>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt64>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Float32>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Float64>(column_a.get(), column_a_null_map_ptr, column_b.get(), column_b_null_map_ptr, result_vec_data, result_null_map_vec_data))
+            if (!executeVectorVectorNullableLeft<Int8>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<Int16>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<Int32>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<Int64>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<UInt8>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<UInt16>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<UInt32>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<UInt64>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<Float32>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data)
+                && !executeVectorVectorNullableLeft<Float64>(
+                    column_a.get(),
+                    column_a_null_map_ptr,
+                    column_b.get(),
+                    column_b_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data))
                 throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
             block.getByPosition(result).column
                 = ColumnNullable::create(std::move(result_vec), std::move(result_null_map_vec));
