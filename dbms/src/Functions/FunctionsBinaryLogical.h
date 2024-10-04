@@ -14,13 +14,10 @@
 
 #pragma once
 
-#include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 #include <Common/FieldVisitors.h>
-#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -42,6 +39,9 @@ struct BinaryAndImpl
     {
         // result is null if a is null and b is true
         res_is_null = a_is_null && b;
+        // when a_is_null == true, a could be either true or false, but we don't need to consider this because
+        // if result_is_null = true, res is meaningless
+        // if result_is_null = false, then b must be false, then a && b is always false
         res = a && b;
     }
     static inline void evaluateTwoNullable(
@@ -57,6 +57,9 @@ struct BinaryAndImpl
         // 2. a is null and b is true
         // 3. b is null and a is true
         res_is_null = (a_is_null && b_is_null) || (a_is_null && b) || (b_is_null && a);
+        // when a_is_null/b_is_null == true, a/b could be either true or false, but we don't need to consider this because
+        // if result_is_null = true, res is meaningless
+        // if result_is_null = false, then b/a must be false, then a && b is always false
         res = a && b;
     }
 };
@@ -68,6 +71,9 @@ struct BinaryOrImpl
     {
         // result is null if a is null and b is false
         res_is_null = a_is_null && !b;
+        // when a_is_null == true, a could be either true or false, but we don't need to consider this because
+        // if result_is_null = true, res is meaningless
+        // if result_is_null = false, then b must be true, then a && b is always true
         res = a || b;
     }
     static inline void evaluateTwoNullable(
@@ -83,6 +89,9 @@ struct BinaryOrImpl
         // 2. a is null and b is false
         // 3. b is null and a is false
         res_is_null = (a_is_null && b_is_null) || (a_is_null && !b) || (b_is_null && !a);
+        // when a_is_null/b_is_null == true, a/b could be either true or false, but we don't need to consider this because
+        // if result_is_null = true, res is meaningless
+        // if result_is_null = false, then b/a must be true, then a && b is always true
         res = a || b;
     }
 };
@@ -109,7 +118,6 @@ struct BinaryXorImpl
 };
 
 using UInt8Container = ColumnUInt8::Container;
-using UInt8ColumnPtrs = std::vector<const ColumnUInt8 *>;
 
 
 /**
