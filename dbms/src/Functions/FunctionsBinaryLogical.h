@@ -544,16 +544,43 @@ private:
         auto & result_vec_data = result_vec->getData();
         if (!result_is_nullable)
         {
-            if (!executeVectorVectorNotNullLeft<Int8>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<Int16>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<Int32>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<Int64>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt8>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt16>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt32>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt64>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<Float32>(column_a.get(), column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<Float64>(column_a.get(), column_b.get(), result_vec_data))
+            if (!executeVectorVectorNotNullLeft<Int8>(not_null_column_a.get(), not_null_column_b.get(), result_vec_data)
+                && !executeVectorVectorNotNullLeft<Int16>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<Int32>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<Int64>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt8>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt16>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt32>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<UInt64>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<Float32>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data)
+                && !executeVectorVectorNotNullLeft<Float64>(
+                    not_null_column_a.get(),
+                    not_null_column_b.get(),
+                    result_vec_data))
                 throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
             block.getByPosition(result).column = std::move(result_vec);
         }
@@ -562,72 +589,72 @@ private:
             auto result_null_map_vec = ColumnUInt8::create(rows);
             auto & result_null_map_vec_data = result_null_map_vec->getData();
             if (!executeVectorVectorNullableLeft<Int8>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<Int16>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<Int32>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<Int64>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<UInt8>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<UInt16>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<UInt32>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<UInt64>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<Float32>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data)
                 && !executeVectorVectorNullableLeft<Float64>(
-                    column_a.get(),
+                    not_null_column_a.get(),
                     column_a_null_map_ptr,
-                    column_b.get(),
+                    not_null_column_b.get(),
                     column_b_null_map_ptr,
                     result_vec_data,
                     result_null_map_vec_data))
@@ -675,8 +702,8 @@ struct NameBinaryOr { static constexpr auto name = "binary_or"; };
 struct NameBinaryXor { static constexpr auto name = "binary_xor"; };
 // clang-format on
 
-using FunctionBinaryAnd = FunctionBinaryLogical<BinaryAndImpl, NameBinaryAnd, true>;
-using FunctionBinaryOr = FunctionBinaryLogical<BinaryOrImpl, NameBinaryOr, true>;
-using FunctionBinaryXor = FunctionBinaryLogical<BinaryXorImpl, NameBinaryXor, false>;
+using FunctionBinaryAnd = FunctionBinaryLogical<BinaryAndImpl, NameBinaryAnd, false>;
+using FunctionBinaryOr = FunctionBinaryLogical<BinaryOrImpl, NameBinaryOr, false>;
+using FunctionBinaryXor = FunctionBinaryLogical<BinaryXorImpl, NameBinaryXor, true>;
 
 } // namespace DB
