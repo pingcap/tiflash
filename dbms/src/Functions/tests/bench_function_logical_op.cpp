@@ -16,6 +16,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/IDataType.h>
 #include <Functions/FunctionsBinaryLogical.h>
 #include <Functions/FunctionsLogical.h>
 #include <TestUtils/ColumnGenerator.h>
@@ -23,8 +24,6 @@
 #include <benchmark/benchmark.h>
 
 #include <memory>
-
-#include "DataTypes/IDataType.h"
 
 namespace DB
 {
@@ -139,6 +138,18 @@ LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, And);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, And);
 LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, And);
 LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, And);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_true, And);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_false, And);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_null, And);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_true, And);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_false, And);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_null, And);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_true, And);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_false, And);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_null, And);
+LOGICAL_BENCH(_nullable_uint64_1, _constant_true, And);
+LOGICAL_BENCH(_nullable_uint64_1, _constant_false, And);
+LOGICAL_BENCH(_nullable_uint64_1, _constant_null, And);
 
 // or
 LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Or);
@@ -147,10 +158,26 @@ LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, Or);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Or);
 LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, Or);
 LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_null, Or);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Or);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Or);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_null, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_true, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_false, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_null, Or);
+LOGICAL_BENCH(_nullable_uint64_1, _constant_true, Or);
+LOGICAL_BENCH(_nullable_uint64_1, _constant_false, Or);
+LOGICAL_BENCH(_nullable_uint64_1, _constant_null, Or);
 
 // xor
 LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Xor);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Xor);
+LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Xor);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
 
 } // namespace tests
 } // namespace DB
