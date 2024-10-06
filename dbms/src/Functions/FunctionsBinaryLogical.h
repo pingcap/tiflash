@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+
+#include "Functions/FunctionBinaryArithmetic.h"
 
 
 namespace DB
@@ -693,6 +695,49 @@ public:
             bool constant_value = false;
             if (!is_constant_null)
                 constant_value = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
+            // check if result is constant
+            bool is_result_null_1, result_1;
+            bool is_result_null_2, result_2;
+            Impl::evaluateOneNullable(is_constant_null, constant_value, 1, result_1, is_result_null_1);
+            Impl::evaluateOneNullable(is_constant_null, constant_value, 0, result_2, is_result_null_2);
+            bool result_is_constant = false;
+            if (is_result_null_1 == is_result_null_2 && result_1 == result_2)
+            {
+                if (column_b->isColumnNullable())
+                {
+                    // if column_b is nullable, need to check null
+                    Impl::evaluateTwoNullable(is_constant_null, constant_value, 0, true, result_1, is_result_null_1);
+                    if (is_result_null_1 == is_result_null_2 && result_1 == result_2)
+                        result_is_constant = true;
+                }
+                else
+                {
+                    result_is_constant = true;
+                }
+            }
+            if (result_is_constant)
+            {
+                auto rows = block.rows();
+                // construct constant result
+                if (column_a->isColumnNullable() || column_b->isColumnNullable())
+                {
+                    if (is_result_null_1)
+                    {
+                        block.getByPosition(result).column
+                            = block.getByPosition(result).type->createColumnConst(rows, Null());
+                    }
+                    else
+                    {
+                        block.getByPosition(result).column
+                            = makeNullable(DataTypeUInt8().createColumnConst(rows, toField(result_1)));
+                    }
+                }
+                else
+                {
+                    assert(is_result_null_1 == false);
+                    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, toField(result_1));
+                }
+            }
             executeConstantVector(block, result, column_b, is_constant_null, constant_value);
         }
         else
