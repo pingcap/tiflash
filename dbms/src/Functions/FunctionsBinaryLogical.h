@@ -696,8 +696,8 @@ public:
             if (!is_constant_null)
                 constant_value = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
             // check if result is constant
-            bool is_result_null_1, result_1;
-            bool is_result_null_2, result_2;
+            UInt8 is_result_null_1, result_1;
+            UInt8 is_result_null_2, result_2;
             Impl::evaluateOneNullable(is_constant_null, constant_value, 1, result_1, is_result_null_1);
             Impl::evaluateOneNullable(is_constant_null, constant_value, 0, result_2, is_result_null_2);
             bool result_is_constant = false;

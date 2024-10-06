@@ -78,58 +78,79 @@ public:
     }
 };
 
-#define BINARY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                 \
-    BENCHMARK_DEFINE_F(LogicalOpBench, binaryLogical##COL1_NAME##COL2_NAME) \
-    (benchmark::State & state)                                              \
-    try                                                                     \
-    {                                                                       \
-        FunctionBinary##OP_NAME function_binary;                            \
-        ColumnsWithTypeAndName columns;                                     \
-        auto col_1 = col_##COL1_NAME;                                       \
-        auto col_2 = col_##COL2_NAME;                                       \
-        columns.push_back(col_1);                                           \
-        columns.push_back(col_2);                                           \
-        Block input(columns);                                               \
-        if (col_1.type->isNullable() || col_2.type->isNullable())           \
-            input.insert({nullptr, nullable_result_type, "res"});           \
-        else                                                                \
-            input.insert({nullptr, not_null_result_type, "res"});           \
-        ColumnNumbers arguments{0, 1};                                      \
-        for (auto _ : state)                                                \
-        {                                                                   \
-            function_binary.executeImpl(input, arguments, 2);               \
-        }                                                                   \
-    }                                                                       \
-    CATCH                                                                   \
-    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogical##COL1_NAME##COL2_NAME)->Iterations(1000);
+#define BINARY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                           \
+    BENCHMARK_DEFINE_F(LogicalOpBench, binaryLogical_##OP_NAME##COL1_NAME##COL2_NAME) \
+    (benchmark::State & state)                                                        \
+    try                                                                               \
+    {                                                                                 \
+        FunctionBinary##OP_NAME function_binary;                                      \
+        ColumnsWithTypeAndName columns;                                               \
+        auto col_1 = col##COL1_NAME;                                                  \
+        auto col_2 = col##COL2_NAME;                                                  \
+        columns.push_back(col_1);                                                     \
+        columns.push_back(col_2);                                                     \
+        Block input(columns);                                                         \
+        if (col_1.type->isNullable() || col_2.type->isNullable())                     \
+            input.insert({nullptr, nullable_result_type, "res"});                     \
+        else                                                                          \
+            input.insert({nullptr, not_null_result_type, "res"});                     \
+        ColumnNumbers arguments{0, 1};                                                \
+        for (auto _ : state)                                                          \
+        {                                                                             \
+            function_binary.executeImpl(input, arguments, 2);                         \
+        }                                                                             \
+    }                                                                                 \
+    CATCH                                                                             \
+    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogical_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
 
-#define ANY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                 \
-    BENCHMARK_DEFINE_F(LogicalOpBench, AnyLogical##COL1_NAME##COL2_NAME) \
-    (benchmark::State & state)                                           \
-    try                                                                  \
-    {                                                                    \
-        Function##OP_NAME function_any;                                  \
-        ColumnsWithTypeAndName columns;                                  \
-        auto col_1 = col_##COL1_NAME;                                    \
-        auto col_2 = col_##COL2_NAME;                                    \
-        columns.push_back(col_1);                                        \
-        columns.push_back(col_2);                                        \
-        Block input(columns);                                            \
-        if (col_1.type->isNullable() || col_2.type->isNullable())        \
-            input.insert({nullptr, nullable_result_type, "res"});        \
-        else                                                             \
-            input.insert({nullptr, not_null_result_type, "res"});        \
-        ColumnNumbers arguments{0, 1};                                   \
-        for (auto _ : state)                                             \
-        {                                                                \
-            function_any.executeImpl(input, arguments, 2);               \
-        }                                                                \
-    }                                                                    \
-    CATCH                                                                \
-    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogical##COL1_NAME##COL2_NAME)->Iterations(1000);
+#define ANY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                           \
+    BENCHMARK_DEFINE_F(LogicalOpBench, AnyLogical_##OP_NAME##COL1_NAME##COL2_NAME) \
+    (benchmark::State & state)                                                     \
+    try                                                                            \
+    {                                                                              \
+        Function##OP_NAME function_any;                                            \
+        ColumnsWithTypeAndName columns;                                            \
+        auto col_1 = col##COL1_NAME;                                               \
+        auto col_2 = col##COL2_NAME;                                               \
+        columns.push_back(col_1);                                                  \
+        columns.push_back(col_2);                                                  \
+        Block input(columns);                                                      \
+        if (col_1.type->isNullable() || col_2.type->isNullable())                  \
+            input.insert({nullptr, nullable_result_type, "res"});                  \
+        else                                                                       \
+            input.insert({nullptr, not_null_result_type, "res"});                  \
+        ColumnNumbers arguments{0, 1};                                             \
+        for (auto _ : state)                                                       \
+        {                                                                          \
+            function_any.executeImpl(input, arguments, 2);                         \
+        }                                                                          \
+    }                                                                              \
+    CATCH                                                                          \
+    BENCHMARK_REGISTER_F(LogicalOpBench, AnyLogical_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
 
-BINARY_LOGICAL_BENCH(not_null_uint64_1, not_null_uint64_2, And);
-ANY_LOGICAL_BENCH(not_null_uint64_1, not_null_uint64_2, And);
+#define LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)    \
+    BINARY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME) \
+    ANY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)
+
+// and
+LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, And);
+LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, And);
+LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, And);
+LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, And);
+LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, And);
+LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, And);
+
+// or
+LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Or);
+LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, Or);
+LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, Or);
+
+// xor
+LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Xor);
+LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
 
 } // namespace tests
 } // namespace DB
