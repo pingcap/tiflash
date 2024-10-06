@@ -140,6 +140,8 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return defaultImplForNull; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     /// Get result types by argument types. If the function does not apply to these arguments, throw an exception.
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
