@@ -14,6 +14,8 @@
 
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionsBinaryLogical.h>
 #include <Functions/FunctionsLogical.h>
 #include <TestUtils/ColumnGenerator.h>
@@ -22,87 +24,112 @@
 
 #include <memory>
 
-#include "DataTypes/DataTypeNullable.h"
-#include "DataTypes/DataTypesNumber.h"
+#include "DataTypes/IDataType.h"
 
 namespace DB
 {
 namespace tests
 {
 
-constexpr size_t data_num = 10000;
+constexpr size_t rows = 10000;
 
 class LogicalOpBench : public benchmark::Fixture
 {
 protected:
-    ColumnWithTypeAndName not_null_uint64_1;
-    ColumnWithTypeAndName not_null_uint64_2;
-    ColumnWithTypeAndName nullable_uint64_1;
-    ColumnWithTypeAndName nullable_uint64_2;
-    ColumnWithTypeAndName not_null_uint8_1;
-    ColumnWithTypeAndName not_null_uint8_2;
-    ColumnWithTypeAndName nullable_uint8_1;
-    ColumnWithTypeAndName nullable_uint8_2;
+    ColumnWithTypeAndName col_not_null_uint64_1;
+    ColumnWithTypeAndName col_not_null_uint64_2;
+    ColumnWithTypeAndName col_nullable_uint64_1;
+    ColumnWithTypeAndName col_nullable_uint64_2;
+    ColumnWithTypeAndName col_not_null_uint8_1;
+    ColumnWithTypeAndName col_not_null_uint8_2;
+    ColumnWithTypeAndName col_nullable_uint8_1;
+    ColumnWithTypeAndName col_nullable_uint8_2;
+    ColumnWithTypeAndName col_constant_null;
+    ColumnWithTypeAndName col_constant_true;
+    ColumnWithTypeAndName col_constant_false;
+    DataTypePtr not_null_result_type;
+    DataTypePtr nullable_result_type;
 
 public:
     void SetUp(const benchmark::State &) override
     {
-        ColumnGeneratorOpts opts{data_num, "UInt64", DataDistribution::RANDOM};
-        not_null_uint64_1 = ColumnGenerator::instance().generate(opts);
-        not_null_uint64_2 = ColumnGenerator::instance().generate(opts);
+        ColumnGeneratorOpts opts{rows, "UInt64", DataDistribution::RANDOM};
+        col_not_null_uint64_1 = ColumnGenerator::instance().generate(opts);
+        col_not_null_uint64_2 = ColumnGenerator::instance().generate(opts);
         opts.type_name = "Nullable(UInt64)";
-        nullable_uint64_1 = ColumnGenerator::instance().generate(opts);
-        nullable_uint64_2 = ColumnGenerator::instance().generate(opts);
+        col_nullable_uint64_1 = ColumnGenerator::instance().generate(opts);
+        col_nullable_uint64_2 = ColumnGenerator::instance().generate(opts);
         opts.type_name = "UInt8";
-        not_null_uint8_1 = ColumnGenerator::instance().generate(opts);
-        not_null_uint8_2 = ColumnGenerator::instance().generate(opts);
+        col_not_null_uint8_1 = ColumnGenerator::instance().generate(opts);
+        col_not_null_uint8_2 = ColumnGenerator::instance().generate(opts);
         opts.type_name = "Nullable(UInt8)";
-        nullable_uint8_1 = ColumnGenerator::instance().generate(opts);
-        nullable_uint8_2 = ColumnGenerator::instance().generate(opts);
+        col_nullable_uint8_1 = ColumnGenerator::instance().generate(opts);
+        col_nullable_uint8_2 = ColumnGenerator::instance().generate(opts);
+        col_constant_null = col_nullable_uint64_1;
+        col_constant_true = col_nullable_uint64_1;
+        col_constant_false = col_nullable_uint64_1;
+        col_constant_null.column = col_constant_null.type->createColumnConst(rows, Null());
+        col_constant_true.column
+            = makeNullable(DataTypeUInt8().createColumnConst(rows, toField(static_cast<UInt64>(10))));
+        col_constant_false.column
+            = makeNullable(DataTypeUInt8().createColumnConst(rows, toField(static_cast<UInt64>(0))));
+        not_null_result_type = std::make_shared<DataTypeNumber<UInt8>>();
+        nullable_result_type = makeNullable(not_null_result_type);
     }
 };
 
-BENCHMARK_DEFINE_F(LogicalOpBench, binaryLogical)
-(benchmark::State & state)
-try
-{
-    FunctionBinaryAnd function_binary_and;
-    ColumnsWithTypeAndName columns;
-    columns.push_back(nullable_uint64_1);
-    columns.push_back(nullable_uint64_2);
-    Block input(columns);
-    auto uint8_type = std::make_shared<DataTypeNumber<UInt8>>();
-    auto nullable_uint8_type = makeNullable(uint8_type);
-    input.insert({nullptr, nullable_uint8_type, "res"});
-    ColumnNumbers arguments{0, 1};
-    for (auto _ : state)
-    {
-        function_binary_and.executeImpl(input, arguments, 2);
-    }
-}
-CATCH
-BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogical)->Iterations(1000);
+#define BINARY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                 \
+    BENCHMARK_DEFINE_F(LogicalOpBench, binaryLogical##COL1_NAME##COL2_NAME) \
+    (benchmark::State & state)                                              \
+    try                                                                     \
+    {                                                                       \
+        FunctionBinary##OP_NAME function_binary;                            \
+        ColumnsWithTypeAndName columns;                                     \
+        auto col_1 = col_##COL1_NAME;                                       \
+        auto col_2 = col_##COL2_NAME;                                       \
+        columns.push_back(col_1);                                           \
+        columns.push_back(col_2);                                           \
+        Block input(columns);                                               \
+        if (col_1.type->isNullable() || col_2.type->isNullable())           \
+            input.insert({nullptr, nullable_result_type, "res"});           \
+        else                                                                \
+            input.insert({nullptr, not_null_result_type, "res"});           \
+        ColumnNumbers arguments{0, 1};                                      \
+        for (auto _ : state)                                                \
+        {                                                                   \
+            function_binary.executeImpl(input, arguments, 2);               \
+        }                                                                   \
+    }                                                                       \
+    CATCH                                                                   \
+    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogical##COL1_NAME##COL2_NAME)->Iterations(1000);
 
-BENCHMARK_DEFINE_F(LogicalOpBench, AnyLogical)
-(benchmark::State & state)
-try
-{
-    FunctionAnd function_and;
-    ColumnsWithTypeAndName columns;
-    columns.push_back(nullable_uint64_1);
-    columns.push_back(nullable_uint64_2);
-    Block input(columns);
-    auto uint8_type = std::make_shared<DataTypeNumber<UInt8>>();
-    auto nullable_uint8_type = makeNullable(uint8_type);
-    input.insert({nullptr, nullable_uint8_type, "res"});
-    ColumnNumbers arguments{0, 1};
-    for (auto _ : state)
-    {
-        function_and.executeImpl(input, arguments, 2);
-    }
-}
-CATCH
-BENCHMARK_REGISTER_F(LogicalOpBench, AnyLogical)->Iterations(1000);
+#define ANY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                 \
+    BENCHMARK_DEFINE_F(LogicalOpBench, AnyLogical##COL1_NAME##COL2_NAME) \
+    (benchmark::State & state)                                           \
+    try                                                                  \
+    {                                                                    \
+        Function##OP_NAME function_any;                                  \
+        ColumnsWithTypeAndName columns;                                  \
+        auto col_1 = col_##COL1_NAME;                                    \
+        auto col_2 = col_##COL2_NAME;                                    \
+        columns.push_back(col_1);                                        \
+        columns.push_back(col_2);                                        \
+        Block input(columns);                                            \
+        if (col_1.type->isNullable() || col_2.type->isNullable())        \
+            input.insert({nullptr, nullable_result_type, "res"});        \
+        else                                                             \
+            input.insert({nullptr, not_null_result_type, "res"});        \
+        ColumnNumbers arguments{0, 1};                                   \
+        for (auto _ : state)                                             \
+        {                                                                \
+            function_any.executeImpl(input, arguments, 2);               \
+        }                                                                \
+    }                                                                    \
+    CATCH                                                                \
+    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogical##COL1_NAME##COL2_NAME)->Iterations(1000);
+
+BINARY_LOGICAL_BENCH(not_null_uint64_1, not_null_uint64_2, And);
+ANY_LOGICAL_BENCH(not_null_uint64_1, not_null_uint64_2, And);
 
 } // namespace tests
 } // namespace DB
