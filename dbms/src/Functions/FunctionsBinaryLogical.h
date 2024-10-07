@@ -20,10 +20,9 @@
 #include <Common/FieldVisitors.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-
-#include "Functions/FunctionBinaryArithmetic.h"
 
 
 namespace DB
@@ -700,15 +699,15 @@ public:
             // check if result is constant
             UInt8 is_result_null_1, result_1;
             UInt8 is_result_null_2, result_2;
-            Impl::evaluateOneNullable(is_constant_null, constant_value, 1, result_1, is_result_null_1);
-            Impl::evaluateOneNullable(is_constant_null, constant_value, 0, result_2, is_result_null_2);
+            Impl::evaluateOneNullable(constant_value, is_constant_null, 1, result_1, is_result_null_1);
+            Impl::evaluateOneNullable(constant_value, is_constant_null, 0, result_2, is_result_null_2);
             bool result_is_constant = false;
             if (is_result_null_1 == is_result_null_2 && result_1 == result_2)
             {
                 if (column_b->isColumnNullable())
                 {
                     // if column_b is nullable, need to check null
-                    Impl::evaluateTwoNullable(is_constant_null, constant_value, 0, true, result_1, is_result_null_1);
+                    Impl::evaluateTwoNullable(constant_value, is_constant_null, 0, true, result_1, is_result_null_1);
                     if (is_result_null_1 == is_result_null_2 && result_1 == result_2)
                         result_is_constant = true;
                 }
@@ -740,7 +739,10 @@ public:
                     block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, toField(result_1));
                 }
             }
-            executeConstantVector(block, result, column_b, is_constant_null, constant_value);
+            else
+            {
+                executeConstantVector(block, result, column_b, is_constant_null, constant_value);
+            }
         }
         else
         {
