@@ -88,8 +88,9 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
         return Field(static_cast<Int64>(0));
     default:
         throw Exception(
-            "Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "Not implemented codec flag: {}",
+            fmt::underlying(col_info.getCodecFlag()));
     }
 }
 } // namespace DB
@@ -440,10 +441,14 @@ try
     name_json->set("L", name);
     json->set("name", name_json);
     json->set("offset", offset);
-    json->set("origin_default", origin_default_value);
-    json->set("default", default_value);
-    json->set("default_bit", default_bit_value);
-    json->set("origin_default_bit", origin_default_bit_value);
+    if (!origin_default_value.isEmpty())
+        json->set("origin_default", origin_default_value);
+    if (!default_value.isEmpty())
+        json->set("default", default_value);
+    if (!default_bit_value.isEmpty())
+        json->set("default_bit", default_bit_value);
+    if (!origin_default_bit_value.isEmpty())
+        json->set("origin_default_bit", origin_default_bit_value);
     {
         // "type" field
         Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
@@ -451,18 +456,16 @@ try
         tp_json->set("Flag", flag);
         tp_json->set("Flen", flen);
         tp_json->set("Decimal", decimal);
-        tp_json->set("Charset", charset);
-        tp_json->set("Collate", collate);
+        if (!charset.isEmpty())
+            tp_json->set("Charset", charset);
+        if (!collate.isEmpty())
+            tp_json->set("Collate", collate);
         if (!elems.empty())
         {
             Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
             for (const auto & elem : elems)
                 elem_arr->add(elem.first);
             tp_json->set("Elems", elem_arr);
-        }
-        else
-        {
-            tp_json->set("Elems", Poco::Dynamic::Var());
         }
         json->set("type", tp_json);
     }
@@ -975,20 +978,13 @@ try
     if (is_partition_table)
     {
         json->set("belonging_table_id", belonging_table_id);
-        if (belonging_table_id != DB::InvalidTableID)
+        if (belonging_table_id == DB::InvalidTableID)
         {
-            json->set("is_partition_sub_table", true);
-            json->set("partition", Poco::Dynamic::Var());
-        }
-        else
-        {
-            // only record partition info in LogicalPartitionTable
+            // We use `belonging_table_id == DB::InvalidTableID` for the
+            // logical partition table.
+            // Only record partition info in LogicalPartitionTable
             json->set("partition", partition.getJSONObject());
         }
-    }
-    else
-    {
-        json->set("partition", Poco::Dynamic::Var());
     }
 
     json->set("schema_version", schema_version);
@@ -1023,9 +1019,8 @@ try
     }
     name = obj->getObject("name")->getValue<String>("L");
 
-    auto cols_arr = obj->getArray("cols");
     columns.clear();
-    if (!cols_arr.isNull())
+    if (auto cols_arr = obj->getArray("cols"); !cols_arr.isNull())
     {
         for (size_t i = 0; i < cols_arr->size(); i++)
         {
