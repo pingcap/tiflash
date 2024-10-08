@@ -144,7 +144,7 @@ struct AssociativeOperationImpl
     AssociativeOperationImpl<Op, N - 1> continuation;
 
     /// Remembers the last N columns from `in`.
-    AssociativeOperationImpl(UInt8ColumnPtrs & in)
+    explicit AssociativeOperationImpl(UInt8ColumnPtrs & in)
         : vec(in[in.size() - N]->getData())
         , continuation(in)
     {}
@@ -190,7 +190,7 @@ struct AssociativeOperationImpl<Op, 1>
 
     const UInt8Container & vec;
 
-    AssociativeOperationImpl(UInt8ColumnPtrs & in)
+    explicit AssociativeOperationImpl(UInt8ColumnPtrs & in)
         : vec(in[in.size() - 1]->getData())
     {}
 
