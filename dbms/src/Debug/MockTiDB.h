@@ -125,6 +125,16 @@ public:
 
     void dropDB(Context & context, const String & database_name, bool drop_regions);
 
+    void addVectorIndexToTable(
+        const String & database_name,
+        const String & table_name,
+        IndexID index_id,
+        const NameAndTypePair & column_name,
+        Int32 offset,
+        TiDB::VectorIndexDefinitionPtr vector_index);
+
+    void dropVectorIndexFromTable(const String & database_name, const String & table_name, IndexID index_id);
+
     void addColumnToTable(
         const String & database_name,
         const String & table_name,

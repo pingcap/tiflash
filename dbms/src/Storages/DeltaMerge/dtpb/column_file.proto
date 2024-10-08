@@ -20,6 +20,7 @@ message ColumnFileBig {
     required uint64 id = 1;
     required uint64 valid_rows = 2;
     required uint64 valid_bytes = 3;
+    required uint64 meta_version = 4;
 }
 
 message RowKeyRange {

@@ -26,6 +26,7 @@
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
+#include <Storages/DeltaMerge/LocalIndexerScheduler_fwd.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -109,6 +110,8 @@ enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
+class VectorIndexCache;
+class ColumnCacheLongTerm;
 class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
@@ -399,6 +402,14 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
+    void setVectorIndexCache(size_t cache_entities);
+    std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
+    void dropVectorIndexCache() const;
+
+    void setColumnCacheLongTerm(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::ColumnCacheLongTerm> getColumnCacheLongTerm() const;
+    void dropColumnCacheLongTerm() const;
+
     bool isDeltaIndexLimited() const;
     void setDeltaIndexManager(size_t cache_size_in_bytes);
     std::shared_ptr<DM::DeltaIndexManager> getDeltaIndexManager() const;
@@ -458,6 +469,9 @@ public:
 
     bool initializeGlobalPageIdAllocator();
     DM::GlobalPageIdAllocatorPtr getGlobalPageIdAllocator() const;
+
+    bool initializeGlobalLocalIndexerScheduler(size_t pool_size, size_t memory_limit);
+    DM::LocalIndexerSchedulerPtr getGlobalLocalIndexerScheduler() const;
 
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;

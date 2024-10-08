@@ -983,12 +983,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (storage_config.format_version != 0)
     {
-        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier)
+        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier
+            && storage_config.format_version != STORAGE_FORMAT_V101.identifier
+            && storage_config.format_version != STORAGE_FORMAT_V102.identifier)
         {
-            LOG_WARNING(log, "'storage.format_version' must be set to 100 when S3 is enabled!");
+            LOG_WARNING(log, "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
             throw Exception(
                 ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'storage.format_version' must be set to 100 when S3 is enabled!");
+                "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
@@ -999,8 +1001,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // If the user does not explicitly set format_version in the config file but
             // enables S3, then we set up a proper format version to support S3.
-            setStorageFormat(STORAGE_FORMAT_V100.identifier);
-            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V100.identifier);
+            setStorageFormat(STORAGE_FORMAT_V102.identifier);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V102.identifier);
         }
         else
         {
@@ -1321,6 +1323,27 @@ int Server::main(const std::vector<std::string> & /*args*/)
         settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity),
         settings.bytes_that_rss_larger_than_limit);
 
+    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        // No need to have local index scheduler.
+    }
+    else if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // There is no compute task in write node.
+        // Set the pool size to 80% of logical cores and 60% of memory
+        // to take full advantage of the resources and avoid blocking other tasks like writes and compactions.
+        global_context->initializeGlobalLocalIndexerScheduler(
+            std::max(1, server_info.cpu_info.logical_cores * 8 / 10), // at least 1 thread
+            std::max(256 * 1024 * 1024ULL, server_info.memory_info.capacity * 6 / 10)); // at least 256MB
+    }
+    else
+    {
+        // There could be compute tasks, reserve more memory for computes.
+        global_context->initializeGlobalLocalIndexerScheduler(
+            std::max(1, server_info.cpu_info.logical_cores * 4 / 10), // at least 1 thread
+            std::max(256 * 1024 * 1024ULL, server_info.memory_info.capacity * 4 / 10)); // at least 256MB
+    }
+
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalPageIdAllocator();
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
@@ -1447,6 +1470,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
+    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
+    size_t vec_index_cache_entities = config().getUInt64("vec_index_cache_entities", 1000);
+    if (vec_index_cache_entities)
+        global_context->setVectorIndexCache(vec_index_cache_entities);
+
+    size_t column_cache_long_term_size
+        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
+    if (column_cache_long_term_size)
+        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
 
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it

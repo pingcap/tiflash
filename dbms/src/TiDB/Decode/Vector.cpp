@@ -16,6 +16,7 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <TiDB/Decode/Vector.h>
+#include <VectorSearch/SimSIMD.h>
 
 #include <compare>
 
@@ -30,15 +31,7 @@ extern const int BAD_ARGUMENTS;
 VectorFloat32Ref::VectorFloat32Ref(const Float32 * elements, size_t n)
     : elements(elements)
     , elements_n(n)
-{
-    for (size_t i = 0; i < n; ++i)
-    {
-        if (unlikely(std::isnan(elements[i])))
-            throw Exception("NaN not allowed in vector", ErrorCodes::BAD_ARGUMENTS);
-        if (unlikely(std::isinf(elements[i])))
-            throw Exception("infinite value not allowed in vector", ErrorCodes::BAD_ARGUMENTS);
-    }
-}
+{}
 
 void VectorFloat32Ref::checkDims(VectorFloat32Ref b) const
 {
@@ -50,15 +43,25 @@ Float64 VectorFloat32Ref::l2SquaredDistance(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    Float32 distance = 0.0;
-    Float32 diff;
+    static simsimd_metric_punned_t metric = nullptr;
+    static std::once_flag init_flag;
 
-    for (size_t i = 0, i_max = size(); i < i_max; ++i)
-    {
-        // Hope this can be vectorized.
-        diff = elements[i] - b[i];
-        distance += diff * diff;
-    }
+    std::call_once(init_flag, []() {
+        simsimd_capability_t used_capability;
+        simsimd_find_metric_punned(
+            simsimd_metric_l2sq_k,
+            simsimd_datatype_f32_k,
+            simsimd_details::simd_capabilities(),
+            simsimd_cap_any_k,
+            &metric,
+            &used_capability);
+    });
+
+    if (!metric)
+        return std::numeric_limits<double>::quiet_NaN();
+
+    simsimd_distance_t distance;
+    metric(elements, b.elements, elements_n, &distance);
 
     return distance;
 }
@@ -67,13 +70,25 @@ Float64 VectorFloat32Ref::innerProduct(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    Float32 distance = 0.0;
+    static simsimd_metric_punned_t metric = nullptr;
+    static std::once_flag init_flag;
 
-    for (size_t i = 0, i_max = size(); i < i_max; ++i)
-    {
-        // Hope this can be vectorized.
-        distance += elements[i] * b[i];
-    }
+    std::call_once(init_flag, []() {
+        simsimd_capability_t used_capability;
+        simsimd_find_metric_punned(
+            simsimd_metric_dot_k,
+            simsimd_datatype_f32_k,
+            simsimd_details::simd_capabilities(),
+            simsimd_cap_any_k,
+            &metric,
+            &used_capability);
+    });
+
+    if (!metric)
+        return std::numeric_limits<double>::quiet_NaN();
+
+    simsimd_distance_t distance;
+    metric(elements, b.elements, elements_n, &distance);
 
     return distance;
 }
@@ -82,30 +97,27 @@ Float64 VectorFloat32Ref::cosineDistance(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    Float32 distance = 0.0;
-    Float32 norma = 0.0;
-    Float32 normb = 0.0;
+    static simsimd_metric_punned_t metric = nullptr;
+    static std::once_flag init_flag;
 
-    for (size_t i = 0, i_max = size(); i < i_max; ++i)
-    {
-        // Hope this can be vectorized.
-        distance += elements[i] * b[i];
-        norma += elements[i] * elements[i];
-        normb += b[i] * b[i];
-    }
+    std::call_once(init_flag, []() {
+        simsimd_capability_t used_capability;
+        simsimd_find_metric_punned(
+            simsimd_metric_cos_k,
+            simsimd_datatype_f32_k,
+            simsimd_details::simd_capabilities(),
+            simsimd_cap_any_k,
+            &metric,
+            &used_capability);
+    });
 
-    Float64 similarity
-        = static_cast<Float64>(distance) / std::sqrt(static_cast<Float64>(norma) * static_cast<Float64>(normb));
+    if (!metric)
+        return std::numeric_limits<double>::quiet_NaN();
 
-    if (std::isnan(similarity))
-    {
-        // When norma or normb is zero, distance is zero, and similarity is NaN.
-        // similarity can not be Inf in this case.
-        return std::nan("");
-    }
+    simsimd_distance_t distance;
+    metric(elements, b.elements, elements_n, &distance);
 
-    similarity = std::clamp(similarity, -1.0, 1.0);
-    return 1.0 - similarity;
+    return distance;
 }
 
 Float64 VectorFloat32Ref::l1Distance(VectorFloat32Ref b) const

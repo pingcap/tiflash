@@ -21,6 +21,11 @@ message RemotePhysicalTable {
     uint64 table_id = 2;
     uint32 keyspace_id = 4;
     repeated RemoteSegment segments = 3;
+
+    // Note: PK column is not handle column. For example, for a String PK,
+    // pk_col_id is the col_id of the String column, but handle column is -1.
+    // If PK is clustered, this field is kept 0.
+    int64 pk_col_id = 5;
 }
 
 message RemoteSegment {
@@ -84,6 +89,7 @@ message ColumnFileTiny {
 message ColumnFileBig {
     uint64 page_id = 1;
     CheckpointInfo checkpoint_info = 2;
+    uint64 meta_version = 3; // Note: Only Stable cares about meta_version. ColumnFileBig does not care.
 
     // TODO: We should better recalculate these fields from local DTFile.
     uint64 valid_rows = 10;
@@ -100,18 +106,4 @@ message CheckpointInfo {
     uint64 size = 3;
     // whether the data reclaimed on the write node or not
     bool is_local_data_reclaimed = 4;
-}
-
-message TiFlashColumnInfo {
-    int64 column_id = 1;
-    // serialized name by IDataType::getName()
-    // TODO: deseri this name is costly, consider another way
-    // like the tipb.ColumnInfo
-    bytes type_full_name = 2;
-    // maybe this is not need
-    bytes column_name = 3;
-}
-
-message TiFlashSchema {
-    repeated TiFlashColumnInfo columns = 1;
 }

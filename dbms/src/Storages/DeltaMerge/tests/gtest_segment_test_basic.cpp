@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
@@ -349,7 +350,7 @@ std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_i
     return {start_key, end_key};
 }
 
-Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted)
 {
     RUNTIME_CHECK(start_key <= end_key);
     if (end_key == start_key)
@@ -367,6 +368,11 @@ Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool i
         1,
         true,
         is_deleted);
+}
+
+Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+{
+    return prepareWriteBlockImpl(start_key, end_key, is_deleted);
 }
 
 Block sortvstackBlocks(std::vector<Block> && blocks)
@@ -703,6 +709,63 @@ void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const DMFilePtr 
         operation_statistics["replaceData"]++;
 }
 
+bool SegmentTestBasic::replaceSegmentStableData(PageIdU64 segment_id, const DMFilePtr & file)
+{
+    LOG_INFO(
+        logger_op,
+        "replaceSegmentStableData, segment_id={} file=dmf_{}(v={})",
+        segment_id,
+        file->fileId(),
+        file->metaVersion());
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    bool success = false;
+    auto segment = segments[segment_id];
+    {
+        auto lock = segment->mustGetUpdateLock();
+        auto new_segment = segment->replaceStableMetaVersion(lock, *dm_context, {file});
+        if (new_segment != nullptr)
+        {
+            segments[new_segment->segmentId()] = new_segment;
+            success = true;
+        }
+    }
+
+    operation_statistics["replaceStableData"]++;
+    return success;
+}
+
+bool SegmentTestBasic::ensureSegmentStableIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos)
+{
+    LOG_INFO(logger_op, "EnsureSegmentStableIndex, segment_id={}", segment_id);
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    bool success = false;
+    auto segment = segments[segment_id];
+    auto dm_files = segment->getStable()->getDMFiles();
+    auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos, dm_files);
+
+    // Build index
+    DMFileIndexWriter iw(DMFileIndexWriter::Options{
+        .path_pool = storage_path_pool,
+        .index_infos = build_info.indexes_to_build,
+        .dm_files = dm_files,
+        .dm_context = *dm_context,
+    });
+    auto new_dmfiles = iw.build();
+    RUNTIME_CHECK(new_dmfiles.size() == 1);
+
+    LOG_INFO(logger_op, "EnsureSegmentStableIndex, build index done, segment_id={}", segment_id);
+
+    // Replace stable data
+    success = replaceSegmentStableData(segment_id, new_dmfiles[0]);
+
+    operation_statistics["ensureStableIndex"]++;
+    return success;
+}
+
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageIdU64> & segments_id) const
 {
     RUNTIME_CHECK(segments_id.size() >= 2);
@@ -830,6 +893,7 @@ SegmentPtr SegmentTestBasic::reload(
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(
                                 is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
                                                   : pre_define_columns;
+    prepareColumns(cols);
     setColumns(cols);
 
     // Always return the first segment
@@ -856,6 +920,7 @@ std::unique_ptr<DMContext> SegmentTestBasic::createDMContext()
         /*min_version_*/ 0,
         NullspaceID,
         /*physical_table_id*/ 100,
+        /*pk_col_id*/ options.pk_col_id,
         options.is_common_handle,
         1,
         db_context->getSettingsRef());

@@ -28,10 +28,14 @@
 #include <TiDB/Decode/Vector.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
+#include <tipb/executor.pb.h>
 
 #include <algorithm>
 #include <cmath>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -100,6 +104,68 @@ using DB::DecimalField;
 using DB::Exception;
 using DB::Field;
 using DB::SchemaNameMapper;
+
+// The IndexType defined in TiDB
+// https://github.com/pingcap/tidb/blob/a5e07a2ed360f29216c912775ce482f536f4102b/pkg/parser/model/model.go#L193-L219
+enum class IndexType
+{
+    INVALID = 0,
+    BTREE = 1,
+    HASH = 2,
+    RTREE = 3,
+    HYPO = 4,
+    HNSW = 5,
+};
+
+inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
+{
+    switch (index_type)
+    {
+    case IndexType::HNSW:
+        return tipb::VectorIndexKind::HNSW;
+    default:
+        throw Exception(
+            DB::ErrorCodes::LOGICAL_ERROR,
+            "Invalid index type for vector index {}",
+            magic_enum::enum_name(index_type));
+    }
+}
+
+VectorIndexDefinitionPtr parseVectorIndexFromJSON(IndexType index_type, const Poco::JSON::Object::Ptr & json)
+{
+    assert(json); // not nullptr
+
+    auto kind = toVectorIndexKind(index_type);
+    auto dimension = json->getValue<UInt64>("dimension");
+    RUNTIME_CHECK(dimension > 0 && dimension <= TiDB::MAX_VECTOR_DIMENSION, dimension); // Just a protection
+
+    tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
+    auto distance_metric_field = json->getValue<String>("distance_metric");
+    RUNTIME_CHECK_MSG(
+        tipb::VectorDistanceMetric_Parse(distance_metric_field, &distance_metric),
+        "invalid distance_metric of vector index, {}",
+        distance_metric_field);
+    RUNTIME_CHECK(distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
+
+    return std::make_shared<const VectorIndexDefinition>(VectorIndexDefinition{
+        .kind = kind,
+        .dimension = dimension,
+        .distance_metric = distance_metric,
+    });
+}
+
+Poco::JSON::Object::Ptr vectorIndexToJSON(const VectorIndexDefinitionPtr & vector_index)
+{
+    assert(vector_index != nullptr);
+    RUNTIME_CHECK(vector_index->kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
+    RUNTIME_CHECK(vector_index->distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
+
+    Poco::JSON::Object::Ptr vector_index_json = new Poco::JSON::Object();
+    vector_index_json->set("kind", tipb::VectorIndexKind_Name(vector_index->kind));
+    vector_index_json->set("dimension", vector_index->dimension);
+    vector_index_json->set("distance_metric", tipb::VectorDistanceMetric_Name(vector_index->distance_metric));
+    return vector_index_json;
+}
 
 ////////////////////////
 ////// ColumnInfo //////
@@ -216,6 +282,8 @@ Field ColumnInfo::defaultValueToField() const
         return getYearValue(value.convert<String>());
     case TypeSet:
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getSetValue(value.convert<String>()); });
+    case TypeTiDBVectorFloat32:
+        return genVectorFloat32Empty();
     default:
         throw Exception("Have not processed type: " + std::to_string(tp));
     }
@@ -794,6 +862,11 @@ try
     json->set("is_invisible", is_invisible);
     json->set("is_global", is_global);
 
+    if (vector_index)
+    {
+        json->set("vector_index", vectorIndexToJSON(vector_index));
+    }
+
 #ifndef NDEBUG
     std::stringstream str;
     json->stringify(str);
@@ -834,6 +907,11 @@ try
         is_invisible = json->getValue<bool>("is_invisible");
     if (json->has("is_global"))
         is_global = json->getValue<bool>("is_global");
+
+    if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
+    {
+        vector_index = parseVectorIndexFromJSON(static_cast<IndexType>(index_type), vector_index_json);
+    }
 }
 catch (const Poco::Exception & e)
 {
@@ -965,12 +1043,16 @@ try
         {
             auto index_info_json = index_arr->getObject(i);
             IndexInfo index_info(index_info_json);
-            // We only keep the "primary index" in tiflash now
+            // We only keep the "primary index" or "vector index" in tiflash now
             if (index_info.is_primary)
             {
                 has_primary_index = true;
                 // always put the primary_index at the front of all index_info
                 index_infos.insert(index_infos.begin(), std::move(index_info));
+            }
+            else if (index_info.vector_index != nullptr)
+            {
+                index_infos.emplace_back(std::move(index_info));
             }
         }
     }
@@ -1128,6 +1210,7 @@ const IndexInfo & TableInfo::getPrimaryIndexInfo() const
 #endif
     return index_infos[0];
 }
+
 size_t TableInfo::numColumnsInKey() const
 {
     if (pk_is_handle)
@@ -1234,6 +1317,11 @@ String genJsonNull()
     const static String null(
         {static_cast<char>(DB::JsonBinary::TYPE_CODE_LITERAL), static_cast<char>(DB::JsonBinary::LITERAL_NIL)});
     return null;
+}
+
+String genVectorFloat32Empty()
+{
+    return String(4, '\0'); // Length=0 vector
 }
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)

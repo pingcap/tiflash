@@ -182,8 +182,8 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
                 /* page_id= */ new_page_id,
                 file_parent_path,
                 DMFileMeta::ReadMode::all(),
+                old_dmfile->metaVersion(),
                 dm_context.keyspace_id);
-
             auto new_column_file = f->cloneWith(dm_context, new_file, target_range);
             cloned.push_back(new_column_file);
         }

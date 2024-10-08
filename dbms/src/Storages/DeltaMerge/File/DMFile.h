@@ -14,9 +14,13 @@
 
 #pragma once
 
+#include <DataTypes/IDataType.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFileUtil.h>
+#include <Storages/DeltaMerge/File/DMFileV3IncrementWriter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
@@ -33,12 +37,14 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 
 namespace DB::DM
 {
+class DMFileWithVectorIndexBlockInputStream;
 namespace tests
 {
 class DMFileTest;
 class DMFileMetaV2Test;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
+
 
 class DMFile : private boost::noncopyable
 {
@@ -59,7 +65,10 @@ public:
         UInt64 page_id,
         const String & parent_path,
         const DMFileMeta::ReadMode & read_meta_mode,
+        UInt64 meta_version = 0,
         KeyspaceID keyspace_id = NullspaceID);
+
+    static String info(const DMFiles & dm_files);
 
     struct ListOptions
     {
@@ -87,7 +96,7 @@ public:
     // keyspaceID
     KeyspaceID keyspaceId() const { return meta->keyspace_id; }
 
-    DMFileFormat::Version version() const { return meta->version; }
+    DMFileFormat::Version version() const { return meta->format_version; }
 
     String path() const;
 
@@ -126,7 +135,7 @@ public:
     const std::unordered_set<ColId> & getColumnIndices() const { return meta->column_indices; }
 
     // only used in gtest
-    void clearPackProperties() { meta->pack_properties.clear_property(); }
+    void clearPackProperties() const { meta->pack_properties.clear_property(); }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
@@ -137,6 +146,29 @@ public:
         throw Exception("Column [" + DB::toString(col_id) + "] not found in dm file [" + path() + "]");
     }
     bool isColumnExist(ColId col_id) const { return meta->column_stats.contains(col_id); }
+
+    std::tuple<DMFileMeta::LocalIndexState, size_t> getLocalIndexState(ColId col_id, IndexID index_id) const
+    {
+        return meta->getLocalIndexState(col_id, index_id);
+    }
+
+    // Check whether the local index of given col_id and index_id has been built on this dmfile.
+    // Return false if
+    // - the col_id is not exist in the dmfile
+    // - the index has not been built
+    bool isLocalIndexExist(ColId col_id, IndexID index_id) const
+    {
+        return std::get<0>(meta->getLocalIndexState(col_id, index_id)) == DMFileMeta::LocalIndexState::IndexBuilt;
+    }
+
+    // Try to get the local index of given col_id and index_id.
+    // Return std::nullopt if
+    // - the col_id is not exist in the dmfile
+    // - the index has not been built
+    std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId col_id, IndexID index_id) const
+    {
+        return meta->getLocalIndex(col_id, index_id);
+    }
 
     /*
      * TODO: This function is currently unused. We could use it when:
@@ -156,7 +188,7 @@ public:
      * Note that only the column id and type is valid.
      * @return All columns
      */
-    ColumnDefines getColumnDefines(bool sort_by_id = true)
+    ColumnDefines getColumnDefines(bool sort_by_id = true) const
     {
         ColumnDefines results{};
         results.reserve(this->meta->column_stats.size());
@@ -171,9 +203,12 @@ public:
         return results;
     }
 
-    bool useMetaV2() const { return meta->version == DMFileFormat::V3; }
+    bool useMetaV2() const { return meta->format_version == DMFileFormat::V3; }
+
     std::vector<String> listFilesForUpload() const;
-    void switchToRemote(const S3::DMFileOID & oid);
+    void switchToRemote(const S3::DMFileOID & oid) const;
+
+    UInt32 metaVersion() const { return meta->metaVersion(); }
 
 private:
     DMFile(
@@ -199,7 +234,8 @@ private:
                 merged_file_max_size_,
                 keyspace_id_,
                 configuration_,
-                version_);
+                version_,
+                /* meta_version= */ 0);
         }
         else
         {
@@ -216,7 +252,7 @@ private:
     // Do not gc me.
     String ngcPath() const;
 
-    String metav2Path() const { return subFilePath(DMFileMetaV2::metaFileName()); }
+    String metav2Path(UInt64 meta_version) const { return subFilePath(DMFileMetaV2::metaFileName(meta_version)); }
     UInt64 getReadFileSize(ColId col_id, const String & filename) const
     {
         return meta->getReadFileSize(col_id, filename);
@@ -268,10 +304,13 @@ private:
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
 
-    void addPack(const DMFileMeta::PackStat & pack_stat) { meta->pack_stats.push_back(pack_stat); }
+    static String vectorIndexFileName(IndexID index_id) { return fmt::format("idx_{}.vector", index_id); }
+    String vectorIndexPath(IndexID index_id) const { return subFilePath(vectorIndexFileName(index_id)); }
+
+    void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
     DMFileStatus getStatus() const { return meta->status; }
-    void setStatus(DMFileStatus status_) { meta->status = status_; }
+    void setStatus(DMFileStatus status_) const { meta->status = status_; }
 
     void finalize();
 
@@ -281,15 +320,23 @@ private:
     const UInt64 page_id;
 
     LoggerPtr log;
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#else
+public:
+#endif
     DMFileMetaPtr meta;
 
+    friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
-    friend class DMFileWriterRemote;
+    friend class DMFileIndexWriter;
     friend class DMFileReader;
     friend class MarkLoader;
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
+    friend class DMFileWithVectorIndexBlockInputStream;
     friend class tests::DMFileTest;
     friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;

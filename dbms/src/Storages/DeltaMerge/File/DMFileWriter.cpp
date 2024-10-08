@@ -17,9 +17,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/S3/S3Common.h>
+#include <sys/stat.h>
 
 #ifndef NDEBUG
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -63,8 +63,20 @@ DMFileWriter::DMFileWriter(
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
+
         addStreams(cd.id, cd.type, do_index);
-        dmfile->meta->getColumnStats().emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
+        dmfile->meta->getColumnStats().emplace(
+            cd.id,
+            ColumnStat{
+                .col_id = cd.id,
+                .type = cd.type,
+                .avg_size = 0,
+                // ... here ignore some fields with default initializers
+                .vector_index = {},
+#ifndef NDEBUG
+                .additional_data_for_test = {},
+#endif
+            });
     }
 }
 
@@ -74,7 +86,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
     {
         return WriteBufferFromWritableFileBuilder::buildPtr(
             file_provider,
-            dmfile->metav2Path(),
+            dmfile->meta->metaPath(),
             dmfile->meta->encryptionMetaPath(),
             /*create_new_encryption_info*/ true,
             write_limiter,
@@ -101,8 +113,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        bool substream_do_index
-            = do_index && !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
+        bool substream_can_index = !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
         auto stream = std::make_unique<Stream>(
             dmfile,
             stream_name,
@@ -111,13 +122,12 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            substream_do_index);
+            do_index && substream_can_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
     type->enumerateStreams(callback, {});
 }
-
 
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
@@ -264,7 +274,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
 #endif
-
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);

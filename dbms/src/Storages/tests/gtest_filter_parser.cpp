@@ -106,6 +106,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
+        tipb::ANNQueryInfo{},
         pushed_down_filters,
         table_info.columns,
         std::vector<int>(), // don't care runtime filter
@@ -433,7 +434,7 @@ try
     String datetime = "2021-10-26 17:00:00.00000";
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
-    tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
+    ASSERT_TRUE(tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer));
     const auto & time_zone_utc = DateLUT::instance("UTC");
     UInt64 converted_time = origin_time_stamp;
 

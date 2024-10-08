@@ -28,8 +28,10 @@ TiDBTableScan::TiDBTableScan(
           is_partition_table_scan ? std::move(TiDB::toTiDBColumnInfos(table_scan->partition_table_scan().columns()))
                                   : std::move(TiDB::toTiDBColumnInfos(table_scan->tbl_scan().columns())))
     , pushed_down_filters(
-          is_partition_table_scan ? std::move(table_scan->partition_table_scan().pushed_down_filter_conditions())
-                                  : std::move(table_scan->tbl_scan().pushed_down_filter_conditions()))
+          is_partition_table_scan ? table_scan->partition_table_scan().pushed_down_filter_conditions()
+                                  : table_scan->tbl_scan().pushed_down_filter_conditions())
+    , ann_query_info(
+          is_partition_table_scan ? table_scan->partition_table_scan().ann_query() : table_scan->tbl_scan().ann_query())
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(
@@ -105,6 +107,8 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
             tipb_table_scan->add_primary_prefix_column_ids(id);
         tipb_table_scan->set_is_fast_scan(partition_table_scan.is_fast_scan());
         tipb_table_scan->set_keep_order(false);
+        if (partition_table_scan.has_ann_query())
+            tipb_table_scan->mutable_ann_query()->CopyFrom(partition_table_scan.ann_query());
     }
     else
     {
