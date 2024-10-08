@@ -12,48 +12,144 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
+#include <Core/ColumnWithTypeAndName.h>
+#include <Core/Types.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/types.h>
 
 namespace DB::tests
 {
 class Logical : public DB::tests::FunctionTest
 {
+protected:
+    void test(
+        const String & func_name,
+        const ColumnWithTypeAndName & result,
+        const ColumnWithTypeAndName & col1,
+        const ColumnWithTypeAndName & col2)
+    {
+        ASSERT_COLUMN_EQ(result, executeFunction(func_name, col1, col2));
+    }
+    ColumnWithTypeAndName not_null_false_column = createColumn<UInt8>({0, 0});
+    ColumnWithTypeAndName not_null_true_column = createColumn<UInt8>({1, 1});
+    ColumnWithTypeAndName nullable_false_column = createColumn<Nullable<UInt8>>({0, 0});
+    ColumnWithTypeAndName nullable_true_column = createColumn<Nullable<UInt8>>({1, 1});
+    ColumnWithTypeAndName nullable_null_column = createColumn<Nullable<UInt8>>({{}, {}});
+    ColumnWithTypeAndName not_null_false_const = createConstColumn<UInt8>(2, 0);
+    ColumnWithTypeAndName not_null_true_const = createConstColumn<UInt8>(2, 1);
+    ColumnWithTypeAndName nullable_false_const = createConstColumn<Nullable<UInt8>>(2, 0);
+    ColumnWithTypeAndName nullable_true_const = createConstColumn<Nullable<UInt8>>(2, 1);
+    ColumnWithTypeAndName nullable_null_const = createConstColumn<Nullable<UInt8>>(2, {});
 };
 
 TEST_F(Logical, andTest)
 try
 {
-    const String & func_name = "binary_and";
+    const String & name = "binary_and";
+    // basic tests
+    // false && false
+    test(name, not_null_false_column, not_null_false_column, not_null_false_column);
+    test(name, not_null_false_const, not_null_false_column, not_null_false_const);
+    test(name, nullable_false_column, nullable_false_column, not_null_false_column);
+    test(name, nullable_false_const, nullable_false_column, not_null_false_const);
+    test(name, nullable_false_column, not_null_false_column, nullable_false_column);
+    // nullable_false_constant will be converted to not_null_false_constant
+    test(name, not_null_false_const, not_null_false_column, nullable_false_const);
+    test(name, nullable_false_column, nullable_false_column, nullable_false_column);
+    test(name, nullable_false_const, nullable_false_column, nullable_false_const);
+    // false && true
+    test(name, not_null_false_column, not_null_false_column, not_null_true_column);
+    test(name, not_null_false_column, not_null_false_column, not_null_true_const);
+    test(name, nullable_false_column, nullable_false_column, not_null_true_column);
+    test(name, nullable_false_column, nullable_false_column, not_null_true_const);
+    test(name, nullable_false_column, not_null_false_column, nullable_true_column);
+    test(name, not_null_false_column, not_null_false_column, nullable_true_const);
+    test(name, nullable_false_column, nullable_false_column, nullable_true_column);
+    test(name, nullable_false_column, nullable_false_column, nullable_true_const);
+    // false && null
+    test(name, nullable_false_column, not_null_false_column, nullable_null_column);
+    test(name, nullable_false_column, not_null_false_column, nullable_null_const);
+    test(name, nullable_false_column, nullable_false_column, nullable_null_column);
+    test(name, nullable_false_column, nullable_false_column, nullable_null_const);
+    // true && false
+    test(name, not_null_false_column, not_null_true_column, not_null_false_column);
+    test(name, not_null_false_const, not_null_true_column, not_null_false_const);
+    test(name, nullable_false_column, nullable_true_column, not_null_false_column);
+    test(name, nullable_false_const, nullable_true_column, not_null_false_const);
+    test(name, nullable_false_column, not_null_true_column, nullable_false_column);
+    test(name, not_null_false_const, not_null_true_column, nullable_false_const);
+    test(name, nullable_false_column, nullable_true_column, nullable_false_column);
+    test(name, nullable_false_const, nullable_true_column, nullable_false_const);
+    // true && true
+    test(name, not_null_true_column, not_null_true_column, not_null_true_column);
+    test(name, not_null_true_column, not_null_true_column, not_null_true_const);
+    test(name, nullable_true_column, nullable_true_column, not_null_true_column);
+    test(name, nullable_true_column, nullable_true_column, not_null_true_const);
+    test(name, nullable_true_column, not_null_true_column, nullable_true_column);
+    test(name, not_null_true_column, not_null_true_column, nullable_true_const);
+    test(name, nullable_true_column, nullable_true_column, nullable_true_column);
+    test(name, nullable_true_column, nullable_true_column, nullable_true_const);
+    // true && null
+    test(name, nullable_null_column, not_null_true_column, nullable_null_column);
+    test(name, nullable_null_column, not_null_true_column, nullable_null_const);
+    test(name, nullable_null_column, nullable_true_column, nullable_null_column);
+    test(name, nullable_null_column, nullable_true_column, nullable_null_const);
+    // null && true
+    test(name, nullable_null_column, nullable_null_column, not_null_true_column);
+    test(name, nullable_null_column, nullable_null_column, not_null_true_const);
+    test(name, nullable_null_column, nullable_null_column, nullable_true_column);
+    test(name, nullable_null_column, nullable_null_column, nullable_true_const);
+    // null && false
+    test(name, nullable_false_column, nullable_null_column, not_null_false_column);
+    test(name, nullable_false_const, nullable_null_column, not_null_false_const);
+    test(name, nullable_false_column, nullable_null_column, nullable_false_column);
+    test(name, nullable_false_const, nullable_null_column, nullable_false_const);
+    // null && null
+    test(name, nullable_null_column, nullable_null_column, nullable_null_column);
+    test(name, nullable_null_column, nullable_null_column, nullable_null_const);
 
     // column, column
-    ASSERT_COLUMN_EQ(
+    test(
+        name,
         createColumn<Nullable<UInt8>>({0, 1, 0, 0, {}, 0}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
-            createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}})));
+        createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
+        createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}}));
     // column, const
-    ASSERT_COLUMN_EQ(
+    test(
+        name,
         createColumn<Nullable<UInt8>>({1, 0}),
-        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(2, 1), createColumn<Nullable<UInt8>>({1, 0})));
+        createConstColumn<Nullable<UInt8>>(2, 1),
+        createColumn<Nullable<UInt8>>({1, 0}));
+    test(
+        name,
+        createConstColumn<Nullable<UInt8>>(2, 0),
+        createConstColumn<Nullable<UInt8>>(2, 0),
+        createColumn<Nullable<UInt8>>({1, 0}));
     // const, const
-    ASSERT_COLUMN_EQ(
+    test(
+        name,
         createConstColumn<UInt8>(1, 1),
-        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 1), createConstColumn<Nullable<UInt8>>(1, 1)));
+        createConstColumn<Nullable<UInt8>>(1, 1),
+        createConstColumn<Nullable<UInt8>>(1, 1));
     // only null
-    ASSERT_COLUMN_EQ(
+    test(
+        name,
         createColumn<Nullable<UInt8>>({{}, 0}),
-        executeFunction(func_name, createOnlyNullColumnConst(2), createColumn<Nullable<UInt8>>({1, 0})));
+        createOnlyNullColumnConst(2),
+        createColumn<Nullable<UInt8>>({1, 0}));
     // issue 6127
-    ASSERT_COLUMN_EQ(
+    test(
+        name,
         createColumn<UInt8>({0, 1, 0, 0}),
-        executeFunction(func_name, createColumn<Int64>({0, 123, 0, 41}), createColumn<UInt8>({0, 11, 221, 0})));
+        createColumn<Int64>({0, 123, 0, 41}),
+        createColumn<UInt8>({0, 11, 221, 0}));
     // issue 6127, position of UInt8 column may affect the result
-    ASSERT_COLUMN_EQ(
+    test(
+        name,
         createColumn<UInt8>({0, 1, 0, 0}),
-        executeFunction(func_name, createColumn<UInt8>({0, 123, 0, 41}), createColumn<Int64>({0, 11, 221, 0})));
+        createColumn<UInt8>({0, 123, 0, 41}),
+        createColumn<Int64>({0, 11, 221, 0}));
 }
 CATCH
 
@@ -71,7 +167,7 @@ try
             createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}})));
     // column, const
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt8>>({1, 1}),
+        createConstColumn<Nullable<UInt8>>(2, 1),
         executeFunction(func_name, createConstColumn<Nullable<UInt8>>(2, 1), createColumn<Nullable<UInt8>>({1, 0})));
     // const, const
     ASSERT_COLUMN_EQ(
@@ -92,6 +188,141 @@ TEST_F(Logical, xorTest)
 try
 {
     const String & func_name = "binary_xor";
+    // basic tests
+    // false && false = false
+    test(func_name, createColumn<UInt8>({0}), createColumn<UInt8>({0}), createColumn<UInt8>({0}));
+    test(func_name, createConstColumn<UInt8>(1, 0), createColumn<UInt8>({0}), createConstColumn<UInt8>(1, 0));
+    test(func_name, createColumn<Nullable<UInt8>>({0}), createColumn<Nullable<UInt8>>({0}), createColumn<UInt8>({0}));
+    test(
+        func_name,
+        createConstColumn<Nullable<UInt8>>(1, 0),
+        createColumn<Nullable<UInt8>>({0}),
+        createConstColumn<UInt8>(1, 0));
+    test(func_name, createColumn<Nullable<UInt8>>({0}), createColumn<UInt8>({0}), createColumn<Nullable<UInt8>>({0}));
+    test(
+        func_name,
+        createConstColumn<Nullable<UInt8>>(1, 0),
+        createColumn<UInt8>({0}),
+        createConstColumn<Nullable<UInt8>>(1, 0));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({0}));
+    test(
+        func_name,
+        createConstColumn<Nullable<UInt8>>(1, 0),
+        createColumn<Nullable<UInt8>>({0}),
+        createConstColumn<Nullable<UInt8>>(1, 0));
+    // false && true = false
+    test(func_name, createColumn<UInt8>({0}), createColumn<UInt8>({0}), createColumn<UInt8>({1}));
+    test(func_name, createColumn<UInt8>({0}), createColumn<UInt8>({0}), createConstColumn<UInt8>(1, 1));
+    test(func_name, createColumn<Nullable<UInt8>>({0}), createColumn<Nullable<UInt8>>({0}), createColumn<UInt8>({1}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({0}),
+        createConstColumn<UInt8>(1, 1));
+    test(func_name, createColumn<Nullable<UInt8>>({0}), createColumn<UInt8>({0}), createColumn<Nullable<UInt8>>({1}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<UInt8>({0}),
+        createConstColumn<Nullable<UInt8>>(1, 1));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({1}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({0}),
+        createConstColumn<Nullable<UInt8>>(1, 1));
+    // false && null = null
+    test(func_name, createColumn<Nullable<UInt8>>({0}), createColumn<UInt8>({0}), createColumn<Nullable<UInt8>>({}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<UInt8>({0}),
+        createConstColumn<Nullable<UInt8>>(1, {}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({0}),
+        createConstColumn<Nullable<UInt8>>(1, {}));
+    // true && false = false
+    test(func_name, createColumn<UInt8>({0}), createColumn<UInt8>({1}), createColumn<UInt8>({0}));
+    test(func_name, createConstColumn<UInt8>(1, 0), createColumn<UInt8>({1}), createConstColumn<UInt8>(1, 0));
+    test(func_name, createColumn<Nullable<UInt8>>({0}), createColumn<Nullable<UInt8>>({1}), createColumn<UInt8>({0}));
+    test(
+        func_name,
+        createConstColumn<Nullable<UInt8>>(1, 0),
+        createColumn<Nullable<UInt8>>({1}),
+        createConstColumn<UInt8>(1, 0));
+    test(func_name, createColumn<Nullable<UInt8>>({0}), createColumn<UInt8>({1}), createColumn<Nullable<UInt8>>({0}));
+    test(
+        func_name,
+        createConstColumn<Nullable<UInt8>>(1, 0),
+        createColumn<UInt8>({1}),
+        createConstColumn<Nullable<UInt8>>(1, 0));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt8>>({0}));
+    test(
+        func_name,
+        createConstColumn<Nullable<UInt8>>(1, 0),
+        createColumn<Nullable<UInt8>>({1}),
+        createConstColumn<Nullable<UInt8>>(1, 0));
+    // true && true = true
+    test(func_name, createColumn<UInt8>({1}), createColumn<UInt8>({1}), createColumn<UInt8>({1}));
+    test(func_name, createColumn<UInt8>({1}), createColumn<UInt8>({1}), createConstColumn<UInt8>(1, 1));
+    test(func_name, createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<UInt8>>({1}), createColumn<UInt8>({1}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt8>>({1}),
+        createConstColumn<UInt8>(1, 1));
+    test(func_name, createColumn<Nullable<UInt8>>({1}), createColumn<UInt8>({1}), createColumn<Nullable<UInt8>>({1}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<UInt8>({1}),
+        createConstColumn<Nullable<UInt8>>(1, 1));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt8>>({1}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt8>>({1}),
+        createConstColumn<Nullable<UInt8>>(1, 1));
+    // true && null = null
+    test(func_name, createColumn<Nullable<UInt8>>({{}}), createColumn<UInt8>({1}), createColumn<Nullable<UInt8>>({{}}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({{}}),
+        createColumn<UInt8>({1}),
+        createConstColumn<Nullable<UInt8>>(1, {}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({{}}),
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt8>>({{}}));
+    test(
+        func_name,
+        createColumn<Nullable<UInt8>>({{}}),
+        createColumn<Nullable<UInt8>>({1}),
+        createConstColumn<Nullable<UInt8>>(1, {}));
 
     // column, column
     ASSERT_COLUMN_EQ(
