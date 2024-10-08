@@ -90,7 +90,7 @@ RSOperatorPtr RSOperator::build(
 
     if (ann_query_info != nullptr)
         rs_operator = wrapWithANNQueryInfo(rs_operator, ann_query_info);
-    
+
     return rs_operator;
 }
 
