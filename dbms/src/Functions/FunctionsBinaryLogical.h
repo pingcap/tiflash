@@ -746,6 +746,7 @@ public:
         }
         else
         {
+            // since useDefaultImplementationForConstants is true, so there is at most 1 constant column at the input columns
             // vectorVector
             executeVectorVector(block, result, column_a, column_b);
         }
