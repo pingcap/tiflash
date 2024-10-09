@@ -22,7 +22,7 @@ mysql> CREATE TABLE test.t (`v` vector(5) DEFAULT NULL, VECTOR INDEX idx_v_l2 US
 # mysql> CREATE TABLE test.t (`v` vector(5) DEFAULT NULL, VECTOR INDEX idx_v_l2 USING HNSW ((VEC_L2_DISTANCE(v))), VECTOR INDEX idx_v_cos USING HNSW ((VEC_COSINE_DISTANCE(v))), VECTOR INDEX idx_v_nip USING HNSW ((VEC_NEGATIVE_INNER_PRODUCT(v))), VECTOR INDEX idx_v_l1 USING HNSW ((VEC_L1_DISTANCE(v))) );
 mysql> INSERT INTO test.t VALUES ('[8.7, 5.7, 7.7, 9.8, 1.5]'),('[3.6, 9.7, 2.4, 6.6, 4.9]'),('[4.7, 4.9, 2.6, 5.2, 7.4]'),('[7.7, 6.7, 8.3, 7.8, 5.7]'),('[1.4, 4.5, 8.5, 7.7, 6.2]');
 func> wait_table test t
-#mysql> alter table test.t compact tiflash replica;
+mysql> alter table test.t compact tiflash replica;
 #mysql> select index_name,rows_stable_indexed,rows_stable_not_indexed from information_schema.tiflash_indexes where TIDB_DATABASE = 'test' AND TIDB_TABLE = 't';
 #+------------+---------------------+-------------------------+
 #| index_name | rows_stable_indexed | rows_stable_not_indexed |
