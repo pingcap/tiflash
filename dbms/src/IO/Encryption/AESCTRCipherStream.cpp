@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Logger.h>
-#include <Common/RedactHelpers.h>
 #include <IO/Encryption/AESCTRCipherStream.h>
 #include <IO/Endian.h>
-#include <common/logger_useful.h>
 
 
 namespace DB
@@ -48,31 +45,7 @@ void AESCTRCipherStream::encrypt(UInt64 file_offset, char * data, size_t data_si
     UInt64 block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
-    LOG_DEBUG(
-        DB::Logger::get("ffff"),
-        "AESCTRCipher encrypt, before,"
-        " block_index={} init_iv_high/low={}/{}"
-        " file_offset={} data_size={} iv={} data={}",
-        block_index,
-        initial_iv_high,
-        initial_iv_low,
-        file_offset,
-        data_size,
-        Redact::keyToHexString(reinterpret_cast<char *>(iv), block_size),
-        Redact::keyToHexString(data, data_size));
     DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/true);
-    LOG_DEBUG(
-        DB::Logger::get("ffff"),
-        "AESCTRCipher encrypt, after,"
-        " block_index={} init_iv_high/low={}/{}"
-        " file_offset={} data_size={} iv={} data={}",
-        block_index,
-        initial_iv_high,
-        initial_iv_low,
-        file_offset,
-        data_size,
-        Redact::keyToHexString(reinterpret_cast<char *>(iv), block_size),
-        Redact::keyToHexString(data, data_size));
 }
 
 void AESCTRCipherStream::decrypt(UInt64 file_offset, char * data, size_t data_size)
@@ -81,31 +54,7 @@ void AESCTRCipherStream::decrypt(UInt64 file_offset, char * data, size_t data_si
     UInt64 block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
-    LOG_DEBUG(
-        DB::Logger::get("ffff"),
-        "AESCTRCipher decrypt, before,"
-        " block_index={} init_iv_high/low={}/{}"
-        " file_offset={} data_size={} iv={} data={}",
-        block_index,
-        initial_iv_high,
-        initial_iv_low,
-        file_offset,
-        data_size,
-        Redact::keyToHexString(reinterpret_cast<char *>(iv), block_size),
-        Redact::keyToHexString(data, data_size));
     DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/false);
-    LOG_DEBUG(
-        DB::Logger::get("ffff"),
-        "AESCTRCipher decrypt, after,"
-        " block_index={} init_iv_high/low={}/{}"
-        " file_offset={} data_size={} iv={} data={}",
-        block_index,
-        initial_iv_high,
-        initial_iv_low,
-        file_offset,
-        data_size,
-        Redact::keyToHexString(reinterpret_cast<char *>(iv), block_size),
-        Redact::keyToHexString(data, data_size));
 }
 
 } // namespace DB

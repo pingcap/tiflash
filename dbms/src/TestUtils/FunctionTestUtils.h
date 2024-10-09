@@ -296,16 +296,6 @@ ColumnWithTypeAndName createVecFloat32Column(
 }
 
 template <typename T>
-ColumnWithTypeAndName createNullableVecFloat32Column(
-    const InferredDataVector<T> & vec,
-    const String & name = "",
-    Int64 column_id = 0)
-{
-    DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeArray>(typeFromString("Float32")));
-    return {makeColumn<T>(data_type, vec), data_type, name, column_id};
-}
-
-template <typename T>
 ColumnWithTypeAndName createColumn(InferredDataInitializerList<T> init, const String & name = "")
 {
     auto vec = InferredDataVector<T>(init);

@@ -52,7 +52,7 @@ public:
             vec.push_back(static_cast<Float64>(v));
             data_in_array.push_back(vec);
         }
-        return ::DB::tests::createNullableVecFloat32Column<Array>(data_in_array, name, column_id);
+        return ::DB::tests::createVecFloat32Column<Array>(data_in_array, name, column_id);
     }
 
     static String encodeVectorFloat32(const std::vector<Float32> & vec)
@@ -68,7 +68,7 @@ public:
     ColumnDefine cdVec() const
     {
         // When used in read, no need to assign vector_index.
-        return ColumnDefine(vec_column_id, vec_column_name, ::DB::tests::typeFromString("Nullable(Array(Float32))"));
+        return ColumnDefine(vec_column_id, vec_column_name, ::DB::tests::typeFromString("Array(Float32)"));
     }
 
     static size_t cleanVectorCacheEntries(const std::shared_ptr<VectorIndexCache> & cache)

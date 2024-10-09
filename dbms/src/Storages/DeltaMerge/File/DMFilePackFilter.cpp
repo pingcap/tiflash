@@ -197,15 +197,14 @@ void DMFilePackFilter::loadIndex(
             if (info == dmfile_meta->merged_sub_file_infos.end())
             {
                 throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "Unknown index file {}",
-                    dmfile->colIndexPath(file_name_base));
+                    fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)),
+                    ErrorCodes::LOGICAL_ERROR);
             }
 
-            const auto file_path = dmfile->meta->mergedPath(info->second.number);
-            const auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
-            const auto offset = info->second.offset;
-            const auto data_size = info->second.size;
+            auto file_path = dmfile->meta->mergedPath(info->second.number);
+            auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
+            auto offset = info->second.offset;
+            auto data_size = info->second.size;
 
             auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
                 file_provider,
@@ -217,14 +216,8 @@ void DMFilePackFilter::loadIndex(
 
             String raw_data;
             raw_data.resize(data_size);
+
             buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
-            LOG_DEBUG(
-                Logger::get(),
-                "read from merged, fname={} fsize={} offset={} plaintext={}",
-                dmfile->colIndexPath(file_name_base),
-                data_size,
-                offset,
-                Redact::keyToHexString(raw_data.data(), data_size));
 
             auto buf = ChecksumReadBufferBuilder::build(
                 std::move(raw_data),
