@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
+#include <Common/RedactHelpers.h>
 #include <Common/TiFlashException.h>
 #include <IO/Encryption/AESCTRCipherStream.h>
 #include <IO/Endian.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
+#include <common/logger_useful.h>
 #include <openssl/md5.h>
 
 #include <magic_enum.hpp>
@@ -51,6 +54,15 @@ BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(
         DB::Encryption::blockSize(method));
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data()));
     auto iv_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data() + sizeof(uint64_t)));
+    LOG_DEBUG(
+        DB::Logger::get("ffff"),
+        "createCipherStream, before,"
+        "enc_info.full_path/file_name={}/{}"
+        " key={} iv={}",
+        encryption_path.full_path,
+        encryption_path.file_name,
+        Redact::keyToHexString(reinterpret_cast<char *>(key->data()), key->size()),
+        Redact::keyToHexString(iv->data(), iv->size()));
     // Currently all encryption info are stored in one file called file.dict.
     // Every update of file.dict will sync the whole file.
     // So when the file is too large, the update cost increases.

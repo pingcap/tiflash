@@ -327,6 +327,7 @@ void DMFileMetaV2::finalizeSmallFiles(
     WriteLimiterPtr & write_limiter)
 {
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
+        // check whether we need to create a new .merged file
         checkMergedFile(writer, file_provider, write_limiter);
 
         auto file = openForRead(
@@ -334,19 +335,28 @@ void DMFileMetaV2::finalizeSmallFiles(
             subFilePath(fname),
             EncryptionPath(encryptionBasePath(), fname, keyspace_id),
             fsize);
-        std::vector<char> read_buf(fsize);
-        auto read_size = file.readBig(read_buf.data(), read_buf.size());
+        std::vector<char> in_mem_buf(fsize);
+        auto read_size = file.readBig(in_mem_buf.data(), in_mem_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
 
-        writer.buffer->write(read_buf.data(), read_buf.size());
-        merged_sub_file_infos.emplace(
+        writer.buffer->write(in_mem_buf.data(), in_mem_buf.size());
+        auto merged_info = MergedSubFileInfo(
             fname,
-            MergedSubFileInfo(
-                fname,
-                writer.file_info.number,
-                /*offset*/ writer.file_info.size,
-                /*size*/ read_buf.size()));
-        writer.file_info.size += read_buf.size();
+            writer.file_info.number,
+            /*offset*/ writer.file_info.size,
+            /*size*/ in_mem_buf.size());
+        merged_sub_file_infos.emplace(fname, merged_info);
+        LOG_DEBUG(
+            log,
+            "merged, fname={} fsize={} merged_num={} offset={} size={} plaintext={}",
+            fname,
+            fsize,
+            merged_info.number,
+            merged_info.offset,
+            merged_info.size,
+            Redact::keyToHexString(in_mem_buf.data(), in_mem_buf.size()));
+
+        writer.file_info.size += in_mem_buf.size();
     };
 
     std::vector<String> delete_file_name;

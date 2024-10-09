@@ -26,6 +26,7 @@ DataKeyManager::DataKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_)
 FileEncryptionInfo DataKeyManager::getInfo(const EncryptionPath & ep)
 {
     auto r = tiflash_instance_wrap->proxy_helper->getFile(Poco::Path(ep.full_path).toString());
+    LOG_DEBUG(Logger::get("fff"), "KeyManager::getInfo -> {}", ep.full_path);
     if (unlikely(!r.isValid()))
     {
         throw DB::TiFlashException(
@@ -40,6 +41,7 @@ FileEncryptionInfo DataKeyManager::getInfo(const EncryptionPath & ep)
 FileEncryptionInfo DataKeyManager::newInfo(const EncryptionPath & ep)
 {
     auto r = tiflash_instance_wrap->proxy_helper->newFile(Poco::Path(ep.full_path).toString());
+    LOG_DEBUG(Logger::get("fff"), "KeyManager::newInfo -> {}", ep.full_path);
     if (unlikely(!r.isValid()))
     {
         throw DB::TiFlashException(
@@ -54,6 +56,7 @@ FileEncryptionInfo DataKeyManager::newInfo(const EncryptionPath & ep)
 void DataKeyManager::deleteInfo(const EncryptionPath & ep, bool throw_on_error)
 {
     auto r = tiflash_instance_wrap->proxy_helper->deleteFile(Poco::Path(ep.full_path).toString());
+    LOG_DEBUG(Logger::get("fff"), "KeyManager::deleteInfo -> {}", ep.full_path);
     if (unlikely(!r.isValid() && throw_on_error))
     {
         throw DB::TiFlashException(

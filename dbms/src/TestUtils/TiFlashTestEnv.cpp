@@ -115,8 +115,9 @@ void TiFlashTestEnv::addGlobalContext(
     global_context->setTemporaryPath(getTemporaryPath());
 
     global_context->initializeTiFlashMetrics();
-    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
-    global_context->initializeFileProvider(key_manager, false);
+    bool enable_encryption = true;
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(enable_encryption);
+    global_context->initializeFileProvider(key_manager, enable_encryption);
 
     global_context->initializeGlobalLocalIndexerScheduler(1, 0);
 

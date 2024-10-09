@@ -274,6 +274,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
 #endif
+
+    // TODO: move this callback into DMFileMeta/DMFileMetaV2
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
@@ -310,11 +312,11 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 #endif
 
             // write index info into merged_file_writer
-            if (stream->minmaxes and !is_empty_file)
+            if (stream->minmaxes && !is_empty_file)
             {
                 dmfile_meta->checkMergedFile(merged_file, file_provider, write_limiter);
 
-                auto fname = colIndexFileName(stream_name);
+                const auto fname = colIndexFileName(stream_name);
 
                 auto buffer = ChecksumWriteBufferBuilder::build(
                     merged_file.buffer,
@@ -334,6 +336,15 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 merged_file.file_info.size += col_stat.index_bytes;
                 buffer->next();
+
+                LOG_DEBUG(
+                    Logger::get(),
+                    "merged, fname={} fsize={} merged_num={} offset={} size={}",
+                    fname,
+                    col_stat.index_bytes,
+                    info.number,
+                    info.offset,
+                    info.size);
             }
 
             // write mark into merged_file_writer
@@ -360,6 +371,15 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 merged_file.file_info.size += mark_size;
                 buffer->next();
+
+                LOG_DEBUG(
+                    Logger::get(),
+                    "merged, fname={} fsize={} merged_num={} offset={} size={}",
+                    fname,
+                    col_stat.index_bytes,
+                    info.number,
+                    info.offset,
+                    info.size);
 
                 if (is_null)
                 {
