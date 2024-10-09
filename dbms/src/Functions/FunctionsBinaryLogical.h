@@ -16,14 +16,15 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
+#include <Common/Exception.h>
 #include <Common/FieldVisitors.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-
 
 namespace DB
 {
@@ -40,9 +41,10 @@ struct BinaryAndImpl
     {
         // result is null if a is null and b is true
         res_is_null = a_is_null && b;
-        // when a_is_null == true, a could be either true or false, but we don't need to consider this because
-        // if result_is_null = true, res is meaningless
-        // if result_is_null = false, then b must be false, then a && b is always false
+        // when a_is_null == true, a could be either true or false, but we don't
+        // need to consider this because if result_is_null = true, res is
+        // meaningless if result_is_null = false, then b must be false, then a && b
+        // is always false
         res = a && b;
     }
     static inline void evaluateTwoNullable(
@@ -58,9 +60,10 @@ struct BinaryAndImpl
         // 2. a is null and b is true
         // 3. b is null and a is true
         res_is_null = (a_is_null && b_is_null) || (a_is_null && b) || (b_is_null && a);
-        // when a_is_null/b_is_null == true, a/b could be either true or false, but we don't need to consider this because
-        // if result_is_null = true, res is meaningless
-        // if result_is_null = false, then b/a must be false, then a && b is always false
+        // when a_is_null/b_is_null == true, a/b could be either true or false, but
+        // we don't need to consider this because if result_is_null = true, res is
+        // meaningless if result_is_null = false, then b/a must be false, then a &&
+        // b is always false
         res = a && b;
     }
 };
@@ -72,9 +75,10 @@ struct BinaryOrImpl
     {
         // result is null if a is null and b is false
         res_is_null = a_is_null && !b;
-        // when a_is_null == true, a could be either true or false, but we don't need to consider this because
-        // if result_is_null = true, res is meaningless
-        // if result_is_null = false, then b must be true, then a && b is always true
+        // when a_is_null == true, a could be either true or false, but we don't
+        // need to consider this because if result_is_null = true, res is
+        // meaningless if result_is_null = false, then b must be true, then a && b
+        // is always true
         res = a || b;
     }
     static inline void evaluateTwoNullable(
@@ -90,9 +94,10 @@ struct BinaryOrImpl
         // 2. a is null and b is false
         // 3. b is null and a is false
         res_is_null = (a_is_null && b_is_null) || (a_is_null && !b) || (b_is_null && !a);
-        // when a_is_null/b_is_null == true, a/b could be either true or false, but we don't need to consider this because
-        // if result_is_null = true, res is meaningless
-        // if result_is_null = false, then b/a must be true, then a && b is always true
+        // when a_is_null/b_is_null == true, a/b could be either true or false, but
+        // we don't need to consider this because if result_is_null = true, res is
+        // meaningless if result_is_null = false, then b/a must be true, then a && b
+        // is always true
         res = a || b;
     }
 };
@@ -120,7 +125,6 @@ struct BinaryXorImpl
 
 using UInt8Container = ColumnUInt8::Container;
 
-
 /**
  * The behavior of and and or is the same as
  * https://en.wikipedia.org/wiki/Null_(SQL)#Comparisons_with_NULL_and_the_three-valued_logic_(3VL)
@@ -135,23 +139,22 @@ public:
 public:
     String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override { return 2; }
-
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
     bool useDefaultImplementationForNulls() const override { return defaultImplForNull; }
 
-    bool useDefaultImplementationForConstants() const override { return true; }
-
-    /// Get result types by argument types. If the function does not apply to these arguments, throw an exception.
+    /// Get result types by argument types. If the function does not apply to
+    /// these arguments, throw an exception.
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 2)
+        if (arguments.size() < 2)
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                     + ", should be 2.",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         bool has_nullable_input_column = false;
-        for (size_t i = 0; i < 2; ++i)
+        for (size_t i = 0; i < arguments.size(); ++i)
         {
             has_nullable_input_column |= arguments[i]->isNullable();
             if (!removeNullable(arguments[i])->isNumber() && !arguments[i]->onlyNull())
@@ -170,8 +173,51 @@ public:
     }
 
 private:
+    bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, UInt8 & res_is_null) const
+    {
+        bool has_res = false;
+        for (int i = static_cast<int>(in.size()) - 1; i >= 0; --i)
+        {
+            if (!in[i]->isColumnConst())
+                continue;
+
+            Field value = (*in[i])[0];
+            UInt8 const_is_null = false;
+            UInt8 const_value = false;
+            if constexpr (!defaultImplForNull)
+            {
+                const_is_null = value.isNull();
+                if (!const_is_null)
+                    const_value = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
+            }
+            else
+            {
+                const_value = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
+            }
+            if (has_res)
+            {
+                if constexpr (!defaultImplForNull)
+                {
+                    Impl::evaluateTwoNullable(res, res_is_null, const_value, const_is_null, res, res_is_null);
+                }
+                else
+                {
+                    Impl::evaluate(res, const_value, res);
+                }
+            }
+            else
+            {
+                res = const_value;
+                res_is_null = const_is_null;
+                has_res = true;
+            }
+            in.erase(in.begin() + i);
+        }
+        return has_res;
+    }
+
     template <typename T>
-    bool executeConstantVectorNullable(
+    bool executeConstantVectorNullableImpl(
         const IColumn * column,
         const ConstNullMapPtr column_null_map,
         bool constant_value,
@@ -227,8 +273,9 @@ private:
         }
         return true;
     }
+
     template <typename T>
-    bool executeConstantVectorNotNull(const IColumn * column, bool constant_value, UInt8Container & res) const
+    bool executeConstantVectorNotNullImpl(const IColumn * column, bool constant_value, UInt8Container & res) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
@@ -242,123 +289,59 @@ private:
         return true;
     }
 
-    void executeConstantVector(
-        Block & block,
-        size_t result,
-        ColumnPtr & column,
+    void executeConstantVectorNullable(
         bool is_constant_null,
-        bool constant_value) const
+        bool constant_value,
+        const IColumn * column,
+        UInt8Container & res,
+        UInt8Container & res_is_null) const
     {
-        ColumnPtr not_null_column = column;
+        const IColumn * not_null_column = column;
         ConstNullMapPtr null_map_ptr = nullptr;
-        if constexpr (!defaultImplForNull)
+        // defaultImplForNull == false means the input column is always not-nullable
+        if (column->isColumnNullable())
         {
-            // defaultImplForNull == false means the input column is always not-nullable
-            if (column->isColumnNullable())
-            {
-                const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column.get());
-                not_null_column = col_nullable->getNestedColumnPtr();
-                null_map_ptr = &col_nullable->getNullMapData();
-            }
+            const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column);
+            not_null_column = &col_nullable->getNestedColumn();
+            null_map_ptr = &col_nullable->getNullMapData();
         }
-        auto result_is_nullable = !defaultImplForNull && (is_constant_null || null_map_ptr != nullptr);
 
-        size_t rows = block.rows();
-        auto result_vec = ColumnUInt8::create(rows);
-        auto & result_vec_data = result_vec->getData();
-        if (!result_is_nullable)
-        {
-            if (!executeConstantVectorNotNull<Int8>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<Int16>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<Int32>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<Int64>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<UInt8>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<UInt16>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<UInt32>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<UInt64>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<Float32>(not_null_column.get(), constant_value, result_vec_data)
-                && !executeConstantVectorNotNull<Float64>(not_null_column.get(), constant_value, result_vec_data))
-                throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
-            block.getByPosition(result).column = std::move(result_vec);
-        }
-        else
-        {
-            auto result_null_map_vec = ColumnUInt8::create(rows);
-            auto & result_null_map_vec_data = result_null_map_vec->getData();
-            if (!executeConstantVectorNullable<Int8>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<Int16>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<Int32>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<Int64>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<UInt8>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<UInt16>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<UInt32>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<UInt64>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<Float32>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeConstantVectorNullable<Float64>(
-                    not_null_column.get(),
-                    null_map_ptr,
-                    constant_value,
-                    is_constant_null,
-                    result_vec_data,
-                    result_null_map_vec_data))
-                throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
-            block.getByPosition(result).column
-                = ColumnNullable::create(std::move(result_vec), std::move(result_null_map_vec));
-        }
+        if (!executeConstantVectorNullableImpl<
+                Int8>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                Int16>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                Int32>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                Int64>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                UInt8>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                UInt16>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                UInt32>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                UInt64>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                Float32>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<
+                Float64>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null))
+            throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    void executeConstantVectorNotNull(bool constant_value, const IColumn * column, UInt8Container & res) const
+    {
+        if (!executeConstantVectorNotNullImpl<Int8>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<Int16>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<Int32>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<Int64>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<UInt8>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<UInt16>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<UInt32>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<UInt64>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<Float32>(column, constant_value, res)
+            && !executeConstantVectorNotNullImpl<Float64>(column, constant_value, res))
+            throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     template <typename LeftType, typename RightType>
@@ -525,234 +508,281 @@ private:
         return true;
     }
 
-    void executeVectorVector(Block & block, size_t result, ColumnPtr & column_a, ColumnPtr & column_b) const
+    void executeVectorVectorNullable(
+        const IColumn * column_a,
+        const IColumn * column_b,
+        UInt8Container & res,
+        UInt8Container & res_is_null) const
     {
-        ColumnPtr not_null_column_a = column_a;
+        const IColumn * not_null_column_a = column_a;
         ConstNullMapPtr column_a_null_map_ptr = nullptr;
-        ColumnPtr not_null_column_b = column_b;
+        const IColumn * not_null_column_b = column_b;
         ConstNullMapPtr column_b_null_map_ptr = nullptr;
-        if constexpr (!defaultImplForNull)
+        // defaultImplForNull == false means the input column is always not-nullable
+        if (column_a->isColumnNullable())
         {
-            // defaultImplForNull == false means the input column is always not-nullable
-            if (column_a->isColumnNullable())
-            {
-                const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column_a.get());
-                not_null_column_a = col_nullable->getNestedColumnPtr();
-                column_a_null_map_ptr = &col_nullable->getNullMapData();
-            }
-            if (column_b->isColumnNullable())
-            {
-                const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column_b.get());
-                not_null_column_b = col_nullable->getNestedColumnPtr();
-                column_b_null_map_ptr = &col_nullable->getNullMapData();
-            }
+            const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column_a);
+            not_null_column_a = &col_nullable->getNestedColumn();
+            column_a_null_map_ptr = &col_nullable->getNullMapData();
         }
-        auto result_is_nullable
-            = !defaultImplForNull && (column_a_null_map_ptr != nullptr || column_b_null_map_ptr != nullptr);
+        if (column_b->isColumnNullable())
+        {
+            const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column_b);
+            not_null_column_b = &col_nullable->getNestedColumn();
+            column_b_null_map_ptr = &col_nullable->getNullMapData();
+        }
 
-        size_t rows = block.rows();
-        auto result_vec = ColumnUInt8::create(rows);
-        auto & result_vec_data = result_vec->getData();
-        if (!result_is_nullable)
-        {
-            if (!executeVectorVectorNotNullLeft<Int8>(not_null_column_a.get(), not_null_column_b.get(), result_vec_data)
-                && !executeVectorVectorNotNullLeft<Int16>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<Int32>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<Int64>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt8>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt16>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt32>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<UInt64>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<Float32>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data)
-                && !executeVectorVectorNotNullLeft<Float64>(
-                    not_null_column_a.get(),
-                    not_null_column_b.get(),
-                    result_vec_data))
-                throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
-            block.getByPosition(result).column = std::move(result_vec);
-        }
-        else
-        {
-            auto result_null_map_vec = ColumnUInt8::create(rows);
-            auto & result_null_map_vec_data = result_null_map_vec->getData();
-            if (!executeVectorVectorNullableLeft<Int8>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Int16>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Int32>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Int64>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt8>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt16>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt32>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<UInt64>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Float32>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data)
-                && !executeVectorVectorNullableLeft<Float64>(
-                    not_null_column_a.get(),
-                    column_a_null_map_ptr,
-                    not_null_column_b.get(),
-                    column_b_null_map_ptr,
-                    result_vec_data,
-                    result_null_map_vec_data))
-                throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
-            block.getByPosition(result).column
-                = ColumnNullable::create(std::move(result_vec), std::move(result_null_map_vec));
-        }
+        if (!executeVectorVectorNullableLeft<Int8>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<Int16>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<Int32>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<Int64>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<UInt8>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<UInt16>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<UInt32>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<UInt64>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<Float32>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null)
+            && !executeVectorVectorNullableLeft<Float64>(
+                not_null_column_a,
+                column_a_null_map_ptr,
+                not_null_column_b,
+                column_b_null_map_ptr,
+                res,
+                res_is_null))
+            throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    void executeVectorVectorNotNull(const IColumn * column_a, const IColumn * column_b, UInt8Container & res) const
+    {
+        if (!executeVectorVectorNotNullLeft<Int8>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<Int16>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<Int32>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<Int64>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<UInt8>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<UInt16>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<UInt32>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<UInt64>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<Float32>(column_a, column_b, res)
+            && !executeVectorVectorNotNullLeft<Float64>(column_a, column_b, res))
+            throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
 public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        auto column_a = block.getByPosition(arguments[0]).column;
-        auto column_b = block.getByPosition(arguments[1]).column;
-        if (column_b->isColumnConst())
+        bool has_nullable_input_column = false;
+        size_t num_arguments = arguments.size();
+        if constexpr (!defaultImplForNull)
         {
-            // make sure that only column_a can be constant column
-            column_a = block.getByPosition(arguments[1]).column;
-            column_b = block.getByPosition(arguments[0]).column;
+            for (size_t i = 0; i < num_arguments; ++i)
+                has_nullable_input_column |= block.getByPosition(arguments[i]).type->isNullable();
+        }
+        ColumnRawPtrs in(num_arguments);
+        for (size_t i = 0; i < num_arguments; ++i)
+        {
+            const auto & col = block.getByPosition(arguments[i]);
+            in[i] = col.column.get();
+            if constexpr (!defaultImplForNull)
+                has_nullable_input_column |= col.type->isNullable();
         }
 
-        if (column_a->isColumnConst())
+        size_t rows = in[0]->size();
+        UInt8 const_val = 0;
+        UInt8 const_val_is_null = false;
+        bool has_consts = extractConstColumns(in, const_val, const_val_is_null);
+
+        // If this value uniquely determines the result, return it.
+        if (has_consts)
         {
-            // constantVector
-            Field value;
-            column_a->get(0, value);
-            bool is_constant_null = value.isNull();
-            bool constant_value = false;
-            if (!is_constant_null)
-                constant_value = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
-            // check if result is constant
-            UInt8 is_result_null_1, result_1;
-            UInt8 is_result_null_2, result_2;
-            Impl::evaluateOneNullable(constant_value, is_constant_null, 1, result_1, is_result_null_1);
-            Impl::evaluateOneNullable(constant_value, is_constant_null, 0, result_2, is_result_null_2);
             bool result_is_constant = false;
-            if (is_result_null_1 == is_result_null_2 && result_1 == result_2)
+            UInt8 const_res = 0, const_res_is_null = false;
+            if (in.empty())
             {
-                if (column_b->isColumnNullable())
+                // all the input is constant
+                result_is_constant = true;
+                const_res = const_val;
+                const_res_is_null = const_val_is_null;
+            }
+            else
+            {
+                if (has_nullable_input_column)
                 {
-                    // if column_b is nullable, need to check null
-                    Impl::evaluateTwoNullable(constant_value, is_constant_null, 0, true, result_1, is_result_null_1);
-                    if (is_result_null_1 == is_result_null_2 && result_1 == result_2)
-                        result_is_constant = true;
+                    // test for true
+                    Impl::evaluateOneNullable(const_val, const_val_is_null, 1, const_res, const_res_is_null);
+                    // test for false
+                    UInt8 res, res_is_null;
+                    Impl::evaluateOneNullable(const_val, const_val_is_null, 0, res, res_is_null);
+                    if (const_res == res && const_res_is_null == res_is_null)
+                    {
+                        // test for null
+                        Impl::evaluateTwoNullable(const_val, const_val_is_null, 0, true, res, res_is_null);
+                        if (const_res == res && const_res_is_null == res_is_null)
+                            result_is_constant = true;
+                    }
                 }
                 else
                 {
-                    result_is_constant = true;
+                    assert(!const_val_is_null);
+                    // test for true
+                    Impl::evaluate(const_val, 1, const_res);
+                    // test for false
+                    UInt8 res;
+                    Impl::evaluate(const_val, 0, res);
+                    if (const_res == res)
+                        result_is_constant = true;
                 }
             }
             if (result_is_constant)
             {
-                auto rows = block.rows();
-                // construct constant result
-                if (column_a->isColumnNullable() || column_b->isColumnNullable())
+                // if result is constant, just return constant
+                if (has_nullable_input_column)
                 {
-                    if (is_result_null_1)
-                    {
+                    // return type is Nullable(UInt8)
+                    if (const_res_is_null)
                         block.getByPosition(result).column
                             = block.getByPosition(result).type->createColumnConst(rows, Null());
-                    }
                     else
-                    {
                         block.getByPosition(result).column
-                            = makeNullable(DataTypeUInt8().createColumnConst(rows, toField(result_1)));
-                    }
+                            = makeNullable(DataTypeUInt8().createColumnConst(rows, toField(const_res)));
                 }
                 else
                 {
-                    assert(is_result_null_1 == false);
-                    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, toField(result_1));
+                    // return type is UInt8
+                    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, toField(const_res));
                 }
+                return;
+            }
+        }
+
+        auto result_vec = ColumnUInt8::create(rows);
+        auto & result_vec_data = result_vec->getData();
+        size_t next_col_index;
+
+        if (has_nullable_input_column)
+        {
+            // result is nullable
+            // set not null by default
+            auto result_null_map_vec = ColumnUInt8::create(rows, static_cast<UInt8>(0));
+            auto & result_null_map_vec_data = result_null_map_vec->getData();
+            if (has_consts)
+            {
+                assert(!in.empty());
+                executeConstantVectorNullable(
+                    const_val_is_null,
+                    const_val,
+                    in[0],
+                    result_vec_data,
+                    result_null_map_vec_data);
+                next_col_index = 1;
             }
             else
             {
-                executeConstantVector(block, result, column_b, is_constant_null, constant_value);
+                assert(in.size() >= 2);
+                executeVectorVectorNullable(in[0], in[1], result_vec_data, result_null_map_vec_data);
+                next_col_index = 2;
             }
+            for (; next_col_index < in.size(); ++next_col_index)
+            {
+                const IColumn * not_null_column = in[next_col_index];
+                ConstNullMapPtr column_null_map_ptr = nullptr;
+                if (in[next_col_index]->isColumnNullable())
+                {
+                    const auto & col_nullable = checkAndGetColumn<ColumnNullable>(in[next_col_index]);
+                    not_null_column = &col_nullable->getNestedColumn();
+                    column_null_map_ptr = &col_nullable->getNullMapData();
+                }
+                auto res = executeVectorVectorNullableLeft<UInt8>(
+                    result_vec.get(),
+                    &result_null_map_vec_data,
+                    not_null_column,
+                    column_null_map_ptr,
+                    result_vec_data,
+                    result_null_map_vec_data);
+                RUNTIME_CHECK_MSG(res, "The left column type must be UInt8");
+            }
+            block.getByPosition(result).column
+                = ColumnNullable::create(std::move(result_vec), std::move(result_null_map_vec));
         }
         else
         {
-            // since useDefaultImplementationForConstants is true, so there is at most 1 constant column at the input columns
-            // vectorVector
-            executeVectorVector(block, result, column_a, column_b);
+            // result is not nullable
+            assert(!const_val_is_null);
+            if (has_consts)
+            {
+                // handle const value first
+                assert(!in.empty());
+                executeConstantVectorNotNull(const_val, in[0], result_vec_data);
+                next_col_index = 1;
+            }
+            else
+            {
+                assert(in.size() >= 2);
+                executeVectorVectorNotNull(in[0], in[1], result_vec_data);
+                next_col_index = 2;
+            }
+            for (; next_col_index < in.size(); ++next_col_index)
+            {
+                // the left side is UInt8
+                auto res = executeVectorVectorNotNullLeft<UInt8>(result_vec.get(), in[next_col_index], result_vec_data);
+                RUNTIME_CHECK_MSG(res, "The left column type must be UInt8");
+            }
+            block.getByPosition(result).column = std::move(result_vec);
         }
     }
 };
-
 
 // clang-format off
 struct NameBinaryAnd { static constexpr auto name = "binary_and"; };
