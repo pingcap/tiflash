@@ -241,16 +241,15 @@ private:
             {
                 for (size_t i = 0; i < n; ++i)
                 {
-                    result_null_map[i] = 0;
                     Impl::evaluate(vec[i], constant_value, res[i]);
                 }
             }
         }
         else
         {
-            for (size_t i = 0; i < n; ++i)
+            if (is_constant_null)
             {
-                if (is_constant_null)
+                for (size_t i = 0; i < n; ++i)
                 {
                     Impl::evaluateTwoNullable(
                         vec[i],
@@ -260,7 +259,10 @@ private:
                         res[i],
                         result_null_map[i]);
                 }
-                else
+            }
+            else
+            {
+                for (size_t i = 0; i < n; ++i)
                 {
                     Impl::evaluateOneNullable(
                         vec[i],
