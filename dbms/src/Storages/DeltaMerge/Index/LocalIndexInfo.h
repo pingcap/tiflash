@@ -52,7 +52,10 @@ using LocalIndexInfos = std::vector<LocalIndexInfo>;
 using LocalIndexInfosPtr = std::shared_ptr<LocalIndexInfos>;
 using LocalIndexInfosSnapshot = std::shared_ptr<const LocalIndexInfos>;
 
-LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
+LocalIndexInfosPtr initLocalIndexInfos(
+    const TiDB::TableInfo & table_info,
+    bool encryption_enabled,
+    const LoggerPtr & logger);
 
 struct LocalIndexInfosChangeset
 {
@@ -66,6 +69,7 @@ struct LocalIndexInfosChangeset
 LocalIndexInfosChangeset generateLocalIndexInfos(
     const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
+    bool encryption_enabled,
     const LoggerPtr & logger);
 
 } // namespace DB::DM

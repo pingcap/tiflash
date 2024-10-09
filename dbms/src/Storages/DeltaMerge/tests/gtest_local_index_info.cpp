@@ -42,10 +42,10 @@ try
     LocalIndexInfosPtr index_info = nullptr;
     // check the same
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, false, logger).new_local_index_infos;
         ASSERT_EQ(new_index_info, nullptr);
         // check again, nothing changed, return nullptr
-        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, false, logger).new_local_index_infos);
 
         // update
         index_info = new_index_info;
@@ -71,7 +71,7 @@ try
     FailPointHelper::enableFailPoint(FailPoints::force_not_support_vector_index);
 
     // check the result when storage format not support
-    auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+    auto new_index_info = generateLocalIndexInfos(index_info, table_info, false, logger).new_local_index_infos;
     ASSERT_NE(new_index_info, nullptr);
     // always return empty index_info, we need to drop all existing indexes
     ASSERT_TRUE(new_index_info->empty());
@@ -93,10 +93,10 @@ try
     LocalIndexInfosPtr index_info = nullptr;
     // check the same
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, false, logger).new_local_index_infos;
         ASSERT_EQ(new_index_info, nullptr);
         // check again, nothing changed, return nullptr
-        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, false, logger).new_local_index_infos);
 
         // update
         index_info = new_index_info;
@@ -121,7 +121,7 @@ try
 
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, false, logger).new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 1);
         const auto & idx = (*new_index_info)[0];
@@ -134,7 +134,7 @@ try
         ASSERT_EQ(expect_idx.vector_index->distance_metric, idx.index_definition->distance_metric);
 
         // check again, nothing changed, return nullptr
-        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, false, logger).new_local_index_infos);
 
         // update
         index_info = new_index_info;
@@ -154,7 +154,7 @@ try
     }
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, false, logger).new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
@@ -175,7 +175,7 @@ try
         ASSERT_EQ(expect_idx2.vector_index->distance_metric, idx1.index_definition->distance_metric);
 
         // check again, nothing changed, return nullptr
-        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, false, logger).new_local_index_infos);
 
         // update
         index_info = new_index_info;
@@ -198,7 +198,7 @@ try
     }
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto new_index_info = generateLocalIndexInfos(index_info, table_info, false, logger).new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
@@ -219,7 +219,7 @@ try
         ASSERT_EQ(expect_idx3.vector_index->distance_metric, idx1.index_definition->distance_metric);
 
         // check again, nothing changed, return nullptr
-        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
+        ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, false, logger).new_local_index_infos);
     }
 }
 CATCH
