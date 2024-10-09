@@ -290,42 +290,32 @@ private:
     }
 
     void executeConstantVectorNullable(
-        bool is_constant_null,
-        bool constant_value,
+        bool is_const_null,
+        bool const_value,
         const IColumn * column,
         UInt8Container & res,
         UInt8Container & res_is_null) const
     {
-        const IColumn * not_null_column = column;
-        ConstNullMapPtr null_map_ptr = nullptr;
+        const IColumn * c = column;
+        ConstNullMapPtr null_map = nullptr;
         // defaultImplForNull == false means the input column is always not-nullable
         if (column->isColumnNullable())
         {
             const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column);
-            not_null_column = &col_nullable->getNestedColumn();
-            null_map_ptr = &col_nullable->getNullMapData();
+            c = &col_nullable->getNestedColumn();
+            null_map = &col_nullable->getNullMapData();
         }
 
-        if (!executeConstantVectorNullableImpl<
-                Int8>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                Int16>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                Int32>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                Int64>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                UInt8>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                UInt16>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                UInt32>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                UInt64>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                Float32>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null)
-            && !executeConstantVectorNullableImpl<
-                Float64>(not_null_column, null_map_ptr, constant_value, is_constant_null, res, res_is_null))
+        if (!executeConstantVectorNullableImpl<Int8>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<Int16>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<Int32>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<Int64>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<UInt8>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<UInt16>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<UInt32>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<UInt64>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<Float32>(c, null_map, const_value, is_const_null, res, res_is_null)
+            && !executeConstantVectorNullableImpl<Float64>(c, null_map, const_value, is_const_null, res, res_is_null))
             throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -363,41 +353,41 @@ private:
 
     template <typename LeftType, typename RightType>
     bool executeVectorVectorNullableRight(
-        const ColumnVector<LeftType> * column_a,
-        ConstNullMapPtr column_a_null_map,
-        const IColumn * column_b,
-        ConstNullMapPtr column_b_null_map,
+        const ColumnVector<LeftType> * a,
+        ConstNullMapPtr a_null_map,
+        const IColumn * b,
+        ConstNullMapPtr b_null_map,
         UInt8Container & res,
-        UInt8Container & res_null_map_data) const
+        UInt8Container & res_is_null) const
     {
-        auto col = checkAndGetColumn<ColumnVector<RightType>>(column_b);
+        auto col = checkAndGetColumn<ColumnVector<RightType>>(b);
         if (!col)
             return false;
-        auto & data_a = column_a->getData();
+        auto & data_a = a->getData();
         auto & data_b = col->getData();
         size_t n = res.size();
-        if (column_a_null_map == nullptr)
+        if (a_null_map == nullptr)
         {
             // column_b_null_map must be not null
             for (size_t i = 0; i < n; ++i)
-                Impl::evaluateOneNullable(data_b[i], (*column_b_null_map)[i], data_a[i], res[i], res_null_map_data[i]);
+                Impl::evaluateOneNullable(data_b[i], (*b_null_map)[i], data_a[i], res[i], res_is_null[i]);
         }
-        else if (column_b_null_map == nullptr)
+        else if (b_null_map == nullptr)
         {
             // column_a_null_map must be not null
             for (size_t i = 0; i < n; ++i)
-                Impl::evaluateOneNullable(data_a[i], (*column_a_null_map)[i], data_b[i], res[i], res_null_map_data[i]);
+                Impl::evaluateOneNullable(data_a[i], (*a_null_map)[i], data_b[i], res[i], res_is_null[i]);
         }
         else
         {
             for (size_t i = 0; i < n; ++i)
                 Impl::evaluateTwoNullable(
                     data_a[i],
-                    (*column_a_null_map)[i],
+                    (*a_null_map)[i],
                     data_b[i],
-                    (*column_b_null_map)[i],
+                    (*b_null_map)[i],
                     res[i],
-                    res_null_map_data[i]);
+                    res_is_null[i]);
         }
         return true;
     }
@@ -424,87 +414,27 @@ private:
 
     template <typename T>
     bool executeVectorVectorNullableLeft(
-        const IColumn * column_a,
-        ConstNullMapPtr column_a_null_map,
-        const IColumn * column_b,
-        ConstNullMapPtr column_b_null_map,
+        const IColumn * a,
+        ConstNullMapPtr a_null_map,
+        const IColumn * b,
+        ConstNullMapPtr b_null_map,
         UInt8Container & res,
-        UInt8Container & res_null_map_data) const
+        UInt8Container & res_is_null) const
     {
-        auto col = checkAndGetColumn<ColumnVector<T>>(column_a);
+        auto col = checkAndGetColumn<ColumnVector<T>>(a);
         if (!col)
             return false;
-        if (!executeVectorVectorNullableRight<T, Int8>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Int16>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Int32>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Int64>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt8>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt16>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt32>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, UInt64>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Float32>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data)
-            && !executeVectorVectorNullableRight<T, Float64>(
-                col,
-                column_a_null_map,
-                column_b,
-                column_b_null_map,
-                res,
-                res_null_map_data))
-            throw Exception("Unexpected type of column: " + column_b->getName(), ErrorCodes::ILLEGAL_COLUMN);
+        if (!executeVectorVectorNullableRight<T, Int8>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, Int16>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, Int32>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, Int64>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, UInt8>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, UInt16>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, UInt32>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, UInt64>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, Float32>(col, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableRight<T, Float64>(col, a_null_map, b, b_null_map, res, res_is_null))
+            throw Exception("Unexpected type of column: " + b->getName(), ErrorCodes::ILLEGAL_COLUMN);
         return true;
     }
 
@@ -514,94 +444,34 @@ private:
         UInt8Container & res,
         UInt8Container & res_is_null) const
     {
-        const IColumn * not_null_column_a = column_a;
-        ConstNullMapPtr column_a_null_map_ptr = nullptr;
-        const IColumn * not_null_column_b = column_b;
-        ConstNullMapPtr column_b_null_map_ptr = nullptr;
+        const IColumn * a = column_a;
+        ConstNullMapPtr a_null_map = nullptr;
+        const IColumn * b = column_b;
+        ConstNullMapPtr b_null_map = nullptr;
         // defaultImplForNull == false means the input column is always not-nullable
         if (column_a->isColumnNullable())
         {
             const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column_a);
-            not_null_column_a = &col_nullable->getNestedColumn();
-            column_a_null_map_ptr = &col_nullable->getNullMapData();
+            a = &col_nullable->getNestedColumn();
+            a_null_map = &col_nullable->getNullMapData();
         }
         if (column_b->isColumnNullable())
         {
             const auto & col_nullable = checkAndGetColumn<ColumnNullable>(column_b);
-            not_null_column_b = &col_nullable->getNestedColumn();
-            column_b_null_map_ptr = &col_nullable->getNullMapData();
+            b = &col_nullable->getNestedColumn();
+            b_null_map = &col_nullable->getNullMapData();
         }
 
-        if (!executeVectorVectorNullableLeft<Int8>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<Int16>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<Int32>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<Int64>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<UInt8>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<UInt16>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<UInt32>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<UInt64>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<Float32>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null)
-            && !executeVectorVectorNullableLeft<Float64>(
-                not_null_column_a,
-                column_a_null_map_ptr,
-                not_null_column_b,
-                column_b_null_map_ptr,
-                res,
-                res_is_null))
+        if (!executeVectorVectorNullableLeft<Int8>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<Int16>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<Int32>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<Int64>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<UInt8>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<UInt16>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<UInt32>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<UInt64>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<Float32>(a, a_null_map, b, b_null_map, res, res_is_null)
+            && !executeVectorVectorNullableLeft<Float64>(a, a_null_map, b, b_null_map, res, res_is_null))
             throw Exception("Unexpected type of column: " + column_a->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
