@@ -22,6 +22,7 @@
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/TiDBTypes.h>
 #include <TiDB/Schema/TiDB_fwd.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <tipb/schema.pb.h>
 
 #include <optional>
@@ -115,6 +116,7 @@ struct ColumnInfo
     Int32 offset = -1;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
+    Poco::Dynamic::Var origin_default_bit_value;
     Poco::Dynamic::Var default_bit_value;
     TP tp = TypeDecimal; // TypeDecimal is not used by TiDB.
     UInt32 flag = 0;
@@ -257,6 +259,8 @@ struct IndexInfo
     bool is_primary = false;
     bool is_invisible = false;
     bool is_global = false;
+
+    VectorIndexDefinitionPtr vector_index = nullptr;
 };
 
 struct TableInfo
@@ -327,11 +331,14 @@ struct TableInfo
 
     /// should not be called if is_common_handle = false.
     const IndexInfo & getPrimaryIndexInfo() const;
+
     size_t numColumnsInKey() const;
 };
 
 
 String genJsonNull();
+
+String genVectorFloat32Empty();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);

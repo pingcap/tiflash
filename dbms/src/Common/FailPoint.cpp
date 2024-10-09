@@ -70,7 +70,11 @@ namespace DB
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
     M(exception_new_dynamic_thread)                               \
-    M(force_wait_index_timeout)
+    M(force_wait_index_timeout)                                   \
+    M(force_local_index_task_memory_limit_exceeded)               \
+    M(exception_build_local_index_for_file)                       \
+    M(force_not_support_vector_index)                             \
+    M(sync_schema_request_failure)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -106,6 +110,7 @@ namespace DB
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
     M(cop_send_failure)                                      \
+    M(file_cache_fg_download_fail)                           \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \

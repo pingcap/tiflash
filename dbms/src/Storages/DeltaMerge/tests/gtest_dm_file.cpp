@@ -135,6 +135,7 @@ public:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             false,
             1,
             db_context->getSettingsRef());
@@ -162,7 +163,7 @@ public:
 
     static void breakFileMetaV2File(const DMFilePtr & dmfile)
     {
-        PosixWritableFile file(dmfile->metav2Path(), false, -1, 0666);
+        PosixWritableFile file(dmfile->metav2Path(/* meta_version= */ 0), false, -1, 0666);
         String s = "hello";
         auto n = file.pwrite(s.data(), s.size(), 0);
         ASSERT_EQ(n, s.size());
@@ -413,8 +414,9 @@ try
                 files.insert(itr.name());
             }
         }
-        ASSERT_EQ(files.size(), 2); // col data and merged file
+        ASSERT_EQ(files.size(), 3); // handle, col data and merged file
         ASSERT(files.find("0.merged") != files.end());
+        ASSERT(files.find("%2D1.dat") != files.end());
         ASSERT(files.find("1.dat") != files.end());
     }
 
@@ -1977,6 +1979,7 @@ public:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             is_common_handle,
             rowkey_column_size,
             db_context->getSettingsRef());

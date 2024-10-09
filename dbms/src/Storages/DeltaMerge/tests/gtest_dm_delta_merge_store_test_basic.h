@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#pragma once
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
@@ -74,11 +75,13 @@ public:
             "t_100",
             NullspaceID,
             100,
+            /*pk_col_id*/ 0,
             true,
             *cols,
             handle_column_define,
             is_common_handle,
             rowkey_column_size,
+            nullptr,
             DeltaMergeStore::Settings());
         return s;
     }
@@ -190,11 +193,13 @@ public:
             "t_101",
             NullspaceID,
             101,
+            /*pk_col_id*/ 0,
             true,
             *cols,
             handle_column_define,
             is_common_handle,
             rowkey_column_size,
+            nullptr,
             DeltaMergeStore::Settings());
         return s;
     }

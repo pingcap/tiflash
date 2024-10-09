@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/SemiJoinHelper.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
@@ -167,7 +168,8 @@ public:
         const BlocksList & right_blocks,
         const std::vector<RowsNotInsertToMap *> & null_rows,
         size_t max_block_size,
-        const JoinNonEqualConditions & non_equal_conditions);
+        const JoinNonEqualConditions & non_equal_conditions,
+        CancellationHook is_cancelled_);
 
     void joinResult(std::list<Result *> & res_list);
 
@@ -192,6 +194,7 @@ private:
     const BlocksList & right_blocks;
     const std::vector<RowsNotInsertToMap *> & null_rows;
     size_t max_block_size;
+    CancellationHook is_cancelled;
 
     const JoinNonEqualConditions & non_equal_conditions;
 };

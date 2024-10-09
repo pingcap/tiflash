@@ -169,11 +169,13 @@ public:
             fmt::format("t_{}", table_id),
             keyspace_id,
             table_id,
+            /*pk_col_id*/ 0,
             true,
             *cols,
             handle_column_define,
             is_common_handle,
             rowkey_column_size,
+            nullptr,
             DeltaMergeStore::Settings());
         return s;
     }

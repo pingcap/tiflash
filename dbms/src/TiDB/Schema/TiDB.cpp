@@ -28,10 +28,14 @@
 #include <TiDB/Decode/Vector.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
+#include <tipb/executor.pb.h>
 
 #include <algorithm>
 #include <cmath>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -84,8 +88,9 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
         return Field(static_cast<Int64>(0));
     default:
         throw Exception(
-            "Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "Not implemented codec flag: {}",
+            fmt::underlying(col_info.getCodecFlag()));
     }
 }
 } // namespace DB
@@ -100,6 +105,68 @@ using DB::DecimalField;
 using DB::Exception;
 using DB::Field;
 using DB::SchemaNameMapper;
+
+// The IndexType defined in TiDB
+// https://github.com/pingcap/tidb/blob/a5e07a2ed360f29216c912775ce482f536f4102b/pkg/parser/model/model.go#L193-L219
+enum class IndexType
+{
+    INVALID = 0,
+    BTREE = 1,
+    HASH = 2,
+    RTREE = 3,
+    HYPO = 4,
+    HNSW = 5,
+};
+
+inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
+{
+    switch (index_type)
+    {
+    case IndexType::HNSW:
+        return tipb::VectorIndexKind::HNSW;
+    default:
+        throw Exception(
+            DB::ErrorCodes::LOGICAL_ERROR,
+            "Invalid index type for vector index {}",
+            magic_enum::enum_name(index_type));
+    }
+}
+
+VectorIndexDefinitionPtr parseVectorIndexFromJSON(IndexType index_type, const Poco::JSON::Object::Ptr & json)
+{
+    assert(json); // not nullptr
+
+    auto kind = toVectorIndexKind(index_type);
+    auto dimension = json->getValue<UInt64>("dimension");
+    RUNTIME_CHECK(dimension > 0 && dimension <= TiDB::MAX_VECTOR_DIMENSION, dimension); // Just a protection
+
+    tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
+    auto distance_metric_field = json->getValue<String>("distance_metric");
+    RUNTIME_CHECK_MSG(
+        tipb::VectorDistanceMetric_Parse(distance_metric_field, &distance_metric),
+        "invalid distance_metric of vector index, {}",
+        distance_metric_field);
+    RUNTIME_CHECK(distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
+
+    return std::make_shared<const VectorIndexDefinition>(VectorIndexDefinition{
+        .kind = kind,
+        .dimension = dimension,
+        .distance_metric = distance_metric,
+    });
+}
+
+Poco::JSON::Object::Ptr vectorIndexToJSON(const VectorIndexDefinitionPtr & vector_index)
+{
+    assert(vector_index != nullptr);
+    RUNTIME_CHECK(vector_index->kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
+    RUNTIME_CHECK(vector_index->distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
+
+    Poco::JSON::Object::Ptr vector_index_json = new Poco::JSON::Object();
+    vector_index_json->set("kind", tipb::VectorIndexKind_Name(vector_index->kind));
+    vector_index_json->set("dimension", vector_index->dimension);
+    vector_index_json->set("distance_metric", tipb::VectorDistanceMetric_Name(vector_index->distance_metric));
+    return vector_index_json;
+}
 
 ////////////////////////
 ////// ColumnInfo //////
@@ -156,14 +223,7 @@ Field ColumnInfo::defaultValueToField() const
         });
     case TypeBit:
     {
-        // TODO: We shall use something like `orig_default_bit`, which will never change once created,
-        //  rather than `default_bit`, which could be altered.
-        //  See https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
-        const auto & bit_value = default_bit_value;
-        // TODO: There might be cases that `orig_default` is not null but `default_bit` is null,
-        //  i.e. bit column added with an default value but later modified to another.
-        //  For these cases, neither `orig_default` (may get corrupted) nor `default_bit` (modified) is correct.
-        //  This is a bug anyway, we choose to make it simple, i.e. use `default_bit`.
+        const auto & bit_value = origin_default_bit_value;
         if (bit_value.isEmpty())
         {
             if (hasNotNullFlag())
@@ -223,6 +283,8 @@ Field ColumnInfo::defaultValueToField() const
         return getYearValue(value.convert<String>());
     case TypeSet:
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getSetValue(value.convert<String>()); });
+    case TypeTiDBVectorFloat32:
+        return genVectorFloat32Empty();
     default:
         throw Exception("Have not processed type: " + std::to_string(tp));
     }
@@ -379,9 +441,14 @@ try
     name_json->set("L", name);
     json->set("name", name_json);
     json->set("offset", offset);
-    json->set("origin_default", origin_default_value);
-    json->set("default", default_value);
-    json->set("default_bit", default_bit_value);
+    if (!origin_default_value.isEmpty())
+        json->set("origin_default", origin_default_value);
+    if (!default_value.isEmpty())
+        json->set("default", default_value);
+    if (!default_bit_value.isEmpty())
+        json->set("default_bit", default_bit_value);
+    if (!origin_default_bit_value.isEmpty())
+        json->set("origin_default_bit", origin_default_bit_value);
     {
         // "type" field
         Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
@@ -389,18 +456,16 @@ try
         tp_json->set("Flag", flag);
         tp_json->set("Flen", flen);
         tp_json->set("Decimal", decimal);
-        tp_json->set("Charset", charset);
-        tp_json->set("Collate", collate);
+        if (!charset.isEmpty())
+            tp_json->set("Charset", charset);
+        if (!collate.isEmpty())
+            tp_json->set("Collate", collate);
         if (!elems.empty())
         {
             Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
             for (const auto & elem : elems)
                 elem_arr->add(elem.first);
             tp_json->set("Elems", elem_arr);
-        }
-        else
-        {
-            tp_json->set("Elems", Poco::Dynamic::Var());
         }
         json->set("type", tp_json);
     }
@@ -433,6 +498,8 @@ try
         default_value = json->get("default");
     if (!json->isNull("default_bit"))
         default_bit_value = json->get("default_bit");
+    if (!json->isNull("origin_default_bit"))
+        origin_default_bit_value = json->get("origin_default_bit");
     {
         // type
         auto type_json = json->getObject("type");
@@ -798,6 +865,11 @@ try
     json->set("is_invisible", is_invisible);
     json->set("is_global", is_global);
 
+    if (vector_index)
+    {
+        json->set("vector_index", vectorIndexToJSON(vector_index));
+    }
+
 #ifndef NDEBUG
     std::stringstream str;
     json->stringify(str);
@@ -838,6 +910,11 @@ try
         is_invisible = json->getValue<bool>("is_invisible");
     if (json->has("is_global"))
         is_global = json->getValue<bool>("is_global");
+
+    if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
+    {
+        vector_index = parseVectorIndexFromJSON(static_cast<IndexType>(index_type), vector_index_json);
+    }
 }
 catch (const Poco::Exception & e)
 {
@@ -901,20 +978,13 @@ try
     if (is_partition_table)
     {
         json->set("belonging_table_id", belonging_table_id);
-        if (belonging_table_id != DB::InvalidTableID)
+        if (belonging_table_id == DB::InvalidTableID)
         {
-            json->set("is_partition_sub_table", true);
-            json->set("partition", Poco::Dynamic::Var());
-        }
-        else
-        {
-            // only record partition info in LogicalPartitionTable
+            // We use `belonging_table_id == DB::InvalidTableID` for the
+            // logical partition table.
+            // Only record partition info in LogicalPartitionTable
             json->set("partition", partition.getJSONObject());
         }
-    }
-    else
-    {
-        json->set("partition", Poco::Dynamic::Var());
     }
 
     json->set("schema_version", schema_version);
@@ -949,9 +1019,8 @@ try
     }
     name = obj->getObject("name")->getValue<String>("L");
 
-    auto cols_arr = obj->getArray("cols");
     columns.clear();
-    if (!cols_arr.isNull())
+    if (auto cols_arr = obj->getArray("cols"); !cols_arr.isNull())
     {
         for (size_t i = 0; i < cols_arr->size(); i++)
         {
@@ -969,12 +1038,16 @@ try
         {
             auto index_info_json = index_arr->getObject(i);
             IndexInfo index_info(index_info_json);
-            // We only keep the "primary index" in tiflash now
+            // We only keep the "primary index" or "vector index" in tiflash now
             if (index_info.is_primary)
             {
                 has_primary_index = true;
                 // always put the primary_index at the front of all index_info
                 index_infos.insert(index_infos.begin(), std::move(index_info));
+            }
+            else if (index_info.vector_index != nullptr)
+            {
+                index_infos.emplace_back(std::move(index_info));
             }
         }
     }
@@ -1132,6 +1205,7 @@ const IndexInfo & TableInfo::getPrimaryIndexInfo() const
 #endif
     return index_infos[0];
 }
+
 size_t TableInfo::numColumnsInKey() const
 {
     if (pk_is_handle)
@@ -1240,6 +1314,11 @@ String genJsonNull()
     return null;
 }
 
+String genVectorFloat32Empty()
+{
+    return String(4, '\0'); // Length=0 vector
+}
+
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
 {
     tipb::FieldType ret;
@@ -1286,7 +1365,11 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     // TiFlash get default value from origin_default_value, check `Field ColumnInfo::defaultValueToField() const`
     // So we need to set origin_default_value to tipb_column_info.default_val()
     // Related logic in tidb, https://github.com/pingcap/tidb/blob/45318da24d8e4c0c6aab836d291a33f949dd18bf/pkg/table/tables/tables.go#L2303-L2329
-    tidb_column_info.origin_default_value = tipb_column_info.default_val();
+    // For TypeBit, we need to set origin_default_bit_value to tipb_column_info.default_val().
+    if (tidb_column_info.tp == TypeBit)
+        tidb_column_info.origin_default_bit_value = tipb_column_info.default_val();
+    else
+        tidb_column_info.origin_default_value = tipb_column_info.default_val();
     tidb_column_info.collate = tipb_column_info.collation();
     for (int i = 0; i < tipb_column_info.elems_size(); ++i)
         tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);

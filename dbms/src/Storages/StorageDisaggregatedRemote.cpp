@@ -64,7 +64,6 @@
 
 #include <atomic>
 #include <magic_enum.hpp>
-#include <numeric>
 #include <unordered_set>
 #include <variant>
 
@@ -413,7 +412,8 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
                     store_id,
                     store_address,
                     table.keyspace_id(),
-                    table.table_id());
+                    table.table_id(),
+                    table.pk_col_id());
                 std::lock_guard lock(output_lock);
                 output_seg_tasks.push_back(seg_read_task);
             },
@@ -495,6 +495,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
 
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
+        table_scan.getANNQueryInfo(),
         table_scan.getPushedDownFilters(),
         table_scan.getColumns(),
         std::vector<int>{},
@@ -514,6 +515,13 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
+    {
+        DM::ANNQueryInfoPtr ann_query_info = nullptr;
+        if (table_scan.getANNQueryInfo().query_type() != tipb::ANNQueryType::InvalidQueryType)
+            ann_query_info = std::make_shared<tipb::ANNQueryInfo>(table_scan.getANNQueryInfo());
+        if (ann_query_info != nullptr)
+            rs_operator = wrapWithANNQueryInfo(rs_operator, ann_query_info);
+    }
     auto push_down_filter = DM::PushDownFilter::build(
         rs_operator,
         table_scan.getColumns(),

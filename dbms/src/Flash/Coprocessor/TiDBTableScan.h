@@ -45,6 +45,8 @@ public:
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const { return pushed_down_filters; }
 
+    const tipb::ANNQueryInfo & getANNQueryInfo() const { return ann_query_info; }
+
 private:
     const tipb::Executor * table_scan;
     String executor_id;
@@ -64,6 +66,8 @@ private:
     /// pushed down to table scan by late materialization.
     /// They will be executed on Storage layer.
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+
+    const tipb::ANNQueryInfo ann_query_info;
 
     bool keep_order;
     bool is_fast_scan;

@@ -44,7 +44,7 @@ public:
     void initBuild(
         const Aggregator::Params & params,
         size_t max_threads_,
-        Aggregator::CancellationHook && hook,
+        CancellationHook && hook,
         const RegisterOperatorSpillContext & register_operator_spill_context);
 
     size_t getBuildConcurrency() const { return max_threads; }
@@ -112,7 +112,7 @@ private:
     };
     std::atomic<AggStatus> status{AggStatus::init};
 
-    Aggregator::CancellationHook is_cancelled{[]() {
+    CancellationHook is_cancelled{[]() {
         return false;
     }};
 

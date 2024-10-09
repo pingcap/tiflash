@@ -54,11 +54,13 @@ void SimplePKTestBasic::reload()
         DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
         NullspaceID,
         101,
+        /*pk_col_id*/ 0,
         true,
         *cols,
         (*cols)[0],
         is_common_handle,
         1,
+        nullptr,
         DeltaMergeStore::Settings());
     dm_context = store->newDMContext(
         *db_context,

@@ -122,6 +122,7 @@ void DeltaMergeStore::cleanPreIngestFiles(
                 f.id,
                 file_parent_path,
                 DM::DMFileMeta::ReadMode::memoryAndDiskSize(),
+                0 /* a meta version that must exists */,
                 keyspace_id);
             removePreIngestFile(f.id, false);
             file->remove(file_provider);
@@ -189,6 +190,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                     page_id,
                     file_parent_path,
                     DMFileMeta::ReadMode::all(),
+                    file->metaVersion(),
                     keyspace_id);
                 data_files.emplace_back(std::move(ref_file));
                 wbs.data.putRefPage(page_id, file->pageId());
@@ -472,6 +474,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
             new_page_id,
             file->parentPath(),
             DMFileMeta::ReadMode::all(),
+            file->metaVersion(),
             keyspace_id);
         wbs.data.putRefPage(new_page_id, file->pageId());
 
@@ -661,6 +664,7 @@ UInt64 DeltaMergeStore::ingestFiles(
                 external_file.id,
                 file_parent_path,
                 DMFileMeta::ReadMode::memoryAndDiskSize(),
+                0 /* FIXME: Support other meta version */,
                 keyspace_id);
         }
         else
@@ -671,7 +675,7 @@ UInt64 DeltaMergeStore::ingestFiles(
                 .table_id = dm_context->physical_table_id,
                 .file_id = external_file.id};
             file = remote_data_store->prepareDMFile(oid, external_file.id)
-                       ->restore(DMFileMeta::ReadMode::memoryAndDiskSize());
+                       ->restore(DMFileMeta::ReadMode::memoryAndDiskSize(), 0 /* FIXME: Support other meta version */);
         }
         rows += file->getRows();
         bytes += file->getBytes();

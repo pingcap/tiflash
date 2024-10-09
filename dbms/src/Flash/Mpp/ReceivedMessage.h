@@ -33,7 +33,8 @@ class ReceivedMessage
     std::vector<const String *> chunks;
     /// used for fine grained shuffle, remaining_consumers will be nullptr for non fine grained shuffle
     std::vector<std::vector<const String *>> fine_grained_chunks;
-    std::shared_ptr<std::atomic<size_t>> remaining_consumers;
+    std::atomic<size_t> remaining_consumers;
+    size_t fine_grained_consumer_size;
 
 public:
     // Constructor that move chunks.
@@ -50,7 +51,7 @@ public:
     const String & getReqInfo() const { return req_info; }
     const mpp::Error * getErrorPtr() const { return error_ptr; }
     const String * getRespPtr(size_t stream_id) const { return stream_id == 0 ? resp_ptr : nullptr; }
-    std::shared_ptr<std::atomic<size_t>> & getRemainingConsumers() { return remaining_consumers; }
+    std::atomic<size_t> & getRemainingConsumers() { return remaining_consumers; }
     const std::vector<const String *> & getChunks(size_t stream_id) const;
     const mpp::MPPDataPacket & getPacket() const { return packet->packet; }
     bool containUsefulMessage() const;

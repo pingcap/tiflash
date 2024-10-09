@@ -21,6 +21,7 @@
 
 namespace DB::DM
 {
+
 struct MergedSubFileInfo
 {
     String fname; // Sub filemame

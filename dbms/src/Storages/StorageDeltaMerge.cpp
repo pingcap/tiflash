@@ -44,10 +44,13 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathPool.h>
 #include <Storages/PrimaryKeyNotMatchException.h>
@@ -104,7 +107,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     {
         const auto mock_table_id = MockTiDB::instance().newTableID();
         tidb_table_info.id = mock_table_id;
-        LOG_WARNING(log, "Allocate table id for mock test [id={}]", mock_table_id);
+        LOG_WARNING(log, "Allocate table id for mock test table_id={}", mock_table_id);
     }
 
     table_column_info = std::make_unique<TableColumnInfo>(db_name_, table_name_, primary_expr_ast_);
@@ -298,6 +301,37 @@ void StorageDeltaMerge::updateTableColumnInfo()
         rowkey_column_defines.push_back(handle_column_define);
     }
     rowkey_column_size = rowkey_column_defines.size();
+
+    {
+        std::vector<ColumnID> pk_col_ids;
+        for (const auto & col : tidb_table_info.columns)
+        {
+            if (col.hasPriKeyFlag())
+                pk_col_ids.push_back(col.id);
+        }
+        if (pk_col_ids.size() == 1)
+            pk_col_id = pk_col_ids[0];
+        else
+            pk_col_id = 0;
+
+        // TODO: Handle with PK change: drop old PK column cache rather than let LRU evict it.
+    }
+
+    LOG_INFO(
+        log,
+        "updateTableColumnInfo finished, table_name={} table_column_defines={}",
+        table_column_info->table_name,
+        [&] {
+            FmtBuffer fmt_buf;
+            fmt_buf.joinStr(
+                table_column_defines.begin(),
+                table_column_defines.end(),
+                [](const ColumnDefine & col, FmtBuffer & fb) {
+                    fb.fmtAppend("{} {}", col.name, col.type->getFamilyName());
+                },
+                ", ");
+            return fmt_buf.toString();
+        }());
 }
 
 void StorageDeltaMerge::clearData()
@@ -1361,16 +1395,24 @@ void StorageDeltaMerge::alterSchemaChange(
     LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
 
     {
-        std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
+        // In order to avoid concurrent issue between init store and DDL,
+        // we must acquire the lock before schema changes is applied.
+        std::lock_guard lock(store_mutex);
         if (storeInited())
         {
             _store->applySchemaChanges(table_info);
         }
-        else // it seems we will never come into this branch ?
+        else
         {
+            // If there is no data need to be stored for this table, the _store instance
+            // is not inited to reduce fragmentation files that may exhaust the inode of
+            // disk.
+            // Under this case, we update some in-memory variables to ensure the correctness.
             updateTableColumnInfo();
         }
     }
+
+    // Should generate new decoding snapshot and cache block
     decoding_schema_changed = true;
 
     SortDescription pk_desc = getPrimarySortDescription();
@@ -1778,6 +1820,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
     std::lock_guard lock(store_mutex);
     if (_store == nullptr)
     {
+        auto index_infos = initLocalIndexInfos(tidb_table_info, log);
         _store = DeltaMergeStore::create(
             global_context,
             data_path_contains_database_name,
@@ -1785,11 +1828,13 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
             table_column_info->table_name,
             tidb_table_info.keyspace_id,
             tidb_table_info.id,
+            pk_col_id,
             tidb_table_info.replica_info.count > 0,
             std::move(table_column_info->table_column_defines),
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
+            std::move(index_infos),
             DeltaMergeStore::Settings(),
             thread_pool);
         table_column_info.reset(nullptr);

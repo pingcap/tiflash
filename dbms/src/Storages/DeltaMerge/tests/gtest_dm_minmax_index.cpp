@@ -118,11 +118,13 @@ bool checkMatch(
         name,
         NullspaceID,
         /*table_id*/ next_table_id++,
+        /*pk_col_id*/ 0,
         true,
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
         is_common_handle,
-        1);
+        1,
+        nullptr);
 
     store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);
@@ -2222,6 +2224,7 @@ try
     TiDB::ColumnInfos column_infos = {a, b};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
+        tipb::ANNQueryInfo{},
         pushed_down_filters, // Not care now
         column_infos,
         std::vector<int>{},
