@@ -197,8 +197,9 @@ void DMFilePackFilter::loadIndex(
             if (info == dmfile_meta->merged_sub_file_infos.end())
             {
                 throw Exception(
-                    fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)),
-                    ErrorCodes::LOGICAL_ERROR);
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Unknown index file {}",
+                    dmfile->colIndexPath(file_name_base));
             }
 
             auto file_path = dmfile->meta->mergedPath(info->second.number);
