@@ -39,3 +39,12 @@ docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T t
 
 docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
 clean_data_log
+
+
+# FIXME: now vector does not support run with encryption-at-rest enabled
+docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
+wait_env
+docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-vector'
+
+docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
+clean_data_log
