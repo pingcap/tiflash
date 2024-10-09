@@ -25,7 +25,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Functions/FunctionsConversion.h>
-#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
@@ -2033,8 +2032,7 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
 void DeltaMergeStore::applyLocalIndexChange(const TiDB::TableInfo & new_table_info)
 {
     // Get a snapshot on the local_index_infos to check whether any new index is created
-    auto encryption_enabled = global_context.getFileProvider()->isEncryptionEnabled();
-    auto changeset = generateLocalIndexInfos(getLocalIndexInfosSnapshot(), new_table_info, encryption_enabled, log);
+    auto changeset = generateLocalIndexInfos(getLocalIndexInfosSnapshot(), new_table_info, log);
 
     // no index is created or dropped
     if (!changeset.new_local_index_infos)

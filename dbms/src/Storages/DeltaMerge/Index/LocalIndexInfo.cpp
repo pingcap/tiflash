@@ -26,17 +26,8 @@ extern const char force_not_support_vector_index[];
 namespace DB::DM
 {
 
-bool isVectorIndexSupported(bool encryption_enabled, const LoggerPtr & logger)
+bool isVectorIndexSupported(const LoggerPtr & logger)
 {
-    if (encryption_enabled)
-    {
-        LOG_ERROR(
-            logger,
-            "Encryption-at-rest is enabled, which does not support building vector index. TiFlash will "
-            "write data without vector index.");
-        return false;
-    }
-
     // Vector Index requires a specific storage format to work.
     if ((STORAGE_FORMAT_CURRENT.identifier > 0 && STORAGE_FORMAT_CURRENT.identifier < 6)
         || STORAGE_FORMAT_CURRENT.identifier == 100)
@@ -58,6 +49,10 @@ ColumnID getVectorIndxColumnID(
     const LoggerPtr & logger)
 {
     if (!idx_info.vector_index)
+        return EmptyColumnID;
+
+    // Vector Index requires a specific storage format to work.
+    if (unlikely(!isVectorIndexSupported(logger)))
         return EmptyColumnID;
 
     if (idx_info.idx_cols.size() != 1)
@@ -88,26 +83,22 @@ ColumnID getVectorIndxColumnID(
     return EmptyColumnID;
 }
 
-LocalIndexInfosPtr initLocalIndexInfos(
-    const TiDB::TableInfo & table_info,
-    bool encryption_enabled,
-    const LoggerPtr & logger)
+LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger)
 {
     // The same as generate local index infos with no existing_indexes
-    return generateLocalIndexInfos(nullptr, table_info, encryption_enabled, logger).new_local_index_infos;
+    return generateLocalIndexInfos(nullptr, table_info, logger).new_local_index_infos;
 }
 
 LocalIndexInfosChangeset generateLocalIndexInfos(
     const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
-    bool encryption_enabled,
     const LoggerPtr & logger)
 {
     LocalIndexInfosPtr new_index_infos = std::make_shared<LocalIndexInfos>();
     {
         // If the storage format does not support vector index, always return an empty
         // index_info. Meaning we should drop all indexes
-        bool is_storage_format_support = isVectorIndexSupported(encryption_enabled, logger);
+        bool is_storage_format_support = isVectorIndexSupported(logger);
         fiu_do_on(FailPoints::force_not_support_vector_index, { is_storage_format_support = false; });
         if (!is_storage_format_support)
             return LocalIndexInfosChangeset{

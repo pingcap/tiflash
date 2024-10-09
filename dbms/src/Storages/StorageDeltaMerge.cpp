@@ -29,7 +29,6 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
-#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -1819,8 +1818,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
     std::lock_guard lock(store_mutex);
     if (_store == nullptr)
     {
-        auto encryption_enabled = global_context.getFileProvider()->isEncryptionEnabled();
-        auto index_infos = initLocalIndexInfos(tidb_table_info, encryption_enabled, log);
+        auto index_infos = initLocalIndexInfos(tidb_table_info, log);
         _store = DeltaMergeStore::create(
             global_context,
             data_path_contains_database_name,
