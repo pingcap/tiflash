@@ -544,7 +544,6 @@ bool DeltaMergeStore::segmentEnsureStableIndexAsync(const SegmentPtr & segment)
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty() || build_info.dm_files.empty())
         return false;
 
-#if 0
     if (auto encryption_enabled = global_context.getFileProvider()->isEncryptionEnabled(); encryption_enabled)
     {
         segment->setIndexBuildError(
@@ -552,7 +551,6 @@ bool DeltaMergeStore::segmentEnsureStableIndexAsync(const SegmentPtr & segment)
             "Encryption-at-rest on TiFlash is enabled, which does not support building vector index");
         return false;
     }
-#endif
 
     auto store_weak_ptr = weak_from_this();
     auto tracing_id
