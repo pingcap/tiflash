@@ -26,6 +26,12 @@
 #include <IO/WriteHelpers.h>
 
 #include <type_traits>
+#include <vector>
+
+#include "Columns/ColumnNothing.h"
+#include "Common/FieldVisitors.h"
+#include "Core/Field.h"
+#include "Core/Types.h"
 
 
 namespace DB
@@ -48,7 +54,7 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 
 struct AndImpl
 {
-    static inline bool isSaturable() { return true; }
+    static constexpr bool isSaturable = true;
 
     static inline bool resNotNull(const Field & value)
     {
@@ -64,15 +70,30 @@ struct AndImpl
     }
 
     static inline bool isSaturatedValue(bool a) { return !a; }
+    static inline bool isSaturatedValue(bool a, bool is_null) { return !is_null && !a; }
 
-    static inline bool apply(bool a, bool b) { return a && b; }
+    static inline void apply(bool a, bool b, UInt8 & res) { res = a && b; }
+    static inline void applyNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null)
+    {
+        // result is null if
+        // 1. both a and b is null
+        // 2. a is null and b is true
+        // 3. b is null and a is true
+        res_is_null = (a_is_null && b_is_null) || (a_is_null && b) || (b_is_null && a);
+        // when a_is_null/b_is_null == true, a/b could be either true or false, but
+        // we don't need to consider this because if result_is_null = true, res is
+        // meaningless if result_is_null = false, then b/a must be false, then a &&
+        // b is always false
+        res = a && b;
+    }
 };
 
 struct OrImpl
 {
-    static inline bool isSaturable() { return true; }
+    static constexpr bool isSaturable = true;
 
     static inline bool isSaturatedValue(bool a) { return a; }
+    static inline bool isSaturatedValue(bool a, bool is_null) { return !is_null && a; }
 
     static inline bool resNotNull(const Field & value)
     {
@@ -87,14 +108,28 @@ struct OrImpl
         value = true;
     }
 
-    static inline bool apply(bool a, bool b) { return a || b; }
+    static inline void apply(bool a, bool b, UInt8 & res) { res = a || b; }
+    static inline void applyNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null)
+    {
+        // result is null if
+        // 1. both a and b is null
+        // 2. a is null and b is false
+        // 3. b is null and a is false
+        res_is_null = (a_is_null && b_is_null) || (a_is_null && !b) || (b_is_null && !a);
+        // when a_is_null/b_is_null == true, a/b could be either true or false, but
+        // we don't need to consider this because if result_is_null = true, res is
+        // meaningless if result_is_null = false, then b/a must be true, then a && b
+        // is always true
+        res = a || b;
+    }
 };
 
 struct XorImpl
 {
-    static inline bool isSaturable() { return false; }
+    static constexpr bool isSaturable = false;
 
     static inline bool isSaturatedValue(bool) { return false; }
+    static inline bool isSaturatedValue(bool, bool) { return false; }
 
     static inline bool resNotNull(const Field &) { return true; }
 
@@ -102,7 +137,12 @@ struct XorImpl
 
     static inline void adjustForNullValue(UInt8 &, UInt8 &) {}
 
-    static inline bool apply(bool a, bool b) { return a != b; }
+    static inline void apply(bool a, bool b, UInt8 & res) { res = a != b; }
+    static inline void applyNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null)
+    {
+        res_is_null = a_is_null || b_is_null;
+        res = a != b;
+    }
 };
 
 template <typename A>
@@ -136,11 +176,12 @@ struct AssociativeOperationImpl
         size_t n = result.size();
         for (size_t i = 0; i < n; ++i)
         {
-            result[i] = operation.apply(i);
+            operation.apply(i, result[i]);
         }
     }
 
     const UInt8Container & vec;
+    const UInt8Container * null_map = nullptr;
     AssociativeOperationImpl<Op, N - 1> continuation;
 
     /// Remembers the last N columns from `in`.
@@ -150,9 +191,9 @@ struct AssociativeOperationImpl
     {}
 
     /// Returns a combination of values in the i-th row of all columns stored in the constructor.
-    inline bool apply(size_t i) const
+    inline void apply(size_t i, UInt8 & res) const
     {
-        if (Op::isSaturable())
+        if constexpr (Op::isSaturable)
         {
             // cast a: UInt8 -> bool -> UInt8 is a trick
             // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1
@@ -171,11 +212,18 @@ struct AssociativeOperationImpl
             //      vec = {1, 0, 2} (error, we only want 0 or 1)
             // See issue: https://github.com/pingcap/tidb/issues/37258
             bool a = static_cast<bool>(vec[i]);
-            return Op::isSaturatedValue(a) ? a : continuation.apply(i);
+            if (Op::isSaturatedValue(a))
+                res = a;
+            else
+            {
+                continuation.apply(i, res);
+            }
         }
         else
         {
-            return Op::apply(vec[i], continuation.apply(i));
+            UInt8 tmp = false;
+            continuation.apply(i, tmp);
+            Op::apply(vec[i], tmp, res);
         }
     }
 };
@@ -194,9 +242,113 @@ struct AssociativeOperationImpl<Op, 1>
         : vec(in[in.size() - 1]->getData())
     {}
 
-    inline bool apply(size_t i) const { return vec[i]; }
+    inline void apply(size_t i, UInt8 & res) const { res = static_cast<bool>(vec[i]); }
 };
 
+template <typename Op, size_t N>
+struct NullableAssociativeOperationImpl
+{
+    /// Erases the N last columns from `in` (if there are less, then all) and puts into `result` their combination.
+    static void NO_INLINE execute(
+        UInt8ColumnPtrs & in,
+        std::vector<const UInt8Container *> null_map_in,
+        UInt8Container & result,
+        UInt8Container & result_is_null)
+    {
+        if (N > in.size())
+        {
+            NullableAssociativeOperationImpl<Op, N - 1>::execute(in, null_map_in, result, result_is_null);
+            return;
+        }
+
+        NullableAssociativeOperationImpl<Op, N> operation(in, null_map_in);
+        in.erase(in.end() - N, in.end());
+        null_map_in.erase(null_map_in.end() - N, null_map_in.end());
+
+        size_t n = result.size();
+        for (size_t i = 0; i < n; ++i)
+        {
+            operation.apply(i, result[i], result_is_null[i]);
+        }
+    }
+
+    const UInt8Container & vec;
+    const UInt8Container * null_map;
+    NullableAssociativeOperationImpl<Op, N - 1> continuation;
+
+    /// Remembers the last N columns from `in`.
+    NullableAssociativeOperationImpl(UInt8ColumnPtrs & in, std::vector<const UInt8Container *> null_map_in)
+        : vec(in[in.size() - N]->getData())
+        , null_map(null_map_in[null_map_in.size() - N])
+        , continuation(in, null_map_in)
+    {}
+
+    /// Returns a combination of values in the i-th row of all columns stored in the constructor.
+    inline void apply(size_t i, UInt8 & res, UInt8 & res_is_null) const
+    {
+        bool a = static_cast<bool>(vec[i]);
+        bool is_null = (*null_map)[i];
+        //if constexpr (Op::isSaturable)
+        //{
+        // cast a: UInt8 -> bool -> UInt8 is a trick
+        // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1
+        // which correspond to false or true. However, for columns with UInt8 type,
+        // no more convertion will be executed on them and the values stored
+        // in them are 'origin' which means that they won't be converted to 0 or 1.
+        // For example:
+        //   Input column with non-UInt8 type:
+        //      column_values = {-2, 0, 2}
+        //   then, they will be converted to:
+        //      vec = {1, 0, 1} (here vec stores converted values)
+        //
+        //   Input column with UInt8 type:
+        //      column_values = {1, 0, 2}
+        //   then, the vec will be:
+        //      vec = {1, 0, 2} (error, we only want 0 or 1)
+        // See issue: https://github.com/pingcap/tidb/issues/37258
+        //    if (Op::isSaturatedValue(a, is_null))
+        //    {
+        //        res = a;
+        //        res_is_null = false;
+        //    }
+        //    else
+        //    {
+        //        UInt8 tmp, tmp_is_null;
+        //        continuation.apply(i, tmp, tmp_is_null);
+        //        Op::applyNullable(a, is_null, tmp, tmp_is_null, res, res_is_null);
+        //    }
+        //}
+        //else
+        //{
+        UInt8 tmp, tmp_is_null;
+        continuation.apply(i, tmp, tmp_is_null);
+        Op::applyNullable(a, is_null, tmp, tmp_is_null, res, res_is_null);
+        //}
+    }
+};
+
+template <typename Op>
+struct NullableAssociativeOperationImpl<Op, 1>
+{
+    static void execute(UInt8ColumnPtrs &, std::vector<const UInt8Container *> &, UInt8Container &, UInt8Container &)
+    {
+        throw Exception("Logical error: AssociativeOperationImpl<Op, 1>::execute called", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    const UInt8Container & vec;
+    const UInt8Container * null_map;
+
+    explicit NullableAssociativeOperationImpl(UInt8ColumnPtrs & in, std::vector<const UInt8Container *> & null_map_in)
+        : vec(in[in.size() - 1]->getData())
+        , null_map(null_map_in[null_map_in.size() - 1])
+    {}
+
+    inline void apply(size_t i, UInt8 & res, UInt8 & res_is_null) const
+    {
+        res = static_cast<bool>(vec[i]);
+        res_is_null = (*null_map)[i];
+    }
+};
 
 /**
  * The behavior of and and or is the same as
@@ -210,75 +362,81 @@ public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionAnyArityLogical>(); }
 
 private:
-    bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, UInt8 & res_not_null, UInt8 & input_has_null) const
+    bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, UInt8 & res_is_null) const
     {
         bool has_res = false;
         for (int i = static_cast<int>(in.size()) - 1; i >= 0; --i)
         {
-            if (!in[i]->isColumnConst())
+            // special case, if column->onlyNull() returns true, treated as constant column
+            if (!in[i]->isColumnConst() && !in[i]->onlyNull())
                 continue;
 
-            Field value = (*in[i])[0];
-            if constexpr (special_impl_for_nulls)
+            UInt8 const_val = false;
+            UInt8 const_val_is_null = false;
+            if (in[i]->onlyNull())
             {
-                input_has_null |= value.isNull();
-                res_not_null |= Impl::resNotNull(value);
-            }
-
-            UInt8 x = !value.isNull() && applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
-            if (has_res)
-            {
-                res = Impl::apply(res, x);
+                // special case
+                const_val_is_null = true;
             }
             else
             {
-                res = x;
-                has_res = true;
+                Field value = (*in[i])[0];
+                if constexpr (special_impl_for_nulls)
+                {
+                    const_val_is_null = value.isNull();
+                    if (!const_val_is_null)
+                        const_val = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
+                }
+                else
+                {
+                    const_val = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
+                }
             }
 
+            if (has_res)
+            {
+                if constexpr (special_impl_for_nulls)
+                {
+                    Impl::applyNullable(res, res_is_null, const_val, const_val_is_null, res, res_is_null);
+                }
+                else
+                {
+                    Impl::apply(res, const_val, res);
+                }
+            }
+            else
+            {
+                res = const_val;
+                res_is_null = const_val_is_null;
+                has_res = true;
+            }
             in.erase(in.begin() + i);
         }
         return has_res;
     }
 
     template <typename T>
-    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null) const
+    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res) const
     {
-        auto col = checkAndGetColumn<ColumnVector<T>>(column);
+        const auto * col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
             return false;
         const auto & vec = col->getData();
         size_t n = res.size();
         for (size_t i = 0; i < n; ++i)
-        {
             res[i] = !!vec[i];
-            if constexpr (special_impl_for_nulls)
-                res_not_null[i] |= Impl::resNotNull(res[i], false);
-        }
-
         return true;
     }
 
-    bool convertOnlyNullToUInt8(
-        const IColumn * column,
-        UInt8Container & res,
-        UInt8Container & res_not_null,
-        UInt8Container & input_has_null) const
+    bool convertColumnNothingToUInt8(const IColumn * column, UInt8Container & res) const
     {
-        if (!column->onlyNull())
+        const auto * col = checkAndGetColumn<ColumnNothing>(column);
+        if (!col)
             return false;
 
         size_t n = res.size();
         for (size_t i = 0; i < n; ++i)
-        {
             res[i] = false;
-            if constexpr (special_impl_for_nulls)
-            {
-                res_not_null[i] |= Impl::resNotNull(res[i], true);
-                input_has_null[i] |= true;
-            }
-        }
-
         return true;
     }
 
@@ -289,7 +447,7 @@ private:
         UInt8Container & res_not_null,
         UInt8Container & input_has_null) const
     {
-        auto col_nullable = checkAndGetColumn<ColumnNullable>(column);
+        const auto * col_nullable = checkAndGetColumn<ColumnNullable>(column);
 
         auto col = checkAndGetColumn<ColumnVector<T>>(&col_nullable->getNestedColumn());
         if (!col)
@@ -312,32 +470,13 @@ private:
         return true;
     }
 
-    void convertToUInt8(
-        const IColumn * column,
-        UInt8Container & res,
-        UInt8Container & res_not_null,
-        UInt8Container & input_has_null) const
+    void convertToUInt8(const IColumn * column, UInt8Container & res) const
     {
-        if (!convertTypeToUInt8<Int8>(column, res, res_not_null)
-            && !convertTypeToUInt8<Int16>(column, res, res_not_null)
-            && !convertTypeToUInt8<Int32>(column, res, res_not_null)
-            && !convertTypeToUInt8<Int64>(column, res, res_not_null)
-            && !convertTypeToUInt8<UInt16>(column, res, res_not_null)
-            && !convertTypeToUInt8<UInt32>(column, res, res_not_null)
-            && !convertTypeToUInt8<UInt64>(column, res, res_not_null)
-            && !convertTypeToUInt8<Float32>(column, res, res_not_null)
-            && !convertTypeToUInt8<Float64>(column, res, res_not_null)
-            && !convertNullableTypeToUInt8<Int8>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<Int16>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<Int32>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<Int64>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<UInt8>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<UInt16>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<UInt32>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<UInt64>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<Float32>(column, res, res_not_null, input_has_null)
-            && !convertNullableTypeToUInt8<Float64>(column, res, res_not_null, input_has_null)
-            && !convertOnlyNullToUInt8(column, res, res_not_null, input_has_null))
+        if (!convertTypeToUInt8<Int8>(column, res) && !convertTypeToUInt8<Int16>(column, res)
+            && !convertTypeToUInt8<Int32>(column, res) && !convertTypeToUInt8<Int64>(column, res)
+            && !convertTypeToUInt8<UInt16>(column, res) && !convertTypeToUInt8<UInt32>(column, res)
+            && !convertTypeToUInt8<UInt64>(column, res) && !convertTypeToUInt8<Float32>(column, res)
+            && !convertTypeToUInt8<Float64>(column, res))
             throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -377,6 +516,75 @@ public:
             return std::make_shared<DataTypeUInt8>();
     }
 
+    bool handleConstantInput(
+        Block & block,
+        size_t result,
+        size_t rows,
+        UInt8 const_val,
+        UInt8 const_val_is_null,
+        bool has_other_column,
+        bool has_nullable_input_column) const
+    {
+        bool result_is_constant = false;
+        UInt8 const_res = 0, const_res_is_null = false;
+        if (!has_other_column)
+        {
+            // all the input is constant
+            result_is_constant = true;
+            const_res = const_val;
+            const_res_is_null = const_val_is_null;
+        }
+        else
+        {
+            if (has_nullable_input_column)
+            {
+                // test for true
+                Impl::applyNullable(const_val, const_val_is_null, true, false, const_res, const_res_is_null);
+                // test for false
+                UInt8 res, res_is_null;
+                Impl::applyNullable(const_val, const_val_is_null, false, false, res, res_is_null);
+                if (const_res == res && const_res_is_null == res_is_null)
+                {
+                    // test for null
+                    Impl::applyNullable(const_val, const_val_is_null, false, true, res, res_is_null);
+                    if (const_res == res && const_res_is_null == res_is_null)
+                        result_is_constant = true;
+                }
+            }
+            else
+            {
+                assert(!const_val_is_null);
+                // test for true
+                Impl::apply(const_val, 1, const_res);
+                // test for false
+                UInt8 res;
+                Impl::apply(const_val, 0, res);
+                if (const_res == res)
+                    result_is_constant = true;
+            }
+        }
+        if (result_is_constant)
+        {
+            // if result is constant, just return constant
+            if (has_nullable_input_column)
+            {
+                // return type is Nullable(UInt8)
+                if (const_res_is_null)
+                    block.getByPosition(result).column
+                        = block.getByPosition(result).type->createColumnConst(rows, Null());
+                else
+                    block.getByPosition(result).column
+                        = makeNullable(DataTypeUInt8().createColumnConst(rows, toField(const_res)));
+            }
+            else
+            {
+                // return type is UInt8
+                block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, toField(const_res));
+            }
+        }
+        return result_is_constant;
+    }
+
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         bool has_nullable_input_column = false;
@@ -393,127 +601,150 @@ public:
 
         /// Combine all constant columns into a single value.
         UInt8 const_val = 0;
-        UInt8 const_val_input_has_null = 0;
-        UInt8 const_val_res_not_null = 0;
-        bool has_consts = extractConstColumns(in, const_val, const_val_res_not_null, const_val_input_has_null);
-
+        UInt8 const_val_is_null = 0;
+        bool has_consts = extractConstColumns(in, const_val, const_val_is_null);
         // If this value uniquely determines the result, return it.
-        if (has_consts
-            && (in.empty() || (!has_nullable_input_column && Impl::apply(const_val, 0) == Impl::apply(const_val, 1))))
-        {
-            if (!in.empty())
-                const_val = Impl::apply(const_val, 0);
-            if constexpr (!special_impl_for_nulls)
-                block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, toField(const_val));
-            else
-            {
-                if (const_val_input_has_null && const_val_res_not_null)
-                    Impl::adjustForNullValue(const_val, const_val_input_has_null);
-                if (const_val_input_has_null)
-                    block.getByPosition(result).column
-                        = block.getByPosition(result).type->createColumnConst(rows, Null());
-                else
-                    block.getByPosition(result).column = has_nullable_input_column
-                        ? makeNullable(DataTypeUInt8().createColumnConst(rows, toField(const_val)))
-                        : DataTypeUInt8().createColumnConst(rows, toField(const_val));
-            }
-            return;
-        }
-
-        /// If this value is a neutral element, let's forget about it.
-        if (!has_nullable_input_column && has_consts && Impl::apply(const_val, 0) == 0
-            && Impl::apply(const_val, 1) == 1)
-            has_consts = false;
-
-        auto col_res = ColumnUInt8::create();
-        UInt8Container & vec_res = col_res->getData();
-        auto col_input_has_null = ColumnUInt8::create();
-        UInt8Container & vec_input_has_null = col_input_has_null->getData();
-        auto col_res_not_null = ColumnUInt8::create();
-        UInt8Container & vec_res_not_null = col_res_not_null->getData();
-
-        Int32 const_column_index = -1;
         if (has_consts)
         {
-            vec_res.assign(rows, const_val);
-            in.push_back(col_res.get());
-            const_column_index = in.size() - 1;
-            if constexpr (special_impl_for_nulls)
-            {
-                vec_input_has_null.assign(rows, const_val_input_has_null);
-                vec_res_not_null.assign(rows, const_val_res_not_null);
-            }
+            if (handleConstantInput(
+                    block,
+                    result,
+                    rows,
+                    const_val,
+                    const_val_is_null,
+                    !in.empty(),
+                    has_nullable_input_column))
+                return;
         }
-        else
-        {
-            vec_res.resize(rows);
-            if constexpr (special_impl_for_nulls)
-            {
-                vec_input_has_null.assign(rows, (UInt8)0);
-                vec_res_not_null.assign(rows, (UInt8)0);
-            }
-        }
+
+        auto col_res = ColumnUInt8::create(rows, static_cast<UInt8>(0));
+        UInt8Container & vec_res = col_res->getData();
+        auto col_res_is_null = ColumnUInt8::create();
+        UInt8Container & vec_res_is_null = col_res_is_null->getData();
+        if (has_nullable_input_column)
+            vec_res_is_null.assign(rows, static_cast<UInt8>(0));
 
         /// Convert all columns to UInt8
-        UInt8ColumnPtrs uint8_in;
+        UInt8ColumnPtrs uint8_in_not_null;
+        UInt8ColumnPtrs uint8_in_nullable;
+        std::vector<const UInt8Container *> null_map_in;
         Columns converted_columns;
 
-        for (size_t index = 0; index < in.size(); index++)
+        for (const auto * column : in)
         {
-            const IColumn * column = in[index];
-            bool is_const_column [[maybe_unused]] = (Int32)index == const_column_index;
-            if (auto uint8_column = checkAndGetColumn<ColumnUInt8>(column))
+            if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(column))
             {
-                uint8_in.push_back(uint8_column);
-                const auto & data = uint8_column->getData();
-                if constexpr (special_impl_for_nulls)
+                uint8_in_not_null.push_back(uint8_column);
+            }
+            else
+            {
+                if (column->isColumnNullable())
                 {
-                    if (!is_const_column)
+                    const auto * nullable_col = checkAndGetColumn<ColumnNullable>(column);
+                    null_map_in.push_back(&nullable_col->getNullMapData());
+                    const auto * not_null_col = &nullable_col->getNestedColumn();
+                    if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(not_null_col))
                     {
-                        size_t n = uint8_column->size();
-                        for (size_t i = 0; i < n; i++)
-                            vec_res_not_null[i] |= Impl::resNotNull(data[i], false);
+                        uint8_in_nullable.push_back(uint8_column);
+                    }
+                    else
+                    {
+                        auto converted_column = ColumnUInt8::create(rows);
+                        convertToUInt8(not_null_col, converted_column->getData());
+                        uint8_in_nullable.push_back(converted_column.get());
+                        converted_columns.emplace_back(std::move(converted_column));
                     }
                 }
+                else
+                {
+                    auto converted_column = ColumnUInt8::create(rows);
+                    convertToUInt8(column, converted_column->getData());
+                    uint8_in_not_null.push_back(converted_column.get());
+                    converted_columns.emplace_back(std::move(converted_column));
+                }
+            }
+        }
+
+        bool has_not_null_column;
+        // first handle not-null column
+        if (!uint8_in_not_null.empty())
+        {
+            has_not_null_column = true;
+            if (uint8_in_not_null.size() == 1)
+            {
+                vec_res.assign(uint8_in_not_null[0]->getData());
             }
             else
             {
-                auto converted_column = ColumnUInt8::create(rows);
-                convertToUInt8(column, converted_column->getData(), vec_res_not_null, vec_input_has_null);
-                uint8_in.push_back(converted_column.get());
-                converted_columns.emplace_back(std::move(converted_column));
+                while (uint8_in_not_null.size() > 1)
+                {
+                    AssociativeOperationImpl<Impl, 10>::execute(uint8_in_not_null, vec_res);
+                    uint8_in_not_null.push_back(col_res.get());
+                }
+            }
+        }
+        // then handle nullable column
+        if (!uint8_in_nullable.empty())
+        {
+            if (has_not_null_column)
+            {
+                // if there is not null column, then need to append the current result to uint8_not_null_column
+                uint8_in_nullable.push_back(col_res.get());
+                null_map_in.push_back(&vec_res_is_null);
+            }
+            if (uint8_in_nullable.size() == 1)
+            {
+                // special case
+                vec_res.assign(uint8_in_nullable[0]->getData());
+                vec_res_is_null.assign(*null_map_in[0]);
+            }
+            else
+            {
+                while (uint8_in_nullable.size() > 1)
+                {
+                    NullableAssociativeOperationImpl<Impl, 10>::execute(
+                        uint8_in_nullable,
+                        null_map_in,
+                        vec_res,
+                        vec_res_is_null);
+                    uint8_in_nullable.push_back(col_res.get());
+                    null_map_in.push_back(&vec_res_is_null);
+                }
             }
         }
 
-        /// Effeciently combine all the columns of the correct type.
-        while (uint8_in.size() > 1)
+        if (has_consts)
         {
-            /// With a large block size, combining 6 columns per pass is the fastest.
-            /// When small - more, is faster.
-            AssociativeOperationImpl<Impl, 10>::execute(uint8_in, vec_res);
-            uint8_in.push_back(col_res.get());
-        }
-
-        /// This is possible if there is exactly one non-constant among the arguments, and it is of type UInt8.
-        if (uint8_in[0] != col_res.get())
-            vec_res.assign(uint8_in[0]->getData());
-
-        if constexpr (!special_impl_for_nulls)
-            block.getByPosition(result).column = std::move(col_res);
-        else
-        {
+            // if there is const, then apply the constant
             if (has_nullable_input_column)
             {
-                for (size_t i = 0; i < rows; i++)
+                for (size_t i = 0; i < rows; ++i)
                 {
-                    if (vec_input_has_null[i] && vec_res_not_null[i])
-                        Impl::adjustForNullValue(vec_res[i], vec_input_has_null[i]);
+                    Impl::applyNullable(
+                        const_val,
+                        const_val_is_null,
+                        vec_res[i],
+                        vec_res_is_null[i],
+                        vec_res[i],
+                        vec_res_is_null[i]);
                 }
-                block.getByPosition(result).column
-                    = ColumnNullable::create(std::move(col_res), std::move(col_input_has_null));
             }
             else
-                block.getByPosition(result).column = std::move(col_res);
+            {
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    Impl::apply(const_val, vec_res[i], vec_res[i]);
+                }
+            }
+        }
+
+        if (has_nullable_input_column)
+        {
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(col_res_is_null));
+        }
+        else
+        {
+            block.getByPosition(result).column = std::move(col_res);
         }
     }
 };

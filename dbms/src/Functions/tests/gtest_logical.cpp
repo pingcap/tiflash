@@ -46,7 +46,7 @@ protected:
 TEST_F(Logical, andTest)
 try
 {
-    const String & name = "binary_and";
+    const String & name = "and";
     // basic tests
     // false && false
     test(name, not_null_false_column, not_null_false_column, not_null_false_column);
@@ -156,7 +156,7 @@ CATCH
 TEST_F(Logical, orTest)
 try
 {
-    const String & name = "binary_or";
+    const String & name = "or";
     // basic tests
     // false || false
     test(name, not_null_false_column, not_null_false_column, not_null_false_column);
@@ -255,7 +255,7 @@ CATCH
 TEST_F(Logical, xorTest)
 try
 {
-    const String & name = "binary_xor";
+    const String & name = "xor";
     // basic tests
     // false xor false
     test(name, not_null_false_column, not_null_false_column, not_null_false_column);

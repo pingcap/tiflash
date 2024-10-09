@@ -132,52 +132,52 @@ public:
     ANY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)
 
 // and
-LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, And);
-LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, And);
-LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, And);
-LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, And);
-LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, And);
-LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, And);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_true, And);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_false, And);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_null, And);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_true, And);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_false, And);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_null, And);
-LOGICAL_BENCH(_nullable_uint8_1, _constant_true, And);
-LOGICAL_BENCH(_nullable_uint8_1, _constant_false, And);
-LOGICAL_BENCH(_nullable_uint8_1, _constant_null, And);
-LOGICAL_BENCH(_nullable_uint64_1, _constant_true, And);
-LOGICAL_BENCH(_nullable_uint64_1, _constant_false, And);
-LOGICAL_BENCH(_nullable_uint64_1, _constant_null, And);
+//LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, And);
+//LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, And);
+//LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, And);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_true, And);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_false, And);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_null, And);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_true, And);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_false, And);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_null, And);
+//LOGICAL_BENCH(_nullable_uint8_1, _constant_true, And);
+//LOGICAL_BENCH(_nullable_uint8_1, _constant_false, And);
+//LOGICAL_BENCH(_nullable_uint8_1, _constant_null, And);
+//LOGICAL_BENCH(_nullable_uint64_1, _constant_true, And);
+//LOGICAL_BENCH(_nullable_uint64_1, _constant_false, And);
+//LOGICAL_BENCH(_nullable_uint64_1, _constant_null, And);
 
 // or
-LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Or);
-LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, Or);
-LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, Or);
+//LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Or);
+//LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, Or);
+//LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, Or);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Or);
 LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, Or);
 LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, Or);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Or);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Or);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_null, Or);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Or);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Or);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_null, Or);
-LOGICAL_BENCH(_nullable_uint8_1, _constant_true, Or);
-LOGICAL_BENCH(_nullable_uint8_1, _constant_false, Or);
-LOGICAL_BENCH(_nullable_uint8_1, _constant_null, Or);
-LOGICAL_BENCH(_nullable_uint64_1, _constant_true, Or);
-LOGICAL_BENCH(_nullable_uint64_1, _constant_false, Or);
-LOGICAL_BENCH(_nullable_uint64_1, _constant_null, Or);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Or);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Or);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_null, Or);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Or);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Or);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_null, Or);
+//LOGICAL_BENCH(_nullable_uint8_1, _constant_true, Or);
+//LOGICAL_BENCH(_nullable_uint8_1, _constant_false, Or);
+//LOGICAL_BENCH(_nullable_uint8_1, _constant_null, Or);
+//LOGICAL_BENCH(_nullable_uint64_1, _constant_true, Or);
+//LOGICAL_BENCH(_nullable_uint64_1, _constant_false, Or);
+//LOGICAL_BENCH(_nullable_uint64_1, _constant_null, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, And);
+LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, And);
+LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, And);
 
 // xor
-LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Xor);
+//LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Xor);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Xor);
-LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Xor);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
-LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Xor);
+//LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Xor);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
+//LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
 
 } // namespace tests
 } // namespace DB
