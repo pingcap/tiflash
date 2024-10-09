@@ -612,12 +612,7 @@ try
         ASSERT_EQ(store->getLocalIndexInfosSnapshot(), nullptr);
     }
 
-    const size_t num_rows_write = 128;
-
-    // write to store before index built
-    write(num_rows_write);
-    // trigger mergeDelta for all segments
-    triggerMergeDelta();
+    const size_t num_rows_write = 5;
 
     {
         // Add vecotr index
@@ -645,6 +640,11 @@ try
         ASSERT_EQ(store->local_index_infos->size(), 1);
     }
 
+    // write to store before index built
+    write(num_rows_write);
+    // trigger mergeDelta for all segments
+    triggerMergeDelta();
+
     // check stable index has built for all segments
     waitStableIndexReady();
 
@@ -652,7 +652,7 @@ try
 
     // read from store
     {
-        read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 5)", vec_column_name, vec_column_id));
     }
 
     auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
