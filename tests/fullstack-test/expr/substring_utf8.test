@@ -13,21 +13,25 @@
 # limitations under the License.
 
 mysql> drop table if exists test.t
-mysql> create table test.t(a char(10))
-mysql> insert into test.t values(''), ('abc')
+mysql> create table test.t(a char(10), b int, c tinyint unsigned)
+mysql> insert into test.t values('', -3, 2), ('abc', -3, 2)
 mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
 
-mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select * from test.t where substring(a, -3, 4) = 'abc'
+mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select a from test.t where substring(a, -3, 4) = 'abc'
 a
 abc
 
-mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select * from test.t where substring(a, -3, 2) = 'ab'
+mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select a from test.t where substring(a, -3, 2) = 'ab'
 a
 abc
 
-mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select * from test.t where substring(a, -4, 3) = 'abc'
+mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select a from test.t where substring(a, b, c) = 'ab'
+a
+abc
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select a from test.t where substring(a, -4, 3) = 'abc'
 # Empty
 
 mysql> set session tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select count(*) from test.t where substring(a, 0, 3) = '' order by a
