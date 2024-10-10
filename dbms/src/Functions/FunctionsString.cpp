@@ -1898,29 +1898,6 @@ public:
             throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
     }
 
-private:
-    using VectorConstConstFunc = std::function<void(
-        const ColumnString::Chars_t &,
-        const ColumnString::Offsets &,
-        size_t,
-        size_t,
-        ColumnString::Chars_t &,
-        ColumnString::Offsets &)>;
-
-    static VectorConstConstFunc getVectorConstConstFunc(bool implicit_length, bool is_positive_start)
-    {
-        if (implicit_length)
-        {
-            return is_positive_start ? SubstringUTF8Impl::vectorConstConst<true, true>
-                                     : SubstringUTF8Impl::vectorConstConst<true, false>;
-        }
-        else
-        {
-            return is_positive_start ? SubstringUTF8Impl::vectorConstConst<false, true>
-                                     : SubstringUTF8Impl::vectorConstConst<false, false>;
-        }
-    }
-
     template <typename Integer>
     static const ColumnVector<Integer> * getInnerColumnVector(const ColumnPtr & column)
     {
@@ -1946,6 +1923,29 @@ private:
                 std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
                 || std::is_same_v<Integer, UInt64>);
             return val;
+        }
+    }
+
+private:
+    using VectorConstConstFunc = std::function<void(
+        const ColumnString::Chars_t &,
+        const ColumnString::Offsets &,
+        size_t,
+        size_t,
+        ColumnString::Chars_t &,
+        ColumnString::Offsets &)>;
+
+    static VectorConstConstFunc getVectorConstConstFunc(bool implicit_length, bool is_positive_start)
+    {
+        if (implicit_length)
+        {
+            return is_positive_start ? SubstringUTF8Impl::vectorConstConst<true, true>
+                                     : SubstringUTF8Impl::vectorConstConst<true, false>;
+        }
+        else
+        {
+            return is_positive_start ? SubstringUTF8Impl::vectorConstConst<false, true>
+                                     : SubstringUTF8Impl::vectorConstConst<false, false>;
         }
     }
 
@@ -2024,7 +2024,7 @@ public:
                   using LengthFieldType = typename LengthType::FieldType;
 
                   const ColumnVector<LengthFieldType> * column_vector_length
-                      = getInnerColumnVector<LengthFieldType>(column_length);
+                      = FunctionSubstringUTF8::getInnerColumnVector<LengthFieldType>(column_length);
                   if unlikely (!column_vector_length)
                       throw Exception(
                           fmt::format(
@@ -2040,7 +2040,9 @@ public:
                       if (column_length->isColumnConst())
                       {
                           // vector const
-                          size_t length = getValueFromLengthColumn<LengthFieldType>(*column_vector_length, 0);
+                          size_t length = FunctionSubstringUTF8::getValueFromLengthColumn<LengthFieldType>(
+                              *column_vector_length,
+                              0);
 
                           // for const 0, return const blank string.
                           if (0 == length)
@@ -2061,7 +2063,9 @@ public:
                       {
                           // vector vector
                           auto get_length_func = [column_vector_length](size_t i) {
-                              return getValueFromLengthColumn<LengthFieldType>(*column_vector_length, i);
+                              return FunctionSubstringUTF8::getValueFromLengthColumn<LengthFieldType>(
+                                  *column_vector_length,
+                                  i);
                           };
                           RightUTF8Impl::vectorVector(
                               col_string->getChars(),
@@ -2081,7 +2085,9 @@ public:
                       // When useDefaultImplementationForConstants is true, string and length are not both constants
                       assert(!column_length->isColumnConst());
                       auto get_length_func = [column_vector_length](size_t i) {
-                          return getValueFromLengthColumn<LengthFieldType>(*column_vector_length, i);
+                          return FunctionSubstringUTF8::getValueFromLengthColumn<LengthFieldType>(
+                              *column_vector_length,
+                              i);
                       };
                       RightUTF8Impl::constVector(
                           column_length->size(),
@@ -2117,34 +2123,6 @@ private:
             DataTypeInt16,
             DataTypeInt32,
             DataTypeInt64>(type.get(), std::forward<F>(f));
-    }
-
-    template <typename Integer>
-    static const ColumnVector<Integer> * getInnerColumnVector(const ColumnPtr & column)
-    {
-        if (column->isColumnConst())
-            return checkAndGetColumn<ColumnVector<Integer>>(
-                checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr().get());
-        return checkAndGetColumn<ColumnVector<Integer>>(column.get());
-    }
-
-    template <typename Integer>
-    static size_t getValueFromLengthColumn(const ColumnVector<Integer> & column, size_t index)
-    {
-        Integer val = column.getElement(index);
-        if constexpr (
-            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32>
-            || std::is_same_v<Integer, Int64>)
-        {
-            return val < 0 ? 0 : val;
-        }
-        else
-        {
-            static_assert(
-                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
-                || std::is_same_v<Integer, UInt64>);
-            return val;
-        }
     }
 };
 
