@@ -18,9 +18,9 @@ tcp_port = 9000
 
 [logger]
 count = 10
-errorlog = "/tmp/tiflash/log/error.log"
+log = "/tmp/tiflash/log/tiflash.log"
+errorlog = "/tmp/tiflash/log/tiflash_error.log"
 size = "1000M"
-log = "/tmp/tiflash/log/server.log"
 level = "trace"
 
 [profiles]
