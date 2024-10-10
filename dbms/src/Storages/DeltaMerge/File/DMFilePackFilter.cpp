@@ -197,8 +197,9 @@ void DMFilePackFilter::loadIndex(
             if (info == dmfile_meta->merged_sub_file_infos.end())
             {
                 throw Exception(
-                    fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)),
-                    ErrorCodes::LOGICAL_ERROR);
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Unknown index file {}",
+                    dmfile->colIndexPath(file_name_base));
             }
 
             auto file_path = dmfile->meta->mergedPath(info->second.number);
@@ -221,7 +222,7 @@ void DMFilePackFilter::loadIndex(
 
             auto buf = ChecksumReadBufferBuilder::build(
                 std::move(raw_data),
-                dmfile->colDataPath(file_name_base),
+                dmfile->colIndexPath(file_name_base), // just for debug
                 dmfile->getConfiguration()->getChecksumFrameLength(),
                 dmfile->getConfiguration()->getChecksumAlgorithm(),
                 dmfile->getConfiguration()->getChecksumFrameLength());
