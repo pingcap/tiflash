@@ -809,7 +809,7 @@ public:
             }
         }
 
-        if (in.size() + static_cast<UInt8>(has_consts))
+        if (in.size() + static_cast<UInt8>(has_consts) == 2)
         {
             // input is 2 column
             handleBinaryLogicalOp(
