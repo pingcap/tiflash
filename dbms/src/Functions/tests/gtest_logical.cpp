@@ -29,7 +29,6 @@ protected:
         const ColumnWithTypeAndName & col1,
         const ColumnWithTypeAndName & col2)
     {
-        // test 2 arg
         ASSERT_COLUMN_EQ(result, executeFunction(func_name, col1, col2));
     }
     ColumnWithTypeAndName not_null_false_column = createColumn<UInt8>({0, 0});
@@ -44,7 +43,7 @@ protected:
     ColumnWithTypeAndName nullable_null_const = createConstColumn<Nullable<UInt8>>(2, {});
 };
 
-TEST_F(Logical, andTest)
+TEST_F(Logical, binaryAndTest)
 try
 {
     const String & name = "and";
@@ -154,7 +153,7 @@ try
 }
 CATCH
 
-TEST_F(Logical, orTest)
+TEST_F(Logical, binaryOrTest)
 try
 {
     const String & name = "or";
@@ -253,7 +252,7 @@ try
 }
 CATCH
 
-TEST_F(Logical, xorTest)
+TEST_F(Logical, binaryXorTest)
 try
 {
     const String & name = "xor";
