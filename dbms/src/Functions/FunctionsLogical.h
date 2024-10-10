@@ -340,45 +340,11 @@ struct NullableAssociativeOperationImpl
     /// the constructor.
     inline std::pair<bool, bool> apply(size_t i) const
     {
-        bool a = static_cast<bool>(vec[i]);
-        bool is_null = (*null_map)[i];
-        // if constexpr (Op::isSaturable)
-        //{
-        //  cast a: UInt8 -> bool -> UInt8 is a trick
-        //  TiFlash converts columns with non-UInt8 type to UInt8 type and sets
-        //  value to 0 or 1 which correspond to false or true. However, for columns
-        //  with UInt8 type, no more convertion will be executed on them and the
-        //  values stored in them are 'origin' which means that they won't be
-        //  converted to 0 or 1. For example:
-        //    Input column with non-UInt8 type:
-        //       column_values = {-2, 0, 2}
-        //    then, they will be converted to:
-        //       vec = {1, 0, 1} (here vec stores converted values)
-        //
-        //    Input column with UInt8 type:
-        //       column_values = {1, 0, 2}
-        //    then, the vec will be:
-        //       vec = {1, 0, 2} (error, we only want 0 or 1)
-        //  See issue: https://github.com/pingcap/tidb/issues/37258
-        //     if (Op::isSaturatedValue(a, is_null))
-        //     {
-        //         res = a;
-        //         res_is_null = false;
-        //     }
-        //     else
-        //     {
-        //         UInt8 tmp, tmp_is_null;
-        //         continuation.apply(i, tmp, tmp_is_null);
-        //         Op::applyNullable(a, is_null, tmp, tmp_is_null, res,
-        //         res_is_null);
-        //     }
-        // }
-        // else
-        //{
         bool tmp, tmp_is_null;
         std::tie(tmp, tmp_is_null) = continuation.apply(i);
+        bool a = static_cast<bool>(vec[i]);
+        bool is_null = (*null_map)[i];
         return Op::applyNullable(a, is_null, tmp, tmp_is_null);
-        //}
     }
 };
 
