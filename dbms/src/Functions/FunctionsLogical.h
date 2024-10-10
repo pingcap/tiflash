@@ -25,7 +25,9 @@
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
 
+#include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "Columns/ColumnNothing.h"
@@ -73,19 +75,20 @@ struct AndImpl
     static inline bool isSaturatedValue(bool a) { return !a; }
     static inline bool isSaturatedValue(bool a, bool is_null) { return !is_null && !a; }
 
-    static inline void apply(bool a, bool b, UInt8 & res) { res = a && b; }
-    static inline void applyNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null)
+    static inline bool apply(bool a, bool b) { return a && b; }
+    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
     {
         // result is null if
         // 1. both a and b is null
         // 2. a is null and b is true
         // 3. b is null and a is true
-        res_is_null = (a_is_null && b_is_null) || (a_is_null && b) || (b_is_null && a);
+        auto res_is_null = (a_is_null && b_is_null) || (a_is_null && b) || (b_is_null && a);
         // when a_is_null/b_is_null == true, a/b could be either true or false, but
         // we don't need to consider this because if result_is_null = true, res is
         // meaningless if result_is_null = false, then b/a must be false, then a &&
         // b is always false
-        res = a && b;
+        auto res = a && b;
+        return std::make_pair(res, res_is_null);
     }
 };
 
@@ -109,19 +112,20 @@ struct OrImpl
         value = true;
     }
 
-    static inline void apply(bool a, bool b, UInt8 & res) { res = a || b; }
-    static inline void applyNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null)
+    static inline bool apply(bool a, bool b) { return a || b; }
+    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
     {
         // result is null if
         // 1. both a and b is null
         // 2. a is null and b is false
         // 3. b is null and a is false
-        res_is_null = (a_is_null && b_is_null) || (a_is_null && !b) || (b_is_null && !a);
+        auto res_is_null = (a_is_null && b_is_null) || (a_is_null && !b) || (b_is_null && !a);
         // when a_is_null/b_is_null == true, a/b could be either true or false, but
         // we don't need to consider this because if result_is_null = true, res is
         // meaningless if result_is_null = false, then b/a must be true, then a && b
         // is always true
-        res = a || b;
+        auto res = a || b;
+        return std::make_pair(res, res_is_null);
     }
 };
 
@@ -138,11 +142,12 @@ struct XorImpl
 
     static inline void adjustForNullValue(UInt8 &, UInt8 &) {}
 
-    static inline void apply(bool a, bool b, UInt8 & res) { res = a != b; }
-    static inline void applyNullable(bool a, bool a_is_null, bool b, bool b_is_null, UInt8 & res, UInt8 & res_is_null)
+    static inline bool apply(bool a, bool b) { return a != b; }
+    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
     {
-        res_is_null = a_is_null || b_is_null;
-        res = a != b;
+        auto res_is_null = a_is_null || b_is_null;
+        auto res = a != b;
+        return std::make_pair(res, res_is_null);
     }
 };
 
@@ -177,7 +182,7 @@ struct AssociativeOperationImpl
         size_t n = result.size();
         for (size_t i = 0; i < n; ++i)
         {
-            operation.apply(i, result[i]);
+            result[i] = operation.apply(i);
         }
     }
 
@@ -192,10 +197,10 @@ struct AssociativeOperationImpl
     {}
 
     /// Returns a combination of values in the i-th row of all columns stored in the constructor.
-    inline void apply(size_t i, UInt8 & res) const
+    inline bool apply(size_t i) const
     {
-        if constexpr (Op::isSaturable)
-        {
+       if constexpr (Op::isSaturable)
+       {
             // cast a: UInt8 -> bool -> UInt8 is a trick
             // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1
             // which correspond to false or true. However, for columns with UInt8 type,
@@ -213,18 +218,11 @@ struct AssociativeOperationImpl
             //      vec = {1, 0, 2} (error, we only want 0 or 1)
             // See issue: https://github.com/pingcap/tidb/issues/37258
             bool a = static_cast<bool>(vec[i]);
-            if (Op::isSaturatedValue(a))
-                res = a;
-            else
-            {
-                continuation.apply(i, res);
-            }
+            return Op::isSaturatedValue(a) ? a : continuation.apply(i);
         }
         else
         {
-            UInt8 tmp = false;
-            continuation.apply(i, tmp);
-            Op::apply(vec[i], tmp, res);
+            return Op::apply(vec[i], continuation.apply(i));
         }
     }
 };
@@ -242,7 +240,7 @@ struct AssociativeOperationImpl<Op, 2>
         size_t n = res.size();
         for (size_t i = 0; i < n; ++i)
         {
-            operation.apply(i, res[i]);
+            res[i] = operation.apply(i);
         }
     }
 
@@ -254,9 +252,9 @@ struct AssociativeOperationImpl<Op, 2>
         , b(in[in.size() - 1]->getData())
     {}
 
-    inline void apply(size_t i, UInt8 & res) const 
+    inline bool apply(size_t i) const 
     { 
-        Op::apply(a[i], b[i], res);
+        return Op::apply(a[i], b[i]);
     }
 };
 
@@ -273,7 +271,7 @@ struct AssociativeOperationImpl<Op, 1>
         throw Exception("Logical error: should not reach here");
     }
 
-    inline void apply(size_t , UInt8 & ) const 
+    inline bool apply(size_t) const 
     { 
         throw Exception("Logical error: should not reach here");
     }
@@ -302,7 +300,7 @@ struct NullableAssociativeOperationImpl
         size_t n = result.size();
         for (size_t i = 0; i < n; ++i)
         {
-            operation.apply(i, result[i], result_is_null[i]);
+            std::tie(result[i], result_is_null[i]) = operation.apply(i);
         }
     }
 
@@ -318,7 +316,7 @@ struct NullableAssociativeOperationImpl
     {}
 
     /// Returns a combination of values in the i-th row of all columns stored in the constructor.
-    inline void apply(size_t i, UInt8 & res, UInt8 & res_is_null) const
+    inline std::pair<bool, bool> apply(size_t i) const
     {
         bool a = static_cast<bool>(vec[i]);
         bool is_null = (*null_map)[i];
@@ -354,9 +352,9 @@ struct NullableAssociativeOperationImpl
         //}
         //else
         //{
-        UInt8 tmp, tmp_is_null;
-        continuation.apply(i, tmp, tmp_is_null);
-        Op::applyNullable(a, is_null, tmp, tmp_is_null, res, res_is_null);
+        bool tmp, tmp_is_null;
+        std::tie(tmp, tmp_is_null) = continuation.apply(i);
+        return Op::applyNullable(a, is_null, tmp, tmp_is_null);
         //}
     }
 };
@@ -375,7 +373,7 @@ struct NullableAssociativeOperationImpl<Op, 2>
         size_t n = res.size();
         for (size_t i = 0; i < n; ++i)
         {
-            operation.apply(i, res[i], res_is_null[i]);
+            std::tie(res[i], res_is_null[i]) = operation.apply(i);
         }
     }
 
@@ -391,9 +389,9 @@ struct NullableAssociativeOperationImpl<Op, 2>
         , b_null_map(null_map_in[null_map_in.size() - 1])
     {}
 
-    inline void apply(size_t i, UInt8 & res, UInt8 & res_is_null) const
+    inline std::pair<bool, bool> apply(size_t i) const
     {
-        Op::applyNullable(a[i],(*a_null_map)[i], b[i], (*b_null_map)[i], res, res_is_null);
+        return Op::applyNullable(a[i],(*a_null_map)[i], b[i], (*b_null_map)[i]);
     }
 };
 
@@ -410,7 +408,7 @@ struct NullableAssociativeOperationImpl<Op, 1>
         throw Exception("Logical error: should not reach here");
     }
 
-    inline void apply(size_t , UInt8 & , UInt8 & ) const
+    inline std::pair<bool, bool> apply(size_t ) const
     {
         throw Exception("Logical error: should not reach here");
     }
@@ -463,11 +461,11 @@ private:
             {
                 if constexpr (special_impl_for_nulls)
                 {
-                    Impl::applyNullable(res, res_is_null, const_val, const_val_is_null, res, res_is_null);
+                    std::tie(res, res_is_null) = Impl::applyNullable(res, res_is_null, const_val, const_val_is_null);
                 }
                 else
                 {
-                    Impl::apply(res, const_val, res);
+                    res = Impl::apply(res, const_val);
                 }
             }
             else
@@ -605,14 +603,14 @@ public:
             if (has_nullable_input_column)
             {
                 // test for true
-                Impl::applyNullable(const_val, const_val_is_null, true, false, const_res, const_res_is_null);
+                std::tie(const_res, const_res_is_null) = Impl::applyNullable(const_val, const_val_is_null, true, false);
                 // test for false
                 UInt8 res, res_is_null;
-                Impl::applyNullable(const_val, const_val_is_null, false, false, res, res_is_null);
+                std::tie(res, res_is_null) = Impl::applyNullable(const_val, const_val_is_null, false, false);
                 if (const_res == res && const_res_is_null == res_is_null)
                 {
                     // test for null
-                    Impl::applyNullable(const_val, const_val_is_null, false, true, res, res_is_null);
+                    std::tie(res, res_is_null) = Impl::applyNullable(const_val, const_val_is_null, false, true);
                     if (const_res == res && const_res_is_null == res_is_null)
                         result_is_constant = true;
                 }
@@ -621,10 +619,9 @@ public:
             {
                 assert(!const_val_is_null);
                 // test for true
-                Impl::apply(const_val, 1, const_res);
+                const_res = Impl::apply(const_val, 1);
                 // test for false
-                UInt8 res;
-                Impl::apply(const_val, 0, res);
+                UInt8 res = Impl::apply(const_val, 0);
                 if (const_res == res)
                     result_is_constant = true;
             }
@@ -786,11 +783,9 @@ public:
             {
                 for (size_t i = 0; i < rows; ++i)
                 {
-                    Impl::applyNullable(
+                    std::tie(vec_res[i], vec_res_is_null[i]) = Impl::applyNullable(
                         const_val,
                         const_val_is_null,
-                        vec_res[i],
-                        vec_res_is_null[i],
                         vec_res[i],
                         vec_res_is_null[i]);
                 }
@@ -799,7 +794,7 @@ public:
             {
                 for (size_t i = 0; i < rows; ++i)
                 {
-                    Impl::apply(const_val, vec_res[i], vec_res[i]);
+                    vec_res[i] = Impl::apply(const_val, vec_res[i]);
                 }
             }
         }
