@@ -279,6 +279,24 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
     return pos;
 }
 
+void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    getNullMapColumn().countSerializeByteSize(byte_size);
+    getNestedColumn().countSerializeByteSize(byte_size);
+}
+
+void ColumnNullable::serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const
+{
+    getNullMapColumn().serializeToPos(pos, start, end, has_null);
+    getNestedColumn().serializeToPos(pos, start, end, has_null);
+}
+
+void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer)
+{
+    getNullMapColumn().deserializeAndInsertFromPos(pos, align_buffer);
+    getNestedColumn().deserializeAndInsertFromPos(pos, align_buffer);
+}
+
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
     const auto & nullable_col = static_cast<const ColumnNullable &>(src);
@@ -315,7 +333,7 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnNullable::insertDisjunctFrom(const IColumn & src, const Offsets & position_vec)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
     getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);
@@ -508,11 +526,24 @@ void ColumnNullable::reserve(size_t n)
     getNullMapData().reserve(n);
 }
 
+void ColumnNullable::reserveAlign(size_t n, size_t alignment)
+{
+    getNestedColumn().reserveAlign(n, alignment);
+    getNullMapData().reserve(n, alignment);
+}
+
 void ColumnNullable::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
 {
     getNullMapColumn().reserve(n);
     total_memory_hint -= n * sizeof(UInt8);
     getNestedColumn().reserveWithTotalMemoryHint(n, total_memory_hint);
+}
+
+void ColumnNullable::reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment)
+{
+    getNullMapColumn().reserveAlign(n, alignment);
+    total_memory_hint -= n * sizeof(UInt8);
+    getNestedColumn().reserveAlignWithTotalMemoryHint(n, total_memory_hint, alignment);
 }
 
 size_t ColumnNullable::byteSize() const

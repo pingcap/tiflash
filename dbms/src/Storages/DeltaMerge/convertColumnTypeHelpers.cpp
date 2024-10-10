@@ -378,7 +378,7 @@ void convertColumnByColumnDefine(
         // not null -> nullable, set null map to all not null
         auto & memory_nullable_col = typeid_cast<ColumnNullable &>(*memory_col);
         auto & nullmap_data = memory_nullable_col.getNullMapData();
-        nullmap_data.resize_fill(rows_offset + rows_limit);
+        nullmap_data.resize_fill_zero(rows_offset + rows_limit);
 
         disk_col_not_null = disk_col;
         memory_col_not_null = memory_nullable_col.getNestedColumn().getPtr();
