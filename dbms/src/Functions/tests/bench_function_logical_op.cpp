@@ -41,13 +41,23 @@ protected:
     ColumnWithTypeAndName col_nullable_uint64_2;
     ColumnWithTypeAndName col_not_null_uint8_1;
     ColumnWithTypeAndName col_not_null_uint8_2;
+    ColumnWithTypeAndName col_not_null_uint8_3;
+    ColumnWithTypeAndName col_not_null_uint8_4;
+    ColumnWithTypeAndName col_not_null_uint8_5;
+    ColumnWithTypeAndName col_not_null_uint8_6;
     ColumnWithTypeAndName col_nullable_uint8_1;
     ColumnWithTypeAndName col_nullable_uint8_2;
+    ColumnWithTypeAndName col_nullable_uint8_3;
+    ColumnWithTypeAndName col_nullable_uint8_4;
+    ColumnWithTypeAndName col_nullable_uint8_5;
+    ColumnWithTypeAndName col_nullable_uint8_6;
     ColumnWithTypeAndName col_constant_null;
     ColumnWithTypeAndName col_constant_true;
     ColumnWithTypeAndName col_constant_false;
     DataTypePtr not_null_result_type;
     DataTypePtr nullable_result_type;
+    ColumnsWithTypeAndName not_null_uint8_columns;
+    ColumnsWithTypeAndName nullable_uint8_columns;
 
 public:
     void SetUp(const benchmark::State &) override
@@ -60,10 +70,30 @@ public:
         col_nullable_uint64_2 = ColumnGenerator::instance().generate(opts);
         opts.type_name = "UInt8";
         col_not_null_uint8_1 = ColumnGenerator::instance().generate(opts);
+        not_null_uint8_columns.push_back(col_not_null_uint8_1);
         col_not_null_uint8_2 = ColumnGenerator::instance().generate(opts);
+        not_null_uint8_columns.push_back(col_not_null_uint8_2);
+        col_not_null_uint8_3 = ColumnGenerator::instance().generate(opts);
+        not_null_uint8_columns.push_back(col_not_null_uint8_3);
+        col_not_null_uint8_4 = ColumnGenerator::instance().generate(opts);
+        not_null_uint8_columns.push_back(col_not_null_uint8_4);
+        col_not_null_uint8_5 = ColumnGenerator::instance().generate(opts);
+        not_null_uint8_columns.push_back(col_not_null_uint8_5);
+        col_not_null_uint8_6 = ColumnGenerator::instance().generate(opts);
+        not_null_uint8_columns.push_back(col_not_null_uint8_6);
         opts.type_name = "Nullable(UInt8)";
         col_nullable_uint8_1 = ColumnGenerator::instance().generate(opts);
+        nullable_uint8_columns.push_back(col_not_null_uint8_1);
         col_nullable_uint8_2 = ColumnGenerator::instance().generate(opts);
+        nullable_uint8_columns.push_back(col_not_null_uint8_2);
+        col_nullable_uint8_3 = ColumnGenerator::instance().generate(opts);
+        nullable_uint8_columns.push_back(col_not_null_uint8_3);
+        col_nullable_uint8_4 = ColumnGenerator::instance().generate(opts);
+        nullable_uint8_columns.push_back(col_not_null_uint8_4);
+        col_nullable_uint8_5 = ColumnGenerator::instance().generate(opts);
+        nullable_uint8_columns.push_back(col_not_null_uint8_5);
+        col_nullable_uint8_6 = ColumnGenerator::instance().generate(opts);
+        nullable_uint8_columns.push_back(col_not_null_uint8_6);
         col_constant_null = col_nullable_uint64_1;
         col_constant_true = col_nullable_uint64_1;
         col_constant_false = col_nullable_uint64_1;
@@ -182,6 +212,100 @@ LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
 //LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Xor);
 //LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
 //LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
+#define BINARY_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                         \
+    BENCHMARK_DEFINE_F(LogicalOpBench, binaryLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
+    (benchmark::State & state)                                                                 \
+    try                                                                                        \
+    {                                                                                          \
+        FunctionBinary##OP_NAME function_binary;                                               \
+        ColumnsWithTypeAndName columns;                                                        \
+        if ((PARAM_NUM) > 6)                                                                   \
+            throw Exception("not supported");                                                  \
+        ColumnNumbers arguments;                                                               \
+        if ((NULLABLE) == 1)                                                          \
+        {                                                                                      \
+            for (size_t i = 0; i < (PARAM_NUM); ++i)                                           \
+            {                                                                                  \
+                columns.push_back(nullable_uint8_columns[i]);                                  \
+                arguments.push_back(i);                                                        \
+            }                                                                                  \
+        }                                                                                      \
+        else                                                                                   \
+        {                                                                                      \
+            for (size_t i = 0; i < (PARAM_NUM); ++i)                                           \
+            {                                                                                  \
+                columns.push_back(not_null_uint8_columns[i]);                                  \
+                arguments.push_back(i);                                                        \
+            }                                                                                  \
+        }                                                                                      \
+        Block input(columns);                                                                  \
+        if (columns[0].column->isColumnNullable())                                             \
+            input.insert({nullptr, nullable_result_type, "res"});                              \
+        else                                                                                   \
+            input.insert({nullptr, not_null_result_type, "res"});                              \
+        for (auto _ : state)                                                                   \
+        {                                                                                      \
+            function_binary.executeImpl(input, arguments, (PARAM_NUM));                        \
+        }                                                                                      \
+    }                                                                                          \
+    CATCH                                                                                      \
+    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE)->Iterations(1000);
+
+#define ANY_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                            \
+    BENCHMARK_DEFINE_F(LogicalOpBench, anyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
+    (benchmark::State & state)                                                                 \
+    try                                                                                        \
+    {                                                                                          \
+        Function##OP_NAME function_binary;                                                     \
+        ColumnsWithTypeAndName columns;                                                        \
+        if ((PARAM_NUM) > 6)                                                                   \
+            throw Exception("not supported");                                                  \
+        ColumnNumbers arguments;                                                               \
+        if ((NULLABLE) == 1)                                                          \
+        {                                                                                      \
+            for (size_t i = 0; i < (PARAM_NUM); ++i)                                           \
+            {                                                                                  \
+                columns.push_back(nullable_uint8_columns[i]);                                  \
+                arguments.push_back(i);                                                        \
+            }                                                                                  \
+        }                                                                                      \
+        else                                                                                   \
+        {                                                                                      \
+            for (size_t i = 0; i < (PARAM_NUM); ++i)                                           \
+            {                                                                                  \
+                columns.push_back(not_null_uint8_columns[i]);                                  \
+                arguments.push_back(i);                                                        \
+            }                                                                                  \
+        }                                                                                      \
+        Block input(columns);                                                                  \
+        if (columns[0].column->isColumnNullable())                                             \
+            input.insert({nullptr, nullable_result_type, "res"});                              \
+        else                                                                                   \
+            input.insert({nullptr, not_null_result_type, "res"});                              \
+        for (auto _ : state)                                                                   \
+        {                                                                                      \
+            function_binary.executeImpl(input, arguments, (PARAM_NUM));                        \
+        }                                                                                      \
+    }                                                                                          \
+    CATCH                                                                                      \
+    BENCHMARK_REGISTER_F(LogicalOpBench, anyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE)->Iterations(1000);
+
+BINARY_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
+ANY_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
+BINARY_LOGICAL_BENCH_MULTI_PARAM(4, And, 0);
+ANY_LOGICAL_BENCH_MULTI_PARAM(4, And, 0);
+BINARY_LOGICAL_BENCH_MULTI_PARAM(5, And, 0);
+ANY_LOGICAL_BENCH_MULTI_PARAM(5, And, 0);
+BINARY_LOGICAL_BENCH_MULTI_PARAM(6, And, 0);
+ANY_LOGICAL_BENCH_MULTI_PARAM(6, And, 0);
+BINARY_LOGICAL_BENCH_MULTI_PARAM(3, And, 1);
+ANY_LOGICAL_BENCH_MULTI_PARAM(3, And, 1);
+BINARY_LOGICAL_BENCH_MULTI_PARAM(4, And, 1);
+ANY_LOGICAL_BENCH_MULTI_PARAM(4, And, 1);
+BINARY_LOGICAL_BENCH_MULTI_PARAM(5, And, 1);
+ANY_LOGICAL_BENCH_MULTI_PARAM(5, And, 1);
+BINARY_LOGICAL_BENCH_MULTI_PARAM(6, And, 1);
+ANY_LOGICAL_BENCH_MULTI_PARAM(6, And, 1);
 
 } // namespace tests
 } // namespace DB
