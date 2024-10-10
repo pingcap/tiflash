@@ -283,7 +283,7 @@ struct NullableAssociativeOperationImpl
     /// Erases the N last columns from `in` (if there are less, then all) and puts into `result` their combination.
     static void NO_INLINE execute(
         UInt8ColumnPtrs & in,
-        std::vector<const UInt8Container *> null_map_in,
+        std::vector<const UInt8Container *> & null_map_in,
         UInt8Container & result,
         UInt8Container & result_is_null)
     {
@@ -309,7 +309,7 @@ struct NullableAssociativeOperationImpl
     NullableAssociativeOperationImpl<Op, N - 1> continuation;
 
     /// Remembers the last N columns from `in`.
-    NullableAssociativeOperationImpl(UInt8ColumnPtrs & in, std::vector<const UInt8Container *> null_map_in)
+    NullableAssociativeOperationImpl(UInt8ColumnPtrs & in, std::vector<const UInt8Container *> & null_map_in)
         : vec(in[in.size() - N]->getData())
         , null_map(null_map_in[null_map_in.size() - N])
         , continuation(in, null_map_in)
@@ -728,6 +728,35 @@ public:
             }
         }
 
+        if (uint8_in_not_null.size() == 1 && uint8_in_nullable.size() == 1)
+        {
+            const auto & data1 = uint8_in_not_null[0]->getData();
+            const auto & data2 = uint8_in_nullable[0]->getData();
+            const auto & null_map_2 = *null_map_in[0];
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    std::tie(vec_res[i], vec_res_is_null[i]) = Impl::applyNullable(
+                        data1[i],
+                        false,
+                        data2[i],
+                        null_map_2[i]);
+                }
+        }
+        else if (uint8_in_not_null.empty() && uint8_in_nullable.size() == 2)
+        {
+                while (uint8_in_nullable.size() > 1)
+                {
+                    NullableAssociativeOperationImpl<Impl, 6>::execute(
+                        uint8_in_nullable,
+                        null_map_in,
+                        vec_res,
+                        vec_res_is_null);
+                    uint8_in_nullable.push_back(col_res.get());
+                    null_map_in.push_back(&vec_res_is_null);
+                }
+        }
+        else
+        {
         bool has_not_null_column;
         // first handle not-null column
         if (!uint8_in_not_null.empty())
@@ -741,7 +770,7 @@ public:
             {
                 while (uint8_in_not_null.size() > 1)
                 {
-                    AssociativeOperationImpl<Impl, 10>::execute(uint8_in_not_null, vec_res);
+                    AssociativeOperationImpl<Impl, 6>::execute(uint8_in_not_null, vec_res);
                     uint8_in_not_null.push_back(col_res.get());
                 }
             }
@@ -765,7 +794,7 @@ public:
             {
                 while (uint8_in_nullable.size() > 1)
                 {
-                    NullableAssociativeOperationImpl<Impl, 10>::execute(
+                    NullableAssociativeOperationImpl<Impl, 6>::execute(
                         uint8_in_nullable,
                         null_map_in,
                         vec_res,
@@ -774,6 +803,7 @@ public:
                     null_map_in.push_back(&vec_res_is_null);
                 }
             }
+        }
         }
 
         if (has_consts)
