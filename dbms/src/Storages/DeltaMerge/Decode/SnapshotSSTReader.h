@@ -68,4 +68,50 @@ struct SSTScanSoftLimit
     }
 };
 
+class SnapshotSSTReader
+{
+public:
+    SnapshotSSTReader(
+        const SSTViewVec & snaps,
+        const TiFlashRaftProxyHelper * proxy_helper,
+        RegionID region_id,
+        UInt64 snapshot_index,
+        const ImutRegionRangePtr & region_range,
+        std::optional<SSTScanSoftLimit> && soft_limit_,
+        const LoggerPtr & log_);
+
+    // Currently it only takes effect if using tablet sst reader which is usually a raftstore v2 case.
+    // Otherwise will return zero.
+    size_t getApproxBytes() const;
+    std::vector<std::string> findSplitKeys(size_t splits_count) const;
+    size_t getSplitId() const
+    {
+        return soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
+    }
+
+    using SSTReaderPtr = std::unique_ptr<SSTReader>;
+    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
+    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
+
+    void checkFinishedState() const
+    {
+        checkCFFinishedState(ColumnFamilyType::Write, write_cf_reader.get());
+        checkCFFinishedState(ColumnFamilyType::Default, default_cf_reader.get());
+        checkCFFinishedState(ColumnFamilyType::Lock, lock_cf_reader.get());
+    }
+    void checkCFFinishedState(ColumnFamilyType cf, SSTReader * reader) const;
+
+    void reset()
+    {
+        write_cf_reader.reset();
+        default_cf_reader.reset();
+        lock_cf_reader.reset();
+    }
+
+    std::optional<SSTScanSoftLimit> soft_limit;
+    LoggerPtr log;
+    SSTReaderPtr write_cf_reader;
+    SSTReaderPtr default_cf_reader;
+    SSTReaderPtr lock_cf_reader;
+};
 } // namespace DB::DM
