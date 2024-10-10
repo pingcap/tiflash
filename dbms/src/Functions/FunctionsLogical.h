@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "Columns/ColumnNothing.h"
+#include "Common/Exception.h"
 #include "Common/FieldVisitors.h"
 #include "Core/Field.h"
 #include "Core/Types.h"
@@ -229,6 +230,37 @@ struct AssociativeOperationImpl
 };
 
 template <typename Op>
+struct AssociativeOperationImpl<Op, 2>
+{
+    static void execute(UInt8ColumnPtrs & in, UInt8Container & res)
+    {
+        if (in.size() <= 1)
+            throw Exception("should not reach here");
+        AssociativeOperationImpl<Op, 2> operation(in);
+        in.erase(in.end() - 2, in.end());
+
+        size_t n = res.size();
+        for (size_t i = 0; i < n; ++i)
+        {
+            operation.apply(i, res[i]);
+        }
+    }
+
+    const UInt8Container & a;
+    const UInt8Container & b;
+
+    explicit AssociativeOperationImpl(UInt8ColumnPtrs & in)
+        : a(in[in.size() - 2]->getData())
+        , b(in[in.size() - 1]->getData())
+    {}
+
+    inline void apply(size_t i, UInt8 & res) const 
+    { 
+        Op::apply(a[i], b[i], res);
+    }
+};
+
+template <typename Op>
 struct AssociativeOperationImpl<Op, 1>
 {
     static void execute(UInt8ColumnPtrs &, UInt8Container &)
@@ -236,13 +268,15 @@ struct AssociativeOperationImpl<Op, 1>
         throw Exception("Logical error: AssociativeOperationImpl<Op, 1>::execute called", ErrorCodes::LOGICAL_ERROR);
     }
 
-    const UInt8Container & vec;
+    explicit AssociativeOperationImpl(UInt8ColumnPtrs &)
+    {
+        throw Exception("Logical error: should not reach here");
+    }
 
-    explicit AssociativeOperationImpl(UInt8ColumnPtrs & in)
-        : vec(in[in.size() - 1]->getData())
-    {}
-
-    inline void apply(size_t i, UInt8 & res) const { res = static_cast<bool>(vec[i]); }
+    inline void apply(size_t , UInt8 & ) const 
+    { 
+        throw Exception("Logical error: should not reach here");
+    }
 };
 
 template <typename Op, size_t N>
@@ -328,6 +362,42 @@ struct NullableAssociativeOperationImpl
 };
 
 template <typename Op>
+struct NullableAssociativeOperationImpl<Op, 2>
+{
+    static void execute(UInt8ColumnPtrs & in, std::vector<const UInt8Container *> & null_map_in, UInt8Container & res, UInt8Container & res_is_null)
+    {
+        if (in.size() <= 1)
+            throw Exception("Logical error: should not reach here");
+        NullableAssociativeOperationImpl<Op, 2> operation(in, null_map_in);
+        in.erase(in.end() - 2, in.end());
+        null_map_in.erase(null_map_in.end() - 2, null_map_in.end());
+
+        size_t n = res.size();
+        for (size_t i = 0; i < n; ++i)
+        {
+            operation.apply(i, res[i], res_is_null[i]);
+        }
+    }
+
+    const UInt8Container & a;
+    const UInt8Container * a_null_map;
+    const UInt8Container & b;
+    const UInt8Container * b_null_map;
+
+    NullableAssociativeOperationImpl(UInt8ColumnPtrs & in, std::vector<const UInt8Container *> & null_map_in)
+        : a(in[in.size() - 2]->getData())
+        , a_null_map(null_map_in[null_map_in.size() - 2])
+        , b(in[in.size() - 1]->getData())
+        , b_null_map(null_map_in[null_map_in.size() - 1])
+    {}
+
+    inline void apply(size_t i, UInt8 & res, UInt8 & res_is_null) const
+    {
+        Op::applyNullable(a[i],(*a_null_map)[i], b[i], (*b_null_map)[i], res, res_is_null);
+    }
+};
+
+template <typename Op>
 struct NullableAssociativeOperationImpl<Op, 1>
 {
     static void execute(UInt8ColumnPtrs &, std::vector<const UInt8Container *> &, UInt8Container &, UInt8Container &)
@@ -335,18 +405,14 @@ struct NullableAssociativeOperationImpl<Op, 1>
         throw Exception("Logical error: AssociativeOperationImpl<Op, 1>::execute called", ErrorCodes::LOGICAL_ERROR);
     }
 
-    const UInt8Container & vec;
-    const UInt8Container * null_map;
-
-    explicit NullableAssociativeOperationImpl(UInt8ColumnPtrs & in, std::vector<const UInt8Container *> & null_map_in)
-        : vec(in[in.size() - 1]->getData())
-        , null_map(null_map_in[null_map_in.size() - 1])
-    {}
-
-    inline void apply(size_t i, UInt8 & res, UInt8 & res_is_null) const
+    NullableAssociativeOperationImpl(UInt8ColumnPtrs & , std::vector<const UInt8Container *> & )
     {
-        res = static_cast<bool>(vec[i]);
-        res_is_null = (*null_map)[i];
+        throw Exception("Logical error: should not reach here");
+    }
+
+    inline void apply(size_t , UInt8 & , UInt8 & ) const
+    {
+        throw Exception("Logical error: should not reach here");
     }
 };
 
