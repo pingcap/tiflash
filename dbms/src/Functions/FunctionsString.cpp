@@ -1681,7 +1681,6 @@ public:
         bool is_start_type_valid
             = getNumberType(block.getByPosition(arguments[1]).type, [&](const auto & start_type, bool) {
                   using StartType = std::decay_t<decltype(start_type)>;
-                  // Int64 / UInt64
                   using StartFieldType = typename StartType::FieldType;
                   const ColumnVector<StartFieldType> * column_vector_start
                       = getInnerColumnVector<StartFieldType>(column_start);
@@ -1705,7 +1704,6 @@ public:
                               block.getByPosition(arguments[2]).type,
                               [&](const auto & length_type, bool) {
                                   using LengthType = std::decay_t<decltype(length_type)>;
-                                  // Int64 / UInt64
                                   using LengthFieldType = typename LengthType::FieldType;
                                   const ColumnVector<LengthFieldType> * column_vector_length
                                       = getInnerColumnVector<LengthFieldType>(block.getByPosition(arguments[2]).column);
@@ -1773,7 +1771,6 @@ public:
                               block.getByPosition(arguments[2]).type,
                               [&](const auto & length_type, bool) {
                                   using LengthType = std::decay_t<decltype(length_type)>;
-                                  // Int64 / UInt64
                                   using LengthFieldType = typename LengthType::FieldType;
                                   const ColumnVector<LengthFieldType> * column_vector_length
                                       = getInnerColumnVector<LengthFieldType>(column_length);
@@ -1968,7 +1965,6 @@ public:
         bool is_length_type_valid
             = getLengthType(block.getByPosition(arguments[1]).type, [&](const auto & length_type, bool) {
                   using LengthType = std::decay_t<decltype(length_type)>;
-                  // Int64 / UInt64
                   using LengthFieldType = typename LengthType::FieldType;
 
                   const ColumnVector<LengthFieldType> * column_vector_length
