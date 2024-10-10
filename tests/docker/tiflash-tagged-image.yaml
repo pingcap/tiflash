@@ -19,17 +19,16 @@ services:
   # (engine DeltaTree)
   tiflash0:
     image: hub.pingcap.net/tiflash/tics:${TAG:-master}
+    security_opt:
+      - seccomp:unconfined
     volumes:
       - ./config/tiflash_dt.toml:/config.toml:ro
+      - ./config/proxy.toml:/proxy.toml:ro
+      - ./config/cipher-file-256:/cipher-file-256:ro
       - ./data/tiflash:/tmp/tiflash/data
       - ./log/tiflash:/tmp/tiflash/log
       - ..:/tests
       - ../docker/_env.sh:/tests/_env.sh
-      - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
-      - ./config/proxy.toml:/proxy.toml:ro
-      - ./config/cipher-file-256:/cipher-file-256:ro
-      - ./data/proxy:/data
-      - ./log/proxy:/log
     command:
       - --config-file
       - /config.toml

@@ -22,9 +22,8 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./config/tiflash_dt_force_enable_lm.toml:/config.toml:ro
-      - ./config/proxy.toml:/proxy.toml:ro
-      - ./config/cipher-file-256:/cipher-file-256:ro
+      - ./config/tiflash_dt.toml:/config.toml:ro
+      - ./config/proxy_disable_encrypt.toml:/proxy.toml:ro
       - ./data/tiflash:/tmp/tiflash/data
       - ./log/tiflash:/tmp/tiflash/log
       - ..:/tests
