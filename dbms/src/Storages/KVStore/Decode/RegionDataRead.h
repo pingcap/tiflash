@@ -77,6 +77,7 @@ struct PrehandleResult
         size_t max_split_write_cf_keys = 0;
         // Will be set in preHandleSnapshotToFiles
         size_t start_time = 0;
+        size_t end_time = 0;
 
         void mergeFrom(const Stats & other)
         {
@@ -91,6 +92,8 @@ struct PrehandleResult
             default_cf_keys += other.default_cf_keys;
             max_split_write_cf_keys = std::max(max_split_write_cf_keys, other.max_split_write_cf_keys);
         }
+
+        Stats clone() { return *this; }
     };
     Stats stats;
 };

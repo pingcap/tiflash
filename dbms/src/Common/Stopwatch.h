@@ -69,6 +69,8 @@ public:
         is_running = true;
     }
 
+    UInt64 getStartMillis() { return start_ns / 1000000UL; }
+
     void stop()
     {
         stop_ns = nanosecondsWithBound(start_ns);

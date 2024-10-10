@@ -288,7 +288,12 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             term,
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
+
         result.stats.start_time = start_time;
+        uint64_t end_time
+            = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                  .count();
+        result.stats.end_time = end_time;
         return result;
     }
     catch (DB::Exception & e)
