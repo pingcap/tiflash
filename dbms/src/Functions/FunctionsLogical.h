@@ -15,11 +15,18 @@
 #pragma once
 
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnNothing.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
+#include <Common/Exception.h>
+#include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
+#include <Core/Field.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionUnaryArithmetic.h>
 #include <Functions/IFunction.h>
@@ -30,13 +37,6 @@
 #include <utility>
 #include <vector>
 
-#include "Columns/ColumnNothing.h"
-#include "Columns/IColumn.h"
-#include "Common/Exception.h"
-#include "Common/FieldVisitors.h"
-#include "Core/Field.h"
-#include "Core/Types.h"
-#include "Functions/FunctionBinaryArithmetic.h"
 
 namespace DB
 {
@@ -45,36 +45,11 @@ namespace ErrorCodes
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-/** Behaviour in presence of NULLs:
- *
- * Functions AND, XOR, NOT use default implementation for NULLs:
- * - if one of arguments is Nullable, they return Nullable result where NULLs
- * are returned when at least one argument was NULL.
- *
- * But function OR is different.
- * It always return non-Nullable result and NULL are equivalent to 0 (false).
- * For example, 1 OR NULL returns 1, not NULL.
- */
-
 struct AndImpl
 {
     static constexpr bool isSaturable = true;
 
-    static inline bool resNotNull(const Field & value)
-    {
-        return !value.isNull() && applyVisitor(FieldVisitorConvertToNumber<bool>(), value) == 0;
-    }
-
-    static inline bool resNotNull(UInt8 value, UInt8 is_null) { return !is_null && !value; }
-
-    static inline void adjustForNullValue(UInt8 & value, UInt8 & is_null)
-    {
-        is_null = false;
-        value = false;
-    }
-
     static inline bool isSaturatedValue(bool a) { return !a; }
-    static inline bool isSaturatedValue(bool a, bool is_null) { return !is_null && !a; }
 
     static inline bool apply(bool a, bool b) { return a && b; }
     static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
@@ -109,20 +84,6 @@ struct OrImpl
     static constexpr bool isSaturable = true;
 
     static inline bool isSaturatedValue(bool a) { return a; }
-    static inline bool isSaturatedValue(bool a, bool is_null) { return !is_null && a; }
-
-    static inline bool resNotNull(const Field & value)
-    {
-        return !value.isNull() && applyVisitor(FieldVisitorConvertToNumber<bool>(), value) == 1;
-    }
-
-    static inline bool resNotNull(UInt8 value, UInt8 is_null) { return !is_null && value; }
-
-    static inline void adjustForNullValue(UInt8 & value, UInt8 & is_null)
-    {
-        is_null = false;
-        value = true;
-    }
 
     static inline bool apply(bool a, bool b) { return a || b; }
     static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
@@ -157,13 +118,6 @@ struct XorImpl
     static constexpr bool isSaturable = false;
 
     static inline bool isSaturatedValue(bool) { return false; }
-    static inline bool isSaturatedValue(bool, bool) { return false; }
-
-    static inline bool resNotNull(const Field &) { return true; }
-
-    static inline bool resNotNull(UInt8, UInt8) { return true; }
-
-    static inline void adjustForNullValue(UInt8 &, UInt8 &) {}
 
     static inline bool apply(bool a, bool b) { return a != b; }
     static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
@@ -292,9 +246,15 @@ struct AssociativeOperationImpl<Op, 1>
         throw Exception("Logical error: AssociativeOperationImpl<Op, 1>::execute called", ErrorCodes::LOGICAL_ERROR);
     }
 
-    explicit AssociativeOperationImpl(UInt8ColumnPtrs &) { throw Exception("Logical error: should not reach here"); }
+    explicit AssociativeOperationImpl(UInt8ColumnPtrs &)
+    {
+        throw Exception("Logical error: AssociativeOperationImpl<Op, 1> is constructed", ErrorCodes::LOGICAL_ERROR);
+    }
 
-    inline bool apply(size_t) const { throw Exception("Logical error: should not reach here"); }
+    inline bool apply(size_t) const
+    {
+        throw Exception("Logical error: AssociativeOperationImpl<Op, 1>::apply called", ErrorCodes::LOGICAL_ERROR);
+    }
 };
 
 template <typename Op, size_t N>
@@ -393,15 +353,24 @@ struct NullableAssociativeOperationImpl<Op, 1>
 {
     static void execute(UInt8ColumnPtrs &, std::vector<const UInt8Container *> &, UInt8Container &, UInt8Container &)
     {
-        throw Exception("Logical error: AssociativeOperationImpl<Op, 1>::execute called", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Logical error: NullableAssociativeOperationImpl<Op, 1>::execute called",
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     NullableAssociativeOperationImpl(UInt8ColumnPtrs &, std::vector<const UInt8Container *> &)
     {
-        throw Exception("Logical error: should not reach here");
+        throw Exception(
+            "Logical error: NullableAssociativeOperationImpl<Op, 1> is constructed",
+            ErrorCodes::LOGICAL_ERROR);
     }
 
-    inline std::pair<bool, bool> apply(size_t) const { throw Exception("Logical error: should not reach here"); }
+    inline std::pair<bool, bool> apply(size_t) const
+    {
+        throw Exception(
+            "Logical error: NullableAssociativeOperationImpl<Op, 1>::apply called",
+            ErrorCodes::LOGICAL_ERROR);
+    }
 };
 
 /**
@@ -480,48 +449,6 @@ private:
         size_t n = res.size();
         for (size_t i = 0; i < n; ++i)
             res[i] = !!vec[i];
-        return true;
-    }
-
-    bool convertColumnNothingToUInt8(const IColumn * column, UInt8Container & res) const
-    {
-        const auto * col = checkAndGetColumn<ColumnNothing>(column);
-        if (!col)
-            return false;
-
-        size_t n = res.size();
-        for (size_t i = 0; i < n; ++i)
-            res[i] = false;
-        return true;
-    }
-
-    template <typename T>
-    bool convertNullableTypeToUInt8(
-        const IColumn * column,
-        UInt8Container & res,
-        UInt8Container & res_not_null,
-        UInt8Container & input_has_null) const
-    {
-        const auto * col_nullable = checkAndGetColumn<ColumnNullable>(column);
-
-        auto col = checkAndGetColumn<ColumnVector<T>>(&col_nullable->getNestedColumn());
-        if (!col)
-            return false;
-
-        const auto & vec = col->getData();
-        const auto & null_map = col_nullable->getNullMapData();
-
-        size_t n = res.size();
-        for (size_t i = 0; i < n; ++i)
-        {
-            res[i] = !!vec[i] && !null_map[i];
-            if constexpr (special_impl_for_nulls)
-            {
-                res_not_null[i] |= Impl::resNotNull(res[i], null_map[i]);
-                input_has_null[i] |= null_map[i];
-            }
-        }
-
         return true;
     }
 

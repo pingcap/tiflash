@@ -29,6 +29,7 @@ protected:
         const ColumnWithTypeAndName & col1,
         const ColumnWithTypeAndName & col2)
     {
+        // test 2 arg
         ASSERT_COLUMN_EQ(result, executeFunction(func_name, col1, col2));
     }
     ColumnWithTypeAndName not_null_false_column = createColumn<UInt8>({0, 0});
