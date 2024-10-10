@@ -719,6 +719,85 @@ protected:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
+template <typename...>
+struct TestTypeList
+{
+};
+
+using TestNullableIntTypes = TestTypeList<Nullable<Int8>, Nullable<Int16>, Nullable<Int32>, Nullable<Int64>>;
+
+using TestNullableUIntTypes = TestTypeList<Nullable<UInt8>, Nullable<UInt16>, Nullable<UInt32>, Nullable<UInt64>>;
+
+using TestIntTypes = TestTypeList<Int8, Int16, Int32, Int64>;
+
+using TestUIntTypes = TestTypeList<UInt8, UInt16, UInt32, UInt64>;
+
+using TestAllIntTypes
+    = TestTypeList<Nullable<Int8>, Nullable<Int16>, Nullable<Int32>, Nullable<Int64>, Int8, Int16, Int32, Int64>;
+
+using TestAllUIntTypes = TestTypeList<
+    Nullable<UInt8>,
+    Nullable<UInt16>,
+    Nullable<UInt32>,
+    Nullable<UInt64>,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64>;
+
+template <typename T1, typename T2List, template <typename, typename> class Func, typename FuncParam>
+struct TestTypeSingle;
+
+template <typename T1, typename T2, typename... T2Rest, template <typename, typename> class Func, typename FuncParam>
+struct TestTypeSingle<T1, TestTypeList<T2, T2Rest...>, Func, FuncParam>
+{
+    static void run(FuncParam & p)
+    {
+        Func<T1, T2>::operator()(p);
+        // Recursively handle the rest of T2List
+        TestTypeSingle<T1, TestTypeList<T2Rest...>, Func, FuncParam>::run(p);
+    }
+};
+
+template <typename T1, template <typename, typename> class Func, typename FuncParam>
+struct TestTypeSingle<T1, TestTypeList<>, Func, FuncParam>
+{
+    static void run(FuncParam &)
+    {
+        // Do nothing when T2List is empty
+    }
+};
+
+template <typename T1List, typename T2List, template <typename, typename> class Func, typename FuncParam>
+struct TestTypePair;
+
+template <
+    typename T1,
+    typename... T1Rest,
+    typename T2List,
+    template <typename, typename>
+    class Func,
+    typename FuncParam>
+struct TestTypePair<TestTypeList<T1, T1Rest...>, T2List, Func, FuncParam>
+{
+    static void run(FuncParam & p)
+    {
+        // For the current T1, traverse all types in T2List
+        TestTypeSingle<T1, T2List, Func, FuncParam>::run(p);
+        // Recursively handle the rest of T1List
+        TestTypePair<TestTypeList<T1Rest...>, T2List, Func, FuncParam>::run(p);
+    }
+};
+
+template <typename T2List, template <typename, typename> class Func, typename FuncParam>
+struct TestTypePair<TestTypeList<>, T2List, Func, FuncParam>
+{
+    static void run(FuncParam &)
+    {
+        // Do nothing when T1List is empty
+    }
+};
+
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
 #define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
 } // namespace tests
