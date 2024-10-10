@@ -31,7 +31,7 @@ template <typename T1, typename T2>
 class TestNullableSigned
 {
 public:
-    static void operator()(SubString & sub_string)
+    static void run(SubString & sub_string)
     {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"p.co", "ww.p", "pingcap", "com", ".com", "", "", "", {}, {}, {}}),
@@ -58,7 +58,7 @@ template <typename T1, typename T2>
 class TestSigned
 {
 public:
-    static void operator()(SubString & sub_string)
+    static void run(SubString & sub_string)
     {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"p.co", "ww.p", "pingcap", "com", ".com", "", "", "", {}}),
@@ -83,7 +83,7 @@ template <typename T1, typename T2>
 class TestNullableUnsigned
 {
 public:
-    static void operator()(SubString & sub_string)
+    static void run(SubString & sub_string)
     {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"p.co", "ww.p", "pingcap", "com", ".com", "", "", {}, {}, {}}),
@@ -109,7 +109,7 @@ template <typename T1, typename T2>
 class TestUnsigned
 {
 public:
-    static void operator()(SubString & sub_string)
+    static void run(SubString & sub_string)
     {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"p.co", "ww.p", "pingcap", "com", ".com", "", "", {}}),
@@ -133,7 +133,7 @@ template <typename T1, typename T2>
 class TestConstPos
 {
 public:
-    static void operator()(SubString & sub_string)
+    static void run(SubString & sub_string)
     {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"w", "ww", "w.p", ".pin"}),
@@ -149,7 +149,7 @@ template <typename T1, typename T2>
 class TestConstLength
 {
 public:
-    static void operator()(SubString & sub_string)
+    static void run(SubString & sub_string)
     {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"www.", "w.pi", "ping", "ngca"}),
