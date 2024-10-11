@@ -29,7 +29,7 @@ try
     auto index_def = dataset.createIndexDef(tipb::VectorIndexKind::HNSW);
     for (auto _ : state)
     {
-        auto builder = std::make_unique<VectorIndexHNSWBuilder>(index_def);
+        auto builder = std::make_unique<VectorIndexHNSWBuilder>(0, index_def);
         builder->addBlock(*train_data, nullptr, []() { return true; });
     }
 }
