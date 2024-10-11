@@ -396,52 +396,6 @@ inline void writeProbablyBackQuotedString(const String & s, WriteBuffer & buf)
     }
 }
 
-
-/** Outputs the string in for the CSV format.
-  * Rules:
-  * - the string is outputted in quotation marks;
-  * - the quotation mark inside the string is outputted as two quotation marks in sequence.
-  */
-template <char quote = '"'>
-void writeCSVString(const char * begin, const char * end, WriteBuffer & buf)
-{
-    writeChar(quote, buf);
-
-    const char * pos = begin;
-    while (true)
-    {
-        const char * next_pos = find_first_symbols<quote>(pos, end);
-
-        if (next_pos == end)
-        {
-            buf.write(pos, end - pos);
-            break;
-        }
-        else /// Quotation.
-        {
-            ++next_pos;
-            buf.write(pos, next_pos - pos);
-            writeChar(quote, buf);
-        }
-
-        pos = next_pos;
-    }
-
-    writeChar(quote, buf);
-}
-
-template <char quote = '"'>
-void writeCSVString(const String & s, WriteBuffer & buf)
-{
-    writeCSVString<quote>(s.data(), s.data() + s.size(), buf);
-}
-
-template <char quote = '"'>
-void writeCSVString(const StringRef & s, WriteBuffer & buf)
-{
-    writeCSVString<quote>(s.data, s.data + s.size, buf);
-}
-
 template <typename IteratorSrc, typename IteratorDst>
 void formatHex(IteratorSrc src, IteratorDst dst, size_t num_bytes);
 void formatUUID(const UInt8 * src16, UInt8 * dst36);
@@ -783,38 +737,6 @@ inline void writeDoubleQuoted(const UUID & x, WriteBuffer & buf)
     writeChar('"', buf);
     writeText(x, buf);
     writeChar('"', buf);
-}
-
-
-/// String - in double quotes and with CSV-escaping; date, datetime - in double quotes. Numbers - without.
-template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void> writeCSV(const T & x, WriteBuffer & buf)
-{
-    writeText(x, buf);
-}
-
-inline void writeCSV(const String & x, WriteBuffer & buf)
-{
-    writeCSVString<>(x, buf);
-}
-inline void writeCSV(const LocalDate & x, WriteBuffer & buf)
-{
-    writeDoubleQuoted(x, buf);
-}
-inline void writeCSV(const LocalDateTime & x, WriteBuffer & buf)
-{
-    writeDoubleQuoted(x, buf);
-}
-inline void writeCSV(const UUID & x, WriteBuffer & buf)
-{
-    writeDoubleQuoted(x, buf);
-}
-inline void writeCSV(const UInt128, WriteBuffer &)
-{
-    /** Because UInt128 isn't a natural type, without arithmetic operator and only use as an intermediary type -for UUID-
-     *  it should never arrive here. But because we used the DataTypeNumber class we should have at least a definition of it.
-     */
-    throw Exception("UInt128 cannot be write as a text", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 template <typename T>
