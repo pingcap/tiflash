@@ -31,12 +31,9 @@
 #include <common/StringRef.h>
 #include <common/find_symbols.h>
 
-#include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <iomanip>
 #include <iterator>
-#include <limits>
 
 namespace DB
 {
@@ -443,48 +440,6 @@ template <char quote = '"'>
 void writeCSVString(const StringRef & s, WriteBuffer & buf)
 {
     writeCSVString<quote>(s.data, s.data + s.size, buf);
-}
-
-
-/// Writing a string to a text node in XML (not into an attribute - otherwise you need more escaping).
-inline void writeXMLString(const char * begin, const char * end, WriteBuffer & buf)
-{
-    const char * pos = begin;
-    while (true)
-    {
-        /// NOTE Perhaps for some XML parsers, you need to escape the zero byte and some control characters.
-        const char * next_pos = find_first_symbols<'<', '&'>(pos, end);
-
-        if (next_pos == end)
-        {
-            buf.write(pos, end - pos);
-            break;
-        }
-        else if (*next_pos == '<')
-        {
-            buf.write(pos, next_pos - pos);
-            ++next_pos;
-            writeCString("&lt;", buf);
-        }
-        else if (*next_pos == '&')
-        {
-            buf.write(pos, next_pos - pos);
-            ++next_pos;
-            writeCString("&amp;", buf);
-        }
-
-        pos = next_pos;
-    }
-}
-
-inline void writeXMLString(const String & s, WriteBuffer & buf)
-{
-    writeXMLString(s.data(), s.data() + s.size(), buf);
-}
-
-inline void writeXMLString(const StringRef & s, WriteBuffer & buf)
-{
-    writeXMLString(s.data, s.data + s.size, buf);
 }
 
 template <typename IteratorSrc, typename IteratorDst>

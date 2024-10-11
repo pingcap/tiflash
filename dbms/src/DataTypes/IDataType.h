@@ -101,7 +101,7 @@ public:
         /// Index of tuple element, starting at 1.
         String tuple_element_name;
 
-        Substream(Type type)
+        Substream(Type type) // NOLINT(google-explicit-constructor)
             : type(type)
         {}
     };
@@ -192,7 +192,7 @@ public:
 
     /** Serialization/deserialization of individual values.
       *
-      * These are helper methods for implementation of various formats to input/output for user (like CSV, JSON, etc.).
+      * These are helper methods for implementation of various formats to input/output for user (like TEXT, JSON, etc.).
       * There is no one-to-one correspondence between formats and these methods.
       * For example, TabSeparated and Pretty formats could use same helper method serializeTextEscaped.
       *
@@ -226,15 +226,6 @@ public:
 
     virtual void deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const = 0;
 
-    /** Text serialization for the CSV format.
-      */
-    virtual void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const = 0;
-
-    /** delimiter - the delimiter we expect when reading a string value that is not double-quoted
-      * (the delimiter is not consumed).
-      */
-    virtual void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const = 0;
-
     /** Text serialization for displaying on a terminal or saving into a text file, and the like.
       * Without escaping or quoting.
       */
@@ -250,13 +241,6 @@ public:
         const FormatSettingsJSON & settings) const
         = 0;
     virtual void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const = 0;
-
-    /** Text serialization for putting into the XML format.
-      */
-    virtual void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-    {
-        serializeText(column, row_num, ostr);
-    }
 
     /** Create empty column for corresponding type.
       */
@@ -280,8 +264,7 @@ public:
     /// Checks that two instances belong to the same type
     virtual bool equals(const IDataType & rhs) const = 0;
 
-    virtual ~IDataType() {}
-
+    virtual ~IDataType() = default;
 
     /// Various properties on behaviour of data type.
 

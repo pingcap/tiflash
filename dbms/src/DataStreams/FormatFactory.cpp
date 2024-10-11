@@ -17,8 +17,6 @@
 #include <DataStreams/BinaryRowOutputStream.h>
 #include <DataStreams/BlockInputStreamFromRowInputStream.h>
 #include <DataStreams/BlockOutputStreamFromRowOutputStream.h>
-#include <DataStreams/CSVRowInputStream.h>
-#include <DataStreams/CSVRowOutputStream.h>
 #include <DataStreams/FormatFactory.h>
 #include <DataStreams/JSONCompactRowOutputStream.h>
 #include <DataStreams/JSONEachRowRowInputStream.h>
@@ -40,7 +38,6 @@
 #include <DataStreams/ValuesRowInputStream.h>
 #include <DataStreams/ValuesRowOutputStream.h>
 #include <DataStreams/VerticalRowOutputStream.h>
-#include <DataStreams/XMLRowOutputStream.h>
 #include <DataTypes/FormatSettingsJSON.h>
 #include <Interpreters/Context.h>
 #include <boost_wrapper/string.h>
@@ -101,14 +98,6 @@ BlockInputStreamPtr FormatFactory::getInput(
             context,
             settings.input_format_values_interpret_expressions));
     }
-    else if (name == "CSV")
-    {
-        return wrap_row_stream(std::make_shared<CSVRowInputStream>(buf, sample, ','));
-    }
-    else if (name == "CSVWithNames")
-    {
-        return wrap_row_stream(std::make_shared<CSVRowInputStream>(buf, sample, ',', true));
-    }
     else if (name == "TSKV")
     {
         return wrap_row_stream(
@@ -123,7 +112,7 @@ BlockInputStreamPtr FormatFactory::getInput(
         name == "TabSeparatedRaw" || name == "TSVRaw" || name == "Pretty" || name == "PrettyCompact"
         || name == "PrettyCompactMonoBlock" || name == "PrettySpace" || name == "PrettyNoEscapes"
         || name == "PrettyCompactNoEscapes" || name == "PrettySpaceNoEscapes" || name == "Vertical"
-        || name == "VerticalRaw" || name == "Null" || name == "JSON" || name == "JSONCompact" || name == "XML")
+        || name == "VerticalRaw" || name == "Null" || name == "JSON" || name == "JSONCompact")
     {
         throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
     }
@@ -164,14 +153,6 @@ static BlockOutputStreamPtr getOutputImpl(
     else if (name == "TabSeparatedRaw" || name == "TSVRaw")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
             std::make_shared<TabSeparatedRawRowOutputStream>(buf, sample),
-            sample);
-    else if (name == "CSV")
-        return std::make_shared<BlockOutputStreamFromRowOutputStream>(
-            std::make_shared<CSVRowOutputStream>(buf, sample),
-            sample);
-    else if (name == "CSVWithNames")
-        return std::make_shared<BlockOutputStreamFromRowOutputStream>(
-            std::make_shared<CSVRowOutputStream>(buf, sample, true),
             sample);
     else if (name == "Pretty")
         return std::make_shared<PrettyBlockOutputStream>(
@@ -254,10 +235,6 @@ static BlockOutputStreamPtr getOutputImpl(
     else if (name == "JSONEachRow")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
             std::make_shared<JSONEachRowRowOutputStream>(buf, sample, json_settings),
-            sample);
-    else if (name == "XML")
-        return std::make_shared<BlockOutputStreamFromRowOutputStream>(
-            std::make_shared<XMLRowOutputStream>(buf, sample, settings.output_format_write_statistics),
             sample);
     else if (name == "TSKV")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(

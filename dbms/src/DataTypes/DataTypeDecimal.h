@@ -154,9 +154,6 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
         const override;
 
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, char delimiter) const override;
-
     void readText(T & x, ReadBuffer & istr) const;
 
     MutableColumnPtr createColumn() const override;

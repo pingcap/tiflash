@@ -65,22 +65,10 @@ public:
     void serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const override;
 
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-
-    /** It is questionable, how NULL values could be represented in CSV. There are three variants:
-      * 1. \N
-      * 2. empty string (without quotes)
-      * 3. NULL
-      * Now we support only first.
-      * In CSV, non-NULL string value, starting with \N characters, must be placed in quotes, to avoid ambiguity.
-      */
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
-
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
         const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
 
     MutableColumnPtr createColumn() const override;
 

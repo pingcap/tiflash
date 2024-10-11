@@ -35,7 +35,7 @@ private:
 public:
     static constexpr bool is_parametric = true;
 
-    DataTypeFixedString(size_t n_)
+    explicit DataTypeFixedString(size_t n_)
         : n(n_)
     {
         if (n == 0)
@@ -73,11 +73,6 @@ public:
         const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
 
-    void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
-
     MutableColumnPtr createColumn() const override;
 
     Field getDefault() const override { return String(); }
@@ -86,9 +81,9 @@ public:
 
     bool isParametric() const override { return true; }
     bool haveSubtypes() const override { return false; }
-    bool isComparable() const override { return true; };
+    bool isComparable() const override { return true; }
     bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return true; }
-    bool isFixedString() const override { return true; };
+    bool isFixedString() const override { return true; }
     bool haveMaximumSizeOfValue() const override { return true; }
     size_t getSizeOfValueInMemory() const override { return n; }
     bool isCategorial() const override { return true; }

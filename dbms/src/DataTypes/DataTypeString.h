@@ -16,8 +16,6 @@
 
 #include <DataTypes/IDataType.h>
 
-#include <ostream>
-
 
 namespace DB
 {
@@ -51,11 +49,6 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
         const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
-
-    void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
     MutableColumnPtr createColumn() const override;
 
