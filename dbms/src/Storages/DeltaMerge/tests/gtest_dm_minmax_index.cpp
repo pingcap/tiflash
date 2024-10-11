@@ -2214,17 +2214,19 @@ try
         filters.Add()->CopyFrom(expr);
     }
 
-    const ColumnDefines columns_to_read
-        = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
-           ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
+    const ColumnDefines columns_to_read = {
+        ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
+        ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()},
+    };
     // Only need id of ColumnInfo
     TiDB::ColumnInfo a, b;
     a.id = 1;
     b.id = 2;
     TiDB::ColumnInfos column_infos = {a, b};
+    const auto ann_query_info = tipb::ANNQueryInfo{};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
-        tipb::ANNQueryInfo{},
+        ann_query_info,
         pushed_down_filters, // Not care now
         column_infos,
         std::vector<int>{},

@@ -44,6 +44,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TiDB/Schema/TiDB.h>
+#include <tipb/executor.pb.h>
 
 #include <ext/scope_guard.h>
 #include <limits>
@@ -128,11 +129,12 @@ try
     // keep a ref on them
     const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    const auto ann_query_info = tipb::ANNQueryInfo{};
     TiDB::ColumnInfos source_columns{};
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
-        tipb::ANNQueryInfo{},
+        ann_query_info,
         pushed_down_filters, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
@@ -684,11 +686,12 @@ try
     // keep a ref on them
     const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    const auto ann_query_info = tipb::ANNQueryInfo{};
     TiDB::ColumnInfos source_columns{};
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
-        tipb::ANNQueryInfo{},
+        ann_query_info,
         pushed_down_filters, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
@@ -805,9 +808,10 @@ try
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
         TiDB::ColumnInfos source_columns{};
         const std::vector<int> runtime_filter_ids;
+        const auto ann_query_info = tipb::ANNQueryInfo{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filters,
-            tipb::ANNQueryInfo{},
+            ann_query_info,
             pushed_down_filters, // Not care now
             source_columns, // Not care now
             runtime_filter_ids,
