@@ -33,7 +33,6 @@
 #include <IO/WriteHelpers.h>
 
 #include <tuple>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -50,9 +49,10 @@ struct AndImpl
     static constexpr bool isSaturable = true;
 
     static inline bool isSaturatedValue(bool a) { return !a; }
+    static inline bool isSaturatedValue(bool a, bool a_is_null) { return !a_is_null && !a; }
 
     static inline bool apply(bool a, bool b) { return a && b; }
-    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
+    static inline std::pair<bool, bool> applyTwoNullable(bool a, bool a_is_null, bool b, bool b_is_null)
     {
         // result is null if
         // 1. both a and b is null
@@ -66,7 +66,7 @@ struct AndImpl
         auto res = a && b;
         return std::make_pair(res, res_is_null);
     }
-    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b)
+    static inline std::pair<bool, bool> applyOneNullable(bool a, bool a_is_null, bool b)
     {
         // result is null if a is null and b is true
         auto res_is_null = a_is_null && b;
@@ -84,9 +84,10 @@ struct OrImpl
     static constexpr bool isSaturable = true;
 
     static inline bool isSaturatedValue(bool a) { return a; }
+    static inline bool isSaturatedValue(bool a, bool a_is_null) { return !a_is_null && a; }
 
     static inline bool apply(bool a, bool b) { return a || b; }
-    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
+    static inline std::pair<bool, bool> applyTwoNullable(bool a, bool a_is_null, bool b, bool b_is_null)
     {
         // result is null if
         // 1. both a and b is null
@@ -100,7 +101,7 @@ struct OrImpl
         auto res = a || b;
         return std::make_pair(res, res_is_null);
     }
-    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b)
+    static inline std::pair<bool, bool> applyOneNullable(bool a, bool a_is_null, bool b)
     {
         // result is null if a is null and b is false
         auto res_is_null = a_is_null && !b;
@@ -118,15 +119,16 @@ struct XorImpl
     static constexpr bool isSaturable = false;
 
     static inline bool isSaturatedValue(bool) { return false; }
+    static inline bool isSaturatedValue(bool, bool) { return false; }
 
     static inline bool apply(bool a, bool b) { return a != b; }
-    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b, bool b_is_null)
+    static inline std::pair<bool, bool> applyTwoNullable(bool a, bool a_is_null, bool b, bool b_is_null)
     {
         auto res_is_null = a_is_null || b_is_null;
         auto res = a != b;
         return std::make_pair(res, res_is_null);
     }
-    static inline std::pair<bool, bool> applyNullable(bool a, bool a_is_null, bool b)
+    static inline std::pair<bool, bool> applyOneNullable(bool a, bool a_is_null, bool b)
     {
         auto res_is_null = a_is_null;
         auto res = a != b;
@@ -304,7 +306,7 @@ struct NullableAssociativeOperationImpl
         std::tie(tmp, tmp_is_null) = continuation.apply(i);
         bool a = static_cast<bool>(vec[i]);
         bool is_null = (*null_map)[i];
-        return Op::applyNullable(a, is_null, tmp, tmp_is_null);
+        return Op::applyTwoNullable(a, is_null, tmp, tmp_is_null);
     }
 };
 
@@ -344,7 +346,7 @@ struct NullableAssociativeOperationImpl<Op, 2>
 
     inline std::pair<bool, bool> apply(size_t i) const
     {
-        return Op::applyNullable(a[i], (*a_null_map)[i], b[i], (*b_null_map)[i]);
+        return Op::applyTwoNullable(a[i], (*a_null_map)[i], b[i], (*b_null_map)[i]);
     }
 };
 
@@ -421,7 +423,7 @@ private:
             {
                 if constexpr (special_impl_for_nulls)
                 {
-                    std::tie(res, res_is_null) = Impl::applyNullable(res, res_is_null, const_val, const_val_is_null);
+                    std::tie(res, res_is_null) = Impl::applyTwoNullable(res, res_is_null, const_val, const_val_is_null);
                 }
                 else
                 {
@@ -499,7 +501,8 @@ public:
             return std::make_shared<DataTypeUInt8>();
     }
 
-    bool handleConstantInput(
+    // if the result is constant, then generate the constant result and return true
+    bool tryCheckConstantResult(
         Block & block,
         size_t result,
         size_t rows,
@@ -509,41 +512,19 @@ public:
         bool has_nullable_input_column) const
     {
         bool result_is_constant = false;
-        UInt8 const_res = 0, const_res_is_null = false;
+        UInt8 const_res = const_val, const_res_is_null = const_val_is_null;
         if (!has_other_column)
         {
             // all the input is constant
             result_is_constant = true;
-            const_res = const_val;
-            const_res_is_null = const_val_is_null;
         }
         else
         {
-            if (has_nullable_input_column)
-            {
-                // test for true
-                std::tie(const_res, const_res_is_null) = Impl::applyNullable(const_val, const_val_is_null, true, false);
-                // test for false
-                UInt8 res, res_is_null;
-                std::tie(res, res_is_null) = Impl::applyNullable(const_val, const_val_is_null, false, false);
-                if (const_res == res && const_res_is_null == res_is_null)
-                {
-                    // test for null
-                    std::tie(res, res_is_null) = Impl::applyNullable(const_val, const_val_is_null, false, true);
-                    if (const_res == res && const_res_is_null == res_is_null)
-                        result_is_constant = true;
-                }
-            }
-            else
-            {
-                assert(!const_val_is_null);
-                // test for true
-                const_res = Impl::apply(const_val, 1);
-                // test for false
-                UInt8 res = Impl::apply(const_val, 0);
-                if (const_res == res)
-                    result_is_constant = true;
-            }
+            // if the value is saturated value, then the result is constant
+            result_is_constant = Impl::isSaturatedValue(const_val, const_res_is_null);
+            if (result_is_constant)
+                std::tie(const_res, const_res_is_null)
+                    = Impl::applyTwoNullable(const_val, const_val_is_null, true, false);
         }
         if (result_is_constant)
         {
@@ -579,6 +560,8 @@ public:
         std::vector<const UInt8Container *> & null_maps,
         bool result_is_nullable) const
     {
+        // logical op with 2 input columns
+        assert(static_cast<UInt8>(has_const) + not_null_uint8_columns.size() + nullable_uint8_columns.size() == 2);
         auto col_res = ColumnUInt8::create(rows, static_cast<UInt8>(0));
         UInt8Container & vec_res = col_res->getData();
         auto col_res_is_null = ColumnUInt8::create();
@@ -594,7 +577,7 @@ public:
                 {
                     for (size_t i = 0; i < rows; ++i)
                         std::tie(vec_res[i], vec_res_is_null[i])
-                            = Impl::applyNullable(const_val, const_val_is_null, col_data[i]);
+                            = Impl::applyOneNullable(const_val, const_val_is_null, col_data[i]);
                 }
                 else
                 {
@@ -612,13 +595,13 @@ public:
                 {
                     for (size_t i = 0; i < rows; ++i)
                         std::tie(vec_res[i], vec_res_is_null[i])
-                            = Impl::applyNullable(const_val, const_val_is_null, col_data[i], null_data[i]);
+                            = Impl::applyTwoNullable(const_val, const_val_is_null, col_data[i], null_data[i]);
                 }
                 else
                 {
                     for (size_t i = 0; i < rows; ++i)
                         std::tie(vec_res[i], vec_res_is_null[i])
-                            = Impl::applyNullable(col_data[i], null_data[i], const_val);
+                            = Impl::applyOneNullable(col_data[i], null_data[i], const_val);
                 }
             }
         }
@@ -637,23 +620,120 @@ public:
                 const auto & null_map_2 = *null_maps[0];
                 for (size_t i = 0; i < rows; ++i)
                 {
-                    std::tie(vec_res[i], vec_res_is_null[i]) = Impl::applyNullable(col_2[i], null_map_2[i], col_1[i]);
+                    std::tie(vec_res[i], vec_res_is_null[i])
+                        = Impl::applyOneNullable(col_2[i], null_map_2[i], col_1[i]);
                 }
             }
             else
             {
                 // case 3: 2 nullable
-                const auto & col_1 = nullable_uint8_columns[0]->getData();
-                const auto & col_2 = nullable_uint8_columns[1]->getData();
-                const auto & null_map_1 = *null_maps[0];
-                const auto & null_map_2 = *null_maps[1];
-                for (size_t i = 0; i < rows; ++i)
+                NullableAssociativeOperationImpl<Impl, 2>::execute(
+                    nullable_uint8_columns,
+                    null_maps,
+                    vec_res,
+                    vec_res_is_null);
+            }
+        }
+        if (result_is_nullable)
+        {
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(col_res_is_null));
+        }
+        else
+        {
+            block.getByPosition(result).column = std::move(col_res);
+        }
+    }
+
+    void handleGenericLogicalOp(
+        Block & block,
+        size_t result,
+        size_t rows,
+        bool has_const,
+        UInt8 const_val,
+        UInt8 const_val_is_null,
+        UInt8ColumnPtrs & not_null_uint8_columns,
+        UInt8ColumnPtrs & nullable_uint8_columns,
+        std::vector<const UInt8Container *> & null_maps,
+        bool result_is_nullable) const
+    {
+        // logical op with more than 2 input columns
+        auto col_res = ColumnUInt8::create(rows, static_cast<UInt8>(0));
+        UInt8Container & vec_res = col_res->getData();
+        auto col_res_is_null = ColumnUInt8::create();
+        UInt8Container & vec_res_is_null = col_res_is_null->getData();
+        if (result_is_nullable)
+            vec_res_is_null.assign(rows, static_cast<UInt8>(0));
+
+        bool has_not_null_column;
+        // first handle not-null column
+        if (!not_null_uint8_columns.empty())
+        {
+            has_not_null_column = true;
+            if (not_null_uint8_columns.size() == 1)
+            {
+                vec_res.assign(not_null_uint8_columns[0]->getData());
+            }
+            else
+            {
+                while (not_null_uint8_columns.size() > 1)
                 {
-                    std::tie(vec_res[i], vec_res_is_null[i])
-                        = Impl::applyNullable(col_1[i], null_map_1[i], col_2[i], null_map_2[i]);
+                    AssociativeOperationImpl<Impl, 6>::execute(not_null_uint8_columns, vec_res);
+                    not_null_uint8_columns.push_back(col_res.get());
                 }
             }
         }
+        // then handle nullable column
+        if (!nullable_uint8_columns.empty())
+        {
+            if (has_not_null_column)
+            {
+                // if there is not null column, then need to append the current result
+                // to uint8_not_null_column as the input column
+                nullable_uint8_columns.push_back(col_res.get());
+                null_maps.push_back(&vec_res_is_null);
+            }
+            if (nullable_uint8_columns.size() == 1)
+            {
+                // special case
+                assert(!has_not_null_column);
+                vec_res.assign(nullable_uint8_columns[0]->getData());
+                vec_res_is_null.assign(*null_maps[0]);
+            }
+            else
+            {
+                while (nullable_uint8_columns.size() > 1)
+                {
+                    NullableAssociativeOperationImpl<Impl, 6>::execute(
+                        nullable_uint8_columns,
+                        null_maps,
+                        vec_res,
+                        vec_res_is_null);
+                    nullable_uint8_columns.push_back(col_res.get());
+                    null_maps.push_back(&vec_res_is_null);
+                }
+            }
+        }
+
+        if (has_const)
+        {
+            // if there is const, then apply the constant at last
+            if (result_is_nullable)
+            {
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    std::tie(vec_res[i], vec_res_is_null[i])
+                        = Impl::applyTwoNullable(const_val, const_val_is_null, vec_res[i], vec_res_is_null[i]);
+                }
+            }
+            else
+            {
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    vec_res[i] = Impl::apply(const_val, vec_res[i]);
+                }
+            }
+        }
+
         if (result_is_nullable)
         {
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(col_res_is_null));
@@ -685,7 +765,7 @@ public:
         if (has_consts)
         {
             // If this value uniquely determines the result, return it.
-            if (handleConstantInput(
+            if (tryCheckConstantResult(
                     block,
                     result,
                     rows,
@@ -738,7 +818,7 @@ public:
 
         if (in.size() + static_cast<UInt8>(has_consts) == 2)
         {
-            // input is 2 column
+            // input is 2 columns
             handleBinaryLogicalOp(
                 block,
                 result,
@@ -750,92 +830,21 @@ public:
                 uint8_in_nullable,
                 null_map_in,
                 has_nullable_input_column);
-            return;
-        }
-
-        auto col_res = ColumnUInt8::create(rows, static_cast<UInt8>(0));
-        UInt8Container & vec_res = col_res->getData();
-        auto col_res_is_null = ColumnUInt8::create();
-        UInt8Container & vec_res_is_null = col_res_is_null->getData();
-        if (has_nullable_input_column)
-            vec_res_is_null.assign(rows, static_cast<UInt8>(0));
-
-        bool has_not_null_column;
-        // first handle not-null column
-        if (!uint8_in_not_null.empty())
-        {
-            has_not_null_column = true;
-            if (uint8_in_not_null.size() == 1)
-            {
-                vec_res.assign(uint8_in_not_null[0]->getData());
-            }
-            else
-            {
-                while (uint8_in_not_null.size() > 1)
-                {
-                    AssociativeOperationImpl<Impl, 6>::execute(uint8_in_not_null, vec_res);
-                    uint8_in_not_null.push_back(col_res.get());
-                }
-            }
-        }
-        // then handle nullable column
-        if (!uint8_in_nullable.empty())
-        {
-            if (has_not_null_column)
-            {
-                // if there is not null column, then need to append the current result
-                // to uint8_not_null_column
-                uint8_in_nullable.push_back(col_res.get());
-                null_map_in.push_back(&vec_res_is_null);
-            }
-            if (uint8_in_nullable.size() == 1)
-            {
-                // special case
-                vec_res.assign(uint8_in_nullable[0]->getData());
-                vec_res_is_null.assign(*null_map_in[0]);
-            }
-            else
-            {
-                while (uint8_in_nullable.size() > 1)
-                {
-                    NullableAssociativeOperationImpl<Impl, 6>::execute(
-                        uint8_in_nullable,
-                        null_map_in,
-                        vec_res,
-                        vec_res_is_null);
-                    uint8_in_nullable.push_back(col_res.get());
-                    null_map_in.push_back(&vec_res_is_null);
-                }
-            }
-        }
-
-        if (has_consts)
-        {
-            // if there is const, then apply the constant
-            if (has_nullable_input_column)
-            {
-                for (size_t i = 0; i < rows; ++i)
-                {
-                    std::tie(vec_res[i], vec_res_is_null[i])
-                        = Impl::applyNullable(const_val, const_val_is_null, vec_res[i], vec_res_is_null[i]);
-                }
-            }
-            else
-            {
-                for (size_t i = 0; i < rows; ++i)
-                {
-                    vec_res[i] = Impl::apply(const_val, vec_res[i]);
-                }
-            }
-        }
-
-        if (has_nullable_input_column)
-        {
-            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(col_res_is_null));
         }
         else
         {
-            block.getByPosition(result).column = std::move(col_res);
+            // input is more than 2 columns
+            handleGenericLogicalOp(
+                block,
+                result,
+                rows,
+                has_consts,
+                const_val,
+                const_val_is_null,
+                uint8_in_not_null,
+                uint8_in_nullable,
+                null_map_in,
+                has_nullable_input_column);
         }
     }
 };
