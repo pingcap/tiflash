@@ -17,7 +17,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
-#include <Functions/FunctionsBinaryLogical.h>
+#include <Functions/FunctionsLegacyLogical.h>
 #include <Functions/FunctionsLogical.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -107,12 +107,12 @@ public:
     }
 };
 
-#define BINARY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                           \
-    BENCHMARK_DEFINE_F(LogicalOpBench, binaryLogical_##OP_NAME##COL1_NAME##COL2_NAME) \
+#define LEGACY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                           \
+    BENCHMARK_DEFINE_F(LogicalOpBench, LegacyLogical_##OP_NAME##COL1_NAME##COL2_NAME) \
     (benchmark::State & state)                                                        \
     try                                                                               \
     {                                                                                 \
-        FunctionBinary##OP_NAME function_binary;                                      \
+        FunctionLegacy##OP_NAME function;                                             \
         ColumnsWithTypeAndName columns;                                               \
         auto col_1 = col##COL1_NAME;                                                  \
         auto col_2 = col##COL2_NAME;                                                  \
@@ -126,18 +126,18 @@ public:
         ColumnNumbers arguments{0, 1};                                                \
         for (auto _ : state)                                                          \
         {                                                                             \
-            function_binary.executeImpl(input, arguments, 2);                         \
+            function.executeImpl(input, arguments, 2);                                \
         }                                                                             \
     }                                                                                 \
     CATCH                                                                             \
-    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogical_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
+    BENCHMARK_REGISTER_F(LogicalOpBench, LegacyLogical_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
 
-#define ANY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                           \
-    BENCHMARK_DEFINE_F(LogicalOpBench, AnyLogical_##OP_NAME##COL1_NAME##COL2_NAME) \
+#define OPT_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                           \
+    BENCHMARK_DEFINE_F(LogicalOpBench, OptLogical_##OP_NAME##COL1_NAME##COL2_NAME) \
     (benchmark::State & state)                                                     \
     try                                                                            \
     {                                                                              \
-        Function##OP_NAME function_any;                                            \
+        Function##OP_NAME function;                                                \
         ColumnsWithTypeAndName columns;                                            \
         auto col_1 = col##COL1_NAME;                                               \
         auto col_2 = col##COL2_NAME;                                               \
@@ -151,15 +151,15 @@ public:
         ColumnNumbers arguments{0, 1};                                             \
         for (auto _ : state)                                                       \
         {                                                                          \
-            function_any.executeImpl(input, arguments, 2);                         \
+            function.executeImpl(input, arguments, 2);                             \
         }                                                                          \
     }                                                                              \
     CATCH                                                                          \
-    BENCHMARK_REGISTER_F(LogicalOpBench, AnyLogical_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
+    BENCHMARK_REGISTER_F(LogicalOpBench, OptLogical_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
 
 #define LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)    \
-    BINARY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME) \
-    ANY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)
+    LEGACY_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME) \
+    OPT_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)
 
 // warm up
 LOGICAL_BENCH(_nullable_uint8_2, _nullable_uint8_1, And);
@@ -212,12 +212,12 @@ LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
 //LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Xor);
 //LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
 //LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
-#define BINARY_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                         \
-    BENCHMARK_DEFINE_F(LogicalOpBench, binaryLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
+#define LEGACY_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                         \
+    BENCHMARK_DEFINE_F(LogicalOpBench, legacyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
     (benchmark::State & state)                                                                 \
     try                                                                                        \
     {                                                                                          \
-        FunctionBinary##OP_NAME function_binary;                                               \
+        FunctionLegacy##OP_NAME function;                                                      \
         ColumnsWithTypeAndName columns;                                                        \
         if ((PARAM_NUM) > 6)                                                                   \
             throw Exception("not supported");                                                  \
@@ -245,18 +245,18 @@ LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
             input.insert({nullptr, not_null_result_type, "res"});                              \
         for (auto _ : state)                                                                   \
         {                                                                                      \
-            function_binary.executeImpl(input, arguments, (PARAM_NUM));                        \
+            function.executeImpl(input, arguments, (PARAM_NUM));                               \
         }                                                                                      \
     }                                                                                          \
     CATCH                                                                                      \
-    BENCHMARK_REGISTER_F(LogicalOpBench, binaryLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE)->Iterations(1000);
+    BENCHMARK_REGISTER_F(LogicalOpBench, legacyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE)->Iterations(1000);
 
-#define ANY_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                         \
-    BENCHMARK_DEFINE_F(LogicalOpBench, anyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
+#define OPT_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                         \
+    BENCHMARK_DEFINE_F(LogicalOpBench, optLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
     (benchmark::State & state)                                                              \
     try                                                                                     \
     {                                                                                       \
-        Function##OP_NAME function_binary;                                                  \
+        Function##OP_NAME function;                                                         \
         ColumnsWithTypeAndName columns;                                                     \
         if ((PARAM_NUM) > 6)                                                                \
             throw Exception("not supported");                                               \
@@ -284,28 +284,28 @@ LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
             input.insert({nullptr, not_null_result_type, "res"});                           \
         for (auto _ : state)                                                                \
         {                                                                                   \
-            function_binary.executeImpl(input, arguments, (PARAM_NUM));                     \
+            function.executeImpl(input, arguments, (PARAM_NUM));                            \
         }                                                                                   \
     }                                                                                       \
     CATCH                                                                                   \
-    BENCHMARK_REGISTER_F(LogicalOpBench, anyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE)->Iterations(1000);
+    BENCHMARK_REGISTER_F(LogicalOpBench, optLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE)->Iterations(1000);
 
-BINARY_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
-ANY_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
-BINARY_LOGICAL_BENCH_MULTI_PARAM(4, And, 0);
-ANY_LOGICAL_BENCH_MULTI_PARAM(4, And, 0);
-BINARY_LOGICAL_BENCH_MULTI_PARAM(5, And, 0);
-ANY_LOGICAL_BENCH_MULTI_PARAM(5, And, 0);
-BINARY_LOGICAL_BENCH_MULTI_PARAM(6, And, 0);
-ANY_LOGICAL_BENCH_MULTI_PARAM(6, And, 0);
-BINARY_LOGICAL_BENCH_MULTI_PARAM(3, And, 1);
-ANY_LOGICAL_BENCH_MULTI_PARAM(3, And, 1);
-BINARY_LOGICAL_BENCH_MULTI_PARAM(4, And, 1);
-ANY_LOGICAL_BENCH_MULTI_PARAM(4, And, 1);
-BINARY_LOGICAL_BENCH_MULTI_PARAM(5, And, 1);
-ANY_LOGICAL_BENCH_MULTI_PARAM(5, And, 1);
-BINARY_LOGICAL_BENCH_MULTI_PARAM(6, And, 1);
-ANY_LOGICAL_BENCH_MULTI_PARAM(6, And, 1);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
+OPT_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(4, And, 0);
+OPT_LOGICAL_BENCH_MULTI_PARAM(4, And, 0);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(5, And, 0);
+OPT_LOGICAL_BENCH_MULTI_PARAM(5, And, 0);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(6, And, 0);
+OPT_LOGICAL_BENCH_MULTI_PARAM(6, And, 0);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(3, And, 1);
+OPT_LOGICAL_BENCH_MULTI_PARAM(3, And, 1);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(4, And, 1);
+OPT_LOGICAL_BENCH_MULTI_PARAM(4, And, 1);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(5, And, 1);
+OPT_LOGICAL_BENCH_MULTI_PARAM(5, And, 1);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(6, And, 1);
+OPT_LOGICAL_BENCH_MULTI_PARAM(6, And, 1);
 
 } // namespace tests
 } // namespace DB

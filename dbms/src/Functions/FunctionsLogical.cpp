@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsBinaryLogical.h>
+#include <Functions/FunctionsLegacyLogical.h>
 #include <Functions/FunctionsLogical.h>
 
 namespace DB
@@ -24,9 +24,9 @@ void registerFunctionsLogical(FunctionFactory & factory)
     factory.registerFunction<FunctionOr>();
     factory.registerFunction<FunctionXor>();
     factory.registerFunction<FunctionNot>();
-    factory.registerFunction<FunctionBinaryAnd>();
-    factory.registerFunction<FunctionBinaryOr>();
-    factory.registerFunction<FunctionBinaryXor>();
+    factory.registerFunction<FunctionLegacyAnd>();
+    factory.registerFunction<FunctionLegacyOr>();
+    factory.registerFunction<FunctionLegacyXor>();
 }
 
 } // namespace DB
