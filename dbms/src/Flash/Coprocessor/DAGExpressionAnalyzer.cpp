@@ -962,7 +962,7 @@ String DAGExpressionAnalyzer::buildFilterColumn(
         for (const auto & condition : conditions)
             arg_names.push_back(getActions(condition, actions, true));
         // connect all the conditions by logical and
-        filter_column_name = applyFunction("binary_and", arg_names, actions, nullptr);
+        filter_column_name = applyFunction("and", arg_names, actions, nullptr);
     }
     return filter_column_name;
 }
