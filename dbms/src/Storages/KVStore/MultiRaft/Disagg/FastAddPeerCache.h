@@ -21,6 +21,7 @@
 
 namespace DB
 {
+struct GeneralCancelHandle;
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
@@ -34,21 +35,23 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 class EndToSegmentId
 {
 public:
-    [[nodiscard]] std::unique_lock<std::mutex> lock();
+    [[nodiscard]] std::unique_lock<std::shared_mutex> writeLock();
+    [[nodiscard]] std::shared_lock<std::shared_mutex> readLock();
 
-    bool isReady(std::unique_lock<std::mutex> & lock) const;
+    bool isReady(std::unique_lock<std::shared_mutex> & lock) const;
+    bool isReady(std::shared_lock<std::shared_mutex> & lock) const;
 
     // The caller must ensure `end_key_and_segment_id` is ordered.
     // Called in `Segment::readAllSegmentsMetaInfoInRange`.
     void build(
-        std::unique_lock<std::mutex> & lock,
+        std::unique_lock<std::shared_mutex> &,
         std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
 
     // Given a key, return the segment_id that may contain the key
-    UInt64 getSegmentIdContainingKey(std::unique_lock<std::mutex> & lock, const DM::RowKeyValue & key);
+    UInt64 getSegmentIdContainingKey(std::shared_lock<std::shared_mutex> & lock, const DM::RowKeyValue & key);
 
 private:
-    std::mutex mu;
+    std::shared_mutex mu;
     bool is_ready = false;
 
     // Store the mapping from end key to segment id

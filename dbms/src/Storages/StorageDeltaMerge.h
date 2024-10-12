@@ -38,6 +38,7 @@
 
 namespace DB
 {
+struct GeneralCancelHandle;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 struct CheckpointIngestInfo;
@@ -129,6 +130,7 @@ public:
         const Settings & settings);
 
     DM::Segments buildSegmentsFromCheckpointInfo(
+        const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
         const DM::RowKeyRange & range,
         CheckpointInfoPtr checkpoint_info,
         const Settings & settings);

@@ -37,20 +37,28 @@
 
 namespace DB
 {
-[[nodiscard]] std::unique_lock<std::mutex> EndToSegmentId::lock()
+[[nodiscard]] std::unique_lock<std::shared_mutex> EndToSegmentId::writeLock()
 {
     return std::unique_lock(mu);
 }
 
-bool EndToSegmentId::isReady(std::unique_lock<std::mutex> & lock) const
+[[nodiscard]] std::shared_lock<std::shared_mutex> EndToSegmentId::readLock()
 {
-    UNUSED(lock);
+    return std::shared_lock(mu);
+}
+
+bool EndToSegmentId::isReady(std::unique_lock<std::shared_mutex> &) const
+{
     return is_ready;
 }
 
-UInt64 EndToSegmentId::getSegmentIdContainingKey(std::unique_lock<std::mutex> & lock, const DM::RowKeyValue & key)
+bool EndToSegmentId::isReady(std::shared_lock<std::shared_mutex> &) const
 {
-    UNUSED(lock);
+    return is_ready;
+}
+
+UInt64 EndToSegmentId::getSegmentIdContainingKey(std::shared_lock<std::shared_mutex> &, const DM::RowKeyValue & key)
+{
     RUNTIME_CHECK(is_ready);
     auto iter = std::upper_bound(
         end_to_segment_id.begin(),
@@ -67,10 +75,9 @@ UInt64 EndToSegmentId::getSegmentIdContainingKey(std::unique_lock<std::mutex> & 
 }
 
 void EndToSegmentId::build(
-    std::unique_lock<std::mutex> & lock,
+    std::unique_lock<std::shared_mutex> &,
     std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids)
 {
-    UNUSED(lock);
     end_to_segment_id = std::move(end_key_and_segment_ids);
     is_ready = true;
 }
