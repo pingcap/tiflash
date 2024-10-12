@@ -26,7 +26,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockOutputStream.h>
-#include <DataStreams/PrettySpaceBlockOutputStream.h>
+#include <DataStreams/PrettyCompactBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/ValuesRowInputStream.h>
 #include <DataStreams/ValuesRowOutputStream.h>
@@ -109,8 +109,8 @@ static BlockOutputStreamPtr getOutputImpl(
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
             std::make_shared<BinaryRowOutputStream>(buf),
             sample);
-    else if (name == "PrettySpaceNoEscapes")
-        return std::make_shared<PrettySpaceBlockOutputStream>(
+    else if (name == "PrettyCompactNoEscapes")
+        return std::make_shared<PrettyCompactBlockOutputStream>(
             buf,
             sample,
             true,
