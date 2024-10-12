@@ -130,7 +130,7 @@ public:
         const Settings & settings);
 
     DM::Segments buildSegmentsFromCheckpointInfo(
-        std::shared_ptr<GeneralCancelHandle> cancel_handle,
+        const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
         const DM::RowKeyRange & range,
         CheckpointInfoPtr checkpoint_info,
         const Settings & settings);

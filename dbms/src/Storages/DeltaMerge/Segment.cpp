@@ -461,7 +461,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         // We can thus avoid reading from the very beginning for every different regions in this table.
         // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
         // Otherwise, we just read the segment that cover the range.
-        LOG_DEBUG(log, "Read segment meta info from segment {}", current_segment_id);
+        LOG_DEBUG(log, "Read segment meta info, segment_id={}", current_segment_id);
 
         // The map is used to build cache.
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
@@ -535,7 +535,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             if (!res)
                 return {};
             auto & [end_key_and_segment_ids, segment_infos] = *res;
-            LOG_DEBUG(log, "Build cache for with {} segments", end_key_and_segment_ids.size());
+            LOG_DEBUG(log, "Segment meta info cache has been built, num_segments={}", end_key_and_segment_ids.size());
             end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
             return std::move(segment_infos);
         }
