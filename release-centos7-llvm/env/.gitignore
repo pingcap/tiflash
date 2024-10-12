@@ -1,3 +1,5 @@
 tiflash-env
 tiflash-env-*.tar.xz
+llvm-project
+sysroot
 *.log
