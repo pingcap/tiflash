@@ -27,6 +27,8 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
+#include <DataStreams/ValuesRowInputStream.h>
+#include <DataStreams/ValuesRowOutputStream.h>
 #include <DataTypes/FormatSettingsJSON.h>
 #include <Interpreters/Context.h>
 #include <boost_wrapper/string.h>
@@ -76,6 +78,14 @@ BlockInputStreamPtr FormatFactory::getInput(
     {
         throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
     }
+    else if (name == "Values")
+    {
+        return wrap_row_stream(std::make_shared<ValuesRowInputStream>(
+            buf,
+            sample,
+            context,
+            settings.input_format_values_interpret_expressions));
+    }
     else
         throw Exception("Unknown format " + name, ErrorCodes::UNKNOWN_FORMAT);
 }
@@ -101,6 +111,10 @@ static BlockOutputStreamPtr getOutputImpl(
     else if (name == "JSON")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
             std::make_shared<JSONRowOutputStream>(buf, sample, settings.output_format_write_statistics, json_settings),
+            sample);
+    else if (name == "Values")
+        return std::make_shared<BlockOutputStreamFromRowOutputStream>(
+            std::make_shared<ValuesRowOutputStream>(buf),
             sample);
     else if (name == "JSONCompact")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
