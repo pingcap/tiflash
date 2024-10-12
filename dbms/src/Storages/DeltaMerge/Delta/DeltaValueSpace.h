@@ -32,7 +32,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 
@@ -480,7 +479,7 @@ public:
         UInt64 start_ts);
 };
 
-class DeltaValueInputStream : public SkippableBlockInputStream
+class DeltaValueInputStream : public IBlockInputStream
 {
 private:
     ColumnFileSetInputStream mem_table_input_stream;
@@ -507,48 +506,6 @@ public:
 
     String getName() const override { return "DeltaValue"; }
     Block getHeader() const override { return persisted_files_input_stream.getHeader(); }
-
-    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
-
-    /// Skip next block in the stream.
-    /// Return the number of rows skipped.
-    /// Return 0 if meet the end of the stream.
-    size_t skipNextBlock() override
-    {
-        size_t skipped_rows = 0;
-        if (persisted_files_done)
-        {
-            skipped_rows = mem_table_input_stream.skipNextBlock();
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-
-        if (skipped_rows = persisted_files_input_stream.skipNextBlock(); skipped_rows > 0)
-        {
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-        else
-        {
-            persisted_files_done = true;
-            skipped_rows = mem_table_input_stream.skipNextBlock();
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-    }
-
-    Block readWithFilter(const IColumn::Filter & filter) override
-    {
-        auto block = read();
-        if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
-        {
-            for (auto & col : block)
-            {
-                col.column = col.column->filter(filter, passed_count);
-            }
-        }
-        return block;
-    }
 
     Block read() override
     {

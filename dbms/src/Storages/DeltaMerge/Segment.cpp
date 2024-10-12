@@ -44,7 +44,6 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
-#include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -65,6 +64,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <memory>
 
 
 namespace ProfileEvents
@@ -3220,15 +3220,16 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     return bitmap_filter;
 }
 
-BlockInputStreamPtr Segment::getBitmapFilterInputStream(
-    BitmapFilterPtr && bitmap_filter,
+SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
+    BitmapFilterPtr bitmap_filter,
     const SegmentSnapshotPtr & segment_snap,
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
     UInt64 start_ts,
-    size_t expected_block_size)
+    size_t expected_block_size,
+    ReadTag read_tag)
 {
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
@@ -3243,7 +3244,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         start_ts,
         expected_block_size,
         enable_handle_clean_read,
-        ReadTag::Query,
+        read_tag,
         is_fast_scan,
         enable_del_clean_read,
         /* read_packs */ {},
@@ -3251,24 +3252,28 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         /* bitmap_filter */ bitmap_filter);
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
-    SkippableBlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
+
+    SkippableBlockInputStreamPtr mem_table_input_stream = std::make_shared<ColumnFileSetInputStream>(
         dm_context,
-        segment_snap->delta,
+        segment_snap->delta->getMemTableSetSnapshot(),
         columns_to_read_ptr,
         this->rowkey_range,
-        ReadTag::Query);
+        read_tag);
+    SkippableBlockInputStreamPtr persisted_files_input_stream = std::make_shared<ColumnFileSetInputStream>(
+        dm_context,
+        segment_snap->delta->getPersistedFileSetSnapshot(),
+        columns_to_read_ptr,
+        this->rowkey_range,
+        read_tag);
 
-    return std::make_shared<BitmapFilterBlockInputStream>(
-        columns_to_read,
-        stable_stream,
-        delta_stream,
-        segment_snap->stable->getDMFilesRows(),
-        bitmap_filter,
-        dm_context.tracing_id);
+    auto stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<false>>(stable_stream);
+    stream->appendChild(persisted_files_input_stream, segment_snap->delta->getPersistedFileSetSnapshot()->getRows());
+    stream->appendChild(mem_table_input_stream, segment_snap->delta->getMemTableSetSnapshot()->getRows());
+    return stream;
 }
 
 BlockInputStreamPtr Segment::getLateMaterializationStream(
-    BitmapFilterPtr && bitmap_filter,
+    BitmapFilterPtr & bitmap_filter,
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
@@ -3277,30 +3282,18 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     UInt64 start_ts,
     size_t expected_block_size)
 {
-    // set `is_fast_scan` to true to try to enable clean read
-    auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
-    constexpr auto is_fast_scan = true;
-    auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
-
-    // construct (stable and delta) streams by the filter column
     const auto & filter_columns = filter->filter_columns;
-    SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
+    auto filter_column_skippable_stream = getConcatSkippableBlockInputStream(
+        bitmap_filter,
+        segment_snap,
         dm_context,
         *filter_columns,
         data_ranges,
         filter->rs_operator,
         start_ts,
         expected_block_size,
-        enable_handle_clean_read,
-        ReadTag::LMFilter,
-        is_fast_scan,
-        enable_del_clean_read);
-    SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
-        dm_context,
-        segment_snap->delta,
-        filter_columns,
-        this->rowkey_range,
         ReadTag::LMFilter);
+    auto filter_column_stream = std::static_pointer_cast<IBlockInputStream>(filter_column_skippable_stream);
 
     if (unlikely(filter_columns->size() == columns_to_read.size()))
     {
@@ -3311,9 +3304,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             filter_columns->size());
         BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
             *filter_columns,
-            filter_column_stable_stream,
-            filter_column_delta_stream,
-            segment_snap->stable->getDMFilesRows(),
+            filter_column_stream,
             bitmap_filter,
             dm_context.tracing_id);
         if (filter->extra_cast)
@@ -3332,13 +3323,6 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         stream->setExtraInfo("project after where");
         return stream;
     }
-
-    BlockInputStreamPtr filter_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
-        *filter_columns,
-        filter_column_stable_stream,
-        filter_column_delta_stream,
-        segment_snap->stable->getDMFilesRows(),
-        dm_context.tracing_id);
 
     // construct extra cast stream if needed
     if (filter->extra_cast)
@@ -3371,29 +3355,16 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     }
 
     // construct stream for the rest columns
-    SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
+    auto rest_column_stream = getConcatSkippableBlockInputStream(
+        bitmap_filter,
+        segment_snap,
         dm_context,
         *rest_columns_to_read,
         data_ranges,
         filter->rs_operator,
         start_ts,
         expected_block_size,
-        enable_handle_clean_read,
-        ReadTag::Query,
-        is_fast_scan,
-        enable_del_clean_read);
-    SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
-        dm_context,
-        segment_snap->delta,
-        rest_columns_to_read,
-        this->rowkey_range,
         ReadTag::Query);
-    SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
-        *rest_columns_to_read,
-        rest_column_stable_stream,
-        rest_column_delta_stream,
-        segment_snap->stable->getDMFilesRows(),
-        dm_context.tracing_id);
 
     // construct late materialization stream
     return std::make_shared<LateMaterializationBlockInputStream>(
@@ -3456,7 +3427,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     {
         // if has filter conditions pushed down, use late materialization
         return getLateMaterializationStream(
-            std::move(bitmap_filter),
+            bitmap_filter,
             dm_context,
             columns_to_read,
             segment_snap,
@@ -3466,15 +3437,21 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             read_data_block_rows);
     }
 
-    return getBitmapFilterInputStream(
-        std::move(bitmap_filter),
+    auto stream = getConcatSkippableBlockInputStream(
+        bitmap_filter,
         segment_snap,
         dm_context,
         columns_to_read,
         real_ranges,
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         start_ts,
-        read_data_block_rows);
+        read_data_block_rows,
+        ReadTag::Query);
+    return std::make_shared<BitmapFilterBlockInputStream>(
+        columns_to_read,
+        stream,
+        bitmap_filter,
+        dm_context.tracing_id);
 }
 
 // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.

@@ -16,7 +16,6 @@
 #include <Common/Logger.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
-#include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -99,36 +98,16 @@ protected:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges)
     {
-        auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
-        constexpr auto is_fast_scan = true;
-        auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
-
-        SkippableBlockInputStreamPtr stable_stream = snapshot->stable->getInputStream(
+        return segment->getConcatSkippableBlockInputStream(
+            nullptr,
+            snapshot,
             *dm_context,
             columns_to_read,
             read_ranges,
             EMPTY_RS_OPERATOR,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-            enable_handle_clean_read,
-            ReadTag::Internal,
-            is_fast_scan,
-            enable_del_clean_read);
-
-        auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
-        SkippableBlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
-            *dm_context,
-            snapshot->delta,
-            columns_to_read_ptr,
-            segment->getRowKeyRange(),
             ReadTag::Internal);
-
-        return std::make_shared<RowKeyOrderedBlockInputStream>(
-            columns_to_read,
-            stable_stream,
-            delta_stream,
-            snapshot->stable->getDMFilesRows(),
-            dm_context->tracing_id);
     }
 
     void testSkipBlockCase(std::string_view seg_data, std::vector<size_t> skip_block_idxs = {})
