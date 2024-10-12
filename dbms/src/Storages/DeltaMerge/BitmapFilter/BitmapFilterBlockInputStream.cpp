@@ -23,12 +23,10 @@ namespace DB::DM
 BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     const ColumnDefines & columns_to_read,
     BlockInputStreamPtr stream_,
-    const BitmapFilterPtr & bitmap_filter_,
-    const String & req_id_)
+    const BitmapFilterPtr & bitmap_filter_)
     : header(toEmptyBlock(columns_to_read))
     , stream(stream_)
     , bitmap_filter(bitmap_filter_)
-    , log(Logger::get(NAME, req_id_))
 {}
 
 Block BitmapFilterBlockInputStream::read()

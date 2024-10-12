@@ -29,8 +29,7 @@ public:
     BitmapFilterBlockInputStream(
         const ColumnDefines & columns_to_read,
         BlockInputStreamPtr stream_,
-        const BitmapFilterPtr & bitmap_filter_,
-        const String & req_id_);
+        const BitmapFilterPtr & bitmap_filter_);
 
     String getName() const override { return NAME; }
 
@@ -40,17 +39,10 @@ protected:
     Block read() override;
 
 private:
-    // When all rows in block are not filtered out, `res_filter` will be set to null.
-    // The caller needs to do handle this situation.
-    // This function always returns the filter to the caller. It does not filter the block.
-    Block readImpl(FilterPtr & res_filter);
-
-private:
     Block header;
     // [stable..., persisted_delta, memtable]
     BlockInputStreamPtr stream;
     BitmapFilterPtr bitmap_filter;
-    const LoggerPtr log;
     IColumn::Filter filter;
 };
 

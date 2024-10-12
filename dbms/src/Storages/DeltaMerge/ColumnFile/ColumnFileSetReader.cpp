@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetReader.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/ScanContext.h>
 
-namespace DB
+
+namespace DB::DM
 {
-namespace DM
-{
+
 std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_t rows_offset, size_t deletes_offset)
 {
     size_t rows_count = 0;
@@ -83,7 +81,6 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
 
 ColumnFileSetReader::ColumnFileSetReader(const DMContext & context_)
     : context(context_)
-    , lac_bytes_collector(context_.scan_context ? context_.scan_context->resource_group_name : "")
 {}
 
 ColumnFileSetReader::ColumnFileSetReader(
@@ -96,7 +93,6 @@ ColumnFileSetReader::ColumnFileSetReader(
     , snapshot(snapshot_)
     , col_defs(col_defs_)
     , segment_range(segment_range_)
-    , lac_bytes_collector(context_.scan_context ? context_.scan_context->resource_group_name : "")
 {
     size_t total_rows = 0;
     for (auto & f : snapshot->getColumnFiles())
@@ -142,14 +138,6 @@ Block ColumnFileSetReader::readPKVersion(size_t offset, size_t limit)
     return block;
 }
 
-static Int64 columnsSize(MutableColumns & columns)
-{
-    Int64 bytes = 0;
-    for (const auto & col : columns)
-        bytes += col->byteSize();
-    return bytes;
-}
-
 size_t ColumnFileSetReader::readRows(
     MutableColumns & output_columns,
     size_t offset,
@@ -175,7 +163,6 @@ size_t ColumnFileSetReader::readRows(
     if (end == start)
         return 0;
 
-    auto bytes_before_read = columnsSize(output_columns);
     auto [start_file_index, rows_start_in_start_file] = locatePosByAccumulation(column_file_rows_end, start);
     auto [end_file_index, rows_end_in_end_file] = locatePosByAccumulation(column_file_rows_end, end);
 
@@ -205,14 +192,6 @@ size_t ColumnFileSetReader::readRows(
                 (*row_ids)[row_ids_offset + i] = start_row_id + i;
             }
         }
-    }
-
-    if (auto delta_bytes = columnsSize(output_columns) - bytes_before_read; delta_bytes > 0)
-    {
-        if (row_ids == nullptr)
-            lac_bytes_collector.collect(delta_bytes);
-        if (likely(context.scan_context))
-            context.scan_context->user_read_bytes += delta_bytes;
     }
 
     return actual_read;
@@ -347,6 +326,4 @@ bool ColumnFileSetReader::shouldPlace(
     return false;
 }
 
-
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

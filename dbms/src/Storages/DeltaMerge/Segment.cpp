@@ -3231,6 +3231,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     size_t expected_block_size,
     ReadTag read_tag)
 {
+    static constexpr bool NeedRowID = false;
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;
@@ -3248,7 +3249,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
         is_fast_scan,
         enable_del_clean_read,
         /* read_packs */ {},
-        /* need_row_id */ false,
+        /* need_row_id */ NeedRowID,
         /* bitmap_filter */ bitmap_filter);
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
@@ -3266,7 +3267,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
         this->rowkey_range,
         read_tag);
 
-    auto stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<false>>(stable_stream);
+    auto stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<NeedRowID>>(stable_stream);
     stream->appendChild(persisted_files_input_stream, segment_snap->delta->getPersistedFileSetSnapshot()->getRows());
     stream->appendChild(mem_table_input_stream, segment_snap->delta->getMemTableSetSnapshot()->getRows());
     return stream;
@@ -3302,11 +3303,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             "Late materialization filter columns size equal to read columns size, which is not expected, "
             "filter_columns_size={}",
             filter_columns->size());
-        BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
-            *filter_columns,
-            filter_column_stream,
-            bitmap_filter,
-            dm_context.tracing_id);
+        BlockInputStreamPtr stream
+            = std::make_shared<BitmapFilterBlockInputStream>(*filter_columns, filter_column_stream, bitmap_filter);
         if (filter->extra_cast)
         {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast, dm_context.tracing_id);
@@ -3447,11 +3445,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         start_ts,
         read_data_block_rows,
         ReadTag::Query);
-    return std::make_shared<BitmapFilterBlockInputStream>(
-        columns_to_read,
-        stream,
-        bitmap_filter,
-        dm_context.tracing_id);
+    return std::make_shared<BitmapFilterBlockInputStream>(columns_to_read, stream, bitmap_filter);
 }
 
 // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.

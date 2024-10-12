@@ -41,8 +41,6 @@ private:
 
     std::vector<ColumnFileReaderPtr> column_file_readers;
 
-    LACBytesCollector lac_bytes_collector;
-
 private:
     explicit ColumnFileSetReader(const DMContext & context_);
 
