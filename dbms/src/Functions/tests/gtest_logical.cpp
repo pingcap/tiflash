@@ -58,6 +58,7 @@ try
     test(name, not_null_false_const, not_null_false_column, nullable_false_const);
     test(name, nullable_false_column, nullable_false_column, nullable_false_column);
     test(name, nullable_false_const, nullable_false_column, nullable_false_const);
+    test(name, not_null_false_const, not_null_false_const, not_null_false_const);
     // false && true
     test(name, not_null_false_column, not_null_false_column, not_null_true_column);
     test(name, not_null_false_column, not_null_false_column, not_null_true_const);
@@ -67,11 +68,13 @@ try
     test(name, not_null_false_column, not_null_false_column, nullable_true_const);
     test(name, nullable_false_column, nullable_false_column, nullable_true_column);
     test(name, nullable_false_column, nullable_false_column, nullable_true_const);
+    test(name, not_null_false_const, nullable_false_const, nullable_true_const);
     // false && null
     test(name, nullable_false_column, not_null_false_column, nullable_null_column);
     test(name, nullable_false_column, not_null_false_column, nullable_null_const);
     test(name, nullable_false_column, nullable_false_column, nullable_null_column);
     test(name, nullable_false_column, nullable_false_column, nullable_null_const);
+    test(name, nullable_false_const, nullable_false_const, nullable_null_const);
     // true && false
     test(name, not_null_false_column, not_null_true_column, not_null_false_column);
     test(name, not_null_false_const, not_null_true_column, not_null_false_const);
@@ -81,6 +84,7 @@ try
     test(name, not_null_false_const, not_null_true_column, nullable_false_const);
     test(name, nullable_false_column, nullable_true_column, nullable_false_column);
     test(name, nullable_false_const, nullable_true_column, nullable_false_const);
+    test(name, not_null_false_const, nullable_true_const, nullable_false_const);
     // true && true
     test(name, not_null_true_column, not_null_true_column, not_null_true_column);
     test(name, not_null_true_column, not_null_true_column, not_null_true_const);
@@ -90,24 +94,29 @@ try
     test(name, not_null_true_column, not_null_true_column, nullable_true_const);
     test(name, nullable_true_column, nullable_true_column, nullable_true_column);
     test(name, nullable_true_column, nullable_true_column, nullable_true_const);
+    test(name, not_null_true_const, nullable_true_const, nullable_true_const);
     // true && null
     test(name, nullable_null_column, not_null_true_column, nullable_null_column);
     test(name, nullable_null_column, not_null_true_column, nullable_null_const);
     test(name, nullable_null_column, nullable_true_column, nullable_null_column);
     test(name, nullable_null_column, nullable_true_column, nullable_null_const);
+    test(name, nullable_null_const, nullable_true_const, nullable_null_const);
     // null && true
     test(name, nullable_null_column, nullable_null_column, not_null_true_column);
     test(name, nullable_null_column, nullable_null_column, not_null_true_const);
     test(name, nullable_null_column, nullable_null_column, nullable_true_column);
     test(name, nullable_null_column, nullable_null_column, nullable_true_const);
+    test(name, nullable_null_const, nullable_null_const, nullable_true_const);
     // null && false
     test(name, nullable_false_column, nullable_null_column, not_null_false_column);
     test(name, nullable_false_const, nullable_null_column, not_null_false_const);
     test(name, nullable_false_column, nullable_null_column, nullable_false_column);
     test(name, nullable_false_const, nullable_null_column, nullable_false_const);
+    test(name, nullable_false_const, nullable_null_const, nullable_false_const);
     // null && null
     test(name, nullable_null_column, nullable_null_column, nullable_null_column);
     test(name, nullable_null_column, nullable_null_column, nullable_null_const);
+    test(name, nullable_null_const, nullable_null_const, nullable_null_const);
 
     // column, column
     test(
@@ -168,6 +177,7 @@ try
     test(name, not_null_false_column, not_null_false_column, nullable_false_const);
     test(name, nullable_false_column, nullable_false_column, nullable_false_column);
     test(name, nullable_false_column, nullable_false_column, nullable_false_const);
+    test(name, not_null_false_const, nullable_false_const, nullable_false_const);
     // false || true
     test(name, not_null_true_column, not_null_false_column, not_null_true_column);
     test(name, not_null_true_const, not_null_false_column, not_null_true_const);
@@ -177,11 +187,13 @@ try
     test(name, not_null_true_const, not_null_false_column, nullable_true_const);
     test(name, nullable_true_column, nullable_false_column, nullable_true_column);
     test(name, nullable_true_const, nullable_false_column, nullable_true_const);
+    test(name, not_null_true_const, nullable_false_const, nullable_true_const);
     // false || null
     test(name, nullable_null_column, not_null_false_column, nullable_null_column);
     test(name, nullable_null_column, not_null_false_column, nullable_null_const);
     test(name, nullable_null_column, nullable_false_column, nullable_null_column);
     test(name, nullable_null_column, nullable_false_column, nullable_null_const);
+    test(name, nullable_null_const, nullable_false_const, nullable_null_const);
     // true || false
     test(name, not_null_true_column, not_null_true_column, not_null_false_column);
     test(name, not_null_true_column, not_null_true_column, not_null_false_const);
@@ -191,6 +203,7 @@ try
     test(name, not_null_true_column, not_null_true_column, nullable_false_const);
     test(name, nullable_true_column, nullable_true_column, nullable_false_column);
     test(name, nullable_true_column, nullable_true_column, nullable_false_const);
+    test(name, not_null_true_const, nullable_true_const, nullable_false_const);
     // true || true
     test(name, not_null_true_column, not_null_true_column, not_null_true_column);
     test(name, not_null_true_const, not_null_true_column, not_null_true_const);
@@ -200,24 +213,29 @@ try
     test(name, not_null_true_const, not_null_true_column, nullable_true_const);
     test(name, nullable_true_column, nullable_true_column, nullable_true_column);
     test(name, nullable_true_const, nullable_true_column, nullable_true_const);
+    test(name, not_null_true_const, nullable_true_const, nullable_true_const);
     // true || null
     test(name, nullable_true_column, not_null_true_column, nullable_null_column);
     test(name, nullable_true_column, not_null_true_column, nullable_null_const);
     test(name, nullable_true_column, nullable_true_column, nullable_null_column);
     test(name, nullable_true_column, nullable_true_column, nullable_null_const);
+    test(name, nullable_true_const, nullable_true_const, nullable_null_const);
     // null || true
     test(name, nullable_true_column, nullable_null_column, not_null_true_column);
     test(name, nullable_true_const, nullable_null_column, not_null_true_const);
     test(name, nullable_true_column, nullable_null_column, nullable_true_column);
     test(name, nullable_true_const, nullable_null_column, nullable_true_const);
+    test(name, nullable_true_const, nullable_null_const, nullable_true_const);
     // null || false
     test(name, nullable_null_column, nullable_null_column, not_null_false_column);
     test(name, nullable_null_column, nullable_null_column, not_null_false_const);
     test(name, nullable_null_column, nullable_null_column, nullable_false_column);
     test(name, nullable_null_column, nullable_null_column, nullable_false_const);
+    test(name, nullable_null_const, nullable_null_const, nullable_false_const);
     // null || null
     test(name, nullable_null_column, nullable_null_column, nullable_null_column);
     test(name, nullable_null_column, nullable_null_column, nullable_null_const);
+    test(name, nullable_null_const, nullable_null_const, nullable_null_const);
 
     // column, column
     test(
@@ -267,6 +285,7 @@ try
     test(name, not_null_false_column, not_null_false_column, nullable_false_const);
     test(name, nullable_false_column, nullable_false_column, nullable_false_column);
     test(name, nullable_false_column, nullable_false_column, nullable_false_const);
+    test(name, not_null_false_const, nullable_false_const, nullable_false_const);
     // false xor true
     test(name, not_null_true_column, not_null_false_column, not_null_true_column);
     test(name, not_null_true_column, not_null_false_column, not_null_true_const);
@@ -276,11 +295,13 @@ try
     test(name, not_null_true_column, not_null_false_column, nullable_true_const);
     test(name, nullable_true_column, nullable_false_column, nullable_true_column);
     test(name, nullable_true_column, nullable_false_column, nullable_true_const);
+    test(name, not_null_true_const, nullable_false_const, nullable_true_const);
     // false xor null
     test(name, nullable_null_column, not_null_false_column, nullable_null_column);
     test(name, nullable_null_const, not_null_false_column, nullable_null_const);
     test(name, nullable_null_column, nullable_false_column, nullable_null_column);
     test(name, nullable_null_const, nullable_false_column, nullable_null_const);
+    test(name, nullable_null_const, nullable_false_const, nullable_null_const);
     // true xor false
     test(name, not_null_true_column, not_null_true_column, not_null_false_column);
     test(name, not_null_true_column, not_null_true_column, not_null_false_const);
@@ -290,6 +311,7 @@ try
     test(name, not_null_true_column, not_null_true_column, nullable_false_const);
     test(name, nullable_true_column, nullable_true_column, nullable_false_column);
     test(name, nullable_true_column, nullable_true_column, nullable_false_const);
+    test(name, not_null_true_const, nullable_true_const, nullable_false_const);
     // true xor true
     test(name, not_null_false_column, not_null_true_column, not_null_true_column);
     test(name, not_null_false_column, not_null_true_column, not_null_true_const);
@@ -299,24 +321,29 @@ try
     test(name, not_null_false_column, not_null_true_column, nullable_true_const);
     test(name, nullable_false_column, nullable_true_column, nullable_true_column);
     test(name, nullable_false_column, nullable_true_column, nullable_true_const);
+    test(name, not_null_false_const, nullable_true_const, nullable_true_const);
     // true xor null
     test(name, nullable_null_column, not_null_true_column, nullable_null_column);
     test(name, nullable_null_const, not_null_true_column, nullable_null_const);
     test(name, nullable_null_column, nullable_true_column, nullable_null_column);
     test(name, nullable_null_const, nullable_true_column, nullable_null_const);
+    test(name, nullable_null_const, nullable_true_const, nullable_null_const);
     // null xor true
     test(name, nullable_null_column, nullable_null_column, not_null_true_column);
     test(name, nullable_null_column, nullable_null_column, not_null_true_const);
     test(name, nullable_null_column, nullable_null_column, nullable_true_column);
     test(name, nullable_null_column, nullable_null_column, nullable_true_const);
+    test(name, nullable_null_const, nullable_null_const, nullable_true_const);
     // null xor false
     test(name, nullable_null_column, nullable_null_column, not_null_false_column);
     test(name, nullable_null_column, nullable_null_column, not_null_false_const);
     test(name, nullable_null_column, nullable_null_column, nullable_false_column);
     test(name, nullable_null_column, nullable_null_column, nullable_false_const);
+    test(name, nullable_null_const, nullable_null_const, nullable_false_const);
     // null xor null
     test(name, nullable_null_column, nullable_null_column, nullable_null_column);
     test(name, nullable_null_const, nullable_null_column, nullable_null_const);
+    test(name, nullable_null_const, nullable_null_const, nullable_null_const);
 
     // column, column
     test(
