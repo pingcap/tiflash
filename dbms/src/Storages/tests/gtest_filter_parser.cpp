@@ -103,13 +103,16 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     {
         columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
     }
+    // these variables need to live long enough as it is kept as reference in `dag_query`
+    const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto runtime_filter_ids = std::vector<int>();
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
-        tipb::ANNQueryInfo{},
+        ann_query_info,
         pushed_down_filters,
         table_info.columns,
-        std::vector<int>(), // don't care runtime filter
+        runtime_filter_ids, // don't care runtime filter
         0,
         timezone_info);
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
