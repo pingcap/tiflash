@@ -83,7 +83,7 @@ public:
         std::vector<size_t> && rows_,
         const ScanContextPtr & scan_context_);
 
-    void appendChild(SkippableBlockInputStreamPtr input, size_t rows);
+    void appendChild(SkippableBlockInputStreamPtr child, size_t rows_);
 
     String getName() const override { return "ConcatSkippable"; }
 

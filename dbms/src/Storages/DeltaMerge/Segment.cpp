@@ -3254,22 +3254,24 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
 
-    SkippableBlockInputStreamPtr mem_table_input_stream = std::make_shared<ColumnFileSetInputStream>(
+    auto memtable = segment_snap->delta->getMemTableSetSnapshot();
+    auto persisted_files = segment_snap->delta->getPersistedFileSetSnapshot();
+    SkippableBlockInputStreamPtr mem_table_stream = std::make_shared<ColumnFileSetInputStream>(
         dm_context,
-        segment_snap->delta->getMemTableSetSnapshot(),
+        memtable,
         columns_to_read_ptr,
         this->rowkey_range,
         read_tag);
-    SkippableBlockInputStreamPtr persisted_files_input_stream = std::make_shared<ColumnFileSetInputStream>(
+    SkippableBlockInputStreamPtr persisted_files_stream = std::make_shared<ColumnFileSetInputStream>(
         dm_context,
-        segment_snap->delta->getPersistedFileSetSnapshot(),
+        persisted_files,
         columns_to_read_ptr,
         this->rowkey_range,
         read_tag);
 
     auto stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<NeedRowID>>(stable_stream);
-    stream->appendChild(persisted_files_input_stream, segment_snap->delta->getPersistedFileSetSnapshot()->getRows());
-    stream->appendChild(mem_table_input_stream, segment_snap->delta->getMemTableSetSnapshot()->getRows());
+    stream->appendChild(persisted_files_stream, persisted_files->getRows());
+    stream->appendChild(mem_table_stream, memtable->getRows());
     return stream;
 }
 

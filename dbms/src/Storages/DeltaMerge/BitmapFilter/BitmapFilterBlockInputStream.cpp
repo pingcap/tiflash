@@ -25,14 +25,15 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     BlockInputStreamPtr stream_,
     const BitmapFilterPtr & bitmap_filter_)
     : header(toEmptyBlock(columns_to_read))
-    , stream(stream_)
     , bitmap_filter(bitmap_filter_)
-{}
+{
+    children.push_back(stream_);
+}
 
 Block BitmapFilterBlockInputStream::read()
 {
     FilterPtr block_filter = nullptr;
-    auto block = stream->read(block_filter, true);
+    auto block = children.at(0)->read(block_filter, true);
     if (!block)
         return block;
 

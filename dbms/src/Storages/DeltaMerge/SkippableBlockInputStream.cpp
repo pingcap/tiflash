@@ -46,10 +46,10 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
 }
 
 template <bool need_row_id>
-void ConcatSkippableBlockInputStream<need_row_id>::appendChild(SkippableBlockInputStreamPtr input, size_t rows)
+void ConcatSkippableBlockInputStream<need_row_id>::appendChild(SkippableBlockInputStreamPtr child, size_t rows_)
 {
-    children.push_back(input);
-    this->rows.push_back(rows);
+    children.push_back(child);
+    rows.push_back(rows_);
     current_stream = children.begin();
 }
 

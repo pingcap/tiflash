@@ -40,8 +40,6 @@ protected:
 
 private:
     Block header;
-    // [stable..., persisted_delta, memtable]
-    BlockInputStreamPtr stream;
     BitmapFilterPtr bitmap_filter;
     IColumn::Filter filter;
 };
