@@ -35,10 +35,6 @@ constexpr size_t rows = 10000;
 class LogicalOpBench : public benchmark::Fixture
 {
 protected:
-    ColumnWithTypeAndName col_not_null_uint64_1;
-    ColumnWithTypeAndName col_not_null_uint64_2;
-    ColumnWithTypeAndName col_nullable_uint64_1;
-    ColumnWithTypeAndName col_nullable_uint64_2;
     ColumnWithTypeAndName col_not_null_uint8_1;
     ColumnWithTypeAndName col_not_null_uint8_2;
     ColumnWithTypeAndName col_not_null_uint8_3;
@@ -62,13 +58,7 @@ protected:
 public:
     void SetUp(const benchmark::State &) override
     {
-        ColumnGeneratorOpts opts{rows, "UInt64", DataDistribution::RANDOM};
-        col_not_null_uint64_1 = ColumnGenerator::instance().generate(opts);
-        col_not_null_uint64_2 = ColumnGenerator::instance().generate(opts);
-        opts.type_name = "Nullable(UInt64)";
-        col_nullable_uint64_1 = ColumnGenerator::instance().generate(opts);
-        col_nullable_uint64_2 = ColumnGenerator::instance().generate(opts);
-        opts.type_name = "UInt8";
+        ColumnGeneratorOpts opts{rows, "UInt8", DataDistribution::RANDOM};
         col_not_null_uint8_1 = ColumnGenerator::instance().generate(opts);
         not_null_uint8_columns.push_back(col_not_null_uint8_1);
         col_not_null_uint8_2 = ColumnGenerator::instance().generate(opts);
@@ -94,9 +84,9 @@ public:
         nullable_uint8_columns.push_back(col_nullable_uint8_5);
         col_nullable_uint8_6 = ColumnGenerator::instance().generate(opts);
         nullable_uint8_columns.push_back(col_nullable_uint8_6);
-        col_constant_null = col_nullable_uint64_1;
-        col_constant_true = col_nullable_uint64_1;
-        col_constant_false = col_nullable_uint64_1;
+        col_constant_null = col_nullable_uint8_1;
+        col_constant_true = col_nullable_uint8_1;
+        col_constant_false = col_nullable_uint8_1;
         col_constant_null.column = col_constant_null.type->createColumnConst(rows, Null());
         col_constant_true.column
             = makeNullable(DataTypeUInt8().createColumnConst(rows, toField(static_cast<UInt64>(10))));
@@ -166,52 +156,32 @@ LOGICAL_BENCH(_nullable_uint8_2, _nullable_uint8_1, And);
 LOGICAL_BENCH(_not_null_uint8_2, _nullable_uint8_1, And);
 LOGICAL_BENCH(_not_null_uint8_2, _not_null_uint8_1, And);
 // and
-//LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, And);
-//LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, And);
-//LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, And);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_true, And);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_false, And);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_null, And);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_true, And);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_false, And);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_null, And);
-//LOGICAL_BENCH(_nullable_uint8_1, _constant_true, And);
-//LOGICAL_BENCH(_nullable_uint8_1, _constant_false, And);
-//LOGICAL_BENCH(_nullable_uint8_1, _constant_null, And);
-//LOGICAL_BENCH(_nullable_uint64_1, _constant_true, And);
-//LOGICAL_BENCH(_nullable_uint64_1, _constant_false, And);
-//LOGICAL_BENCH(_nullable_uint64_1, _constant_null, And);
-
-// or
-//LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Or);
-//LOGICAL_BENCH(_nullable_uint64_1, _nullable_uint64_2, Or);
-//LOGICAL_BENCH(_not_null_uint64_1, _nullable_uint64_2, Or);
-LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, Or);
-LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, Or);
-LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Or);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Or);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Or);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_null, Or);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Or);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Or);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_null, Or);
-//LOGICAL_BENCH(_nullable_uint8_1, _constant_true, Or);
-//LOGICAL_BENCH(_nullable_uint8_1, _constant_false, Or);
-//LOGICAL_BENCH(_nullable_uint8_1, _constant_null, Or);
-//LOGICAL_BENCH(_nullable_uint64_1, _constant_true, Or);
-//LOGICAL_BENCH(_nullable_uint64_1, _constant_false, Or);
-//LOGICAL_BENCH(_nullable_uint64_1, _constant_null, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_true, And);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_false, And);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_null, And);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_true, And);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_false, And);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_null, And);
 LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, And);
 LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, And);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, And);
 
+// or
+LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_null, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_true, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_false, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _constant_null, Or);
+LOGICAL_BENCH(_nullable_uint8_1, _nullable_uint8_2, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _nullable_uint8_2, Or);
+LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Or);
+
 // xor
-//LOGICAL_BENCH(_not_null_uint64_1, _not_null_uint64_2, Xor);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
+LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_true, Xor);
-//LOGICAL_BENCH(_not_null_uint64_1, _constant_false, Xor);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
-//LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
+
 #define LEGACY_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                         \
     BENCHMARK_DEFINE_F(LogicalOpBench, legacyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
     (benchmark::State & state)                                                                 \
@@ -290,6 +260,7 @@ LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
     CATCH                                                                                   \
     BENCHMARK_REGISTER_F(LogicalOpBench, optLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE)->Iterations(1000);
 
+// test and only since in TiDB it always use binary logical op, so or and xor is always binary logical op
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
 OPT_LOGICAL_BENCH_MULTI_PARAM(3, And, 0);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(4, And, 0);
