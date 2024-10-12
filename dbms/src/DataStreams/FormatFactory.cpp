@@ -26,6 +26,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockOutputStream.h>
+#include <DataStreams/PrettySpaceBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/ValuesRowInputStream.h>
 #include <DataStreams/ValuesRowOutputStream.h>
@@ -69,15 +70,6 @@ BlockInputStreamPtr FormatFactory::getInput(
     {
         return wrap_row_stream(std::make_shared<BinaryRowInputStream>(buf, sample));
     }
-    else if (name == "JSONEachRow")
-    {
-        return wrap_row_stream(
-            std::make_shared<JSONEachRowRowInputStream>(buf, sample, settings.input_format_skip_unknown_fields));
-    }
-    else if (name == "Null" || name == "JSON" || name == "JSONCompact")
-    {
-        throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
-    }
     else if (name == "Values")
     {
         return wrap_row_stream(std::make_shared<ValuesRowInputStream>(
@@ -85,6 +77,15 @@ BlockInputStreamPtr FormatFactory::getInput(
             sample,
             context,
             settings.input_format_values_interpret_expressions));
+    }
+    else if (name == "JSONEachRow")
+    {
+        return wrap_row_stream(
+            std::make_shared<JSONEachRowRowInputStream>(buf, sample, settings.input_format_skip_unknown_fields));
+    }
+    else if (name == "Null" || name == "JSON" || name == "JSONCompact" || name == "PrettyCompactNoEscapes")
+    {
+        throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
     }
     else
         throw Exception("Unknown format " + name, ErrorCodes::UNKNOWN_FORMAT);
@@ -108,6 +109,13 @@ static BlockOutputStreamPtr getOutputImpl(
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
             std::make_shared<BinaryRowOutputStream>(buf),
             sample);
+    else if (name == "PrettySpaceNoEscapes")
+        return std::make_shared<PrettySpaceBlockOutputStream>(
+            buf,
+            sample,
+            true,
+            settings.output_format_pretty_max_rows,
+            context);
     else if (name == "JSON")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
             std::make_shared<JSONRowOutputStream>(buf, sample, settings.output_format_write_statistics, json_settings),
