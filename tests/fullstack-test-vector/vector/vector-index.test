@@ -67,7 +67,7 @@ mysql> set tidb_isolation_read_engines='tiflash';SELECT * FROM test.t ORDER BY V
 | [4.7,4.9,2.6,5.2,7.4] |
 +-----------------------+
 
-#TODO: support "negative inner product" and "L1"
+#TODO: support "negative inner product"
 #RETURN
 
 # build vector index with "negative inner product"
@@ -88,26 +88,6 @@ mysql> set tidb_isolation_read_engines='tiflash';SELECT * FROM test.t ORDER BY V
 | [7.7,6.7,8.3,7.8,5.7] |
 | [1.4,4.5,8.5,7.7,6.2] |
 | [8.7,5.7,7.7,9.8,1.5] |
-+-----------------------+
-
-# build vector index with "L1"
-mysql> set tidb_isolation_read_engines='tiflash';SELECT * FROM test.t ORDER BY VEC_L1_DISTANCE(v, '[1.0,4.0,8.0,7.0,6.0]') LIMIT 3;
-+-----------------------+
-| v                     |
-+-----------------------+
-| [1.4,4.5,8.5,7.7,6.2] |
-| [7.7,6.7,8.3,7.8,5.7] |
-| [4.7,4.9,2.6,5.2,7.4] |
-+-----------------------+
-## FIXME: not yet support
-mysql> ALTER TABLE test.t ADD VECTOR INDEX idx_v_cos ((VEC_L1_DISTANCE(v))) USING HNSW;
-mysql> set tidb_isolation_read_engines='tiflash';SELECT * FROM test.t ORDER BY VEC_L1_DISTANCE(v, '[1.0,4.0,8.0,7.0,6.0]') LIMIT 3;
-+-----------------------+
-| v                     |
-+-----------------------+
-| [1.4,4.5,8.5,7.7,6.2] |
-| [7.7,6.7,8.3,7.8,5.7] |
-| [4.7,4.9,2.6,5.2,7.4] |
 +-----------------------+
 
 # Cleanup
