@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "Columns/ColumnNullable.h"
+#include "DataTypes/DataTypeNullable.h"
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
@@ -102,6 +104,12 @@ protected:
         for (size_t i = 2; i < inputs.size(); ++i)
         {
             res_2 = executeFunction(func_name, res_2, inputs[i]);
+        }
+        if (res_1.type->isNullable() && !res_2.type->isNullable())
+        {
+            // special case
+            res_2.type = makeNullable(res_2.type);
+            res_2.column = makeNullable(res_2.column);
         }
         ASSERT_COLUMN_EQ(res_1, res_2);
         }
