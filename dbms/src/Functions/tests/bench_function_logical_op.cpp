@@ -63,6 +63,7 @@ public:
     void SetUp(const benchmark::State &) override
     {
         ColumnGeneratorOpts opts{rows, "UInt8", DataDistribution::RANDOM};
+        opts.gen_bool = true;
         col_not_null_uint8_1 = ColumnGenerator::instance().generate(opts);
         not_null_uint8_columns.push_back(col_not_null_uint8_1);
         col_not_null_uint8_2 = ColumnGenerator::instance().generate(opts);

@@ -50,6 +50,7 @@ struct AndImpl
 
     static inline bool isSaturatedValue(bool a) { return !a; }
     static inline bool isSaturatedValue(bool a, bool a_is_null) { return !a_is_null && !a; }
+    static inline bool canConstantBeIgnored(bool a, bool a_is_null) { return !a_is_null && a; }
 
     static inline bool apply(bool a, bool b) { return a && b; }
     static inline std::pair<bool, bool> applyTwoNullable(bool a, bool a_is_null, bool b, bool b_is_null)
@@ -85,6 +86,7 @@ struct OrImpl
 
     static inline bool isSaturatedValue(bool a) { return a; }
     static inline bool isSaturatedValue(bool a, bool a_is_null) { return !a_is_null && a; }
+    static inline bool canConstantBeIgnored(bool a, bool a_is_null) { return !a_is_null && !a; }
 
     static inline bool apply(bool a, bool b) { return a || b; }
     static inline std::pair<bool, bool> applyTwoNullable(bool a, bool a_is_null, bool b, bool b_is_null)
@@ -120,6 +122,7 @@ struct XorImpl
 
     static inline bool isSaturatedValue(bool) { return false; }
     static inline bool isSaturatedValue(bool, bool) { return false; }
+    static inline bool canConstantBeIgnored(bool, bool) { return false; }
 
     static inline bool apply(bool a, bool b) { return a != b; }
     static inline std::pair<bool, bool> applyTwoNullable(bool a, bool a_is_null, bool b, bool b_is_null)
@@ -548,7 +551,42 @@ public:
         return result_is_constant;
     }
 
-    void handleBinaryLogicalOp(
+    void handleSingleInputColumn(
+        Block & block,
+        size_t result,
+        size_t rows,
+        UInt8ColumnPtrs & not_null_uint8_columns,
+        UInt8ColumnPtrs & nullable_uint8_columns,
+        std::vector<const UInt8Container *> & null_maps,
+        bool result_is_nullable) const
+    {
+        // logical op with 1 input columns, special case when there is a constant and the constant can be ignored
+        auto col_res = ColumnUInt8::create();
+        auto col_res_is_null = ColumnUInt8::create();
+        UInt8Container & vec_res = col_res->getData();
+        UInt8Container & vec_res_is_null = col_res_is_null->getData();
+        if (!not_null_uint8_columns.empty())
+        {
+            vec_res.assign(not_null_uint8_columns[0]->getData());
+            if (result_is_nullable)
+                vec_res_is_null.assign(rows, static_cast<UInt8>(0));
+        }
+        else
+        {
+            vec_res.assign(nullable_uint8_columns[0]->getData());
+            vec_res_is_null.assign(*null_maps[0]);
+        }
+        if (result_is_nullable)
+        {
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(col_res_is_null));
+        }
+        else
+        {
+            block.getByPosition(result).column = std::move(col_res);
+        }
+    }
+
+    void handleTwoInputColumns(
         Block & block,
         size_t result,
         size_t rows,
@@ -644,7 +682,7 @@ public:
         }
     }
 
-    void handleGenericLogicalOp(
+    void handleMultipleInputColumns(
         Block & block,
         size_t result,
         size_t rows,
@@ -816,10 +854,24 @@ public:
             }
         }
 
-        if (in.size() + static_cast<UInt8>(has_consts) == 2)
+        if (Impl::canConstantBeIgnored(const_val, const_val_is_null))
+            has_consts = false;
+        if (in.size() + static_cast<UInt8>(has_consts) == 1)
+        {
+            RUNTIME_CHECK_MSG(has_consts == false, " Logical error, has_consts must be false");
+            handleSingleInputColumn(
+                block,
+                result,
+                rows,
+                uint8_in_not_null,
+                uint8_in_nullable,
+                null_map_in,
+                has_nullable_input_column);
+        }
+        else if (in.size() + static_cast<UInt8>(has_consts) == 2)
         {
             // input is 2 columns
-            handleBinaryLogicalOp(
+            handleTwoInputColumns(
                 block,
                 result,
                 rows,
@@ -834,7 +886,7 @@ public:
         else
         {
             // input is more than 2 columns
-            handleGenericLogicalOp(
+            handleMultipleInputColumns(
                 block,
                 result,
                 rows,

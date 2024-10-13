@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <Core/ColumnWithTypeAndName.h>
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
@@ -23,7 +25,20 @@ namespace DB::tests
 class Logical : public DB::tests::FunctionTest
 {
 protected:
-    void test(
+    void SetUp() override
+    {
+        FunctionTest::SetUp();
+        ColumnGeneratorOpts not_null_opts{rows, "UInt8", DataDistribution::RANDOM};
+        not_null_opts.gen_bool = true;
+        ColumnGeneratorOpts nullable_opts{rows, "Nullable(UInt8)", DataDistribution::RANDOM};
+        nullable_opts.gen_bool = true;
+        for (size_t i = 0; i < uint8_column_num; ++i)
+        {
+            not_null_uint8_columns.push_back(ColumnGenerator::instance().generate(not_null_opts));
+            nullable_uint8_columns.push_back(ColumnGenerator::instance().generate(nullable_opts));
+        }
+    }
+    void testBinaryLogicalOP(
         const String & func_name,
         const ColumnWithTypeAndName & result,
         const ColumnWithTypeAndName & col1,
@@ -31,6 +46,22 @@ protected:
     {
         ASSERT_COLUMN_EQ(result, executeFunction(func_name, col1, col2));
     }
+    void testGenericLogicalOP(const String & func_name, const ColumnsWithTypeAndName & inputs)
+    {
+        if (inputs.size() <= 1)
+        {
+            throw Exception("there must be at least 2 input columns");
+        }
+        auto res_1 = executeFunction(func_name, inputs);
+        auto res_2 = executeFunction(func_name, inputs[0], inputs[1]);
+        for (size_t i = 2; i < inputs.size(); ++i)
+        {
+            res_2 = executeFunction(func_name, res_2, inputs[i]);
+        }
+        ASSERT_COLUMN_EQ(res_1, res_2);
+        // test with constants
+    }
+
     ColumnWithTypeAndName not_null_false_column = createColumn<UInt8>({0, 0});
     ColumnWithTypeAndName not_null_true_column = createColumn<UInt8>({1, 1});
     ColumnWithTypeAndName nullable_false_column = createColumn<Nullable<UInt8>>({0, 0});
@@ -41,6 +72,16 @@ protected:
     ColumnWithTypeAndName nullable_false_const = createConstColumn<Nullable<UInt8>>(2, 0);
     ColumnWithTypeAndName nullable_true_const = createConstColumn<Nullable<UInt8>>(2, 1);
     ColumnWithTypeAndName nullable_null_const = createConstColumn<Nullable<UInt8>>(2, {});
+    static const size_t rows = 1024;
+    static const size_t uint8_column_num = 8;
+    std::mt19937_64 rand_gen;
+    ColumnsWithTypeAndName not_null_uint8_columns;
+    ColumnsWithTypeAndName nullable_uint8_columns;
+    ColumnWithTypeAndName not_null_false_const_long = createConstColumn<UInt8>(rows, 0);
+    ColumnWithTypeAndName not_null_true_const_long = createConstColumn<UInt8>(rows, 1);
+    ColumnWithTypeAndName nullable_false_const_long = createConstColumn<Nullable<UInt8>>(rows, 0);
+    ColumnWithTypeAndName nullable_true_const_long = createConstColumn<Nullable<UInt8>>(rows, 1);
+    ColumnWithTypeAndName nullable_null_const_long = createConstColumn<Nullable<UInt8>>(rows, {});
 };
 
 TEST_F(Logical, binaryAndTest)
@@ -49,116 +90,230 @@ try
     const String & name = "and";
     // basic tests
     // false && false
-    test(name, not_null_false_column, not_null_false_column, not_null_false_column);
-    test(name, not_null_false_const, not_null_false_column, not_null_false_const);
-    test(name, nullable_false_column, nullable_false_column, not_null_false_column);
-    test(name, nullable_false_const, nullable_false_column, not_null_false_const);
-    test(name, nullable_false_column, not_null_false_column, nullable_false_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, not_null_false_column);
+    testBinaryLogicalOP(name, not_null_false_const, not_null_false_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_false_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_false_column, nullable_false_column);
     // nullable_false_constant will be converted to not_null_false_constant
-    test(name, not_null_false_const, not_null_false_column, nullable_false_const);
-    test(name, nullable_false_column, nullable_false_column, nullable_false_column);
-    test(name, nullable_false_const, nullable_false_column, nullable_false_const);
-    test(name, not_null_false_const, not_null_false_const, not_null_false_const);
+    testBinaryLogicalOP(name, not_null_false_const, not_null_false_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_false_column, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_false_const, not_null_false_const, not_null_false_const);
     // false && true
-    test(name, not_null_false_column, not_null_false_column, not_null_true_column);
-    test(name, not_null_false_column, not_null_false_column, not_null_true_const);
-    test(name, nullable_false_column, nullable_false_column, not_null_true_column);
-    test(name, nullable_false_column, nullable_false_column, not_null_true_const);
-    test(name, nullable_false_column, not_null_false_column, nullable_true_column);
-    test(name, not_null_false_column, not_null_false_column, nullable_true_const);
-    test(name, nullable_false_column, nullable_false_column, nullable_true_column);
-    test(name, nullable_false_column, nullable_false_column, nullable_true_const);
-    test(name, not_null_false_const, nullable_false_const, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, not_null_true_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_false_column, nullable_true_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_false_const, nullable_false_const, nullable_true_const);
     // false && null
-    test(name, nullable_false_column, not_null_false_column, nullable_null_column);
-    test(name, nullable_false_column, not_null_false_column, nullable_null_const);
-    test(name, nullable_false_column, nullable_false_column, nullable_null_column);
-    test(name, nullable_false_column, nullable_false_column, nullable_null_const);
-    test(name, nullable_false_const, nullable_false_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_false_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_false_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_false_const, nullable_null_const);
     // true && false
-    test(name, not_null_false_column, not_null_true_column, not_null_false_column);
-    test(name, not_null_false_const, not_null_true_column, not_null_false_const);
-    test(name, nullable_false_column, nullable_true_column, not_null_false_column);
-    test(name, nullable_false_const, nullable_true_column, not_null_false_const);
-    test(name, nullable_false_column, not_null_true_column, nullable_false_column);
-    test(name, not_null_false_const, not_null_true_column, nullable_false_const);
-    test(name, nullable_false_column, nullable_true_column, nullable_false_column);
-    test(name, nullable_false_const, nullable_true_column, nullable_false_const);
-    test(name, not_null_false_const, nullable_true_const, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_true_column, not_null_false_column);
+    testBinaryLogicalOP(name, not_null_false_const, not_null_true_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_true_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_true_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_true_column, nullable_false_column);
+    testBinaryLogicalOP(name, not_null_false_const, not_null_true_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_true_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_true_column, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_false_const, nullable_true_const, nullable_false_const);
     // true && true
-    test(name, not_null_true_column, not_null_true_column, not_null_true_column);
-    test(name, not_null_true_column, not_null_true_column, not_null_true_const);
-    test(name, nullable_true_column, nullable_true_column, not_null_true_column);
-    test(name, nullable_true_column, nullable_true_column, not_null_true_const);
-    test(name, nullable_true_column, not_null_true_column, nullable_true_column);
-    test(name, not_null_true_column, not_null_true_column, nullable_true_const);
-    test(name, nullable_true_column, nullable_true_column, nullable_true_column);
-    test(name, nullable_true_column, nullable_true_column, nullable_true_const);
-    test(name, not_null_true_const, nullable_true_const, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, not_null_true_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_true_column, nullable_true_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_const, nullable_true_const, nullable_true_const);
     // true && null
-    test(name, nullable_null_column, not_null_true_column, nullable_null_column);
-    test(name, nullable_null_column, not_null_true_column, nullable_null_const);
-    test(name, nullable_null_column, nullable_true_column, nullable_null_column);
-    test(name, nullable_null_column, nullable_true_column, nullable_null_const);
-    test(name, nullable_null_const, nullable_true_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, not_null_true_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_column, not_null_true_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_true_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_true_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_true_const, nullable_null_const);
     // null && true
-    test(name, nullable_null_column, nullable_null_column, not_null_true_column);
-    test(name, nullable_null_column, nullable_null_column, not_null_true_const);
-    test(name, nullable_null_column, nullable_null_column, nullable_true_column);
-    test(name, nullable_null_column, nullable_null_column, nullable_true_const);
-    test(name, nullable_null_const, nullable_null_const, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_const, nullable_true_const);
     // null && false
-    test(name, nullable_false_column, nullable_null_column, not_null_false_column);
-    test(name, nullable_false_const, nullable_null_column, not_null_false_const);
-    test(name, nullable_false_column, nullable_null_column, nullable_false_column);
-    test(name, nullable_false_const, nullable_null_column, nullable_false_const);
-    test(name, nullable_false_const, nullable_null_const, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_null_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_null_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_null_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_null_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_false_const, nullable_null_const, nullable_false_const);
     // null && null
-    test(name, nullable_null_column, nullable_null_column, nullable_null_column);
-    test(name, nullable_null_column, nullable_null_column, nullable_null_const);
-    test(name, nullable_null_const, nullable_null_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_const, nullable_null_const);
 
     // column, column
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<Nullable<UInt8>>({0, 1, 0, 0, {}, 0}),
         createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
         createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}}));
     // column, const
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<Nullable<UInt8>>({1, 0}),
         createConstColumn<Nullable<UInt8>>(2, 1),
         createColumn<Nullable<UInt8>>({1, 0}));
-    test(
+    testBinaryLogicalOP(
         name,
         createConstColumn<Nullable<UInt8>>(2, 0),
         createConstColumn<Nullable<UInt8>>(2, 0),
         createColumn<Nullable<UInt8>>({1, 0}));
     // const, const
-    test(
+    testBinaryLogicalOP(
         name,
         createConstColumn<UInt8>(1, 1),
         createConstColumn<Nullable<UInt8>>(1, 1),
         createConstColumn<Nullable<UInt8>>(1, 1));
     // only null
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<Nullable<UInt8>>({{}, 0}),
         createOnlyNullColumnConst(2),
         createColumn<Nullable<UInt8>>({1, 0}));
     // issue 6127
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<UInt8>({0, 1, 0, 0}),
         createColumn<Int64>({0, 123, 0, 41}),
         createColumn<UInt8>({0, 11, 221, 0}));
     // issue 6127, position of UInt8 column may affect the result
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<UInt8>({0, 1, 0, 0}),
         createColumn<UInt8>({0, 123, 0, 41}),
         createColumn<Int64>({0, 11, 221, 0}));
+}
+CATCH
+
+TEST_F(Logical, AndTest)
+try
+{
+    const String & name = "and";
+    ColumnsWithTypeAndName input_columns;
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            if (rand_gen() % 2 == 0)
+                input_columns.push_back(not_null_uint8_columns[j]);
+            else
+                input_columns.push_back(nullable_uint8_columns[j]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            input_columns.push_back(not_null_uint8_columns[i]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            input_columns.push_back(nullable_uint8_columns[j]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+}
+CATCH
+
+TEST_F(Logical, OrTest)
+try
+{
+    const String & name = "or";
+    ColumnsWithTypeAndName input_columns;
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            if (rand_gen() % 2 == 0)
+                input_columns.push_back(not_null_uint8_columns[j]);
+            else
+                input_columns.push_back(nullable_uint8_columns[j]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            input_columns.push_back(not_null_uint8_columns[i]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            input_columns.push_back(nullable_uint8_columns[j]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+}
+CATCH
+
+TEST_F(Logical, XorTest)
+try
+{
+    const String & name = "xor";
+    ColumnsWithTypeAndName input_columns;
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            if (rand_gen() % 2 == 0)
+                input_columns.push_back(not_null_uint8_columns[j]);
+            else
+                input_columns.push_back(nullable_uint8_columns[j]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            input_columns.push_back(not_null_uint8_columns[i]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
+    for (size_t i = 3; i < uint8_column_num; i++)
+    {
+        for (size_t j = 0; j < i; ++j)
+        {
+            input_columns.push_back(nullable_uint8_columns[j]);
+        }
+        testGenericLogicalOP(name, input_columns);
+        input_columns.clear();
+    }
 }
 CATCH
 
@@ -168,101 +323,101 @@ try
     const String & name = "or";
     // basic tests
     // false || false
-    test(name, not_null_false_column, not_null_false_column, not_null_false_column);
-    test(name, not_null_false_column, not_null_false_column, not_null_false_const);
-    test(name, nullable_false_column, nullable_false_column, not_null_false_column);
-    test(name, nullable_false_column, nullable_false_column, not_null_false_const);
-    test(name, nullable_false_column, not_null_false_column, nullable_false_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, not_null_false_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_false_column, nullable_false_column);
     // nullable_false_constant will be converted to not_null_false_constant
-    test(name, not_null_false_column, not_null_false_column, nullable_false_const);
-    test(name, nullable_false_column, nullable_false_column, nullable_false_column);
-    test(name, nullable_false_column, nullable_false_column, nullable_false_const);
-    test(name, not_null_false_const, nullable_false_const, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_false_const, nullable_false_const, nullable_false_const);
     // false || true
-    test(name, not_null_true_column, not_null_false_column, not_null_true_column);
-    test(name, not_null_true_const, not_null_false_column, not_null_true_const);
-    test(name, nullable_true_column, nullable_false_column, not_null_true_column);
-    test(name, nullable_true_const, nullable_false_column, not_null_true_const);
-    test(name, nullable_true_column, not_null_false_column, nullable_true_column);
-    test(name, not_null_true_const, not_null_false_column, nullable_true_const);
-    test(name, nullable_true_column, nullable_false_column, nullable_true_column);
-    test(name, nullable_true_const, nullable_false_column, nullable_true_const);
-    test(name, not_null_true_const, nullable_false_const, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_false_column, not_null_true_column);
+    testBinaryLogicalOP(name, not_null_true_const, not_null_false_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_false_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_false_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_false_column, nullable_true_column);
+    testBinaryLogicalOP(name, not_null_true_const, not_null_false_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_false_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_false_column, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_const, nullable_false_const, nullable_true_const);
     // false || null
-    test(name, nullable_null_column, not_null_false_column, nullable_null_column);
-    test(name, nullable_null_column, not_null_false_column, nullable_null_const);
-    test(name, nullable_null_column, nullable_false_column, nullable_null_column);
-    test(name, nullable_null_column, nullable_false_column, nullable_null_const);
-    test(name, nullable_null_const, nullable_false_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, not_null_false_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_column, not_null_false_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_false_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_false_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_false_const, nullable_null_const);
     // true || false
-    test(name, not_null_true_column, not_null_true_column, not_null_false_column);
-    test(name, not_null_true_column, not_null_true_column, not_null_false_const);
-    test(name, nullable_true_column, nullable_true_column, not_null_false_column);
-    test(name, nullable_true_column, nullable_true_column, not_null_false_const);
-    test(name, nullable_true_column, not_null_true_column, nullable_false_column);
-    test(name, not_null_true_column, not_null_true_column, nullable_false_const);
-    test(name, nullable_true_column, nullable_true_column, nullable_false_column);
-    test(name, nullable_true_column, nullable_true_column, nullable_false_const);
-    test(name, not_null_true_const, nullable_true_const, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, not_null_false_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_true_column, nullable_false_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_true_const, nullable_true_const, nullable_false_const);
     // true || true
-    test(name, not_null_true_column, not_null_true_column, not_null_true_column);
-    test(name, not_null_true_const, not_null_true_column, not_null_true_const);
-    test(name, nullable_true_column, nullable_true_column, not_null_true_column);
-    test(name, nullable_true_const, nullable_true_column, not_null_true_const);
-    test(name, nullable_true_column, not_null_true_column, nullable_true_column);
-    test(name, not_null_true_const, not_null_true_column, nullable_true_const);
-    test(name, nullable_true_column, nullable_true_column, nullable_true_column);
-    test(name, nullable_true_const, nullable_true_column, nullable_true_const);
-    test(name, not_null_true_const, nullable_true_const, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, not_null_true_column);
+    testBinaryLogicalOP(name, not_null_true_const, not_null_true_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_true_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_true_column, nullable_true_column);
+    testBinaryLogicalOP(name, not_null_true_const, not_null_true_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_true_column, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_const, nullable_true_const, nullable_true_const);
     // true || null
-    test(name, nullable_true_column, not_null_true_column, nullable_null_column);
-    test(name, nullable_true_column, not_null_true_column, nullable_null_const);
-    test(name, nullable_true_column, nullable_true_column, nullable_null_column);
-    test(name, nullable_true_column, nullable_true_column, nullable_null_const);
-    test(name, nullable_true_const, nullable_true_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_true_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_true_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_true_const, nullable_null_const);
     // null || true
-    test(name, nullable_true_column, nullable_null_column, not_null_true_column);
-    test(name, nullable_true_const, nullable_null_column, not_null_true_const);
-    test(name, nullable_true_column, nullable_null_column, nullable_true_column);
-    test(name, nullable_true_const, nullable_null_column, nullable_true_const);
-    test(name, nullable_true_const, nullable_null_const, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_null_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_null_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_null_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_null_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_true_const, nullable_null_const, nullable_true_const);
     // null || false
-    test(name, nullable_null_column, nullable_null_column, not_null_false_column);
-    test(name, nullable_null_column, nullable_null_column, not_null_false_const);
-    test(name, nullable_null_column, nullable_null_column, nullable_false_column);
-    test(name, nullable_null_column, nullable_null_column, nullable_false_const);
-    test(name, nullable_null_const, nullable_null_const, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_const, nullable_false_const);
     // null || null
-    test(name, nullable_null_column, nullable_null_column, nullable_null_column);
-    test(name, nullable_null_column, nullable_null_column, nullable_null_const);
-    test(name, nullable_null_const, nullable_null_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_const, nullable_null_const);
 
     // column, column
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<Nullable<UInt8>>({0, 1, 1, 1, 1, {}}),
         createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
         createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}}));
     // column, const
-    test(
+    testBinaryLogicalOP(
         name,
         createConstColumn<Nullable<UInt8>>(2, 1),
         createConstColumn<Nullable<UInt8>>(2, 1),
         createColumn<Nullable<UInt8>>({1, 0}));
     // const, const
-    test(
+    testBinaryLogicalOP(
         name,
         createConstColumn<UInt8>(1, 1),
         createConstColumn<Nullable<UInt8>>(1, 1),
         createConstColumn<Nullable<UInt8>>(1, 0));
     // only null
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<Nullable<UInt8>>({1, {}}),
         createOnlyNullColumnConst(2),
         createColumn<Nullable<UInt8>>({1, 0}));
     // issue 5849
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<UInt8>({0, 1, 1, 1}),
         createColumn<UInt8>({0, 123, 0, 41}),
@@ -276,95 +431,99 @@ try
     const String & name = "xor";
     // basic tests
     // false xor false
-    test(name, not_null_false_column, not_null_false_column, not_null_false_column);
-    test(name, not_null_false_column, not_null_false_column, not_null_false_const);
-    test(name, nullable_false_column, nullable_false_column, not_null_false_column);
-    test(name, nullable_false_column, nullable_false_column, not_null_false_const);
-    test(name, nullable_false_column, not_null_false_column, nullable_false_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, not_null_false_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_false_column, nullable_false_column);
     // nullable_false_constant will be converted to not_null_false_constant
-    test(name, not_null_false_column, not_null_false_column, nullable_false_const);
-    test(name, nullable_false_column, nullable_false_column, nullable_false_column);
-    test(name, nullable_false_column, nullable_false_column, nullable_false_const);
-    test(name, not_null_false_const, nullable_false_const, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_false_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_false_column, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_false_const, nullable_false_const, nullable_false_const);
     // false xor true
-    test(name, not_null_true_column, not_null_false_column, not_null_true_column);
-    test(name, not_null_true_column, not_null_false_column, not_null_true_const);
-    test(name, nullable_true_column, nullable_false_column, not_null_true_column);
-    test(name, nullable_true_column, nullable_false_column, not_null_true_const);
-    test(name, nullable_true_column, not_null_false_column, nullable_true_column);
-    test(name, not_null_true_column, not_null_false_column, nullable_true_const);
-    test(name, nullable_true_column, nullable_false_column, nullable_true_column);
-    test(name, nullable_true_column, nullable_false_column, nullable_true_const);
-    test(name, not_null_true_const, nullable_false_const, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_false_column, not_null_true_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_false_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_false_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_false_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_false_column, nullable_true_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_false_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_false_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_false_column, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_true_const, nullable_false_const, nullable_true_const);
     // false xor null
-    test(name, nullable_null_column, not_null_false_column, nullable_null_column);
-    test(name, nullable_null_const, not_null_false_column, nullable_null_const);
-    test(name, nullable_null_column, nullable_false_column, nullable_null_column);
-    test(name, nullable_null_const, nullable_false_column, nullable_null_const);
-    test(name, nullable_null_const, nullable_false_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, not_null_false_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_const, not_null_false_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_false_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_false_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_false_const, nullable_null_const);
     // true xor false
-    test(name, not_null_true_column, not_null_true_column, not_null_false_column);
-    test(name, not_null_true_column, not_null_true_column, not_null_false_const);
-    test(name, nullable_true_column, nullable_true_column, not_null_false_column);
-    test(name, nullable_true_column, nullable_true_column, not_null_false_const);
-    test(name, nullable_true_column, not_null_true_column, nullable_false_column);
-    test(name, not_null_true_column, not_null_true_column, nullable_false_const);
-    test(name, nullable_true_column, nullable_true_column, nullable_false_column);
-    test(name, nullable_true_column, nullable_true_column, nullable_false_const);
-    test(name, not_null_true_const, nullable_true_const, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, not_null_false_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_true_column, not_null_true_column, nullable_false_column);
+    testBinaryLogicalOP(name, not_null_true_column, not_null_true_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_true_column, nullable_true_column, nullable_false_const);
+    testBinaryLogicalOP(name, not_null_true_const, nullable_true_const, nullable_false_const);
     // true xor true
-    test(name, not_null_false_column, not_null_true_column, not_null_true_column);
-    test(name, not_null_false_column, not_null_true_column, not_null_true_const);
-    test(name, nullable_false_column, nullable_true_column, not_null_true_column);
-    test(name, nullable_false_column, nullable_true_column, not_null_true_const);
-    test(name, nullable_false_column, not_null_true_column, nullable_true_column);
-    test(name, not_null_false_column, not_null_true_column, nullable_true_const);
-    test(name, nullable_false_column, nullable_true_column, nullable_true_column);
-    test(name, nullable_false_column, nullable_true_column, nullable_true_const);
-    test(name, not_null_false_const, nullable_true_const, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_true_column, not_null_true_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_true_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_true_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_true_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_false_column, not_null_true_column, nullable_true_column);
+    testBinaryLogicalOP(name, not_null_false_column, not_null_true_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_true_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_false_column, nullable_true_column, nullable_true_const);
+    testBinaryLogicalOP(name, not_null_false_const, nullable_true_const, nullable_true_const);
     // true xor null
-    test(name, nullable_null_column, not_null_true_column, nullable_null_column);
-    test(name, nullable_null_const, not_null_true_column, nullable_null_const);
-    test(name, nullable_null_column, nullable_true_column, nullable_null_column);
-    test(name, nullable_null_const, nullable_true_column, nullable_null_const);
-    test(name, nullable_null_const, nullable_true_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, not_null_true_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_const, not_null_true_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_true_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_true_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_true_const, nullable_null_const);
     // null xor true
-    test(name, nullable_null_column, nullable_null_column, not_null_true_column);
-    test(name, nullable_null_column, nullable_null_column, not_null_true_const);
-    test(name, nullable_null_column, nullable_null_column, nullable_true_column);
-    test(name, nullable_null_column, nullable_null_column, nullable_true_const);
-    test(name, nullable_null_const, nullable_null_const, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_true_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_true_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_true_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_true_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_const, nullable_true_const);
     // null xor false
-    test(name, nullable_null_column, nullable_null_column, not_null_false_column);
-    test(name, nullable_null_column, nullable_null_column, not_null_false_const);
-    test(name, nullable_null_column, nullable_null_column, nullable_false_column);
-    test(name, nullable_null_column, nullable_null_column, nullable_false_const);
-    test(name, nullable_null_const, nullable_null_const, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_false_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, not_null_false_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_false_column);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_false_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_const, nullable_false_const);
     // null xor null
-    test(name, nullable_null_column, nullable_null_column, nullable_null_column);
-    test(name, nullable_null_const, nullable_null_column, nullable_null_const);
-    test(name, nullable_null_const, nullable_null_const, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_column, nullable_null_column, nullable_null_column);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_column, nullable_null_const);
+    testBinaryLogicalOP(name, nullable_null_const, nullable_null_const, nullable_null_const);
 
     // column, column
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<Nullable<UInt8>>({0, 0, 1, 1, {}, {}}),
         createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
         createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}}));
     // column, const
-    test(
+    testBinaryLogicalOP(
         name,
         createColumn<Nullable<UInt8>>({0, 1}),
         createConstColumn<Nullable<UInt8>>(2, 1),
         createColumn<Nullable<UInt8>>({1, 0}));
     // const, const
-    test(
+    testBinaryLogicalOP(
         name,
         createConstColumn<UInt8>(1, 0),
         createConstColumn<Nullable<UInt8>>(1, 1),
         createConstColumn<Nullable<UInt8>>(1, 1));
     // only null
-    test(name, createOnlyNullColumnConst(2), createOnlyNullColumnConst(2), createColumn<Nullable<UInt8>>({1, 0}));
+    testBinaryLogicalOP(
+        name,
+        createOnlyNullColumnConst(2),
+        createOnlyNullColumnConst(2),
+        createColumn<Nullable<UInt8>>({1, 0}));
 }
 CATCH
 
