@@ -505,7 +505,7 @@ public:
     }
 
     // if the result is constant, then generate the constant result and return true
-    bool tryCheckConstantResult(
+    bool tryGenerateConstantResult(
         Block & block,
         size_t result,
         size_t rows,
@@ -782,6 +782,50 @@ public:
         }
     }
 
+    void convertAllInputToUInt8(
+        ColumnRawPtrs & input_columns,
+        size_t rows,
+        UInt8ColumnPtrs & not_null_uint8_columns,
+        UInt8ColumnPtrs & nullable_uint8_columns,
+        std::vector<const UInt8Container *> & null_maps,
+        Columns & converted_columns) const
+    {
+        for (const auto * column : input_columns)
+        {
+            if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(column))
+            {
+                not_null_uint8_columns.push_back(uint8_column);
+            }
+            else
+            {
+                if (column->isColumnNullable())
+                {
+                    const auto * nullable_col = checkAndGetColumn<ColumnNullable>(column);
+                    null_maps.push_back(&nullable_col->getNullMapData());
+                    const auto * not_null_col = &nullable_col->getNestedColumn();
+                    if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(not_null_col))
+                    {
+                        nullable_uint8_columns.push_back(uint8_column);
+                    }
+                    else
+                    {
+                        auto converted_column = ColumnUInt8::create(rows);
+                        convertToUInt8(not_null_col, converted_column->getData());
+                        nullable_uint8_columns.push_back(converted_column.get());
+                        converted_columns.emplace_back(std::move(converted_column));
+                    }
+                }
+                else
+                {
+                    auto converted_column = ColumnUInt8::create(rows);
+                    convertToUInt8(column, converted_column->getData());
+                    not_null_uint8_columns.push_back(converted_column.get());
+                    converted_columns.emplace_back(std::move(converted_column));
+                }
+            }
+        }
+    }
+
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         bool has_nullable_input_column = false;
@@ -803,7 +847,7 @@ public:
         if (has_consts)
         {
             // If this value uniquely determines the result, return it.
-            if (tryCheckConstantResult(
+            if (tryGenerateConstantResult(
                     block,
                     result,
                     rows,
@@ -815,47 +859,15 @@ public:
         }
 
         /// Convert all columns to UInt8
-        UInt8ColumnPtrs uint8_in_not_null;
-        UInt8ColumnPtrs uint8_in_nullable;
-        std::vector<const UInt8Container *> null_map_in;
+        UInt8ColumnPtrs not_null_uint8_columns;
+        UInt8ColumnPtrs nullable_uint8_columns;
+        std::vector<const UInt8Container *> null_maps;
         Columns converted_columns;
-        for (const auto * column : in)
-        {
-            if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(column))
-            {
-                uint8_in_not_null.push_back(uint8_column);
-            }
-            else
-            {
-                if (column->isColumnNullable())
-                {
-                    const auto * nullable_col = checkAndGetColumn<ColumnNullable>(column);
-                    null_map_in.push_back(&nullable_col->getNullMapData());
-                    const auto * not_null_col = &nullable_col->getNestedColumn();
-                    if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(not_null_col))
-                    {
-                        uint8_in_nullable.push_back(uint8_column);
-                    }
-                    else
-                    {
-                        auto converted_column = ColumnUInt8::create(rows);
-                        convertToUInt8(not_null_col, converted_column->getData());
-                        uint8_in_nullable.push_back(converted_column.get());
-                        converted_columns.emplace_back(std::move(converted_column));
-                    }
-                }
-                else
-                {
-                    auto converted_column = ColumnUInt8::create(rows);
-                    convertToUInt8(column, converted_column->getData());
-                    uint8_in_not_null.push_back(converted_column.get());
-                    converted_columns.emplace_back(std::move(converted_column));
-                }
-            }
-        }
+        convertAllInputToUInt8(in, rows, not_null_uint8_columns, nullable_uint8_columns, null_maps, converted_columns);
 
         if (Impl::canConstantBeIgnored(const_val, const_val_is_null))
             has_consts = false;
+
         if (in.size() + static_cast<UInt8>(has_consts) == 1)
         {
             RUNTIME_CHECK_MSG(has_consts == false, " Logical error, has_consts must be false");
@@ -863,9 +875,9 @@ public:
                 block,
                 result,
                 rows,
-                uint8_in_not_null,
-                uint8_in_nullable,
-                null_map_in,
+                not_null_uint8_columns,
+                nullable_uint8_columns,
+                null_maps,
                 has_nullable_input_column);
         }
         else if (in.size() + static_cast<UInt8>(has_consts) == 2)
@@ -878,9 +890,9 @@ public:
                 has_consts,
                 const_val,
                 const_val_is_null,
-                uint8_in_not_null,
-                uint8_in_nullable,
-                null_map_in,
+                not_null_uint8_columns,
+                nullable_uint8_columns,
+                null_maps,
                 has_nullable_input_column);
         }
         else
@@ -893,9 +905,9 @@ public:
                 has_consts,
                 const_val,
                 const_val_is_null,
-                uint8_in_not_null,
-                uint8_in_nullable,
-                null_map_in,
+                not_null_uint8_columns,
+                nullable_uint8_columns,
+                null_maps,
                 has_nullable_input_column);
         }
     }
