@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Columns/ColumnNullable.h"
-#include "DataTypes/DataTypeNullable.h"
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
@@ -21,6 +19,9 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
+
+#include "Columns/ColumnNullable.h"
+#include "DataTypes/DataTypeNullable.h"
 
 namespace DB::tests
 {
@@ -48,71 +49,74 @@ protected:
     {
         ASSERT_COLUMN_EQ(result, executeFunction(func_name, col1, col2));
     }
-    void testGenericLogicalOP(const String & func_name, const ColumnsWithTypeAndName & inputs, bool with_constants)
+    void testGenericLogicalOPWithConstants(const String & func_name, const ColumnsWithTypeAndName & inputs)
+    {
+        auto new_inputs = inputs;
+        // add constant_true
+        new_inputs.push_back(not_null_true_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        // add constant_false
+        new_inputs = inputs;
+        new_inputs.push_back(not_null_false_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        // add constant_null
+        new_inputs = inputs;
+        new_inputs.push_back(nullable_null_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        // multiple constant
+        new_inputs = inputs;
+        new_inputs.push_back(nullable_null_const_long);
+        new_inputs.push_back(not_null_false_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        new_inputs = inputs;
+        new_inputs.push_back(nullable_null_const_long);
+        new_inputs.push_back(not_null_true_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        new_inputs = inputs;
+        new_inputs.push_back(not_null_true_const_long);
+        new_inputs.push_back(not_null_false_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        new_inputs = inputs;
+        new_inputs.push_back(nullable_null_const_long);
+        new_inputs.push_back(not_null_true_const_long);
+        new_inputs.push_back(not_null_false_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        new_inputs = inputs;
+        new_inputs.push_back(not_null_true_const_long);
+        new_inputs.push_back(not_null_true_const_long);
+        new_inputs.push_back(not_null_false_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        new_inputs = inputs;
+        new_inputs.push_back(not_null_false_const_long);
+        new_inputs.push_back(not_null_true_const_long);
+        new_inputs.push_back(not_null_false_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+        new_inputs = inputs;
+        new_inputs.push_back(not_null_false_const_long);
+        new_inputs.push_back(not_null_true_const_long);
+        new_inputs.push_back(not_null_false_const_long);
+        new_inputs.push_back(nullable_null_const_long);
+        testGenericLogicalOP(func_name, new_inputs, true);
+    }
+    void testGenericLogicalOP(const String & func_name, const ColumnsWithTypeAndName & inputs, bool input_has_constants)
     {
         if (inputs.size() <= 1)
         {
             throw Exception("there must be at least 2 input columns");
         }
-        if (with_constants)
-        {
-            auto new_inputs = inputs;
-            // add constant_true
-            new_inputs.push_back(not_null_true_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            // add constant_false
-            new_inputs = inputs;
-            new_inputs.push_back(not_null_false_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            // add constant_null
-            new_inputs = inputs;
-            new_inputs.push_back(nullable_null_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            // multiple constant
-            new_inputs = inputs;
-            new_inputs.push_back(nullable_null_const_long);
-            new_inputs.push_back(not_null_false_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            new_inputs = inputs;
-            new_inputs.push_back(nullable_null_const_long);
-            new_inputs.push_back(not_null_true_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            new_inputs = inputs;
-            new_inputs.push_back(nullable_null_const_long);
-            new_inputs.push_back(not_null_true_const_long);
-            new_inputs.push_back(not_null_false_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            new_inputs = inputs;
-            new_inputs.push_back(not_null_true_const_long);
-            new_inputs.push_back(not_null_false_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            new_inputs = inputs;
-            new_inputs.push_back(not_null_true_const_long);
-            new_inputs.push_back(not_null_true_const_long);
-            new_inputs.push_back(not_null_false_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-            new_inputs = inputs;
-            new_inputs.push_back(not_null_false_const_long);
-            new_inputs.push_back(not_null_true_const_long);
-            new_inputs.push_back(not_null_false_const_long);
-            testGenericLogicalOP(func_name, new_inputs, false);
-        }
-        else
-        {
         auto res_1 = executeFunction(func_name, inputs);
         auto res_2 = executeFunction(func_name, inputs[0], inputs[1]);
         for (size_t i = 2; i < inputs.size(); ++i)
         {
             res_2 = executeFunction(func_name, res_2, inputs[i]);
         }
-        if (res_1.type->isNullable() && !res_2.type->isNullable())
+        if (input_has_constants && res_1.type->isNullable() && !res_2.type->isNullable())
         {
             // special case
             res_2.type = makeNullable(res_2.type);
             res_2.column = makeNullable(res_2.column);
         }
         ASSERT_COLUMN_EQ(res_1, res_2);
-        }
     }
 
     ColumnWithTypeAndName not_null_false_column = createColumn<UInt8>({0, 0});
@@ -271,7 +275,7 @@ try
                 input_columns.push_back(nullable_uint8_columns[j]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -281,7 +285,7 @@ try
             input_columns.push_back(not_null_uint8_columns[i]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -291,7 +295,7 @@ try
             input_columns.push_back(nullable_uint8_columns[j]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
 }
@@ -312,7 +316,7 @@ try
                 input_columns.push_back(nullable_uint8_columns[j]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -322,7 +326,7 @@ try
             input_columns.push_back(not_null_uint8_columns[i]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -332,7 +336,7 @@ try
             input_columns.push_back(nullable_uint8_columns[j]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
 }
@@ -353,7 +357,7 @@ try
                 input_columns.push_back(nullable_uint8_columns[j]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -363,7 +367,7 @@ try
             input_columns.push_back(not_null_uint8_columns[i]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -373,7 +377,7 @@ try
             input_columns.push_back(nullable_uint8_columns[j]);
         }
         testGenericLogicalOP(name, input_columns, false);
-        testGenericLogicalOP(name, input_columns, true);
+        testGenericLogicalOPWithConstants(name, input_columns);
         input_columns.clear();
     }
 }
