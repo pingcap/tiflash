@@ -261,6 +261,8 @@ bool LocalIndexerScheduler::tryAddTaskToPool(std::unique_lock<std::mutex> & lock
     }
 
     auto real_job = [task, this]() {
+        // The task is executed by a thread that is created by UniThreadPool. We need to set the thread name
+        // before executing and reset it after the task is done.
         const auto old_thread_name = getThreadName();
         setThreadName("LocalIndexPool");
 
