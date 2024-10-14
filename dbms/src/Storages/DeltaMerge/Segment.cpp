@@ -3314,8 +3314,8 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
         is_fast_scan,
         enable_del_clean_read,
         /* read_packs */ {},
-        /* need_row_id */ NeedRowID,
-        /* bitmap_filter */ bitmap_filter);
+        NeedRowID,
+        bitmap_filter);
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
 
