@@ -739,15 +739,16 @@ public:
         const RSOperatorPtr & filter,
         UInt64 start_ts,
         size_t expected_block_size);
-    BlockInputStreamPtr getBitmapFilterInputStream(
-        BitmapFilterPtr && bitmap_filter,
+    SkippableBlockInputStreamPtr getConcatSkippableBlockInputStream(
+        BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         UInt64 start_ts,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        ReadTag read_tag);
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -759,7 +760,7 @@ public:
         size_t read_data_block_rows);
 
     BlockInputStreamPtr getLateMaterializationStream(
-        BitmapFilterPtr && bitmap_filter,
+        BitmapFilterPtr & bitmap_filter,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
