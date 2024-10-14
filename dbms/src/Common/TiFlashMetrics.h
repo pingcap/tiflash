@@ -480,6 +480,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_admin_commit_merge, {{"type", "admin_commit_merge"}}, ExpBuckets{0.0005, 2, 20}),                                      \
       F(type_admin_change_peer, {{"type", "admin_change_peer"}}, ExpBuckets{0.0005, 2, 20}),                                        \
       F(type_flush_region, {{"type", "flush_region"}}, ExpBuckets{0.0005, 2, 20}))                                                  \
+    M(tiflash_raft_long_term_event_duration_seconds,                                                                                \
+      "Bucketed histogram of applying write command Raft logs",                                                                     \
+      Histogram,                                                                                                                    \
+      F(type_apply_snapshot_gap, {{"type", "apply_snapshot_gap"}}, ExpBucketsWithRange{1, 8, 60 * 60 * 24}))                        \
     M(tiflash_raft_upstream_latency,                                                                                                \
       "The latency that tikv sends raft log to tiflash.",                                                                           \
       Histogram,                                                                                                                    \

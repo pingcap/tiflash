@@ -437,8 +437,10 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
 
 RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
     const Base & base_,
+    PrehandleResult::Stats && prehandle_stats_,
     std::vector<DM::ExternalDTFileInfo> && external_files_)
     : base(base_)
+    , prehandle_stats(std::move(prehandle_stats_))
     , external_files(std::move(external_files_))
 {}
 
@@ -446,6 +448,26 @@ RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(const Base & base_, Che
     : base(base_)
     , checkpoint_info(std::move(checkpoint_info_))
 {}
+
+UInt64 RegionPtrWithCheckpointInfo::getPrehandleElapsedMillis() const
+{
+    if (checkpoint_info->beginTime() != 0 && checkpoint_info->createdTime() != 0
+        && checkpoint_info->createdTime() > checkpoint_info->beginTime())
+    {
+        return checkpoint_info->createdTime() - checkpoint_info->beginTime();
+    }
+    return 0;
+}
+
+UInt64 RegionPtrWithCheckpointInfo::getPrehandleStartMillis() const
+{
+    return checkpoint_info->beginTime();
+}
+UInt64 RegionPtrWithCheckpointInfo::getPrehandleEndMillis() const
+{
+    return checkpoint_info->createdTime();
+}
+
 
 bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts)
 {

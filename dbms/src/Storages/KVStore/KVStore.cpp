@@ -266,6 +266,7 @@ void KVStore::removeRegion(
     const KVStoreTaskLock & task_lock,
     const RegionTaskLock & region_lock)
 {
+    Stopwatch sw;
     LOG_INFO(log, "Start to remove region_id={}", region_id);
 
     {
@@ -293,7 +294,9 @@ void KVStore::removeRegion(
 
     region_table.removeRegion(region_id, remove_data, region_lock);
 
-    LOG_INFO(log, "Remove region_id={} done", region_id);
+    auto el = sw.elapsedSeconds();
+    // Blocking in `HandleDestroy` can block raftstore thread and other KVStore tasks(by task lock).
+    LOG_INFO(log, "Remove region_id={} done, {}_elapsed={:3f}s", region_id, el > 60.0 ? "long" : "", el);
 }
 
 KVStoreTaskLock KVStore::genTaskLock() const

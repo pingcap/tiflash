@@ -75,7 +75,11 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         }
 
         {
-            LOG_INFO(log, "{} set state to `Applying`", old_region->toString());
+            LOG_INFO(
+                log,
+                "{} set state to `Applying`, lastAppliedTime={}",
+                old_region->toString(),
+                old_region->lastSnapshotAppliedTime());
             // Set original region state to `Applying` and any read request toward this region should be rejected because
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
@@ -351,7 +355,10 @@ void KVStore::onSnapshot(
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
-
+    if (old_region != nullptr)
+    {
+        new_region->updateSnapshotAppliedTime(old_region->lastSnapshotAppliedTime());
+    }
     prehandling_trace.deregisterTask(new_region->id());
 }
 
@@ -362,7 +369,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
     {
         LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
 
-        Stopwatch watch;
+        Stopwatch watch(CLOCK_REALTIME);
         SCOPE_EXIT({
             GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
                 .Observe(watch.elapsedSeconds());
@@ -372,8 +379,20 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
 
         FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-        // `new_region` may change in the previous function, just log the region_id down
-        LOG_INFO(log, "Finish apply snapshot, cost={:.3f}s region_id={}", watch.elapsedSeconds(), new_region->id());
+        // `new_region` may change in the previous function, just log the region_id down.
+        // `worker_queue_cost` is the time since prehandle finished, to we actually pop the snapshot from region worker.
+        // - For normal snapshot, it is the time since prehandle finished.
+        // - For FAP snapshot, it is the time since CheckpointIngestInfo is built. So it includes the time of MsgSnapshot.
+        //   We can not observe the timepoint when the task is pushed into region worker queue, because FAP snapshot has no prehandling stage.
+        LOG_INFO(
+            log,
+            "Finish apply snapshot, cost={:.3f}s region_id={} prehandle_cost={:.3f}s worker_queue_cost={:.3f}s "
+            "snapshot_type={}",
+            watch.elapsedSeconds(),
+            new_region->id(),
+            new_region.getPrehandleElapsedMillis() / 1000.0,
+            (watch.getStartMillis() - new_region.getPrehandleEndMillis()) / 1000.0,
+            new_region.snapshotType());
     }
     catch (Exception & e)
     {
