@@ -1101,7 +1101,7 @@ struct ReplaceStringImpl
             while (pos_in_data < data.size())
             {
                 bool match = true;
-                
+
                 // Check if there are enough characters to match
                 if (pos_in_data + needle_size > data.size() || (replace_one && replace_cnt > 0))
                     match = false;
@@ -1146,17 +1146,17 @@ struct ReplaceStringImpl
 
     // Handle the case where `column_src` are const
     static void vectorConstFirstParaReplacement(
-    const std::string & data,
-    const ColumnString::Chars_t & needle_chars,
-    const ColumnString::Offsets & needle_offsets,
-    const ColumnString::Chars_t & replacement_chars,
-    const ColumnString::Offsets & replacement_offsets,
-    const Int64 & /* pos */,
-    const Int64 & /* occ */,
-    const std::string & /* match_type */,
-    TiDB::TiDBCollatorPtr /* collator */,
-    ColumnString::Chars_t & res_data,
-    ColumnString::Offsets & res_offsets)
+        const std::string & data,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         res_offsets.resize(needle_offsets.size());
@@ -1166,7 +1166,7 @@ struct ReplaceStringImpl
         {
             // 获取当前 needle 的起始位置和大小
             auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
-            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1;  // Ignore trailing zero bytes
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // Ignore trailing zero bytes
 
             // If needle is empty, copy the entire data directly
             if (needle_size == 0)
@@ -1179,12 +1179,12 @@ struct ReplaceStringImpl
             }
 
             Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, data.size());
-            size_t pos_in_data = 0;  // trace the location in `data`
+            size_t pos_in_data = 0; // trace the location in `data`
 
             while (pos_in_data < data.size())
             {
-                const char* match = searcher.search(data.data() + pos_in_data, data.size() - pos_in_data);
-                
+                const char * match = searcher.search(data.data() + pos_in_data, data.size() - pos_in_data);
+
                 // Copy unmatched characters
                 size_t unmatched_len = match - (data.data() + pos_in_data);
                 res_data.resize(res_data.size() + unmatched_len);
@@ -1200,7 +1200,7 @@ struct ReplaceStringImpl
                 if (pos_in_data + needle_size <= data.size())
                 {
                     auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
-                    auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1;  // 忽略末尾的零字节
+                    auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // 忽略末尾的零字节
 
                     res_data.resize(res_data.size() + replacement_size);
                     memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
@@ -1222,6 +1222,70 @@ struct ReplaceStringImpl
             res_offsets[i] = res_offset;
         }
     }
+
+    // Handle the case where `column_src` and 'needle_chars' are const
+    static void vectorConstFirstThireParaReplacement(
+        const std::string & data,
+        const std::string & needle_chars,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        res_offsets.resize(replacement_offsets.size());
+        ColumnString::Offset res_offset = 0;
+
+        size_t needle_size = needle_chars.size();
+
+        for (size_t i = 0; i < replacement_offsets.size(); ++i)
+        {
+            size_t pos_in_data = 0; // trace the location in `data`
+
+            while (pos_in_data < data.size())
+            {
+                size_t match_pos = data.find(needle_chars, pos_in_data);
+
+                if (match_pos == std::string::npos)
+                {
+                    size_t remaining_len = data.size() - pos_in_data;
+                    res_data.resize(res_data.size() + remaining_len);
+                    memcpy(&res_data[res_offset], data.data() + pos_in_data, remaining_len);
+                    res_offset += remaining_len;
+                    break;
+                }
+
+                size_t unmatched_len = match_pos - pos_in_data;
+                res_data.resize(res_data.size() + unmatched_len);
+                memcpy(&res_data[res_offset], data.data() + pos_in_data, unmatched_len);
+                res_offset += unmatched_len;
+
+                auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+                auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // Ignore trailing zero bytes
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+
+                pos_in_data = match_pos + needle_size;
+
+                if (replace_one)
+                {
+                    size_t remaining_len = data.size() - pos_in_data;
+                    res_data.resize(res_data.size() + remaining_len);
+                    memcpy(&res_data[res_offset], data.data() + pos_in_data, remaining_len);
+                    res_offset += remaining_len;
+                    break;
+                }
+            }
+
+            res_offsets[i] = res_offset;
+        }
+    }
+
 
     static void vectorNonConstNeedleReplacement(
         const ColumnString::Chars_t & data,
