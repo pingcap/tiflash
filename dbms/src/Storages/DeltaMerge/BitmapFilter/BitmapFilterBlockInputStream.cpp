@@ -34,6 +34,8 @@ Block BitmapFilterBlockInputStream::read()
 {
     FilterPtr block_filter = nullptr;
     auto block = children.at(0)->read(block_filter, true);
+    std::cout << bitmap_filter->toDebugString() << std::endl;
+    std::cout << "BitmapFilterBlockInputStream " << block.rows() << " " << block.startOffset() << std::endl; 
     if (!block)
         return block;
 

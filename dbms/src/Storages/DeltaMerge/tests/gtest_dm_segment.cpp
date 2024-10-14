@@ -1024,6 +1024,111 @@ try
 }
 CATCH
 
+TEST_F(SegmentTest, ColumnFileBigRangeGreaterThanSegment)
+try
+{
+    auto write_column_file_big = [&](Block block) {
+        WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto delegator = storage_path_pool->getStableDiskDelegator();
+        auto parent_path = delegator.choosePath();
+        auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
+        ingest_wbs.data.putExternal(file_id, /* tag */ 0);
+        ingest_wbs.writeLogAndData();
+        delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
+
+        WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(
+            dm_context->global_context.getFileProvider(),
+            file_id,
+            ref_id,
+            parent_path,
+            DMFileMeta::ReadMode::all());
+        wbs.writeLogAndData();
+        ASSERT_TRUE(segment->ingestDataToDelta(
+            *dm_context,
+            segment->getRowKeyRange(),
+            {ref_file},
+            /* clear_data_in_range */ false));
+
+        ingest_wbs.rollbackWrittenLogAndData();
+    };
+
+    {
+        // write ColumnFileBig with range [0, 100)
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 100, false);
+        HandleRange range(50, 80);
+        segment->rowkey_range = RowKeyRange::fromHandleRange(range);
+        write_column_file_big(std::move(block));
+    }
+    {
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto read_ranges = {RowKeyRange::newAll(false, 1)};
+        auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+        auto bitmap_filter = segment->buildBitmapFilter(
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            EMPTY_RS_OPERATOR,
+            0,
+            DEFAULT_BLOCK_SIZE);
+        std::cout << bitmap_filter->toDebugString() << std::endl;
+        ASSERT_EQ(bitmap_filter->size(), 30);
+    }
+
+    // {
+    //     // write ColumnFileBig with range [100, 200)
+    //     Block block = DMTestEnv::prepareSimpleWriteBlock(100, 200, false);
+    //     write_column_file_big(std::move(block));
+    // }
+    // {
+    //     // write ColumnFileBig with range [200, 300)
+    //     Block block = DMTestEnv::prepareSimpleWriteBlock(200, 300, false);
+    //     write_column_file_big(std::move(block));
+    // }
+    // {
+    //     // delete range [300, 350)
+    //     Block block = DMTestEnv::prepareSimpleWriteBlock(
+    //         300,
+    //         350,
+    //         false,
+    //         2,
+    //         "_tidb_rowid",
+    //         EXTRA_HANDLE_COLUMN_ID,
+    //         EXTRA_HANDLE_COLUMN_INT_TYPE,
+    //         false,
+    //         1,
+    //         true,
+    //         /*is_deleted=*/true);
+    //     segment->write(dmContext(), std::move(block), false);
+    // }
+
+    // HandleRange range(0, 250);
+    // segment->rowkey_range = RowKeyRange::fromHandleRange(range);
+
+    // std::cout << segment->rowkey_range.toDebugString() << std::endl;
+
+    // {
+    //     // read written data
+    //     auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    //     auto in = segment->getBitmapFilterInputStream(
+    //         dmContext(),
+    //         *tableColumns(),
+    //         segment_snap,
+    //         {RowKeyRange::newAll(false, 1)},
+    //         EMPTY_FILTER,
+    //         0,
+    //         DEFAULT_BLOCK_SIZE,
+    //         DEFAULT_BLOCK_SIZE);
+    //     ASSERT_INPUTSTREAM_NROWS(in, 250);
+    // }
+}
+CATCH
+
 TEST_F(SegmentTest, Split)
 try
 {
