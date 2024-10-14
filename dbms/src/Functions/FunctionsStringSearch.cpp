@@ -1108,7 +1108,7 @@ struct ReplaceStringImpl
 
                 // Check if characters match
                 for (size_t j = 0; match && j < needle_size; ++j)
-                    if (data[pos_in_data + j] != needle_chars[needle_offset + j])
+                    if (static_cast<unsigned char>(data[pos_in_data + j]) != needle_chars[needle_offset + j])
                         match = false;
 
                 // If it matches, replace `needle` with `replacement`
@@ -1199,7 +1199,7 @@ struct ReplaceStringImpl
                 if (pos_in_data + needle_size <= data.size())
                 {
                     auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
-                    auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; 
+                    auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1;
 
                     res_data.resize(res_data.size() + replacement_size);
                     memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
