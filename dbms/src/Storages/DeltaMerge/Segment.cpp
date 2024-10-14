@@ -3352,7 +3352,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     size_t expected_block_size)
 {
     const auto & filter_columns = filter->filter_columns;
-    auto filter_column_skippable_stream = getConcatSkippableBlockInputStream(
+    BlockInputStreamPtr filter_column_stream = getConcatSkippableBlockInputStream(
         bitmap_filter,
         segment_snap,
         dm_context,
@@ -3362,7 +3362,6 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         start_ts,
         expected_block_size,
         ReadTag::LMFilter);
-    auto filter_column_stream = std::static_pointer_cast<IBlockInputStream>(filter_column_skippable_stream);
 
     if (unlikely(filter_columns->size() == columns_to_read.size()))
     {
