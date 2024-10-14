@@ -28,7 +28,7 @@ private:
 public:
     static constexpr bool is_parametric = true;
 
-    DataTypeArray(const DataTypePtr & nested_);
+    explicit DataTypeArray(const DataTypePtr & nested_);
 
     std::string getName() const override { return "Array(" + nested->getName() + ")"; }
 
@@ -58,11 +58,6 @@ public:
         WriteBuffer & ostr,
         const FormatSettingsJSON & settings) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
-
-    void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
     /** Streaming serialization of arrays is arranged in a special way:
       * - elements placed in a row are written/read without array sizes;

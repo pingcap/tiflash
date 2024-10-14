@@ -19,7 +19,6 @@
 #include <Core/Names.h>
 #include <Dictionaries/IDictionarySource.h>
 #include <Interpreters/IExternalLoadable.h>
-#include <Poco/Util/XMLConfiguration.h>
 #include <common/StringRef.h>
 
 #include <memory>
