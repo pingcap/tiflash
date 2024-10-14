@@ -110,7 +110,7 @@ try
         toVec({"Good Night!", "Bad Afternoon", "Good Afterwhile"}),
         executeFunction(
             "replaceAll",
-            toVec({"Good Afternoon!"}),
+            toConst({"Good Afternoon!"}),
             toVec({"Afternoon", "Good", "noon"}),
             toVec({"Night", "Bad", "while"})));
 
@@ -119,7 +119,7 @@ try
         toVec({"Good Night!", "Good Bad!", "Good while!"}),
         executeFunction(
             "replaceAll",
-            toVec({"Good Afternoon!"}),
+            toConst({"Good Afternoon!"}),
             toConst({"Afternoon"}),
             toVec({"Night", "Bad", "while"})));
 
@@ -128,14 +128,14 @@ try
         toVec({"Good Night!", "Night Afternoon!", "Good AfterNight!"}),
         executeFunction(
             "replaceAll",
-            toVec({"Good Afternoon!"}),
+            toConst({"Good Afternoon!"}),
             toVec({"Afternoon", "Good", "noon"}),
             toConst({"Night"})));
 
     /// const src and replace replacement
     ASSERT_COLUMN_EQ(
         toVec({"Good Night!"}),
-        executeFunction("replaceAll", toVec({"Good Afternoon!"}), toConst({"Afternoon"}), toConst({"Night"})));
+        executeFunction("replaceAll", toConst({"Good Afternoon!"}), toConst({"Afternoon"}), toConst({"Night"})));
 }
 CATCH
 
