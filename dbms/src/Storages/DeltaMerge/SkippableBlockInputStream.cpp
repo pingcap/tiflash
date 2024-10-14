@@ -48,7 +48,7 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
 template <bool need_row_id>
 void ConcatSkippableBlockInputStream<need_row_id>::appendChild(SkippableBlockInputStreamPtr child, size_t rows_)
 {
-    children.push_back(child);
+    children.emplace_back(std::move(child));
     rows.push_back(rows_);
     current_stream = children.begin();
 }

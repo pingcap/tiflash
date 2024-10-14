@@ -3270,6 +3270,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
         read_tag);
 
     auto stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<NeedRowID>>(stable_stream);
+    assert(stream != nullptr);
     stream->appendChild(persisted_files_stream, persisted_files->getRows());
     stream->appendChild(mem_table_stream, memtable->getRows());
     return stream;
