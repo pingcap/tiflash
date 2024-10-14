@@ -137,19 +137,16 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
 
     auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
 
-    auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead, false);
-    delta_snap->mem_table_snap
-        = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
-    delta_snap->persisted_files_snap
+    auto mem_snap = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
+    auto persisted_snap
         = deserializeColumnFileSet(dm_context, proto.column_files_persisted(), data_store, segment_range);
-
-    // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
-    // because they are constructed using ColumnFileDataProviderNop.
-
-    auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
-    if (delta_index_cache)
-    {
-        delta_snap->shared_delta_index = delta_index_cache->getDeltaIndex({
+    auto delta_index = [&]() {
+        auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
+        if (!delta_index_cache)
+        {
+            return std::make_shared<DeltaIndex>();
+        }
+        return delta_index_cache->getDeltaIndex({
             .store_id = remote_store_id,
             .keyspace_id = keyspace_id,
             .table_id = table_id,
@@ -157,13 +154,18 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
             .segment_epoch = proto.segment_epoch(),
             .delta_index_epoch = proto.delta_index_epoch(),
         });
-    }
-    else
-    {
-        delta_snap->shared_delta_index = std::make_shared<DeltaIndex>();
-    }
-    // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
-    delta_snap->delta_index_epoch = proto.delta_index_epoch();
+    }();
+    // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
+    // because they are constructed using ColumnFileDataProviderNop.
+    auto delta_snap = std::make_shared<DeltaValueSnapshot>(
+        CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead,
+        false,
+        std::move(mem_snap),
+        std::move(persisted_snap),
+        std::move(delta_index),
+        // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
+        proto.delta_index_epoch());
+    // delta_snap->delta is nullptr because there is no DeltaValueSpace in the disagg arch read node
 
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
     DMFiles dmfiles;
@@ -230,40 +232,34 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
     const Remote::IDataStorePtr & data_store,
     const RowKeyRange & segment_range)
 {
-    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
-    auto ret = std::make_shared<ColumnFileSetSnapshot>(empty_data_provider);
-    ret->column_files.reserve(proto.size());
+    ColumnFiles column_files;
+    column_files.reserve(proto.size());
     for (const auto & remote_column_file : proto)
     {
         if (remote_column_file.has_tiny())
         {
-            ret->column_files.push_back(deserializeCFTiny(dm_context, remote_column_file.tiny()));
+            column_files.emplace_back(deserializeCFTiny(dm_context, remote_column_file.tiny()));
         }
         else if (remote_column_file.has_delete_range())
         {
-            ret->column_files.push_back(deserializeCFDeleteRange(remote_column_file.delete_range()));
+            column_files.emplace_back(deserializeCFDeleteRange(remote_column_file.delete_range()));
         }
         else if (remote_column_file.has_big())
         {
             const auto & big_file = remote_column_file.big();
-            ret->column_files.push_back(deserializeCFBig(big_file, data_store, segment_range));
+            column_files.emplace_back(deserializeCFBig(big_file, data_store, segment_range));
         }
         else if (remote_column_file.has_in_memory())
         {
-            ret->column_files.push_back(deserializeCFInMemory(remote_column_file.in_memory()));
+            column_files.emplace_back(deserializeCFInMemory(remote_column_file.in_memory()));
         }
         else
         {
             RUNTIME_CHECK_MSG(false, "Unexpected proto ColumnFile");
         }
     }
-    for (const auto & column_file : ret->column_files)
-    {
-        ret->rows += column_file->getRows();
-        ret->bytes += column_file->getBytes();
-        ret->deletes += column_file->getDeletes();
-    }
-    return ret;
+    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
+    return ColumnFileSetSnapshot::buildFromColumnFiles(empty_data_provider, std::move(column_files));
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMemory & cf_in_mem, bool need_mem_data)

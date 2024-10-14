@@ -363,12 +363,11 @@ public:
     const bool is_update{false};
 
     // The delta index of cached.
-    DeltaIndexPtr shared_delta_index;
-    UInt64 delta_index_epoch = 0;
+    const DeltaIndexPtr shared_delta_index;
+    const UInt64 delta_index_epoch;
 
     ColumnFileSetSnapshotPtr mem_table_snap;
-
-    ColumnFileSetSnapshotPtr persisted_files_snap;
+    const ColumnFileSetSnapshotPtr persisted_files_snap;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr delta;
@@ -381,19 +380,30 @@ public:
         // We only allow one for_update snapshots to exist, so it cannot be cloned.
         RUNTIME_CHECK(!is_update);
 
-        auto c = std::make_shared<DeltaValueSnapshot>(type, is_update);
-        c->shared_delta_index = shared_delta_index;
-        c->delta_index_epoch = delta_index_epoch;
-        c->mem_table_snap = mem_table_snap->clone();
-        c->persisted_files_snap = persisted_files_snap->clone();
-
+        auto c = std::make_shared<DeltaValueSnapshot>(
+            type,
+            is_update,
+            mem_table_snap->clone(),
+            persisted_files_snap->clone(),
+            shared_delta_index,
+            delta_index_epoch);
         c->delta = delta;
 
         return c;
     }
 
-    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_, bool update_)
+    DeltaValueSnapshot(
+        CurrentMetrics::Metric type_,
+        bool update_,
+        ColumnFileSetSnapshotPtr mem_snap,
+        const ColumnFileSetSnapshotPtr persisted_snap,
+        DeltaIndexPtr delta_index,
+        UInt64 index_epoch)
         : is_update(update_)
+        , shared_delta_index(std::move(delta_index))
+        , delta_index_epoch(index_epoch)
+        , mem_table_snap(std::move(mem_snap))
+        , persisted_files_snap(std::move(persisted_snap))
         , type(type_)
     {
         CurrentMetrics::add(type);
@@ -434,6 +444,9 @@ public:
 
     bool isForUpdate() const { return is_update; }
 
+    // Semantically speaking this is a "hack" for the "snapshot".
+    // But we need this because under disagg arch, we fetch the mem-table by streaming way.
+    // After all mem-table fetched, we set the mem-table-set snapshot to the DeltaValueSnapshot.
     void setMemTableSetSnapshot(const ColumnFileSetSnapshotPtr & mem_table_snap_) { mem_table_snap = mem_table_snap_; }
 };
 

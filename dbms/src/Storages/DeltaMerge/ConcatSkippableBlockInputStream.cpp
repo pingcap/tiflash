@@ -29,6 +29,7 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     , scan_context(scan_context_)
     , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
 {
+    assert(inputs_.size() == 1); // otherwise the `rows` is not correct
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();
 }
@@ -43,6 +44,7 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     , scan_context(scan_context_)
     , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
 {
+    assert(rows.size() == inputs_.size());
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();
 }
@@ -87,10 +89,9 @@ size_t ConcatSkippableBlockInputStream<need_row_id>::skipNextBlock()
 {
     while (current_stream != children.end())
     {
-        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>(current_stream->get());
 
         size_t skipped_rows = skippable_stream->skipNextBlock();
-
         if (skipped_rows > 0)
         {
             return skipped_rows;
@@ -112,9 +113,8 @@ Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn
 
     while (current_stream != children.end())
     {
-        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>(current_stream->get());
         res = skippable_stream->readWithFilter(filter);
-
         if (res)
         {
             res.setStartOffset(res.startOffset() + precede_stream_rows);
@@ -139,7 +139,6 @@ Block ConcatSkippableBlockInputStream<need_row_id>::read(FilterPtr & res_filter,
     while (current_stream != children.end())
     {
         res = (*current_stream)->read(res_filter, return_filter);
-
         if (res)
         {
             res.setStartOffset(res.startOffset() + precede_stream_rows);

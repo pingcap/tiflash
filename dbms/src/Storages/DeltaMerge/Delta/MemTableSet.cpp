@@ -22,10 +22,9 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
     if (!column_files.empty())
@@ -243,14 +242,10 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
     if (disable_sharing && !column_files.empty() && column_files.back()->isAppendable())
         column_files.back()->disableAppend();
 
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
-    snap->rows = rows;
-    snap->bytes = bytes;
-    snap->deletes = deletes;
-    snap->column_files.reserve(column_files.size());
-
     size_t total_rows = 0;
     size_t total_deletes = 0;
+    ColumnFiles column_files_snap;
+    column_files_snap.reserve(column_files.size());
     for (const auto & file : column_files)
     {
         // ColumnFile is not a thread-safe object, but only ColumnFileInMemory may be appendable after its creation.
@@ -260,11 +255,11 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
             // Compact threads could update the value of ColumnFileInMemory,
             // and since ColumnFile is not multi-threads safe, we should create a new column file object.
             // TODO: When `disable_sharing == true`, may be we can safely use the same ptr without the clone.
-            snap->column_files.push_back(m->clone());
+            column_files_snap.emplace_back(m->clone());
         }
         else
         {
-            snap->column_files.push_back(file);
+            column_files_snap.emplace_back(file);
         }
         total_rows += file->getRows();
         total_deletes += file->getDeletes();
@@ -279,7 +274,7 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
         total_deletes,
         deletes.load());
 
-    return snap;
+    return std::make_shared<ColumnFileSetSnapshot>(data_provider, std::move(column_files_snap), rows, bytes, deletes);
 }
 
 ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
@@ -362,5 +357,4 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
 }
 
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
