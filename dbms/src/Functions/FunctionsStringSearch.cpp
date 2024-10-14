@@ -1164,7 +1164,6 @@ struct ReplaceStringImpl
 
         for (size_t i = 0; i < needle_offsets.size(); ++i)
         {
-            // 获取当前 needle 的起始位置和大小
             auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
             auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // Ignore trailing zero bytes
 
@@ -1200,7 +1199,7 @@ struct ReplaceStringImpl
                 if (pos_in_data + needle_size <= data.size())
                 {
                     auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
-                    auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // 忽略末尾的零字节
+                    auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; 
 
                     res_data.resize(res_data.size() + replacement_size);
                     memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
