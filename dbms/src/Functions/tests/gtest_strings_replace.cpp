@@ -104,6 +104,38 @@ try
             toVec({"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"}),
             toVec({" ", "h", "", "h", ","}),
             toVec({"", "x", "xx", " ", ","})));
+
+    /// const src replacement
+    ASSERT_COLUMN_EQ(
+        toVec({"Good Night!", "Bad Afternoon", "Good Afterwhile"}),
+        executeFunction(
+            "replaceAll",
+            toVec({"Good Afternoon!"}),
+            toVec({"Afternoon", "Good", "noon"}),
+            toVec({"Night", "Bad", "while"})));
+
+    /// const src and needle replacement
+    ASSERT_COLUMN_EQ(
+        toVec({"Good Night!", "Good Bad!", "Good while!"}),
+        executeFunction(
+            "replaceAll",
+            toVec({"Good Afternoon!"}),
+            toConst({"Afternoon"}),
+            toVec({"Night", "Bad", "while"})));
+
+    /// const src and replace replacement
+    ASSERT_COLUMN_EQ(
+        toVec({"Good Night!", "Night Afternoon!", "Good AfterNight!"}),
+        executeFunction(
+            "replaceAll",
+            toVec({"Good Afternoon!"}),
+            toVec({"Afternoon", "Good", "noon"}),
+            toConst({"Night"})));
+
+    /// const src and replace replacement
+    ASSERT_COLUMN_EQ(
+        toVec({"Good Night!"}),
+        executeFunction("replaceAll", toVec({"Good Afternoon!"}), toConst({"Afternoon"}), toConst({"Night"})));
 }
 CATCH
 
