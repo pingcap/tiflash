@@ -122,10 +122,40 @@ public:
 
         ColumnWithTypeAndName & column_result = block.getByPosition(result);
 
+        bool src_const = column_src->isColumnConst();
         bool needle_const = column_needle->isColumnConst();
         bool replacement_const = column_replacement->isColumnConst();
 
-        if (needle_const && replacement_const)
+        if (src_const){
+            if (!needle_const && replacement_const)
+            {
+                executeImplConstReplacement(
+                    column_src,
+                    column_needle,
+                    column_replacement,
+                    pos,
+                    occ,
+                    match_type,
+                    column_result
+                );
+            }else if (!needle_const && !replacement_const)
+            {
+                executeImplConstFirstParaReplacement(
+                    column_src,
+                    column_needle,
+                    column_replacement,
+                    pos,
+                    occ,
+                    match_type,
+                    column_result
+                );
+            }else
+            {
+                throw Exception(
+                    "UnImplement function.",
+                    ErrorCodes::BAD_ARGUMENTS);
+            }
+        }else if (needle_const && replacement_const)
         {
             executeImpl(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
         }
@@ -396,6 +426,97 @@ private:
         {
             throw Exception(
                 "Argument at index 2 and 3 for function replace must be constant",
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+
+    void executeImplConstFirstParaReplacement(
+        const ColumnPtr & column_src,
+        const ColumnPtr & column_needle,
+        const ColumnPtr & column_replacement,
+        Int64 pos [[maybe_unused]],
+        Int64 occ [[maybe_unused]],
+        const String & match_type,
+        ColumnWithTypeAndName & column_result) const
+    {
+        if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
+        {
+            const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
+            const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
+            if (const auto * col = checkAndGetColumn<ColumnConst>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vectorConstFirstParaReplacement(
+                    col->getValue<String>(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    col_replacement->getChars(),
+                    col_replacement->getOffsets(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets()
+                );
+                column_result.column = std::move(col_res);
+            }
+            else
+                throw Exception(
+                    "Illegal column " + column_src->getName() + " of first argument of function " + getName() +
+                    "Illegal column " + column_needle->getName() + " of second argument of function " + getName() +
+                    "Illegal column " + column_replacement->getName() + " of third argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        }
+        else
+        {
+            throw Exception(
+                "Argument at index 1 for function replace must be constant",
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+
+    void executeImplConstReplacement(
+        const ColumnPtr & column_src,
+        const ColumnPtr & column_needle,
+        const ColumnPtr & column_replacement,
+        Int64 pos [[maybe_unused]],
+        Int64 occ [[maybe_unused]],
+        const String & match_type,
+        ColumnWithTypeAndName & column_result) const
+    {
+        if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
+        {
+            const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
+            const auto * col_replacement = typeid_cast<const ColumnConst *>(column_replacement.get());
+            if (const auto * col = checkAndGetColumn<ColumnConst>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vectorConstReplacement(
+                    col->getValue<String>(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    col_replacement->getValue<String>(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets()
+                );
+                column_result.column = std::move(col_res);
+            }
+            else
+                throw Exception(
+                    "Illegal column " + column_src->getName() + " of first argument of function " + getName() +
+                    "Illegal column " + column_needle->getName() + " of second argument of function " + getName() +
+                    "Illegal column " + column_replacement->getName() + " of third argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        }
+        else
+        {
+            throw Exception(
+                "Argument at index 1 and 3 for function replace must be constant",
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
