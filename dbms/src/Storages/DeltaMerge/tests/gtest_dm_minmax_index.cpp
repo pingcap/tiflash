@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
-#include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -59,8 +58,8 @@ protected:
 
 namespace
 {
-static constexpr ColId DEFAULT_COL_ID = 0;
-static const String DEFAULT_COL_NAME = "2020-09-26";
+constexpr ColId DEFAULT_COL_ID = 0;
+const String DEFAULT_COL_NAME = "2020-09-26";
 
 Attr attr(String type)
 {
@@ -71,6 +70,28 @@ Attr pkAttr()
 {
     const ColumnDefine & col = getExtraHandleColumnDefine(true);
     return Attr{col.name, col.id, col.type};
+}
+
+using CSVTuple = std::vector<String>;
+using CSVTuples = std::vector<CSVTuple>;
+
+Block genBlock(const Block & header, const CSVTuples & tuples)
+{
+    Block block;
+    for (size_t i = 0; i < header.columns(); ++i)
+    {
+        const auto & cd = header.getByPosition(i);
+        ColumnWithTypeAndName col{{}, cd.type, cd.name, cd.column_id};
+        auto col_data = cd.type->createColumn();
+        for (const auto & tuple : tuples)
+        {
+            ReadBufferFromString buf(tuple.at(i));
+            cd.type->deserializeTextEscaped(*col_data, buf);
+        }
+        col.column = std::move(col_data);
+        block.insert(std::move(col));
+    }
+    return block;
 }
 
 // Check if the data in `block_tuples` match `filter`.
@@ -226,24 +247,24 @@ Decimal64 getDecimal64(String s)
     return expected_default_value;
 }
 
-static constexpr Int64 Int64_Match_DATA = 100;
-static constexpr Int64 Int64_Greater_DATA = 10000;
-static constexpr Int64 Int64_Smaller_DATA = -1;
+constexpr Int64 Int64_Match_DATA = 100;
+constexpr Int64 Int64_Greater_DATA = 10000;
+constexpr Int64 Int64_Smaller_DATA = -1;
 
-static const String Date_Match_DATA = "2020-09-27";
-static const String Date_Greater_DATA = "2022-09-27";
-static const String Date_Smaller_DATA = "1997-09-27";
+const String Date_Match_DATA = "2020-09-27";
+const String Date_Greater_DATA = "2022-09-27";
+const String Date_Smaller_DATA = "1997-09-27";
 
-static const String DateTime_Match_DATA = "2020-01-01 05:00:01";
-static const String DateTime_Greater_DATA = "2022-01-01 05:00:01";
-static const String DateTime_Smaller_DATA = "1997-01-01 05:00:01";
+const String DateTime_Match_DATA = "2020-01-01 05:00:01";
+const String DateTime_Greater_DATA = "2022-01-01 05:00:01";
+const String DateTime_Smaller_DATA = "1997-01-01 05:00:01";
 
-static const String MyDateTime_Match_DATE = "2020-09-27";
-static const String MyDateTime_Greater_DATE = "2022-09-27";
-static const String MyDateTime_Smaller_DATE = "1997-09-27";
+const String MyDateTime_Match_DATE = "2020-09-27";
+const String MyDateTime_Greater_DATE = "2022-09-27";
+const String MyDateTime_Smaller_DATE = "1997-09-27";
 
-static const String Decimal_Match_DATA = "100.25566";
-static const String Decimal_UnMatch_DATA = "100.25500";
+const String Decimal_Match_DATA = "100.25566";
+const String Decimal_UnMatch_DATA = "100.25500";
 
 std::pair<String, CSVTuples> generateTypeValue(MinMaxTestDatatype data_type, bool has_null)
 {
@@ -2434,7 +2455,7 @@ try
 }
 CATCH
 
-TEST_F(MinMaxIndexTest, CheckCmp_Equal)
+TEST_F(MinMaxIndexTest, CheckCmpEqual)
 try
 {
     struct ValuesAndResults
@@ -2497,7 +2518,7 @@ try
 }
 CATCH
 
-TEST_F(MinMaxIndexTest, CheckCmp_Greater)
+TEST_F(MinMaxIndexTest, CheckCmpGreater)
 try
 {
     struct ValuesAndResults
@@ -2575,7 +2596,7 @@ try
 }
 CATCH
 
-TEST_F(MinMaxIndexTest, CheckCmp_GreaterEqual)
+TEST_F(MinMaxIndexTest, CheckCmpGreaterEqual)
 try
 {
     struct ValuesAndResults

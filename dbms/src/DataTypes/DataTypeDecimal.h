@@ -154,9 +154,6 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
         const override;
 
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, char delimiter) const override;
-
     void readText(T & x, ReadBuffer & istr) const;
 
     MutableColumnPtr createColumn() const override;
@@ -180,7 +177,7 @@ public:
 
     bool isParametric() const override { return true; }
     bool haveSubtypes() const override { return false; }
-    bool isComparable() const override { return true; };
+    bool isComparable() const override { return true; }
     bool isValueRepresentedByNumber() const override { return true; }
     bool isValueRepresentedByInteger() const override { return scale == 0; }
     bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return !is_Decimal256; }
