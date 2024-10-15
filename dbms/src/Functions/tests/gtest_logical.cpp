@@ -131,7 +131,7 @@ protected:
     ColumnWithTypeAndName nullable_true_const = createConstColumn<Nullable<UInt8>>(2, 1);
     ColumnWithTypeAndName nullable_null_const = createConstColumn<Nullable<UInt8>>(2, {});
     static const size_t rows = 1024;
-    static const size_t uint8_column_num = 8;
+    static const size_t uint8_column_num = 10;
     std::mt19937_64 rand_gen;
     ColumnsWithTypeAndName not_null_uint8_columns;
     ColumnsWithTypeAndName nullable_uint8_columns;

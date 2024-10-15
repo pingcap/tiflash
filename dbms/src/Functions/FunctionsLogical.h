@@ -749,9 +749,8 @@ public:
             {
                 while (not_null_uint8_columns.size() > 1)
                 {
-                    /// With a large block size, combining 6 columns per pass is the fastest.
-                    /// When small - more, is faster.
-                    AssociativeOperationImpl<Impl, 6>::execute(not_null_uint8_columns, vec_res);
+                    // micro benchmark shows 4 << 6, 8 outperforms 6 slightly, and performance may decline when set to 10
+                    AssociativeOperationImpl<Impl, 8>::execute(not_null_uint8_columns, vec_res);
                     not_null_uint8_columns.push_back(col_res.get());
                 }
             }
@@ -783,9 +782,8 @@ public:
             {
                 while (nullable_uint8_columns.size() > 1)
                 {
-                    /// With a large block size, combining 6 columns per pass is the fastest.
-                    /// When small - more, is faster.
-                    NullableAssociativeOperationImpl<Impl, 6>::execute(
+                    // micro benchmark shows 4 << 6, 8 outperforms 6 slightly, and performance may decline when set to 10
+                    NullableAssociativeOperationImpl<Impl, 8>::execute(
                         nullable_uint8_columns,
                         null_maps,
                         vec_res,

@@ -37,20 +37,8 @@ class LogicalOpBench : public benchmark::Fixture
 protected:
     ColumnWithTypeAndName col_not_null_uint8_1;
     ColumnWithTypeAndName col_not_null_uint8_2;
-    ColumnWithTypeAndName col_not_null_uint8_3;
-    ColumnWithTypeAndName col_not_null_uint8_4;
-    ColumnWithTypeAndName col_not_null_uint8_5;
-    ColumnWithTypeAndName col_not_null_uint8_6;
-    ColumnWithTypeAndName col_not_null_uint8_7;
-    ColumnWithTypeAndName col_not_null_uint8_8;
     ColumnWithTypeAndName col_nullable_uint8_1;
     ColumnWithTypeAndName col_nullable_uint8_2;
-    ColumnWithTypeAndName col_nullable_uint8_3;
-    ColumnWithTypeAndName col_nullable_uint8_4;
-    ColumnWithTypeAndName col_nullable_uint8_5;
-    ColumnWithTypeAndName col_nullable_uint8_6;
-    ColumnWithTypeAndName col_nullable_uint8_7;
-    ColumnWithTypeAndName col_nullable_uint8_8;
     ColumnWithTypeAndName col_constant_null;
     ColumnWithTypeAndName col_constant_true;
     ColumnWithTypeAndName col_constant_false;
@@ -68,35 +56,15 @@ public:
         not_null_uint8_columns.push_back(col_not_null_uint8_1);
         col_not_null_uint8_2 = ColumnGenerator::instance().generate(opts);
         not_null_uint8_columns.push_back(col_not_null_uint8_2);
-        col_not_null_uint8_3 = ColumnGenerator::instance().generate(opts);
-        not_null_uint8_columns.push_back(col_not_null_uint8_3);
-        col_not_null_uint8_4 = ColumnGenerator::instance().generate(opts);
-        not_null_uint8_columns.push_back(col_not_null_uint8_4);
-        col_not_null_uint8_5 = ColumnGenerator::instance().generate(opts);
-        not_null_uint8_columns.push_back(col_not_null_uint8_5);
-        col_not_null_uint8_6 = ColumnGenerator::instance().generate(opts);
-        not_null_uint8_columns.push_back(col_not_null_uint8_6);
-        col_not_null_uint8_7 = ColumnGenerator::instance().generate(opts);
-        not_null_uint8_columns.push_back(col_not_null_uint8_7);
-        col_not_null_uint8_8 = ColumnGenerator::instance().generate(opts);
-        not_null_uint8_columns.push_back(col_not_null_uint8_8);
+        for (size_t i = 2; i < 10; ++i)
+            not_null_uint8_columns.push_back(ColumnGenerator::instance().generate(opts));
         opts.type_name = "Nullable(UInt8)";
         col_nullable_uint8_1 = ColumnGenerator::instance().generate(opts);
         nullable_uint8_columns.push_back(col_nullable_uint8_1);
         col_nullable_uint8_2 = ColumnGenerator::instance().generate(opts);
         nullable_uint8_columns.push_back(col_nullable_uint8_2);
-        col_nullable_uint8_3 = ColumnGenerator::instance().generate(opts);
-        nullable_uint8_columns.push_back(col_nullable_uint8_3);
-        col_nullable_uint8_4 = ColumnGenerator::instance().generate(opts);
-        nullable_uint8_columns.push_back(col_nullable_uint8_4);
-        col_nullable_uint8_5 = ColumnGenerator::instance().generate(opts);
-        nullable_uint8_columns.push_back(col_nullable_uint8_5);
-        col_nullable_uint8_6 = ColumnGenerator::instance().generate(opts);
-        nullable_uint8_columns.push_back(col_nullable_uint8_6);
-        col_nullable_uint8_7 = ColumnGenerator::instance().generate(opts);
-        nullable_uint8_columns.push_back(col_nullable_uint8_7);
-        col_nullable_uint8_8 = ColumnGenerator::instance().generate(opts);
-        nullable_uint8_columns.push_back(col_nullable_uint8_8);
+        for (size_t i = 2; i < 10; ++i)
+            nullable_uint8_columns.push_back(ColumnGenerator::instance().generate(opts));
         col_constant_null = col_nullable_uint8_1;
         col_constant_true = col_nullable_uint8_1;
         col_constant_false = col_nullable_uint8_1;
@@ -202,7 +170,7 @@ LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
     {                                                                                          \
         FunctionLegacy##OP_NAME function;                                                      \
         ColumnsWithTypeAndName columns;                                                        \
-        if ((PARAM_NUM) > 8)                                                                   \
+        if ((PARAM_NUM) > 10)                                                                  \
             throw Exception("not supported");                                                  \
         ColumnNumbers arguments;                                                               \
         bool result_is_nullable = false;                                                       \
@@ -262,7 +230,7 @@ LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
     {                                                                                       \
         Function##OP_NAME function;                                                         \
         ColumnsWithTypeAndName columns;                                                     \
-        if ((PARAM_NUM) > 8)                                                                \
+        if ((PARAM_NUM) > 10)                                                               \
             throw Exception("not supported");                                               \
         ColumnNumbers arguments;                                                            \
         bool result_is_nullable = false;                                                    \
@@ -324,6 +292,10 @@ LEGACY_LOGICAL_BENCH_MULTI_PARAM(7, And, _not_null);
 OPT_LOGICAL_BENCH_MULTI_PARAM(7, And, _not_null);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(8, And, _not_null);
 OPT_LOGICAL_BENCH_MULTI_PARAM(8, And, _not_null);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(9, And, _not_null);
+OPT_LOGICAL_BENCH_MULTI_PARAM(9, And, _not_null);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(10, And, _not_null);
+OPT_LOGICAL_BENCH_MULTI_PARAM(10, And, _not_null);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(3, And, _mixed);
 OPT_LOGICAL_BENCH_MULTI_PARAM(3, And, _mixed);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(4, And, _mixed);
@@ -336,6 +308,10 @@ LEGACY_LOGICAL_BENCH_MULTI_PARAM(7, And, _mixed);
 OPT_LOGICAL_BENCH_MULTI_PARAM(7, And, _mixed);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(8, And, _mixed);
 OPT_LOGICAL_BENCH_MULTI_PARAM(8, And, _mixed);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(9, And, _mixed);
+OPT_LOGICAL_BENCH_MULTI_PARAM(9, And, _mixed);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(10, And, _mixed);
+OPT_LOGICAL_BENCH_MULTI_PARAM(10, And, _mixed);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(3, And, _nullable);
 OPT_LOGICAL_BENCH_MULTI_PARAM(3, And, _nullable);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(4, And, _nullable);
@@ -348,6 +324,10 @@ LEGACY_LOGICAL_BENCH_MULTI_PARAM(7, And, _nullable);
 OPT_LOGICAL_BENCH_MULTI_PARAM(7, And, _nullable);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(8, And, _nullable);
 OPT_LOGICAL_BENCH_MULTI_PARAM(8, And, _nullable);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
+OPT_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
+LEGACY_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
+OPT_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
 
 } // namespace tests
 } // namespace DB
