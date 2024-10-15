@@ -26,7 +26,7 @@ namespace DB
 class OneBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    OneBlockInputStream(const Block & block_)
+    explicit OneBlockInputStream(const Block & block_)
         : block(block_)
     {}
 

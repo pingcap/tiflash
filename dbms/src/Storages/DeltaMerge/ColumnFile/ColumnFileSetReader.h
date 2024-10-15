@@ -14,14 +14,14 @@
 
 #pragma once
 
+#include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileSetReader
 {
     friend class ColumnFileSetInputStream;
@@ -40,8 +40,6 @@ private:
     std::vector<size_t> column_file_rows_end;
 
     std::vector<ColumnFileReaderPtr> column_file_readers;
-
-    LACBytesCollector lac_bytes_collector;
 
 private:
     explicit ColumnFileSetReader(const DMContext & context_);
@@ -95,6 +93,7 @@ private:
 
     ColumnFileReaderPtr cur_column_file_reader = {};
     size_t next_file_index = 0;
+    size_t read_rows = 0;
 
 public:
     ColumnFileSetInputStream(
@@ -131,6 +130,7 @@ public:
                 }
             }
             size_t skipped_rows = cur_column_file_reader->skipNextBlock();
+            read_rows += skipped_rows;
             if (skipped_rows > 0)
                 return skipped_rows;
             else
@@ -158,17 +158,29 @@ public:
             }
             Block block = cur_column_file_reader->readNextBlock();
             if (block)
+            {
+                block.setStartOffset(read_rows);
+                read_rows += block.rows();
                 return block;
+            }
             else
                 cur_column_file_reader = {};
         }
         return {};
     }
 
-    Block readWithFilter(const IColumn::Filter &) override
+    Block readWithFilter(const IColumn::Filter & filter) override
     {
-        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+        auto block = read();
+        if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
+        {
+            for (auto & col : block)
+            {
+                col.column = col.column->filter(filter, passed_count);
+            }
+        }
+        return block;
     }
 };
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM
