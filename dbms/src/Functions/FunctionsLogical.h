@@ -737,7 +737,13 @@ public:
             has_not_null_column = true;
             if (not_null_uint8_columns.size() == 1)
             {
-                vec_res.assign(not_null_uint8_columns[0]->getData());
+                const auto & col_data = not_null_uint8_columns[0]->getData();
+                // according to https://github.com/pingcap/tiflash/issues/5849
+                // need to cast the UInt8 column to bool explicitly
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    vec_res[i] = static_cast<bool>(col_data[i]);
+                }
             }
             else
             {
@@ -764,7 +770,13 @@ public:
             {
                 // special case
                 assert(!has_not_null_column);
-                vec_res.assign(nullable_uint8_columns[0]->getData());
+                const auto & col_data = nullable_uint8_columns[0]->getData();
+                // according to https://github.com/pingcap/tiflash/issues/5849
+                // need to cast the UInt8 column to bool explicitly
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    vec_res[i] = static_cast<bool>(col_data[i]);
+                }
                 vec_res_is_null.assign(*null_maps[0]);
             }
             else

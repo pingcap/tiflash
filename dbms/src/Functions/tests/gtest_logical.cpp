@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNullable.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionsLogical.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
-
-#include "Columns/ColumnNullable.h"
-#include "DataTypes/DataTypeNullable.h"
+#include <gtest/gtest.h>
 
 namespace DB::tests
 {
@@ -140,6 +141,333 @@ protected:
     ColumnWithTypeAndName nullable_true_const_long = createConstColumn<Nullable<UInt8>>(rows, 1);
     ColumnWithTypeAndName nullable_null_const_long = createConstColumn<Nullable<UInt8>>(rows, {});
 };
+
+TEST_F(Logical, AndImpl)
+try
+{
+    ASSERT_EQ(true, AndImpl::isSaturable);
+    bool val_null = true;
+    bool val_not_null = false;
+    bool true_value = true;
+    bool false_value = false;
+    // test saturated value, only false is saturated value for and
+    ASSERT_EQ(true, AndImpl::isSaturatedValue(false_value));
+    ASSERT_EQ(false, AndImpl::isSaturatedValue(true_value));
+    ASSERT_EQ(false, AndImpl::isSaturatedValue(false_value, val_null));
+    ASSERT_EQ(false, AndImpl::isSaturatedValue(true_value, val_null));
+    ASSERT_EQ(true, AndImpl::isSaturatedValue(false_value, val_not_null));
+    ASSERT_EQ(false, AndImpl::isSaturatedValue(true_value, val_not_null));
+    // test canConstantBeIgnored, only true can be ignored
+    ASSERT_EQ(false, AndImpl::canConstantBeIgnored(false_value, val_null));
+    ASSERT_EQ(false, AndImpl::canConstantBeIgnored(true_value, val_null));
+    ASSERT_EQ(false, AndImpl::canConstantBeIgnored(false_value, val_not_null));
+    ASSERT_EQ(true, AndImpl::canConstantBeIgnored(true_value, val_not_null));
+    // test apply
+    // true && true
+    ASSERT_EQ(true, AndImpl::apply(true_value, true_value));
+    // true && false
+    ASSERT_EQ(false, AndImpl::apply(true_value, false_value));
+    // false && true
+    ASSERT_EQ(false, AndImpl::apply(false_value, true_value));
+    // false && false
+    ASSERT_EQ(false, AndImpl::apply(false_value, false_value));
+    // test applyTwoNullable
+    // true && true
+    auto [res, res_is_null] = AndImpl::applyTwoNullable(true_value, val_not_null, true_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // true && false
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(true_value, val_not_null, false_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // true && null
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(true_value, val_not_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(true_value, val_not_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    // false && true
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_not_null, true_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // false && false
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_not_null, false_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // false && null
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_not_null, false_value, val_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_not_null, true_value, val_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // null && true
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_null, true_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(true_value, val_null, true_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    // null && false
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_null, false_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(true_value, val_null, false_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // null && null
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(true_value, val_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(true_value, val_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = AndImpl::applyTwoNullable(false_value, val_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    // test applyOneNullable
+    // true && true
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(true_value, val_not_null, true_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // true && false
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(true_value, val_not_null, false_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // false && true
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(false_value, val_not_null, true_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // false && false
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(false_value, val_not_null, false_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // null && true
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(false_value, val_null, true_value);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(true_value, val_null, true_value);
+    ASSERT_EQ(res_is_null, true);
+    // null && false
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(false_value, val_null, false_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    std::tie(res, res_is_null) = AndImpl::applyOneNullable(true_value, val_null, false_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+}
+CATCH
+
+TEST_F(Logical, OrImpl)
+try
+{
+    ASSERT_EQ(true, OrImpl::isSaturable);
+    bool val_null = true;
+    bool val_not_null = false;
+    bool true_value = true;
+    bool false_value = false;
+    // test saturated value, only true is saturated value for or
+    ASSERT_EQ(false, OrImpl::isSaturatedValue(false_value));
+    ASSERT_EQ(true, OrImpl::isSaturatedValue(true_value));
+    ASSERT_EQ(false, OrImpl::isSaturatedValue(false_value, val_null));
+    ASSERT_EQ(false, OrImpl::isSaturatedValue(true_value, val_null));
+    ASSERT_EQ(false, OrImpl::isSaturatedValue(false_value, val_not_null));
+    ASSERT_EQ(true, OrImpl::isSaturatedValue(true_value, val_not_null));
+    // test canConstantBeIgnored, only false can be ignored
+    ASSERT_EQ(false, OrImpl::canConstantBeIgnored(false_value, val_null));
+    ASSERT_EQ(false, OrImpl::canConstantBeIgnored(true_value, val_null));
+    ASSERT_EQ(true, OrImpl::canConstantBeIgnored(false_value, val_not_null));
+    ASSERT_EQ(false, OrImpl::canConstantBeIgnored(true_value, val_not_null));
+    // test apply
+    // true || true
+    ASSERT_EQ(true, OrImpl::apply(true_value, true_value));
+    // true || false
+    ASSERT_EQ(true, OrImpl::apply(true_value, false_value));
+    // false || true
+    ASSERT_EQ(true, OrImpl::apply(false_value, true_value));
+    // false || false
+    ASSERT_EQ(false, OrImpl::apply(false_value, false_value));
+    // test applyTwoNullable
+    // true || true
+    auto [res, res_is_null] = OrImpl::applyTwoNullable(true_value, val_not_null, true_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // true || false
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(true_value, val_not_null, false_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // true || null
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(true_value, val_not_null, false_value, val_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(true_value, val_not_null, true_value, val_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // false || true
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_not_null, true_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // false || false
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_not_null, false_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // false || null
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_not_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_not_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    // null || true
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_null, true_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(true_value, val_null, true_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // null || false
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_null, false_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(true_value, val_null, false_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    // null || null
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(true_value, val_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(true_value, val_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = OrImpl::applyTwoNullable(false_value, val_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    // test applyOneNullable
+    // true || true
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(true_value, val_not_null, true_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // true || false
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(true_value, val_not_null, false_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // false || true
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(false_value, val_not_null, true_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // false || false
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(false_value, val_not_null, false_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // null || true
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(false_value, val_null, true_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(true_value, val_null, true_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // null || false
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(false_value, val_null, false_value);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = OrImpl::applyOneNullable(true_value, val_null, false_value);
+    ASSERT_EQ(res_is_null, true);
+}
+CATCH
+
+TEST_F(Logical, XorImpl)
+try
+{
+    ASSERT_EQ(false, XorImpl::isSaturable);
+    bool val_null = true;
+    bool val_not_null = false;
+    bool true_value = true;
+    bool false_value = false;
+    // test saturated value
+    ASSERT_EQ(false, XorImpl::isSaturatedValue(false_value));
+    ASSERT_EQ(false, XorImpl::isSaturatedValue(true_value));
+    ASSERT_EQ(false, XorImpl::isSaturatedValue(false_value, val_null));
+    ASSERT_EQ(false, XorImpl::isSaturatedValue(true_value, val_null));
+    ASSERT_EQ(false, XorImpl::isSaturatedValue(false_value, val_not_null));
+    ASSERT_EQ(false, XorImpl::isSaturatedValue(true_value, val_not_null));
+    // test canConstantBeIgnored
+    ASSERT_EQ(false, XorImpl::canConstantBeIgnored(false_value, val_null));
+    ASSERT_EQ(false, XorImpl::canConstantBeIgnored(true_value, val_null));
+    ASSERT_EQ(false, XorImpl::canConstantBeIgnored(false_value, val_not_null));
+    ASSERT_EQ(false, XorImpl::canConstantBeIgnored(true_value, val_not_null));
+    // test apply
+    // true xor true
+    ASSERT_EQ(false, XorImpl::apply(true_value, true_value));
+    // true xor false
+    ASSERT_EQ(true, XorImpl::apply(true_value, false_value));
+    // false xor true
+    ASSERT_EQ(true, XorImpl::apply(false_value, true_value));
+    // false xor false
+    ASSERT_EQ(false, XorImpl::apply(false_value, false_value));
+    // test applyTwoNullable
+    // true xor true
+    auto [res, res_is_null] = XorImpl::applyTwoNullable(true_value, val_not_null, true_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // true xor false
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(true_value, val_not_null, false_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // true xor null
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(true_value, val_not_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(true_value, val_not_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    // false xor true
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_not_null, true_value, val_not_null);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // false xor false
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_not_null, false_value, val_not_null);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // false xor null
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_not_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_not_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    // null xor true
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_null, true_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(true_value, val_null, true_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    // null xor false
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_null, false_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(true_value, val_null, false_value, val_not_null);
+    ASSERT_EQ(res_is_null, true);
+    // null xor null
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(true_value, val_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(true_value, val_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_null, true_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyTwoNullable(false_value, val_null, false_value, val_null);
+    ASSERT_EQ(res_is_null, true);
+    // test applyOneNullable
+    // true xor true
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(true_value, val_not_null, true_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // true xor false
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(true_value, val_not_null, false_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // false xor true
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(false_value, val_not_null, true_value);
+    ASSERT_EQ(res, true);
+    ASSERT_EQ(res_is_null, false);
+    // false xor false
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(false_value, val_not_null, false_value);
+    ASSERT_EQ(res, false);
+    ASSERT_EQ(res_is_null, false);
+    // null xor true
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(false_value, val_null, true_value);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(true_value, val_null, true_value);
+    ASSERT_EQ(res_is_null, true);
+    // null xor false
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(false_value, val_null, false_value);
+    ASSERT_EQ(res_is_null, true);
+    std::tie(res, res_is_null) = XorImpl::applyOneNullable(true_value, val_null, false_value);
+    ASSERT_EQ(res_is_null, true);
+}
+CATCH
 
 TEST_F(Logical, binaryAndTest)
 try
