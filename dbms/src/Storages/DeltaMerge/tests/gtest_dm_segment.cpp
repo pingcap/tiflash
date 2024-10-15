@@ -14,6 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -1027,12 +1028,22 @@ CATCH
 TEST_F(SegmentTest, ColumnFileBigRangeGreaterThanSegment)
 try
 {
-    auto write_column_file_big = [&](Block block) {
+    auto write_column_file_big = [&](size_t begin, size_t end, size_t block_num) {
         WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+
+        std::vector<BlockInputStreamPtr> streams;
+        streams.reserve(block_num);
+        size_t step = (end - begin) / block_num;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = DMTestEnv::prepareSimpleWriteBlock(begin + i * step, begin + (i + 1) * step, false);
+            auto stream = std::make_shared<OneBlockInputStream>(block);
+            streams.push_back(stream);
+        }
+        auto input_stream = std::make_shared<ConcatBlockInputStream>(std::move(streams), dmContext().tracing_id);
 
         auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
@@ -1059,73 +1070,64 @@ try
     };
 
     {
-        // write ColumnFileBig with range [0, 100)
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 100, false);
-        HandleRange range(50, 80);
+        // let segment's rowkey_range be [60, 90)
+        HandleRange range(60, 90);
         segment->rowkey_range = RowKeyRange::fromHandleRange(range);
-        write_column_file_big(std::move(block));
+        // write ColumnFileBig with range [0, 50) and [50, 100)
+        write_column_file_big(0, 100, 2);
     }
     {
+        // test built bitmap filter
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
         auto read_ranges = {RowKeyRange::newAll(false, 1)};
         auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
-        auto bitmap_filter = segment->buildBitmapFilter(
+        auto bitmap_filter = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,
             EMPTY_RS_OPERATOR,
-            0,
+            std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
-        std::cout << bitmap_filter->toDebugString() << std::endl;
-        ASSERT_EQ(bitmap_filter->size(), 30);
+        ASSERT_EQ(bitmap_filter->size(), 50);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "00000000001111111111111111111111111111110000000000");
     }
 
-    // {
-    //     // write ColumnFileBig with range [100, 200)
-    //     Block block = DMTestEnv::prepareSimpleWriteBlock(100, 200, false);
-    //     write_column_file_big(std::move(block));
-    // }
-    // {
-    //     // write ColumnFileBig with range [200, 300)
-    //     Block block = DMTestEnv::prepareSimpleWriteBlock(200, 300, false);
-    //     write_column_file_big(std::move(block));
-    // }
-    // {
-    //     // delete range [300, 350)
-    //     Block block = DMTestEnv::prepareSimpleWriteBlock(
-    //         300,
-    //         350,
-    //         false,
-    //         2,
-    //         "_tidb_rowid",
-    //         EXTRA_HANDLE_COLUMN_ID,
-    //         EXTRA_HANDLE_COLUMN_INT_TYPE,
-    //         false,
-    //         1,
-    //         true,
-    //         /*is_deleted=*/true);
-    //     segment->write(dmContext(), std::move(block), false);
-    // }
-
-    // HandleRange range(0, 250);
-    // segment->rowkey_range = RowKeyRange::fromHandleRange(range);
-
-    // std::cout << segment->rowkey_range.toDebugString() << std::endl;
-
-    // {
-    //     // read written data
-    //     auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-    //     auto in = segment->getBitmapFilterInputStream(
-    //         dmContext(),
-    //         *tableColumns(),
-    //         segment_snap,
-    //         {RowKeyRange::newAll(false, 1)},
-    //         EMPTY_FILTER,
-    //         0,
-    //         DEFAULT_BLOCK_SIZE,
-    //         DEFAULT_BLOCK_SIZE);
-    //     ASSERT_INPUTSTREAM_NROWS(in, 250);
-    // }
+    {
+        // let segment's rowkey_range be [60, 150)
+        HandleRange range(60, 150);
+        segment->rowkey_range = RowKeyRange::fromHandleRange(range);
+        // delete range [90, 100)
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            90,
+            100,
+            false,
+            3,
+            "_tidb_rowid",
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_INT_TYPE,
+            false,
+            1,
+            true,
+            /*is_deleted=*/true);
+        segment->write(dmContext(), std::move(block));
+        // write range [100, 150)
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(100, 150, false);
+        segment->write(dmContext(), std::move(block2));
+    }
+    {
+        // test read data
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto in = segment->getBitmapFilterInputStream(
+            dmContext(),
+            *tableColumns(),
+            segment_snap,
+            {RowKeyRange::newAll(false, 1)},
+            EMPTY_FILTER,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_NROWS(in, 80);
+    }
 }
 CATCH
 
