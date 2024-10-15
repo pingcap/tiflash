@@ -179,9 +179,7 @@ private:
         auto needle = c1_const->getValue<String>();
         auto replacement = c2_const->getValue<String>();
 
-        bool col_const = column_src->isColumnConst();
-
-        if (col_const)
+        if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
         {
             std::string result_value;
             const auto * src_const = typeid_cast<const ColumnConst *>(column_src.get());
@@ -244,12 +242,12 @@ private:
             const auto * col_replacement_const = typeid_cast<const ColumnConst *>(column_replacement.get());
             auto replacement = col_replacement_const->getValue<String>();
 
-            bool col_const = column_src->isColumnConst();
-
-            if (col_const)
+            if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
             {
-                auto new_src = column_src->convertToFullColumnIfConst();
-                const auto * col = typeid_cast<const ColumnString *>(new_src.get());
+                // using the data directly as a reference.
+                const auto & const_data = col_const->getDataColumn();
+                const auto * col = typeid_cast<const ColumnString *>(&const_data);
+
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstNeedle(
                     col->getChars(),
@@ -263,6 +261,7 @@ private:
                     collator,
                     col_res->getChars(),
                     col_res->getOffsets());
+
                 column_result.column = std::move(col_res);
             }
             else if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
@@ -325,12 +324,12 @@ private:
             auto needle = col_needle_const->getValue<String>();
             const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
 
-            bool col_const = column_src->isColumnConst();
-
-            if (col_const)
+            if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
             {
-                auto new_src = column_src->convertToFullColumnIfConst();
-                const auto * col = typeid_cast<const ColumnString *>(new_src.get());
+                // using the data directly as a reference.
+                const auto & const_data = col_const->getDataColumn();
+                const auto * col = typeid_cast<const ColumnString *>(&const_data);
+
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstReplacement(
                     col->getChars(),
@@ -405,12 +404,12 @@ private:
             const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
             const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
 
-            bool col_const = column_src->isColumnConst();
-
-            if (col_const)
+            if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
             {
-                auto new_src = column_src->convertToFullColumnIfConst();
-                const auto * col = typeid_cast<const ColumnString *>(new_src.get());
+                // using the data directly as a reference.
+                const auto & const_data = col_const->getDataColumn();
+                const auto * col = typeid_cast<const ColumnString *>(&const_data);
+
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstNeedleReplacement(
                     col->getChars(),
