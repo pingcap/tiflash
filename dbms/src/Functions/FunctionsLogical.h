@@ -551,6 +551,13 @@ public:
         return result_is_constant;
     }
 
+    /*
+     * handle the cases that there is only one input column
+     * this could happen when there is N original input, but N-1 of them are constant, and
+     * the merged constant value could be ignored for current logical operator
+     * for example, the merged constant value is true for And operator, in this case
+     * there is no need to do the real calculation, just copy the input column is enough
+     */
     void handleSingleInputColumn(
         Block & block,
         size_t result,
@@ -561,19 +568,31 @@ public:
         bool result_is_nullable) const
     {
         // logical op with 1 input columns, special case when there is a constant and the constant can be ignored
-        auto col_res = ColumnUInt8::create();
-        auto col_res_is_null = ColumnUInt8::create();
+        auto col_res = ColumnUInt8::create(rows);
         UInt8Container & vec_res = col_res->getData();
+        auto col_res_is_null = ColumnUInt8::create();
         UInt8Container & vec_res_is_null = col_res_is_null->getData();
         if (!not_null_uint8_columns.empty())
         {
-            vec_res.assign(not_null_uint8_columns[0]->getData());
+            const auto & col_data = not_null_uint8_columns[0]->getData();
+            // according to https://github.com/pingcap/tiflash/issues/5849
+            // need to cast the UInt8 column to bool explicitly
+            for (size_t i = 0; i < rows; ++i)
+            {
+                vec_res[i] = static_cast<bool>(col_data[i]);
+            }
             if (result_is_nullable)
                 vec_res_is_null.assign(rows, static_cast<UInt8>(0));
         }
         else
         {
-            vec_res.assign(nullable_uint8_columns[0]->getData());
+            const auto & col_data = nullable_uint8_columns[0]->getData();
+            // according to https://github.com/pingcap/tiflash/issues/5849
+            // need to cast the UInt8 column to bool explicitly
+            for (size_t i = 0; i < rows; ++i)
+            {
+                vec_res[i] = static_cast<bool>(col_data[i]);
+            }
             vec_res_is_null.assign(*null_maps[0]);
         }
         if (result_is_nullable)
@@ -586,6 +605,12 @@ public:
         }
     }
 
+    /*
+     * handle the case that there are only 2 input columns
+     * the main difference between this function and handleMultipleInputColumns is
+     * when the 2 input columns are [not_null_column, nullable_column]
+     * Impl::applyOneNullable is used
+     */
     void handleTwoInputColumns(
         Block & block,
         size_t result,
@@ -682,6 +707,9 @@ public:
         }
     }
 
+    /*
+     * handle the cases that there are more than 2 input columns
+     */
     void handleMultipleInputColumns(
         Block & block,
         size_t result,
@@ -715,6 +743,8 @@ public:
             {
                 while (not_null_uint8_columns.size() > 1)
                 {
+                    /// With a large block size, combining 6 columns per pass is the fastest.
+                    /// When small - more, is faster.
                     AssociativeOperationImpl<Impl, 6>::execute(not_null_uint8_columns, vec_res);
                     not_null_uint8_columns.push_back(col_res.get());
                 }
@@ -741,6 +771,8 @@ public:
             {
                 while (nullable_uint8_columns.size() > 1)
                 {
+                    /// With a large block size, combining 6 columns per pass is the fastest.
+                    /// When small - more, is faster.
                     NullableAssociativeOperationImpl<Impl, 6>::execute(
                         nullable_uint8_columns,
                         null_maps,
@@ -858,11 +890,18 @@ public:
                 return;
         }
 
-        /// Convert all columns to UInt8
+        // used to hold the ColumnPtr for not null uint8 columns
         UInt8ColumnPtrs not_null_uint8_columns;
+        // used to hold the ColumnPtr for nullable uint8 columns
         UInt8ColumnPtrs nullable_uint8_columns;
+        // used to hold the NullMap for nullable uint8 columns
         std::vector<const UInt8Container *> null_maps;
+        // used to hold the converted columns, the columns in
+        // not_null_uint8_columns/nullable_uint8_columns are raw pointer
+        // and converted_columns is used to hold the ColumnPtr of these
+        // raw pointer if needed
         Columns converted_columns;
+        /// Convert all columns to UInt8
         convertAllInputToUInt8(in, rows, not_null_uint8_columns, nullable_uint8_columns, null_maps, converted_columns);
 
         if (Impl::canConstantBeIgnored(const_val, const_val_is_null))
