@@ -16,7 +16,6 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
-#include <Common/setThreadName.h>
 #include <Common/wrapInvocable.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Poco/Event.h>

@@ -19,7 +19,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
 #include <Common/getNumberOfCPUCores.h>
-#include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
