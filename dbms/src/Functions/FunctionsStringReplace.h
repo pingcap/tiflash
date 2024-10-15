@@ -179,7 +179,19 @@ private:
         auto needle = c1_const->getValue<String>();
         auto replacement = c2_const->getValue<String>();
 
-        if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
+        bool col_const = column_src->isColumnConst();
+
+        if (col_const)
+        {
+            std::string result_value;
+            const auto * src_const = typeid_cast<const ColumnConst *>(column_src.get());
+            auto src = src_const->getValue<String>();
+            Impl::constant(src, needle, replacement, pos, occ, match_type, collator, result_value);
+            auto col_res = ColumnString::create();
+            col_res->insert(result_value);
+            column_result.column = std::move(col_res);
+        }
+        else if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
             Impl::vector(
