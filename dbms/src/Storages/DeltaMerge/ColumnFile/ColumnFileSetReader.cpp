@@ -117,13 +117,7 @@ ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesP
 
     for (auto & fr : column_file_readers)
     {
-        if (!fr)
-        {
-            new_reader->column_file_readers.emplace_back(nullptr);
-            continue;
-        }
-        auto reader = fr->createNewReader(new_col_defs, read_tag);
-        new_reader->column_file_readers.emplace_back(std::move(reader));
+        new_reader->column_file_readers.emplace_back(fr ? fr->createNewReader(new_col_defs, read_tag) : nullptr);
     }
 
     return std::shared_ptr<ColumnFileSetReader>(new_reader);
