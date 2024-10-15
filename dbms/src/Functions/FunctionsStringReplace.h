@@ -249,7 +249,7 @@ private:
                 const auto * col = typeid_cast<const ColumnString *>(&const_data);
 
                 auto col_res = ColumnString::create();
-                Impl::vectorNonConstNeedle(
+                Impl::vectorConstSrcAndReplace(
                     col->getChars(),
                     col->getOffsets(),
                     col_needle->getChars(),
@@ -331,7 +331,7 @@ private:
                 const auto * col = typeid_cast<const ColumnString *>(&const_data);
 
                 auto col_res = ColumnString::create();
-                Impl::vectorNonConstReplacement(
+                Impl::vectorConstSrcAndNeedle(
                     col->getChars(),
                     col->getOffsets(),
                     needle,
@@ -411,7 +411,7 @@ private:
                 const auto * col = typeid_cast<const ColumnString *>(&const_data);
 
                 auto col_res = ColumnString::create();
-                Impl::vectorNonConstNeedleReplacement(
+                Impl::vectorConstSrc(
                     col->getChars(),
                     col->getOffsets(),
                     col_needle->getChars(),
