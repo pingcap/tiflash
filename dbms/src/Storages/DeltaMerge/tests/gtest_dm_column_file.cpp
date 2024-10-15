@@ -122,7 +122,8 @@ try
     ColumnDefinesPtr column_defines = std::make_shared<ColumnDefines>();
     column_defines->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
     column_defines->emplace_back(getVersionColumnDefine());
-    auto column_file_big_reader = column_file_big.getReader(dmContext(), /*storage_snap*/ nullptr, column_defines);
+    auto column_file_big_reader
+        = column_file_big.getReader(dmContext(), /*storage_snap*/ nullptr, column_defines, ReadTag::Internal);
     {
         size_t num_rows_read = 0;
         while (Block in = column_file_big_reader->readNextBlock())
@@ -149,7 +150,7 @@ try
         ColumnDefinesPtr column_defines_pk_and_del = std::make_shared<ColumnDefines>();
         column_defines_pk_and_del->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
         column_defines_pk_and_del->emplace_back(getTagColumnDefine());
-        auto column_file_big_reader2 = column_file_big_reader->createNewReader(column_defines_pk_and_del);
+        auto column_file_big_reader2 = column_file_big_reader->createNewReader(column_defines_pk_and_del, ReadTag::Internal);
         size_t num_rows_read = 0;
         while (Block in = column_file_big_reader2->readNextBlock())
         {
@@ -172,7 +173,7 @@ try
     }
 
     {
-        auto column_file_big_reader3 = column_file_big_reader->createNewReader(table_columns);
+        auto column_file_big_reader3 = column_file_big_reader->createNewReader(table_columns, ReadTag::Internal);
         size_t num_rows_read = 0;
         while (Block in = column_file_big_reader3->readNextBlock())
         {
@@ -243,7 +244,7 @@ try
     {
         // Read columns exactly the same as we have written
         auto columns_to_read = std::make_shared<ColumnDefines>(getColumnDefinesFromBlock(block));
-        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read);
+        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read, ReadTag::Internal);
         auto block_read = reader->readNextBlock();
         ASSERT_BLOCK_EQ(block_read, block);
     }
@@ -254,7 +255,7 @@ try
         String added_colname = "added_col";
         auto columns_to_read = std::make_shared<ColumnDefines>(
             ColumnDefines{ColumnDefine(added_colid, added_colname, typeFromString("Int64"))});
-        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read);
+        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read, ReadTag::Internal);
         auto block_read = reader->readNextBlock();
         ASSERT_COLUMNS_EQ_R(
             ColumnsWithTypeAndName({

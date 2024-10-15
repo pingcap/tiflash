@@ -64,7 +64,7 @@ public:
 
     size_t skipNextBlock() override;
 
-    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
+    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag) override;
 };
 
 } // namespace DB::DM

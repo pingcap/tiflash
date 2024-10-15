@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 
+
 namespace DB::DM
 {
 
@@ -64,7 +65,7 @@ size_t ColumnFileTinyReader::skipNextBlock()
     return tiny_file.getRows();
 }
 
-ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag)
 {
     // Reuse the cache data.
     return std::make_shared<ColumnFileTinyReader>(tiny_file, data_provider, new_col_defs, cols_data_cache);

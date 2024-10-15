@@ -110,7 +110,8 @@ public:
     ColumnFileReaderPtr getReader(
         const DMContext &,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const override;
+        const ColumnDefinesPtr & col_defs,
+        ReadTag) const override;
 
     void removeData(WriteBatches & wbs) const override;
 

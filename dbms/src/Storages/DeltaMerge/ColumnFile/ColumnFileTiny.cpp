@@ -149,7 +149,8 @@ void ColumnFileTiny::fillColumns(
 ColumnFileReaderPtr ColumnFileTiny::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr & data_provider,
-    const ColumnDefinesPtr & col_defs) const
+    const ColumnDefinesPtr & col_defs,
+    ReadTag) const
 {
     return std::make_shared<ColumnFileTinyReader>(*this, data_provider, col_defs);
 }

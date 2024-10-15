@@ -22,7 +22,8 @@ namespace DB::DM
 ColumnFileReaderPtr ColumnFileDeleteRange::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr &,
-    const ColumnDefinesPtr &) const
+    const ColumnDefinesPtr &,
+    ReadTag) const
 {
     // ColumnFileDeleteRange is not readable.
     return nullptr;
