@@ -306,7 +306,7 @@ struct RegionPtrWithCheckpointInfo
     /// make it could be cast into RegionPtr implicitly.
     operator const Base &() const { return base; }
 
-    // We consider the "prehandle" phase of FAP snapshot from its
+    // We consider the select+write phase of FAP snapshot as "prehandle" phase.
     UInt64 getPrehandleElapsedMillis() const;
     UInt64 getPrehandleStartMillis() const;
     UInt64 getPrehandleEndMillis() const;

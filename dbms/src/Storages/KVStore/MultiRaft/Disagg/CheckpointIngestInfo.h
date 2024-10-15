@@ -41,8 +41,10 @@ struct CheckpointIngestInfo
     RegionPtr getRegion() const { return region; }
     UInt64 regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
+    // When this FAP tasks began. If could be zero after restarted.
     UInt64 beginTime() const { return begin_time; }
-    UInt64 createdTime() const { return begin_time; }
+    // When this struct is created. Usually happens after the write stage is finished, or restored.
+    UInt64 createdTime() const { return created_time; }
 
     CheckpointIngestInfo(
         TMTContext & tmt_,
@@ -110,6 +112,7 @@ private:
     // The time the FAP task is added into async tasks pool.
     // If restored, `beginTime` is no longer meaningful.
     const UInt64 begin_time;
+    // The time the CheckpointIngestInfo is created, which means the FAP snapshot is added.
     const UInt64 created_time;
     DB::LoggerPtr log;
 };
