@@ -410,7 +410,7 @@ public:
     size_t getMemTableSetRowsOffset() const { return persisted_files_snap->getRows(); }
     size_t getMemTableSetDeletesOffset() const { return persisted_files_snap->getDeletes(); }
 
-    RowKeyRange getSquashDeleteRange() const;
+    RowKeyRange getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const;
 
     const auto & getSharedDeltaIndex() const { return shared_delta_index; }
     size_t getDeltaIndexEpoch() const { return delta_index_epoch; }
