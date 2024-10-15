@@ -2130,7 +2130,6 @@ try
             0,
             span_per_part // only first part
         },
-#if 0
         QueryRangeInfo{
             DMTestEnv::getRowKeyRangeForClusteredIndex(800, num_rows_write, rowkey_column_size),
             800,
@@ -2150,11 +2149,7 @@ try
             std::numeric_limits<Int64>::min(),
             std::numeric_limits<Int64>::max(),
         }, // full range
-#endif
     };
-
-    ranges[0].range.is_common_handle = false;
-    ranges[0].range.rowkey_column_size = 1;
 
     for (const auto & range : ranges)
     {
