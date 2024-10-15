@@ -50,9 +50,12 @@ Block ColumnFileSetInputStream::read()
             continue;
         }
         auto block = (*cur_column_file_reader)->readNextBlock();
-        read_rows += block.rows();
-        if (block.rows())
+        if (block)
+        {
+            block.setStartOffset(read_rows);
+            read_rows += block.rows();
             return block;
+        }
         else
         {
             auto prev = *cur_column_file_reader;
