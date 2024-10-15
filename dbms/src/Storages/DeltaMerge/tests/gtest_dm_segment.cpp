@@ -14,8 +14,10 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
@@ -1021,6 +1023,142 @@ try
         pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
 
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
+    }
+}
+CATCH
+
+TEST_F(SegmentTest, ColumnFileBigRangeGreaterThanSegment)
+try
+{
+    auto write_column_file_big = [&](size_t begin, size_t end, size_t block_num) {
+        WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto delegator = storage_path_pool->getStableDiskDelegator();
+        auto parent_path = delegator.choosePath();
+        auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+
+        std::vector<BlockInputStreamPtr> streams;
+        streams.reserve(block_num);
+        size_t step = (end - begin) / block_num;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = DMTestEnv::prepareSimpleWriteBlock(begin + i * step, begin + (i + 1) * step, false);
+            auto stream = std::make_shared<OneBlockInputStream>(block);
+            streams.push_back(stream);
+        }
+        auto input_stream = std::make_shared<ConcatBlockInputStream>(std::move(streams), dmContext().tracing_id);
+
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
+        ingest_wbs.data.putExternal(file_id, /* tag */ 0);
+        ingest_wbs.writeLogAndData();
+        delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
+
+        WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(
+            dm_context->global_context.getFileProvider(),
+            file_id,
+            ref_id,
+            parent_path,
+            DMFileMeta::ReadMode::all());
+        wbs.writeLogAndData();
+        ASSERT_TRUE(segment->ingestDataToDelta(
+            *dm_context,
+            segment->getRowKeyRange(),
+            {ref_file},
+            /* clear_data_in_range */ false));
+
+        ingest_wbs.rollbackWrittenLogAndData();
+    };
+
+    {
+        // let segment's rowkey_range be [30, 70)
+        HandleRange range(30, 70);
+        segment->rowkey_range = RowKeyRange::fromHandleRange(range);
+        // write ColumnFileBig with range [0, 20), [20, 40), [40, 60), [60, 80), [80, 100).
+        write_column_file_big(0, 100, 5);
+    }
+    {
+        // test built bitmap filter
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto read_ranges = {RowKeyRange::newAll(false, 1)};
+        auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+        auto bitmap_filter = segment->buildBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            EMPTY_RS_OPERATOR,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
+        ASSERT_EQ(bitmap_filter->size(), 60);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
+    }
+
+    ColumnDefines cols_to_read{
+        getExtraHandleColumnDefine(false),
+    };
+    {
+        // test read data
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto in = segment->getBitmapFilterInputStream(
+            dmContext(),
+            cols_to_read,
+            segment_snap,
+            {RowKeyRange::newAll(false, 1)},
+            EMPTY_FILTER,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_BLOCK_UR(
+            in,
+            Block({
+                createColumn<Int64>(createNumbers<Int64>(30, 70)),
+            }));
+    }
+
+    {
+        // let segment's rowkey_range be [30, 90)
+        HandleRange range(30, 90);
+        segment->rowkey_range = RowKeyRange::fromHandleRange(range);
+        // delete range [50, 80)
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            50,
+            80,
+            false,
+            3,
+            "_tidb_rowid",
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_INT_TYPE,
+            false,
+            1,
+            true,
+            /*is_deleted=*/true);
+        segment->write(dmContext(), std::move(block));
+        // write range [80, 90)
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(80, 90, false);
+        segment->write(dmContext(), std::move(block2));
+    }
+    {
+        // test read data with delete-range and new writes
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto in = segment->getBitmapFilterInputStream(
+            dmContext(),
+            cols_to_read,
+            segment_snap,
+            {RowKeyRange::newAll(false, 1)},
+            EMPTY_FILTER,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            DEFAULT_BLOCK_SIZE);
+        // Only the rows in [30, 50) and [80, 90) valid
+        auto vec = createNumbers<Int64>(30, 50);
+        vec.append_range(createNumbers<Int64>(80, 90));
+        ASSERT_INPUTSTREAM_BLOCK_UR(
+            in,
+            Block({
+                createColumn<Int64>(vec),
+            }));
     }
 }
 CATCH
