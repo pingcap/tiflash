@@ -18,6 +18,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::DM
 {
 
@@ -38,10 +40,17 @@ void DMFilePackFilter::init(ReadTag read_tag)
         if (!rowkey_ranges.empty())
         {
             bool is_common_handle = rowkey_ranges.begin()->is_common_handle;
+            auto handle_col_type = dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type;
             if (is_common_handle)
-                RUNTIME_CHECK(dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type->getTypeId() == TypeIndex::String);
+                RUNTIME_CHECK_MSG(
+                    handle_col_type->getTypeId() == TypeIndex::String,
+                    "handle_col_type_id={}",
+                    magic_enum::enum_name(handle_col_type->getTypeId()));
             else
-                RUNTIME_CHECK(dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type->getTypeId() == TypeIndex::Int64);
+                RUNTIME_CHECK_MSG(
+                    handle_col_type->getTypeId() == TypeIndex::Int64,
+                    "handle_col_type_id={}",
+                    magic_enum::enum_name(handle_col_type->getTypeId()));
             for (size_t i = 1; i < rowkey_ranges.size(); ++i)
             {
                 RUNTIME_CHECK_MSG(
