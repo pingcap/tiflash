@@ -973,8 +973,7 @@ struct ReplaceStringImpl
     }
 
     static void vectorConstSrcAndReplace(
-        const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
+        const std::string & data,
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const std::string & replacement,
@@ -985,20 +984,25 @@ struct ReplaceStringImpl
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        res_data.reserve(data.size() * needle_offsets.size()); // Leave enough space to handle multiple lines
-        res_offsets.resize(needle_offsets.size());
+        auto data_col = ColumnString::create();
+        data_col->insert(data);
+        const ColumnString::Chars_t & search_data = data_col->getChars();
+        const ColumnString::Offsets & search_offsets = data_col->getOffsets();
+
+        res_data.reserve(search_data.size());
+        res_offsets.resize(search_offsets.size());
 
         ColumnString::Offset res_offset = 0;
 
-        for (size_t i = 0; i < needle_offsets.size(); ++i)
+        for (size_t i = 0; i < search_offsets.size(); ++i)
         {
-            auto data_offset = StringUtil::offsetAt(offsets, 0); // data have 1 rows.
-            auto data_size = StringUtil::sizeAt(offsets, 0);
+            auto data_offset = StringUtil::offsetAt(search_offsets, i);
+            auto data_size = StringUtil::sizeAt(search_offsets, i);
 
             auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
             auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
-            const UInt8 * begin = &data[data_offset];
+            const UInt8 * begin = &search_data[data_offset];
             const UInt8 * pos = begin;
             const UInt8 * end = pos + data_size;
 
@@ -1024,6 +1028,7 @@ struct ReplaceStringImpl
 
                 if (match == end)
                 {
+                    /// It's time to stop.
                     break;
                 }
 
@@ -1032,18 +1037,21 @@ struct ReplaceStringImpl
                 res_offset += replacement.size();
                 pos = match + needle_size;
 
-                res_data.resize(res_data.size() + (end - pos));
-                memcpy(&res_data[res_offset], pos, (end - pos));
-                res_offset += (end - pos);
-                break;
+                if (replace_one)
+                {
+                    /// Copy the rest of data and stop.
+                    res_data.resize(res_data.size() + (end - pos));
+                    memcpy(&res_data[res_offset], pos, (end - pos));
+                    res_offset += (end - pos);
+                    break;
+                }
             }
             res_offsets[i] = res_offset;
         }
     }
 
     static void vectorConstSrcAndNeedle(
-        const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & /* offsets */,
+        const std::string & data,
         const std::string & needle,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
@@ -1054,64 +1062,92 @@ struct ReplaceStringImpl
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        const UInt8 * begin = &data[0];
-        const UInt8 * end = begin + data.size();
+        // create a ColumnString which has 1 rows.
+        auto data_col = ColumnString::create();
+        data_col->insert(data);
+        const ColumnString::Chars_t & search_data = data_col->getChars();
+        const ColumnString::Offsets & search_offsets = data_col->getOffsets();
+
+        const UInt8 * begin = &search_data[0];
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + search_data.size();
 
         ColumnString::Offset res_offset = 0;
-        res_data.reserve(data.size() * replacement_offsets.size()); // Leave enough space to handle multiple lines
-        res_offsets.resize(replacement_offsets.size());
+        res_data.reserve(search_data.size());
+        size_t size = search_offsets.size();
+        res_offsets.resize(size);
 
         if (needle.empty())
         {
-            for (size_t i = 0; i < replacement_offsets.size(); ++i)
-            {
-                res_data.resize(res_data.size() + data.size());
-                memcpy(&res_data[res_offset], begin, data.size());
-                res_offset += data.size();
-                res_offsets[i] = res_offset;
-            }
+            /// Copy all the data without changing.
+            res_data.resize(search_data.size());
+            memcpy(&res_data[0], begin, search_data.size());
+            memcpy(&res_offsets[0], &search_offsets[0], size * sizeof(UInt64));
             return;
         }
 
-        for (size_t i = 0; i < replacement_offsets.size(); ++i)
+        /// The current index in the array of strings.
+        size_t i = 0;
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
         {
-            const UInt8 * pos = begin;
-            Volnitsky searcher(needle.data(), needle.size(), end - pos);
+            const UInt8 * match = searcher.search(pos, end - pos);
+
+            /// Copy the data without changing
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+
+            /// Determine which index it belongs to.
+            while (i < search_offsets.size() && begin + search_offsets[i] <= match)
+            {
+                res_offsets[i] = res_offset + ((begin + search_offsets[i]) - pos);
+                ++i;
+            }
+            res_offset += (match - pos);
+
+            /// If you have reached the end, it's time to stop
+            if (i == search_offsets.size())
+                break;
+
+            /// Is it true that this line no longer needs to perform transformations.
+            bool can_finish_current_string = false;
 
             auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
             auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
-            while (pos < end)
+            /// We check that the entry does not go through the boundaries of strings.
+            if (match + needle.size() < begin + search_offsets[i])
             {
-                const UInt8 * match = searcher.search(pos, end - pos);
-
-                /// Copy the whole data to res without changing
-                res_data.resize(res_data.size() + (match - pos));
-                memcpy(&res_data[res_offset], pos, match - pos);
-                res_offset += match - pos;
-
-                if (match == end)
-                    break;
-
-                // Replace the matched part with the current replacement
                 res_data.resize(res_data.size() + replacement_size);
                 memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
                 res_offset += replacement_size;
-
                 pos = match + needle.size();
+                if (replace_one)
+                    can_finish_current_string = true;
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
 
-                res_data.resize(res_data.size() + (end - pos));
-                memcpy(&res_data[res_offset], pos, end - pos);
-                res_offset += (end - pos);
+            if (can_finish_current_string)
+            {
+                res_data.resize(res_data.size() + (begin + search_offsets[i] - pos));
+                memcpy(&res_data[res_offset], pos, (begin + search_offsets[i] - pos));
+                res_offset += (begin + search_offsets[i] - pos);
                 res_offsets[i] = res_offset;
-                break;
+                pos = begin + search_offsets[i];
+                ++i;
             }
         }
     }
 
     static void vectorConstSrc(
-        const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
+        const std::string & data,
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const ColumnString::Chars_t & replacement_chars,
@@ -1123,27 +1159,32 @@ struct ReplaceStringImpl
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        res_data.reserve(data.size() * offsets.size()); // Reserve space in the result data and offsets
-        res_offsets.resize(offsets.size());
+        // create a ColumnString which has 1 rows.
+        auto data_col = ColumnString::create();
+        data_col->insert(data);
+        const ColumnString::Chars_t & search_data = data_col->getChars();
+        const ColumnString::Offsets & search_offsets = data_col->getOffsets();
+
+        res_data.reserve(search_data.size());
+        res_offsets.resize(search_offsets.size());
 
         ColumnString::Offset res_offset = 0;
 
-        for (size_t i = 0; i < offsets.size(); ++i)
+        for (size_t i = 0; i < search_offsets.size(); ++i)
         {
-            auto data_offset = 0; // data have 1 rows.
-            auto data_size = data.size();
+            auto data_offset = StringUtil::offsetAt(search_offsets, i);
+            auto data_size = StringUtil::sizeAt(search_offsets, i);
 
             auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
-            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // Ignore the trailing zero
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
             auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
-            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // Ignore the trailing zero
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
-            const UInt8 * begin = &data[data_offset];
+            const UInt8 * begin = &search_data[data_offset];
             const UInt8 * pos = begin;
             const UInt8 * end = pos + data_size;
 
-            // Handle empty needle case
             if (needle_size == 0)
             {
                 res_data.resize(res_data.size() + data_size);
@@ -1153,39 +1194,36 @@ struct ReplaceStringImpl
                 continue;
             }
 
-            // Search for the needle in the data
             Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, data_size);
             while (pos < end)
             {
                 const UInt8 * match = searcher.search(pos, end - pos);
 
-                // Copy the data before the match
+                /// Copy the data without changing.
                 res_data.resize(res_data.size() + (match - pos));
                 memcpy(&res_data[res_offset], pos, match - pos);
                 res_offset += match - pos;
 
                 if (match == end)
                 {
+                    /// It's time to stop.
                     break;
                 }
 
-                // Replace the matched needle with the replacement
                 res_data.resize(res_data.size() + replacement_size);
                 memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
                 res_offset += replacement_size;
-
-                // Move the position pointer to after the matched needle
                 pos = match + needle_size;
 
                 if (replace_one)
                 {
+                    /// Copy the rest of data and stop.
                     res_data.resize(res_data.size() + (end - pos));
                     memcpy(&res_data[res_offset], pos, (end - pos));
                     res_offset += (end - pos);
                     break;
                 }
             }
-
             res_offsets[i] = res_offset;
         }
     }

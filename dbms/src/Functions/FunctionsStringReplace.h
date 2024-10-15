@@ -244,14 +244,10 @@ private:
 
             if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
             {
-                // using the data directly as a reference.
-                const auto & const_data = col_const->getDataColumn();
-                const auto * col = typeid_cast<const ColumnString *>(&const_data);
-
                 auto col_res = ColumnString::create();
+
                 Impl::vectorConstSrcAndReplace(
-                    col->getChars(),
-                    col->getOffsets(),
+                    col_const->getValue<String>(),
                     col_needle->getChars(),
                     col_needle->getOffsets(),
                     replacement,
@@ -326,14 +322,10 @@ private:
 
             if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
             {
-                // using the data directly as a reference.
-                const auto & const_data = col_const->getDataColumn();
-                const auto * col = typeid_cast<const ColumnString *>(&const_data);
-
                 auto col_res = ColumnString::create();
+
                 Impl::vectorConstSrcAndNeedle(
-                    col->getChars(),
-                    col->getOffsets(),
+                    col_const->getValue<String>(),
                     needle,
                     col_replacement->getChars(),
                     col_replacement->getOffsets(),
@@ -406,14 +398,10 @@ private:
 
             if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
             {
-                // using the data directly as a reference.
-                const auto & const_data = col_const->getDataColumn();
-                const auto * col = typeid_cast<const ColumnString *>(&const_data);
-
                 auto col_res = ColumnString::create();
+
                 Impl::vectorConstSrc(
-                    col->getChars(),
-                    col->getOffsets(),
+                    col_const->getValue<String>(),
                     col_needle->getChars(),
                     col_needle->getOffsets(),
                     col_replacement->getChars(),
