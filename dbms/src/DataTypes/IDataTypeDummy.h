@@ -49,8 +49,6 @@ public:
         throwNoSerialization();
     }
     void deserializeTextJSON(IColumn &, ReadBuffer &) const override { throwNoSerialization(); }
-    void serializeTextCSV(const IColumn &, size_t, WriteBuffer &) const override { throwNoSerialization(); }
-    void deserializeTextCSV(IColumn &, ReadBuffer &, const char) const override { throwNoSerialization(); }
 
     MutableColumnPtr createColumn() const override
     {

@@ -15,7 +15,6 @@
 #include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
-#include <Storages/DeltaMerge/ReadUtil.h>
 
 
 namespace DB::DM
