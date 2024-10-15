@@ -150,7 +150,8 @@ try
         ColumnDefinesPtr column_defines_pk_and_del = std::make_shared<ColumnDefines>();
         column_defines_pk_and_del->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
         column_defines_pk_and_del->emplace_back(getTagColumnDefine());
-        auto column_file_big_reader2 = column_file_big_reader->createNewReader(column_defines_pk_and_del, ReadTag::Internal);
+        auto column_file_big_reader2
+            = column_file_big_reader->createNewReader(column_defines_pk_and_del, ReadTag::Internal);
         size_t num_rows_read = 0;
         while (Block in = column_file_big_reader2->readNextBlock())
         {
