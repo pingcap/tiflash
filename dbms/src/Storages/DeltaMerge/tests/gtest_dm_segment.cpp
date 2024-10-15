@@ -1272,7 +1272,7 @@ try
 }
 CATCH
 
-enum SegmentTestMode
+enum class SegmentTestMode
 {
     PageStorageV2_MemoryOnly,
     PageStorageV2_DiskOnly,
