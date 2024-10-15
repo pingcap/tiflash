@@ -77,24 +77,7 @@ namespace DB::DM::tests
 
 String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 {
-    const auto mode = info.param;
-    switch (mode)
-    {
-    case TestMode::PageStorageV2_MemoryOnly:
-        return "PageStorageV2_MemoryOnly";
-    case TestMode::PageStorageV2_DiskOnly:
-        return "PageStorageV2_DiskOnly";
-    case TestMode::PageStorageV2_MemoryAndDisk:
-        return "PageStorageV2_MemoryAndDisk";
-    case TestMode::Current_MemoryOnly:
-        return "Current_MemoryOnly";
-    case TestMode::Current_DiskOnly:
-        return "Current_DiskOnly";
-    case TestMode::Current_MemoryAndDisk:
-        return "Current_MemoryAndDisk";
-    default:
-        return "Unknown";
-    }
+    return String{magic_enum::enum_name(info.param)};
 }
 
 

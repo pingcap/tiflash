@@ -1282,20 +1282,7 @@ enum SegmentTestMode
 
 String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
 {
-    const auto mode = info.param;
-    switch (mode)
-    {
-    case SegmentTestMode::PageStorageV2_MemoryOnly:
-        return "PageStorageV2_MemoryOnly";
-    case SegmentTestMode::PageStorageV2_DiskOnly:
-        return "PageStorageV2_DiskOnly";
-    case SegmentTestMode::Current_MemoryOnly:
-        return "Current_MemoryOnly";
-    case SegmentTestMode::Current_DiskOnly:
-        return "Current_DiskOnly";
-    default:
-        return "Unknown";
-    }
+    return String{magic_enum::enum_name(info.param)};
 }
 
 class SegmentTest2
