@@ -2123,8 +2123,7 @@ try
         RowKeyRange range;
         Int64 start, end;
     };
-    std::vector<QueryRangeInfo> ranges
-    {
+    std::vector<QueryRangeInfo> ranges{
         QueryRangeInfo{
             DMTestEnv::getRowKeyRangeForClusteredIndex(0, span_per_part, rowkey_column_size),
             0,
