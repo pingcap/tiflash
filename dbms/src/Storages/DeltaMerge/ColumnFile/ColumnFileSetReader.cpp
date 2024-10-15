@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetReader.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 #include <Storages/DeltaMerge/DMContext.h>
 
 

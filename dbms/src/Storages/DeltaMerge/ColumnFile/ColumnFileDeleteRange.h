@@ -18,10 +18,9 @@
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileDeleteRange;
 using ColumnFileDeleteRangePtr = std::shared_ptr<ColumnFileDeleteRange>;
 
@@ -74,10 +73,4 @@ public:
     String toString() const override { return "{delete_range:" + delete_range.toString() + "}"; }
 };
 
-class ColumnFileEmptyReader : public ColumnFileReader
-{
-public:
-    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr &) override;
-};
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

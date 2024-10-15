@@ -15,7 +15,6 @@
 #pragma once
 
 #include <IO/FileProvider/FileProvider_fwd.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
@@ -23,10 +22,9 @@
 #include <Storages/DeltaMerge/dtpb/column_file.pb.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileTiny;
 using ColumnFileTinyPtr = std::shared_ptr<ColumnFileTiny>;
 
@@ -208,52 +206,4 @@ public:
     }
 };
 
-class ColumnFileTinyReader : public ColumnFileReader
-{
-private:
-    const ColumnFileTiny & tiny_file;
-    const IColumnFileDataProviderPtr data_provider;
-    const ColumnDefinesPtr col_defs;
-
-    Columns cols_data_cache;
-    bool read_done = false;
-
-public:
-    ColumnFileTinyReader(
-        const ColumnFileTiny & tiny_file_,
-        const IColumnFileDataProviderPtr & data_provider_,
-        const ColumnDefinesPtr & col_defs_,
-        const Columns & cols_data_cache_)
-        : tiny_file(tiny_file_)
-        , data_provider(data_provider_)
-        , col_defs(col_defs_)
-        , cols_data_cache(cols_data_cache_)
-    {}
-
-    ColumnFileTinyReader(
-        const ColumnFileTiny & tiny_file_,
-        const IColumnFileDataProviderPtr & data_provider_,
-        const ColumnDefinesPtr & col_defs_)
-        : tiny_file(tiny_file_)
-        , data_provider(data_provider_)
-        , col_defs(col_defs_)
-    {}
-
-    /// This is a ugly hack to fast return PK & Version column.
-    ColumnPtr getPKColumn();
-    ColumnPtr getVersionColumn();
-
-    std::pair<size_t, size_t> readRows(
-        MutableColumns & output_cols,
-        size_t rows_offset,
-        size_t rows_limit,
-        const RowKeyRange * range) override;
-
-    Block readNextBlock() override;
-
-    size_t skipNextBlock() override;
-
-    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
-};
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
