@@ -423,7 +423,7 @@ void fillFixedBatch(
         {
             const auto * column = key_columns[i];
             size_t num_rows = column->size();
-            out.resize_fill(num_rows);
+            out.resize_fill_zero(num_rows);
 
             /// Note: here we violate strict aliasing.
             /// It should be ok as log as we do not reffer to any value from `out` before filling.

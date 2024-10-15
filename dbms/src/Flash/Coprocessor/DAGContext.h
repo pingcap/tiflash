@@ -56,7 +56,12 @@ using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class AutoSpillTrigger;
 
-struct JoinProfileInfo;
+struct JoinProfileInfo
+{
+    UInt64 peak_build_bytes_usage = 0;
+    bool is_spill_enabled = false;
+    bool is_spilled = false;
+};
 using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 struct JoinExecuteInfo
 {

@@ -67,7 +67,7 @@ void PrettyBlockOutputStream::calculateWidths(
     size_t columns = block.columns();
 
     widths.resize(columns);
-    max_widths.resize_fill(columns);
+    max_widths.resize_fill_zero(columns);
     name_widths.resize(columns);
 
     /// Calculate widths of all values.

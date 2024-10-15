@@ -85,12 +85,12 @@ public:
 
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+    void insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec) override;
 
     void insertData(const char * pos, size_t length) override;
 
-    void insertDefault() override { chars.resize_fill(chars.size() + n); }
-    void insertManyDefaults(size_t length) override { chars.resize_fill(chars.size() + n * length); }
+    void insertDefault() override { chars.resize_fill_zero(chars.size() + n); }
+    void insertManyDefaults(size_t length) override { chars.resize_fill_zero(chars.size() + n * length); }
 
     void popBack(size_t elems) override { chars.resize_assume_reserved(chars.size() - n * elems); }
 
@@ -151,6 +151,7 @@ public:
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     void reserve(size_t size) override { chars.reserve(n * size); }
+    void reserveAlign(size_t size, size_t alignment) override { chars.reserve(n * size, alignment); }
 
     void getExtremes(Field & min, Field & max) const override;
 

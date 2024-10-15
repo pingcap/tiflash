@@ -77,7 +77,7 @@ public:
             {
                 cols[i] = column_ptr->cloneEmpty();
             }
-            std::vector<size_t> position_vec;
+            IColumn::Offsets position_vec;
             position_vec.push_back(0);
             position_vec.push_back(2);
             position_vec.push_back(4);

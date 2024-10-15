@@ -87,7 +87,7 @@ void ColumnFixedString::insertManyFrom(const IColumn & src_, size_t position, si
         memcpySmallAllowReadWriteOverflow15(&chars[i], src_char_ptr, n);
 }
 
-void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec)
+void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec)
 {
     const auto & src = static_cast<const ColumnFixedString &>(src_);
     if (n != src.getN())

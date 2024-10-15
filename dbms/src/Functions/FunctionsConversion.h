@@ -1352,7 +1352,7 @@ public:
         static constexpr auto name = "toDecimal";
     };
     static constexpr auto name = "toDecimal";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionToDecimal<T>>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionToDecimal<T>>(); }
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 3; }
@@ -1425,7 +1425,7 @@ class FunctionToFixedString : public IFunction
 {
 public:
     static constexpr auto name = "toFixedString";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionToFixedString>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionToFixedString>(); }
 
     String getName() const override { return name; }
 
@@ -1472,7 +1472,7 @@ public:
             const auto & in_chars = column_string->getChars();
             const auto & in_offsets = column_string->getOffsets();
 
-            out_chars.resize_fill(in_offsets.size() * n);
+            out_chars.resize_fill_zero(in_offsets.size() * n);
 
             for (size_t i = 0; i < in_offsets.size(); ++i)
             {
@@ -1500,7 +1500,7 @@ public:
             auto & out_chars = column_fixed->getChars();
             const auto & in_chars = column_fixed_string->getChars();
             const auto size = column_fixed_string->size();
-            out_chars.resize_fill(size * n);
+            out_chars.resize_fill_zero(size * n);
 
             for (const auto i : ext::range(0, size))
                 memcpy(&out_chars[i * n], &in_chars[i * src_n], src_n);
@@ -1516,7 +1516,7 @@ class FunctionFromUnixTime : public IFunction
 {
 public:
     static constexpr auto name = "fromUnixTime";
-    static FunctionPtr create(const Context & context_) { return std::make_shared<FunctionFromUnixTime>(context_); };
+    static FunctionPtr create(const Context & context_) { return std::make_shared<FunctionFromUnixTime>(context_); }
     explicit FunctionFromUnixTime(const Context & context_)
         : context(context_){};
 
@@ -1799,7 +1799,7 @@ class FunctionDateFormat : public IFunction
 {
 public:
     static constexpr auto name = "dateFormat";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionDateFormat>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionDateFormat>(); }
 
     String getName() const override { return name; }
 
@@ -1910,7 +1910,7 @@ private:
 
 public:
     static constexpr auto name = "getFormat";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionGetFormat>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionGetFormat>(); }
 
     String getName() const override { return name; }
 
@@ -2917,7 +2917,7 @@ private:
                         + " to " + toString(new_value),
                     ErrorCodes::CANNOT_CONVERT_TYPE};
         }
-    };
+    }
 
     template <typename ColumnStringType, typename EnumType>
     WrapperType createStringToEnumWrapper() const

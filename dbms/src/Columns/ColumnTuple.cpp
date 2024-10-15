@@ -428,6 +428,13 @@ void ColumnTuple::reserve(size_t n)
         getColumn(i).reserve(n);
 }
 
+void ColumnTuple::reserveAlign(size_t n, size_t alignment)
+{
+    const size_t tuple_size = columns.size();
+    for (size_t i = 0; i < tuple_size; ++i)
+        getColumn(i).reserveAlign(n, alignment);
+}
+
 size_t ColumnTuple::byteSize() const
 {
     size_t res = 0;
