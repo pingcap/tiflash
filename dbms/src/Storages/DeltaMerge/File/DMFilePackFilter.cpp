@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB::DM
@@ -31,6 +33,26 @@ void DMFilePackFilter::init(ReadTag read_tag)
         std::vector<RSOperatorPtr> handle_filters;
         for (auto & rowkey_range : rowkey_ranges)
             handle_filters.emplace_back(toFilter(rowkey_range));
+#ifndef NDEBUG
+        // sanity check under debug mode to ensure the rowkey_range is correct common-handle or int64-handle
+        if (!rowkey_ranges.empty())
+        {
+            bool is_common_handle = rowkey_ranges.begin()->is_common_handle;
+            if (is_common_handle)
+                RUNTIME_CHECK(dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type->getTypeId() == TypeIndex::String);
+            else
+                RUNTIME_CHECK(dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type->getTypeId() == TypeIndex::Int64);
+            for (size_t i = 1; i < rowkey_ranges.size(); ++i)
+            {
+                RUNTIME_CHECK_MSG(
+                    is_common_handle == rowkey_ranges[i].is_common_handle,
+                    "i={} is_common_handle={} ith.is_common_handle={}",
+                    i,
+                    is_common_handle,
+                    rowkey_ranges[i].is_common_handle);
+            }
+        }
+#endif
         for (size_t i = 0; i < pack_count; ++i)
         {
             handle_res[i] = RSResult::None;
