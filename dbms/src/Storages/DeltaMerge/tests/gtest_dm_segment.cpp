@@ -17,6 +17,7 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
@@ -1092,6 +1093,28 @@ try
         ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
     }
 
+    ColumnDefines cols_to_read{
+        getExtraHandleColumnDefine(false),
+    };
+    {
+        // test read data
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto in = segment->getBitmapFilterInputStream(
+            dmContext(),
+            cols_to_read,
+            segment_snap,
+            {RowKeyRange::newAll(false, 1)},
+            EMPTY_FILTER,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_BLOCK_UR(
+            in,
+            Block({
+                createColumn<Int64>(createNumbers<Int64>(30, 70)),
+            }));
+    }
+
     {
         // let segment's rowkey_range be [30, 90)
         HandleRange range(30, 90);
@@ -1115,18 +1138,25 @@ try
         segment->write(dmContext(), std::move(block2));
     }
     {
-        // test read data
+        // test read data with delete-range and new writes
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
         auto in = segment->getBitmapFilterInputStream(
             dmContext(),
-            *tableColumns(),
+            cols_to_read,
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
-        ASSERT_INPUTSTREAM_NROWS(in, 30);
+        // [30, 50) and [80, 90)
+        auto vec = createNumbers<Int64>(30, 50);
+        vec.append_range(createNumbers<Int64>(80, 90));
+        ASSERT_INPUTSTREAM_BLOCK_UR(
+            in,
+            Block({
+                createColumn<Int64>(vec),
+            }));
     }
 }
 CATCH
