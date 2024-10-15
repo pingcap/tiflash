@@ -1274,11 +1274,10 @@ CATCH
 
 enum SegmentTestMode
 {
-    V1_BlockOnly,
-    V2_BlockOnly,
-    V2_FileOnly,
-    V3_BlockOnly,
-    V3_FileOnly,
+    PageStorageV2_MemoryOnly,
+    PageStorageV2_DiskOnly,
+    Current_MemoryOnly,
+    Current_DiskOnly,
 };
 
 String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
@@ -1286,16 +1285,14 @@ String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
     const auto mode = info.param;
     switch (mode)
     {
-    case SegmentTestMode::V1_BlockOnly:
-        return "V1_BlockOnly";
-    case SegmentTestMode::V2_BlockOnly:
-        return "V2_BlockOnly";
-    case SegmentTestMode::V2_FileOnly:
-        return "V2_FileOnly";
-    case SegmentTestMode::V3_BlockOnly:
-        return "V3_BlockOnly";
-    case SegmentTestMode::V3_FileOnly:
-        return "V3_FileOnly";
+    case SegmentTestMode::PageStorageV2_MemoryOnly:
+        return "PageStorageV2_MemoryOnly";
+    case SegmentTestMode::PageStorageV2_DiskOnly:
+        return "PageStorageV2_DiskOnly";
+    case SegmentTestMode::Current_MemoryOnly:
+        return "Current_MemoryOnly";
+    case SegmentTestMode::Current_DiskOnly:
+        return "Current_DiskOnly";
     default:
         return "Unknown";
     }
@@ -1317,16 +1314,13 @@ public:
         mode = GetParam();
         switch (mode)
         {
-        case SegmentTestMode::V1_BlockOnly:
-            setStorageFormat(1);
-            break;
-        case SegmentTestMode::V2_BlockOnly:
-        case SegmentTestMode::V2_FileOnly:
-            setStorageFormat(2);
-            break;
-        case SegmentTestMode::V3_BlockOnly:
-        case SegmentTestMode::V3_FileOnly:
+        case SegmentTestMode::PageStorageV2_MemoryOnly:
+        case SegmentTestMode::PageStorageV2_DiskOnly:
             setStorageFormat(3);
+            break;
+        case SegmentTestMode::Current_MemoryOnly:
+        case SegmentTestMode::Current_DiskOnly:
+            setStorageFormat(STORAGE_FORMAT_CURRENT);
             break;
         }
 
@@ -1373,13 +1367,12 @@ try
             row_offset += 100;
             switch (mode)
             {
-            case SegmentTestMode::V1_BlockOnly:
-            case SegmentTestMode::V2_BlockOnly:
-            case SegmentTestMode::V3_BlockOnly:
+            case SegmentTestMode::PageStorageV2_MemoryOnly:
+            case SegmentTestMode::Current_MemoryOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case SegmentTestMode::V2_FileOnly:
-            case SegmentTestMode::V3_FileOnly:
+            case SegmentTestMode::PageStorageV2_DiskOnly:
+            case SegmentTestMode::Current_DiskOnly:
             {
                 auto delegate = dmContext().path_pool->getStableDiskDelegator();
                 auto file_provider = dmContext().global_context.getFileProvider();
@@ -1487,11 +1480,10 @@ INSTANTIATE_TEST_CASE_P(
     SegmentTestMode, //
     SegmentTest2,
     testing::Values(
-        SegmentTestMode::V1_BlockOnly,
-        SegmentTestMode::V2_BlockOnly,
-        SegmentTestMode::V2_FileOnly,
-        SegmentTestMode::V3_BlockOnly,
-        SegmentTestMode::V3_FileOnly),
+        SegmentTestMode::PageStorageV2_MemoryOnly,
+        SegmentTestMode::PageStorageV2_DiskOnly,
+        SegmentTestMode::Current_MemoryOnly,
+        SegmentTestMode::Current_DiskOnly),
     testModeToString);
 
 enum class SegmentWriteType
