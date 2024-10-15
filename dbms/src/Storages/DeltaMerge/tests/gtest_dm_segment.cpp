@@ -1089,6 +1089,7 @@ try
             EMPTY_RS_OPERATOR,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
+        // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
         ASSERT_EQ(bitmap_filter->size(), 60);
         ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
     }
@@ -1149,7 +1150,7 @@ try
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
-        // [30, 50) and [80, 90)
+        // Only the rows in [30, 50) and [80, 90) valid
         auto vec = createNumbers<Int64>(30, 50);
         vec.append_range(createNumbers<Int64>(80, 90));
         ASSERT_INPUTSTREAM_BLOCK_UR(
