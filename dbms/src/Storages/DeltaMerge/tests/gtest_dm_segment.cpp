@@ -1070,11 +1070,11 @@ try
     };
 
     {
-        // let segment's rowkey_range be [60, 90)
-        HandleRange range(60, 90);
+        // let segment's rowkey_range be [30, 70)
+        HandleRange range(30, 70);
         segment->rowkey_range = RowKeyRange::fromHandleRange(range);
-        // write ColumnFileBig with range [0, 50) and [50, 100)
-        write_column_file_big(0, 100, 2);
+        // write ColumnFileBig with range [0, 20), [20, 40), [40, 60), [60, 80), [80, 100).
+        write_column_file_big(0, 100, 5);
     }
     {
         // test built bitmap filter
@@ -1088,18 +1088,18 @@ try
             EMPTY_RS_OPERATOR,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
-        ASSERT_EQ(bitmap_filter->size(), 50);
-        ASSERT_EQ(bitmap_filter->toDebugString(), "00000000001111111111111111111111111111110000000000");
+        ASSERT_EQ(bitmap_filter->size(), 60);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
     }
 
     {
-        // let segment's rowkey_range be [60, 150)
-        HandleRange range(60, 150);
+        // let segment's rowkey_range be [30, 90)
+        HandleRange range(30, 90);
         segment->rowkey_range = RowKeyRange::fromHandleRange(range);
-        // delete range [90, 100)
+        // delete range [50, 80)
         Block block = DMTestEnv::prepareSimpleWriteBlock(
-            90,
-            100,
+            50,
+            80,
             false,
             3,
             "_tidb_rowid",
@@ -1110,8 +1110,8 @@ try
             true,
             /*is_deleted=*/true);
         segment->write(dmContext(), std::move(block));
-        // write range [100, 150)
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(100, 150, false);
+        // write range [80, 90)
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(80, 90, false);
         segment->write(dmContext(), std::move(block2));
     }
     {
@@ -1126,7 +1126,7 @@ try
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
-        ASSERT_INPUTSTREAM_NROWS(in, 80);
+        ASSERT_INPUTSTREAM_NROWS(in, 30);
     }
 }
 CATCH
