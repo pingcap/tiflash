@@ -28,10 +28,9 @@
 
 #include <ext/scope_guard.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 // ================================================
 // Public methods
 // ================================================
@@ -158,6 +157,21 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
             // Use a newly created page_id to reference the data page_id of current column file.
             PageIdU64 new_data_page_id = dm_context.storage_pool->newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
+            if (auto index_infos = t->getIndexInfos(); index_infos)
+            {
+                auto new_index_infos = std::make_shared<ColumnFileTiny::IndexInfos>();
+                new_index_infos->reserve(index_infos->size());
+                // Use a newly created page_id to reference the index page_id of current column file.
+                for (auto & index_info : *index_infos)
+                {
+                    auto new_index_page_id = dm_context.storage_pool->newLogPageId();
+                    wbs.log.putRefPage(new_index_page_id, index_info.index_page_id);
+                    new_index_infos->emplace_back(new_index_page_id, index_info.vector_index);
+                }
+                auto new_column_file = t->cloneWith(new_data_page_id, new_index_infos);
+                cloned.push_back(new_column_file);
+                continue;
+            }
             auto new_column_file = t->cloneWith(new_data_page_id);
             cloned.push_back(new_column_file);
         }
@@ -503,5 +517,5 @@ bool DeltaValueSpace::compact(DMContext & context)
 
     return true;
 }
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM
