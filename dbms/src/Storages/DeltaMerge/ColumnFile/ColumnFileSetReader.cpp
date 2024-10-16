@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetReader.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 #include <Storages/DeltaMerge/DMContext.h>
 
 
@@ -100,8 +101,8 @@ ColumnFileSetReader::ColumnFileSetReader(
         total_rows += f->getRows();
         column_file_rows.push_back(f->getRows());
         column_file_rows_end.push_back(total_rows);
-        column_file_readers.push_back(f->getReader(context, snapshot->getDataProvider(), col_defs));
-        column_file_readers.back()->setReadTag(read_tag_);
+        auto reader = f->getReader(context, snapshot->getDataProvider(), col_defs, read_tag_);
+        column_file_readers.emplace_back(std::move(reader));
     }
 }
 
@@ -116,8 +117,7 @@ ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesP
 
     for (auto & fr : column_file_readers)
     {
-        new_reader->column_file_readers.push_back(fr->createNewReader(new_col_defs));
-        new_reader->column_file_readers.back()->setReadTag(read_tag);
+        new_reader->column_file_readers.emplace_back(fr ? fr->createNewReader(new_col_defs, read_tag) : nullptr);
     }
 
     return std::shared_ptr<ColumnFileSetReader>(new_reader);
