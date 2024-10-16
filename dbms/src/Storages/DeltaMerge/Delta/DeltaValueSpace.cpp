@@ -107,16 +107,6 @@ std::string DeltaValueSpace::serializeMeta() const
     return wb.releaseStr();
 }
 
-template <class ColumnFileT>
-struct CloneColumnFilesHelper
-{
-    static std::vector<ColumnFileT> clone(
-        DMContext & dm_context,
-        const std::vector<ColumnFileT> & src,
-        const RowKeyRange & target_range,
-        WriteBatches & wbs);
-};
-
 template <class ColumnFilePtrT>
 std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
     DMContext & dm_context,

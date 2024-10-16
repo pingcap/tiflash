@@ -265,8 +265,8 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
                     UNUSED(bytes);
                     switch (state)
                     {
-                    case DMFileMeta::LocalIndexState::
-                        NoNeed: // Regard as indexed, because column does not need any index
+                    case DMFileMeta::LocalIndexState::NoNeed:
+                        // Regard as indexed, because column does not need any index
                     case DMFileMeta::LocalIndexState::IndexBuilt:
                         break;
                     case DMFileMeta::LocalIndexState::IndexPending:
