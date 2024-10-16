@@ -31,9 +31,7 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 extern DMFilePtr writeIntoNewDMFile(
     DMContext & dm_context,
@@ -41,8 +39,11 @@ extern DMFilePtr writeIntoNewDMFile(
     const BlockInputStreamPtr & input_stream,
     UInt64 file_id,
     const String & parent_path);
-namespace tests
+}
+
+namespace DB::DM::tests
 {
+
 // Simple test suit for DeltaMergeStore.
 class DeltaMergeStoreTest : public DB::base::TiFlashStorageTestBasic
 {
@@ -120,15 +121,14 @@ protected:
     DeltaMergeStorePtr store;
 };
 
-enum TestMode
+enum class TestMode
 {
-    V1_BlockOnly,
-    V2_BlockOnly,
-    V2_FileOnly,
-    V2_Mix,
-    V3_BlockOnly,
-    V3_FileOnly,
-    V3_Mix
+    PageStorageV2_MemoryOnly,
+    PageStorageV2_DiskOnly,
+    PageStorageV2_MemoryAndDisk,
+    Current_MemoryOnly,
+    Current_DiskOnly,
+    Current_MemoryAndDisk
 };
 
 // Read write test suit for DeltaMergeStore.
@@ -146,18 +146,15 @@ public:
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-            setStorageFormat(1);
-            break;
-        case TestMode::V2_BlockOnly:
-        case TestMode::V2_FileOnly:
-        case TestMode::V2_Mix:
-            setStorageFormat(2);
-            break;
-        case TestMode::V3_BlockOnly:
-        case TestMode::V3_FileOnly:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::PageStorageV2_MemoryAndDisk:
             setStorageFormat(3);
+            break;
+        case TestMode::Current_MemoryOnly:
+        case TestMode::Current_DiskOnly:
+        case TestMode::Current_MemoryAndDisk:
+            setStorageFormat(STORAGE_FORMAT_CURRENT);
             break;
         }
     }
@@ -239,6 +236,5 @@ protected:
 
     void dupHandleVersionAndDeltaIndexAdvancedThanSnapshot();
 };
-} // namespace tests
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM::tests
