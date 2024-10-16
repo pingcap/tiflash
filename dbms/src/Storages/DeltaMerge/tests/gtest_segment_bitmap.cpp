@@ -14,13 +14,13 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
-
 using namespace std::chrono_literals;
 using namespace DB::tests;
 
@@ -35,6 +35,13 @@ protected:
     ColumnPtr hold_row_id;
     ColumnPtr hold_handle;
     RowKeyRanges read_ranges;
+
+    void setRowKeyRange(Int64 begin, Int64 end)
+    {
+        auto itr = segments.find(SEG_ID);
+        RUNTIME_CHECK(itr != segments.end(), SEG_ID);
+        itr->second->rowkey_range = buildRowKeyRange(begin, end);
+    }
 
     /*
     0----------------stable_rows----------------stable_rows + delta_rows <-- append
@@ -51,8 +58,12 @@ protected:
 
     Returns {row_id, handle}.
     */
-    std::pair<const PaddedPODArray<UInt32> *, const PaddedPODArray<Int64> *> writeSegment(std::string_view seg_data)
+    std::pair<const PaddedPODArray<UInt32> *, const PaddedPODArray<Int64> *> writeSegment(
+        std::string_view seg_data,
+        std::optional<std::pair<Int64, Int64>> rowkey_range = std::nullopt)
     {
+        if (rowkey_range)
+            setRowKeyRange(rowkey_range->first, rowkey_range->second);
         auto seg_data_units = parseSegData(seg_data);
         for (const auto & unit : seg_data_units)
         {
@@ -97,7 +108,13 @@ protected:
         }
         else if (type == "d_big")
         {
-            SegmentTestBasic::ingestDTFileIntoDelta(SEG_ID, end - begin, begin, false);
+            SegmentTestBasic::ingestDTFileIntoDelta(
+                SEG_ID,
+                end - begin,
+                begin,
+                false,
+                unit.pack_size,
+                /*check_range*/ false);
         }
         else if (type == "d_dr")
         {
@@ -106,6 +123,12 @@ protected:
         else if (type == "s")
         {
             SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            if (unit.pack_size)
+            {
+                db_context->getSettingsRef().set("dt_segment_stable_pack_rows", *(unit.pack_size));
+                reloadDMContext();
+                ASSERT_EQ(dm_context->stable_pack_rows, *(unit.pack_size));
+            }
             SegmentTestBasic::mergeSegmentDelta(SEG_ID);
         }
         else
@@ -120,21 +143,24 @@ protected:
             std::string_view seg_data_,
             size_t expected_size_,
             std::string_view expected_row_id_,
-            std::string_view expected_handle_)
+            std::string_view expected_handle_,
+            std::optional<std::pair<Int64, Int64>> rowkey_range_ = std::nullopt)
             : seg_data(seg_data_)
             , expected_size(expected_size_)
             , expected_row_id(expected_row_id_)
             , expected_handle(expected_handle_)
+            , rowkey_range(rowkey_range_)
         {}
         std::string seg_data;
         size_t expected_size;
         std::string expected_row_id;
         std::string expected_handle;
+        std::optional<std::pair<Int64, Int64>> rowkey_range;
     };
 
     void runTestCase(TestCase test_case)
     {
-        auto [row_id, handle] = writeSegment(test_case.seg_data);
+        auto [row_id, handle] = writeSegment(test_case.seg_data, test_case.rowkey_range);
         if (test_case.expected_size == 0)
         {
             ASSERT_EQ(nullptr, row_id);
@@ -464,6 +490,70 @@ try
     auto expected_right_row_id = genSequence<UInt32>("[25000, 50000)");
     ASSERT_EQ(expected_right_row_id.size(), right_r->size());
     ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+}
+CATCH
+
+TEST_F(SegmentBitmapFilterTest, BigPart)
+try
+{
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // Packs in rowkey_range: [270, 280)|[280, 290)|[290, 300)
+    runTestCase(TestCase{
+        /*seg_data*/ "d_big:[250, 1000):10",
+        /*expected_size*/ 20,
+        /*expected_row_id*/ "[5, 25)",
+        /*expected_handle*/ "[275, 295)",
+        /*rowkey_range*/ std::pair<Int64, Int64>{275, 295}});
+
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto bitmap_filter = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        {seg->getRowKeyRange()},
+        nullptr,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
+    ASSERT_EQ(bitmap_filter->size(), 30);
+    ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
+    ASSERT_EQ(bitmap_filter->toDebugString(), "000001111111111111111111100000");
+}
+CATCH
+
+TEST_F(SegmentBitmapFilterTest, StablePart)
+try
+{
+    runTestCase(TestCase{
+        /*seg_data*/ "s:[250, 1000):10",
+        /*expected_size*/ 750,
+        /*expected_row_id*/ "[0, 750)",
+        /*expected_handle*/ "[250, 1000)"});
+
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(seg->stable->getDMFilesPacks(), 75);
+    }
+
+    // For Stable, all packs of DMFile will be considered in BitmapFilter.
+    setRowKeyRange(275, 295); // Shrinking range
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto bitmap_filter = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        {seg->getRowKeyRange()},
+        nullptr,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
+    ASSERT_EQ(bitmap_filter->size(), 750);
+    ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
+    ASSERT_EQ(
+        bitmap_filter->toDebugString(),
+        "00000000000000000000000001111111111111111111100000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
 }
 CATCH
 
