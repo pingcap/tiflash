@@ -22,11 +22,11 @@
 namespace DB::DM::tests
 {
 
-class DeltaValueSpaceTest : public SegmentTestBasic
+class ColumnFileCloneTest : public SegmentTestBasic
 {
 };
 
-TEST_F(DeltaValueSpaceTest, CloneColumnFileTinyWithVectorIndex)
+TEST_F(ColumnFileCloneTest, CloneColumnFileTinyWithVectorIndex)
 {
     WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
     const PageIdU64 index_page_id = dm_context->storage_pool->newLogPageId();
