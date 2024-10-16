@@ -1495,9 +1495,9 @@ struct ReplaceStringImpl
     }
 
     static void constant(
-        const std::string & data,
-        const std::string & needle,
-        const std::string & replacement,
+        const std::string_view data,
+        const std::string_view needle,
+        const std::string_view replacement,
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,

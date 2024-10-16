@@ -122,10 +122,16 @@ public:
 
         ColumnWithTypeAndName & column_result = block.getByPosition(result);
 
+        bool src_const = column_src->isColumnConst();
         bool needle_const = column_needle->isColumnConst();
         bool replacement_const = column_replacement->isColumnConst();
 
-        if (needle_const && replacement_const)
+        if (src_const)
+        {
+            // Rare cases
+            executeFallbackImpl(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
+        }
+        else if (needle_const && replacement_const)
         {
             executeImpl(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
         }
@@ -165,6 +171,34 @@ public:
     }
 
 private:
+    // No vectorized acceleration. Just a general enough implementation suitable
+    // for all kind of input columns.
+    void executeFallbackImpl(
+        const ColumnPtr & column_src,
+        const ColumnPtr & column_needle,
+        const ColumnPtr & column_replacement,
+        Int64 pos,
+        Int64 occ,
+        const String & match_type,
+        ColumnWithTypeAndName & column_result) const
+    {
+        auto col_res = ColumnString::create();
+        col_res->reserve(column_src->size());
+
+        for (size_t i = 0; i < column_src->size(); ++i)
+        {
+            String result;
+            const auto data = column_src->getDataAt(i).toStringView();
+            const auto needle = column_needle->getDataAt(i).toStringView();
+            const auto replacement = column_replacement->getDataAt(i).toStringView();
+            Impl::constant(data, needle, replacement, pos, occ, match_type, collator, result);
+
+            col_res->insertData(result.data(), result.size());
+        }
+
+        column_result.column = std::move(col_res);
+    }
+
     void executeImpl(
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
