@@ -63,9 +63,9 @@ protected:
         : id(++MAX_COLUMN_FILE_ID)
     {}
 
+public:
     virtual ~ColumnFile() = default;
 
-public:
     enum Type : UInt32
     {
         DELETE_RANGE = 1,
@@ -94,8 +94,8 @@ public:
     UInt64 getId() const { return id; }
 
     virtual size_t getRows() const { return 0; }
-    virtual size_t getBytes() const { return 0; };
-    virtual size_t getDeletes() const { return 0; };
+    virtual size_t getBytes() const { return 0; }
+    virtual size_t getDeletes() const { return 0; }
 
     virtual Type getType() const = 0;
 
@@ -104,11 +104,11 @@ public:
     /// Is a ColumnFileTiny or not.
     bool isTinyFile() const { return getType() == Type::TINY_FILE; }
     /// Is a ColumnFileDeleteRange or not.
-    bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
+    bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; }
     /// Is a ColumnFileBig or not.
-    bool isBigFile() const { return getType() == Type::BIG_FILE; };
+    bool isBigFile() const { return getType() == Type::BIG_FILE; }
     /// Is a ColumnFilePersisted or not
-    bool isPersisted() const { return getType() != Type::INMEMORY_FILE; };
+    bool isPersisted() const { return getType() != Type::INMEMORY_FILE; }
 
     /**
      * Whether this column file SEEMS TO BE flushed from another.
@@ -130,7 +130,8 @@ public:
     virtual ColumnFileReaderPtr getReader(
         const DMContext & context,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const
+        const ColumnDefinesPtr & col_defs,
+        ReadTag read_tag) const
         = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
@@ -177,9 +178,7 @@ public:
     virtual size_t skipNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
 
     /// Create a new reader from current reader with different columns to read.
-    virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;
-
-    virtual void setReadTag(ReadTag /*read_tag*/) {}
+    virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs, ReadTag read_tag) = 0;
 };
 
 std::pair<size_t, size_t> copyColumnsData(

@@ -59,7 +59,8 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
 ColumnFileReaderPtr ColumnFileInMemory::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr &,
-    const ColumnDefinesPtr & col_defs) const
+    const ColumnDefinesPtr & col_defs,
+    ReadTag) const
 {
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
@@ -155,7 +156,7 @@ size_t ColumnFileInMemoryReader::skipNextBlock()
     return memory_file.getRows();
 }
 
-ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag)
 {
     // Reuse the cache data.
     return std::make_shared<ColumnFileInMemoryReader>(memory_file, new_col_defs, cols_data_cache);
