@@ -79,7 +79,7 @@ public:
         std::optional<Int64> start_at = std::nullopt,
         bool clear = false,
         std::optional<size_t> pack_size = std::nullopt,
-        bool check_range = false);
+        bool check_range = true);
     void ingestDTFileByReplace(
         PageIdU64 segment_id,
         UInt64 write_rows = 100,
