@@ -32,9 +32,8 @@ size_t ColumnFileSetInputStream::skipNextBlock()
             return skipped_rows;
         else
         {
-            auto prev = *cur_column_file_reader;
+            (*cur_column_file_reader).reset();
             ++cur_column_file_reader;
-            prev.reset();
         }
     }
     return 0;
@@ -58,9 +57,8 @@ Block ColumnFileSetInputStream::read()
         }
         else
         {
-            auto prev = *cur_column_file_reader;
+            (*cur_column_file_reader).reset();
             ++cur_column_file_reader;
-            prev.reset();
         }
     }
     return {};
