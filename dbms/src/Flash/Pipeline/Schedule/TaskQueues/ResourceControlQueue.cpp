@@ -120,16 +120,6 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             const ResourceGroupInfo & group_info = resource_group_infos.top();
             const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
 
-            LOG_TRACE(
-                logger,
-                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
-                "task_queue.empty(): {}",
-                group_info.name,
-                group_info.priority,
-                ru_exhausted,
-                is_finished,
-                group_info.task_queue->empty());
-
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
             if (!ru_exhausted)
@@ -138,6 +128,18 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 return true;
             }
             wait_dura = LocalAdmissionController::global_instance->estWaitDuraMS(group_info.name);
+
+            LOG_DEBUG(
+                logger,
+                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
+                "task_queue.empty(): {}, wait_dura: {}",
+                group_info.name,
+                group_info.priority,
+                ru_exhausted,
+                is_finished,
+                group_info.task_queue->empty(),
+                wait_dura);
+
         }
 
         assert(!task);
