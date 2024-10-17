@@ -156,6 +156,7 @@ bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr &
 {
     if (pool->getFreeBlockSlots() <= 0)
     {
+        LOG_DEBUG(Logger::get(), "gjt debug needScheduleToRead failed: {}", pool->getFreeBlockSlotsInfo());
         GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_slot).Increment();
         return false;
     }

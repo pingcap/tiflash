@@ -74,7 +74,9 @@ public:
     void registerPipeTask(TaskPtr && task)
     {
         {
+            const auto pipe_task_cnt = pipe_cv.getTaskCnt();
             std::lock_guard lock(mu);
+            LOG_DEBUG(Logger::get(), "gjt debug registerPipTask queue size: {}, done: {}", queue.size(), done, pipe_task_cnt);
             if (queue.empty() && !done)
             {
                 pipe_cv.registerTask(std::move(task));

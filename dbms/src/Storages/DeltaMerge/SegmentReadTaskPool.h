@@ -202,6 +202,11 @@ public:
 
     const LoggerPtr & getLogger() const { return log; }
 
+    String getFreeBlockSlotsInfo() const
+    {
+        return fmt::format("block_slot_limit: {}, pending: {}",
+                block_slot_limit, blk_stat.pendingCount());
+    }
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
