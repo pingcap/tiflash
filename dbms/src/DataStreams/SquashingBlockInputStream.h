@@ -22,7 +22,7 @@ namespace DB
 {
 /** Merging consecutive blocks of stream to specified minimum size.
   */
-class SquashingBlockInputStream : public IProfilingBlockInputStream
+class SquashingBlockInputStream : public IBlockInputStream
 {
     static constexpr auto NAME = "Squashing";
 
@@ -37,8 +37,7 @@ public:
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 
-protected:
-    Block readImpl() override;
+    Block read() override;
 
 private:
     const LoggerPtr log;

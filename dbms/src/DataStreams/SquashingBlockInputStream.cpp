@@ -28,7 +28,7 @@ SquashingBlockInputStream::SquashingBlockInputStream(
 }
 
 
-Block SquashingBlockInputStream::readImpl()
+Block SquashingBlockInputStream::read()
 {
     if (all_read)
         return {};
