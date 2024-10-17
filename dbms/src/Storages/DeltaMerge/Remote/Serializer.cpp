@@ -231,8 +231,6 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
 {
     auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
     auto ret = std::make_shared<ColumnFileSetSnapshot>(empty_data_provider);
-    ret->is_common_handle = segment_range.is_common_handle;
-    ret->rowkey_column_size = segment_range.rowkey_column_size;
     ret->column_files.reserve(proto.size());
     for (const auto & remote_column_file : proto)
     {

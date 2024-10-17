@@ -516,7 +516,9 @@ bool shouldCompactDeltaWithStable(
     double invalid_data_ratio_threshold,
     const LoggerPtr & log)
 {
-    auto actual_delete_range = snap->delta->getSquashDeleteRange().shrink(segment_range);
+    auto actual_delete_range
+        = snap->delta->getSquashDeleteRange(segment_range.is_common_handle, segment_range.rowkey_column_size)
+              .shrink(segment_range);
     if (actual_delete_range.none())
         return false;
 
