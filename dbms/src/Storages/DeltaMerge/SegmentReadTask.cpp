@@ -112,6 +112,7 @@ SegmentReadTask::SegmentReadTask(
         ranges.push_back(RowKeyRange::deserialize(rb));
     }
 
+    // The index page of ColumnFileTiny is also included.
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
     {
@@ -130,6 +131,19 @@ SegmentReadTask::SegmentReadTask(
                 remote_page_ids.emplace_back(tiny->getDataPageId());
                 remote_page_sizes.emplace_back(tiny->getDataPageSize());
                 ++count;
+                // Add vector index pages.
+                if (auto index_infos = tiny->getIndexInfos(); index_infos)
+                {
+                    for (const auto & index_info : *index_infos)
+                    {
+                        if (index_info.vector_index)
+                        {
+                            remote_page_ids.emplace_back(index_info.index_page_id);
+                            remote_page_sizes.emplace_back(index_info.vector_index->index_bytes());
+                            ++count;
+                        }
+                    }
+                }
             }
         }
         return count;

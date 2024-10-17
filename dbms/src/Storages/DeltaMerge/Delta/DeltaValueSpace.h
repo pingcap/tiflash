@@ -338,6 +338,16 @@ public:
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
+template <class ColumnFileT>
+struct CloneColumnFilesHelper
+{
+    static std::vector<ColumnFileT> clone(
+        DMContext & dm_context,
+        const std::vector<ColumnFileT> & src,
+        const RowKeyRange & target_range,
+        WriteBatches & wbs);
+};
+
 class DeltaValueSnapshot
     : public std::enable_shared_from_this<DeltaValueSnapshot>
     , private boost::noncopyable

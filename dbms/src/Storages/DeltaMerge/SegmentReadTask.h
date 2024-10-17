@@ -50,6 +50,7 @@ struct ExtraRemoteSegmentInfo
     String store_address;
     // DisaggTaskId is corresponding to a storage snapshot in write node.
     // Returned by EstablishDisaggTask and used by FetchDisaggPages.
+    // The index pages of ColumnFileTiny are also included.
     DisaggTaskId snapshot_id;
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;

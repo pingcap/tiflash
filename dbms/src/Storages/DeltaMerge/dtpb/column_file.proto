@@ -16,6 +16,8 @@ syntax = "proto2";
 
 package dtpb;
 
+import "vector_index.proto"; // for VectorIndexFileProps
+
 message ColumnFileBig {
     required uint64 id = 1;
     required uint64 valid_rows = 2;
@@ -40,11 +42,17 @@ message ColumnSchema {
     required string column_type = 3;
 }
 
+message IndexInfo {
+    required uint64 index_page_id = 1; // which page it stores
+    optional VectorIndexFileProps vector_index = 2; // vector index file properties, needed when read
+}
+
 message ColumnFileTiny {
     repeated ColumnSchema columns = 1;
     required uint64 id = 2;
     required uint64 rows = 3;
     required uint64 bytes = 4;
+    repeated IndexInfo indexes = 5;
 }
 
 enum ColumnFileType {
