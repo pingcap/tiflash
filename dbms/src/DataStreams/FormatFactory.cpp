@@ -28,6 +28,8 @@
 #include <DataStreams/NullBlockOutputStream.h>
 #include <DataStreams/PrettyCompactBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
+#include <DataStreams/TabSeparatedRowInputStream.h>
+#include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/ValuesRowInputStream.h>
 #include <DataStreams/ValuesRowOutputStream.h>
 #include <DataTypes/FormatSettingsJSON.h>
@@ -70,6 +72,14 @@ BlockInputStreamPtr FormatFactory::getInput(
     {
         return wrap_row_stream(std::make_shared<BinaryRowInputStream>(buf, sample));
     }
+    else if (name == "TabSeparated" || name == "TSV") /// TSV is a synonym/alias for the original TabSeparated format
+    {
+        return wrap_row_stream(std::make_shared<TabSeparatedRowInputStream>(buf, sample));
+    }
+    else if (name == "TabSeparatedWithNames" || name == "TSVWithNames")
+    {
+        return wrap_row_stream(std::make_shared<TabSeparatedRowInputStream>(buf, sample, true));
+    }
     else if (name == "Values")
     {
         return wrap_row_stream(std::make_shared<ValuesRowInputStream>(
@@ -108,6 +118,14 @@ static BlockOutputStreamPtr getOutputImpl(
     else if (name == "RowBinary")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(
             std::make_shared<BinaryRowOutputStream>(buf),
+            sample);
+    else if (name == "TabSeparated" || name == "TSV")
+        return std::make_shared<BlockOutputStreamFromRowOutputStream>(
+            std::make_shared<TabSeparatedRowOutputStream>(buf, sample),
+            sample);
+    else if (name == "TabSeparatedWithNames" || name == "TSVWithNames")
+        return std::make_shared<BlockOutputStreamFromRowOutputStream>(
+            std::make_shared<TabSeparatedRowOutputStream>(buf, sample, true),
             sample);
     else if (name == "PrettyCompactNoEscapes")
         return std::make_shared<PrettyCompactBlockOutputStream>(

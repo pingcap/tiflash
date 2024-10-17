@@ -77,7 +77,9 @@ public:
         PageIdU64 segment_id,
         UInt64 write_rows = 100,
         std::optional<Int64> start_at = std::nullopt,
-        bool clear = false);
+        bool clear = false,
+        std::optional<size_t> pack_size = std::nullopt,
+        bool check_range = true);
     void ingestDTFileByReplace(
         PageIdU64 segment_id,
         UInt64 write_rows = 100,
@@ -169,6 +171,13 @@ protected:
 
 private:
     SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings);
+
+    BlockInputStreamPtr getIngestDTFileInputStream(
+        PageIdU64 segment_id,
+        UInt64 write_rows,
+        std::optional<Int64> start_at,
+        std::optional<size_t> pack_size,
+        bool check_range);
 
 protected:
     inline static constexpr PageIdU64 NAMESPACE_ID = 100;

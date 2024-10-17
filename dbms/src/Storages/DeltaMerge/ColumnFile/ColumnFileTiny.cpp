@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -26,10 +27,9 @@
 #include <memory>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 Columns ColumnFileTiny::readFromCache(const ColumnDefines & column_defines, size_t col_start, size_t col_end) const
 {
     if (!cache)
@@ -149,7 +149,8 @@ void ColumnFileTiny::fillColumns(
 ColumnFileReaderPtr ColumnFileTiny::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr & data_provider,
-    const ColumnDefinesPtr & col_defs) const
+    const ColumnDefinesPtr & col_defs,
+    ReadTag) const
 {
     return std::make_shared<ColumnFileTinyReader>(*this, data_provider, col_defs);
 }
@@ -425,58 +426,6 @@ void ColumnFileTiny::removeData(WriteBatches & wbs) const
     wbs.removed_log.delPage(data_page_id);
 }
 
-ColumnPtr ColumnFileTinyReader::getPKColumn()
-{
-    tiny_file.fillColumns(data_provider, *col_defs, 1, cols_data_cache);
-    return cols_data_cache[0];
-}
-
-ColumnPtr ColumnFileTinyReader::getVersionColumn()
-{
-    tiny_file.fillColumns(data_provider, *col_defs, 2, cols_data_cache);
-    return cols_data_cache[1];
-}
-
-std::pair<size_t, size_t> ColumnFileTinyReader::readRows(
-    MutableColumns & output_cols,
-    size_t rows_offset,
-    size_t rows_limit,
-    const RowKeyRange * range)
-{
-    tiny_file.fillColumns(data_provider, *col_defs, output_cols.size(), cols_data_cache);
-
-    auto & pk_col = cols_data_cache[0];
-    return copyColumnsData(cols_data_cache, pk_col, output_cols, rows_offset, rows_limit, range);
-}
-
-Block ColumnFileTinyReader::readNextBlock()
-{
-    if (read_done)
-        return {};
-
-    Columns columns;
-    tiny_file.fillColumns(data_provider, *col_defs, col_defs->size(), columns);
-
-    read_done = true;
-
-    return genBlock(*col_defs, columns);
-}
-
-size_t ColumnFileTinyReader::skipNextBlock()
-{
-    if (read_done)
-        return 0;
-
-    read_done = true;
-    return tiny_file.getRows();
-}
-
-ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
-{
-    // Reuse the cache data.
-    return std::make_shared<ColumnFileTinyReader>(tiny_file, data_provider, new_col_defs, cols_data_cache);
-}
-
 ColumnFileTiny::ColumnFileTiny(
     const ColumnFileSchemaPtr & schema_,
     UInt64 rows_,
@@ -493,5 +442,4 @@ ColumnFileTiny::ColumnFileTiny(
     , cache(cache_)
 {}
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

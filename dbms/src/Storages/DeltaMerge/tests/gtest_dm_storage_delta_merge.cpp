@@ -145,9 +145,10 @@ try
     BlockInputStreamPtr in = ins[0];
     ASSERT_INPUTSTREAM_BLOCK_UR(
         in,
-        Block(
-            {createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), "col1"),
-             createColumn<String>(Strings(num_rows_write, "a"), "col2")}));
+        Block({
+            createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), "col1"),
+            createColumn<String>(Strings(num_rows_write, "a"), "col2"),
+        }));
 
     auto store_status = storage->status();
     Block status = store_status->read();
