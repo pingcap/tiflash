@@ -27,6 +27,8 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/S3Common.h>
 
+#include <magic_enum.hpp>
+
 namespace ProfileEvents
 {
 extern const Event DMFileFilterNoFilter;
@@ -153,6 +155,33 @@ private:
             std::vector<RSOperatorPtr> handle_filters;
             for (auto & rowkey_range : rowkey_ranges)
                 handle_filters.emplace_back(toFilter(rowkey_range));
+#ifndef NDEBUG
+            // sanity check under debug mode to ensure the rowkey_range is correct common-handle or int64-handle
+            if (!rowkey_ranges.empty())
+            {
+                bool is_common_handle = rowkey_ranges.begin()->is_common_handle;
+                auto handle_col_type = dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type;
+                if (is_common_handle)
+                    RUNTIME_CHECK_MSG(
+                        handle_col_type->getTypeId() == TypeIndex::String,
+                        "handle_col_type_id={}",
+                        magic_enum::enum_name(handle_col_type->getTypeId()));
+                else
+                    RUNTIME_CHECK_MSG(
+                        handle_col_type->getTypeId() == TypeIndex::Int64,
+                        "handle_col_type_id={}",
+                        magic_enum::enum_name(handle_col_type->getTypeId()));
+                for (size_t i = 1; i < rowkey_ranges.size(); ++i)
+                {
+                    RUNTIME_CHECK_MSG(
+                        is_common_handle == rowkey_ranges[i].is_common_handle,
+                        "i={} is_common_handle={} ith.is_common_handle={}",
+                        i,
+                        is_common_handle,
+                        rowkey_ranges[i].is_common_handle);
+                }
+            }
+#endif
             for (size_t i = 0; i < pack_count; ++i)
             {
                 handle_res[i] = RSResult::None;
