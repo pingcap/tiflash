@@ -179,7 +179,17 @@ private:
         auto needle = c1_const->getValue<String>();
         auto replacement = c2_const->getValue<String>();
 
-        if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
+        if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
+        {
+            std::string result_value;
+            const auto * src_const = typeid_cast<const ColumnConst *>(column_src.get());
+            auto src = src_const->getValue<String>();
+            Impl::constant(src, needle, replacement, pos, occ, match_type, collator, result_value);
+            auto col_res = ColumnString::create();
+            col_res->insert(result_value);
+            column_result.column = std::move(col_res);
+        }
+        else if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
             Impl::vector(
@@ -232,7 +242,25 @@ private:
             const auto * col_replacement_const = typeid_cast<const ColumnConst *>(column_replacement.get());
             auto replacement = col_replacement_const->getValue<String>();
 
-            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+
+                Impl::vectorConstSrcAndReplace(
+                    col_const->getValue<String>(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    replacement,
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
+
+                column_result.column = std::move(col_res);
+            }
+            else if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstNeedle(
@@ -292,7 +320,24 @@ private:
             auto needle = col_needle_const->getValue<String>();
             const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
 
-            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+
+                Impl::vectorConstSrcAndNeedle(
+                    col_const->getValue<String>(),
+                    needle,
+                    col_replacement->getChars(),
+                    col_replacement->getOffsets(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
+                column_result.column = std::move(col_res);
+            }
+            else if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstReplacement(
@@ -351,7 +396,25 @@ private:
             const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
             const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
 
-            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            if (const auto * col_const = checkAndGetColumnConst<ColumnString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+
+                Impl::vectorConstSrc(
+                    col_const->getValue<String>(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    col_replacement->getChars(),
+                    col_replacement->getOffsets(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
+                column_result.column = std::move(col_res);
+            }
+            else if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstNeedleReplacement(
