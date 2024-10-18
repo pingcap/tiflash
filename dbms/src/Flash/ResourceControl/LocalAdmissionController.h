@@ -774,10 +774,10 @@ private:
     void consume()
     {
         assert(delta_bytes != 0);
-        if (!resource_group_name.empty())
-            LocalAdmissionController::global_instance->consumeBytesResource(
-                resource_group_name,
-                bytesToRU(delta_bytes));
+        // if (!resource_group_name.empty())
+        //     LocalAdmissionController::global_instance->consumeBytesResource(
+        //         resource_group_name,
+        //         bytesToRU(delta_bytes));
     }
 
     const std::string resource_group_name;
