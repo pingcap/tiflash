@@ -204,8 +204,8 @@ public:
 
     String getFreeBlockSlotsInfo() const
     {
-        return fmt::format("block_slot_limit: {}, pending: {}",
-                block_slot_limit, blk_stat.pendingCount());
+        return fmt::format("block_slot_limit: {}, pending: {}, workqueue: {}",
+                block_slot_limit, blk_stat.pendingCount(), q.getAddr());
     }
 private:
     Int64 getFreeActiveSegmentsUnlock() const;

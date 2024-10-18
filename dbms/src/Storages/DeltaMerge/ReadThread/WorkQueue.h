@@ -20,6 +20,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <queue>
+#include <sstream>
 
 namespace DB::DM
 {
@@ -71,12 +72,20 @@ public:
         , pop_empty_times(0)
     {}
 
+    String getAddr() const
+    {
+        std::stringstream ss;
+        ss << this;
+        return ss.str();
+    }
+
     void registerPipeTask(TaskPtr && task)
     {
         {
             const auto pipe_task_cnt = pipe_cv.getTaskCnt();
             std::lock_guard lock(mu);
-            LOG_DEBUG(Logger::get(), "gjt debug registerPipTask queue size: {}, done: {}, pipe_task_cnt: {}", queue.size(), done, pipe_task_cnt);
+            LOG_DEBUG(Logger::get(), "gjt debug registerPipTask queue size: {}, done: {}, pipe_task_cnt: {}, workqueue: {}",
+                    queue.size(), done, pipe_task_cnt, getAddr());
             if (queue.empty() && !done)
             {
                 pipe_cv.registerTask(std::move(task));
