@@ -47,6 +47,13 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
 {
     RUNTIME_CHECK(client_ptr != nullptr);
     RUNTIME_CHECK(initialize(), remote_fname);
+    // TODO Update parameters
+    prefetch = std::make_unique<PrefetchCache>(
+        1,
+        [this](auto && arg1, auto && arg2) {
+            return readImpl(std::forward<decltype(arg1)>(arg1), std::forward<decltype(arg2)>(arg2));
+        },
+        10);
 }
 
 std::string S3RandomAccessFile::getFileName() const
@@ -63,7 +70,7 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 {
     while (true)
     {
-        auto n = readImpl(buf, size);
+        auto n = prefetch->read(buf, size);
         if (unlikely(n < 0 && isRetryableError(errno)))
         {
             // If it is a retryable error, then initialize again
@@ -151,7 +158,9 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
-    if (!istr.ignore(offset_ - cur_offset))
+    auto ignore_count = offset_ - cur_offset;
+    auto direct_ignore_count = prefetch->skip(ignore_count);
+    if (!istr.ignore(direct_ignore_count))
     {
         LOG_ERROR(log, "Cannot ignore from istream, errmsg={}, cost={}ns", strerror(errno), sw.elapsed());
         return -1;
@@ -182,6 +191,12 @@ bool S3RandomAccessFile::initialize()
 {
     Stopwatch sw;
     bool request_succ = false;
+    if (prefetch != nullptr) {
+        auto to_revert = prefetch->getRevertCount();
+        LOG_INFO(log, "S3 revert cache {}", to_revert);
+        cur_offset -= to_revert;
+    }
+    prefetch = std::make_unique<PrefetchCache>(10, std::bind(&S3RandomAccessFile::readImpl, this, std::placeholders::_1, std::placeholders::_2), 1024 * 1024);
     Aws::S3::Model::GetObjectRequest req;
     req.SetRange(readRangeOfObject());
     client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
