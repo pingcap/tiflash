@@ -173,6 +173,17 @@ void ColumnFileTiny::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool s
     tiny_pb->set_id(data_page_id);
     tiny_pb->set_rows(rows);
     tiny_pb->set_bytes(bytes);
+
+    if (!index_infos)
+        return;
+
+    for (const auto & index_info : *index_infos)
+    {
+        auto * index_pb = tiny_pb->add_indexes();
+        index_pb->set_index_page_id(index_info.index_page_id);
+        if (index_info.vector_index.has_value())
+            index_pb->mutable_vector_index()->CopyFrom(*index_info.vector_index);
+    }
 }
 
 ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
@@ -224,8 +235,17 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
     PageIdU64 data_page_id = cf_pb.id();
     size_t rows = cf_pb.rows();
     size_t bytes = cf_pb.bytes();
+    auto index_infos = std::make_shared<IndexInfos>();
+    index_infos->reserve(cf_pb.indexes().size());
+    for (const auto & index_pb : cf_pb.indexes())
+    {
+        if (index_pb.has_vector_index())
+            index_infos->emplace_back(index_pb.index_page_id(), index_pb.vector_index());
+        else
+            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+    }
 
-    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context);
+    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context, index_infos);
 }
 
 ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
@@ -236,36 +256,55 @@ ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
     BlockPtr schema,
     PageIdU64 data_page_id,
     size_t rows,
-    size_t bytes)
+    size_t bytes,
+    IndexInfosPtr index_infos)
 {
-    auto new_cf_id = context.storage_pool->newLogPageId();
-    /// Generate a new RemotePage with an entry with data location on S3
-    auto remote_page_id = UniversalPageIdFormat::toFullPageId(
-        UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id),
-        data_page_id);
-    // The `data_file_id` in temp_ps is lock key, we need convert it to data key before write to local ps
-    auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
-    RUNTIME_CHECK(remote_data_location.has_value());
-    auto remote_data_file_lock_key_view = S3::S3FilenameView::fromKey(*remote_data_location->data_file_id);
-    RUNTIME_CHECK(remote_data_file_lock_key_view.isLockFile());
-    auto remote_data_file_key = remote_data_file_lock_key_view.asDataFile().toFullKey();
-    PS::V3::CheckpointLocation new_remote_data_location{
-        .data_file_id = std::make_shared<String>(remote_data_file_key),
-        .offset_in_file = remote_data_location->offset_in_file,
-        .size_in_file = remote_data_location->size_in_file,
+    auto put_remote_page = [&](PageIdU64 page_id) {
+        auto new_cf_id = context.storage_pool->newLogPageId();
+        /// Generate a new RemotePage with an entry with data location on S3
+        auto remote_page_id = UniversalPageIdFormat::toFullPageId(
+            UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id),
+            page_id);
+        // The `data_file_id` in temp_ps is lock key, we need convert it to data key before write to local ps
+        auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
+        RUNTIME_CHECK(remote_data_location.has_value());
+        auto remote_data_file_lock_key_view = S3::S3FilenameView::fromKey(*remote_data_location->data_file_id);
+        RUNTIME_CHECK(remote_data_file_lock_key_view.isLockFile());
+        auto remote_data_file_key = remote_data_file_lock_key_view.asDataFile().toFullKey();
+        PS::V3::CheckpointLocation new_remote_data_location{
+            .data_file_id = std::make_shared<String>(remote_data_file_key),
+            .offset_in_file = remote_data_location->offset_in_file,
+            .size_in_file = remote_data_location->size_in_file,
+        };
+        // TODO: merge the `getEntry` and `getCheckpointLocation`
+        auto entry = temp_ps->getEntry(remote_page_id);
+        LOG_DEBUG(
+            parent_log,
+            "Write remote page to local, page_id={} remote_location={} remote_page_id={}",
+            new_cf_id,
+            new_remote_data_location.toDebugString(),
+            remote_page_id);
+        wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
+        return new_cf_id;
     };
-    // TODO: merge the `getEntry` and `getCheckpointLocation`
-    auto entry = temp_ps->getEntry(remote_page_id);
-    LOG_DEBUG(
-        parent_log,
-        "Write remote page to local, page_id={} remote_location={} remote_page_id={}",
-        new_cf_id,
-        new_remote_data_location.toDebugString(),
-        remote_page_id);
-    wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
 
+    // Write column data page to local ps
+    auto new_cf_id = put_remote_page(data_page_id);
     auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);
-    return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context);
+    if (!index_infos)
+        return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context);
+
+    // Write index data page to local ps
+    auto new_index_infos = std::make_shared<IndexInfos>();
+    for (const auto & index : *index_infos)
+    {
+        auto new_index_page_id = put_remote_page(index.index_page_id);
+        if (index.vector_index)
+            new_index_infos->emplace_back(new_index_page_id, index.vector_index);
+        else
+            new_index_infos->emplace_back(new_index_page_id, std::nullopt);
+    }
+    return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context, new_index_infos);
 }
 
 std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
@@ -289,7 +328,7 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     readIntBinary(bytes, buf);
 
     return {
-        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes),
+        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes, nullptr),
         schema,
     };
 }
@@ -310,9 +349,18 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     PageIdU64 data_page_id = cf_pb.id();
     size_t rows = cf_pb.rows();
     size_t bytes = cf_pb.bytes();
+    auto index_infos = std::make_shared<IndexInfos>();
+    index_infos->reserve(cf_pb.indexes().size());
+    for (const auto & index_pb : cf_pb.indexes())
+    {
+        if (index_pb.has_vector_index())
+            index_infos->emplace_back(index_pb.index_page_id(), index_pb.vector_index());
+        else
+            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+    }
 
     return {
-        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes),
+        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes, index_infos),
         schema,
     };
 }
@@ -363,7 +411,7 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
     auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
 
     auto bytes = block.bytes(offset, limit);
-    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, context, cache);
+    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, context, nullptr, cache);
 }
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(
@@ -424,6 +472,11 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
 void ColumnFileTiny::removeData(WriteBatches & wbs) const
 {
     wbs.removed_log.delPage(data_page_id);
+    if (index_infos)
+    {
+        for (const auto & index_info : *index_infos)
+            wbs.removed_log.delPage(index_info.index_page_id);
+    }
 }
 
 ColumnFileTiny::ColumnFileTiny(
@@ -432,11 +485,13 @@ ColumnFileTiny::ColumnFileTiny(
     UInt64 bytes_,
     PageIdU64 data_page_id_,
     const DMContext & dm_context,
+    const IndexInfosPtr & index_infos_,
     const CachePtr & cache_)
     : schema(schema_)
     , rows(rows_)
     , bytes(bytes_)
     , data_page_id(data_page_id_)
+    , index_infos(index_infos_)
     , keyspace_id(dm_context.keyspace_id)
     , file_provider(dm_context.global_context.getFileProvider())
     , cache(cache_)
