@@ -80,8 +80,13 @@ public:
         TaskScheduler::instance->submit(std::move(task));
     }
 
+    size_t getTaskCnt() const
+    {
+        std::lock_guard lock(mu);
+        return tasks.size();
+    }
 private:
-    std::mutex mu;
+    mutable std::mutex mu;
     std::deque<TaskPtr> tasks;
 };
 } // namespace DB

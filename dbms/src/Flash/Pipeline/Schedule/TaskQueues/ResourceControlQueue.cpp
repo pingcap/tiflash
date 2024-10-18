@@ -115,29 +115,34 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             continue;
 
         UInt64 wait_dura = LocalAdmissionController::DEFAULT_FETCH_GAC_INTERVAL_MS;
+        LOG_DEBUG(logger, "gjt debug RCQ::take() wait_dura: {}, resource_group_infos: {}",
+                wait_dura, resource_group_infos.size());
         if (!resource_group_infos.empty())
         {
             const ResourceGroupInfo & group_info = resource_group_infos.top();
             const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
 
-            LOG_TRACE(
-                logger,
-                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
-                "task_queue.empty(): {}",
-                group_info.name,
-                group_info.priority,
-                ru_exhausted,
-                is_finished,
-                group_info.task_queue->empty());
-
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
             if (!ru_exhausted)
             {
+                LOG_DEBUG(logger, "gjt debug RCQ::take() ru enough, returns ok");
                 mustTakeTask(group_info.task_queue, task);
                 return true;
             }
             wait_dura = LocalAdmissionController::global_instance->estWaitDuraMS(group_info.name);
+
+            LOG_DEBUG(
+                logger,
+                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
+                "task_queue.empty(): {}, wait_dura: {}",
+                group_info.name,
+                group_info.priority,
+                ru_exhausted,
+                is_finished,
+                group_info.task_queue->empty(),
+                wait_dura);
+
         }
 
         assert(!task);
