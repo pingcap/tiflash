@@ -3432,12 +3432,18 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         ReadTag::Query);
 
     // construct late materialization stream
-    return std::make_shared<LateMaterializationBlockInputStream>(
+    auto stream = std::make_shared<LateMaterializationBlockInputStream>(
         columns_to_read,
         filter->filter_column_name,
         filter_column_stream,
         rest_column_stream,
         bitmap_filter,
+        dm_context.tracing_id);
+    // Squash blocks to reduce the number of blocks.
+    return std::make_shared<SquashingBlockInputStream>(
+        stream,
+        /*min_block_size_rows=*/expected_block_size,
+        /*min_block_size_bytes=*/0,
         dm_context.tracing_id);
 }
 

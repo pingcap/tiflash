@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
-#include <DataStreams/SquashingBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Storages/IStorage.h>
