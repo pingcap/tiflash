@@ -66,8 +66,16 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
     switch (type_id)
     {
     case TypeIndex::UInt8:
-        for (size_t i = 0; i < opts.size; ++i)
-            genUInt<UInt8>(col);
+        if (opts.gen_bool)
+        {
+            for (size_t i = 0; i < opts.size; ++i)
+                genBool<false>(col);
+        }
+        else
+        {
+            for (size_t i = 0; i < opts.size; ++i)
+                genUInt<UInt8>(col);
+        }
         break;
     case TypeIndex::UInt16:
         for (size_t i = 0; i < opts.size; ++i)
@@ -214,9 +222,13 @@ void ColumnGenerator::genUInt(MutableColumnPtr & col)
     col->insert(f);
 }
 
+template <bool two_value>
 void ColumnGenerator::genBool(MutableColumnPtr & col)
 {
-    Field f = static_cast<UInt64>(static_cast<UInt64>(rand_gen()) % 8 == 0);
+    auto res = rand_gen() % 8;
+    if constexpr (two_value)
+        res = res == 0;
+    Field f = static_cast<UInt64>(static_cast<UInt64>(res));
     col->insert(f);
 }
 
