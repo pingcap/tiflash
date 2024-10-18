@@ -43,7 +43,10 @@ protected:
         return createColumn<Nullable<String>>(v);
     }
 
-    ColumnWithTypeAndName toConst(const String & s) { return createConstColumn<Nullable<String>>(1, s); }
+    ColumnWithTypeAndName toConst(const String & s, size_t size = 1)
+    {
+        return createConstColumn<Nullable<String>>(size, s);
+    }
 };
 
 TEST_F(StringReplace, string_replace_all_unit_Test)
@@ -104,6 +107,33 @@ try
             toVec({"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"}),
             toVec({" ", "h", "", "h", ","}),
             toVec({"", "x", "xx", " ", ","})));
+
+    /// const src replacement
+    ASSERT_COLUMN_EQ(
+        toVec({"Good Night", "Bad Afternoon", "Good Afterwhile"}),
+        executeFunction(
+            "replaceAll",
+            toConst("Good Afternoon", 3),
+            toVec({"Afternoon", "Good", "noon"}),
+            toVec({"Night", "Bad", "while"})));
+
+    /// const src and needle replacement
+    ASSERT_COLUMN_EQ(
+        toVec({"Good Night", "Good Bad", "Good while"}),
+        executeFunction(
+            "replaceAll",
+            toConst("Good Afternoon", 3),
+            toConst("Afternoon", 3),
+            toVec({"Night", "Bad", "while"})));
+
+    /// const src and replace replacement
+    ASSERT_COLUMN_EQ(
+        toVec({"Good Night", "Night Afternoon", "Good AfterNight"}),
+        executeFunction(
+            "replaceAll",
+            toConst("Good Afternoon", 3),
+            toVec({"Afternoon", "Good", "noon"}),
+            toConst("Night", 3)));
 }
 CATCH
 
