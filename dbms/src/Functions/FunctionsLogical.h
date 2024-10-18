@@ -730,7 +730,7 @@ public:
         if (result_is_nullable)
             vec_res_is_null.assign(rows, static_cast<UInt8>(0));
 
-        bool has_not_null_column;
+        bool has_not_null_column = false;
         // first handle not-null column
         if (!not_null_uint8_columns.empty())
         {
