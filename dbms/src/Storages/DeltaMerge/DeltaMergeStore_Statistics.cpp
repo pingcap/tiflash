@@ -234,6 +234,9 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
             // Delta
             {
                 const auto & delta = segment->getDelta();
+                auto lock = delta->getLock();
+                if (!lock)
+                    continue;
                 const auto & mem_table = delta->getMemTableSet();
                 index_stats.rows_delta_not_indexed += mem_table->getRows();
                 const auto & persisted = delta->getPersistedFileSet();
