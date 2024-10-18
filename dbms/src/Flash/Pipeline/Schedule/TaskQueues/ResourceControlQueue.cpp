@@ -115,6 +115,8 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             continue;
 
         UInt64 wait_dura = LocalAdmissionController::DEFAULT_FETCH_GAC_INTERVAL_MS;
+        LOG_DEBUG(logger, "gjt debug RCQ::take() wait_dura: {}, resource_group_infos: {}",
+                wait_dura, resource_group_infos.size());
         if (!resource_group_infos.empty())
         {
             const ResourceGroupInfo & group_info = resource_group_infos.top();
@@ -124,6 +126,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             // Should not take any task from nested task queue for this situation.
             if (!ru_exhausted)
             {
+                LOG_DEBUG(logger, "gjt debug RCQ::take() ru enough, returns ok");
                 mustTakeTask(group_info.task_queue, task);
                 return true;
             }
