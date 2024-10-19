@@ -432,8 +432,8 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
         compression_method,
         original_size);
 
-    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
-        return;
+    // if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+    //     return;
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
@@ -457,8 +457,8 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
         num_columns,
         result_field_types);
 
-    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
-        return;
+    // if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+    //     return;
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
