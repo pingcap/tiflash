@@ -242,9 +242,7 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
                 const auto & persisted = delta->getPersistedFileSet();
                 for (const auto & file : persisted->getFiles())
                 {
-                    // TODO: this is not efficient, we can maintain the indexed_rows in ColumnFilePersisted
-                    const auto * tiny_file = file->tryToTinyFile();
-                    if (tiny_file)
+                    if (const auto * tiny_file = file->tryToTinyFile(); tiny_file)
                     {
                         if (tiny_file->hasIndex(index_stats.index_id))
                             index_stats.rows_delta_indexed += tiny_file->getRows();

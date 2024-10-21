@@ -38,6 +38,7 @@ class ColumnFileTiny : public ColumnFilePersisted
 public:
     friend class ColumnFileTinyReader;
     friend class ColumnFileTinyVectorIndexWriter;
+    friend class ColumnFileTinyVectorIndexReader;
     friend struct Remote::Serializer;
 
     struct IndexInfo

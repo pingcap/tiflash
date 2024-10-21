@@ -25,6 +25,7 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetWithVectorIndexInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -1607,6 +1608,8 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
             auto prepared = remote_data_store->prepareDMFile(file_oid, new_data_page_id);
             auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), b->getFile()->metaVersion());
             auto new_column_file = b->cloneWith(dm_context, dmfile, rowkey_range);
+            // TODO: Do we need to acquire new page id for ColumnFileTiny index page?
+            // Maybe we even do not need to clone data page: https://github.com/pingcap/tiflash/pull/9436
             new_column_file_persisteds.push_back(new_column_file);
         }
         else
@@ -3327,11 +3330,15 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
         columns_to_read_ptr,
         this->rowkey_range,
         read_tag);
-    SkippableBlockInputStreamPtr persisted_files_stream = std::make_shared<ColumnFileSetInputStream>(
+    SkippableBlockInputStreamPtr persisted_files_stream = ColumnFileSetWithVectorIndexInputStream::tryBuild(
         dm_context,
         persisted_files,
         columns_to_read_ptr,
         this->rowkey_range,
+        persisted_files->getDataProvider(),
+        filter,
+        bitmap_filter,
+        segment_snap->stable->getDMFilesRows(),
         read_tag);
 
     auto stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<NeedRowID>>(stable_stream);

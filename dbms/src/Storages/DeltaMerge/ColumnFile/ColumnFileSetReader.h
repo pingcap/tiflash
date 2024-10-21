@@ -25,6 +25,7 @@ namespace DB::DM
 class ColumnFileSetReader
 {
     friend class ColumnFileSetInputStream;
+    friend class ColumnFileSetWithVectorIndexInputStream;
 
 private:
     const DMContext & context;

@@ -62,6 +62,7 @@ private:
     std::thread cleaner_thread;
 
 public:
+    static constexpr const char * COLUMNFILETINY_INDEX_NAME_PREFIX = "vec_index_page_";
     explicit VectorIndexCache(size_t max_entities);
 
     ~VectorIndexCache();
@@ -69,6 +70,7 @@ public:
     template <typename LoadFunc>
     Cache::MappedPtr getOrSet(const Cache::Key & file_path, LoadFunc && load)
     {
+        if (!file_path.starts_with(COLUMNFILETINY_INDEX_NAME_PREFIX))
         {
             std::scoped_lock lock(mu);
             files_to_check.insert(file_path);

@@ -156,7 +156,9 @@ public:
 
     bool appendPersistedColumnFiles(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
 
-    bool updatePersistedColumnFiles(const ColumnFilePersisteds & new_persisted_files, WriteBatches & wbs);
+    bool updatePersistedColumnFilesAfterAddingIndex(
+        const ColumnFilePersisteds & new_persisted_files,
+        WriteBatches & wbs);
 
     /// Choose all small column files that can be compacted to larger column files
     MinorCompactionPtr pickUpMinorCompaction(DMContext & context);
