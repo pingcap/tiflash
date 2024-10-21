@@ -1380,7 +1380,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
     assertStreamOut(stream, "[4, 5)");
@@ -1405,7 +1405,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20);
 
@@ -1436,7 +1436,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     // Delta: [12, 18), [50, 60)
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 6, /* at */ 12);
@@ -1486,7 +1486,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     size_t cache_hit = 0;
     size_t cache_miss = 0;
@@ -1529,7 +1529,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     size_t cache_hit = 0;
     size_t cache_miss = 0;
@@ -1574,7 +1574,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     size_t cache_hit = 0;
     size_t cache_miss = 0;
@@ -1677,7 +1677,7 @@ try
     ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0, /* clear */ false);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ensureSegmentStableIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20);
 

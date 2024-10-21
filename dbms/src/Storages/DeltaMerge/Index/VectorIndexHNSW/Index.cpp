@@ -142,6 +142,18 @@ void VectorIndexHNSWBuilder::save(std::string_view path) const
     RUNTIME_CHECK_MSG(result, "Failed to save vector index: {} path={}", result.error.what(), path);
 }
 
+void VectorIndexHNSWBuilder::save(WriteBuffer & write_buf) const
+{
+    Stopwatch w;
+    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
+
+    auto result = index.save_to_stream([&](void const * buffer, std::size_t length) {
+        write_buf.write(reinterpret_cast<const char *>(buffer), length);
+        return true;
+    });
+    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
+}
+
 VectorIndexHNSWBuilder::~VectorIndexHNSWBuilder()
 {
     GET_METRIC(tiflash_vector_index_duration, type_build).Observe(total_duration);

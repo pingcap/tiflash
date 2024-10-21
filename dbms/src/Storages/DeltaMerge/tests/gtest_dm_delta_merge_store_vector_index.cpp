@@ -119,7 +119,7 @@ public:
                 store->segmentMergeDelta(*dm_context, segment, DeltaMergeStore::MergeDeltaReason::Manual) != nullptr);
     }
 
-    void waitStableIndexReady()
+    void waitStableLocalIndexReady()
     {
         std::vector<SegmentPtr> all_segments;
         {
@@ -128,7 +128,7 @@ public:
                 all_segments.push_back(segment);
         }
         for (const auto & segment : all_segments)
-            ASSERT_TRUE(store->segmentWaitStableIndexReady(segment));
+            ASSERT_TRUE(store->segmentWaitStableLocalIndexReady(segment));
     }
 
     void triggerMergeAllSegments()
@@ -170,7 +170,7 @@ try
     triggerMergeDelta();
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
 
     const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
 
@@ -244,7 +244,7 @@ try
     }
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
 
     // read from store
     {
@@ -282,7 +282,7 @@ try
     triggerMergeAllSegments();
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
 
     auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
 
@@ -350,7 +350,7 @@ try
     if (left == nullptr && right == nullptr)
     {
         // check stable index has built for all segments first
-        waitStableIndexReady();
+        waitStableLocalIndexReady();
         // trigger physical split again
         std::tie(left, right) = physical_split();
     }
@@ -364,7 +364,7 @@ try
         store->rowkey_column_size);
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
 
     // read from store
     {
@@ -402,7 +402,7 @@ try
     triggerMergeAllSegments();
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
 
     auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
 
@@ -488,7 +488,7 @@ try
     }
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
 
     auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
 
@@ -556,7 +556,7 @@ try
     store = reload();
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
     {
         auto local_index_snap = store->getLocalIndexInfosSnapshot();
         ASSERT_NE(local_index_snap, nullptr);
@@ -646,7 +646,7 @@ try
     }
 
     // check stable index has built for all segments
-    waitStableIndexReady();
+    waitStableLocalIndexReady();
 
     const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
 

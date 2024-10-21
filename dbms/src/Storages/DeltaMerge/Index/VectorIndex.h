@@ -58,6 +58,7 @@ public:
         = 0;
 
     virtual void save(std::string_view path) const = 0;
+    virtual void save(WriteBuffer & write_buf) const = 0;
 
 public:
     const IndexID index_id;
