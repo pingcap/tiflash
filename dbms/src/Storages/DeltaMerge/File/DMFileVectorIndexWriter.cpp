@@ -17,8 +17,8 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
+#include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -40,7 +40,7 @@ extern const char exception_build_local_index_for_file[];
 namespace DB::DM
 {
 
-LocalIndexBuildInfo DMFileIndexWriter::getLocalIndexBuildInfo(
+LocalIndexBuildInfo DMFileVectorIndexWriter::getLocalIndexBuildInfo(
     const LocalIndexInfosSnapshot & index_infos,
     const DMFiles & dm_files)
 {
@@ -85,7 +85,8 @@ LocalIndexBuildInfo DMFileIndexWriter::getLocalIndexBuildInfo(
     return build;
 }
 
-size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, ProceedCheckFn should_proceed) const
+size_t DMFileVectorIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, ProceedCheckFn should_proceed)
+    const
 {
     const auto column_defines = dm_file_mutable->getColumnDefines();
     const auto del_cd_iter = std::find_if(column_defines.cbegin(), column_defines.cend(), [](const ColumnDefine & cd) {
@@ -242,7 +243,7 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
     return total_built_index_bytes;
 }
 
-DMFiles DMFileIndexWriter::build(ProceedCheckFn should_proceed) const
+DMFiles DMFileVectorIndexWriter::build(ProceedCheckFn should_proceed) const
 {
     RUNTIME_CHECK(!built);
     // Create a clone of existing DMFile instances by using DMFile::restore,

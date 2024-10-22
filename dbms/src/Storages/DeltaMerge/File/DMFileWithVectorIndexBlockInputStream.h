@@ -17,8 +17,8 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
+#include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
-#include <Storages/DeltaMerge/File/VectorColumnFromIndexReader_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
@@ -56,11 +56,9 @@ public:
     static DMFileWithVectorIndexBlockInputStreamPtr create(
         const ANNQueryInfoPtr & ann_query_info,
         const DMFilePtr & dmfile,
-        Block && header_layout,
+        Block && header,
         DMFileReader && reader,
         ColumnDefine && vec_cd,
-        const FileProviderPtr & file_provider,
-        const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context,
         const VectorIndexCachePtr & vec_index_cache,
         const BitmapFilterView & valid_rows,
@@ -69,11 +67,9 @@ public:
         return std::make_shared<DMFileWithVectorIndexBlockInputStream>(
             ann_query_info,
             dmfile,
-            std::move(header_layout),
+            std::move(header),
             std::move(reader),
             std::move(vec_cd),
-            file_provider,
-            read_limiter,
             scan_context,
             vec_index_cache,
             valid_rows,
@@ -83,11 +79,9 @@ public:
     explicit DMFileWithVectorIndexBlockInputStream(
         const ANNQueryInfoPtr & ann_query_info_,
         const DMFilePtr & dmfile_,
-        Block && header_layout_,
+        Block && header_,
         DMFileReader && reader_,
         ColumnDefine && vec_cd_,
-        const FileProviderPtr & file_provider_,
-        const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
         const VectorIndexCachePtr & vec_index_cache_,
         const BitmapFilterView & valid_rows_,
@@ -141,20 +135,14 @@ private:
 
     // Read data totally from the VectorColumnFromIndexReader. This is used
     // when there is no other column to read.
-    Block readByIndexReader();
+    std::tuple<Block, size_t> readByIndexReader();
 
     // Read data from other columns first, then read from VectorColumnFromIndexReader. This is used
     // when there are other columns to read.
-    Block readByFollowingOtherColumns();
+    std::tuple<Block, size_t> readByFollowingOtherColumns();
 
 private:
     void load();
-
-    void loadVectorIndex();
-
-    void loadVectorSearchResult();
-
-    UInt32 getPackIdFromBlock(const Block & block);
 
 private:
     const LoggerPtr log;
@@ -162,35 +150,27 @@ private:
     const ANNQueryInfoPtr ann_query_info;
     const DMFilePtr dmfile;
 
-    // The header_layout should contain columns from reader and vec_cd
-    Block header_layout;
+    // The header contains columns from reader and vec_cd
+    Block header;
     // Vector column should be excluded in the reader
     DMFileReader reader;
     // Note: ColumnDefine comes from read path does not have vector_index fields.
     const ColumnDefine vec_cd;
-    const FileProviderPtr file_provider;
-    const ReadLimiterPtr read_limiter;
     const ScanContextPtr scan_context;
-    const VectorIndexCachePtr vec_index_cache;
-    const BitmapFilterView valid_rows; // TODO(vector-index): Currently this does not support ColumnFileBig
-
-    Block header; // Filled in constructor;
-
-    std::unordered_map<UInt32, UInt32> start_offset_to_pack_id; // Filled from reader in constructor
+    const DMFileVectorIndexReaderPtr vec_index_reader;
 
     // Set after load().
     VectorIndexViewerPtr vec_index = nullptr;
-    // Set after load().
-    VectorColumnFromIndexReaderPtr vec_column_reader = nullptr;
+    // VectorColumnFromIndexReaderPtr vec_column_reader = nullptr;
     // Set after load(). Used to filter the output rows.
     std::vector<UInt32> sorted_results{}; // Key is rowid
     IColumn::Filter filter;
 
     bool loaded = false;
 
-    double duration_load_vec_index_and_results_seconds = 0;
-    double duration_read_from_vec_index_seconds = 0;
     double duration_read_from_other_columns_seconds = 0;
+    size_t valid_packs_before_search = 0;
+    size_t valid_packs_after_search = 0;
 };
 
 } // namespace DB::DM
