@@ -333,7 +333,7 @@ struct NullableAssociativeOperationImpl
     inline bool applyNotNull(size_t i) const
     {
         bool a = !(*null_map)[i] && static_cast<bool>(vec[i]);
-        return Op::isSaturatedValue(a) ? a : continuation.apply(i);
+        return Op::isSaturatedValue(a) ? a : continuation.applyNotNull(i);
     }
 };
 
