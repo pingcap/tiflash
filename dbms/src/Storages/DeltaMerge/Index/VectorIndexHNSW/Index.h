@@ -35,8 +35,8 @@ public:
 
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed) override;
 
-    void save(std::string_view path) const override;
-    void save(WriteBuffer & write_buf) const override;
+    void saveToFile(std::string_view path) const override;
+    void saveToBuffer(WriteBuffer & write_buf) const override;
 
 private:
     USearchImplType index;

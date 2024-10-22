@@ -133,7 +133,7 @@ void VectorIndexHNSWBuilder::addBlock(
     last_reported_memory_usage = current_memory_usage;
 }
 
-void VectorIndexHNSWBuilder::save(std::string_view path) const
+void VectorIndexHNSWBuilder::saveToFile(std::string_view path) const
 {
     Stopwatch w;
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
@@ -142,7 +142,7 @@ void VectorIndexHNSWBuilder::save(std::string_view path) const
     RUNTIME_CHECK_MSG(result, "Failed to save vector index: {} path={}", result.error.what(), path);
 }
 
-void VectorIndexHNSWBuilder::save(WriteBuffer & write_buf) const
+void VectorIndexHNSWBuilder::saveToBuffer(WriteBuffer & write_buf) const
 {
     Stopwatch w;
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });

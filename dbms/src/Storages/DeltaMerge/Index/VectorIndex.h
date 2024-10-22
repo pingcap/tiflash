@@ -57,8 +57,8 @@ public:
         ProceedCheckFn should_proceed)
         = 0;
 
-    virtual void save(std::string_view path) const = 0;
-    virtual void save(WriteBuffer & write_buf) const = 0;
+    virtual void saveToFile(std::string_view path) const = 0;
+    virtual void saveToBuffer(WriteBuffer & write_buf) const = 0;
 
 public:
     const IndexID index_id;

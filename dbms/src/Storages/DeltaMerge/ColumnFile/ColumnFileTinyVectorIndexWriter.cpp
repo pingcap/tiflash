@@ -171,7 +171,7 @@ ColumnFileTinyPtr ColumnFileTinyVectorIndexWriter::buildIndexForFile(
             auto index_page_id = options.storage_pool->newLogPageId();
             MemoryWriteBuffer write_buf;
             CompressedWriteBuffer compressed(write_buf);
-            index_builder->save(compressed);
+            index_builder->saveToBuffer(compressed);
             compressed.next();
             auto data_size = write_buf.count();
             auto buf = write_buf.tryGetReadBuffer();
