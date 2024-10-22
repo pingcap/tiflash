@@ -992,6 +992,7 @@ public:
 
         for (size_t i = 0; i < num_arguments; ++i)
             has_nullable_input_column |= block.getByPosition(arguments[i]).type->isNullable();
+        bool res_is_nullable = !two_value_logic_op && has_nullable_input_column;
 
         ColumnRawPtrs in(num_arguments);
         for (size_t i = 0; i < num_arguments; ++i)
@@ -1013,7 +1014,7 @@ public:
                     const_val,
                     const_val_is_null,
                     !in.empty(),
-                    has_nullable_input_column))
+                    res_is_nullable))
                 return;
         }
 
@@ -1044,7 +1045,7 @@ public:
                 not_null_uint8_columns,
                 nullable_uint8_columns,
                 null_maps,
-                has_nullable_input_column);
+                res_is_nullable);
         }
         else if (in.size() + static_cast<UInt8>(has_consts) == 2)
         {
@@ -1059,7 +1060,7 @@ public:
                 not_null_uint8_columns,
                 nullable_uint8_columns,
                 null_maps,
-                has_nullable_input_column);
+                res_is_nullable);
         }
         else
         {
@@ -1074,7 +1075,7 @@ public:
                 not_null_uint8_columns,
                 nullable_uint8_columns,
                 null_maps,
-                has_nullable_input_column);
+                res_is_nullable);
         }
     }
 };
