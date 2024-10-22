@@ -964,7 +964,7 @@ String DAGExpressionAnalyzer::buildFilterColumn(
         // connect all the conditions by logical and
         String fun_name = "and";
         if (context.getSettingsRef().use_two_value_logic_op_for_top_filter)
-            fun_name = "and_two_value";
+            fun_name = "two_value_and";
         filter_column_name = applyFunction(fun_name, arg_names, actions, nullptr);
     }
     return filter_column_name;

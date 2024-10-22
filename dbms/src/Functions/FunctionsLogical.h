@@ -53,6 +53,11 @@ struct AndImpl
     static inline bool canConstantBeIgnored(bool a, bool a_is_null) { return !a_is_null && a; }
 
     static inline bool apply(bool a, bool b) { return a && b; }
+    static inline bool applyOneNullableNotNull(bool a, bool a_is_null, bool b) { return !a_is_null && a && b; }
+    static inline bool applyTwoNullableNotNull(bool a, bool a_is_null, bool b, bool b_is_null)
+    {
+        return !a_is_null && a && !b_is_null && b;
+    }
     static inline std::pair<bool, bool> applyTwoNullable(bool a, bool a_is_null, bool b, bool b_is_null)
     {
         // result is null if
@@ -389,7 +394,10 @@ struct NullableAssociativeOperationImpl<Op, 2>
     {
         return Op::applyTwoNullable(a[i], (*a_null_map)[i], b[i], (*b_null_map)[i]);
     }
-    inline bool applyNotNull(size_t i) const { return Op::apply(!(*a_null_map)[i] && a[i], !(*b_null_map)[i] && b[i]); }
+    inline bool applyNotNull(size_t i) const
+    {
+        return Op::applyTwoNullableNotNull(a[i], (*a_null_map)[i], b[i], (*b_null_map)[i]);
+    }
 };
 
 template <typename Op>
@@ -476,6 +484,7 @@ private:
             }
             if constexpr (two_value_logic_op)
             {
+                // treate null as false
                 const_val = const_val_is_null ? false : const_val;
                 const_val_is_null = false;
             }
@@ -649,7 +658,7 @@ public:
             {
                 for (size_t i = 0; i < rows; ++i)
                 {
-                    vec_res[i] = !(*null_maps[0])[i] && col_data[i];
+                    vec_res[i] = !(*null_maps[0])[i] && static_cast<bool>(col_data[i]);
                 }
             }
             else
@@ -733,7 +742,7 @@ public:
                     if constexpr (two_value_logic_op)
                     {
                         for (size_t i = 0; i < rows; ++i)
-                            vec_res[i] = Impl::apply(!null_data[i] && col_data[i], const_val);
+                            vec_res[i] = Impl::applyOneNullableNotNull(col_data[i], null_data[i], const_val);
                     }
                     else
                     {
@@ -761,7 +770,7 @@ public:
                 {
                     for (size_t i = 0; i < rows; ++i)
                     {
-                        vec_res[i] = Impl::apply(!null_map_2[i] && col_2[i], col_1[i]);
+                        vec_res[i] = Impl::applyOneNullableNotNull(col_2[i], null_map_2[i], col_1[i]);
                     }
                 }
                 else
@@ -851,11 +860,6 @@ public:
         // then handle nullable column
         if (!nullable_uint8_columns.empty())
         {
-            if (!result_is_nullable)
-            {
-                // for temperary usage
-                vec_res_is_null.assign(rows, static_cast<UInt8>(0));
-            }
             if (has_not_null_column)
             {
                 // if there is not null column, then need to append the current result
@@ -888,6 +892,11 @@ public:
             }
             else
             {
+                if (!result_is_nullable)
+                {
+                    // for temporary usage in NullableAssociativeOperationImpl
+                    vec_res_is_null.assign(rows, static_cast<UInt8>(0));
+                }
                 while (nullable_uint8_columns.size() > 1)
                 {
                     // micro benchmark shows 4 << 6, 8 outperforms 6 slightly, and performance may decline when set to 10
@@ -1139,14 +1148,14 @@ public:
 
 // clang-format off
 struct NameAnd { static constexpr auto name = "and"; };
-struct NameAndTwoValue { static constexpr auto name = "and_two_value"; };
+struct NameTwoValueAnd { static constexpr auto name = "two_value_and"; };
 struct NameOr { static constexpr auto name = "or"; };
 struct NameXor { static constexpr auto name = "xor"; };
 struct NameNot { static constexpr auto name = "not"; };
 // clang-format on
 
 using FunctionAnd = FunctionAnyArityLogical<AndImpl, NameAnd, true>;
-using FunctionAndTwoValue = FunctionAnyArityLogical<AndImpl, NameAndTwoValue, true, true>;
+using FunctionTwoValueAnd = FunctionAnyArityLogical<AndImpl, NameTwoValueAnd, true, true>;
 using FunctionOr = FunctionAnyArityLogical<OrImpl, NameOr, true>;
 using FunctionXor = FunctionAnyArityLogical<XorImpl, NameXor, false>;
 using FunctionNot = FunctionUnaryLogical<NotImpl, NameNot>;
