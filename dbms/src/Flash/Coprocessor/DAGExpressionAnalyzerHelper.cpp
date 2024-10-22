@@ -555,6 +555,7 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"cast_json_as_string", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
      {"json_unquote", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
      {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+     {"and_two_value", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"not", DAGExpressionAnalyzerHelper::buildLogicalFunction},

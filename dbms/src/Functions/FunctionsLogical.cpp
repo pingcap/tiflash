@@ -21,6 +21,7 @@ namespace DB
 void registerFunctionsLogical(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionAnd>();
+    factory.registerFunction<FunctionAndTwoValue>();
     factory.registerFunction<FunctionOr>();
     factory.registerFunction<FunctionXor>();
     factory.registerFunction<FunctionNot>();
