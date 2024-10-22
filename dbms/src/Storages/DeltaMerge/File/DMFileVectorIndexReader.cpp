@@ -190,7 +190,7 @@ std::vector<VectorIndexViewer::Key> DMFileVectorIndexReader::loadVectorSearchRes
 
 void DMFileVectorIndexReader::read(
     MutableColumnPtr & vec_column,
-    const std::vector<VectorIndexViewer::Key> & row_ids,
+    const std::span<const VectorIndexViewer::Key> & selected_rows,
     size_t start_offset,
     size_t column_size)
 {
@@ -200,7 +200,7 @@ void DMFileVectorIndexReader::read(
     vec_column->reserve(column_size);
     std::vector<Float32> value;
     size_t current_rowid = start_offset;
-    for (auto rowid : row_ids)
+    for (auto rowid : selected_rows)
     {
         vec_index->get(rowid, value);
         if (rowid > current_rowid)

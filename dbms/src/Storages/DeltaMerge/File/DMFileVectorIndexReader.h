@@ -77,7 +77,7 @@ public:
     // return the real number of rows read.
     void read(
         MutableColumnPtr & vec_column,
-        const std::vector<VectorIndexViewer::Key> & row_ids,
+        const std::span<const VectorIndexViewer::Key> & selected_rows,
         size_t start_offset,
         size_t column_size);
 

@@ -168,16 +168,13 @@ std::tuple<Block, size_t> DMFileWithVectorIndexBlockInputStream::readByIndexRead
     size_t read_rows = index_reader_next_row_id - block_start_row_id;
     auto vec_column = vec_cd.type->createColumn();
 
-    std::vector<VectorIndexViewer::Key> row_ids;
-    for (auto row_id : sorted_results)
-    {
-        if (row_id >= block_start_row_id && row_id < index_reader_next_row_id)
-            row_ids.push_back(row_id);
-    }
-    vec_index_reader->read(vec_column, row_ids, block_start_row_id, read_rows);
+    auto begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), block_start_row_id);
+    auto end = std::lower_bound(begin, sorted_results.cend(), index_reader_next_row_id);
+    const std::span block_selected_rows{begin, end};
+    vec_index_reader->read(vec_column, block_selected_rows, block_start_row_id, read_rows);
 
     block.insert(ColumnWithTypeAndName{std::move(vec_column), vec_cd.type, vec_cd.name, vec_cd.id});
-    return {block, row_ids.size()};
+    return {block, block_selected_rows.size()};
 }
 
 std::tuple<Block, size_t> DMFileWithVectorIndexBlockInputStream::readByFollowingOtherColumns()
@@ -199,19 +196,16 @@ std::tuple<Block, size_t> DMFileWithVectorIndexBlockInputStream::readByFollowing
     auto vec_column = vec_cd.type->createColumn();
 
     // Then read from vector index for the same pack.
-    std::vector<VectorIndexViewer::Key> row_ids;
-    for (auto row_id : sorted_results)
-    {
-        if (row_id >= block_others.startOffset() && row_id < block_others.startOffset() + read_rows)
-            row_ids.push_back(row_id);
-    }
-    vec_index_reader->read(vec_column, row_ids, block_others.startOffset(), read_rows);
+    auto begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), block_others.startOffset());
+    auto end = std::lower_bound(begin, sorted_results.cend(), block_others.startOffset() + read_rows);
+    const std::span block_selected_rows{begin, end};
+    vec_index_reader->read(vec_column, block_selected_rows, block_others.startOffset(), read_rows);
 
     // Re-assemble block using the same layout as header.
     // Insert the vector column into the block.
     auto index = header.getPositionByName(vec_cd.name);
     block_others.insert(index, ColumnWithTypeAndName(std::move(vec_column), vec_cd.type, vec_cd.name));
-    return {block_others, row_ids.size()};
+    return {block_others, block_selected_rows.size()};
 }
 
 void DMFileWithVectorIndexBlockInputStream::load()
