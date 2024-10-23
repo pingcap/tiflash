@@ -27,7 +27,9 @@ void bitmapAndStd(benchmark::State & state)
     std::vector<T> b(65536);
     for (auto _ : state)
     {
-        std::transform(a.begin(), a.end(), b.begin(), a.begin(), [](const auto i, const auto j) { return i && j; });
+        std::vector<T> c(65536);
+        std::transform(a.begin(), a.end(), b.begin(), c.begin(), [](const auto i, const auto j) { return i && j; });
+        benchmark::DoNotOptimize(c);
     }
 }
 
