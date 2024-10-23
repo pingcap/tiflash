@@ -26,7 +26,9 @@ void bitmapAndStd(benchmark::State & state)
     std::vector<T> a(65536);
     std::vector<T> b(65536);
     for (auto _ : state)
+    {
         std::transform(a.begin(), a.end(), b.begin(), a.begin(), [](const auto i, const auto j) { return i && j; });
+    }
 }
 
 static void bitmapAndBool(benchmark::State & state)
@@ -42,16 +44,25 @@ static void bitmapAndUInt8(benchmark::State & state)
 template <typename T>
 void bitmapSetRowID(benchmark::State & state)
 {
-    std::vector<T> v(65536, static_cast<T>(0));
-    std::vector<UInt32> row_ids(45678);
+    constexpr size_t bitmap_size = 65536;
+    constexpr size_t rowid_size = 45678;
+
+    std::vector<UInt32> row_ids(rowid_size);
     std::random_device rd;
     std::mt19937 gen(rd());
     for (auto & id : row_ids)
-        id = gen() % v.size();
-
+    {
+        id = gen() % bitmap_size;
+    }
     for (auto _ : state)
+    {
+        std::vector<T> v(bitmap_size, static_cast<T>(0));
         for (auto id : row_ids)
+        {
             v[id] = static_cast<T>(1);
+        }
+        benchmark::DoNotOptimize(v);
+    }
 }
 
 static void bitmapSetRowIDBool(benchmark::State & state)
