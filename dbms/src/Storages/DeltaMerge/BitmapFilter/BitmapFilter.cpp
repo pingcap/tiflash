@@ -93,7 +93,7 @@ void BitmapFilter::rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) con
     auto begin = filter.cbegin() + start;
     if (!all_match)
     {
-        std::transform(f.begin(), f.end(), begin, f.begin(), [](const UInt8 a, const bool b) { return a != 0 && b; });
+        std::transform(f.begin(), f.end(), begin, f.begin(), [](const auto a, const auto b) { return a && b; });
     }
 }
 
