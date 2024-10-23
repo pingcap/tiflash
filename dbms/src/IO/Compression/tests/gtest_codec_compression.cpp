@@ -102,6 +102,7 @@ template <typename T, typename ContainerLeft, typename ContainerRight>
 
     auto l = AsSequenceOf<T>(left);
     auto r = AsSequenceOf<T>(right);
+    size_t i = 0;
 
     while (l && r)
     {
@@ -109,12 +110,17 @@ template <typename T, typename ContainerLeft, typename ContainerRight>
         const auto right_value = *r;
         ++l;
         ++r;
+        ++i;
 
         if (left_value != right_value)
         {
             if (result)
             {
-                result = ::testing::AssertionFailure();
+                result = ::testing::AssertionFailure()
+                    << "\nmismatch at position " << i << "\nexpected: " << bin(left_value) << " (0x" << std::hex
+                    << static_cast<size_t>(left_value) << ")"
+                    << "\ngot     : " << bin(right_value) << " (0x" << std::hex << static_cast<size_t>(right_value)
+                    << ")";
                 break;
             }
         }
@@ -148,10 +154,9 @@ template <typename ContainerLeft, typename ContainerRight>
     }
 }
 
-CompressionCodecPtr makeCodec(const CompressionMethodByte method_byte, UInt8 type_byte)
+CompressionCodecPtr makeCodec(const CompressionMethodByte method_byte, const DataTypePtr & data_type)
 {
-    CompressionSetting setting(method_byte);
-    setting.data_type = magic_enum::enum_cast<CompressionDataType>(type_byte).value();
+    auto setting = CompressionSetting::create(method_byte, 1, *data_type);
     return CompressionCodecFactory::create(setting);
 }
 
@@ -193,11 +198,9 @@ try
     const auto method_byte = std::get<0>(GetParam());
     const auto sequences = std::get<1>(GetParam());
     ASSERT_FALSE(sequences.empty());
-    auto type_byte = sequences.front().type_byte;
-    const auto codec = DB::tests::makeCodec(method_byte, type_byte);
+    const auto codec = DB::tests::makeCodec(method_byte, sequences.front().data_type);
     for (const auto & sequence : sequences)
     {
-        ASSERT_EQ(sequence.type_byte, type_byte);
         DB::tests::testTranscoding(*codec, sequence);
     }
 }
@@ -212,7 +215,7 @@ try
 {
     const auto method_byte = std::get<0>(GetParam());
     const auto sequence = std::get<1>(GetParam());
-    const auto codec = DB::tests::makeCodec(method_byte, sequence.type_byte);
+    const auto codec = DB::tests::makeCodec(method_byte, sequence.data_type);
     DB::tests::testTranscoding(*codec, sequence);
 }
 CATCH
@@ -401,25 +404,27 @@ INSTANTIATE_TEST_CASE_P(
             generateSeq<UInt32>(G(RepeatGenerator<UInt32>(0))),
             generateSeq<UInt64>(G(RepeatGenerator<UInt64>(0))))));
 
-// INSTANTIATE_TEST_CASE_P(
-//     RandomishInt,
-//     CodecTest,
-//     ::testing::Combine(
-//         IntegerCodecsToTest,
-//         ::testing::Values(
-//             generateSeq<Int32>(G(RandomishGenerator)),
-//             generateSeq<Int64>(G(RandomishGenerator)),
-//             generateSeq<UInt32>(G(RandomishGenerator)),
-//             generateSeq<UInt64>(G(RandomishGenerator)),
-//             generateSeq<Float32>(G(RandomishGenerator)),
-//             generateSeq<Float64>(G(RandomishGenerator)))));
+const auto GeneralCodecsToTest = ::testing::Values(CompressionMethodByte::Lightweight);
 
+auto RandomishGenerator = [](auto i) {
+    using T = decltype(i);
+    double sin_value = sin(static_cast<double>(i * i)) * i;
+    if (sin_value < std::numeric_limits<T>::lowest() || sin_value > static_cast<double>(std::numeric_limits<T>::max()))
+        return T{};
+    return T(sin_value);
+};
 
-// INSTANTIATE_TEST_CASE_P(
-//     RandomishFloat,
-//     CodecTest,
-//     ::testing::Combine(
-//         IntegerCodecsToTest,
-//         ::testing::Values(generateSeq<Float32>(G(RandomishGenerator)), generateSeq<Float64>(G(RandomishGenerator)))));
+INSTANTIATE_TEST_CASE_P(
+    RandomishInt,
+    CodecTest,
+    ::testing::Combine(
+        GeneralCodecsToTest,
+        ::testing::Values(
+            generateSeq<Int32>(G(RandomishGenerator)),
+            generateSeq<Int64>(G(RandomishGenerator)),
+            generateSeq<UInt32>(G(RandomishGenerator)),
+            generateSeq<UInt64>(G(RandomishGenerator)),
+            generateSeq<Float32>(G(RandomishGenerator)),
+            generateSeq<Float64>(G(RandomishGenerator)))));
 
 } // namespace DB::tests

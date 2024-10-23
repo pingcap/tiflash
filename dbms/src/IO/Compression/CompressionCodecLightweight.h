@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <IO/Compression/ALP/CompressionState.h>
 #include <IO/Compression/ICompressionCodec.h>
 
 #include <span>
@@ -130,13 +131,59 @@ private:
     template <std::integral T>
     void decompressDataForInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size) const;
 
-    /// Non-integer data
+    /// Float data
 
-    static size_t compressDataForNonInteger(const char * source, UInt32 source_size, char * dest);
-    static void decompressDataForNonInteger(const char * source, UInt32 source_size, char * dest, UInt32 output_size);
+    enum class FloatMode : UInt8
+    {
+        Invalid = 0,
+        ALP = 1, // Adaptive lossless floating-point compression
+        ALPRD = 2, //
+        LZ4 = 3, // the above modes are not suitable, use LZ4 instead
+    };
+
+    class FloatCompressContext
+    {
+    public:
+        explicit FloatCompressContext(int n_samples_)
+            : n_samples(std::min(1, n_samples_))
+        {}
+
+        template <typename T>
+        void analyze(const std::span<const T> & values);
+
+        template <typename T>
+        ALP::CompressionState<T> & getState()
+        {
+            if constexpr (std::is_same_v<T, float>)
+                return float_state;
+            else if constexpr (std::is_same_v<T, double>)
+                return double_state;
+        }
+
+    private:
+        bool needAnalyze() const { return !analyzed; }
+
+    private:
+        const int n_samples;
+        bool analyzed = false;
+        ALP::CompressionState<float> float_state;
+        ALP::CompressionState<double> double_state;
+    };
+
+
+    template <typename T>
+    size_t compressDataForFloat(const char * source, UInt32 source_size, char * dest) const;
+    template <typename T>
+    static void decompressDataForFloat(const char * source, UInt32 source_size, char * dest, UInt32 output_size);
+
+    /// String data
+
+    static size_t compressDataForString(const char * source, UInt32 source_size, char * dest);
+    static void decompressDataForString(const char * source, UInt32 source_size, char * dest, UInt32 output_size);
 
 private:
     mutable IntegerCompressContext ctx;
+    mutable FloatCompressContext float_ctx;
     const CompressionDataType data_type;
 };
 
