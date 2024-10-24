@@ -56,6 +56,7 @@ protected:
 public:
     using Impl = ImplTable;
     static constexpr bool isPhMap = ImplTable::isPhMap;
+    static constexpr bool isNestedMap = true;
 
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
@@ -118,7 +119,7 @@ public:
         {
             for (typename Source::const_iterator it = src.begin(); it != src.end(); ++it)
             {
-                const auto hashval = it.getHash();
+                const auto hashval = it.getPtr()->getHash(src);
                 const size_t bucket = getBucketFromHash(hashval);
                 bool inserted = false;
                 LookupResult lookup_it = nullptr;
@@ -378,6 +379,15 @@ public:
         size_t res = 0;
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
             res += impls[i].getBufferSizeInBytes();
+
+        return res;
+    }
+
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (size_t i = 0; i < NUM_BUCKETS; ++i)
+            res += impls[i].getBufferSizeInCells();
 
         return res;
     }

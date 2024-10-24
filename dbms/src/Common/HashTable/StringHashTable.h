@@ -157,6 +157,7 @@ public:
     size_t size() const { return hasZero() ? 1 : 0; }
     bool empty() const { return !hasZero(); }
     size_t getBufferSizeInBytes() const { return sizeof(Cell); }
+    size_t getBufferSizeInCells() const { return 1; }
     void setResizeCallback(const ResizeCallback &) {}
     size_t getCollisions() const { return 0; }
 };
@@ -228,6 +229,7 @@ public:
     using ConstLookupResult = StringHashTableLookupResult<const typename Self::mapped_type>;
 
     static constexpr bool isPhMap = SubMaps::isPhMap;
+    static constexpr bool isNestedMap = true;
 
     StringHashTable() = default;
 
@@ -442,6 +444,12 @@ public:
     {
         return m0.getBufferSizeInBytes() + m1.getBufferSizeInBytes() + m2.getBufferSizeInBytes()
             + m3.getBufferSizeInBytes() + ms.getBufferSizeInBytes();
+    }
+
+    size_t getBufferSizeInCells() const
+    {
+        return m0.getBufferSizeInCells() + m1.getBufferSizeInCells() + m2.getBufferSizeInCells()
+            + m3.getBufferSizeInCells() + ms.getBufferSizeInCells();
     }
 
     void setResizeCallback(const ResizeCallback & resize_callback)

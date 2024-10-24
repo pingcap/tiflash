@@ -897,8 +897,7 @@ public:
         friend bool operator==(const iterator& a, const iterator& b) { return a.ctrl_ == b.ctrl_; }
         friend bool operator!=(const iterator& a, const iterator& b) { return !(a == b); }
 
-        auto getPtr() const { return slot_; }
-        size_t getHash() const { return getPtr()->getHash(*this); }
+        auto * getPtr() const { return slot_; }
 
     private:
         iterator(ctrl_t* ctrl) : ctrl_(ctrl) {} // for end()
@@ -950,8 +949,7 @@ public:
         friend bool operator==(const const_iterator& a, const const_iterator& b) { return a.inner_ == b.inner_; }
         friend bool operator!=(const const_iterator& a, const const_iterator& b) { return !(a == b); }
 
-        auto getPtr() const { return inner_.getPtr(); }
-        size_t getHash() const { return inner_.getHash(); }
+        auto * getPtr() const { return inner_.getPtr(); }
     private:
         const_iterator(const ctrl_t* ctrl, const slot_type* slot)
                 : inner_(const_cast<ctrl_t*>(ctrl), const_cast<slot_type*>(slot)) {}

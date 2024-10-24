@@ -27,6 +27,7 @@ public:
     using Key = StringRef;
     using Impl = ImplTable;
     static constexpr bool isPhMap = ImplTable::isPhMap;
+    static constexpr bool isNestedMap = true;
 
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
@@ -70,22 +71,22 @@ public:
 
         if constexpr (Source::isPhMap)
         {
-#define M(MAPX) \
-            for (typename Source::const_iterator it = src.MAPX.begin(); it != src.MAPX.end(); ++it) \
+#define M(MAP_NAME, MAP_TYPE) \
+            for (auto it = src.MAP_NAME.begin(); it != src.MAP_NAME.end(); ++it) \
             { \
-                const auto hashval = it.getHash(); \
+                const auto hashval = it.getPtr()->getHash(src.MAP_NAME); \
                 const size_t bucket = getBucketFromHash(hashval); \
                 bool inserted = false; \
-                LookupResult lookup_it = nullptr; \
-                impls[bucket].MAPX.emplace(it->first, lookup_it, inserted, hashval); \
+                typename SubMaps::MAP_TYPE::LookupResult lookup_it = nullptr; \
+                impls[bucket].MAP_NAME.emplace(it->first, lookup_it, inserted, hashval); \
                 if (inserted) \
                     lookup_it->getMapped() = it->second; \
             }
 
-            M(m1)
-            M(m2)
-            M(m3)
-            M(ms)
+            M(m1, T1)
+            M(m2, T2)
+            M(m3, T3)
+            M(ms, Ts)
 #undef M
         }
         else
@@ -288,6 +289,15 @@ public:
         size_t res = 0;
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
             res += impls[i].getBufferSizeInBytes();
+
+        return res;
+    }
+
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (size_t i = 0; i < NUM_BUCKETS; ++i)
+            res += impls[i].getBufferSizeInCells();
 
         return res;
     }

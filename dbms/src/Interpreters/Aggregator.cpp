@@ -665,7 +665,8 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-    if constexpr (Method::Data::isPhMap)
+    // TODO two level map prefetch
+    if constexpr (!Method::Data::isNestedMap && Method::Data::isPhMap)
     {
         if (method.data.getBufferSizeInCells() < 8192)
             executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);

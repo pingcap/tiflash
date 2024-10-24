@@ -86,6 +86,7 @@ public:
     using cell_type = Cell;
 
     static constexpr bool isPhMap = false;
+    static constexpr bool isNestedMap = false;
 
     class Reader final : private Cell::State
     {

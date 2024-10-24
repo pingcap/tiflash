@@ -6,6 +6,7 @@ class PhHashTable : public phmap::flat_hash_map<KeyType, Mapped, Hash>
 {
 public:
     static constexpr bool isPhMap = true;
+    static constexpr bool isNestedMap = false;
 
     using Self = PhHashTable;
     using Base = phmap::flat_hash_map<KeyType, Mapped, Hash>;
@@ -238,6 +239,7 @@ class PhHashTableWithSavedHash : public phmap::priv::raw_hash_map<
 {
 public:
     static constexpr bool isPhMap = true;
+    static constexpr bool isNestedMap = false;
 
     using Self = PhHashTableWithSavedHash;
     using Policy = FlatHashMapWithSavedHashPolicy<KeyType, Mapped>;
@@ -320,7 +322,7 @@ public:
     ALWAYS_INLINE inline LookupResult find(const KeyType & key)
     {
         const auto hashval = this->hash(key);
-        find(key, hashval);
+        return find(key, hashval);
     }
 
     ALWAYS_INLINE inline ConstLookupResult find(const KeyType & key, size_t hashval) const

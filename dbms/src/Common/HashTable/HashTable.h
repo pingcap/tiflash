@@ -403,6 +403,7 @@ public:
     using Allocator = AllocatorType;
 
     static constexpr bool isPhMap = false;
+    static constexpr bool isNestedMap = false;
 protected:
     friend class const_iterator;
     friend class iterator;
