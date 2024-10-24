@@ -20,6 +20,10 @@
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -563,7 +567,7 @@ void ColumnString::deserializeAndInsertFromPos(
         pos[i] += sizeof(size_t);
 
         chars.resize(char_size + str_size);
-        inline_memcpy(&chars[char_size], pos[i], str_size);
+        memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
         char_size += str_size;
         offsets[prev_size + i] = char_size;
         pos[i] += str_size;

@@ -282,7 +282,7 @@ public:
             size_t str_size = sizeAt(i);
             std::memcpy(pos[i], &str_size, sizeof(size_t));
             pos[i] += sizeof(size_t);
-            inline_memcpy(pos[i], &chars[offsetAt(i)], str_size);
+            memcpySmallAllowReadWriteOverflow15(pos[i], &chars[offsetAt(i)], str_size);
             pos[i] += str_size;
         }
     }

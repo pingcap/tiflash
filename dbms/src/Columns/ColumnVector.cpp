@@ -30,6 +30,9 @@
 #include <emmintrin.h>
 #endif
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
 
 namespace DB
 {

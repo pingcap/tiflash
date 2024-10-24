@@ -23,6 +23,10 @@
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
+
 template <typename T>
 bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
 

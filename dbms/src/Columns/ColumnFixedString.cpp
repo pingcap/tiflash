@@ -20,6 +20,7 @@
 #include <Common/memcpySmall.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
+#include <common/memcpy.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -107,7 +108,7 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
 
     size_t old_size = chars.size();
     chars.resize(old_size + n);
-    memcpy(chars.data() + old_size, pos, length);
+    inline_memcpy(chars.data() + old_size, pos, length);
     memset(chars.data() + old_size + length, 0, n - length);
 }
 
@@ -119,7 +120,7 @@ StringRef ColumnFixedString::serializeValueIntoArena(
     String &) const
 {
     auto * pos = arena.allocContinue(n, begin);
-    memcpy(pos, &chars[n * index], n);
+    inline_memcpy(pos, &chars[n * index], n);
     return StringRef(pos, n);
 }
 
@@ -127,8 +128,23 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
 {
     size_t old_size = chars.size();
     chars.resize(old_size + n);
-    memcpy(&chars[old_size], pos, n);
+    inline_memcpy(&chars[old_size], pos, n);
     return pos + n;
+}
+
+void ColumnFixedString::deserializeAndInsertFromPos(
+    PaddedPODArray<UInt8 *> & pos,
+    ColumnsAlignBufferAVX2 & /* align_buffer */)
+{
+    size_t size = pos.size();
+    size_t old_char_size = chars.size();
+    chars.resize(old_char_size + n * size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        memcpySmallAllowReadWriteOverflow15(&chars[old_char_size], pos[i], n);
+        old_char_size += n;
+        pos[i] += n;
+    }
 }
 
 void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const

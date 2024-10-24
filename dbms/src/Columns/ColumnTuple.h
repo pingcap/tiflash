@@ -94,6 +94,25 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
+    {
+        for (const auto & column : columns)
+            column->countSerializeByteSize(byte_size);
+    }
+
+    void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override
+    {
+        for (const auto & column : columns)
+            column->serializeToPos(pos, start, end, has_null);
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().deserializeAndInsertFromPos(pos, align_buffer);
+    }
+
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;

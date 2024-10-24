@@ -279,6 +279,24 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
     return pos;
 }
 
+void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    getNullMapColumn().countSerializeByteSize(byte_size);
+    getNestedColumn().countSerializeByteSize(byte_size);
+}
+
+void ColumnNullable::serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const
+{
+    getNullMapColumn().serializeToPos(pos, start, end, has_null);
+    getNestedColumn().serializeToPos(pos, start, end, has_null);
+}
+
+void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer)
+{
+    getNullMapColumn().deserializeAndInsertFromPos(pos, align_buffer);
+    getNestedColumn().deserializeAndInsertFromPos(pos, align_buffer);
+}
+
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
     const auto & nullable_col = static_cast<const ColumnNullable &>(src);
