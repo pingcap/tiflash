@@ -195,6 +195,7 @@ class StringHashTable : private boost::noncopyable
 {
 protected:
     static constexpr size_t NUM_MAPS = 5;
+
     // Map for storing empty string
     using T0 = typename SubMaps::T0;
 
@@ -226,7 +227,7 @@ public:
     using LookupResult = StringHashTableLookupResult<typename cell_type::mapped_type>;
     using ConstLookupResult = StringHashTableLookupResult<const typename cell_type::mapped_type>;
 
-    static constexpr bool isPhMap = false;
+    static constexpr bool isPhMap = SubMaps::isPhMap;
 
     StringHashTable() = default;
 

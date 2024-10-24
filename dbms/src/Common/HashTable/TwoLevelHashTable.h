@@ -55,8 +55,7 @@ protected:
 
 public:
     using Impl = ImplTable;
-    // TODO maybe another isTwoLevel
-    static constexpr bool isPhMap = false;
+    static constexpr bool isPhMap = ImplTable::isPhMap;
 
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
@@ -117,14 +116,16 @@ public:
     {
         if constexpr (Source::isPhMap)
         {
-            src.forEachValue([&](const auto & key, auto & mapped) {
-                LookupResult it;
-                bool inserted;
-                this->emplace(key, it, inserted);
-
+            for (typename Source::const_iterator it = src.begin(); it != src.end(); ++it)
+            {
+                const auto hashval = it.getHash();
+                const size_t bucket = getBucketFromHash(hashval);
+                bool inserted = false;
+                LookupResult lookup_it = nullptr;
+                impls[bucket].emplace(it->first, lookup_it, inserted, hashval);
                 if (inserted)
-                    it->second = mapped;
-            });
+                    lookup_it->getMapped() = it->second;
+            }
         }
         else
         {

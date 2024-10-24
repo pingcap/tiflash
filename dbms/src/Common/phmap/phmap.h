@@ -1876,7 +1876,10 @@ private:
 
         for (size_t i = 0; i != old_capacity; ++i) {
             if (IsFull(old_ctrl[i])) {
-                size_t hashval = PolicyTraits::apply(HashElement{hash_ref()}, PolicyTraits::element(old_slots + i));
+                // For slot type of saved hash, will skip compute hashval again.
+                // TODO check other places to optimize.
+                // size_t hashval = PolicyTraits::apply(HashElement{hash_ref()}, PolicyTraits::element(old_slots + i));
+                size_t hashval = static_cast<const slot_type *>(old_slots + i)->getHash(*this);
                 auto target = find_first_non_full(hashval);
                 size_t new_i = target.offset;
                 set_ctrl(new_i, H2(hashval));
@@ -3784,9 +3787,9 @@ struct FlatHashSetPolicy {
 
 // --------------------------------------------------------------------------
 // --------------------------------------------------------------------------
-template <class K, class V>
+template <class K, class V, class MapSlotPolicy = priv::map_slot_policy<K, V>>
 struct FlatHashMapPolicy {
-    using slot_policy = priv::map_slot_policy<K, V>;
+    using slot_policy = MapSlotPolicy;
     using slot_type = typename slot_policy::slot_type;
     using key_type = K;
     using mapped_type = V;

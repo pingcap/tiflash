@@ -90,6 +90,7 @@ struct StringHashMapCell<StringRef, TMapped>
 template <typename TMapped, typename Allocator>
 struct StringHashMapSubMaps
 {
+    static constexpr bool isPhMap = false;
     using T0 = StringHashTableEmpty<StringHashMapCell<StringRef, TMapped>>;
     using T1 = HashMapTable<
         StringKey8,

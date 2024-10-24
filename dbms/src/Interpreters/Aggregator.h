@@ -37,8 +37,6 @@
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 
-#include <Common/HashTable/PhHashTable.h>
-
 #include <functional>
 #include <memory>
 
@@ -74,67 +72,6 @@ class AggHashTableToBlocksBlockInputStream;
   *  best suited for different cases, and this approach is just one of them, chosen for a combination of reasons.
   */
 
-// TODO
-template <typename Key, typename Mapped>
-using PhHashMap = PhHashTable<Key, Mapped, PhHash<Key, PhHashSeed1>>;
-
-// template parameter of Hash/Grower/Allocator will be ignored for phmap.
-template <
-    typename Key,
-    typename MappedType,
-    typename Hash = DefaultHash<Key>,
-    typename Grower = TwoLevelHashTableGrower<>,
-    typename Allocator = HashTableAllocator,
-    template <typename...> typename ImplTable = PhHashMap>
-class TwoLevelPhHashMapTable
-    : public TwoLevelHashTable<Key, MappedType, Hash, Grower, Allocator, ImplTable<Key, MappedType>>
-{
-public:
-    using Impl = ImplTable<Key, MappedType>;
-    using LookupResult = typename Impl::LookupResult;
-    // TODO dup?
-    using Mapped = MappedType;
-    using Self = TwoLevelPhHashMapTable;
-
-    using TwoLevelHashTable<Key, Mapped, Hash, Grower, Allocator, ImplTable<Key, Mapped>>::TwoLevelHashTable;
-
-    template <typename Func>
-    void ALWAYS_INLINE forEachMapped(Func && func)
-    {
-        for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
-            this->impls[i].forEachMapped(func);
-    }
-
-    typename Self::Mapped & ALWAYS_INLINE operator[](const Key & x)
-    {
-        LookupResult it;
-        bool inserted;
-        this->emplace(x, it, inserted);
-
-        if (inserted)
-            new (&it->getMapped()) typename Self::Mapped();
-
-        return it->getMapped();
-    }
-};
-
-template <typename Key, typename Mapped>
-using TwoLevelPhHashMap = TwoLevelPhHashMapTable<Key, Mapped>;
-
-// TODO gjt Allocator
-template <typename TMapped, typename Allocator>
-struct StringHashMapPhSubMaps
-{
-    using T0 = StringHashTableEmpty<StringHashMapCell<StringRef, TMapped>>;
-    // TODO seed
-    using T1 = PhHashTable<StringKey8, TMapped, PhHash<StringKey8, PhHashSeed1>>;
-    using T2 = PhHashTable<StringKey16, TMapped, PhHash<StringKey16, PhHashSeed1>>;
-    using T3 = PhHashTable<StringKey24, TMapped, PhHash<StringKey24, PhHashSeed1>>;
-    using Ts = PhHashTable<StringRef, TMapped, PhHash<StringRef, PhHashSeed1>>;
-};
-using StringPhHashMap = StringHashMap<AggregateDataPtr, HashTableAllocator, StringHashMapPhSubMaps>;
-using TwoLevelStringPhHashMap = TwoLevelStringHashMap<AggregateDataPtr, HashTableAllocator, StringHashMap, StringHashMapPhSubMaps>;
-
 using AggregatedDataWithoutKey = AggregateDataPtr;
 
 using AggregatedDataWithUInt8Key = FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>;
@@ -142,7 +79,6 @@ using AggregatedDataWithUInt16Key = FixedImplicitZeroHashMap<UInt16, AggregateDa
 
 using AggregatedDataWithUInt32Key = HashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64Key = HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using AggregatedDataWithUInt64KeyPhMap = PhHashMap<UInt64, AggregateDataPtr>;
 
 using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr>;
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
@@ -154,7 +90,6 @@ using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, HashCRC32<U
 
 using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using AggregatedDataWithUInt64KeyTwoLevelPhMap = TwoLevelPhHashMap<UInt64, AggregateDataPtr>;
 
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 
@@ -824,8 +759,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_key8 = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>;
     using AggregationMethod_key16 = AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key, false>;
     using AggregationMethod_key32 = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>;
-    // using AggregationMethod_key64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>;
-    using AggregationMethod_key64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyPhMap, false>;
+    using AggregationMethod_key64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>;
     using AggregationMethod_key_int256 = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>;
     using AggregationMethod_key_string = AggregationMethodStringNoCache<AggregatedDataWithShortStringKey>;
     using AggregationMethod_one_key_strbin
@@ -839,10 +773,8 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_keys128 = AggregationMethodKeysFixed<AggregatedDataWithKeys128>;
     using AggregationMethod_keys256 = AggregationMethodKeysFixed<AggregatedDataWithKeys256>;
     using AggregationMethod_serialized = AggregationMethodSerialized<AggregatedDataWithStringKey>;
-    // using AggregationMethod_key32_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>;
-    // using AggregationMethod_key64_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>;
-    using AggregationMethod_key32_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevelPhMap, false>;
-    using AggregationMethod_key64_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevelPhMap, false>;
+    using AggregationMethod_key32_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>;
+    using AggregationMethod_key64_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>;
     using AggregationMethod_key_int256_two_level
         = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>;
     using AggregationMethod_key_string_two_level

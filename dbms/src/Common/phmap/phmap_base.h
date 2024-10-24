@@ -4314,16 +4314,17 @@ union map_slot_type {
     using value_type = std::pair<const K, V>;
     using mutable_value_type = std::pair<K, V>;
 
-    template <typename Hash>
-    size_t getHash(const Hash & hash) const
+    template <typename Container>
+    size_t getHash(const Container & container) const
     {
-        hash.hash(value.first);
+        container.hash(value.first);
     }
 
     const K & getKey() const { return value.first; }
     V & getMapped() { return value.second; }
     const V & getMapped() const { return value.second; }
     const value_type & getValue() const { return value; }
+    void setHash(size_t) {}
 
     value_type value;
     mutable_value_type mutable_value;
@@ -4332,9 +4333,9 @@ union map_slot_type {
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
-template <class K, class V>
+template <class K, class V, class MapSlotType = map_slot_type<K, V>>
 struct map_slot_policy {
-    using slot_type = map_slot_type<K, V>;
+    using slot_type = MapSlotType;
     using value_type = std::pair<const K, V>;
     using mutable_value_type = std::pair<K, V>;
 

@@ -26,8 +26,7 @@ protected:
 public:
     using Key = StringRef;
     using Impl = ImplTable;
-    // TODO maybe isTwoLevel
-    static constexpr bool isPhMap = false;
+    static constexpr bool isPhMap = ImplTable::isPhMap;
 
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
@@ -69,29 +68,52 @@ public:
         if (src.m0.hasZero())
             impls[0].m0.setHasZero(*src.m0.zeroValue());
 
-        for (auto & v : src.m1)
+        if constexpr (Source::isPhMap)
         {
-            size_t hash_value = v.getHash(src.m1);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m1.insertUniqueNonZero(&v, hash_value);
+#define M(MAPX) \
+            for (typename Source::const_iterator it = src.MAPX.begin(); it != src.MAPX.end(); ++it) \
+            { \
+                const auto hashval = it.getHash(); \
+                const size_t bucket = getBucketFromHash(hashval); \
+                bool inserted = false; \
+                LookupResult lookup_it = nullptr; \
+                impls[bucket].MAPX.emplace(it->first, lookup_it, inserted, hashval); \
+                if (inserted) \
+                    lookup_it->getMapped() = it->second; \
+            }
+
+            M(m1)
+            M(m2)
+            M(m3)
+            M(ms)
+#undef M
         }
-        for (auto & v : src.m2)
+        else
         {
-            size_t hash_value = v.getHash(src.m2);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m2.insertUniqueNonZero(&v, hash_value);
-        }
-        for (auto & v : src.m3)
-        {
-            size_t hash_value = v.getHash(src.m3);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m3.insertUniqueNonZero(&v, hash_value);
-        }
-        for (auto & v : src.ms)
-        {
-            size_t hash_value = v.getHash(src.ms);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].ms.insertUniqueNonZero(&v, hash_value);
+            for (auto & v : src.m1)
+            {
+                size_t hash_value = v.getHash(src.m1);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].m1.insertUniqueNonZero(&v, hash_value);
+            }
+            for (auto & v : src.m2)
+            {
+                size_t hash_value = v.getHash(src.m2);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].m2.insertUniqueNonZero(&v, hash_value);
+            }
+            for (auto & v : src.m3)
+            {
+                size_t hash_value = v.getHash(src.m3);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].m3.insertUniqueNonZero(&v, hash_value);
+            }
+            for (auto & v : src.ms)
+            {
+                size_t hash_value = v.getHash(src.ms);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].ms.insertUniqueNonZero(&v, hash_value);
+            }
         }
     }
 
