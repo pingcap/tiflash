@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -542,6 +543,14 @@ bool DeltaMergeStore::segmentEnsureStableIndexAsync(const SegmentPtr & segment)
         = DMFileIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, segment->getStable()->getDMFiles());
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty() || build_info.dm_files.empty())
         return false;
+
+    if (auto encryption_enabled = global_context.getFileProvider()->isEncryptionEnabled(); encryption_enabled)
+    {
+        segment->setIndexBuildError(
+            build_info.indexesIDs(),
+            "Encryption-at-rest on TiFlash is enabled, which does not support building vector index");
+        return false;
+    }
 
     auto store_weak_ptr = weak_from_this();
     auto tracing_id

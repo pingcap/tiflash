@@ -428,6 +428,6 @@ add_target_pch("pch-stl.h" libprotobuf kvproto tipb libprotoc)
 
 # poco
 add_target_pch("pch-stl.h" Net Crypto Util Data NetSSL)
-add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" XML Foundation JSON)
+add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" Foundation JSON)
 
 message (STATUS "Will build TiFlash ${TIFLASH_RELEASE_VERSION}")

@@ -150,7 +150,7 @@ void DMFileV3IncrementWriter::writeAndIncludeMetaFile()
         options.file_provider,
         meta_file_path_for_write, // Must not use meta->metaPath(), because DMFile may be a S3 DMFile
         EncryptionPath(local_path, meta_file_name),
-        /*create_new_encryption_info*/ true,
+        /*create_new_encryption_info*/ false, // must be false to reuse the encryption_info of exisiting dmfile
         options.write_limiter,
         DMFileMetaV2::meta_buffer_size);
 

@@ -107,20 +107,6 @@ void DataTypeDateTime::deserializeTextJSON(IColumn & column, ReadBuffer & istr) 
     static_cast<ColumnUInt32 &>(column).getData().push_back(x);
 }
 
-void DataTypeDateTime::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    writeChar('"', ostr);
-    serializeText(column, row_num, ostr);
-    writeChar('"', ostr);
-}
-
-void DataTypeDateTime::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
-{
-    time_t x;
-    readDateTimeCSV(x, istr, time_zone);
-    static_cast<ColumnUInt32 &>(column).getData().push_back(x);
-}
-
 bool DataTypeDateTime::equals(const IDataType & rhs) const
 {
     /// DateTime with different timezones are equal, because:

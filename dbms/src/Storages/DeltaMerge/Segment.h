@@ -29,7 +29,10 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 
-namespace DB::DM
+namespace DB
+{
+struct GeneralCancelHandle;
+namespace DM
 {
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
@@ -173,6 +176,7 @@ public:
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
     static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
         DMContext & context,
+        const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
         const RowKeyRange & target_range,
         const CheckpointInfoPtr & checkpoint_info);
 
@@ -180,6 +184,7 @@ public:
     // The data of these temp segments will be included in `wbs`.
     static Segments createTargetSegmentsFromCheckpoint( //
         const LoggerPtr & parent_log,
+        UInt64 region_id,
         DMContext & context,
         StoreID remote_store_id,
         const SegmentMetaInfos & meta_infos,
@@ -734,15 +739,16 @@ public:
         const RSOperatorPtr & filter,
         UInt64 start_ts,
         size_t expected_block_size);
-    BlockInputStreamPtr getBitmapFilterInputStream(
-        BitmapFilterPtr && bitmap_filter,
+    SkippableBlockInputStreamPtr getConcatSkippableBlockInputStream(
+        BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         UInt64 start_ts,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        ReadTag read_tag);
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -754,7 +760,7 @@ public:
         size_t read_data_block_rows);
 
     BlockInputStreamPtr getLateMaterializationStream(
-        BitmapFilterPtr && bitmap_filter,
+        BitmapFilterPtr & bitmap_filter,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
@@ -810,4 +816,5 @@ public:
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);
-} // namespace DB::DM
+} // namespace DM
+} // namespace DB

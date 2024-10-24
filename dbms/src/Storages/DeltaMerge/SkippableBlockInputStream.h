@@ -83,6 +83,8 @@ public:
         std::vector<size_t> && rows_,
         const ScanContextPtr & scan_context_);
 
+    void appendChild(SkippableBlockInputStreamPtr child, size_t rows_);
+
     String getName() const override { return "ConcatSkippable"; }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
@@ -112,6 +114,8 @@ private:
     const ScanContextPtr scan_context;
     LACBytesCollector lac_bytes_collector;
 };
+
+using ConcatSkippableBlockInputStreamPtr = std::shared_ptr<ConcatSkippableBlockInputStream</*need_row_id*/ false>>;
 
 } // namespace DM
 } // namespace DB

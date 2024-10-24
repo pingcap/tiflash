@@ -232,8 +232,6 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
 {
     auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
     auto ret = std::make_shared<ColumnFileSetSnapshot>(empty_data_provider);
-    ret->is_common_handle = segment_range.is_common_handle;
-    ret->rowkey_column_size = segment_range.rowkey_column_size;
     ret->column_files.reserve(proto.size());
     for (const auto & remote_column_file : proto)
     {
@@ -358,6 +356,25 @@ RemotePb::ColumnFileRemote Serializer::serializeCFTiny(
     remote_tiny->set_rows(cf_tiny.rows);
     remote_tiny->set_bytes(cf_tiny.bytes);
 
+    if (!cf_tiny.index_infos)
+        return ret;
+
+    for (const auto & index_info : *cf_tiny.index_infos)
+    {
+        auto * index_pb = remote_tiny->add_indexes();
+        index_pb->set_index_page_id(index_info.index_page_id);
+        if (index_info.vector_index.has_value())
+        {
+            RemotePb::VectorIndexFileProps index_props;
+            index_props.set_index_kind(index_info.vector_index->index_kind());
+            index_props.set_distance_metric(index_info.vector_index->distance_metric());
+            index_props.set_dimensions(index_info.vector_index->dimensions());
+            index_props.set_index_id(index_info.vector_index->index_id());
+            index_props.set_index_bytes(index_info.vector_index->index_bytes());
+            index_pb->mutable_vector_index()->Swap(&index_props);
+        }
+    }
+
     // TODO: read the checkpoint info from data_provider and send it to the compute node
 
     return ret;
@@ -373,9 +390,32 @@ ColumnFileTinyPtr Serializer::deserializeCFTiny(const DMContext & dm_context, co
 
     // We do not try to reuse the CFSchema from `SharedBlockSchemas`, because the ColumnFile will be freed immediately after the request.
     auto schema = std::make_shared<ColumnFileSchema>(*block_schema);
-    auto cf = std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id(), dm_context);
-    cf->data_page_size = proto.page_size();
+    auto index_infos = std::make_shared<ColumnFileTiny::IndexInfos>();
+    index_infos->reserve(proto.indexes().size());
+    for (const auto & index_pb : proto.indexes())
+    {
+        if (index_pb.has_vector_index())
+        {
+            dtpb::VectorIndexFileProps index_props;
+            index_props.set_index_kind(index_pb.vector_index().index_kind());
+            index_props.set_distance_metric(index_pb.vector_index().distance_metric());
+            index_props.set_dimensions(index_pb.vector_index().dimensions());
+            index_props.set_index_id(index_pb.vector_index().index_id());
+            index_props.set_index_bytes(index_pb.vector_index().index_bytes());
+            index_infos->emplace_back(index_pb.index_page_id(), index_props);
+        }
+        else
+            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+    }
 
+    auto cf = std::make_shared<ColumnFileTiny>(
+        schema,
+        proto.rows(),
+        proto.bytes(),
+        proto.page_id(),
+        dm_context,
+        index_infos);
+    cf->data_page_size = proto.page_size();
     return cf;
 }
 

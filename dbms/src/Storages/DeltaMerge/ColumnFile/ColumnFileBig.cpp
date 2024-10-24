@@ -67,9 +67,10 @@ void ColumnFileBig::removeData(WriteBatches & wbs) const
 ColumnFileReaderPtr ColumnFileBig::getReader(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr &,
-    const ColumnDefinesPtr & col_defs) const
+    const ColumnDefinesPtr & col_defs,
+    ReadTag read_tag) const
 {
-    return std::make_shared<ColumnFileBigReader>(dm_context, *this, col_defs);
+    return std::make_shared<ColumnFileBigReader>(dm_context, *this, col_defs, read_tag);
 }
 
 void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -380,17 +381,10 @@ size_t ColumnFileBigReader::skipNextBlock()
     }
 }
 
-ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag)
 {
     // Currently we don't reuse the cache data.
-    return std::make_shared<ColumnFileBigReader>(dm_context, column_file, new_col_defs);
-}
-
-void ColumnFileBigReader::setReadTag(ReadTag read_tag_)
-{
-    // `read_tag` should be set before `file_stream` is initialized.
-    RUNTIME_CHECK(file_stream == nullptr);
-    read_tag = read_tag_;
+    return std::make_shared<ColumnFileBigReader>(dm_context, column_file, new_col_defs, read_tag);
 }
 
 } // namespace DB::DM

@@ -541,7 +541,10 @@ TEST_F(UniPageStorageTest, OnlyScanRaftLog)
                   ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(page_id), region_prefix);
                   count++;
               };
-        reader.traverseRemoteRaftLogForRegion(region_id, checker);
+        reader.traverseRemoteRaftLogForRegion(
+            region_id,
+            [](size_t) { return true; },
+            checker);
         ASSERT_EQ(count, 3);
     }
 }

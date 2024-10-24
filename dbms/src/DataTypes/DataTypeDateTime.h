@@ -44,7 +44,7 @@ namespace DB
 class DataTypeDateTime final : public DataTypeNumberBase<UInt32>
 {
 public:
-    DataTypeDateTime(const std::string & time_zone_name = "");
+    explicit DataTypeDateTime(const std::string & time_zone_name = "");
 
     const char * getFamilyName() const override { return "DateTime"; }
     std::string getName() const override;
@@ -58,8 +58,6 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
         const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
     bool canBeUsedAsVersion() const override { return true; }
     bool isDateOrDateTime() const override { return true; }

@@ -231,42 +231,69 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
         {
             UNUSED(handle);
 
-            // Currently Delta is always not indexed.
-            index_stats.rows_delta_not_indexed
-                += segment->getDelta()->getRows(); // TODO: More precisely count column bytes instead.
-
-            const auto & stable = segment->getStable();
-            bool is_stable_indexed = true;
-            for (const auto & dmfile : stable->getDMFiles())
+            // Delta
             {
-                const auto [state, bytes] = dmfile->getLocalIndexState(index_info.column_id, index_info.index_id);
-                UNUSED(bytes);
-                switch (state)
+                const auto & delta = segment->getDelta();
+                auto lock = delta->getLock();
+                if (!lock)
+                    continue;
+                const auto & mem_table = delta->getMemTableSet();
+                index_stats.rows_delta_not_indexed += mem_table->getRows();
+                const auto & persisted = delta->getPersistedFileSet();
+                for (const auto & file : persisted->getFiles())
                 {
-                case DMFileMeta::LocalIndexState::NoNeed: // Regard as indexed, because column does not need any index
-                case DMFileMeta::LocalIndexState::IndexBuilt:
-                    break;
-                case DMFileMeta::LocalIndexState::IndexPending:
-                    is_stable_indexed = false;
-                    break;
+                    // TODO: this is not efficient, we can maintain the indexed_rows in ColumnFilePersisted
+                    const auto * tiny_file = file->tryToTinyFile();
+                    if (tiny_file)
+                    {
+                        if (tiny_file->hasIndex(index_stats.index_id))
+                            index_stats.rows_delta_indexed += tiny_file->getRows();
+                        else
+                            index_stats.rows_delta_not_indexed += tiny_file->getRows();
+                    }
+                    else
+                    {
+                        index_stats.rows_delta_not_indexed += file->getRows();
+                    }
                 }
             }
 
-            if (is_stable_indexed)
+            // Stable
             {
-                index_stats.rows_stable_indexed += stable->getRows();
-            }
-            else
-            {
-                index_stats.rows_stable_not_indexed += stable->getRows();
-            }
+                const auto & stable = segment->getStable();
+                bool is_stable_indexed = true;
+                for (const auto & dmfile : stable->getDMFiles())
+                {
+                    const auto [state, bytes] = dmfile->getLocalIndexState(index_info.column_id, index_info.index_id);
+                    UNUSED(bytes);
+                    switch (state)
+                    {
+                    case DMFileMeta::LocalIndexState::NoNeed:
+                        // Regard as indexed, because column does not need any index
+                    case DMFileMeta::LocalIndexState::IndexBuilt:
+                        break;
+                    case DMFileMeta::LocalIndexState::IndexPending:
+                        is_stable_indexed = false;
+                        break;
+                    }
+                }
 
-            const auto index_build_error = segment->getIndexBuildError();
-            // Set error_message to the first error_message we meet among all segments
-            if (auto err_iter = index_build_error.find(index_info.index_id);
-                err_iter != index_build_error.end() && index_stats.error_message.empty())
-            {
-                index_stats.error_message = err_iter->second;
+                if (is_stable_indexed)
+                {
+                    index_stats.rows_stable_indexed += stable->getRows();
+                }
+                else
+                {
+                    index_stats.rows_stable_not_indexed += stable->getRows();
+                }
+
+                const auto index_build_error = segment->getIndexBuildError();
+                // Set error_message to the first error_message we meet among all segments
+                if (auto err_iter = index_build_error.find(index_info.index_id);
+                    err_iter != index_build_error.end() && index_stats.error_message.empty())
+                {
+                    index_stats.error_message = err_iter->second;
+                }
             }
         }
 

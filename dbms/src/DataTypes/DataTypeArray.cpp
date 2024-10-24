@@ -152,7 +152,7 @@ void deserializeArraySizesPositionIndependent(IColumn & column, ReadBuffer & ist
 
 void DataTypeArray::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
 {
-    path.push_back(Substream::ArraySizes);
+    path.emplace_back(Substream::ArraySizes);
     callback(path);
     path.back() = Substream::ArrayElements;
     nested->enumerateStreams(callback, path);
@@ -170,7 +170,7 @@ void DataTypeArray::serializeBinaryBulkWithMultipleStreams(
     const ColumnArray & column_array = typeid_cast<const ColumnArray &>(column);
 
     /// First serialize array sizes.
-    path.push_back(Substream::ArraySizes);
+    path.emplace_back(Substream::ArraySizes);
     if (auto * stream = getter(path))
     {
         // `position_independent_encoding == false` indicates that the `column_array.offsets`
@@ -227,7 +227,7 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
 {
     ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
 
-    path.push_back(Substream::ArraySizes);
+    path.emplace_back(Substream::ArraySizes);
     if (auto * stream = getter(path))
     {
         // `position_independent_encoding == false` indicates that the `column_array.offsets`
@@ -423,45 +423,6 @@ void DataTypeArray::deserializeTextJSON(IColumn & column, ReadBuffer & istr) con
     deserializeTextImpl(column, istr, [&](IColumn & nested_column) {
         nested->deserializeTextJSON(nested_column, istr);
     });
-}
-
-
-void DataTypeArray::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    const auto & column_array = static_cast<const ColumnArray &>(column);
-    const ColumnArray::Offsets & offsets = column_array.getOffsets();
-
-    size_t offset = row_num == 0 ? 0 : offsets[row_num - 1];
-    size_t next_offset = offsets[row_num];
-
-    const IColumn & nested_column = column_array.getData();
-
-    writeCString("<array>", ostr);
-    for (size_t i = offset; i < next_offset; ++i)
-    {
-        writeCString("<elem>", ostr);
-        nested->serializeTextXML(nested_column, i, ostr);
-        writeCString("</elem>", ostr);
-    }
-    writeCString("</array>", ostr);
-}
-
-
-void DataTypeArray::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    /// There is no good way to serialize an array in CSV. Therefore, we serialize it into a string, and then write the resulting string in CSV.
-    WriteBufferFromOwnString wb;
-    serializeText(column, row_num, wb);
-    writeCSV(wb.str(), ostr);
-}
-
-
-void DataTypeArray::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const
-{
-    String s;
-    readCSV(s, istr, delimiter);
-    ReadBufferFromString rb(s);
-    deserializeText(column, rb);
 }
 
 

@@ -228,6 +228,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
     RaftDataReader raft_data_reader(*wn_ps);
     raft_data_reader.traverseRemoteRaftLogForRegion(
         region_id,
+        [](size_t) { return true; },
         [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation &) {
             LOG_DEBUG(
                 log,

@@ -80,20 +80,6 @@ void DataTypeDate::deserializeTextJSON(IColumn & column, ReadBuffer & istr) cons
     static_cast<ColumnUInt16 &>(column).getData().push_back(x);
 }
 
-void DataTypeDate::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    writeChar('"', ostr);
-    serializeText(column, row_num, ostr);
-    writeChar('"', ostr);
-}
-
-void DataTypeDate::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
-{
-    LocalDate value;
-    readCSV(value, istr);
-    static_cast<ColumnUInt16 &>(column).getData().push_back(value.getDayNum());
-}
-
 bool DataTypeDate::equals(const IDataType & rhs) const
 {
     return typeid(rhs) == typeid(*this);

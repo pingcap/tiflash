@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-
 namespace DB
 {
 class RaftDataReader final
@@ -39,6 +38,7 @@ public:
     // Only used to get raft log data from remote checkpoint data
     void traverseRemoteRaftLogForRegion(
         UInt64 region_id,
+        const std::function<bool(size_t)> precheck,
         const std::function<
             void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> &
             acceptor);

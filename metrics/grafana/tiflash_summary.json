@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1718272201438,
+  "iteration": 1728897014230,
   "links": [],
   "panels": [
     {
@@ -2831,6 +2831,147 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "Segment Scheduler",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 1,
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": null,
+          "description": "",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 51
+          },
+          "hiddenSeries": false,
+          "id": 295,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": 250,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "Limit",
+              "color": "#F2495C",
+              "hideTooltip": true,
+              "legend": false,
+              "linewidth": 2,
+              "nullPointMode": "connected"
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexPool*\"}[1m]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "pool-{{instance}}",
+              "refId": "A",
+              "step": 40
+            },
+            {
+              "exemplar": true,
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexPool*\"})",
+              "hide": true,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "Limit",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexSched*\"}[1m]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "sched-{{instance}}",
+              "refId": "C",
+              "step": 40
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Local Index Pool",
           "tooltip": {
             "msResolution": false,
             "shared": true,
@@ -8661,7 +8802,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:222",
               "format": "µs",
               "label": null,
               "logBase": 1,
@@ -8670,7 +8810,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:223",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -9413,7 +9552,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:304",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -9422,7 +9560,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:305",
               "format": "short",
               "label": null,
               "logBase": 1,
