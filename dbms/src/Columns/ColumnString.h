@@ -247,6 +247,48 @@ public:
         return pos + string_size;
     }
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
+    {
+        if unlikely (byte_size.size() != offsets.size())
+            byte_size.resize(offsets.size());
+
+        size_t size = byte_size.size();
+        for (size_t i = 0; i < size; ++i)
+            byte_size[i] += sizeof(size_t) + sizeAt(i);
+    }
+
+    void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override
+    {
+        if (has_null)
+            serializeToPosImpl<true>(pos, start, end);
+        else
+            serializeToPosImpl<false>(pos, start, end);
+    }
+
+    template <bool has_null>
+    void serializeToPosImpl(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end) const
+    {
+        if unlikely (pos.size() != offsets.size())
+            pos.resize(offsets.size());
+
+        for (size_t i = start; i < end; ++i)
+        {
+            if constexpr (has_null)
+            {
+                if (pos[i] == nullptr)
+                    continue;
+            }
+
+            size_t str_size = sizeAt(i);
+            std::memcpy(pos[i], &str_size, sizeof(size_t));
+            pos[i] += sizeof(size_t);
+            inline_memcpy(pos[i], &chars[offsetAt(i)], str_size);
+            pos[i] += str_size;
+        }
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
+
     void updateHashWithValue(
         size_t n,
         SipHash & hash,

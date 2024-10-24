@@ -317,6 +317,44 @@ public:
         return pos + sizeof(T);
     }
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
+    {
+        if unlikely (byte_size.size() != data.size())
+            byte_size.resize(data.size());
+
+        size_t size = byte_size.size();
+        for (size_t i = 0; i < size; ++i)
+            byte_size[i] += sizeof(T);
+    }
+
+    void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override
+    {
+        if (has_null)
+            serializeToPosImpl<true>(pos, start, end);
+        else
+            serializeToPosImpl<false>(pos, start, end);
+    }
+
+    template <bool has_null>
+    void serializeToPosImpl(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end) const
+    {
+        if unlikely (pos.size() != data.size())
+            pos.resize(data.size());
+
+        for (size_t i = start; i < end; ++i)
+        {
+            if constexpr (has_null)
+            {
+                if (pos[i] == nullptr)
+                    continue;
+            }
+            std::memcpy(pos[i], &data[i], sizeof(T));
+            pos[i] += sizeof(T);
+        }
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
+
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;

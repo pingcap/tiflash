@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/COWPtr.h>
+#include <Common/ColumnsAlignBuffer.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
@@ -232,6 +233,20 @@ public:
       */
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
+
+    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
+
+    virtual void serializeToPos(
+        PaddedPODArray<UInt8 *> & /* pos */,
+        size_t /* start */,
+        size_t /* end */,
+        bool /* has_null */) const
+        = 0;
+
+    virtual void deserializeAndInsertFromPos(
+        PaddedPODArray<UInt8 *> & /* pos */,
+        ColumnsAlignBufferAVX2 & /* align_buffer */)
+        = 0;
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,

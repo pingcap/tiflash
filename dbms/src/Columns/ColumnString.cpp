@@ -460,6 +460,116 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
+void ColumnString::deserializeAndInsertFromPos(
+    PaddedPODArray<UInt8 *> & pos,
+    ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
+{
+    size_t prev_size = offsets.size();
+    size_t char_size = chars.size();
+    size_t size = pos.size();
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % AlignBufferAVX2::buffer_size == 0;
+    bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % AlignBufferAVX2::buffer_size == 0;
+
+    size_t char_buffer_index = align_buffer.nextIndex();
+    AlignBufferAVX2 & char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
+    UInt8 & char_buffer_size = align_buffer.getSize(char_buffer_index);
+
+    size_t offset_buffer_index = align_buffer.nextIndex();
+    AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
+    UInt8 & offset_buffer_size = align_buffer.getSize(offset_buffer_index);
+
+    if likely (is_offset_aligned && is_char_aligned)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t str_size;
+            std::memcpy(&str_size, pos[i], sizeof(size_t));
+            pos[i] += sizeof(size_t);
+
+            do
+            {
+                UInt8 remain = AlignBufferAVX2::buffer_size - char_buffer_size;
+                UInt8 copy_bytes = std::min(remain, str_size);
+                inline_memcpy(&char_buffer.data[char_buffer_size], pos[i], copy_bytes);
+                pos[i] += copy_bytes;
+                char_buffer_size += copy_bytes;
+                str_size -= copy_bytes;
+                if (char_buffer_size == AlignBufferAVX2::buffer_size)
+                {
+                    chars.resize(char_size + AlignBufferAVX2::buffer_size, AlignBufferAVX2::buffer_size);
+                    _mm256_stream_si256(reinterpret_cast<__m256i *>(&chars[char_size]), char_buffer.v[0]);
+                    char_size += AlignBufferAVX2::vector_size;
+                    _mm256_stream_si256(reinterpret_cast<__m256i *>(&chars[char_size]), char_buffer.v[1]);
+                    char_size += AlignBufferAVX2::vector_size;
+                    char_buffer_size = 0;
+                }
+            } while (str_size > 0);
+
+            size_t offset = char_size + char_buffer_size;
+            std::memcpy(&offset_buffer.data[offset_buffer_size], &offset, sizeof(size_t));
+            offset_buffer_size += sizeof(size_t);
+            if unlikely (offset_buffer_size == AlignBufferAVX2::buffer_size)
+            {
+                offsets.resize(prev_size + AlignBufferAVX2::buffer_size / sizeof(size_t), AlignBufferAVX2::buffer_size);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&offsets[prev_size]), offset_buffer.v[0]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&offsets[prev_size]), offset_buffer.v[1]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(size_t);
+                offset_buffer_size = 0;
+            }
+        }
+
+        if unlikely (align_buffer.needFlush())
+        {
+            if (char_buffer_size != 0)
+            {
+                chars.resize(char_size + char_buffer_size, AlignBufferAVX2::buffer_size);
+                inline_memcpy(&chars[char_size], char_buffer.data, char_buffer_size);
+                char_buffer_size = 0;
+            }
+            if (offset_buffer_size != 0)
+            {
+                offsets.resize(prev_size + offset_buffer_size / sizeof(size_t), AlignBufferAVX2::buffer_size);
+                inline_memcpy(&offsets[prev_size], offset_buffer.data, offset_buffer_size);
+                offset_buffer_size = 0;
+            }
+        }
+        return;
+    }
+
+    if unlikely (char_buffer_size != 0)
+    {
+        chars.resize(char_size + char_buffer_size, AlignBufferAVX2::buffer_size);
+        inline_memcpy(&chars[char_size], char_buffer.data, char_buffer_size);
+        char_size += char_buffer_size;
+        char_buffer_size = 0;
+    }
+    if unlikely (offset_buffer_size != 0)
+    {
+        offsets.resize(prev_size + offset_buffer_size / sizeof(size_t), AlignBufferAVX2::buffer_size);
+        inline_memcpy(&offsets[prev_size], offset_buffer.data, offset_buffer_size);
+        prev_size += offset_buffer_size / sizeof(size_t);
+        offset_buffer_size = 0;
+    }
+#endif
+
+    offsets.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t str_size;
+        std::memcpy(&str_size, pos[i], sizeof(size_t));
+        pos[i] += sizeof(size_t);
+
+        chars.resize(char_size + str_size);
+        inline_memcpy(&chars[char_size], pos[i], str_size);
+        char_size += str_size;
+        offsets[prev_size + i] = char_size;
+        pos[i] += str_size;
+    }
+}
+
 void updateWeakHash32BinPadding(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());

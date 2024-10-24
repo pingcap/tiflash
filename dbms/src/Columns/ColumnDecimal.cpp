@@ -119,6 +119,113 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
+void ColumnDecimal<T>::deserializeAndInsertFromPos(
+    PaddedPODArray<UInt8 *> & pos,
+    ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
+{
+    size_t prev_size = data.size();
+    size_t size = pos.size();
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    data.resize(prev_size + size, AlignBufferAVX2::buffer_size);
+#else
+    data.resize(prev_size + size);
+#endif
+
+    size_t i = 0;
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    if constexpr (AlignBufferAVX2::buffer_size % sizeof(T) == 0)
+    {
+        size_t buffer_index = align_buffer.nextIndex();
+        AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
+        UInt8 & buffer_size = align_buffer.getSize(buffer_index);
+        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::buffer_size == 0;
+        if likely (is_aligned)
+        {
+            if (buffer_size != 0)
+            {
+                size_t count = std::min(size, i + (AlignBufferAVX2::buffer_size - buffer_size) / sizeof(T));
+                for (; i < count; ++i)
+                {
+                    std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                    buffer_size += sizeof(T);
+                    pos[i] += sizeof(T);
+                }
+
+                if (buffer_size < AlignBufferAVX2::buffer_size)
+                {
+                    if unlikely (align_buffer.needFlush())
+                    {
+                        std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                        buffer_size = 0;
+                    }
+                    return;
+                }
+
+                assert(buffer_size == AlignBufferAVX2::buffer_size);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[0]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[1]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                buffer_size = 0;
+            }
+
+            union alignas(64)
+            {
+                char vec_data[AlignBufferAVX2::buffer_size]{};
+                __m256i v[2];
+            };
+            size_t vec_size = 0;
+            constexpr size_t simd_width = AlignBufferAVX2::buffer_size / sizeof(T);
+            for (; i + simd_width <= size; i += simd_width)
+            {
+                for (size_t j = 0; j < simd_width; ++j)
+                {
+                    std::memcpy(&vec_data[vec_size], pos[i + j], sizeof(T));
+                    vec_size += sizeof(T);
+                    pos[i + j] += sizeof(T);
+                }
+
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[0]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[1]);
+                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                vec_size = 0;
+            }
+
+            for (; i < size; ++i)
+            {
+                std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                buffer_size += sizeof(T);
+                pos[i] += sizeof(T);
+            }
+
+            if unlikely (align_buffer.needFlush())
+            {
+                std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                buffer_size = 0;
+            }
+
+            return;
+        }
+
+        if unlikely (buffer_size != 0)
+        {
+            std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+            buffer_size = 0;
+        }
+    }
+#endif
+
+    for (; i < size; ++i)
+    {
+        std::memcpy(static_cast<void *>(&data[prev_size]), pos[i], sizeof(T));
+        ++prev_size;
+        pos[i] += sizeof(T);
+    }
+}
+
+template <typename T>
 UInt64 ColumnDecimal<T>::get64(size_t n) const
 {
     if constexpr (sizeof(T) > sizeof(UInt64))
