@@ -83,8 +83,12 @@ struct StringHashMapPhSubMaps
     using T3 = PhHashMap<StringKey24, TMapped>;
     using Ts = PhHashMap<StringRef, TMapped>;
 };
-using PhStringHashMap = StringHashMap<DB::AggregateDataPtr, HashTableAllocator, StringHashMapPhSubMaps>;
-using TwoLevelPhStringHashMap = TwoLevelStringHashMap<DB::AggregateDataPtr, HashTableAllocator, StringHashMap, StringHashMapPhSubMaps>;
+
+template <typename Mapped>
+using PhStringHashMap = StringHashMap<Mapped, HashTableAllocator, StringHashMapPhSubMaps>;
+
+template <typename Mapped>
+using TwoLevelPhStringHashMap = TwoLevelStringHashMap<Mapped, HashTableAllocator, StringHashMap, StringHashMapPhSubMaps>;
 
 // using AggregatedDataWithUInt64KeyPhMap = PhHashMap<UInt64, AggregateDataPtr>;
 // using AggregatedDataWithStringKey = PhHashMapWithSavedHash<StringRef, AggregateDataPtr>;
@@ -123,4 +127,8 @@ using AggregatedDataWithStringKeyTwoLevelPhMap = TwoLevelPhHashMapWithSavedHash<
 using AggregatedDataWithKeys128TwoLevelPhMap = TwoLevelPhHashMap<UInt128, AggregateDataPtr>;
 using AggregatedDataWithKeys256TwoLevelPhMap = TwoLevelPhHashMap<UInt256, AggregateDataPtr>;
 
+using AggregatedDataWithUInt64KeyHash64PhMap = PhHashMap<UInt64, AggregateDataPtr>;
+using AggregatedDataWithStringKeyHash64PhMap = PhHashMapWithSavedHash<StringRef, AggregateDataPtr>;
+using AggregatedDataWithKeys128Hash64PhMap = PhHashMap<UInt128, AggregateDataPtr>;
+using AggregatedDataWithKeys256Hash64PhMap = HashMap<UInt256, AggregateDataPtr>;
 } // namespace DB

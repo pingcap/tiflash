@@ -224,8 +224,8 @@ public:
     using value_type = typename Ts::value_type;
     using cell_type = typename Ts::cell_type;
 
-    using LookupResult = StringHashTableLookupResult<typename cell_type::mapped_type>;
-    using ConstLookupResult = StringHashTableLookupResult<const typename cell_type::mapped_type>;
+    using LookupResult = StringHashTableLookupResult<typename Self::mapped_type>;
+    using ConstLookupResult = StringHashTableLookupResult<const typename Self::mapped_type>;
 
     static constexpr bool isPhMap = SubMaps::isPhMap;
 
