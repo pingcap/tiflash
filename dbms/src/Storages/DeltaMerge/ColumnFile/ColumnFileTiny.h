@@ -42,6 +42,11 @@ public:
 
     struct IndexInfo
     {
+        IndexInfo(PageIdU64 page_id, std::optional<dtpb::VectorIndexFileProps> vec_index)
+            : index_page_id(page_id)
+            , vector_index(vec_index)
+        {}
+
         PageIdU64 index_page_id{};
         std::optional<dtpb::VectorIndexFileProps> vector_index = std::nullopt;
     };
