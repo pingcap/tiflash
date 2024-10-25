@@ -32,7 +32,7 @@
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
-#include <Interpreters/AggregatorMethod.h>
+#include <Interpreters/AggregatedDataPhMap.h>
 #include <Interpreters/CancellationHook.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
