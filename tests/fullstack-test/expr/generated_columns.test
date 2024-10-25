@@ -95,4 +95,29 @@ mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test
 |    9 |   10 |   90 |   91 |  900 |
 +------+------+------+------+------+
 
+=> DBGInvoke __enable_fail_point(force_remote_read_for_batch_cop)
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 80;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    8 |    9 |   80 |   81 |  800 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 80;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    8 |    9 |   80 |   81 |  800 |
++------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, e from test.t where c = 90;
++------+------+------+------+------+
+| a    | b    | c    | d    | e    |
++------+------+------+------+------+
+|    9 |   10 |   90 |   91 |  900 |
++------+------+------+------+------+
+
+=> DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
+
 mysql> drop table test.t;
