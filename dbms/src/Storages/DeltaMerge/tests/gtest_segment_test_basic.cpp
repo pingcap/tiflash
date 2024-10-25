@@ -773,9 +773,9 @@ bool SegmentTestBasic::replaceSegmentStableData(PageIdU64 segment_id, const DMFi
     return success;
 }
 
-bool SegmentTestBasic::ensureSegmentStableIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos)
+bool SegmentTestBasic::ensureSegmentStableLocalIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos)
 {
-    LOG_INFO(logger_op, "EnsureSegmentStableIndex, segment_id={}", segment_id);
+    LOG_INFO(logger_op, "EnsureSegmentStableLocalIndex, segment_id={}", segment_id);
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
 
@@ -794,12 +794,12 @@ bool SegmentTestBasic::ensureSegmentStableIndex(PageIdU64 segment_id, const Loca
     auto new_dmfiles = iw.build();
     RUNTIME_CHECK(new_dmfiles.size() == 1);
 
-    LOG_INFO(logger_op, "EnsureSegmentStableIndex, build index done, segment_id={}", segment_id);
+    LOG_INFO(logger_op, "EnsureSegmentStableLocalIndex, build index done, segment_id={}", segment_id);
 
     // Replace stable data
     success = replaceSegmentStableData(segment_id, new_dmfiles[0]);
 
-    operation_statistics["ensureStableIndex"]++;
+    operation_statistics["ensureStableLocalIndex"]++;
     return success;
 }
 

@@ -214,7 +214,7 @@ size_t DMFileIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutable, P
                     ? dm_file_mutable->vectorIndexFileName(index_id)
                     : colIndexFileName(DMFile::getFileNameBase(cd.id, substream_path));
                 const auto index_path = iw->localPath() + "/" + index_file_name;
-                index_builder->save(index_path);
+                index_builder->saveToFile(index_path);
 
                 // Memorize what kind of vector index it is, so that we can correctly restore it when reading.
                 dtpb::VectorIndexFileProps pb_idx;
