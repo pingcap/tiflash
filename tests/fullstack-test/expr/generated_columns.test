@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
 mysql> drop table if exists test.t;
 mysql> create table if not exists test.t(a int);
 mysql> alter table test.t add column b int as (a+1) virtual;
