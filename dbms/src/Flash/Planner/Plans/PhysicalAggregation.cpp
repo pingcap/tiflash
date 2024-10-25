@@ -167,7 +167,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                         fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
                     else if (context.getDAGContext() != nullptr)
                         context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
-                });
+                },
+                context.getSettingsRef().enable_aggregation_phmap);
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
         if (fine_grained_spill_context != nullptr)
@@ -182,7 +183,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                     stream,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size);
+                    context.getSettings().max_block_size,
+                    context.getSettingsRef().enable_aggregation_phmap);
                 stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
             });
         }
@@ -193,7 +195,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                     stream,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size);
+                    context.getSettings().max_block_size,
+                    context.getSettingsRef().enable_aggregation_phmap);
                 stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
             });
         }
@@ -222,7 +225,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                 {
                     context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
                 }
-            });
+            },
+            context.getSettingsRef().enable_aggregation_phmap);
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
@@ -246,7 +250,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                 {
                     context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
                 }
-            });
+            },
+            context.getSettingsRef().enable_aggregation_phmap);
     }
 
     // we can record for agg after restore concurrency.
@@ -308,7 +313,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
                 exec_context,
                 log->identifier(),
                 params,
-                fine_grained_spill_context));
+                fine_grained_spill_context,
+                context.getSettingsRef().enable_aggregation_phmap));
         });
         if (fine_grained_spill_context != nullptr)
             context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
@@ -323,7 +329,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
                     exec_context,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size));
+                    context.getSettingsRef().max_block_size,
+                    context.getSettingsRef().enable_aggregation_phmap));
             });
         }
         else if (auto_pass_through_switcher.isAuto())
@@ -334,7 +341,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
                     exec_context,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size));
+                    context.getSettingsRef().max_block_size,
+                    context.getSettingsRef().enable_aggregation_phmap));
             });
         }
         else

@@ -287,6 +287,7 @@ Aggregator::Aggregator(
     const String & req_id,
     size_t concurrency,
     const RegisterOperatorSpillContext & register_operator_spill_context,
+    bool enable_phmap,
     bool is_auto_pass_through_)
     : params(params_)
     , log(Logger::get(req_id))
@@ -332,7 +333,7 @@ Aggregator::Aggregator(
             all_aggregates_has_trivial_destructor = false;
     }
 
-    method_chosen = chooseAggregationMethod();
+    method_chosen = chooseAggregationMethod(enable_phmap);
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     agg_spill_context = std::make_shared<AggSpillContext>(
         concurrency,
@@ -485,7 +486,29 @@ AggregatedDataVariants::Type ChooseAggregationMethodFastPath(
     return AggregatedDataVariants::Type::serialized;
 }
 
-AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
+namespace
+{
+AggregatedDataVariants::Type mapToPhMap(bool enable_phmap, const AggregatedDataVariants::Type & type)
+{
+    if (!enable_phmap)
+        return type;
+
+    switch (type)
+    {
+#define M(name) case AggregatedDataVariants::Type::name: return AggregatedDataVariants::Type::name##_phmap;
+    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M);
+#undef M
+
+#define M(name) case AggregatedDataVariants::Type::name##_two_level: return AggregatedDataVariants::Type::name##_phmap_two_level;
+    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M);
+#undef M
+    default:
+        RUNTIME_CHECK_MSG(false, "unexpected method type");
+    }
+}
+}
+
+AggregatedDataVariants::Type Aggregator::chooseAggregationMethod(bool enable_phmap)
 {
     /// If no keys. All aggregating to single row.
     if (params.keys_size == 0)
@@ -538,13 +561,13 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             /// Pack if possible all the keys along with information about which key values are nulls
             /// into a fixed 16- or 32-byte blob.
             if (std::tuple_size<KeysNullMap<UInt128>>::value + keys_bytes <= 16)
-                return AggregatedDataVariants::Type::nullable_keys128;
+                return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::nullable_keys128);
             if (std::tuple_size<KeysNullMap<UInt256>>::value + keys_bytes <= 32)
-                return AggregatedDataVariants::Type::nullable_keys256;
+                return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::nullable_keys256);
         }
 
         /// Fallback case.
-        return AggregatedDataVariants::Type::serialized;
+        return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::serialized);
     }
 
     /// No key has been found to be nullable.
@@ -556,19 +579,19 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     {
         size_t size_of_field = types_not_null[0]->getSizeOfValueInMemory();
         if (size_of_field == 1)
-            return AggregatedDataVariants::Type::key8;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key8);
         if (size_of_field == 2)
-            return AggregatedDataVariants::Type::key16;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key16);
         if (size_of_field == 4)
-            return AggregatedDataVariants::Type::key32;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key32);
         if (size_of_field == 8)
-            return AggregatedDataVariants::Type::key64;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key64);
         if (size_of_field == 16)
-            return AggregatedDataVariants::Type::keys128;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::keys128);
         if (size_of_field == 32)
-            return AggregatedDataVariants::Type::keys256;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::keys256);
         if (size_of_field == sizeof(Decimal256))
-            return AggregatedDataVariants::Type::key_int256;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key_int256);
         throw Exception(
             "Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16, 32.",
             ErrorCodes::LOGICAL_ERROR);
@@ -578,15 +601,15 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     if (params.keys_size == num_fixed_contiguous_keys)
     {
         if (keys_bytes <= 2)
-            return AggregatedDataVariants::Type::keys16;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::keys16);
         if (keys_bytes <= 4)
-            return AggregatedDataVariants::Type::keys32;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::keys32);
         if (keys_bytes <= 8)
-            return AggregatedDataVariants::Type::keys64;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::keys64);
         if (keys_bytes <= 16)
-            return AggregatedDataVariants::Type::keys128;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::keys128);
         if (keys_bytes <= 32)
-            return AggregatedDataVariants::Type::keys256;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::keys256);
     }
 
     /// If single string key - will use hash table with references to it. Strings itself are stored separately in Arena.
@@ -595,7 +618,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
         if (params.collators.empty() || !params.collators[0])
         {
             // use original way. `Type::one_key_strbin` will generate empty column.
-            return AggregatedDataVariants::Type::key_string;
+            return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key_string);
         }
         else
         {
@@ -606,25 +629,25 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
             case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
             {
-                return AggregatedDataVariants::Type::one_key_strbinpadding;
+                return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::one_key_strbinpadding);
             }
             case TiDB::ITiDBCollator::CollatorType::BINARY:
             {
-                return AggregatedDataVariants::Type::one_key_strbin;
+                return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::one_key_strbin);
             }
             default:
             {
                 // for CI COLLATION, use original way
-                return AggregatedDataVariants::Type::key_string;
+                return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key_string);
             }
             }
         }
     }
 
     if (params.keys_size == 1 && types_not_null[0]->isFixedString())
-        return AggregatedDataVariants::Type::key_fixed_string;
+        return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key_fixed_string);
 
-    return ChooseAggregationMethodFastPath(params.keys_size, types_not_null, params.collators);
+    return mapToPhMap(enable_phmap, ChooseAggregationMethodFastPath(params.keys_size, types_not_null, params.collators));
 }
 
 

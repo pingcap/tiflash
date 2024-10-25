@@ -32,16 +32,18 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     Int64 max_buffered_bytes_,
     size_t temporary_data_merge_threads_,
     const String & req_id,
-    const RegisterOperatorSpillContext & register_operator_spill_context)
+    const RegisterOperatorSpillContext & register_operator_spill_context,
+    bool enable_phmap_)
     : log(Logger::get(req_id))
     , max_threads(std::min(inputs.size(), max_threads_))
     , params(params_)
-    , aggregator(params, req_id, max_threads, register_operator_spill_context)
+    , aggregator(params, req_id, max_threads, register_operator_spill_context, enable_phmap_)
     , final(final_)
     , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , handler(*this)
     , processor(inputs, additional_inputs_at_end, max_threads, handler, log)
+    , enable_phmap(enable_phmap_)
 {
     children = inputs;
     children.insert(children.end(), additional_inputs_at_end.begin(), additional_inputs_at_end.end());
@@ -129,7 +131,8 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 final,
                 temporary_data_merge_threads,
                 temporary_data_merge_threads,
-                log->identifier());
+                log->identifier(),
+                enable_phmap);
         }
 
         executed = true;

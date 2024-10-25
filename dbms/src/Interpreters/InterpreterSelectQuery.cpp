@@ -951,7 +951,8 @@ void InterpreterSelectQuery::executeAggregation(
                 ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                 : static_cast<size_t>(settings.max_threads),
             /*req_id=*/"",
-            [&](const OperatorSpillContextPtr &) {});
+            [&](const OperatorSpillContextPtr &) {},
+            /*enable_phmap*/false);
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
@@ -969,7 +970,8 @@ void InterpreterSelectQuery::executeAggregation(
             params,
             final,
             /*req_id=*/"",
-            [](const OperatorSpillContextPtr &) {});
+            [](const OperatorSpillContextPtr &) {},
+            /*enable_phmap*/false);
     }
 }
 
@@ -1033,7 +1035,8 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
         settings.aggregation_memory_efficient_merge_threads
             ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
             : static_cast<size_t>(settings.max_threads),
-        /*req_id=*/"");
+        /*req_id=*/"",
+        /*enable_phmap=*/false);
 
     pipeline.streams.resize(1);
 }

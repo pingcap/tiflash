@@ -40,7 +40,8 @@ public:
         Int64 max_buffered_bytes_,
         size_t temporary_data_merge_threads_,
         const String & req_id,
-        const RegisterOperatorSpillContext & register_operator_spill_context);
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        bool enable_phmap_);
 
     String getName() const override { return NAME; }
 
@@ -114,6 +115,7 @@ private:
     /** From here we get the finished blocks after the aggregation.
       */
     std::unique_ptr<IBlockInputStream> impl;
+    bool enable_phmap = false;
 };
 
 } // namespace DB

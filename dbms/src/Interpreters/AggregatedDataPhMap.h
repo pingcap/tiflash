@@ -102,8 +102,8 @@ using TwoLevelPhStringHashMap = TwoLevelStringHashMap<Mapped, HashTableAllocator
 
 namespace DB
 {
-// using AggregatedDataWithUInt8KeyPhMap = FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>;
-// using AggregatedDataWithUInt16KeyPhMap = FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>;
+using AggregatedDataWithUInt8KeyPhMap = FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>;
+using AggregatedDataWithUInt16KeyPhMap = FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>;
 
 using AggregatedDataWithUInt32KeyPhMap = PhHashMap<UInt32, AggregateDataPtr>;
 using AggregatedDataWithUInt64KeyPhMap = PhHashMap<UInt64, AggregateDataPtr>;
@@ -130,8 +130,9 @@ using AggregatedDataWithStringKeyTwoLevelPhMap = TwoLevelPhHashMapWithSavedHash<
 using AggregatedDataWithKeys128TwoLevelPhMap = TwoLevelPhHashMap<UInt128, AggregateDataPtr>;
 using AggregatedDataWithKeys256TwoLevelPhMap = TwoLevelPhHashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
 
-// using AggregatedDataWithUInt64KeyHash64PhMap = PhHashMap<UInt64, AggregateDataPtr>;
-// using AggregatedDataWithStringKeyHash64PhMap = PhHashMapWithSavedHash<StringRef, AggregateDataPtr>;
-// using AggregatedDataWithKeys128Hash64PhMap = PhHashMap<UInt128, AggregateDataPtr>;
-// using AggregatedDataWithKeys256Hash64PhMap = PhHashMap<UInt256, AggregateDataPtr>;
+// TODO hash is not good
+using AggregatedDataWithUInt64KeyHash64PhMap = PhHashMap<UInt64, AggregateDataPtr, DefaultHash<UInt64>>;
+using AggregatedDataWithStringKeyHash64PhMap = PhHashMapWithSavedHash<StringRef, AggregateDataPtr, StringRefHash64>;
+using AggregatedDataWithKeys128Hash64PhMap = PhHashMap<UInt128, AggregateDataPtr, DefaultHash<UInt128>>;
+using AggregatedDataWithKeys256Hash64PhMap = PhHashMap<UInt256, AggregateDataPtr, DefaultHash<UInt256>>;
 } // namespace DB

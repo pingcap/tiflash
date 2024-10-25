@@ -55,6 +55,7 @@ public:
         const Aggregator::Params & params_,
         CancellationHook && hook,
         const String & req_id_,
+        bool enable_phmap,
         UInt64 row_limit_unit_,
         UInt64 normal_unit_num_ = DEF_NORMAL_UNIT_NUM,
         UInt64 dynamic_unit_num_ = DEF_DYNAMIC_UNIT_NUM)
@@ -67,7 +68,7 @@ public:
         , log(Logger::get(req_id_))
     {
         aggregator
-            = std::make_unique<Aggregator>(params_, req_id_, /*concurrency=*/1, nullptr, /*is_auto_pass_through=*/true);
+            = std::make_unique<Aggregator>(params_, req_id_, /*concurrency=*/1, nullptr, enable_phmap, /*is_auto_pass_through=*/true);
         aggregator->setCancellationHook(hook);
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);

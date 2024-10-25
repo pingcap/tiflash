@@ -32,7 +32,8 @@ public:
         const BlockInputStreamPtr & input_,
         const Aggregator::Params & params_,
         const String & req_id,
-        UInt64 row_limit_unit)
+        UInt64 row_limit_unit,
+        bool enable_phmap)
     {
         children.push_back(input_);
         auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(
@@ -40,6 +41,7 @@ public:
             params_,
             [&]() { return this->isCancelled(); },
             req_id,
+            enable_phmap,
             row_limit_unit);
     }
 
