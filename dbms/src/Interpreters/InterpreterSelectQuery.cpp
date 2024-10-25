@@ -952,7 +952,7 @@ void InterpreterSelectQuery::executeAggregation(
                 : static_cast<size_t>(settings.max_threads),
             /*req_id=*/"",
             [&](const OperatorSpillContextPtr &) {},
-            /*enable_phmap*/false);
+            /*enable_phmap*/ false);
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
@@ -971,7 +971,7 @@ void InterpreterSelectQuery::executeAggregation(
             final,
             /*req_id=*/"",
             [](const OperatorSpillContextPtr &) {},
-            /*enable_phmap*/false);
+            /*enable_phmap*/ false);
     }
 }
 

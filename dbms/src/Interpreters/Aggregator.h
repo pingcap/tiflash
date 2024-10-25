@@ -29,10 +29,10 @@
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Interpreters/AggregatorMethod.h>
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Interpreters/AggregatorMethod.h>
 #include <Interpreters/CancellationHook.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
@@ -757,179 +757,210 @@ struct AggregatedDataVariants : private boost::noncopyable
       */
     AggregatedDataWithoutKey without_key = nullptr;
 
-#define M_OneNumber(METHOD_POSTFIX, AGGDATA_POSTFIX) \
-    using AggregationMethod_key8##METHOD_POSTFIX = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key##AGGDATA_POSTFIX, false>; \
-    using AggregationMethod_key16##METHOD_POSTFIX = AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key##AGGDATA_POSTFIX, false>;
+#define M_OneNumber(METHOD_POSTFIX, AGGDATA_POSTFIX)                                             \
+    using AggregationMethod_key8##METHOD_POSTFIX                                                 \
+        = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key##AGGDATA_POSTFIX, false>; \
+    using AggregationMethod_key16##METHOD_POSTFIX                                                \
+        = AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key##AGGDATA_POSTFIX, false>;
 
     // key8 and key16 will not use phmap, so skip define phmap version.
-    M_OneNumber(,);
+    M_OneNumber(, );
 #undef M_OneNumber
 
-#define M_OneNumber(METHOD_POSTFIX, DATA_POSTFIX, ENABLE_CACHE) \
-    using AggregationMethod_key32##METHOD_POSTFIX = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key##DATA_POSTFIX, ENABLE_CACHE>; \
-    using AggregationMethod_key64##METHOD_POSTFIX = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key##DATA_POSTFIX, ENABLE_CACHE>; \
-    using AggregationMethod_key_int256##METHOD_POSTFIX = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key##DATA_POSTFIX, ENABLE_CACHE>; \
-    using AggregationMethod_key32##METHOD_POSTFIX##_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel##DATA_POSTFIX, ENABLE_CACHE>; \
-    using AggregationMethod_key64##METHOD_POSTFIX##_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel##DATA_POSTFIX, ENABLE_CACHE>; \
-    using AggregationMethod_key_int256##METHOD_POSTFIX##_two_level = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel##DATA_POSTFIX, ENABLE_CACHE>; \
+#define M_OneNumber(METHOD_POSTFIX, DATA_POSTFIX, ENABLE_CACHE)                                                \
+    using AggregationMethod_key32##METHOD_POSTFIX                                                              \
+        = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key##DATA_POSTFIX, ENABLE_CACHE>;         \
+    using AggregationMethod_key64##METHOD_POSTFIX                                                              \
+        = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key##DATA_POSTFIX, ENABLE_CACHE>;         \
+    using AggregationMethod_key_int256##METHOD_POSTFIX                                                         \
+        = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key##DATA_POSTFIX, ENABLE_CACHE>;         \
+    using AggregationMethod_key32##METHOD_POSTFIX##_two_level                                                  \
+        = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel##DATA_POSTFIX, ENABLE_CACHE>; \
+    using AggregationMethod_key64##METHOD_POSTFIX##_two_level                                                  \
+        = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel##DATA_POSTFIX, ENABLE_CACHE>; \
+    using AggregationMethod_key_int256##METHOD_POSTFIX##_two_level                                             \
+        = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel##DATA_POSTFIX, ENABLE_CACHE>;
 
-    M_OneNumber(,,true);
+    M_OneNumber(, , true);
     M_OneNumber(_phmap, PhMap, false);
 #undef M_OneNumber
 
-#define M_StringNoCache(METHOD_POSTFIX, DATA_POSTFIX) \
-    using AggregationMethod_key_string##METHOD_POSTFIX = AggregationMethodStringNoCache<AggregatedDataWithShortStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_key_string##METHOD_POSTFIX##_two_level = AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel##DATA_POSTFIX>; \
+#define M_StringNoCache(METHOD_POSTFIX, DATA_POSTFIX)                                     \
+    using AggregationMethod_key_string##METHOD_POSTFIX                                    \
+        = AggregationMethodStringNoCache<AggregatedDataWithShortStringKey##DATA_POSTFIX>; \
+    using AggregationMethod_key_string##METHOD_POSTFIX##_two_level                        \
+        = AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel##DATA_POSTFIX>;
 
-    M_StringNoCache(,);
+    M_StringNoCache(, );
     M_StringNoCache(_phmap, PhMap);
 #undef M_StringNoCache
 
-#define M_OneKeyStringNoCache(METHOD_POSTFIX, DATA_POSTFIX) \
-    using AggregationMethod_one_key_strbin##METHOD_POSTFIX \
-        = AggregationMethodOneKeyStringNoCache<false, AggregatedDataWithShortStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_one_key_strbinpadding##METHOD_POSTFIX \
-        = AggregationMethodOneKeyStringNoCache<true, AggregatedDataWithShortStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_one_key_strbin##METHOD_POSTFIX##_two_level \
+#define M_OneKeyStringNoCache(METHOD_POSTFIX, DATA_POSTFIX)                                                    \
+    using AggregationMethod_one_key_strbin##METHOD_POSTFIX                                                     \
+        = AggregationMethodOneKeyStringNoCache<false, AggregatedDataWithShortStringKey##DATA_POSTFIX>;         \
+    using AggregationMethod_one_key_strbinpadding##METHOD_POSTFIX                                              \
+        = AggregationMethodOneKeyStringNoCache<true, AggregatedDataWithShortStringKey##DATA_POSTFIX>;          \
+    using AggregationMethod_one_key_strbin##METHOD_POSTFIX##_two_level                                         \
         = AggregationMethodOneKeyStringNoCache<false, AggregatedDataWithShortStringKeyTwoLevel##DATA_POSTFIX>; \
-    using AggregationMethod_one_key_strbinpadding##METHOD_POSTFIX##_two_level \
+    using AggregationMethod_one_key_strbinpadding##METHOD_POSTFIX##_two_level                                  \
         = AggregationMethodOneKeyStringNoCache<true, AggregatedDataWithShortStringKeyTwoLevel##DATA_POSTFIX>;
 
-    M_OneKeyStringNoCache(,);
+    M_OneKeyStringNoCache(, );
     M_OneKeyStringNoCache(_phmap, PhMap);
 #undef M_OneKeyStringNoCache
 
-#define M_FixedStringNoCache(METHOD_POSTFIX, DATA_POSTFIX) \
-    using AggregationMethod_key_fixed_string##METHOD_POSTFIX = AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_key_fixed_string##METHOD_POSTFIX##_two_level \
+#define M_FixedStringNoCache(METHOD_POSTFIX, DATA_POSTFIX)                                     \
+    using AggregationMethod_key_fixed_string##METHOD_POSTFIX                                   \
+        = AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKey##DATA_POSTFIX>; \
+    using AggregationMethod_key_fixed_string##METHOD_POSTFIX##_two_level                       \
         = AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel##DATA_POSTFIX>;
 
-    M_FixedStringNoCache(,);
+    M_FixedStringNoCache(, );
     M_FixedStringNoCache(_phmap, PhMap);
 #undef M_FixedStringNoCache
 
 #define M_KeysFixed(METHOD_POSTFIX, DATA_POSTFIX, NULLABLE, ENABLE_CACHE) \
-    using AggregationMethod_keys16##METHOD_POSTFIX = AggregationMethodKeysFixed<AggregatedDataWithUInt16Key##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
+    using AggregationMethod_keys16##METHOD_POSTFIX                        \
+        = AggregationMethodKeysFixed<AggregatedDataWithUInt16Key##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;
 
     // keys16 also use AggregatedDataWithUInt16Key, which is same with key16. It's just an array of 2^16.
     // So no need to use phmap
-    M_KeysFixed(,, false, false);
+    M_KeysFixed(, , false, false);
 #undef M_KeysFixed
 
-#define M_KeysFixed(METHOD_POSTFIX, DATA_POSTFIX, NULLABLE, ENABLE_CACHE) \
-    using AggregationMethod_keys32##METHOD_POSTFIX = AggregationMethodKeysFixed<AggregatedDataWithUInt32Key##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys64##METHOD_POSTFIX = AggregationMethodKeysFixed<AggregatedDataWithUInt64Key##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys128##METHOD_POSTFIX = AggregationMethodKeysFixed<AggregatedDataWithKeys128##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys256##METHOD_POSTFIX = AggregationMethodKeysFixed<AggregatedDataWithKeys256##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys32##METHOD_POSTFIX##_two_level = \
-        AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys64##METHOD_POSTFIX##_two_level = \
-        AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys128##METHOD_POSTFIX##_two_level = \
-        AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys256##METHOD_POSTFIX##_two_level = \
-        AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
+#define M_KeysFixed(METHOD_POSTFIX, DATA_POSTFIX, NULLABLE, ENABLE_CACHE)                                        \
+    using AggregationMethod_keys32##METHOD_POSTFIX                                                               \
+        = AggregationMethodKeysFixed<AggregatedDataWithUInt32Key##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;         \
+    using AggregationMethod_keys64##METHOD_POSTFIX                                                               \
+        = AggregationMethodKeysFixed<AggregatedDataWithUInt64Key##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;         \
+    using AggregationMethod_keys128##METHOD_POSTFIX                                                              \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;           \
+    using AggregationMethod_keys256##METHOD_POSTFIX                                                              \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys256##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;           \
+    using AggregationMethod_keys32##METHOD_POSTFIX##_two_level                                                   \
+        = AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
+    using AggregationMethod_keys64##METHOD_POSTFIX##_two_level                                                   \
+        = AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
+    using AggregationMethod_keys128##METHOD_POSTFIX##_two_level                                                  \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;   \
+    using AggregationMethod_keys256##METHOD_POSTFIX##_two_level                                                  \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;
 
-    M_KeysFixed(,, false, true);
+    M_KeysFixed(, , false, true);
     M_KeysFixed(_phmap, PhMap, false, false);
 #undef M_KeysFixed
 
-#define M_KeysFixed(METHOD_POSTFIX, DATA_POSTFIX, NULLABLE, ENABLE_CACHE) \
-    using AggregationMethod_nullable_keys128##METHOD_POSTFIX = AggregationMethodKeysFixed<AggregatedDataWithKeys128##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_nullable_keys256##METHOD_POSTFIX = AggregationMethodKeysFixed<AggregatedDataWithKeys256##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_nullable_keys128##METHOD_POSTFIX##_two_level \
+#define M_KeysFixed(METHOD_POSTFIX, DATA_POSTFIX, NULLABLE, ENABLE_CACHE)                                      \
+    using AggregationMethod_nullable_keys128##METHOD_POSTFIX                                                   \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;         \
+    using AggregationMethod_nullable_keys256##METHOD_POSTFIX                                                   \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys256##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;         \
+    using AggregationMethod_nullable_keys128##METHOD_POSTFIX##_two_level                                       \
         = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_nullable_keys256##METHOD_POSTFIX##_two_level \
+    using AggregationMethod_nullable_keys256##METHOD_POSTFIX##_two_level                                       \
         = AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;
 
-    M_KeysFixed(,, true, true);
+    M_KeysFixed(, , true, true);
     M_KeysFixed(_phmap, PhMap, true, false);
 #undef M_KeysFixed
 
-#define M_Serialized(METHOD_POSTFIX, DATA_POSTFIX) \
-    using AggregationMethod_serialized##METHOD_POSTFIX = AggregationMethodSerialized<AggregatedDataWithStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_serialized##METHOD_POSTFIX##_two_level = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>; \
+#define M_Serialized(METHOD_POSTFIX, DATA_POSTFIX)                                \
+    using AggregationMethod_serialized##METHOD_POSTFIX                            \
+        = AggregationMethodSerialized<AggregatedDataWithStringKey##DATA_POSTFIX>; \
+    using AggregationMethod_serialized##METHOD_POSTFIX##_two_level                \
+        = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;
 
-    M_Serialized(,);
+    M_Serialized(, );
     M_Serialized(_phmap, PhMap);
 #undef M_Serialized
 
-#define M_FastPathTwoKeysNoCache(METHOD_POSTFIX, DATA_POSTFIX) \
-    using AggregationMethod_two_keys_num64_strbin##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescNumber64, \
-        ColumnsHashing::KeyDescStringBin, \
-        AggregatedDataWithStringKey##DATA_POSTFIX>; \
+#define M_FastPathTwoKeysNoCache(METHOD_POSTFIX, DATA_POSTFIX)                                                      \
+    using AggregationMethod_two_keys_num64_strbin##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache<        \
+        ColumnsHashing::KeyDescNumber64,                                                                            \
+        ColumnsHashing::KeyDescStringBin,                                                                           \
+        AggregatedDataWithStringKey##DATA_POSTFIX>;                                                                 \
     using AggregationMethod_two_keys_num64_strbinpadding##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescNumber64, \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        AggregatedDataWithStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_strbin_num64##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBin, \
-        ColumnsHashing::KeyDescNumber64, \
-        AggregatedDataWithStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_strbin_strbin##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBin, \
-        ColumnsHashing::KeyDescStringBin, \
-        AggregatedDataWithStringKey##DATA_POSTFIX>; \
+        ColumnsHashing::KeyDescNumber64,                                                                            \
+        ColumnsHashing::KeyDescStringBinPadding,                                                                    \
+        AggregatedDataWithStringKey##DATA_POSTFIX>;                                                                 \
+    using AggregationMethod_two_keys_strbin_num64##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache<        \
+        ColumnsHashing::KeyDescStringBin,                                                                           \
+        ColumnsHashing::KeyDescNumber64,                                                                            \
+        AggregatedDataWithStringKey##DATA_POSTFIX>;                                                                 \
+    using AggregationMethod_two_keys_strbin_strbin##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache<       \
+        ColumnsHashing::KeyDescStringBin,                                                                           \
+        ColumnsHashing::KeyDescStringBin,                                                                           \
+        AggregatedDataWithStringKey##DATA_POSTFIX>;                                                                 \
     using AggregationMethod_two_keys_strbinpadding_num64##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        ColumnsHashing::KeyDescNumber64, \
-        AggregatedDataWithStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_strbinpadding_strbinpadding##METHOD_POSTFIX = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        AggregatedDataWithStringKey##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_num64_strbin##METHOD_POSTFIX##_two_level = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescNumber64, \
-        ColumnsHashing::KeyDescStringBin, \
-        AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_num64_strbinpadding##METHOD_POSTFIX##_two_level = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescNumber64, \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_strbin_num64##METHOD_POSTFIX##_two_level = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBin, \
-        ColumnsHashing::KeyDescNumber64, \
-        AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_strbin_strbin##METHOD_POSTFIX##_two_level = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBin, \
-        ColumnsHashing::KeyDescStringBin, \
-        AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_strbinpadding_num64##METHOD_POSTFIX##_two_level = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        ColumnsHashing::KeyDescNumber64, \
-        AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>; \
-    using AggregationMethod_two_keys_strbinpadding_strbinpadding##METHOD_POSTFIX##_two_level = AggregationMethodFastPathTwoKeysNoCache< \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        ColumnsHashing::KeyDescStringBinPadding, \
-        AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;
+        ColumnsHashing::KeyDescStringBinPadding,                                                                    \
+        ColumnsHashing::KeyDescNumber64,                                                                            \
+        AggregatedDataWithStringKey##DATA_POSTFIX>;                                                                 \
+    using AggregationMethod_two_keys_strbinpadding_strbinpadding##METHOD_POSTFIX                                    \
+        = AggregationMethodFastPathTwoKeysNoCache<                                                                  \
+            ColumnsHashing::KeyDescStringBinPadding,                                                                \
+            ColumnsHashing::KeyDescStringBinPadding,                                                                \
+            AggregatedDataWithStringKey##DATA_POSTFIX>;                                                             \
+    using AggregationMethod_two_keys_num64_strbin##METHOD_POSTFIX##_two_level                                       \
+        = AggregationMethodFastPathTwoKeysNoCache<                                                                  \
+            ColumnsHashing::KeyDescNumber64,                                                                        \
+            ColumnsHashing::KeyDescStringBin,                                                                       \
+            AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;                                                     \
+    using AggregationMethod_two_keys_num64_strbinpadding##METHOD_POSTFIX##_two_level                                \
+        = AggregationMethodFastPathTwoKeysNoCache<                                                                  \
+            ColumnsHashing::KeyDescNumber64,                                                                        \
+            ColumnsHashing::KeyDescStringBinPadding,                                                                \
+            AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;                                                     \
+    using AggregationMethod_two_keys_strbin_num64##METHOD_POSTFIX##_two_level                                       \
+        = AggregationMethodFastPathTwoKeysNoCache<                                                                  \
+            ColumnsHashing::KeyDescStringBin,                                                                       \
+            ColumnsHashing::KeyDescNumber64,                                                                        \
+            AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;                                                     \
+    using AggregationMethod_two_keys_strbin_strbin##METHOD_POSTFIX##_two_level                                      \
+        = AggregationMethodFastPathTwoKeysNoCache<                                                                  \
+            ColumnsHashing::KeyDescStringBin,                                                                       \
+            ColumnsHashing::KeyDescStringBin,                                                                       \
+            AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;                                                     \
+    using AggregationMethod_two_keys_strbinpadding_num64##METHOD_POSTFIX##_two_level                                \
+        = AggregationMethodFastPathTwoKeysNoCache<                                                                  \
+            ColumnsHashing::KeyDescStringBinPadding,                                                                \
+            ColumnsHashing::KeyDescNumber64,                                                                        \
+            AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;                                                     \
+    using AggregationMethod_two_keys_strbinpadding_strbinpadding##METHOD_POSTFIX##_two_level                        \
+        = AggregationMethodFastPathTwoKeysNoCache<                                                                  \
+            ColumnsHashing::KeyDescStringBinPadding,                                                                \
+            ColumnsHashing::KeyDescStringBinPadding,                                                                \
+            AggregatedDataWithStringKeyTwoLevel##DATA_POSTFIX>;
 
-    M_FastPathTwoKeysNoCache(,);
+    M_FastPathTwoKeysNoCache(, );
     M_FastPathTwoKeysNoCache(_phmap, PhMap);
 #undef M_FastPathTwoKeysNoCache
 
 // All methods with DefaultHash hasher.
 #define M_OneNumber(METHOD_POSTFIX, DATA_POSTFIX, ENABLE_CACHE) \
-    using AggregationMethod_key64_hash64##METHOD_POSTFIX = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64##DATA_POSTFIX, ENABLE_CACHE>;
-#define M_StringNoCache(METHOD_POSTFIX, DATA_POSTFIX) \
-    using AggregationMethod_key_string_hash64##METHOD_POSTFIX = AggregationMethodStringNoCache<AggregatedDataWithStringKeyHash64##DATA_POSTFIX>;
-#define M_KeysFixed(METHOD_POSTFIX, DATA_POSTFIX, NULLABLE, ENABLE_CACHE) \
-    using AggregationMethod_keys128_hash64##METHOD_POSTFIX = \
-        AggregationMethodKeysFixed<AggregatedDataWithKeys128Hash64##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
-    using AggregationMethod_keys256_hash64##METHOD_POSTFIX = \
-        AggregationMethodKeysFixed<AggregatedDataWithKeys256Hash64##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;
-#define M_Serialized(METHOD_POSTFIX, DATA_POSTFIX) \
-    using AggregationMethod_serialized_hash64##METHOD_POSTFIX = AggregationMethodSerialized<AggregatedDataWithStringKeyHash64##DATA_POSTFIX>;
-#define M_FixedString(METHOD_POSTFIX, DATA_POSTFIX, ENABLE_CACHE) \
-    using AggregationMethod_key_fixed_string_hash64##METHOD_POSTFIX = AggregationMethodFixedString<AggregatedDataWithStringKeyHash64##DATA_POSTFIX, ENABLE_CACHE>;
+    using AggregationMethod_key64_hash64##METHOD_POSTFIX        \
+        = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64##DATA_POSTFIX, ENABLE_CACHE>;
+#define M_StringNoCache(METHOD_POSTFIX, DATA_POSTFIX)         \
+    using AggregationMethod_key_string_hash64##METHOD_POSTFIX \
+        = AggregationMethodStringNoCache<AggregatedDataWithStringKeyHash64##DATA_POSTFIX>;
+#define M_KeysFixed(METHOD_POSTFIX, DATA_POSTFIX, NULLABLE, ENABLE_CACHE)                                    \
+    using AggregationMethod_keys128_hash64##METHOD_POSTFIX                                                   \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128Hash64##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>; \
+    using AggregationMethod_keys256_hash64##METHOD_POSTFIX                                                   \
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys256Hash64##DATA_POSTFIX, NULLABLE, ENABLE_CACHE>;
+#define M_Serialized(METHOD_POSTFIX, DATA_POSTFIX)            \
+    using AggregationMethod_serialized_hash64##METHOD_POSTFIX \
+        = AggregationMethodSerialized<AggregatedDataWithStringKeyHash64##DATA_POSTFIX>;
+#define M_FixedString(METHOD_POSTFIX, DATA_POSTFIX, ENABLE_CACHE)   \
+    using AggregationMethod_key_fixed_string_hash64##METHOD_POSTFIX \
+        = AggregationMethodFixedString<AggregatedDataWithStringKeyHash64##DATA_POSTFIX, ENABLE_CACHE>;
 
     // These methods all use DefaultHash for ckmap.
     // We will not define phmap version because chaning hash method is meanless for phmap. Also they are not used by Aggregator.
-    M_OneNumber(,,true);
-    M_StringNoCache(,);
-    M_KeysFixed(,, false, true);
-    M_Serialized(,);
-    M_FixedString(,, true);
+    M_OneNumber(, , true);
+    M_StringNoCache(, );
+    M_KeysFixed(, , false, true);
+    M_Serialized(, );
+    M_FixedString(, , true);
 #undef M_OneNumber
 #undef M_StringNoCache
 #undef M_KeysFixed
@@ -937,7 +968,7 @@ struct AggregatedDataVariants : private boost::noncopyable
 #undef M_FixedString
 
 /// In this and similar macros, the option without_key is not considered.
-#define APPLY_FOR_AGGREGATED_VARIANTS_NON_PHMAP(M)                    \
+#define APPLY_FOR_AGGREGATED_VARIANTS_NON_PHMAP(M)          \
     M(key8, false)                                          \
     M(key16, false)                                         \
     M(key32, false)                                         \
@@ -988,7 +1019,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(one_key_strbin_two_level, true)                       \
     M(one_key_strbinpadding_two_level, true)
 
-#define APPLY_FOR_AGGREGATED_VARIANTS_PHMAP(M) \
+#define APPLY_FOR_AGGREGATED_VARIANTS_PHMAP(M)                    \
     M(key32_phmap, false)                                         \
     M(key64_phmap, false)                                         \
     M(key_string_phmap, false)                                    \
@@ -1030,7 +1061,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(one_key_strbin_phmap_two_level, true)                       \
     M(one_key_strbinpadding_phmap_two_level, true)
 
-#define APPLY_FOR_AGGREGATED_VARIANTS(M) \
+#define APPLY_FOR_AGGREGATED_VARIANTS(M)   \
     APPLY_FOR_AGGREGATED_VARIANTS_PHMAP(M) \
     APPLY_FOR_AGGREGATED_VARIANTS_NON_PHMAP(M)
 
@@ -1166,25 +1197,25 @@ struct AggregatedDataVariants : private boost::noncopyable
     }
 
 #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M) \
-    M(key32)                                           \
-    M(key64)                                           \
-    M(key_int256)                                      \
-    M(key_string)                                      \
-    M(key_fixed_string)                                \
-    M(keys32)                                          \
-    M(keys64)                                          \
-    M(keys128)                                         \
-    M(keys256)                                         \
-    M(serialized)                                      \
-    M(nullable_keys128)                                \
-    M(nullable_keys256)                                \
-    M(two_keys_num64_strbin)                           \
-    M(two_keys_num64_strbinpadding)                    \
-    M(two_keys_strbin_num64)                           \
-    M(two_keys_strbin_strbin)                          \
-    M(two_keys_strbinpadding_num64)                    \
-    M(two_keys_strbinpadding_strbinpadding)            \
-    M(one_key_strbin)                                  \
+    M(key32)                                                     \
+    M(key64)                                                     \
+    M(key_int256)                                                \
+    M(key_string)                                                \
+    M(key_fixed_string)                                          \
+    M(keys32)                                                    \
+    M(keys64)                                                    \
+    M(keys128)                                                   \
+    M(keys256)                                                   \
+    M(serialized)                                                \
+    M(nullable_keys128)                                          \
+    M(nullable_keys256)                                          \
+    M(two_keys_num64_strbin)                                     \
+    M(two_keys_num64_strbinpadding)                              \
+    M(two_keys_strbin_num64)                                     \
+    M(two_keys_strbin_strbin)                                    \
+    M(two_keys_strbinpadding_num64)                              \
+    M(two_keys_strbinpadding_strbinpadding)                      \
+    M(one_key_strbin)                                            \
     M(one_key_strbinpadding)
 
 #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_PHMAP(M) \
@@ -1209,9 +1240,9 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(one_key_strbin_phmap)                                  \
     M(one_key_strbinpadding_phmap)
 
-#define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M) \
+#define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)   \
     APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_PHMAP(M) \
-    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M) \
+    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M)
 
 #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL(M) \
     M(key8)                                                \
@@ -1252,27 +1283,27 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     void setResizeCallbackIfNeeded(size_t thread_num) const;
 
-#define APPLY_FOR_VARIANTS_TWO_LEVEL(M)               \
-    M(key32_two_level)                                \
-    M(key64_two_level)                                \
-    M(key_int256_two_level)                           \
-    M(key_string_two_level)                           \
-    M(key_fixed_string_two_level)                     \
-    M(keys32_two_level)                               \
-    M(keys64_two_level)                               \
-    M(keys128_two_level)                              \
-    M(keys256_two_level)                              \
-    M(serialized_two_level)                           \
-    M(nullable_keys128_two_level)                     \
-    M(nullable_keys256_two_level)                     \
-    M(two_keys_num64_strbin_two_level)                \
-    M(two_keys_num64_strbinpadding_two_level)         \
-    M(two_keys_strbin_num64_two_level)                \
-    M(two_keys_strbin_strbin_two_level)               \
-    M(two_keys_strbinpadding_num64_two_level)         \
-    M(two_keys_strbinpadding_strbinpadding_two_level) \
-    M(one_key_strbin_two_level)                       \
-    M(one_key_strbinpadding_two_level) \
+#define APPLY_FOR_VARIANTS_TWO_LEVEL(M)                     \
+    M(key32_two_level)                                      \
+    M(key64_two_level)                                      \
+    M(key_int256_two_level)                                 \
+    M(key_string_two_level)                                 \
+    M(key_fixed_string_two_level)                           \
+    M(keys32_two_level)                                     \
+    M(keys64_two_level)                                     \
+    M(keys128_two_level)                                    \
+    M(keys256_two_level)                                    \
+    M(serialized_two_level)                                 \
+    M(nullable_keys128_two_level)                           \
+    M(nullable_keys256_two_level)                           \
+    M(two_keys_num64_strbin_two_level)                      \
+    M(two_keys_num64_strbinpadding_two_level)               \
+    M(two_keys_strbin_num64_two_level)                      \
+    M(two_keys_strbin_strbin_two_level)                     \
+    M(two_keys_strbinpadding_num64_two_level)               \
+    M(two_keys_strbinpadding_strbinpadding_two_level)       \
+    M(one_key_strbin_two_level)                             \
+    M(one_key_strbinpadding_two_level)                      \
     M(key32_phmap_two_level)                                \
     M(key64_phmap_two_level)                                \
     M(key_int256_phmap_two_level)                           \

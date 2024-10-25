@@ -84,7 +84,12 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     const String & req_id,
     bool enable_phmap)
     : log(Logger::get(req_id))
-    , aggregator(params, req_id, merging_threads_, [](const OperatorSpillContextPtr &) {}, enable_phmap)
+    , aggregator(
+          params,
+          req_id,
+          merging_threads_,
+          [](const OperatorSpillContextPtr &) {},
+          enable_phmap)
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))
     , merging_threads(merging_threads_)

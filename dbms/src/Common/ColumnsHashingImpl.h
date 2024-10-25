@@ -152,7 +152,7 @@ public:
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
 
         const size_t prefetch_idx = row + prefetch_step;
-        if likely(prefetch_idx < hashvals.size())
+        if likely (prefetch_idx < hashvals.size())
             data.prefetch_hash(hashvals[prefetch_idx]);
 
         return emplaceImpl<true>(key_holder, data, hashvals[row]);
@@ -200,10 +200,7 @@ protected:
     }
 
     template <bool enable_prefetch, typename Data, typename KeyHolder>
-    ALWAYS_INLINE inline EmplaceResult emplaceImpl(
-            KeyHolder & key_holder,
-            Data & data,
-            size_t hashval [[maybe_unused]])
+    ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval [[maybe_unused]])
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {

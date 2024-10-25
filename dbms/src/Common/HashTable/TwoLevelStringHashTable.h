@@ -71,17 +71,17 @@ public:
 
         if constexpr (Source::isPhMap)
         {
-#define M(MAP_NAME, MAP_TYPE) \
-            for (auto it = src.MAP_NAME.begin(); it != src.MAP_NAME.end(); ++it) \
-            { \
-                const auto hashval = it.getPtr()->getHash(src.MAP_NAME); \
-                const size_t bucket = getBucketFromHash(hashval); \
-                bool inserted = false; \
-                typename SubMaps::MAP_TYPE::LookupResult lookup_it = nullptr; \
-                impls[bucket].MAP_NAME.emplace(it->first, lookup_it, inserted, hashval); \
-                if (inserted) \
-                    lookup_it->getMapped() = it->second; \
-            }
+#define M(MAP_NAME, MAP_TYPE)                                                    \
+    for (auto it = src.MAP_NAME.begin(); it != src.MAP_NAME.end(); ++it)         \
+    {                                                                            \
+        const auto hashval = it.getPtr() -> getHash(src.MAP_NAME);               \
+        const size_t bucket = getBucketFromHash(hashval);                        \
+        bool inserted = false;                                                   \
+        typename SubMaps::MAP_TYPE::LookupResult lookup_it = nullptr;            \
+        impls[bucket].MAP_NAME.emplace(it->first, lookup_it, inserted, hashval); \
+        if (inserted)                                                            \
+            lookup_it->getMapped() = it->second;                                 \
+    }
 
             M(m1, T1)
             M(m2, T2)

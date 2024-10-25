@@ -120,9 +120,10 @@ struct StringHashMapSubMaps
         Allocator>;
 };
 
-template <typename TMapped,
-         typename Allocator = HashTableAllocator,
-         template <typename, typename> typename TSubMaps = StringHashMapSubMaps>
+template <
+    typename TMapped,
+    typename Allocator = HashTableAllocator,
+    template <typename, typename> typename TSubMaps = StringHashMapSubMaps>
 class StringHashMap : public StringHashTable<TSubMaps<TMapped, Allocator>>
 {
 public:
@@ -192,17 +193,17 @@ public:
 
         if constexpr (TSubMaps<TMapped, Allocator>::isPhMap)
         {
-#define M(MAP_NAME) \
-            for (auto it = (MAP_NAME).begin(); it != (MAP_NAME).end(); ++it) \
-            { \
-                func(toStringRef(it.getPtr()->getKey()), it.getPtr()->getMapped()); \
-            }
+#define M(MAP_NAME)                                                         \
+    for (auto it = (MAP_NAME).begin(); it != (MAP_NAME).end(); ++it)        \
+    {                                                                       \
+        func(toStringRef(it.getPtr()->getKey()), it.getPtr()->getMapped()); \
+    }
 
             M(this->m1);
             M(this->m2);
             M(this->m3);
 #undef M
- 
+
             for (auto it = this->ms.begin(); it != this->ms.end(); ++it)
             {
                 func(it.getPtr()->getKey(), it.getPtr()->getMapped());
@@ -240,11 +241,11 @@ public:
 
         if constexpr (TSubMaps<TMapped, Allocator>::isPhMap)
         {
-#define M(MAP_NAME) \
-            for (auto it = (MAP_NAME).begin(); it != (MAP_NAME).end(); ++it) \
-            { \
-                func(it.getPtr()->getMapped()); \
-            }
+#define M(MAP_NAME)                                                  \
+    for (auto it = (MAP_NAME).begin(); it != (MAP_NAME).end(); ++it) \
+    {                                                                \
+        func(it.getPtr()->getMapped());                              \
+    }
 
             M(this->m1);
             M(this->m2);

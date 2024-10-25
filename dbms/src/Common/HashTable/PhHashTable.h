@@ -1,5 +1,5 @@
-#include <Common/phmap/phmap.h>
 #include <Common/HashTable/HashTable.h>
+#include <Common/phmap/phmap.h>
 
 template <typename KeyType, typename Mapped, typename Hash>
 class PhHashTable : public phmap::flat_hash_map<KeyType, Mapped, Hash>
@@ -21,20 +21,20 @@ public:
     using typename Base::key_type;
     using typename Base::value_type;
 
-    using Base::prefetch;
     using Base::begin;
-    using Base::end;
-    using Base::empty;
-    using Base::size;
     using Base::capacity;
     using Base::clear;
-    using Base::slot_at;
-    using Base::find_or_prepare_insert;
+    using Base::empty;
+    using Base::end;
     using Base::find_impl;
+    using Base::find_or_prepare_insert;
     using Base::hash;
     using Base::hash_function;
     using Base::lazy_emplace;
     using Base::lazy_emplace_with_hash;
+    using Base::prefetch;
+    using Base::size;
+    using Base::slot_at;
 
     template <typename KeyHolder>
     ALWAYS_INLINE inline void emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted)
@@ -114,7 +114,7 @@ public:
         emplace(key, it, inserted);
 
         if (inserted)
-            new (&it->getMapped()) (typename Base::mapped_type)();
+            new (&it->getMapped())(typename Base::mapped_type)();
 
         return it->getMapped();
     }
@@ -131,18 +131,15 @@ public:
         return capacity();
     }
 
-    ALWAYS_INLINE inline void clearAndShrink()
-    {
-        clear();
-    }
+    ALWAYS_INLINE inline void clearAndShrink() { clear(); }
 
-    void write(DB::WriteBuffer & ) const
+    void write(DB::WriteBuffer &) const
     {
         // DB::writeBinary(value.first, wb);
         // DB::writeBinary(value.second, wb);
     }
 
-    void writeText(DB::WriteBuffer & ) const
+    void writeText(DB::WriteBuffer &) const
     {
         // DB::writeDoubleQuoted(value.first, wb);
         // DB::writeChar(',', wb);
@@ -150,13 +147,13 @@ public:
     }
 
     /// Deserialization, in binary and text form.
-    void read(DB::ReadBuffer & )
+    void read(DB::ReadBuffer &)
     {
         // DB::readBinary(value.first, rb);
         // DB::readBinary(value.second, rb);
     }
 
-    void readText(DB::ReadBuffer & )
+    void readText(DB::ReadBuffer &)
     {
         // TODO
         // DB::readDoubleQuoted(value.first, rb);
@@ -199,13 +196,18 @@ public:
 template <typename K, typename V>
 struct MapSlotWithSavedHashType
 {
-    MapSlotWithSavedHashType() : hashval(0) {}
+    MapSlotWithSavedHashType()
+        : hashval(0)
+    {}
     ~MapSlotWithSavedHashType() = delete;
     MapSlotWithSavedHashType(const MapSlotWithSavedHashType &) = delete;
     MapSlotWithSavedHashType & operator=(const MapSlotWithSavedHashType &) = delete;
 
     template <typename Container>
-    size_t getHash(const Container &) const { return hashval; }
+    size_t getHash(const Container &) const
+    {
+        return hashval;
+    }
 
     const K & getKey() const { return value.first; }
     V & getMapped() { return value.second; }
@@ -231,11 +233,12 @@ using FlatHashMapWithSavedHashPolicy = phmap::priv::FlatHashMapPolicy<K, V, MapS
 
 // TODO handle duplicated code with PhHashTable
 template <typename KeyType, typename Mapped, typename Hash>
-class PhHashTableWithSavedHash : public phmap::priv::raw_hash_map<
-                                 FlatHashMapWithSavedHashPolicy<KeyType, Mapped>,
-                                 Hash,
-                                 phmap::priv::hash_default_eq<KeyType>,
-                                 phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<KeyType, Mapped>::slot_type>>
+class PhHashTableWithSavedHash
+    : public phmap::priv::raw_hash_map<
+          FlatHashMapWithSavedHashPolicy<KeyType, Mapped>,
+          Hash,
+          phmap::priv::hash_default_eq<KeyType>,
+          phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<KeyType, Mapped>::slot_type>>
 {
 public:
     static constexpr bool isPhMap = true;
@@ -259,20 +262,20 @@ public:
     using typename Base::key_type;
     using typename Base::value_type;
 
-    using Base::prefetch;
     using Base::begin;
-    using Base::end;
-    using Base::empty;
-    using Base::size;
     using Base::capacity;
     using Base::clear;
-    using Base::slot_at;
-    using Base::find_or_prepare_insert;
+    using Base::empty;
+    using Base::end;
     using Base::find_impl;
+    using Base::find_or_prepare_insert;
     using Base::hash;
     using Base::hash_function;
     using Base::lazy_emplace;
     using Base::lazy_emplace_with_hash;
+    using Base::prefetch;
+    using Base::size;
+    using Base::slot_at;
 
     template <typename KeyHolder>
     ALWAYS_INLINE inline void emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted)
@@ -360,7 +363,7 @@ public:
         emplace(key, it, inserted);
 
         if (inserted)
-            new (&it->getMapped()) (typename Base::mapped_type)();
+            new (&it->getMapped())(typename Base::mapped_type)();
 
         return it->getMapped();
     }
@@ -377,18 +380,15 @@ public:
         return capacity();
     }
 
-    ALWAYS_INLINE inline void clearAndShrink()
-    {
-        clear();
-    }
+    ALWAYS_INLINE inline void clearAndShrink() { clear(); }
 
-    void write(DB::WriteBuffer & ) const
+    void write(DB::WriteBuffer &) const
     {
         // DB::writeBinary(value.first, wb);
         // DB::writeBinary(value.second, wb);
     }
 
-    void writeText(DB::WriteBuffer & ) const
+    void writeText(DB::WriteBuffer &) const
     {
         // DB::writeDoubleQuoted(value.first, wb);
         // DB::writeChar(',', wb);
@@ -396,13 +396,13 @@ public:
     }
 
     /// Deserialization, in binary and text form.
-    void read(DB::ReadBuffer & )
+    void read(DB::ReadBuffer &)
     {
         // DB::readBinary(value.first, rb);
         // DB::readBinary(value.second, rb);
     }
 
-    void readText(DB::ReadBuffer & )
+    void readText(DB::ReadBuffer &)
     {
         // TODO
         // DB::readDoubleQuoted(value.first, rb);

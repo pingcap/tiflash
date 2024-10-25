@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Common/Decimal.h>
+#include <Common/phmap/phmap_bits.h>
 #include <Core/Types.h>
 #include <city.h>
 #include <common/StringRef.h>
 #include <common/types.h>
 #include <common/unaligned.h>
-#include <Common/phmap/phmap_bits.h>
 
 #include <boost/functional/hash/hash.hpp>
 #include <type_traits>
@@ -131,8 +131,8 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
         return updated_value;
     }
     static_assert(
-        DB::IsDecimal<
-            T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        DB::IsDecimal<T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -245,8 +245,8 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
         return boost::multiprecision::hash_value(key);
     }
     static_assert(
-        is_boost_number_v<
-            T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -298,20 +298,26 @@ inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 template <typename T>
 struct HashCRC32;
 
-#define DEFINE_HASH(T)                                               \
-    template <>                                                      \
-    struct HashCRC32<T>                                              \
-    {                                                                \
-        static_assert(is_fit_register<T>);                           \
-        size_t operator()(T key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH(T)                     \
+    template <>                            \
+    struct HashCRC32<T>                    \
+    {                                      \
+        static_assert(is_fit_register<T>); \
+        size_t operator()(T key) const     \
+        {                                  \
+            return hashCRC32<T>(key);      \
+        }                                  \
     };
 
-#define DEFINE_HASH_WIDE(T)                                                  \
-    template <>                                                              \
-    struct HashCRC32<T>                                                      \
-    {                                                                        \
-        static_assert(!is_fit_register<T>);                                  \
-        size_t operator()(const T & key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH_WIDE(T)                    \
+    template <>                                \
+    struct HashCRC32<T>                        \
+    {                                          \
+        static_assert(!is_fit_register<T>);    \
+        size_t operator()(const T & key) const \
+        {                                      \
+            return hashCRC32<T>(key);          \
+        }                                      \
     };
 
 DEFINE_HASH(DB::UInt8)
@@ -418,18 +424,25 @@ struct IntHash32<T, salt, std::enable_if_t<!is_fit_register<T>, void>>
     }
 };
 
-enum PhHashSeed { PhHashSeed1, PhHashSeed2 };
+enum PhHashSeed
+{
+    PhHashSeed1,
+    PhHashSeed2
+};
 
 template <int n, PhHashSeed seed>
-class PhHashMixSeed {
+class PhHashMixSeed
+{
 public:
     inline size_t operator()(size_t) const;
 };
 
 template <>
-class PhHashMixSeed<4, PhHashSeed1> {
+class PhHashMixSeed<4, PhHashSeed1>
+{
 public:
-    inline size_t operator()(size_t a) const {
+    inline size_t operator()(size_t a) const
+    {
         static constexpr uint64_t kmul = 0xcc9e2d51UL;
         uint64_t l = a * kmul;
         return static_cast<size_t>(l ^ (l >> 32u));
@@ -437,9 +450,11 @@ public:
 };
 
 template <>
-class PhHashMixSeed<8, PhHashSeed1> {
+class PhHashMixSeed<8, PhHashSeed1>
+{
 public:
-    inline size_t operator()(size_t a) const {
+    inline size_t operator()(size_t a) const
+    {
         static constexpr uint64_t k = 0xde5fb9d2630458e9ULL;
         uint64_t h;
         uint64_t l = umul128(a, k, &h);
@@ -449,5 +464,8 @@ public:
 template <typename T, PhHashSeed seed>
 struct PhHash
 {
-    std::size_t operator()(const T & value) const { return PhHashMixSeed<sizeof(size_t), seed>()(std::hash<T>()(value)); }
+    std::size_t operator()(const T & value) const
+    {
+        return PhHashMixSeed<sizeof(size_t), seed>()(std::hash<T>()(value));
+    }
 };

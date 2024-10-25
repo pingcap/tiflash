@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Interpreters/Aggregator.h>
 #include <Common/HashTable/PhHashTable.h>
+#include <Interpreters/Aggregator.h>
 
 // TODO
 template <typename Key, typename Mapped, typename Hash = PhHash<Key, PhHashSeed1>>
@@ -68,8 +68,8 @@ template <typename Key, typename Mapped, typename Hash = DefaultHash<Key>>
 using TwoLevelPhHashMap = TwoLevelPhHashMapTable<Key, Mapped, Hash>;
 
 template <typename Key, typename Mapped, typename Hash = PhHash<Key, PhHashSeed1>>
-using TwoLevelPhHashMapWithSavedHash = TwoLevelPhHashMapTable<
-    Key, Mapped, Hash, TwoLevelHashTableGrower<>, HashTableAllocator, PhHashMapWithSavedHash>;
+using TwoLevelPhHashMapWithSavedHash
+    = TwoLevelPhHashMapTable<Key, Mapped, Hash, TwoLevelHashTableGrower<>, HashTableAllocator, PhHashMapWithSavedHash>;
 
 // TODO gjt Allocator
 template <typename TMapped, typename Allocator>
@@ -89,13 +89,14 @@ template <typename Mapped>
 using PhStringHashMap = StringHashMap<Mapped, HashTableAllocator, StringHashMapPhSubMaps>;
 
 template <typename Mapped>
-using TwoLevelPhStringHashMap = TwoLevelStringHashMap<Mapped, HashTableAllocator, StringHashMap, StringHashMapPhSubMaps>;
+using TwoLevelPhStringHashMap
+    = TwoLevelStringHashMap<Mapped, HashTableAllocator, StringHashMap, StringHashMapPhSubMaps>;
 
 // using AggregatedDataWithUInt64KeyPhMap = PhHashMap<UInt64, AggregateDataPtr>;
 // using AggregatedDataWithStringKey = PhHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 // using AggregatedDataWithUInt64KeyTwoLevelPhMap = TwoLevelPhHashMap<UInt64, AggregateDataPtr>;
 // using AggregatedDataWithStringKeyTwoLevel = TwoLevelPhHashMapWithSavedHash<StringRef, AggregateDataPtr>;
-// 
+//
 // using AggregationMethod_key64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyPhMap, false>;
 // using AggregationMethod_key32_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevelPhMap, false>;
 // using AggregationMethod_key64_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevelPhMap, false>;

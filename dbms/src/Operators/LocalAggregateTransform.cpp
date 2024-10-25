@@ -48,8 +48,7 @@ LocalAggregateTransform::LocalAggregateTransform(
             else if (exec_context.getRegisterOperatorSpillContext() != nullptr)
                 exec_context.getRegisterOperatorSpillContext()(operator_spill_context);
         },
-        enable_phmap
-        );
+        enable_phmap);
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)

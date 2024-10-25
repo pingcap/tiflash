@@ -495,18 +495,22 @@ AggregatedDataVariants::Type mapToPhMap(bool enable_phmap, const AggregatedDataV
 
     switch (type)
     {
-#define M(name) case AggregatedDataVariants::Type::name: return AggregatedDataVariants::Type::name##_phmap;
-    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M);
+#define M(name)                              \
+    case AggregatedDataVariants::Type::name: \
+        return AggregatedDataVariants::Type::name##_phmap;
+        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M);
 #undef M
 
-#define M(name) case AggregatedDataVariants::Type::name##_two_level: return AggregatedDataVariants::Type::name##_phmap_two_level;
-    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M);
+#define M(name)                                          \
+    case AggregatedDataVariants::Type::name##_two_level: \
+        return AggregatedDataVariants::Type::name##_phmap_two_level;
+        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_NON_PHMAP(M);
 #undef M
     default:
         RUNTIME_CHECK_MSG(false, "unexpected method type");
     }
 }
-}
+} // namespace
 
 AggregatedDataVariants::Type Aggregator::chooseAggregationMethod(bool enable_phmap)
 {
@@ -647,7 +651,9 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod(bool enable_phm
     if (params.keys_size == 1 && types_not_null[0]->isFixedString())
         return mapToPhMap(enable_phmap, AggregatedDataVariants::Type::key_fixed_string);
 
-    return mapToPhMap(enable_phmap, ChooseAggregationMethodFastPath(params.keys_size, types_not_null, params.collators));
+    return mapToPhMap(
+        enable_phmap,
+        ChooseAggregationMethodFastPath(params.keys_size, types_not_null, params.collators));
 }
 
 
@@ -732,12 +738,12 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
 
 template <bool enable_prefetch, typename Data, typename State>
 ALWAYS_INLINE inline std::vector<size_t> getHashVals(
-        const Data & data,
-        const State & state,
-        const Aggregator::AggProcessInfo & agg_process_info,
-        size_t rows,
-        Arena & pool,
-        std::vector<String> & sort_key_containers)
+    const Data & data,
+    const State & state,
+    const Aggregator::AggProcessInfo & agg_process_info,
+    size_t rows,
+    Arena & pool,
+    std::vector<String> & sort_key_containers)
 {
     std::vector<size_t> hashvals;
     if constexpr (enable_prefetch)
@@ -773,12 +779,12 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
         std::vector<size_t> hashvals = getHashVals<enable_prefetch>(
-                method.data,
-                state,
-                agg_process_info,
-                agg_size,
-                *aggregates_pool,
-                sort_key_containers);
+            method.data,
+            state,
+            agg_process_info,
+            agg_size,
+            *aggregates_pool,
+            sort_key_containers);
 
         for (size_t i = 0; i < agg_size; ++i)
         {
@@ -853,14 +859,24 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_size]);
     std::optional<size_t> processed_rows;
     std::vector<size_t> hashvals = getHashVals<enable_prefetch>(
-            method.data, state, agg_process_info, agg_size, *aggregates_pool, sort_key_containers);
+        method.data,
+        state,
+        agg_process_info,
+        agg_size,
+        *aggregates_pool,
+        sort_key_containers);
 
     for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        auto emplace_result_holder
-            = emplaceOrFindKey<only_lookup, enable_prefetch>(method, state, i, hashvals, *aggregates_pool, sort_key_containers);
+        auto emplace_result_holder = emplaceOrFindKey<only_lookup, enable_prefetch>(
+            method,
+            state,
+            i,
+            hashvals,
+            *aggregates_pool,
+            sort_key_containers);
         if unlikely (!emplace_result_holder.has_value())
         {
             LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");

@@ -221,7 +221,7 @@ public:
 
     using LookupResult = Cell *;
     using ConstLookupResult = const Cell *;
-    
+
     static constexpr bool isPhMap = false;
     static constexpr bool isNestedMap = false;
 
