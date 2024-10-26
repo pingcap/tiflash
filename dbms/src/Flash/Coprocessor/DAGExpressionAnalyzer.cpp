@@ -938,7 +938,8 @@ String DAGExpressionAnalyzer::applyFunction(
 
 String DAGExpressionAnalyzer::buildFilterColumn(
     const ExpressionActionsPtr & actions,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    bool null_as_false)
 {
     String filter_column_name;
     if (conditions.size() == 1)
@@ -963,7 +964,7 @@ String DAGExpressionAnalyzer::buildFilterColumn(
             arg_names.push_back(getActions(condition, actions, true));
         // connect all the conditions by logical and
         String fun_name = "and";
-        if (context.getSettingsRef().use_two_value_logic_op_for_top_filter)
+        if (context.getSettingsRef().use_two_value_logic_op_for_top_filter && null_as_false)
             fun_name = "two_value_and";
         filter_column_name = applyFunction(fun_name, arg_names, actions, nullptr);
     }

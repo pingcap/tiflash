@@ -53,8 +53,8 @@ struct AndImpl
     static inline bool canConstantBeIgnored(bool a, bool a_is_null) { return !a_is_null && a; }
 
     static inline bool apply(bool a, bool b) { return a && b; }
-    static inline bool applyOneNullableNotNull(bool a, bool a_is_null, bool b) { return !a_is_null && a && b; }
-    static inline bool applyTwoNullableNotNull(bool a, bool a_is_null, bool b, bool b_is_null)
+    static inline bool applyOneNullableNullAsFalse(bool a, bool a_is_null, bool b) { return !a_is_null && a && b; }
+    static inline bool applyTwoNullableNullAsFalse(bool a, bool a_is_null, bool b, bool b_is_null)
     {
         return !a_is_null && a && !b_is_null && b;
     }
@@ -310,7 +310,7 @@ struct NullableAssociativeOperationImpl
         size_t n = result.size();
         for (size_t i = 0; i < n; ++i)
         {
-            result[i] = operation.applyNotNull(i);
+            result[i] = operation.applyNullAsFalse(i);
         }
     }
 
@@ -335,10 +335,10 @@ struct NullableAssociativeOperationImpl
         bool is_null = (*null_map)[i];
         return Op::applyTwoNullable(a, is_null, tmp, tmp_is_null);
     }
-    inline bool applyNotNull(size_t i) const
+    inline bool applyNullAsFalse(size_t i) const
     {
         bool a = !(*null_map)[i] && static_cast<bool>(vec[i]);
-        return Op::isSaturatedValue(a) ? a : continuation.applyNotNull(i);
+        return Op::isSaturatedValue(a) ? a : continuation.applyNullAsFalse(i);
     }
 };
 
@@ -374,7 +374,7 @@ struct NullableAssociativeOperationImpl<Op, 2>
         size_t n = res.size();
         for (size_t i = 0; i < n; ++i)
         {
-            res[i] = operation.applyNotNull(i);
+            res[i] = operation.applyNullAsFalse(i);
         }
     }
 
@@ -394,9 +394,9 @@ struct NullableAssociativeOperationImpl<Op, 2>
     {
         return Op::applyTwoNullable(a[i], (*a_null_map)[i], b[i], (*b_null_map)[i]);
     }
-    inline bool applyNotNull(size_t i) const
+    inline bool applyNullAsFalse(size_t i) const
     {
-        return Op::applyTwoNullableNotNull(a[i], (*a_null_map)[i], b[i], (*b_null_map)[i]);
+        return Op::applyTwoNullableNullAsFalse(a[i], (*a_null_map)[i], b[i], (*b_null_map)[i]);
     }
 };
 
@@ -429,10 +429,10 @@ struct NullableAssociativeOperationImpl<Op, 1>
             "Logical error: NullableAssociativeOperationImpl<Op, 1>::apply called",
             ErrorCodes::LOGICAL_ERROR);
     }
-    inline bool applyNotNull(size_t) const
+    inline bool applyNullAsFalse(size_t) const
     {
         throw Exception(
-            "Logical error: NullableAssociativeOperationImpl<Op, 1>::applyNotNull called",
+            "Logical error: NullableAssociativeOperationImpl<Op, 1>::applyNullAsFalse called",
             ErrorCodes::LOGICAL_ERROR);
     }
 };
@@ -443,7 +443,7 @@ struct NullableAssociativeOperationImpl<Op, 1>
  * if two_value_logic_op is true, the function will only return true/false, and any null input will 
  * be treated as false
  */
-template <typename Impl, typename Name, bool special_impl_for_nulls, bool two_value_logic_op = false>
+template <typename Impl, typename Name, bool special_impl_for_nulls, bool null_as_false = false>
 class FunctionAnyArityLogical : public IFunction
 {
 public:
@@ -482,7 +482,7 @@ private:
                     const_val = applyVisitor(FieldVisitorConvertToNumber<bool>(), value);
                 }
             }
-            if constexpr (two_value_logic_op)
+            if constexpr (null_as_false)
             {
                 // treate null as false
                 const_val = const_val_is_null ? false : const_val;
@@ -565,7 +565,7 @@ public:
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        if (!two_value_logic_op && has_nullable_input_column)
+        if (!null_as_false && has_nullable_input_column)
             return makeNullable(std::make_shared<DataTypeUInt8>());
         else
             return std::make_shared<DataTypeUInt8>();
@@ -654,7 +654,7 @@ public:
         else
         {
             const auto & col_data = nullable_uint8_columns[0]->getData();
-            if constexpr (two_value_logic_op)
+            if constexpr (null_as_false)
             {
                 for (size_t i = 0; i < rows; ++i)
                 {
@@ -739,10 +739,10 @@ public:
                 }
                 else
                 {
-                    if constexpr (two_value_logic_op)
+                    if constexpr (null_as_false)
                     {
                         for (size_t i = 0; i < rows; ++i)
-                            vec_res[i] = Impl::applyOneNullableNotNull(col_data[i], null_data[i], const_val);
+                            vec_res[i] = Impl::applyOneNullableNullAsFalse(col_data[i], null_data[i], const_val);
                     }
                     else
                     {
@@ -766,11 +766,11 @@ public:
                 const auto & col_1 = not_null_uint8_columns[0]->getData();
                 const auto & col_2 = nullable_uint8_columns[0]->getData();
                 const auto & null_map_2 = *null_maps[0];
-                if constexpr (two_value_logic_op)
+                if constexpr (null_as_false)
                 {
                     for (size_t i = 0; i < rows; ++i)
                     {
-                        vec_res[i] = Impl::applyOneNullableNotNull(col_2[i], null_map_2[i], col_1[i]);
+                        vec_res[i] = Impl::applyOneNullableNullAsFalse(col_2[i], null_map_2[i], col_1[i]);
                     }
                 }
                 else
@@ -785,7 +785,7 @@ public:
             else
             {
                 // case 3: 2 nullable
-                if constexpr (two_value_logic_op)
+                if constexpr (null_as_false)
                 {
                     NullableAssociativeOperationImpl<Impl, 2>::execute(nullable_uint8_columns, null_maps, vec_res);
                 }
@@ -874,7 +874,7 @@ public:
                 const auto & col_data = nullable_uint8_columns[0]->getData();
                 // according to https://github.com/pingcap/tiflash/issues/5849
                 // need to cast the UInt8 column to bool explicitly
-                if constexpr (two_value_logic_op)
+                if constexpr (null_as_false)
                 {
                     for (size_t i = 0; i < rows; ++i)
                     {
@@ -900,7 +900,7 @@ public:
                 while (nullable_uint8_columns.size() > 1)
                 {
                     // micro benchmark shows 4 << 6, 8 outperforms 6 slightly, and performance may decline when set to 10
-                    if constexpr (two_value_logic_op)
+                    if constexpr (null_as_false)
                     {
                         NullableAssociativeOperationImpl<Impl, 8>::execute(nullable_uint8_columns, null_maps, vec_res);
                         nullable_uint8_columns.push_back(col_res.get());
@@ -1001,7 +1001,7 @@ public:
 
         for (size_t i = 0; i < num_arguments; ++i)
             has_nullable_input_column |= block.getByPosition(arguments[i]).type->isNullable();
-        bool res_is_nullable = !two_value_logic_op && has_nullable_input_column;
+        bool res_is_nullable = !null_as_false && has_nullable_input_column;
 
         ColumnRawPtrs in(num_arguments);
         for (size_t i = 0; i < num_arguments; ++i)

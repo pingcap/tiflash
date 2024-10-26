@@ -144,7 +144,8 @@ public:
 
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        bool null_as_false = false);
 
     std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
