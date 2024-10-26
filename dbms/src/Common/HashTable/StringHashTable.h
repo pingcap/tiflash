@@ -359,7 +359,6 @@ public:
         {
             typename Map::LookupResult result;
             map.emplace(key_holder, result, inserted, hash);
-            // TODO gjt phmap
             mapped = &result->getMapped();
         }
     };

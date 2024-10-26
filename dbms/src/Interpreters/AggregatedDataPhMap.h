@@ -73,7 +73,7 @@ template <typename Key, typename Mapped, typename Hash = DefPhHash<Key>>
 using TwoLevelPhHashMapWithSavedHash
     = TwoLevelPhHashMapTable<Key, Mapped, Hash, TwoLevelHashTableGrower<>, HashTableAllocator, PhHashMapWithSavedHash>;
 
-// TODO gjt Allocator
+// For phmap, it use std::allocator for now.
 template <typename TMapped, typename Allocator>
 struct StringHashMapPhSubMaps
 {

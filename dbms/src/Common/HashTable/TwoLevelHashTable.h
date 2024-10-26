@@ -319,7 +319,6 @@ public:
 
     ConstLookupResult ALWAYS_INLINE find(Key x) const { return find(x, hash(x)); }
 
-    // TODO gjt map
     void write(DB::WriteBuffer & wb) const
     {
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
