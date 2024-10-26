@@ -972,13 +972,14 @@ String DAGExpressionAnalyzer::buildFilterColumn(
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownFilter(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    bool null_as_false)
 {
     assert(!conditions.empty());
 
     ExpressionActionsChain chain;
     initChain(chain);
-    String filter_column_name = appendWhere(chain, conditions);
+    String filter_column_name = appendWhere(chain, conditions, null_as_false);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
@@ -997,11 +998,12 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnal
 
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    bool null_as_false)
 {
     auto & last_step = initAndGetLastStep(chain);
 
-    String filter_column_name = buildFilterColumn(last_step.actions, conditions);
+    String filter_column_name = buildFilterColumn(last_step.actions, conditions, null_as_false);
 
     last_step.required_output.push_back(filter_column_name);
     return filter_column_name;
