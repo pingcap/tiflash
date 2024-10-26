@@ -4306,6 +4306,7 @@ public:
 // ----------------------------------------------------------------------------
 template <class K, class V>
 union map_slot_type {
+    static constexpr bool with_saved_hash = false;
     map_slot_type() {}
     ~map_slot_type() = delete;
     map_slot_type(const map_slot_type&) = delete;
@@ -4317,7 +4318,7 @@ union map_slot_type {
     template <typename Container>
     size_t getHash(const Container & container) const
     {
-        container.hash(value.first);
+        return container.hash(value.first);
     }
 
     const K & getKey() const { return value.first; }
@@ -4325,6 +4326,14 @@ union map_slot_type {
     const V & getMapped() const { return value.second; }
     const value_type & getValue() const { return value; }
     void setHash(size_t) {}
+
+    template <typename T>
+    static K & getKey(const T & x)
+    {
+        static_assert(std::is_same_v<std::decay_t<T>, value_type> ||
+                std::is_same_v<std::decay_t<T>, mutable_value_type>);
+        return x.second;
+    }
 
     value_type value;
     mutable_value_type mutable_value;
@@ -4335,9 +4344,8 @@ union map_slot_type {
 // ----------------------------------------------------------------------------
 template <class K, class V, class MapSlotType = map_slot_type<K, V>>
 struct map_slot_policy {
+public:
     using slot_type = MapSlotType;
-    using value_type = std::pair<const K, V>;
-    using mutable_value_type = std::pair<K, V>;
 
 private:
     static void emplace(slot_type* slot) {
@@ -4349,6 +4357,8 @@ private:
     // or the other via slot_type. We are also free to access the key via
     // slot_type::key in this case.
     using kMutableKeys = memory_internal::IsLayoutCompatible<K, V>;
+    using value_type = std::pair<const K, V>;
+    using mutable_value_type = std::pair<K, V>;
 
 public:
     static value_type& element(slot_type* slot) { return slot->value; }
@@ -4396,6 +4406,9 @@ public:
         } else {
             phmap::allocator_traits<Allocator>::construct(*alloc, &new_slot->value, std::move(old_slot->value));
         }
+        if constexpr (slot_type::with_saved_hash) {
+            new_slot->hashval = old_slot->hashval;
+        }
         destroy(alloc, old_slot);
     }
 
@@ -4411,6 +4424,9 @@ public:
             phmap::allocator_traits<Allocator>::destroy(*alloc, &b->value);
             phmap::allocator_traits<Allocator>::construct(*alloc, &b->value, std::move(tmp));
         }
+        if constexpr (slot_type::with_saved_hash) {
+            swap(a->hashval, b->hashval);
+        }
     }
 
     template <class Allocator>
@@ -4420,6 +4436,10 @@ public:
         } else {
             phmap::allocator_traits<Allocator>::destroy(*alloc, &dest->value);
             phmap::allocator_traits<Allocator>::construct(*alloc, &dest->value, std::move(src->value));
+        }
+        if constexpr (slot_type::with_saved_hash) {
+            dest->hashval = src->hashval;
+            src->hashval = 0;
         }
     }
 

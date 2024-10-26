@@ -17,18 +17,20 @@
 #include <Common/HashTable/PhHashTable.h>
 #include <Interpreters/Aggregator.h>
 
+template <typename Key>
+using DefPhHash = PhHash<Key, PhHashSeed1>;
 // TODO
-template <typename Key, typename Mapped, typename Hash = PhHash<Key, PhHashSeed1>>
+template <typename Key, typename Mapped, typename Hash = DefPhHash<Key>>
 using PhHashMap = PhHashTable<Key, Mapped, Hash>;
 
-template <typename Key, typename Mapped, typename Hash = PhHash<Key, PhHashSeed1>>
+template <typename Key, typename Mapped, typename Hash = DefPhHash<Key>>
 using PhHashMapWithSavedHash = PhHashTableWithSavedHash<Key, Mapped, Hash>;
 
 // template parameter of Hash/Grower/Allocator will be ignored for phmap.
 template <
     typename Key,
     typename MappedType,
-    typename Hash = PhHash<Key, PhHashSeed1>,
+    typename Hash = DefPhHash<Key>,
     typename Grower = TwoLevelHashTableGrower<>,
     typename Allocator = HashTableAllocator,
     template <typename...> typename ImplTable = PhHashMap>
@@ -64,10 +66,10 @@ public:
     }
 };
 
-template <typename Key, typename Mapped, typename Hash = DefaultHash<Key>>
+template <typename Key, typename Mapped, typename Hash = DefPhHash<Key>>
 using TwoLevelPhHashMap = TwoLevelPhHashMapTable<Key, Mapped, Hash>;
 
-template <typename Key, typename Mapped, typename Hash = PhHash<Key, PhHashSeed1>>
+template <typename Key, typename Mapped, typename Hash = DefPhHash<Key>>
 using TwoLevelPhHashMapWithSavedHash
     = TwoLevelPhHashMapTable<Key, Mapped, Hash, TwoLevelHashTableGrower<>, HashTableAllocator, PhHashMapWithSavedHash>;
 
@@ -82,6 +84,7 @@ struct StringHashMapPhSubMaps
     using T1 = PhHashTable<StringKey8, TMapped, StringHashTableHash>;
     using T2 = PhHashTable<StringKey16, TMapped, StringHashTableHash>;
     using T3 = PhHashTable<StringKey24, TMapped, StringHashTableHash>;
+    // TODO saved hash?
     using Ts = PhHashTable<StringRef, TMapped, StringHashTableHash>;
 };
 
@@ -110,7 +113,8 @@ using AggregatedDataWithUInt32KeyPhMap = PhHashMap<UInt32, AggregateDataPtr>;
 using AggregatedDataWithUInt64KeyPhMap = PhHashMap<UInt64, AggregateDataPtr>;
 
 using AggregatedDataWithShortStringKeyPhMap = PhStringHashMap<AggregateDataPtr>;
-using AggregatedDataWithStringKeyPhMap = PhHashMapWithSavedHash<StringRef, AggregateDataPtr>;
+// TODO DefPhHash for StringRef
+using AggregatedDataWithStringKeyPhMap = PhHashMapWithSavedHash<StringRef, AggregateDataPtr, DefaultHash<StringRef>>;
 
 // TODO hasher ok with Int256? for now use HashCRC32???
 using AggregatedDataWithInt256KeyPhMap = PhHashTable<Int256, AggregateDataPtr, HashCRC32<Int256>>;
@@ -126,7 +130,7 @@ using AggregatedDataWithUInt64KeyTwoLevelPhMap = TwoLevelPhHashMap<UInt64, Aggre
 using AggregatedDataWithInt256KeyTwoLevelPhMap = TwoLevelPhHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 
 using AggregatedDataWithShortStringKeyTwoLevelPhMap = TwoLevelPhStringHashMap<AggregateDataPtr>;
-using AggregatedDataWithStringKeyTwoLevelPhMap = TwoLevelPhHashMapWithSavedHash<StringRef, AggregateDataPtr>;
+using AggregatedDataWithStringKeyTwoLevelPhMap = TwoLevelPhHashMapWithSavedHash<StringRef, AggregateDataPtr, DefaultHash<StringRef>>;
 
 using AggregatedDataWithKeys128TwoLevelPhMap = TwoLevelPhHashMap<UInt128, AggregateDataPtr>;
 using AggregatedDataWithKeys256TwoLevelPhMap = TwoLevelPhHashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
