@@ -836,8 +836,8 @@ try
     // test read with ANN query after add a vector index
     {
         // check stable index has built for all segments
-        dmsv.waitStableIndexReady();
-        LOG_INFO(Logger::get(), "waitStableIndexReady done");
+        dmsv.waitStableLocalIndexReady();
+        LOG_INFO(Logger::get(), "waitStableLocalIndexReady done");
         const auto range = DM::RowKeyRange::newAll(dmsv.store->is_common_handle, dmsv.store->rowkey_column_size);
 
         // read from store

@@ -290,6 +290,22 @@ bool ColumnFilePersistedSet::appendPersistedColumnFiles(const ColumnFilePersiste
     return true;
 }
 
+bool ColumnFilePersistedSet::updatePersistedColumnFiles(
+    const ColumnFilePersisteds & new_persisted_files,
+    WriteBatches & wbs)
+{
+    /// Save the new metadata of column files to disk.
+    serializeColumnFilePersisteds(wbs, metadata_id, new_persisted_files);
+    wbs.writeMeta();
+
+    /// Commit updates in memory.
+    persisted_files = std::move(new_persisted_files);
+    updateColumnFileStats();
+    LOG_DEBUG(log, "{}, after update column files, persisted column files: {}", info(), detailInfo());
+
+    return true;
+}
+
 MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & context)
 {
     // Every time we try to compact all column files.

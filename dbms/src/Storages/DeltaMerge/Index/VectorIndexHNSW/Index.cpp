@@ -133,13 +133,25 @@ void VectorIndexHNSWBuilder::addBlock(
     last_reported_memory_usage = current_memory_usage;
 }
 
-void VectorIndexHNSWBuilder::save(std::string_view path) const
+void VectorIndexHNSWBuilder::saveToFile(std::string_view path) const
 {
     Stopwatch w;
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
 
     auto result = index.save(unum::usearch::output_file_t(path.data()));
     RUNTIME_CHECK_MSG(result, "Failed to save vector index: {} path={}", result.error.what(), path);
+}
+
+void VectorIndexHNSWBuilder::saveToBuffer(WriteBuffer & write_buf) const
+{
+    Stopwatch w;
+    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
+
+    auto result = index.save_to_stream([&](void const * buffer, std::size_t length) {
+        write_buf.write(reinterpret_cast<const char *>(buffer), length);
+        return true;
+    });
+    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
 }
 
 VectorIndexHNSWBuilder::~VectorIndexHNSWBuilder()
