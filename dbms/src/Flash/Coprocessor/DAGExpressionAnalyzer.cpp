@@ -963,9 +963,10 @@ String DAGExpressionAnalyzer::buildFilterColumn(
         for (const auto & condition : conditions)
             arg_names.push_back(getActions(condition, actions, true));
         // connect all the conditions by logical and
-        String fun_name = "and";
-        if (context.getSettingsRef().use_two_value_logic_op_for_top_filter && null_as_false)
-            fun_name = "two_value_and";
+        // two_value_and treats null as false inside the `two_value_and` function, so the output column
+        // will always be UInt8 type, which can save the merge step in FilterDescription
+        // it should only be used when the output is only used as a filter column
+        String fun_name = null_as_false ? "two_value_and" : "and";
         filter_column_name = applyFunction(fun_name, arg_names, actions, nullptr);
     }
     return filter_column_name;

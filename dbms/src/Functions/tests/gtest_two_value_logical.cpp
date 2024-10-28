@@ -26,7 +26,7 @@
 
 namespace DB::tests
 {
-class TwoValueLogical : public DB::tests::FunctionTest
+class TwoValueAnd : public DB::tests::FunctionTest
 {
 protected:
     void SetUp() override
@@ -42,7 +42,7 @@ protected:
             nullable_uint8_columns.push_back(ColumnGenerator::instance().generate(nullable_opts));
         }
     }
-    void testBinaryTwoValueLogicalOP(
+    void testBinaryTwoValueAnd(
         const String & func_name,
         const ColumnWithTypeAndName & result,
         const ColumnWithTypeAndName & col1,
@@ -51,56 +51,56 @@ protected:
         // need to use raw_function_test because there is no way to map "two_value_and" to a tipb ScalarFunctionSig
         ASSERT_COLUMN_EQ(result, executeFunction(func_name, {col1, col2}, nullptr, true));
     }
-    void testGenericTwoValueLogicalOPWithConstants(const String & func_name, const ColumnsWithTypeAndName & inputs)
+    void testGenericTwoValueAndWithConstants(const String & func_name, const ColumnsWithTypeAndName & inputs)
     {
         auto new_inputs = inputs;
         // add constant_true
         new_inputs.push_back(not_null_true_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         // add constant_false
         new_inputs = inputs;
         new_inputs.push_back(not_null_false_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         // add constant_null
         new_inputs = inputs;
         new_inputs.push_back(nullable_null_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         // multiple constant
         new_inputs = inputs;
         new_inputs.push_back(nullable_null_const_long);
         new_inputs.push_back(not_null_false_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         new_inputs = inputs;
         new_inputs.push_back(nullable_null_const_long);
         new_inputs.push_back(not_null_true_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         new_inputs = inputs;
         new_inputs.push_back(not_null_true_const_long);
         new_inputs.push_back(not_null_false_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         new_inputs = inputs;
         new_inputs.push_back(nullable_null_const_long);
         new_inputs.push_back(not_null_true_const_long);
         new_inputs.push_back(not_null_false_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         new_inputs = inputs;
         new_inputs.push_back(not_null_true_const_long);
         new_inputs.push_back(not_null_true_const_long);
         new_inputs.push_back(not_null_false_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         new_inputs = inputs;
         new_inputs.push_back(not_null_false_const_long);
         new_inputs.push_back(not_null_true_const_long);
         new_inputs.push_back(not_null_false_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
         new_inputs = inputs;
         new_inputs.push_back(not_null_false_const_long);
         new_inputs.push_back(not_null_true_const_long);
         new_inputs.push_back(not_null_false_const_long);
         new_inputs.push_back(nullable_null_const_long);
-        testGenericTwoValueLogicalOP(func_name, new_inputs);
+        testGenericTwoValueAnd(func_name, new_inputs);
     }
-    void testGenericTwoValueLogicalOP(const String & func_name, const ColumnsWithTypeAndName & inputs)
+    void testGenericTwoValueAnd(const String & func_name, const ColumnsWithTypeAndName & inputs)
     {
         if (inputs.size() <= 1)
         {
@@ -138,117 +138,117 @@ protected:
     ColumnWithTypeAndName nullable_null_const_long = createConstColumn<Nullable<UInt8>>(rows, {});
 };
 
-TEST_F(TwoValueLogical, binaryAndTest)
+TEST_F(TwoValueAnd, TwoInputColumns)
 try
 {
     // basic tests
     // false && false
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_false_column, not_null_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, not_null_false_column, not_null_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_false_column, not_null_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_false_column, not_null_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_false_column, nullable_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_false_column, not_null_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, not_null_false_column, not_null_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_false_column, not_null_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_false_column, not_null_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_false_column, nullable_false_column);
     // nullable_false_constant will be converted to not_null_false_constant
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, not_null_false_column, nullable_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_false_column, nullable_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_false_column, nullable_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, not_null_false_const, not_null_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, not_null_false_column, nullable_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_false_column, nullable_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_false_column, nullable_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, not_null_false_const, not_null_false_const);
     // false && true
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_false_column, not_null_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_false_column, not_null_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_false_column, not_null_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_false_column, not_null_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_false_column, nullable_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_false_column, nullable_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_false_column, nullable_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_false_column, nullable_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_false_const, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_false_column, not_null_true_column);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_false_column, not_null_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_false_column, not_null_true_column);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_false_column, not_null_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_false_column, nullable_true_column);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_false_column, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_false_column, nullable_true_column);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_false_column, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_false_const, nullable_true_const);
     // false && null
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_false_column, nullable_null_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, not_null_false_column, nullable_null_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_false_column, nullable_null_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_false_column, nullable_null_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_false_const, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_false_column, nullable_null_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, not_null_false_column, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_false_column, nullable_null_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_false_column, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_false_const, nullable_null_const);
     // true && false
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_true_column, not_null_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, not_null_true_column, not_null_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_true_column, not_null_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_true_column, not_null_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_true_column, nullable_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, not_null_true_column, nullable_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_true_column, nullable_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_true_column, nullable_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_true_const, nullable_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_true_column, not_null_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, not_null_true_column, not_null_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_true_column, not_null_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_true_column, not_null_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_true_column, nullable_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, not_null_true_column, nullable_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_true_column, nullable_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_true_column, nullable_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_true_const, nullable_false_const);
     // true && true
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, not_null_true_column, not_null_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, not_null_true_column, not_null_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, nullable_true_column, not_null_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, nullable_true_column, not_null_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, not_null_true_column, nullable_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, not_null_true_column, nullable_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, nullable_true_column, nullable_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_true_column, nullable_true_column, nullable_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_true_const, nullable_true_const, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_true_column, not_null_true_column, not_null_true_column);
+    testBinaryTwoValueAnd(name, not_null_true_column, not_null_true_column, not_null_true_const);
+    testBinaryTwoValueAnd(name, not_null_true_column, nullable_true_column, not_null_true_column);
+    testBinaryTwoValueAnd(name, not_null_true_column, nullable_true_column, not_null_true_const);
+    testBinaryTwoValueAnd(name, not_null_true_column, not_null_true_column, nullable_true_column);
+    testBinaryTwoValueAnd(name, not_null_true_column, not_null_true_column, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_true_column, nullable_true_column, nullable_true_column);
+    testBinaryTwoValueAnd(name, not_null_true_column, nullable_true_column, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_true_const, nullable_true_const, nullable_true_const);
     // true && null
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, not_null_true_column, nullable_null_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, not_null_true_column, nullable_null_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_true_column, nullable_null_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_true_column, nullable_null_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_true_const, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, not_null_true_column, nullable_null_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, not_null_true_column, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_true_column, nullable_null_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_true_column, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_true_const, nullable_null_const);
     // null && true
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_null_column, not_null_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_null_column, not_null_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_null_column, nullable_true_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_null_column, nullable_true_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_null_const, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_null_column, not_null_true_column);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_null_column, not_null_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_null_column, nullable_true_column);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_null_column, nullable_true_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_null_const, nullable_true_const);
     // null && false
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_null_column, not_null_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_null_column, not_null_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_null_column, nullable_false_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_null_column, nullable_false_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_null_const, nullable_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_null_column, not_null_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_null_column, not_null_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_null_column, nullable_false_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_null_column, nullable_false_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_null_const, nullable_false_const);
     // null && null
-    testBinaryTwoValueLogicalOP(name, not_null_false_column, nullable_null_column, nullable_null_column);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_null_column, nullable_null_const);
-    testBinaryTwoValueLogicalOP(name, not_null_false_const, nullable_null_const, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_column, nullable_null_column, nullable_null_column);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_null_column, nullable_null_const);
+    testBinaryTwoValueAnd(name, not_null_false_const, nullable_null_const, nullable_null_const);
 
     // column, column
-    testBinaryTwoValueLogicalOP(
+    testBinaryTwoValueAnd(
         name,
         createColumn<UInt8>({0, 1, 0, 0, 0, 0}),
         createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
         createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}}));
     // column, const
-    testBinaryTwoValueLogicalOP(
+    testBinaryTwoValueAnd(
         name,
         createColumn<UInt8>({1, 0}),
         createConstColumn<Nullable<UInt8>>(2, 1),
         createColumn<Nullable<UInt8>>({1, 0}));
-    testBinaryTwoValueLogicalOP(
+    testBinaryTwoValueAnd(
         name,
         createConstColumn<UInt8>(2, 0),
         createConstColumn<Nullable<UInt8>>(2, 0),
         createColumn<Nullable<UInt8>>({1, 0}));
     // const, const
-    testBinaryTwoValueLogicalOP(
+    testBinaryTwoValueAnd(
         name,
         createConstColumn<UInt8>(1, 1),
         createConstColumn<Nullable<UInt8>>(1, 1),
         createConstColumn<Nullable<UInt8>>(1, 1));
     // only null
-    testBinaryTwoValueLogicalOP(
+    testBinaryTwoValueAnd(
         name,
         createConstColumn<UInt8>(2, 0),
         createOnlyNullColumnConst(2),
         createColumn<Nullable<UInt8>>({1, 0}));
     // issue 6127
-    testBinaryTwoValueLogicalOP(
+    testBinaryTwoValueAnd(
         name,
         createColumn<UInt8>({0, 1, 0, 0}),
         createColumn<Int64>({0, 123, 0, 41}),
         createColumn<UInt8>({0, 11, 221, 0}));
     // issue 6127, position of UInt8 column may affect the result
-    testBinaryTwoValueLogicalOP(
+    testBinaryTwoValueAnd(
         name,
         createColumn<UInt8>({0, 1, 0, 0}),
         createColumn<UInt8>({0, 123, 0, 41}),
@@ -256,7 +256,7 @@ try
 }
 CATCH
 
-TEST_F(TwoValueLogical, AndTest)
+TEST_F(TwoValueAnd, MultipleInputColumns)
 try
 {
     ColumnsWithTypeAndName input_columns;
@@ -269,8 +269,8 @@ try
             else
                 input_columns.push_back(nullable_uint8_columns[j]);
         }
-        testGenericTwoValueLogicalOP(name, input_columns);
-        testGenericTwoValueLogicalOPWithConstants(name, input_columns);
+        testGenericTwoValueAnd(name, input_columns);
+        testGenericTwoValueAndWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -279,8 +279,8 @@ try
         {
             input_columns.push_back(not_null_uint8_columns[i]);
         }
-        testGenericTwoValueLogicalOP(name, input_columns);
-        testGenericTwoValueLogicalOPWithConstants(name, input_columns);
+        testGenericTwoValueAnd(name, input_columns);
+        testGenericTwoValueAndWithConstants(name, input_columns);
         input_columns.clear();
     }
     for (size_t i = 3; i < uint8_column_num; i++)
@@ -289,8 +289,8 @@ try
         {
             input_columns.push_back(nullable_uint8_columns[j]);
         }
-        testGenericTwoValueLogicalOP(name, input_columns);
-        testGenericTwoValueLogicalOPWithConstants(name, input_columns);
+        testGenericTwoValueAnd(name, input_columns);
+        testGenericTwoValueAndWithConstants(name, input_columns);
         input_columns.clear();
     }
 }

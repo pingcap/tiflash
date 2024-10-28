@@ -116,24 +116,24 @@ public:
     }                                                                                       \
     CATCH                                                                                   \
     BENCHMARK_REGISTER_F(TwoValueLogicalOpBench, TwoValueRaw_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
-#define NORMAL_RAW(COL1_NAME, COL2_NAME, OP_NAME)                                         \
-    BENCHMARK_DEFINE_F(TwoValueLogicalOpBench, NormalRaw_##OP_NAME##COL1_NAME##COL2_NAME) \
-    (benchmark::State & state)                                                            \
-    try                                                                                   \
-    {                                                                                     \
-        for (auto _ : state)                                                              \
-        {                                                                                 \
-            const auto & col_1 = *data_1;                                                 \
-            const auto & col_2 = *data_2;                                                 \
-            const auto & null_2 = *null_map_2;                                            \
-            size_t rows = col_1.size();                                                   \
-            for (size_t i = 0; i < rows; ++i)                                             \
-            {                                                                             \
-                res[i] = AndImpl::applyOneNullableNotNull(col_2[i], null_2[i], col_1[i]); \
-            }                                                                             \
-        }                                                                                 \
-    }                                                                                     \
-    CATCH                                                                                 \
+#define NORMAL_RAW(COL1_NAME, COL2_NAME, OP_NAME)                                             \
+    BENCHMARK_DEFINE_F(TwoValueLogicalOpBench, NormalRaw_##OP_NAME##COL1_NAME##COL2_NAME)     \
+    (benchmark::State & state)                                                                \
+    try                                                                                       \
+    {                                                                                         \
+        for (auto _ : state)                                                                  \
+        {                                                                                     \
+            const auto & col_1 = *data_1;                                                     \
+            const auto & col_2 = *data_2;                                                     \
+            const auto & null_2 = *null_map_2;                                                \
+            size_t rows = col_1.size();                                                       \
+            for (size_t i = 0; i < rows; ++i)                                                 \
+            {                                                                                 \
+                res[i] = AndImpl::applyOneNullableNullAsFalse(col_2[i], null_2[i], col_1[i]); \
+            }                                                                                 \
+        }                                                                                     \
+    }                                                                                         \
+    CATCH                                                                                     \
     BENCHMARK_REGISTER_F(TwoValueLogicalOpBench, NormalRaw_##OP_NAME##COL1_NAME##COL2_NAME)->Iterations(1000);
 
 #define TWO_VALUE_LOGICAL_BENCH(COL1_NAME, COL2_NAME, OP_NAME)                                  \
@@ -333,54 +333,54 @@ RAW_BENCH(_not_null_uint8_1, _not_null_uint8_2, And);
         ->Iterations(1000);
 
 // test and only since in TiDB it always use binary logical op, so or and xor is always binary logical op
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(3, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(3, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(4, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(4, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(5, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(5, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(6, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(6, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(7, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(7, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(8, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(8, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(9, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(9, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(10, And, _not_null);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(10, And, _not_null);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(3, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(3, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(4, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(4, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(5, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(5, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(6, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(6, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(7, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(7, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(8, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(8, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(9, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(9, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(10, And, _mixed);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(10, And, _mixed);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(3, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(3, And, _nullable);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(4, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(4, And, _nullable);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(5, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(5, And, _nullable);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(6, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(6, And, _nullable);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(7, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(7, And, _nullable);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(8, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(8, And, _nullable);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
-//TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
-//NORMAL_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(3, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(3, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(4, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(4, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(5, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(5, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(6, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(6, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(7, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(7, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(8, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(8, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(9, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(9, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(10, And, _not_null);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(10, And, _not_null);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(3, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(3, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(4, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(4, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(5, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(5, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(6, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(6, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(7, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(7, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(8, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(8, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(9, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(9, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(10, And, _mixed);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(10, And, _mixed);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(3, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(3, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(4, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(4, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(5, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(5, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(6, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(6, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(7, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(7, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(8, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(8, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
+TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
+NORMAL_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
 
 #undef TWO_VALUE_LOGICAL_BENCH_MULTI_PARAM
 #undef NORMAL_LOGICAL_BENCH_MULTI_PARAM
