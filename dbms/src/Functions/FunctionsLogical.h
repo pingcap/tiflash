@@ -440,7 +440,7 @@ struct NullableAssociativeOperationImpl<Op, 1>
 /**
  * The behavior of and and or is the same as
  * https://en.wikipedia.org/wiki/Null_(SQL)#Comparisons_with_NULL_and_the_three-valued_logic_(3VL)
- * if two_value_logic_op is true, the function will only return true/false, and any null input will 
+ * if null_as_false is true, the function will only return true/false, and any null input will 
  * be treated as false
  */
 template <typename Impl, typename Name, bool special_impl_for_nulls, bool null_as_false = false>
