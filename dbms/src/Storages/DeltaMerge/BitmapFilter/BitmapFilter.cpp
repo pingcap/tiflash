@@ -18,7 +18,7 @@
 namespace DB::DM
 {
 BitmapFilter::BitmapFilter(UInt32 size_, bool default_value)
-    : filter(size_, default_value)
+    : filter(size_, static_cast<UInt8>(default_value))
     , all_match(default_value)
 {}
 
@@ -58,7 +58,7 @@ void BitmapFilter::set(std::span<const UInt32> row_ids, const FilterPtr & f)
     else
     {
         RUNTIME_CHECK(row_ids.size() == f->size(), row_ids.size(), f->size());
-        for (UInt32 i = 0; i < row_ids.size(); i++)
+        for (UInt32 i = 0; i < row_ids.size(); ++i)
         {
             filter[row_ids[i]] = (*f)[i];
         }
@@ -68,7 +68,7 @@ void BitmapFilter::set(std::span<const UInt32> row_ids, const FilterPtr & f)
 void BitmapFilter::set(UInt32 start, UInt32 limit, bool value)
 {
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
-    std::fill_n(filter.begin() + start, limit, value);
+    std::fill_n(filter.begin() + start, limit, static_cast<UInt8>(value));
 }
 
 bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
@@ -76,7 +76,7 @@ bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
     auto begin = filter.cbegin() + start;
     auto end = filter.cbegin() + start + limit;
-    if (all_match || std::find(begin, end, false) == end)
+    if (all_match || std::find(begin, end, static_cast<UInt8>(false)) == end)
     {
         return true;
     }
@@ -99,7 +99,7 @@ void BitmapFilter::rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) con
 
 void BitmapFilter::runOptimize()
 {
-    all_match = std::find(filter.begin(), filter.end(), false) == filter.end();
+    all_match = std::find(filter.begin(), filter.end(), static_cast<UInt8>(false)) == filter.end();
 }
 
 String BitmapFilter::toDebugString() const
@@ -117,6 +117,6 @@ String BitmapFilter::toDebugString() const
 
 size_t BitmapFilter::count() const
 {
-    return std::count(filter.cbegin(), filter.cend(), true);
+    return std::count(filter.cbegin(), filter.cend(), static_cast<UInt8>(true));
 }
 } // namespace DB::DM
