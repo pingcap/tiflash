@@ -250,8 +250,6 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         std::move(header_layout),
         std::move(rest_columns_reader),
         std::move(vec_column.value()),
-        file_provider,
-        read_limiter,
         scan_context,
         vector_index_cache,
         bitmap_filter.value(),

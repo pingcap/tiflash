@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/DeltaMerge/File/DMFileIndexWriter.h>
+#include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
@@ -127,8 +127,8 @@ public:
 
     DMFilePtr buildIndex(TiDB::VectorIndexDefinition definition)
     {
-        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(indexInfo(definition), {dm_file});
-        DMFileIndexWriter iw(DMFileIndexWriter::Options{
+        auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(indexInfo(definition), {dm_file});
+        DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
             .path_pool = path_pool,
             .index_infos = build_info.indexes_to_build,
             .dm_files = {dm_file},
@@ -142,8 +142,8 @@ public:
     DMFilePtr buildMultiIndex(const LocalIndexInfosPtr & index_infos)
     {
         assert(index_infos != nullptr);
-        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(index_infos, {dm_file});
-        DMFileIndexWriter iw(DMFileIndexWriter::Options{
+        auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(index_infos, {dm_file});
+        DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
             .path_pool = path_pool,
             .index_infos = build_info.indexes_to_build,
             .dm_files = {dm_file},
@@ -1892,10 +1892,10 @@ public:
                 }),
             },
         });
-        auto build_info = DMFileIndexWriter::getLocalIndexBuildInfo(index_infos, dm_files);
+        auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(index_infos, dm_files);
 
         // Build multiple index
-        DMFileIndexWriter iw(DMFileIndexWriter::Options{
+        DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
             .path_pool = storage_path_pool,
             .index_infos = build_info.indexes_to_build,
             .dm_files = dm_files,

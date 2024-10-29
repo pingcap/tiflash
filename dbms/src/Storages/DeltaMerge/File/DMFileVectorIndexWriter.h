@@ -64,7 +64,7 @@ public:
     }
 };
 
-class DMFileIndexWriter
+class DMFileVectorIndexWriter
 {
 public:
     static LocalIndexBuildInfo getLocalIndexBuildInfo(
@@ -81,7 +81,7 @@ public:
 
     using ProceedCheckFn = std::function<bool()>;
 
-    explicit DMFileIndexWriter(const Options & options)
+    explicit DMFileVectorIndexWriter(const Options & options)
         : logger(Logger::get())
         , options(options)
     {}
