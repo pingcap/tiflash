@@ -80,9 +80,9 @@ public:
     // others will be filled with default values.
     void read(
         MutableColumnPtr & vec_column,
-        const std::span<const VectorIndexViewer::SearchResult> & selected_rows,
-        size_t start_offset,
-        size_t column_size);
+        const std::span<const VectorIndexViewer::SearchResult> & read_rowids,
+        size_t rowid_start_offset,
+        size_t read_rows);
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.

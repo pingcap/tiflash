@@ -93,6 +93,8 @@ private:
 
     Block readOtherColumns();
 
+    void toNextFile(size_t current_file_index, size_t current_file_rows);
+
     void load();
 };
 

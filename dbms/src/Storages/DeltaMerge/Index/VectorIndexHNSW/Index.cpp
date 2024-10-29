@@ -304,9 +304,6 @@ auto VectorIndexHNSWViewer::searchImpl(const ANNQueryInfoPtr & query_info, const
     if (has_exception_in_search)
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Exception happened occurred during search");
 
-    std::vector<Key> keys(result.size());
-    result.dump_to(keys.data());
-
     PerfContext::vector_search.visited_nodes += visited_nodes;
     PerfContext::vector_search.discarded_nodes += discarded_nodes;
     return result;
@@ -318,14 +315,17 @@ std::vector<VectorIndexViewer::Key> VectorIndexHNSWViewer::search(
 {
     auto result = searchImpl(query_info, valid_rows);
 
-    std::vector<Key> keys(result.size());
-    result.dump_to(keys.data());
-
     // For some reason usearch does not always do the predicate for all search results.
     // So we need to filter again.
-    keys.erase(
-        std::remove_if(keys.begin(), keys.end(), [&valid_rows](Key key) { return !valid_rows[key]; }),
-        keys.end());
+    const size_t result_size = result.size();
+    std::vector<Key> keys;
+    keys.reserve(result_size);
+    for (size_t i = 0; i < result_size; ++i)
+    {
+        const auto rowid = result[i].member.key;
+        if (valid_rows[rowid])
+            keys.push_back(rowid);
+    }
     return keys;
 }
 
@@ -335,18 +335,16 @@ std::vector<VectorIndexViewer::SearchResult> VectorIndexHNSWViewer::searchWithDi
 {
     auto result = searchImpl(query_info, valid_rows);
 
-    std::vector<Key> keys(result.size());
-    std::vector<Distance> distances(result.size());
-    result.dump_to(keys.data(), distances.data());
-
     // For some reason usearch does not always do the predicate for all search results.
     // So we need to filter again.
+    const size_t result_size = result.size();
     std::vector<SearchResult> search_results;
-    search_results.reserve(result.size());
-    for (size_t i = 0; i < result.size(); ++i)
+    search_results.reserve(result_size);
+    for (size_t i = 0; i < result_size; ++i)
     {
-        if (valid_rows[keys[i]])
-            search_results.push_back({keys[i], distances[i]});
+        const auto rowid = result[i].member.key;
+        if (valid_rows[rowid])
+            search_results.emplace_back(rowid, result[i].distance);
     }
     return search_results;
 }

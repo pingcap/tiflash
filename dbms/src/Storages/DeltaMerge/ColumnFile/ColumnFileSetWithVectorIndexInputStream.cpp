@@ -115,6 +115,14 @@ Block ColumnFileSetWithVectorIndexInputStream::readOtherColumns()
     return block;
 }
 
+void ColumnFileSetWithVectorIndexInputStream::toNextFile(size_t current_file_index, size_t current_file_rows)
+{
+    (*cur_column_file_reader).reset();
+    ++cur_column_file_reader;
+    read_rows += current_file_rows;
+    tiny_readers[current_file_index].reset();
+}
+
 Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
 {
     load();
@@ -132,13 +140,6 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
         if (tiny_readers[current_file_index] != nullptr)
         {
             const auto file_rows = column_files[current_file_index]->getRows();
-            auto to_next_file = [&]() {
-                (*cur_column_file_reader).reset();
-                ++cur_column_file_reader;
-                read_rows += file_rows;
-                tiny_readers[current_file_index].reset();
-            };
-
             auto selected_row_begin = std::lower_bound(
                 selected_rows.cbegin(),
                 selected_rows.cend(),
@@ -153,7 +154,7 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
             // If all rows are filtered out, skip this file.
             if (selected_rows == 0)
             {
-                to_next_file();
+                toNextFile(current_file_index, file_rows);
                 continue;
             }
 
@@ -161,7 +162,7 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
             auto tiny_reader = tiny_readers[current_file_index];
             auto vec_column = vec_cd.type->createColumn();
             const std::span file_selected_rows{selected_row_begin, selected_row_end};
-            tiny_reader->read(vec_column, file_selected_rows, read_rows, file_rows);
+            tiny_reader->read(vec_column, file_selected_rows, /* rowid_start_offset= */ read_rows, file_rows);
             assert(vec_column->size() == file_rows);
 
             Block block;
@@ -190,7 +191,7 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
 
             // All rows in this ColumnFileTiny have been read.
             block.setStartOffset(read_rows);
-            to_next_file();
+            toNextFile(current_file_index, file_rows);
             return block;
         }
         auto block = (*cur_column_file_reader)->readNextBlock();
@@ -243,13 +244,13 @@ void ColumnFileSetWithVectorIndexInputStream::load()
             precedes_rows += column_file->getRows();
         }
     }
-    // Sort by distance
-    std::sort(selected_rows.begin(), selected_rows.end(), [](const auto & lhs, const auto & rhs) {
+    // Keep the top k minimum distances rows.
+    auto select_size = selected_rows.size() > ann_query_info->top_k() ? ann_query_info->top_k() : selected_rows.size();
+    auto top_k_end = selected_rows.begin() + select_size;
+    std::nth_element(selected_rows.begin(), top_k_end, selected_rows.end(), [](const auto & lhs, const auto & rhs) {
         return lhs.distance < rhs.distance;
     });
-    // Only keep the top_k rows.
-    if (selected_rows.size() > ann_query_info->top_k())
-        selected_rows.resize(ann_query_info->top_k());
+    selected_rows.resize(select_size);
     // Sort by key again.
     std::sort(selected_rows.begin(), selected_rows.end(), [](const auto & lhs, const auto & rhs) {
         return lhs.key < rhs.key;

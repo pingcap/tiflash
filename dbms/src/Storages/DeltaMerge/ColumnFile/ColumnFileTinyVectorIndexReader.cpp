@@ -26,17 +26,17 @@ namespace DB::DM
 
 void ColumnFileTinyVectorIndexReader::read(
     MutableColumnPtr & vec_column,
-    const std::span<const VectorIndexViewer::SearchResult> & selected_rows,
-    size_t start_offset,
-    size_t column_size)
+    const std::span<const VectorIndexViewer::SearchResult> & read_rowids,
+    size_t rowid_start_offset,
+    size_t read_rows)
 {
     RUNTIME_CHECK(loaded);
 
     Stopwatch watch;
-    vec_column->reserve(column_size);
+    vec_column->reserve(read_rows);
     std::vector<Float32> value;
-    size_t current_rowid = start_offset;
-    for (const auto & [rowid, _] : selected_rows)
+    size_t current_rowid = rowid_start_offset;
+    for (const auto & [rowid, _] : read_rowids)
     {
         vec_index->get(rowid, value);
         if (rowid > current_rowid)
@@ -48,13 +48,13 @@ void ColumnFileTinyVectorIndexReader::read(
         vec_column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
         current_rowid = rowid + 1;
     }
-    if (current_rowid < start_offset + column_size)
+    if (current_rowid < rowid_start_offset + read_rows)
     {
-        UInt32 nulls = start_offset + column_size - current_rowid;
+        UInt32 nulls = rowid_start_offset + read_rows - current_rowid;
         vec_column->insertManyDefaults(nulls);
     }
 
-    perf_stat.returned_rows = selected_rows.size();
+    perf_stat.returned_rows = read_rowids.size();
     perf_stat.read_vec_column_seconds = watch.elapsedSeconds();
 }
 
@@ -102,7 +102,11 @@ void ColumnFileTinyVectorIndexReader::loadVectorIndex()
     };
     if (vec_index_cache)
     {
-        const auto key = fmt::format("{}{}", VectorIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
+        const auto key = fmt::format(
+            "{}{}_{}",
+            VectorIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX,
+            tiny_file.keyspace_id,
+            index_page_id);
         vec_index = vec_index_cache->getOrSet(key, load_from_page_storage);
     }
     else
