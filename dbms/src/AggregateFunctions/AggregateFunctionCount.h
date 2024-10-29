@@ -136,20 +136,12 @@ public:
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
-        Arena *,
+        Arena * arena,
         ssize_t if_argument_pos) const override
     {
         const auto & nc = assert_cast<const ColumnNullable &>(*columns[0]);
-        if (if_argument_pos >= 0)
-        {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            data(place).count
-                += countBytesInFilterWithNull(flags, nc.getNullMapData().data(), start_offset, batch_size);
-        }
-        else
-        {
-            data(place).count += batch_size - countBytesInFilter(nc.getNullMapData().data(), start_offset, batch_size);
-        }
+        const UInt8 * null_map = nc.getNullMapData().data();
+        addBatchSinglePlaceNotNull(start_offset, batch_size, place, columns, null_map, arena, if_argument_pos);
     }
 
     void addBatchSinglePlaceNotNull(
