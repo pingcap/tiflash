@@ -39,7 +39,12 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 PipelineExecPtr PipelineExecBuilder::build(bool internal_break_time, uint64_t minTSO_time_in_ms)
 {
     RUNTIME_CHECK(source_op && sink_op);
-    return std::make_unique<PipelineExec>(std::move(source_op), std::move(transform_ops), std::move(sink_op), internal_break_time, minTSO_time_in_ms);
+    return std::make_unique<PipelineExec>(
+        std::move(source_op),
+        std::move(transform_ops),
+        std::move(sink_op),
+        internal_break_time,
+        minTSO_time_in_ms);
 }
 
 OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const

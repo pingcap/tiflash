@@ -26,7 +26,12 @@ namespace DB
 class PipelineExec : private boost::noncopyable
 {
 public:
-    PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_, bool internal_break_time_, uint64_t minTSO_time_in_ms_);
+    PipelineExec(
+        SourceOpPtr && source_op_,
+        TransformOps && transform_ops_,
+        SinkOpPtr && sink_op_,
+        bool internal_break_time_,
+        uint64_t minTSO_time_in_ms_);
 
     void executePrefix();
     void executeSuffix();
