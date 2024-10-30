@@ -27,7 +27,8 @@ PipelineExecutor::PipelineExecutor(
     AutoSpillTrigger * auto_spill_trigger,
     const RegisterOperatorSpillContext & register_operator_spill_context,
     Context & context_,
-    const String & req_id)
+    const String & req_id,
+    UInt64 minTSO_wait_time_in_ms_)
     : QueryExecutor(memory_tracker_, context_, req_id)
     , exec_context(
           // For mpp task, there is a unique identifier MPPTaskId, so MPPTaskId is used here as the query id of PipelineExecutor.
@@ -47,10 +48,10 @@ PipelineExecutor::PipelineExecutor(
     LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
 }
 
-void PipelineExecutor::scheduleEvents()
+void PipelineExecutor::scheduleEvents(UInt64 minTSO_wait_time_in_ms)
 {
     assert(root_pipeline);
-    auto events = root_pipeline->toEvents(exec_context, context, context.getMaxStreams());
+    auto events = root_pipeline->toEvents(exec_context, context, context.getMaxStreams(), minTSO_wait_time_in_ms);
     Events sources;
     for (const auto & event : events)
     {
@@ -81,7 +82,7 @@ void PipelineExecutor::consume(ResultHandler & result_handler)
     exec_context.consume(result_handler);
 }
 
-ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler, UInt64 minTSO_wait_time_in_ms)
 {
     if (result_handler)
     {
@@ -92,12 +93,12 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         // The queue size is same as UnionBlockInputStream = concurrency * 5.
         assert(root_pipeline);
         root_pipeline->addGetResultSink(exec_context.toConsumeMode(/*queue_size=*/context.getMaxStreams() * 5));
-        scheduleEvents();
+        scheduleEvents(minTSO_wait_time_in_ms);
         consume(result_handler);
     }
     else
     {
-        scheduleEvents();
+        scheduleEvents(minTSO_wait_time_in_ms);
         wait();
     }
     LOG_DEBUG(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());

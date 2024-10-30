@@ -566,7 +566,7 @@ void MPPTask::runImpl()
         }
 #endif
 
-        auto result = query_executor_holder->execute();
+        auto result = query_executor_holder->execute(time_cost_in_schedule_ms);
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;

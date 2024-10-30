@@ -40,8 +40,8 @@ public:
 
     virtual ~QueryExecutor() = default;
 
-    ExecutionResult execute();
-    ExecutionResult execute(ResultHandler::Handler handler);
+    ExecutionResult execute(UInt64 minTSO_wait_time_in_ms);
+    ExecutionResult execute(ResultHandler::Handler handler, UInt64 minTSO_wait_time_in_ms);
 
     virtual void cancel() = 0;
 
@@ -58,7 +58,7 @@ public:
     virtual String getExtraJsonInfo() const { return "{}"; }
 
 protected:
-    virtual ExecutionResult execute(ResultHandler &&) = 0;
+    virtual ExecutionResult execute(ResultHandler &&, UInt64 minTSO_wait_time_in_ms) = 0;
 
     DAGContext & dagContext() const;
 

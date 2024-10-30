@@ -21,7 +21,7 @@ namespace DB
 void PlainPipelineEvent::scheduleImpl()
 {
     RUNTIME_CHECK(pipeline);
-    auto pipeline_exec_group = pipeline->buildExecGroup(exec_context, context, concurrency);
+    auto pipeline_exec_group = pipeline->buildExecGroup(exec_context, context, concurrency, minTSO_wait_time_in_ms);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     for (auto & pipeline_exec : pipeline_exec_group)
         addTask(std::make_unique<PipelineTask>(
