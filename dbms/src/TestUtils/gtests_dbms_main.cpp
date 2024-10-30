@@ -119,6 +119,7 @@ int main(int argc, char ** argv)
     // `TiFlashTestEnv::shutdown()` will destroy `DeltaIndexManager`.
     // Stop threads explicitly before `TiFlashTestEnv::shutdown()`.
     DB::DM::SegmentReaderPoolManager::instance().stop();
+    DB::S3FileCachePool::shutdown();
     DB::tests::TiFlashTestEnv::shutdown();
     DB::S3::ClientFactory::instance().shutdown();
 
