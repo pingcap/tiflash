@@ -567,7 +567,7 @@ void ColumnString::deserializeAndInsertFromPos(
         pos[i] += sizeof(size_t);
 
         chars.resize(char_size + str_size);
-        memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
+        inline_memcpy(&chars[char_size], pos[i], str_size);
         char_size += str_size;
         offsets[prev_size + i] = char_size;
         pos[i] += str_size;

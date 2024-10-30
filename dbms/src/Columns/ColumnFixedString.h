@@ -17,6 +17,7 @@
 #include <Columns/IColumn.h>
 #include <Common/PODArray.h>
 #include <string.h> // memcpy
+#include <common/memcpy.h>
 
 
 namespace DB
@@ -135,7 +136,7 @@ public:
                     continue;
             }
 
-            memcpySmallAllowReadWriteOverflow15(pos[i], &chars[i * n], n);
+            inline_memcpy(pos[i], &chars[i * n], n);
             pos[i] += n;
         }
     }

@@ -141,7 +141,7 @@ void ColumnFixedString::deserializeAndInsertFromPos(
     chars.resize(old_char_size + n * size);
     for (size_t i = 0; i < size; ++i)
     {
-        memcpySmallAllowReadWriteOverflow15(&chars[old_char_size], pos[i], n);
+        inline_memcpy(&chars[old_char_size], pos[i], n);
         old_char_size += n;
         pos[i] += n;
     }
