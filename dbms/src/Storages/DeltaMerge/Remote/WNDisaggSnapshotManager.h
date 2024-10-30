@@ -78,12 +78,13 @@ public:
         });
     }
 
-    DisaggReadSnapshotPtr getSnapshot(const DisaggTaskId & task_id) const
+    DisaggReadSnapshotPtr getSnapshot(const DisaggTaskId & task_id, bool refresh_expiration = false) const
     {
         return snapshots.withShared([&](auto & snapshots) {
             if (auto iter = snapshots.find(task_id); iter != snapshots.end())
             {
-                iter->second->refreshExpiredTime();
+                if (refresh_expiration)
+                    iter->second->refreshExpiredTime();
                 return iter->second->snap;
             }
             return DisaggReadSnapshotPtr{nullptr};
