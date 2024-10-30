@@ -170,7 +170,9 @@ std::tuple<Block, size_t> DMFileWithVectorIndexBlockInputStream::readByIndexRead
 
     auto begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), block_start_row_id);
     auto end = std::lower_bound(begin, sorted_results.cend(), index_reader_next_row_id);
-    const std::span<const VectorIndexViewer::Key> block_selected_rows{begin, end};
+    const std::span<const VectorIndexViewer::Key> block_selected_rows{
+        &*begin,
+        static_cast<size_t>(std::distance(begin, end))};
     vec_index_reader->read(vec_column, block_selected_rows, block_start_row_id, read_rows);
 
     block.insert(ColumnWithTypeAndName{std::move(vec_column), vec_cd.type, vec_cd.name, vec_cd.id});
@@ -198,7 +200,9 @@ std::tuple<Block, size_t> DMFileWithVectorIndexBlockInputStream::readByFollowing
     // Then read from vector index for the same pack.
     auto begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), block_others.startOffset());
     auto end = std::lower_bound(begin, sorted_results.cend(), block_others.startOffset() + read_rows);
-    const std::span<const VectorIndexViewer::Key> block_selected_rows{begin, end};
+    const std::span<const VectorIndexViewer::Key> block_selected_rows{
+        &*begin,
+        static_cast<size_t>(std::distance(begin, end))};
     vec_index_reader->read(vec_column, block_selected_rows, block_others.startOffset(), read_rows);
 
     // Re-assemble block using the same layout as header.
