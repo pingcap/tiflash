@@ -70,9 +70,9 @@ public:
     // used for getting the result blocks.
     void addGetResultSink(const ResultQueuePtr & result_queue);
 
-    PipelineExecGroup buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
+    PipelineExecGroup buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, UInt64 minTSO_wait_time_in_ms);
 
-    Events toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
+    Events toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, UInt64 minTSO_wait_time_in_ms);
 
     Block getSampleBlock() const;
 
@@ -94,11 +94,12 @@ private:
     void toTreeStringImpl(FmtBuffer & buffer, size_t level) const;
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
-    PipelineEvents toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
+    PipelineEvents toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, UInt64 minTSO_wait_time_in_ms);
     PipelineEvents doToEvents(
         PipelineExecutorContext & exec_context,
         Context & context,
         size_t concurrency,
+        UInt64 minTSO_wait_time_in_ms,
         Events & all_events);
 
 private:
@@ -113,5 +114,6 @@ private:
     std::vector<PipelinePtr> children;
 
     mutable String tree_string;
+    bool internal_break_time;
 };
 } // namespace DB

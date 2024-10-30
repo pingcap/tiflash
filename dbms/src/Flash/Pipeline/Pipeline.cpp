@@ -193,7 +193,8 @@ String Pipeline::getFinalPlanExecId() const
 PipelineExecGroup Pipeline::buildExecGroup(
     PipelineExecutorContext & exec_context,
     Context & context,
-    size_t concurrency)
+    size_t concurrency,
+    UInt64 minTSO_wait_time_in_ms)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
@@ -201,7 +202,7 @@ PipelineExecGroup Pipeline::buildExecGroup(
     {
         plan_node->buildPipelineExecGroup(exec_context, builder, context, concurrency);
     }
-    return builder.build();
+    return builder.build(internal_break_time, minTSO_wait_time_in_ms);
 }
 
 /**
@@ -233,15 +234,15 @@ EventPtr Pipeline::complete(PipelineExecutorContext & exec_context)
     return plan_nodes.back()->sinkComplete(exec_context);
 }
 
-Events Pipeline::toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
+Events Pipeline::toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, UInt64 minTSO_wait_time_in_ms)
 {
     Events all_events;
-    doToEvents(exec_context, context, concurrency, all_events);
+    doToEvents(exec_context, context, concurrency, minTSO_wait_time_in_ms, all_events);
     RUNTIME_CHECK(!all_events.empty());
     return all_events;
 }
 
-PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
+PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, UInt64 minTSO_wait_time_in_ms)
 {
     Events self_events;
     RUNTIME_CHECK(!plan_nodes.empty());
@@ -270,11 +271,12 @@ PipelineEvents Pipeline::doToEvents(
     PipelineExecutorContext & exec_context,
     Context & context,
     size_t concurrency,
+    UInt64 minTSO_wait_time_in_ms,
     Events & all_events)
 {
-    auto self_events = toSelfEvents(exec_context, context, concurrency);
+    auto self_events = toSelfEvents(exec_context, context, concurrency, minTSO_wait_time_in_ms);
     for (const auto & child : children)
-        self_events.mapInputs(child->doToEvents(exec_context, context, concurrency, all_events));
+        self_events.mapInputs(child->doToEvents(exec_context, context, concurrency, minTSO_wait_time_in_ms, all_events));
     all_events.insert(all_events.end(), self_events.events.cbegin(), self_events.events.cend());
     return self_events;
 }

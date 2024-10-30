@@ -23,16 +23,16 @@ namespace FailPoints
 extern const char hang_in_execution[];
 } // namespace FailPoints
 
-ExecutionResult QueryExecutor::execute()
+ExecutionResult QueryExecutor::execute(UInt64 minTSO_wait_time_in_ms)
 {
     FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-    return execute(ResultHandler{});
+    return execute(ResultHandler{}, minTSO_wait_time_in_ms);
 }
 
-ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler)
+ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler, UInt64 minTSO_wait_time_in_ms)
 {
     FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-    return execute(ResultHandler{handler});
+    return execute(ResultHandler{handler}, minTSO_wait_time_in_ms);
 }
 
 DAGContext & QueryExecutor::dagContext() const
