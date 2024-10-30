@@ -40,8 +40,8 @@ public:
 
     virtual ~QueryExecutor() = default;
 
-    ExecutionResult execute(UInt64 minTSO_wait_time_in_ms);
-    ExecutionResult execute(ResultHandler::Handler handler, UInt64 minTSO_wait_time_in_ms);
+    ExecutionResult execute(UInt64 minTSO_wait_time_in_ms = 0);
+    ExecutionResult execute(ResultHandler::Handler handler, UInt64 minTSO_wait_time_in_ms = 0);
 
     virtual void cancel() = 0;
 
