@@ -23,7 +23,6 @@
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <tipb/executor.pb.h>
 
-#include <algorithm>
 #include <ext/scope_guard.h>
 
 namespace DB::ErrorCodes
