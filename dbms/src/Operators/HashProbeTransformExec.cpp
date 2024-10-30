@@ -85,7 +85,7 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             exec_context.addOneTimeFuture(restore_info->join->wait_build_finished_future);
             exec_context.addOneTimeFuture(restore_info->join->wait_probe_finished_future);
             TaskScheduler::instance->submit(
-                std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build()));
+                std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build(true, 0)));
 
             return restore_probe_exec;
         }
