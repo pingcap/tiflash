@@ -47,10 +47,10 @@ PipelineExecutor::PipelineExecutor(
     LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
 }
 
-void PipelineExecutor::scheduleEvents(UInt64 minTSO_wait_time_in_ms)
+void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
-    auto events = root_pipeline->toEvents(exec_context, context, context.getMaxStreams(), minTSO_wait_time_in_ms);
+    auto events = root_pipeline->toEvents(exec_context, context, context.getMaxStreams());
     Events sources;
     for (const auto & event : events)
     {
@@ -83,6 +83,7 @@ void PipelineExecutor::consume(ResultHandler & result_handler)
 
 ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler, UInt64 minTSO_wait_time_in_ms)
 {
+    exec_context.setMinTSOWaitTime(minTSO_wait_time_in_ms);
     if (result_handler)
     {
         ///                                 ┌──get_result_sink

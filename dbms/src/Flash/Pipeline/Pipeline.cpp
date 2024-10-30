@@ -193,8 +193,7 @@ String Pipeline::getFinalPlanExecId() const
 PipelineExecGroup Pipeline::buildExecGroup(
     PipelineExecutorContext & exec_context,
     Context & context,
-    size_t concurrency,
-    UInt64 minTSO_wait_time_in_ms)
+    size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
@@ -202,7 +201,7 @@ PipelineExecGroup Pipeline::buildExecGroup(
     {
         plan_node->buildPipelineExecGroup(exec_context, builder, context, concurrency);
     }
-    return builder.build(internal_break_time, minTSO_wait_time_in_ms);
+    return builder.build(internal_break_time, exec_context.getMinTSOWaitTime());
 }
 
 /**
@@ -234,10 +233,10 @@ EventPtr Pipeline::complete(PipelineExecutorContext & exec_context)
     return plan_nodes.back()->sinkComplete(exec_context);
 }
 
-Events Pipeline::toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, UInt64 minTSO_wait_time_in_ms)
+Events Pipeline::toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     Events all_events;
-    doToEvents(exec_context, context, concurrency, minTSO_wait_time_in_ms, all_events);
+    doToEvents(exec_context, context, concurrency, all_events);
     RUNTIME_CHECK(!all_events.empty());
     return all_events;
 }
@@ -248,7 +247,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Co
     RUNTIME_CHECK(!plan_nodes.empty());
     if (isFineGrainedMode())
     {
-        auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency, minTSO_wait_time_in_ms);
+        auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(
                 std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
@@ -261,8 +260,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Co
             log->identifier(),
             context,
             shared_from_this(),
-            concurrency,
-            minTSO_wait_time_in_ms));
+            concurrency));
         LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};
@@ -272,12 +270,11 @@ PipelineEvents Pipeline::doToEvents(
     PipelineExecutorContext & exec_context,
     Context & context,
     size_t concurrency,
-    UInt64 minTSO_wait_time_in_ms,
     Events & all_events)
 {
-    auto self_events = toSelfEvents(exec_context, context, concurrency, minTSO_wait_time_in_ms);
+    auto self_events = toSelfEvents(exec_context, context, concurrency);
     for (const auto & child : children)
-        self_events.mapInputs(child->doToEvents(exec_context, context, concurrency, minTSO_wait_time_in_ms, all_events));
+        self_events.mapInputs(child->doToEvents(exec_context, context, concurrency, all_events));
     all_events.insert(all_events.end(), self_events.events.cbegin(), self_events.events.cend());
     return self_events;
 }
