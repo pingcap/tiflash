@@ -311,7 +311,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
     join_build_builder.build();
 
     // Join probe pipeline.
-    builder->setHasPipelineBreakerWaitTime(true);
+    builder.setHasPipelineBreakerWaitTime(true);
     probe()->buildPipeline(builder, context, exec_context);
     auto join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
