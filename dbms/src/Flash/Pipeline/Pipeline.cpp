@@ -248,7 +248,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Co
     RUNTIME_CHECK(!plan_nodes.empty());
     if (isFineGrainedMode())
     {
-        auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency);
+        auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency, minTSO_wait_time_in_ms);
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(
                 std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
@@ -261,7 +261,8 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Co
             log->identifier(),
             context,
             shared_from_this(),
-            concurrency));
+            concurrency,
+            minTSO_wait_time_in_ms));
         LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};
