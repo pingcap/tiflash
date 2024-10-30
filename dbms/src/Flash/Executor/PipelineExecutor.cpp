@@ -27,8 +27,7 @@ PipelineExecutor::PipelineExecutor(
     AutoSpillTrigger * auto_spill_trigger,
     const RegisterOperatorSpillContext & register_operator_spill_context,
     Context & context_,
-    const String & req_id,
-    UInt64 minTSO_wait_time_in_ms_)
+    const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
     , exec_context(
           // For mpp task, there is a unique identifier MPPTaskId, so MPPTaskId is used here as the query id of PipelineExecutor.

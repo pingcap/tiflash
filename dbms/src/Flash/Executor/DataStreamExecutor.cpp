@@ -34,7 +34,7 @@ DataStreamExecutor::DataStreamExecutor(
     estimate_thread_cnt = std::max(data_stream->estimateNewThreadCount(), 1);
 }
 
-ExecutionResult DataStreamExecutor::execute(ResultHandler && result_handler)
+ExecutionResult DataStreamExecutor::execute(ResultHandler && result_handler, UInt64)
 {
     try
     {
