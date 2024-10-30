@@ -31,7 +31,8 @@ public:
         const String & req_id,
         Context & context_,
         const PipelinePtr & pipeline_,
-        size_t concurrency_)
+        size_t concurrency_,
+        UInt64 minTSO_wait_time_in_ms_)
         : Event(exec_context_, req_id)
         , context(context_)
         , pipeline(pipeline_)

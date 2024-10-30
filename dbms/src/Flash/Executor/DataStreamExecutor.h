@@ -43,7 +43,7 @@ public:
     BaseRuntimeStatistics getRuntimeStatistics() const override;
 
 protected:
-    ExecutionResult execute(ResultHandler && result_handler) override;
+    ExecutionResult execute(ResultHandler && result_handler, UInt64) override;
 
 protected:
     BlockInputStreamPtr data_stream;
