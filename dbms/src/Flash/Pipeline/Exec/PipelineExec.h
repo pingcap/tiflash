@@ -30,8 +30,8 @@ public:
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
         SinkOpPtr && sink_op_,
-        bool internal_break_time_,
-        uint64_t minTSO_time_in_ms_);
+        bool has_pipeline_breaker_wait_time_,
+        uint64_t minTSO_wait_time_in_ms_);
 
     void executePrefix();
     void executeSuffix();
@@ -80,8 +80,8 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
-    bool internal_break_time;
-    uint64_t minTSO_time_in_ms;
+    bool has_pipeline_breaker_wait_time;
+    uint64_t minTSO_wait_time_in_ms;
 
     // hold the operator which is ready for executing await.
     Operator * awaitable = nullptr;

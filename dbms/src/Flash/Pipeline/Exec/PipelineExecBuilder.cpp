@@ -36,14 +36,14 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
     sink_op = std::move(sink_op_);
 }
 
-PipelineExecPtr PipelineExecBuilder::build(bool internal_break_time, uint64_t minTSO_wait_time_in_ms)
+PipelineExecPtr PipelineExecBuilder::build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ms)
 {
     RUNTIME_CHECK(source_op && sink_op);
     return std::make_unique<PipelineExec>(
         std::move(source_op),
         std::move(transform_ops),
         std::move(sink_op),
-        internal_break_time,
+        has_pipeline_breaker_wait_time,
         minTSO_wait_time_in_ms);
 }
 
@@ -118,7 +118,7 @@ void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
             std::make_move_iterator(other.groups[i].end()));
 }
 
-PipelineExecGroup PipelineExecGroupBuilder::build(bool internal_break_time, uint64_t minTSO_wait_time_in_ms)
+PipelineExecGroup PipelineExecGroupBuilder::build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ms)
 {
     RUNTIME_CHECK(!groups.empty());
     PipelineExecGroup pipeline_exec_group;
@@ -126,7 +126,7 @@ PipelineExecGroup PipelineExecGroupBuilder::build(bool internal_break_time, uint
     {
         RUNTIME_CHECK(!group.empty());
         for (auto & builder : group)
-            pipeline_exec_group.push_back(builder.build(internal_break_time, minTSO_wait_time_in_ms));
+            pipeline_exec_group.push_back(builder.build(has_pipeline_breaker_wait_time, minTSO_wait_time_in_ms));
     }
     return pipeline_exec_group;
 }
