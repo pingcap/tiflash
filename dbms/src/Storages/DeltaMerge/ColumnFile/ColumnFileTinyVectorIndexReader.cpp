@@ -102,11 +102,7 @@ void ColumnFileTinyVectorIndexReader::loadVectorIndex()
     };
     if (vec_index_cache)
     {
-        const auto key = fmt::format(
-            "{}{}_{}",
-            VectorIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX,
-            tiny_file.keyspace_id,
-            index_page_id);
+        const auto key = fmt::format("{}{}", VectorIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
         vec_index = vec_index_cache->getOrSet(key, load_from_page_storage);
     }
     else
