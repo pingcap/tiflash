@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM hub.pingcap.net/tiflash/tiflash-ci-base:py3
+FROM hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028
 
 COPY tiflash /tiflash
 
