@@ -139,6 +139,10 @@ public:
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
 
+    void setMinTSOWaitTime(UInt64 minTSO_wait_time_in_ms_) { minTSO_wait_time_in_ms = minTSO_wait_time_in_ms_; }
+
+    UInt64 getMinTSOWaitTime() const { return minTSO_wait_time_in_ms; }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -187,5 +191,7 @@ private:
     std::vector<SharedQueuePtr> shared_queues;
 
     std::vector<OneTimeNotifyFuturePtr> one_time_futures;
+
+    UInt64 minTSO_wait_time_in_ms{0};
 };
 } // namespace DB

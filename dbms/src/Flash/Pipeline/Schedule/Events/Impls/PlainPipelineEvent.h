@@ -37,7 +37,6 @@ public:
         , context(context_)
         , pipeline(pipeline_)
         , concurrency(concurrency_)
-        , minTSO_wait_time_in_ms(minTSO_wait_time_in_ms_)
     {}
 
 protected:
@@ -49,6 +48,5 @@ private:
     Context & context;
     PipelinePtr pipeline;
     size_t concurrency;
-    UInt64 minTSO_wait_time_in_ms;
 };
 } // namespace DB

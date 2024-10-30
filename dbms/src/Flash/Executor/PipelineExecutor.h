@@ -79,7 +79,7 @@ protected:
     ExecutionResult execute(ResultHandler && result_handler, UInt64 minTSO_wait_time_in_ms) override;
 
 private:
-    void scheduleEvents(UInt64 minTSO_wait_time_in_ms);
+    void scheduleEvents();
 
     void wait();
 
