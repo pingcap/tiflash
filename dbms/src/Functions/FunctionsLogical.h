@@ -639,11 +639,11 @@ public:
         UInt8Container & vec_res = col_res->getData();
         auto col_res_is_null = ColumnUInt8::create();
         UInt8Container & vec_res_is_null = col_res_is_null->getData();
+        // according to https://github.com/pingcap/tiflash/issues/5849
+        // need to cast the UInt8 column to bool explicitly
         if (!not_null_uint8_columns.empty())
         {
             const auto & col_data = not_null_uint8_columns[0]->getData();
-            // according to https://github.com/pingcap/tiflash/issues/5849
-            // need to cast the UInt8 column to bool explicitly
             for (size_t i = 0; i < rows; ++i)
             {
                 vec_res[i] = static_cast<bool>(col_data[i]);
@@ -663,8 +663,6 @@ public:
             }
             else
             {
-                // according to https://github.com/pingcap/tiflash/issues/5849
-                // need to cast the UInt8 column to bool explicitly
                 for (size_t i = 0; i < rows; ++i)
                 {
                     vec_res[i] = static_cast<bool>(col_data[i]);
@@ -892,7 +890,7 @@ public:
             }
             else
             {
-                if (!result_is_nullable)
+                if constexpr (null_as_false)
                 {
                     // for temporary usage in NullableAssociativeOperationImpl
                     vec_res_is_null.assign(rows, static_cast<UInt8>(0));
