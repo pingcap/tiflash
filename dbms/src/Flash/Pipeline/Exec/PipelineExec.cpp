@@ -72,7 +72,12 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
         return (op_status);                                                                                    \
     }
 
-PipelineExec::PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_, bool internal_break_time_, uint64_t minTSO_time_in_ms_)
+PipelineExec::PipelineExec(
+    SourceOpPtr && source_op_,
+    TransformOps && transform_ops_,
+    SinkOpPtr && sink_op_,
+    bool internal_break_time_,
+    uint64_t minTSO_time_in_ms_)
     : source_op(std::move(source_op_))
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
@@ -252,7 +257,8 @@ void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_brea
     source_op->getProfileInfo()->execution_time += pipeline_breaker_wait_time;
     source_op->getProfileInfo()->execution_time += minTSO_time_in_ms;
     source_op->getProfileInfo()->execution_time += queuing_time;
-    if (!internal_break_time) {
+    if (!internal_break_time)
+    {
         source_op->getProfileInfo()->pipeline_breaker_wait_time += pipeline_breaker_wait_time;
     }
     source_op->getProfileInfo()->task_wait_time = queuing_time;
