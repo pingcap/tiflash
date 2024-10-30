@@ -27,10 +27,12 @@ struct PipelineExecBuilder
     void setSourceOp(SourceOpPtr && source_op_);
     void appendTransformOp(TransformOpPtr && transform_op);
     void setSinkOp(SinkOpPtr && sink_op_);
+    void setInternalBreakTime(bool internal_break_time_);
+    void setMinTSOTime(uint64_t minTSO_time_in_ms_);
 
     Block getCurrentHeader() const;
 
-    PipelineExecPtr build();
+    PipelineExecPtr build(bool internal_break_time, uint64_t minTSO_time_in_ms);
 
     OperatorProfileInfoPtr getCurProfileInfo() const;
 
@@ -77,7 +79,7 @@ public:
         }
     }
 
-    PipelineExecGroup build();
+    PipelineExecGroup build(bool internal_break_time, uint64_t minTSO_time_in_ms);
 
     Block getCurrentHeader();
 

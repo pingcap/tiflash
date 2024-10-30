@@ -36,10 +36,10 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
     sink_op = std::move(sink_op_);
 }
 
-PipelineExecPtr PipelineExecBuilder::build()
+PipelineExecPtr PipelineExecBuilder::build(bool internal_break_time, uint64_t minTSO_time_in_ms)
 {
     RUNTIME_CHECK(source_op && sink_op);
-    return std::make_unique<PipelineExec>(std::move(source_op), std::move(transform_ops), std::move(sink_op));
+    return std::make_unique<PipelineExec>(std::move(source_op), std::move(transform_ops), std::move(sink_op), internal_break_time, minTSO_time_in_ms);
 }
 
 OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
@@ -113,7 +113,7 @@ void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
             std::make_move_iterator(other.groups[i].end()));
 }
 
-PipelineExecGroup PipelineExecGroupBuilder::build()
+PipelineExecGroup PipelineExecGroupBuilder::build(bool internal_break_time, uint64_t minTSO_time_in_ms)
 {
     RUNTIME_CHECK(!groups.empty());
     PipelineExecGroup pipeline_exec_group;
@@ -121,7 +121,7 @@ PipelineExecGroup PipelineExecGroupBuilder::build()
     {
         RUNTIME_CHECK(!group.empty());
         for (auto & builder : group)
-            pipeline_exec_group.push_back(builder.build());
+            pipeline_exec_group.push_back(builder.build(internal_break_time, minTSO_time_in_ms));
     }
     return pipeline_exec_group;
 }

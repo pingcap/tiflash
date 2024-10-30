@@ -72,10 +72,12 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
         return (op_status);                                                                                    \
     }
 
-PipelineExec::PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_)
+PipelineExec::PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_, bool internal_break_time_, uint64_t minTSO_time_in_ms_)
     : source_op(std::move(source_op_))
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
+    , internal_break_time(internal_break_time_)
+    , minTSO_time_in_ms(minTSO_time_in_ms_)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
 }
@@ -248,20 +250,21 @@ void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_brea
     // The execution time of operator[i] = self_time_from_profile_info + sum(self_time_from_profile_info[i-1, .., 0]) + (i + 1) * extra_time / operator_num.
 
     source_op->getProfileInfo()->execution_time += pipeline_breaker_wait_time;
+    source_op->getProfileInfo()->execution_time += minTSO_time_in_ms;
+    source_op->getProfileInfo()->execution_time += queuing_time;
+    if (!internal_break_time) {
+        source_op->getProfileInfo()->pipeline_breaker_wait_time += pipeline_breaker_wait_time;
+    }
+    source_op->getProfileInfo()->task_wait_time = queuing_time;
+    source_op->getProfileInfo()->minTSO_wait_time = minTSO_time_in_ms;
 
-    UInt64 operator_num = 2 + transform_ops.size();
-    UInt64 per_operator_queuing_time = queuing_time / operator_num;
-
-    source_op->getProfileInfo()->execution_time += per_operator_queuing_time;
-    // Compensate for the values missing due to rounding.
-    source_op->getProfileInfo()->execution_time += (queuing_time - (per_operator_queuing_time * operator_num));
     UInt64 time_for_prev_op = source_op->getProfileInfo()->execution_time;
     for (const auto & transform_op : transform_ops)
     {
-        transform_op->getProfileInfo()->execution_time += (per_operator_queuing_time + time_for_prev_op);
+        transform_op->getProfileInfo()->execution_time += time_for_prev_op;
         time_for_prev_op = transform_op->getProfileInfo()->execution_time;
     }
-    sink_op->getProfileInfo()->execution_time += (per_operator_queuing_time + time_for_prev_op);
+    sink_op->getProfileInfo()->execution_time += time_for_prev_op;
 }
 
 } // namespace DB
