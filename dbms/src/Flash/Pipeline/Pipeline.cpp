@@ -241,7 +241,7 @@ Events Pipeline::toEvents(PipelineExecutorContext & exec_context, Context & cont
     return all_events;
 }
 
-PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, UInt64 minTSO_wait_time_in_ms)
+PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     Events self_events;
     RUNTIME_CHECK(!plan_nodes.empty());

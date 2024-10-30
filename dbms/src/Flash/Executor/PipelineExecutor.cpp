@@ -93,12 +93,12 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler, UInt6
         // The queue size is same as UnionBlockInputStream = concurrency * 5.
         assert(root_pipeline);
         root_pipeline->addGetResultSink(exec_context.toConsumeMode(/*queue_size=*/context.getMaxStreams() * 5));
-        scheduleEvents(minTSO_wait_time_in_ms);
+        scheduleEvents();
         consume(result_handler);
     }
     else
     {
-        scheduleEvents(minTSO_wait_time_in_ms);
+        scheduleEvents();
         wait();
     }
     LOG_DEBUG(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
