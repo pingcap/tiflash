@@ -140,7 +140,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LTDecimal, "less"},
     {tipb::ScalarFuncSig::LTTime, "less"},
     {tipb::ScalarFuncSig::LTDuration, "less"},
-    {tipb::ScalarFuncSig::LTJson, "less"},
+    //{tipb::ScalarFuncSig::LTJson, "less"},
 
     {tipb::ScalarFuncSig::LEInt, "lessOrEquals"},
     {tipb::ScalarFuncSig::LEReal, "lessOrEquals"},
@@ -148,7 +148,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LEDecimal, "lessOrEquals"},
     {tipb::ScalarFuncSig::LETime, "lessOrEquals"},
     {tipb::ScalarFuncSig::LEDuration, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LEJson, "lessOrEquals"},
+    //{tipb::ScalarFuncSig::LEJson, "lessOrEquals"},
 
     {tipb::ScalarFuncSig::GTInt, "greater"},
     {tipb::ScalarFuncSig::GTReal, "greater"},
@@ -156,7 +156,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GTDecimal, "greater"},
     {tipb::ScalarFuncSig::GTTime, "greater"},
     {tipb::ScalarFuncSig::GTDuration, "greater"},
-    {tipb::ScalarFuncSig::GTJson, "greater"},
+    //{tipb::ScalarFuncSig::GTJson, "greater"},
 
     {tipb::ScalarFuncSig::GreatestInt, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestReal, "tidbGreatest"},
@@ -179,7 +179,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GEDecimal, "greaterOrEquals"},
     {tipb::ScalarFuncSig::GETime, "greaterOrEquals"},
     {tipb::ScalarFuncSig::GEDuration, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GEJson, "greaterOrEquals"},
+    //{tipb::ScalarFuncSig::GEJson, "greaterOrEquals"},
 
     {tipb::ScalarFuncSig::EQInt, "equals"},
     {tipb::ScalarFuncSig::EQReal, "equals"},
@@ -187,7 +187,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::EQDecimal, "equals"},
     {tipb::ScalarFuncSig::EQTime, "equals"},
     {tipb::ScalarFuncSig::EQDuration, "equals"},
-    {tipb::ScalarFuncSig::EQJson, "equals"},
+    //{tipb::ScalarFuncSig::EQJson, "equals"},
 
     {tipb::ScalarFuncSig::NEInt, "notEquals"},
     {tipb::ScalarFuncSig::NEReal, "notEquals"},
@@ -195,7 +195,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::NEDecimal, "notEquals"},
     {tipb::ScalarFuncSig::NETime, "notEquals"},
     {tipb::ScalarFuncSig::NEDuration, "notEquals"},
-    {tipb::ScalarFuncSig::NEJson, "notEquals"},
+    //{tipb::ScalarFuncSig::NEJson, "notEquals"},
 
     //{tipb::ScalarFuncSig::NullEQInt, "cast"},
     //{tipb::ScalarFuncSig::NullEQReal, "cast"},
@@ -312,7 +312,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::StringIsNull, "isNull"},
     {tipb::ScalarFuncSig::TimeIsNull, "isNull"},
     {tipb::ScalarFuncSig::IntIsNull, "isNull"},
-    {tipb::ScalarFuncSig::JsonIsNull, "isNull"},
+    //{tipb::ScalarFuncSig::JsonIsNull, "isNull"},
 
     {tipb::ScalarFuncSig::BitAndSig, "bitAnd"},
     {tipb::ScalarFuncSig::BitOrSig, "bitOr"},
@@ -353,7 +353,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::InDecimal, "tidbIn"},
     {tipb::ScalarFuncSig::InTime, "tidbIn"},
     {tipb::ScalarFuncSig::InDuration, "tidbIn"},
-    {tipb::ScalarFuncSig::InJson, "tidbIn"},
+    //{tipb::ScalarFuncSig::InJson, "tidbIn"},
 
     {tipb::ScalarFuncSig::IfNullInt, "ifNull"},
     {tipb::ScalarFuncSig::IfNullReal, "ifNull"},

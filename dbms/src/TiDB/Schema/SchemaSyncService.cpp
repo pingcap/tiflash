@@ -41,15 +41,26 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
     , log(Logger::get())
 {
     // Add task for adding and removing keyspace sync schema tasks.
-    handle = background_pool.addTask(
-        [&, this] {
-            addKeyspaceGCTasks();
-            removeKeyspaceGCTasks();
+    auto interval_ms = interval_seconds * 1000;
+    if (interval_ms == 0)
+    {
+        LOG_WARNING(
+            log,
+            "The background task of SchemaSyncService is disabled, please check the ddl_sync_interval_seconds "
+            "settings");
+    }
+    else
+    {
+        handle = background_pool.addTask(
+            [&, this] {
+                addKeyspaceGCTasks();
+                removeKeyspaceGCTasks();
 
-            return false;
-        },
-        false,
-        interval_seconds * 1000);
+                return false;
+            },
+            false,
+            interval_ms);
+    }
 }
 
 void SchemaSyncService::addKeyspaceGCTasks()
@@ -142,7 +153,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
     LOG_IMPL(log, log_level, "remove sync schema task for keyspaces done, num_remove_tasks={}", num_remove_tasks);
 }
 
-SchemaSyncService::~SchemaSyncService()
+void SchemaSyncService::shutdown()
 {
     background_pool.removeTask(handle);
     for (auto const & iter : ks_handle_map)
@@ -151,6 +162,11 @@ SchemaSyncService::~SchemaSyncService()
         background_pool.removeTask(task_handle);
     }
     LOG_INFO(log, "SchemaSyncService stopped");
+}
+
+SchemaSyncService::~SchemaSyncService()
+{
+    shutdown();
 }
 
 bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
@@ -187,6 +203,11 @@ void SchemaSyncService::updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp 
 }
 
 bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
+{
+    return gcImpl(gc_safepoint, keyspace_id, /*ignore_remain_regions*/ false);
+}
+
+bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, bool ignore_remain_regions)
 {
     const std::optional<Timestamp> last_gc_safepoint = lastGcSafePoint(keyspace_id);
     // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
@@ -242,6 +263,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }
     }
 
+    auto & tmt_context = context.getTMTContext();
     // Physically drop tables
     bool succeeded = true;
     for (auto & storage_ptr : storages_to_gc)
@@ -267,6 +289,38 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                 *database_id,
                 table_info.id);
         }();
+
+        auto & region_table = tmt_context.getRegionTable();
+        if (auto remain_regions = region_table.getRegionIdsByTable(keyspace_id, table_info.id); //
+            !remain_regions.empty())
+        {
+            if (likely(!ignore_remain_regions))
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is skip, regions are not totally removed from TiFlash, remain_region_ids={}"
+                    " table_tombstone={} safepoint={} {}",
+                    remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+                succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
+                continue;
+            }
+            else
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is executed while regions are not totally removed from TiFlash,"
+                    " remain_region_ids={} ignore_remain_regions={} table_tombstone={} safepoint={} {} ",
+                    remain_regions,
+                    ignore_remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+            }
+        }
+
         LOG_INFO(
             keyspace_log,
             "Physically drop table begin, table_tombstone={} safepoint={} {}",
@@ -288,7 +342,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             // Maybe a read lock of a table is held for a long time, just ignore it this round.
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
@@ -338,7 +392,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this database is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
                 err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error
@@ -348,6 +402,8 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }
     }
 
+    // TODO: Optimize it after `BackgroundProcessingPool` can the task return how many seconds to sleep
+    //       before next round.
     if (succeeded)
     {
         updateLastGcSafepoint(keyspace_id, gc_safepoint);
@@ -357,6 +413,11 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             num_tables_removed,
             num_databases_removed,
             gc_safepoint);
+        // This round of GC could run for a long time. Run immediately to check whether
+        // the latest gc_safepoint has been updated in PD.
+        // - gc_safepoint is not updated, it will be skipped because gc_safepoint == last_gc_safepoint
+        // - gc_safepoint is updated, run again immediately to cleanup other dropped data
+        return true;
     }
     else
     {
@@ -366,9 +427,10 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             "Schema GC meet error, will try again later, last_safepoint={} safepoint={}",
             last_gc_safepoint_str,
             gc_safepoint);
+        // Return false to let it run again after `ddl_sync_interval_seconds` even if the gc_safepoint
+        // on PD is not updated.
+        return false;
     }
-
-    return true;
 }
 
 } // namespace DB
