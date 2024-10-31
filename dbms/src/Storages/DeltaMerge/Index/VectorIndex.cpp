@@ -74,4 +74,25 @@ VectorIndexViewerPtr VectorIndexViewer::view(const dtpb::VectorIndexFileProps & 
     }
 }
 
+
+VectorIndexViewerPtr VectorIndexViewer::load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf)
+{
+    RUNTIME_CHECK(file_props.dimensions() > 0);
+    RUNTIME_CHECK(file_props.dimensions() <= TiDB::MAX_VECTOR_DIMENSION);
+
+    tipb::VectorIndexKind kind;
+    RUNTIME_CHECK(tipb::VectorIndexKind_Parse(file_props.index_kind(), &kind));
+
+    switch (kind)
+    {
+    case tipb::VectorIndexKind::HNSW:
+        return VectorIndexHNSWViewer::load(file_props, buf);
+    default:
+        throw Exception( //
+            ErrorCodes::INCORRECT_QUERY,
+            "Unsupported vector index {}",
+            file_props.index_kind());
+    }
+}
+
 } // namespace DB::DM

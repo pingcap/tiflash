@@ -264,20 +264,13 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 
 bool ColumnFilePersistedSet::appendPersistedColumnFiles(const ColumnFilePersisteds & column_files, WriteBatches & wbs)
 {
-    ColumnFilePersisteds new_persisted_files;
-    for (const auto & file : persisted_files)
-    {
-        new_persisted_files.push_back(file);
-    }
-    for (const auto & file : column_files)
-    {
-        new_persisted_files.push_back(file);
-    }
-    /// Save the new metadata of column files to disk.
+    ColumnFilePersisteds new_persisted_files{persisted_files};
+    new_persisted_files.insert(new_persisted_files.end(), column_files.begin(), column_files.end());
+    // Save the new metadata of column files to disk.
     serializeColumnFilePersisteds(wbs, metadata_id, new_persisted_files);
     wbs.writeMeta();
 
-    /// Commit updates in memory.
+    // Commit updates in memory.
     persisted_files.swap(new_persisted_files);
     updateColumnFileStats();
     LOG_DEBUG(
@@ -290,19 +283,17 @@ bool ColumnFilePersistedSet::appendPersistedColumnFiles(const ColumnFilePersiste
     return true;
 }
 
-bool ColumnFilePersistedSet::updatePersistedColumnFiles(
+bool ColumnFilePersistedSet::updatePersistedColumnFilesAfterAddingIndex(
     const ColumnFilePersisteds & new_persisted_files,
     WriteBatches & wbs)
 {
-    /// Save the new metadata of column files to disk.
+    // Save the new metadata of column files to disk.
     serializeColumnFilePersisteds(wbs, metadata_id, new_persisted_files);
     wbs.writeMeta();
 
-    /// Commit updates in memory.
+    // Commit updates in memory.
     persisted_files = std::move(new_persisted_files);
-    updateColumnFileStats();
-    LOG_DEBUG(log, "{}, after update column files, persisted column files: {}", info(), detailInfo());
-
+    // After adding index, the stats of column files will not change.
     return true;
 }
 
