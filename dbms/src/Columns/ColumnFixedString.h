@@ -90,8 +90,8 @@ public:
 
     void insertData(const char * pos, size_t length) override;
 
-    void insertDefault() override { chars.resize_fill(chars.size() + n); }
-    void insertManyDefaults(size_t length) override { chars.resize_fill(chars.size() + n * length); }
+    void insertDefault() override { chars.resize_fill_zero(chars.size() + n); }
+    void insertManyDefaults(size_t length) override { chars.resize_fill_zero(chars.size() + n * length); }
 
     void popBack(size_t elems) override { chars.resize_assume_reserved(chars.size() - n * elems); }
 

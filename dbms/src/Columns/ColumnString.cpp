@@ -62,7 +62,7 @@ MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
 
         /// Empty strings are just zero terminating bytes.
 
-        res->chars.resize_fill(res->chars.size() + to_size - from_size);
+        res->chars.resize_fill_zero(res->chars.size() + to_size - from_size);
 
         res->offsets.resize(to_size);
         for (size_t i = from_size; i < to_size; ++i)

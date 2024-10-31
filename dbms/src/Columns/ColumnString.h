@@ -326,7 +326,7 @@ public:
 
     void insertManyDefaults(size_t length) override
     {
-        chars.resize_fill(chars.size() + length);
+        chars.resize_fill_zero(chars.size() + length);
         offsets.reserve(offsets.size() + length);
         for (size_t i = 0; i < length; ++i)
         {
