@@ -77,7 +77,7 @@ PipelineExec::PipelineExec(
     TransformOps && transform_ops_,
     SinkOpPtr && sink_op_,
     bool has_pipeline_breaker_wait_time_,
-    uint64_t minTSO_wait_time_in_ns_)
+    UInt64 minTSO_wait_time_in_ns_)
     : source_op(std::move(source_op_))
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
@@ -247,13 +247,8 @@ void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_brea
     // However, if there are multiple pipeline breaker operators within a single pipeline, it can become very complex.
     // Therefore, to simplify matters, we will include the pipeline schedule duration in the execution time of the source operator.
     //
-    // For the queuing_time, it should be evenly distributed across all operators.
-    //
-    // TODO Refining execution summary, excluding extra time from execution time.
-    // For example: [total_time:6s, execution_time:1s, queuing_time:2s, pipeline_breaker_wait_time:3s]
-
-    // The execution time of operator[i] = self_time_from_profile_info + sum(self_time_from_profile_info[i-1, .., 0]) + (i + 1) * extra_time / operator_num.
-
+    // For the queuing_time, it is added into the source operator's execution time also.
+    // Also keep these time separately to provide more info.
     source_op->getProfileInfo()->execution_time += pipeline_breaker_wait_time;
     source_op->getProfileInfo()->execution_time += minTSO_wait_time_in_ns;
     source_op->getProfileInfo()->execution_time += queuing_time;

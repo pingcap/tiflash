@@ -36,7 +36,7 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
     sink_op = std::move(sink_op_);
 }
 
-PipelineExecPtr PipelineExecBuilder::build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ns)
+PipelineExecPtr PipelineExecBuilder::build(bool has_pipeline_breaker_wait_time, UInt64 minTSO_wait_time_in_ns)
 {
     RUNTIME_CHECK(source_op && sink_op);
     return std::make_unique<PipelineExec>(
@@ -118,7 +118,7 @@ void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
             std::make_move_iterator(other.groups[i].end()));
 }
 
-PipelineExecGroup PipelineExecGroupBuilder::build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ns)
+PipelineExecGroup PipelineExecGroupBuilder::build(bool has_pipeline_breaker_wait_time, UInt64 minTSO_wait_time_in_ns)
 {
     RUNTIME_CHECK(!groups.empty());
     PipelineExecGroup pipeline_exec_group;
