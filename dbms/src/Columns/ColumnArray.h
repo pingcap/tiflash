@@ -82,22 +82,39 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override
-    {
-        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    void serializeToPos(PaddedPODArray<UInt8 *> & /* pos */, size_t /* start */, size_t /* end */, bool /* has_null */)
-        const override
-    {
-        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & /* pos */, ColumnsAlignBufferAVX2 & /* align_buffer */)
-        override
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const IColumn::Offsets & /* array_offsets */) const override
     {
         throw Exception(
-            "Method deserializeAndInsertFromPos is not supported for " + getName(),
+            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const override;
+    template <bool has_null>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const;
+
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* end */,
+        bool /* has_null */,
+        const IColumn::Offsets & /* array_offsets */) const override
+    {
+        throw Exception(
+            "Method serializeToPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const IColumn::Offsets & /* array_offsets */) override
+    {
+        throw Exception(
+            "Method deserializeAndInsertFromPosForColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
@@ -145,12 +162,12 @@ public:
     IColumn & getData() { return data->assumeMutableRef(); }
     const IColumn & getData() const { return *data; }
 
-    IColumn & getOffsetsColumn() { return offsets->assumeMutableRef(); }
-    const IColumn & getOffsetsColumn() const { return *offsets; }
+    ColumnOffsets & getOffsetsColumn() { return static_cast<ColumnOffsets &>(offsets->assumeMutableRef()); }
+    const ColumnOffsets & getOffsetsColumn() const { return static_cast<const ColumnOffsets &>(*offsets); }
 
-    Offsets & ALWAYS_INLINE getOffsets() { return static_cast<ColumnOffsets &>(offsets->assumeMutableRef()).getData(); }
+    Offsets & ALWAYS_INLINE getOffsets() { return getOffsetsColumn().getData(); }
 
-    const Offsets & ALWAYS_INLINE getOffsets() const { return static_cast<const ColumnOffsets &>(*offsets).getData(); }
+    const Offsets & ALWAYS_INLINE getOffsets() const { return getOffsetsColumn().getData(); }
 
     const ColumnPtr & getDataPtr() const { return data; }
     ColumnPtr & getDataPtr() { return data; }
@@ -192,10 +209,7 @@ public:
 
     std::pair<UInt32, StringRef> getElementRef(size_t element_idx) const;
 
-    size_t ALWAYS_INLINE sizeAt(size_t i) const
-    {
-        return i == 0 ? getOffsets()[0] : (getOffsets()[i] - getOffsets()[i - 1]);
-    }
+    size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return (getOffsets()[i] - getOffsets()[i - 1]); }
 
 private:
     ColumnPtr data;

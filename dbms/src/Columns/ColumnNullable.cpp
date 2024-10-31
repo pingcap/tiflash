@@ -285,16 +285,43 @@ void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) 
     getNestedColumn().countSerializeByteSize(byte_size);
 }
 
-void ColumnNullable::serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const
+void ColumnNullable::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    getNullMapColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    getNestedColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+}
+
+void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
 {
     getNullMapColumn().serializeToPos(pos, start, end, has_null);
     getNestedColumn().serializeToPos(pos, start, end, has_null);
 }
 
-void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer)
+void ColumnNullable::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t end,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    getNullMapColumn().serializeToPosForColumnArray(pos, start, end, has_null, array_offsets);
+    getNestedColumn().serializeToPosForColumnArray(pos, start, end, has_null, array_offsets);
+}
+
+void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer)
 {
     getNullMapColumn().deserializeAndInsertFromPos(pos, align_buffer);
     getNestedColumn().deserializeAndInsertFromPos(pos, align_buffer);
+}
+
+void ColumnNullable::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets)
+{
+    getNullMapColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets);
+    getNestedColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets);
 }
 
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)

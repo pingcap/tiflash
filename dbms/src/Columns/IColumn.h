@@ -51,6 +51,8 @@ private:
     virtual MutablePtr clone() const = 0;
 
 public:
+    using Offset = UInt64;
+    using Offsets = PaddedPODArray<Offset>;
     /// Name of a Column. It is used in info messages.
     virtual std::string getName() const { return getFamilyName(); }
 
@@ -235,17 +237,36 @@ public:
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
 
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
+    virtual void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const Offsets & /* array_offsets */) const
+        = 0;
 
     virtual void serializeToPos(
-        PaddedPODArray<UInt8 *> & /* pos */,
+        PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* end */,
         bool /* has_null */) const
         = 0;
+    virtual void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* end */,
+        bool /* has_null */,
+        const Offsets & /* array_offsets */) const
+        = 0;
 
+    /// Deserialize and insert data from pos.
     virtual void deserializeAndInsertFromPos(
-        PaddedPODArray<UInt8 *> & /* pos */,
+        PaddedPODArray<char *> & /* pos */,
         ColumnsAlignBufferAVX2 & /* align_buffer */)
+        = 0;
+    /// Deserialize and insert data from pos called by ColumnArray.
+    /// array_offsets is the offsets of ColumnArray.
+    /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
+    virtual void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const Offsets & /* array_offsets */)
         = 0;
 
     /// Update state of hash function with value of n-th element.
@@ -338,9 +359,6 @@ public:
     /** Copies each element according offsets parameter.
       * (i-th element should be copied offsets[i] - offsets[i - 1] times.)
       */
-    using Offset = UInt64;
-    using Offsets = PaddedPODArray<Offset>;
-
     virtual Ptr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const = 0;
 
     Ptr replicate(const Offsets & offsets) const { return replicateRange(0, offsets.size(), offsets); }

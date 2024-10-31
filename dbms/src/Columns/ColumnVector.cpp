@@ -52,13 +52,111 @@ StringRef ColumnVector<T>::serializeValueIntoArena(
     String &) const
 {
     auto * pos = arena.allocContinue(sizeof(T), begin);
-    memcpy(pos, &data[n], sizeof(T));
+    tiflash_compiler_builtin_memcpy(pos, &data[n], sizeof(T));
     return StringRef(pos, sizeof(T));
 }
 
 template <typename T>
+void ColumnVector<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    if unlikely (byte_size.size() != size())
+        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(T);
+}
+
+template <typename T>
+void ColumnVector<T>::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    if unlikely (byte_size.size() != array_offsets.size())
+        throw Exception("byte_size.size() != array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
+}
+
+template <typename T>
+void ColumnVector<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, end);
+    else
+        serializeToPosImpl<false>(pos, start, end);
+}
+
+template <typename T>
+template <bool has_null>
+void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+{
+    if unlikely (pos.size() != size())
+        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start > end || end >= size())
+        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+
+    for (size_t i = start; i < end; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        tiflash_compiler_builtin_memcpy(pos[i], &data[i], sizeof(T));
+        pos[i] += sizeof(T);
+    }
+}
+
+template <typename T>
+void ColumnVector<T>::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t end,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl<true>(pos, start, end, array_offsets);
+    else
+        serializeToPosForColumnArrayImpl<false>(pos, start, end, array_offsets);
+}
+
+template <typename T>
+template <bool has_null>
+void ColumnVector<T>::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t end,
+    const IColumn::Offsets & array_offsets) const
+{
+    if unlikely (pos.size() != array_offsets.size())
+        throw Exception("pos.size() != array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start > end || end >= array_offsets.size())
+        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (!array_offsets.empty() && array_offsets.back() != size())
+        throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+
+    for (size_t i = start; i < end; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        {
+            tiflash_compiler_builtin_memcpy(pos[i], &data[j], sizeof(T));
+            pos[i] += sizeof(T);
+        }
+    }
+}
+
+template <typename T>
 void ColumnVector<T>::deserializeAndInsertFromPos(
-    PaddedPODArray<UInt8 *> & pos,
+    PaddedPODArray<char *> & pos,
     ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
@@ -85,7 +183,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
                 size_t count = std::min(size, i + (AlignBufferAVX2::buffer_size - buffer_size) / sizeof(T));
                 for (; i < count; ++i)
                 {
-                    std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                    tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
                     buffer_size += sizeof(T);
                     pos[i] += sizeof(T);
                 }
@@ -119,7 +217,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
             {
                 for (size_t j = 0; j < simd_width; ++j)
                 {
-                    std::memcpy(&vec_data[vec_size], pos[i + j], sizeof(T));
+                    tiflash_compiler_builtin_memcpy(&vec_data[vec_size], pos[i + j], sizeof(T));
                     vec_size += sizeof(T);
                     pos[i + j] += sizeof(T);
                 }
@@ -133,7 +231,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
 
             for (; i < size; ++i)
             {
-                std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
                 buffer_size += sizeof(T);
                 pos[i] += sizeof(T);
             }
@@ -157,10 +255,40 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
 
     for (; i < size; ++i)
     {
-        std::memcpy(&data[prev_size], pos[i], sizeof(T));
+        tiflash_compiler_builtin_memcpy(&data[prev_size], pos[i], sizeof(T));
         ++prev_size;
         pos[i] += sizeof(T);
     }
+}
+
+template <typename T>
+void ColumnVector<T>::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets)
+{
+    if unlikely (pos.empty())
+        return;
+    if unlikely (pos.size() > array_offsets.size())
+        throw Exception("pos.size() > array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+    size_t start_point = array_offsets.size() - pos.size();
+    if unlikely (array_offsets[start_point - 1] != data.size())
+        throw Exception("Offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t prev_size = data.size();
+    data.resize(array_offsets.back());
+
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        for (size_t j = 0; j < length; ++j)
+        {
+            tiflash_compiler_builtin_memcpy(&data[prev_size], pos[i], sizeof(T));
+            ++prev_size;
+            pos[i] += sizeof(T);
+        }
+    }
+    assert(prev_size == array_offsets.back());
 }
 
 template <typename T>

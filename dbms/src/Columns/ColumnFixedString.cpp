@@ -132,8 +132,98 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
     return pos + n;
 }
 
+void ColumnFixedString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    if (byte_size.size() != size())
+        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += n;
+}
+
+void ColumnFixedString::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    if unlikely (byte_size.size() != array_offsets.size())
+        byte_size.resize(array_offsets.size());
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
+}
+
+void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, end);
+    else
+        serializeToPosImpl<false>(pos, start, end);
+}
+
+template <bool has_null>
+void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+{
+    if unlikely (pos.size() != size())
+        pos.resize(size());
+
+    for (size_t i = start; i < end; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+
+        inline_memcpy(pos[i], &chars[i * n], n);
+        pos[i] += n;
+    }
+}
+
+void ColumnFixedString::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t end,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl<true>(pos, start, end, array_offsets);
+    else
+        serializeToPosForColumnArrayImpl<false>(pos, start, end, array_offsets);
+}
+
+template <bool has_null>
+void ColumnFixedString::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t end,
+    const IColumn::Offsets & array_offsets) const
+{
+    if unlikely (pos.size() != array_offsets.size())
+        pos.resize(array_offsets.size());
+
+    if unlikely (start > end || end >= array_offsets.size())
+        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+
+    for (size_t i = start; i < end; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+
+        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        {
+            inline_memcpy(pos[i], &chars[j * n], n);
+            pos[i] += n;
+        }
+    }
+}
+
 void ColumnFixedString::deserializeAndInsertFromPos(
-    PaddedPODArray<UInt8 *> & pos,
+    PaddedPODArray<char *> & pos,
     ColumnsAlignBufferAVX2 & /* align_buffer */)
 {
     size_t size = pos.size();
@@ -145,6 +235,35 @@ void ColumnFixedString::deserializeAndInsertFromPos(
         old_char_size += n;
         pos[i] += n;
     }
+}
+
+void ColumnFixedString::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets)
+{
+    if unlikely (pos.empty())
+        return;
+    if unlikely (pos.size() > array_offsets.size())
+        throw Exception("pos.size() > array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+    size_t start_point = array_offsets.size() - pos.size();
+    if unlikely (array_offsets[start_point - 1] != size())
+        throw Exception("Offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t prev_size = chars.size();
+    chars.resize(array_offsets.back());
+
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        for (size_t j = 0; j < length; ++j)
+        {
+            inline_memcpy(&chars[prev_size], pos[i], n);
+            prev_size += n;
+            pos[i] += n;
+        }
+    }
+    assert(prev_size == array_offsets.back());
 }
 
 void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const

@@ -464,8 +464,108 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
+void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    if unlikely (byte_size.size() != size())
+        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(size_t) + sizeAt(i);
+}
+
+void ColumnString::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    if unlikely (byte_size.size() != array_offsets.size())
+        throw Exception("byte_size.size() != array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (!array_offsets.empty() && array_offsets.back() != size())
+        throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+            byte_size[i] += sizeof(size_t) + sizeAt(j);
+}
+
+void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, end);
+    else
+        serializeToPosImpl<false>(pos, start, end);
+}
+
+template <bool has_null>
+void ColumnString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+{
+    if unlikely (pos.size() != size())
+        throw Exception("pos.size() != column size", ErrorCodes::LOGICAL_ERROR);
+
+    for (size_t i = start; i < end; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+
+        size_t str_size = sizeAt(i);
+        tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
+        pos[i] += sizeof(size_t);
+        inline_memcpy(pos[i], &chars[offsetAt(i)], str_size);
+        pos[i] += str_size;
+    }
+}
+
+void ColumnString::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t end,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl<true>(pos, start, end, array_offsets);
+    else
+        serializeToPosForColumnArrayImpl<false>(pos, start, end, array_offsets);
+}
+
+template <bool has_null>
+void ColumnString::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t end,
+    const IColumn::Offsets & array_offsets) const
+{
+    if unlikely (pos.size() != array_offsets.size())
+        throw Exception("pos.size() != array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start > end || end >= array_offsets.size())
+        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (!array_offsets.empty() && array_offsets.back() != size())
+        throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+
+    for (size_t i = start; i < end; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        {
+            size_t str_size = sizeAt(j);
+            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
+            pos[i] += sizeof(size_t);
+            inline_memcpy(pos[i], &chars[offsetAt(j)], str_size);
+            pos[i] += str_size;
+        }
+    }
+}
+
 void ColumnString::deserializeAndInsertFromPos(
-    PaddedPODArray<UInt8 *> & pos,
+    PaddedPODArray<char *> & pos,
     ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
 {
     size_t prev_size = offsets.size();
@@ -489,7 +589,7 @@ void ColumnString::deserializeAndInsertFromPos(
         for (size_t i = 0; i < size; ++i)
         {
             size_t str_size;
-            std::memcpy(&str_size, pos[i], sizeof(size_t));
+            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
             pos[i] += sizeof(size_t);
 
             do
@@ -512,7 +612,7 @@ void ColumnString::deserializeAndInsertFromPos(
             } while (str_size > 0);
 
             size_t offset = char_size + char_buffer_size;
-            std::memcpy(&offset_buffer.data[offset_buffer_size], &offset, sizeof(size_t));
+            tiflash_compiler_builtin_memcpy(&offset_buffer.data[offset_buffer_size], &offset, sizeof(size_t));
             offset_buffer_size += sizeof(size_t);
             if unlikely (offset_buffer_size == AlignBufferAVX2::buffer_size)
             {
@@ -563,7 +663,7 @@ void ColumnString::deserializeAndInsertFromPos(
     for (size_t i = 0; i < size; ++i)
     {
         size_t str_size;
-        std::memcpy(&str_size, pos[i], sizeof(size_t));
+        tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
         pos[i] += sizeof(size_t);
 
         chars.resize(char_size + str_size);
@@ -571,6 +671,40 @@ void ColumnString::deserializeAndInsertFromPos(
         char_size += str_size;
         offsets[prev_size + i] = char_size;
         pos[i] += str_size;
+    }
+}
+
+void ColumnString::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets)
+{
+    if unlikely (pos.empty())
+        return;
+    if unlikely (pos.size() > array_offsets.size())
+        throw Exception("Invalid size of pos or offsets", ErrorCodes::LOGICAL_ERROR);
+    size_t start_point = array_offsets.size() - pos.size();
+    if unlikely (array_offsets[start_point - 1] != size())
+        throw Exception("Offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t size = pos.size();
+    size_t prev_size = offsets.size();
+    size_t char_size = chars.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        for (size_t j = 0; j < length; ++j)
+        {
+            size_t str_size;
+            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
+            pos[i] += sizeof(size_t);
+
+            chars.resize(char_size + str_size);
+            inline_memcpy(&chars[char_size], pos[i], str_size);
+            char_size += str_size;
+            offsets[prev_size] = char_size;
+            ++prev_size;
+            pos[i] += str_size;
+        }
     }
 }
 

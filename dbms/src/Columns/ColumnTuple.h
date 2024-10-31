@@ -100,17 +100,40 @@ public:
         for (const auto & column : columns)
             column->countSerializeByteSize(byte_size);
     }
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override
+    {
+        for (const auto & column : columns)
+            column->countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    }
 
-    void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const override
     {
         for (const auto & column : columns)
             column->serializeToPos(pos, start, end, has_null);
     }
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t end,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override
+    {
+        for (const auto & column : columns)
+            column->serializeToPosForColumnArray(pos, start, end, has_null, array_offsets);
+    }
 
-    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override
     {
         for (auto & column : columns)
             column->assumeMutableRef().deserializeAndInsertFromPos(pos, align_buffer);
+    }
+    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().deserializeAndInsertFromPosForColumnArray(pos, array_offsets);
     }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;

@@ -219,6 +219,64 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
     return pos;
 }
 
+void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    if unlikely (byte_size.size() != size())
+        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(size_t);
+
+    getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
+}
+
+void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, end);
+    else
+        serializeToPosImpl<false>(pos, start, end);
+}
+
+template <bool has_null>
+void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+{
+    if unlikely (pos.size() != size())
+        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start > end || end >= size())
+        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+
+    for (size_t i = start; i < end; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        size_t length = sizeAt(i);
+        tiflash_compiler_builtin_memcpy(pos[i], &length, sizeof(size_t));
+        pos[i] += sizeof(size_t);
+    }
+
+    getData().serializeToPosForColumnArray(pos, start, end, has_null, getOffsets());
+}
+
+void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & /* align_buffer */)
+{
+    auto & offsets = getOffsets();
+    size_t prev_size = offsets.size();
+    size_t size = pos.size();
+    offsets.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        tiflash_compiler_builtin_memcpy(&offsets[prev_size + i], pos[i], sizeof(size_t));
+        offsets[prev_size + i] += offsets[prev_size + i - 1];
+        pos[i] += sizeof(size_t);
+    }
+
+    getData().deserializeAndInsertFromPosForColumnArray(pos, offsets);
+}
 
 void ColumnArray::updateHashWithValue(
     size_t n,
