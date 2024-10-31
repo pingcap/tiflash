@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
@@ -71,12 +72,23 @@ public:
         return s;
     }
 
-    void write(size_t num_rows_write)
+    void write(size_t begin, size_t end, bool is_delete = false)
     {
-        String sequence = fmt::format("[0, {})", num_rows_write);
+        String sequence = fmt::format("[{}, {})", begin, end);
         Block block;
         {
-            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            block = DMTestEnv::prepareSimpleWriteBlock(
+                begin,
+                end,
+                false,
+                /*tso= */ 3,
+                /*pk_name_=*/EXTRA_HANDLE_COLUMN_NAME,
+                /*pk_col_id=*/EXTRA_HANDLE_COLUMN_ID,
+                /*pk_type=*/EXTRA_HANDLE_COLUMN_INT_TYPE,
+                /*is_common_handle=*/false,
+                /*rowkey_column_size=*/1,
+                /*with_internal_columns=*/true,
+                is_delete);
             // Add a column of vector for test
             block.insert(colVecFloat32(sequence, vec_column_name, vec_column_id));
         }
@@ -119,6 +131,35 @@ public:
                 store->segmentMergeDelta(*dm_context, segment, DeltaMergeStore::MergeDeltaReason::Manual) != nullptr);
     }
 
+    void triggerFlushCacheAndEnsureDeltaLocalIndex() const
+    {
+        std::vector<SegmentPtr> all_segments;
+        {
+            std::shared_lock lock(store->read_write_mutex);
+            for (const auto & [_, segment] : store->id_to_segment)
+                all_segments.push_back(segment);
+        }
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        for (const auto & segment : all_segments)
+        {
+            ASSERT_TRUE(segment->flushCache(*dm_context));
+            store->segmentEnsureDeltaLocalIndexAsync(segment);
+        }
+    }
+
+    void triggerCompactDelta() const
+    {
+        std::vector<SegmentPtr> all_segments;
+        {
+            std::shared_lock lock(store->read_write_mutex);
+            for (const auto & [_, segment] : store->id_to_segment)
+                all_segments.push_back(segment);
+        }
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        for (const auto & segment : all_segments)
+            ASSERT_TRUE(segment->compactDelta(*dm_context));
+    }
+
     void waitStableLocalIndexReady()
     {
         std::vector<SegmentPtr> all_segments;
@@ -129,6 +170,18 @@ public:
         }
         for (const auto & segment : all_segments)
             ASSERT_TRUE(store->segmentWaitStableLocalIndexReady(segment));
+    }
+
+    void waitDeltaIndexReady()
+    {
+        std::vector<SegmentPtr> all_segments;
+        {
+            std::shared_lock lock(store->read_write_mutex);
+            for (const auto & [_, segment] : store->id_to_segment)
+                all_segments.push_back(segment);
+        }
+        for (const auto & segment : all_segments)
+            ASSERT_TRUE(store->segmentWaitDeltaLocalIndexReady(segment));
     }
 
     void triggerMergeAllSegments()
@@ -163,12 +216,21 @@ try
 
     const size_t num_rows_write = 128;
 
-    // write to store
-    write(num_rows_write);
-
+    // write [0, 128) to store
+    write(0, num_rows_write);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
 
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+    // write delete [0, 64) to store
+    write(0, num_rows_write / 2, true);
+
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // check delta index has built for all segments
+    waitDeltaIndexReady();
     // check stable index has built for all segments
     waitStableLocalIndexReady();
 
@@ -176,7 +238,7 @@ try
 
     // read from store
     {
-        read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
+        read(range, EMPTY_FILTER, colVecFloat32("[64, 256)", vec_column_name, vec_column_id));
     }
 
     auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
@@ -186,21 +248,189 @@ try
     // read with ANN query
     {
         ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.0}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
+        // stable 72.0, delta 128.0
+        read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}}));
     }
 
     // read with ANN query
     {
         ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.1}));
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        // stable 72.0, delta 128.0
+        read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}}));
+    }
+}
+CATCH
 
-        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
+TEST_F(DeltaMergeStoreVectorTest, TestMultipleColumnFileTiny)
+try
+{
+    store = reload();
+
+    const size_t num_rows_write = 128;
+
+    // write [0, 128) to store
+    write(0, num_rows_write);
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // check delta index has built for all segments
+    waitDeltaIndexReady();
+
+    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+
+    // read from store
+    {
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
+    }
+
+    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+    ann_query_info->set_column_id(vec_column_id);
+    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
+
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
+    }
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({172.1}));
+
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        read(range, filter, createVecFloat32Column<Array>({{172.0}, {173.0}}));
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, TestFlushCache)
+try
+{
+    store = reload();
+
+    const size_t num_rows_write = 128;
+
+    auto sp_delta_index_built
+        = SyncPointCtl::enableInScope("DeltaMergeStore::segmentEnsureDeltaLocalIndex_after_build");
+    // write [0, 128) to store
+    write(0, num_rows_write);
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // Pause after delta vector index built but not set.
+    sp_delta_index_built.waitAndPause();
+
+    // write [128, 130) to store
+    write(num_rows_write, num_rows_write + 2);
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // Now persisted file set has changed.
+    // Resume
+    sp_delta_index_built.next();
+
+    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+
+    // read from store
+    {
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 130)", vec_column_name, vec_column_id));
+    }
+
+    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+    ann_query_info->set_column_id(vec_column_id);
+    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.0}));
+
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
+        read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
+    }
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
+
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
+        read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, TestCompactDelta)
+try
+{
+    store = reload();
+
+    auto sp_delta_index_built
+        = SyncPointCtl::enableInScope("DeltaMergeStore::segmentEnsureDeltaLocalIndex_after_build");
+    // write [0, 2) to store
+    write(0, 2);
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+    // write [2, 4) to store
+    write(2, 4);
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // Pause after delta vector index built but not set.
+    sp_delta_index_built.waitAndPause();
+
+    // compact delta [0, 2) + [2, 4) -> [0, 4)
+    triggerCompactDelta();
+
+    // Now persisted file set has changed.
+    // Resume
+    sp_delta_index_built.next();
+
+    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+
+    // read from store
+    {
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+    }
+
+    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+    ann_query_info->set_column_id(vec_column_id);
+    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
+
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        // [0, 4) without vector index return all.
+        read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+    }
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.1}));
+
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        // [0, 4) without vector index return all.
+        read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
     }
 }
 CATCH
@@ -212,11 +442,19 @@ try
 
     const size_t num_rows_write = 128;
 
-    // write to store
-    write(num_rows_write);
-
+    // write [0, 128) to store
+    write(0, num_rows_write);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // check delta index has built for all segments
+    waitDeltaIndexReady();
 
     // logical split
     RowKeyRange left_segment_range;
@@ -227,7 +465,7 @@ try
             segment = store->segments.begin()->second;
         }
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-        auto breakpoint = RowKeyValue::fromHandle(num_rows_write / 2);
+        auto breakpoint = RowKeyValue::fromHandle(num_rows_write);
         const auto [left, right] = store->segmentSplit(
             *dm_context,
             segment,
@@ -251,7 +489,7 @@ try
         read(
             left_segment_range,
             EMPTY_FILTER,
-            colVecFloat32(fmt::format("[0, {})", num_rows_write / 2), vec_column_name, vec_column_id));
+            colVecFloat32(fmt::format("[0, {})", num_rows_write), vec_column_name, vec_column_id));
     }
 
     auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
@@ -271,11 +509,11 @@ try
     // read with ANN query
     {
         ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(left_segment_range, filter, createVecFloat32Column<Array>({{63.0}}));
+        read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
 
     // merge segment
@@ -288,7 +526,7 @@ try
 
     // read from store
     {
-        read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
     }
 
     // read with ANN query
@@ -323,11 +561,19 @@ try
 
     const size_t num_rows_write = 128;
 
-    // write to store
-    write(num_rows_write);
-
+    // write [0, 128) to store
+    write(0, num_rows_write);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // check delta index has built for all segments
+    waitDeltaIndexReady();
 
     // physical split
     auto physical_split = [&] {
@@ -337,7 +583,7 @@ try
             segment = store->segments.begin()->second;
         }
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-        auto breakpoint = RowKeyValue::fromHandle(num_rows_write / 2);
+        auto breakpoint = RowKeyValue::fromHandle(num_rows_write);
         return store->segmentSplit(
             *dm_context,
             segment,
@@ -355,8 +601,8 @@ try
         std::tie(left, right) = physical_split();
     }
 
-    ASSERT_TRUE(left->rowkey_range.end == RowKeyValue::fromHandle(num_rows_write / 2));
-    ASSERT_TRUE(right->rowkey_range.start == RowKeyValue::fromHandle(num_rows_write / 2));
+    ASSERT_TRUE(left->rowkey_range.end == RowKeyValue::fromHandle(num_rows_write));
+    ASSERT_TRUE(right->rowkey_range.start == RowKeyValue::fromHandle(num_rows_write));
     RowKeyRange left_segment_range = RowKeyRange(
         left->rowkey_range.start,
         left->rowkey_range.end,
@@ -371,7 +617,7 @@ try
         read(
             left_segment_range,
             EMPTY_FILTER,
-            colVecFloat32(fmt::format("[0, {})", num_rows_write / 2), vec_column_name, vec_column_id));
+            colVecFloat32(fmt::format("[0, {})", num_rows_write), vec_column_name, vec_column_id));
     }
 
     auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
@@ -391,11 +637,11 @@ try
     // read with ANN query
     {
         ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(left_segment_range, filter, createVecFloat32Column<Array>({{63.0}}));
+        read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
 
     // merge segment
@@ -408,7 +654,7 @@ try
 
     // read from store
     {
-        read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
     }
 
     // read with ANN query
@@ -441,7 +687,7 @@ try
     const size_t num_rows_write = 128;
 
     // write to store
-    write(num_rows_write);
+    write(0, num_rows_write);
 
     // Prepare DMFile
     auto [dmfile_parent_path, file_id] = store->preAllocateIngestFile();
@@ -543,11 +789,19 @@ try
 
     const size_t num_rows_write = 128;
 
-    // write to store
-    write(num_rows_write);
-
+    // write [0, 128) to store
+    write(0, num_rows_write);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // check delta index has built for all segments
+    waitDeltaIndexReady();
 
     // shutdown store
     store->shutdown();
@@ -574,7 +828,7 @@ try
 
     // read from store
     {
-        read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
     }
 
     auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
@@ -588,17 +842,17 @@ try
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{2.0}, {128.0}}));
     }
 
     // read with ANN query
     {
         ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.1}));
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{127.0}, {222.0}}));
     }
 }
 CATCH
@@ -614,10 +868,13 @@ try
 
     const size_t num_rows_write = 128;
 
-    // write to store before index built
-    write(num_rows_write);
+    // write [0, 128) to store
+    write(0, num_rows_write);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
 
     {
         // Add vecotr index
@@ -645,6 +902,11 @@ try
         ASSERT_EQ(store->local_index_infos->size(), 1);
     }
 
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // check delta index has built for all segments
+    waitDeltaIndexReady();
     // check stable index has built for all segments
     waitStableLocalIndexReady();
 
@@ -652,7 +914,7 @@ try
 
     // read from store
     {
-        read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
     }
 
     auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
@@ -667,17 +929,17 @@ try
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{2.0}, {128.0}}));
     }
 
     // read with ANN query
     {
         ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.1}));
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{127.0}, {222.0}}));
     }
 
     {
@@ -706,7 +968,7 @@ try
     const size_t num_rows_write = 128;
 
     // write to store before index built
-    write(num_rows_write);
+    write(0, num_rows_write);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
 
@@ -759,7 +1021,7 @@ try
     const size_t num_rows_write = 128;
 
     // write to store before index built
-    write(num_rows_write);
+    write(0, num_rows_write);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
 

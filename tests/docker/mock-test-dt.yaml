@@ -17,7 +17,7 @@ version: '2.3'
 services:
   # tics0 container is for tests under delta-merge-test directory
   tics0:
-    image: hub.pingcap.net/tiflash/tiflash-ci-base:py3
+    image: hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028
     volumes:
       - ./config/tics_dt.toml:/config.toml:ro
       - ./data/tiflash:/tmp/tiflash/data

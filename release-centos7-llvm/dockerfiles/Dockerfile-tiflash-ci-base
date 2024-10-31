@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM hub.pingcap.net/tiflash/centos:7.9.2009-amd64
+FROM ghcr.io/pingcap-qe/ci/jenkins/tiflash:v2024.10.8-24-gfd2cff2
 
 USER root
 WORKDIR /root/
@@ -22,6 +22,3 @@ ENV TZ Asia/Shanghai
 ENV LD_LIBRARY_PATH /tiflash
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-RUN yum install mysql -y && yum clean all
-RUN yum install python3 -y && yum clean all

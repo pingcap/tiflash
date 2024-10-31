@@ -328,9 +328,10 @@ public:
 #endif
     DMFileMetaPtr meta;
 
+    friend class DMFileVectorIndexReader;
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
-    friend class DMFileIndexWriter;
+    friend class DMFileVectorIndexWriter;
     friend class DMFileReader;
     friend class MarkLoader;
     friend class ColumnReadStream;

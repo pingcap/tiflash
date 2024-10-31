@@ -905,6 +905,12 @@ private:
      */
     bool segmentEnsureStableLocalIndexAsync(const SegmentPtr & segment);
 
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#else
+public:
+#endif
+
     /**
       * Ensure the segment has delta index.
       * If the segment has no delta index, it will be built in background.
@@ -913,12 +919,6 @@ private:
       * @returns true if index is missing and a build task is added in background.
       */
     bool segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segment);
-
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#else
-public:
-#endif
 
     void applyLocalIndexChange(const TiDB::TableInfo & new_table_info);
 
@@ -929,7 +929,7 @@ public:
       *
       * @returns false if index is still missing after wait timed out.
       */
-    bool segmentWaitDeltaIndexReady(const SegmentPtr & segment) const;
+    bool segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment) const;
 
     /**
      * Wait until the segment has stable index.
