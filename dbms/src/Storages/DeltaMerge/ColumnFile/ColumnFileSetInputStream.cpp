@@ -39,8 +39,9 @@ size_t ColumnFileSetInputStream::skipNextBlock()
     return 0;
 }
 
-Block ColumnFileSetInputStream::read()
+Block ColumnFileSetInputStream::read(FilterPtr & res_filter, bool)
 {
+    res_filter = nullptr;
     while (cur_column_file_reader != reader.column_file_readers.end())
     {
         if (*cur_column_file_reader == nullptr)

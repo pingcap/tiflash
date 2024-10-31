@@ -135,7 +135,7 @@ public:
         auto index_def = dataset.createIndexDef(Builder::kind());
         auto builder = std::make_unique<Builder>(0, index_def);
         builder->addBlock(*train_data, nullptr, []() { return true; });
-        builder->save(index_path);
+        builder->saveToFile(index_path);
     }
 
     template <typename Viewer>

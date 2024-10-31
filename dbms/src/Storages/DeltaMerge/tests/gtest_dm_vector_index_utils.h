@@ -185,7 +185,7 @@ public:
                 store->segmentMergeDelta(*dm_context, segment, DeltaMergeStore::MergeDeltaReason::Manual) != nullptr);
     }
 
-    void waitStableIndexReady() const
+    void waitStableLocalIndexReady() const
     {
         std::vector<SegmentPtr> all_segments;
         {
@@ -194,7 +194,7 @@ public:
                 all_segments.push_back(segment);
         }
         for (const auto & segment : all_segments)
-            ASSERT_TRUE(store->segmentWaitStableIndexReady(segment));
+            ASSERT_TRUE(store->segmentWaitStableLocalIndexReady(segment));
     }
 
     ContextPtr db_context;

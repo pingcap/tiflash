@@ -416,11 +416,15 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         }
         case TaskType::Compact:
             task.segment->compactDelta(*task.dm_context);
+            // After compact delta, try to create delta local index.
+            segmentEnsureDeltaLocalIndexAsync(task.segment);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         case TaskType::Flush:
             task.segment->flushCache(*task.dm_context);
+            // After flush cache, try to create delta local index.
+            segmentEnsureDeltaLocalIndexAsync(task.segment);
             // After flush cache, better place delta index.
             task.segment->placeDeltaIndex(*task.dm_context);
             left = task.segment;

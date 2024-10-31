@@ -35,7 +35,8 @@ public:
 
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed) override;
 
-    void save(std::string_view path) const override;
+    void saveToFile(std::string_view path) const override;
+    void saveToBuffer(WriteBuffer & write_buf) const override;
 
 private:
     USearchImplType index;
@@ -49,6 +50,7 @@ class VectorIndexHNSWViewer : public VectorIndexViewer
 {
 public:
     static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & props, std::string_view path);
+    static VectorIndexViewerPtr load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf);
 
     static tipb::VectorIndexKind kind();
 
@@ -58,11 +60,16 @@ public:
 
     std::vector<Key> search(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const override;
 
+    std::vector<SearchResult> searchWithDistance(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows)
+        const override;
+
     size_t size() const override;
 
     void get(Key key, std::vector<Float32> & out) const override;
 
 private:
+    auto searchImpl(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const;
+
     USearchImplType index;
 
     size_t last_reported_memory_usage = 0;
