@@ -527,7 +527,8 @@ void MPPTask::runImpl()
     {
         LOG_DEBUG(log, "task starts preprocessing");
         preprocess();
-        auto time_cost_in_preprocess_ms = stopwatch.elapsedMilliseconds();
+        auto time_cost_in_preprocess_ns = stopwatch.elapsed();
+        auto time_cost_in_preprocess_ms = time_cost_in_preprocess_ns / MILLISECOND_TO_NANO;
         LOG_DEBUG(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
         LOG_DEBUG(
@@ -539,7 +540,8 @@ void MPPTask::runImpl()
 
         scheduleOrWait();
 
-        auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
+        auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
+        auto time_cost_in_schedule_ms = time_cost_in_schedule_ns / MILLISECOND_TO_NANO;
         LOG_INFO(
             log,
             "task starts running, time cost in schedule: {} ms, time cost in preprocess: {} ms",
@@ -566,7 +568,7 @@ void MPPTask::runImpl()
         }
 #endif
 
-        auto result = query_executor_holder->execute(time_cost_in_schedule_ms);
+        auto result = query_executor_holder->execute(time_cost_in_schedule_ns);
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
@@ -593,7 +595,7 @@ void MPPTask::runImpl()
         LOG_DEBUG(
             log,
             "finish with {} seconds, {} rows, {} blocks, {} bytes",
-            runtime_statistics.execution_time_ns / static_cast<double>(1000000000),
+            runtime_statistics.execution_time_ns / static_cast<double>(SECOND_TO_NANO),
             runtime_statistics.rows,
             runtime_statistics.blocks,
             runtime_statistics.bytes);

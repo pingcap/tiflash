@@ -26,7 +26,14 @@ ExecutionSummary::ExecutionSummary()
 
 void ExecutionSummary::merge(const ExecutionSummary & other)
 {
-    time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+    bool time_updated = time_processed_ns < other.time_processed_ns;
+    if (time_updated) {
+        time_processed_ns = other.time_processed_ns;
+        time_minTSO_wait_ns = other.time_minTSO_wait_ns;
+        time_pipeline_breaker_wait_ns = other.time_pipeline_breaker_wait_ns;
+        time_pipeline_queue_ns = other.time_pipeline_queue_ns;
+    }
+
     num_produced_rows += other.num_produced_rows;
     num_iterations += other.num_iterations;
     concurrency += other.concurrency;
@@ -36,7 +43,13 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
 
 void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
 {
-    time_processed_ns = std::max(time_processed_ns, other.time_processed_ns());
+    bool time_updated = time_processed_ns < other.time_processed_ns();
+    if (time_updated) {
+        time_processed_ns = other.time_processed_ns();
+        time_minTSO_wait_ns = other.tiflash_wait_summary().mintso_wait_ns();
+        time_pipeline_breaker_wait_ns = other.tiflash_wait_summary().pipeline_breaker_wait_ns();
+        time_pipeline_queue_ns = other.tiflash_wait_summary().pipeline_queue_wait_ns();
+    }
     num_produced_rows += other.num_produced_rows();
     num_iterations += other.num_iterations();
     concurrency += other.concurrency();
@@ -47,6 +60,9 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
 void ExecutionSummary::fill(const BaseRuntimeStatistics & other)
 {
     time_processed_ns = other.execution_time_ns;
+    time_minTSO_wait_ns = other.minTSO_wait_time_ns;
+    time_pipeline_breaker_wait_ns = other.pipeline_breaker_wait_time_ns;
+    time_pipeline_queue_ns = other.queue_wait_time_ns;
     num_produced_rows = other.rows;
     num_iterations = other.blocks;
     concurrency = other.concurrency;
@@ -55,6 +71,9 @@ void ExecutionSummary::fill(const BaseRuntimeStatistics & other)
 void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
 {
     time_processed_ns = other.time_processed_ns();
+    time_minTSO_wait_ns = other.tiflash_wait_summary().mintso_wait_ns();
+    time_pipeline_breaker_wait_ns = other.tiflash_wait_summary().pipeline_breaker_wait_ns();
+    time_pipeline_queue_ns = other.tiflash_wait_summary().pipeline_queue_wait_ns();
     num_produced_rows = other.num_produced_rows();
     num_iterations = other.num_iterations();
     concurrency = other.concurrency();
