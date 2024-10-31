@@ -76,7 +76,7 @@ public:
     String getExtraJsonInfo() const override;
 
 protected:
-    ExecutionResult execute(ResultHandler && result_handler, UInt64 minTSO_wait_time_in_ms) override;
+    ExecutionResult execute(ResultHandler && result_handler, UInt64 minTSO_wait_time_in_ns) override;
 
 private:
     void scheduleEvents();

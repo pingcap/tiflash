@@ -24,13 +24,17 @@
 #include <common/apple_rt.h>
 #endif
 
+constexpr UInt64 SECOND_TO_NANO = 1000000000ULL;
+constexpr UInt64 MILLISECOND_TO_NANO = 1000000UL;
+constexpr UInt64 MICROSECOND_TO_NANO = 1000UL;
+
 inline UInt64 clock_gettime_ns(clockid_t clock_type = CLOCK_MONOTONIC)
 {
     struct timespec ts
     {
     };
     clock_gettime(clock_type, &ts);
-    return static_cast<UInt64>(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
+    return static_cast<UInt64>(ts.tv_sec * SECOND_TO_NANO + ts.tv_nsec);
 }
 
 /// Sometimes monotonic clock may not be monotonic (due to bug in kernel?).
@@ -43,7 +47,7 @@ inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type =
         return current_time;
 
     /// Something probably went completely wrong if time stepped back for more than 1 second.
-    assert(prev_time - current_time <= 1000000000ULL);
+    assert(prev_time - current_time <= SECOND_TO_NANO);
     return prev_time;
 }
 
@@ -86,8 +90,8 @@ public:
     void restart() { start(); }
 
     UInt64 elapsed() const { return is_running ? nanosecondsWithBound(start_ns) - start_ns : stop_ns - start_ns; }
-    UInt64 elapsedMilliseconds() const { return elapsed() / 1000000UL; }
-    double elapsedSeconds() const { return static_cast<double>(elapsed()) / 1000000000ULL; }
+    UInt64 elapsedMilliseconds() const { return elapsed() / MILLISECOND_TO_NANO; }
+    double elapsedSeconds() const { return static_cast<double>(elapsed()) / SECOND_TO_NANO; }
 
     UInt64 elapsedFromLastTime()
     {
@@ -104,8 +108,8 @@ public:
         }
     }
 
-    UInt64 elapsedMillisecondsFromLastTime() { return elapsedFromLastTime() / 1000000UL; }
-    double elapsedSecondsFromLastTime() { return static_cast<double>(elapsedFromLastTime()) / 1000000000ULL; }
+    UInt64 elapsedMillisecondsFromLastTime() { return elapsedFromLastTime() / MILLISECOND_TO_NANO; }
+    double elapsedSecondsFromLastTime() { return static_cast<double>(elapsedFromLastTime()) / SECOND_TO_NANO; }
 
 private:
     UInt64 start_ns = 0;

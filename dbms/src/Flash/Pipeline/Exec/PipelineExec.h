@@ -31,7 +31,7 @@ public:
         TransformOps && transform_ops_,
         SinkOpPtr && sink_op_,
         bool has_pipeline_breaker_wait_time_,
-        uint64_t minTSO_wait_time_in_ms_);
+        uint64_t minTSO_wait_time_in_ns_);
 
     void executePrefix();
     void executeSuffix();
@@ -81,7 +81,7 @@ private:
     TransformOps transform_ops;
     SinkOpPtr sink_op;
     bool has_pipeline_breaker_wait_time;
-    uint64_t minTSO_wait_time_in_ms;
+    uint64_t minTSO_wait_time_in_ns;
 
     // hold the operator which is ready for executing await.
     Operator * awaitable = nullptr;

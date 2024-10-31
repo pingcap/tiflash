@@ -30,7 +30,7 @@ struct PipelineExecBuilder
 
     Block getCurrentHeader() const;
 
-    PipelineExecPtr build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ms);
+    PipelineExecPtr build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ns);
 
     OperatorProfileInfoPtr getCurProfileInfo() const;
 
@@ -77,7 +77,7 @@ public:
         }
     }
 
-    PipelineExecGroup build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ms);
+    PipelineExecGroup build(bool has_pipeline_breaker_wait_time, uint64_t minTSO_wait_time_in_ns);
 
     Block getCurrentHeader();
 
