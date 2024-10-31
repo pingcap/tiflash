@@ -32,6 +32,11 @@ if [ -d "$install_dir" ]; then rm -rf "${install_dir:?}"/*; else mkdir -p "$inst
 build_dir="$SRCPATH/release-darwin/build-release"
 rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 
+# use llvm@17
+export PATH="$(brew --prefix)/opt/llvm@17/bin:$PATH"
+export CC="$(brew --prefix)/opt/llvm@17/bin/clang"
+export CXX="$(brew --prefix)/opt/llvm@17/bin/clang++"
+
 cmake "$SRCPATH" \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
       -DUSE_INTERNAL_SSL_LIBRARY=ON \
