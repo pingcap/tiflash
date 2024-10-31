@@ -27,7 +27,8 @@ ExecutionSummary::ExecutionSummary()
 void ExecutionSummary::merge(const ExecutionSummary & other)
 {
     bool time_updated = time_processed_ns < other.time_processed_ns;
-    if (time_updated) {
+    if (time_updated)
+    {
         time_processed_ns = other.time_processed_ns;
         time_minTSO_wait_ns = other.time_minTSO_wait_ns;
         time_pipeline_breaker_wait_ns = other.time_pipeline_breaker_wait_ns;
@@ -44,7 +45,8 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
 void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
 {
     bool time_updated = time_processed_ns < other.time_processed_ns();
-    if (time_updated) {
+    if (time_updated)
+    {
         time_processed_ns = other.time_processed_ns();
         time_minTSO_wait_ns = other.tiflash_wait_summary().mintso_wait_ns();
         time_pipeline_breaker_wait_ns = other.tiflash_wait_summary().pipeline_breaker_wait_ns();
