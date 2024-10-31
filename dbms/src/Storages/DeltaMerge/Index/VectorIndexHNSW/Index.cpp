@@ -343,7 +343,7 @@ std::vector<VectorIndexViewer::SearchResult> VectorIndexHNSWViewer::searchWithDi
     {
         const auto rowid = result[i].member.key;
         if (valid_rows[rowid])
-            search_results.emplace_back(rowid, result[i].distance);
+            search_results.push_back({rowid, result[i].distance});
     }
     return search_results;
 }
