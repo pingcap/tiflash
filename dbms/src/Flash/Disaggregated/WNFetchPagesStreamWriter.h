@@ -34,8 +34,6 @@ namespace DB
 
 struct Settings;
 
-using SyncPagePacketWriter = grpc::ServerWriter<disaggregated::PagesPacket>;
-
 class WNFetchPagesStreamWriter;
 using WNFetchPagesStreamWriterPtr = std::unique_ptr<WNFetchPagesStreamWriter>;
 
