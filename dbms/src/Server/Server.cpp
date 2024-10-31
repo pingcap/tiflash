@@ -1325,8 +1325,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
-                bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.
-                if (updated)
+                if (bool updated = global_context->getSecurityConfig()->update(*config); updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
                     auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
