@@ -38,7 +38,6 @@ extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 namespace DB::DM::tests
 {
-
 class SegmentCommonHandleTest : public DB::base::TiFlashStorageTestBasic
 {
 public:

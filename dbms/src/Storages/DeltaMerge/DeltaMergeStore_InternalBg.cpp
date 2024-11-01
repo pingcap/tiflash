@@ -43,7 +43,6 @@ extern const char pause_until_dt_background_delta_merge[];
 
 namespace DM
 {
-
 // A callback class for scanning the DMFiles on local filesystem
 class LocalDMFileGcScanner final
 {
