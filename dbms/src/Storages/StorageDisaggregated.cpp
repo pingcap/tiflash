@@ -42,19 +42,30 @@ StorageDisaggregated::StorageDisaggregated(
     std::istringstream iss(context.getSettingsRef().disagg_blocklist_wn_store_id);
     std::string token;
 
-    while (std::getline(iss, token, ',')) {
-        try {
+    while (std::getline(iss, token, ','))
+    {
+        try
+        {
             uint64_t number = std::stoull(token);
             store_id_blocklist.insert(number);
-        } catch (...) {
+        }
+        catch (...)
+        {
             // Keep empty
-            LOG_INFO(log, "Error disagg_blocklist_wn_store_id setting, {}", context.getSettingsRef().disagg_blocklist_wn_store_id.getRef());
+            LOG_INFO(
+                log,
+                "Error disagg_blocklist_wn_store_id setting, {}",
+                context.getSettingsRef().disagg_blocklist_wn_store_id.getRef());
             store_id_blocklist.clear();
             break;
         }
     }
-    if(!store_id_blocklist.empty())
-        LOG_DEBUG(log, "Blacklisted {} stores, which are {}", store_id_blocklist.size(), context.getSettingsRef().disagg_blocklist_wn_store_id.getRef());
+    if (!store_id_blocklist.empty())
+        LOG_DEBUG(
+            log,
+            "Blacklisted {} stores, which are {}",
+            store_id_blocklist.size(),
+            context.getSettingsRef().disagg_blocklist_wn_store_id.getRef());
 #endif
 }
 
