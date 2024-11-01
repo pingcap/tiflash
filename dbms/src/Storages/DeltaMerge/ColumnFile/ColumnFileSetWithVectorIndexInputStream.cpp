@@ -17,8 +17,6 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/Filter/WithANNQueryInfo.h>
 
-#include <iterator>
-
 
 namespace DB::DM
 {
