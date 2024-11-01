@@ -22,6 +22,7 @@
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
@@ -249,6 +250,7 @@ public:
 
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -364,6 +366,10 @@ private:
     bool initialized = false;
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
+
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
 
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
