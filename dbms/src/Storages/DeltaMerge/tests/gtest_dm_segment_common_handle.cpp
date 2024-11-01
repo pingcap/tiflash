@@ -885,19 +885,12 @@ try
             // Delete some records so that the following condition can be satisfied:
             // if pk % 5 < 2, then the record would be deleted
             // if pk % 5 >= 2, then the record would be reserved
-<<<<<<< HEAD
-            segment->write(dmContext(),
-                           DMTestEnv::getRowKeyRangeForClusteredIndex(Int64((num_batches_written - 1) * num_rows_per_write),
-                                                                      Int64((num_batches_written - 1) * num_rows_per_write + 2),
-                                                                      rowkey_column_size));
-=======
             segment->write(
                 dmContext(),
                 DMTestEnv::getRowKeyRangeForClusteredIndex(
                     static_cast<Int64>((num_batches_written - 1) * num_rows_per_write),
                     static_cast<Int64>((num_batches_written - 1) * num_rows_per_write + 2),
                     rowkey_column_size));
->>>>>>> 5e09f4a538 (Storage: Fix `getSquashDeleteRange` does not return correctly squashed key-range when using common-handle (#9530))
         }
 
         {

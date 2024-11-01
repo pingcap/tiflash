@@ -1524,23 +1524,6 @@ try
         RowKeyRange range;
         Int64 start, end;
     };
-<<<<<<< HEAD
-    std::vector<QueryRangeInfo> ranges;
-    ranges.emplace_back(
-        DMTestEnv::getRowKeyRangeForClusteredIndex(0, span_per_part, rowkey_column_size),
-        0,
-        span_per_part); // only first part
-    ranges.emplace_back(DMTestEnv::getRowKeyRangeForClusteredIndex(800, num_rows_write, rowkey_column_size), 800, num_rows_write);
-    ranges.emplace_back(DMTestEnv::getRowKeyRangeForClusteredIndex(256, 700, rowkey_column_size), 256, 700); //
-    ranges.emplace_back(DMTestEnv::getRowKeyRangeForClusteredIndex(0, 0, rowkey_column_size), 0, 0); // none
-    ranges.emplace_back(DMTestEnv::getRowKeyRangeForClusteredIndex(0, num_rows_write, rowkey_column_size), 0, num_rows_write); // full range
-    ranges.emplace_back(DMTestEnv::getRowKeyRangeForClusteredIndex(
-                            std::numeric_limits<Int64>::min(),
-                            std::numeric_limits<Int64>::max(),
-                            rowkey_column_size),
-                        std::numeric_limits<Int64>::min(),
-                        std::numeric_limits<Int64>::max()); // full range
-=======
     std::vector<QueryRangeInfo> ranges{
         QueryRangeInfo{
             DMTestEnv::getRowKeyRangeForClusteredIndex(0, span_per_part, rowkey_column_size),
@@ -1567,8 +1550,6 @@ try
             std::numeric_limits<Int64>::max(),
         }, // full range
     };
-
->>>>>>> 5e09f4a538 (Storage: Fix `getSquashDeleteRange` does not return correctly squashed key-range when using common-handle (#9530))
     for (const auto & range : ranges)
     {
         // Test read
