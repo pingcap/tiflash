@@ -35,8 +35,6 @@ public:
         size_t scan_hash_map_after_probe_stream_index,
         size_t max_block_size);
 
-    using CancellationHook = std::function<bool()>;
-
     HashJoinProbeExec(
         const JoinPtr & join_,
         const BlockInputStreamPtr & restore_build_stream_,

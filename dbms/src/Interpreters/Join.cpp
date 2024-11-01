@@ -916,6 +916,8 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     probe_process_info.prepareForProbe(key_names_left, non_equal_conditions.left_filter_column, kind, strictness);
     while (true)
     {
+        if (is_cancelled())
+            return {};
         auto block = doJoinBlockHash(probe_process_info);
         assert(block);
         result_rows += block.rows();
@@ -1112,6 +1114,8 @@ void Join::joinBlockCrossImpl(Block & block, ConstNullMapPtr null_map [[maybe_un
     auto total_right_rows = CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::calTotalRightRows(blocks);
     for (size_t start = 0; start <= rows_left; start += left_rows_per_iter)
     {
+        if (is_cancelled())
+            return;
         size_t end = std::min(start + left_rows_per_iter, rows_left);
         MutableColumns dst_columns(block.columns());
         for (size_t i = 0; i < block.columns(); ++i)
@@ -1209,6 +1213,9 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
         DISPATCH(false)
     }
 #undef DISPATCH
+
+    if (is_cancelled())
+        return {};
     /// todo control the returned block size for cross join
     probe_process_info.all_rows_joined_finish = true;
     return block;
@@ -1276,6 +1283,9 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
     /// Null aware join never expand the left block, just handle the whole block at one time is enough
     probe_process_info.all_rows_joined_finish = true;
 
+    if (is_cancelled())
+        return {};
+
     return block;
 }
 
@@ -1306,6 +1316,9 @@ void Join::joinBlockNullAwareImpl(
 
     RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
+    if (is_cancelled())
+        return;
+
     size_t right_columns = block.columns() - left_columns;
 
     if (!res_list.empty())
@@ -1317,12 +1330,16 @@ void Join::joinBlockNullAwareImpl(
             blocks,
             null_rows,
             max_block_size,
-            non_equal_conditions);
+            non_equal_conditions,
+            is_cancelled);
 
         helper.joinResult(res_list);
 
         RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
+
+    if (is_cancelled())
+        return;
 
     /// Now all results are known.
 
@@ -1581,6 +1598,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     else
         block = joinBlockHash(probe_process_info);
 
+    if (!block)
+        // if cancelled, just return
+        return block;
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == LeftOuterAnti || kind == Cross_LeftOuterAnti)
     {
