@@ -27,11 +27,16 @@
 #include <ctime>
 #include <memory>
 
-namespace DB
+namespace CurrentMetrics
 {
-namespace DM
-{
-namespace tests
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfDeltaMerge;
+extern const Metric DT_SnapshotOfPlaceIndex;
+} // namespace CurrentMetrics
+namespace DB::DM::tests
 {
 class SegmentCommonHandleTest : public DB::base::TiFlashStorageTestBasic
 {
@@ -517,16 +522,27 @@ try
     }
 
     {
-        // flush segment
+        // do delta-merge move data to stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
+    auto check_segment_squash_delete_range = [this](SegmentPtr & segment, const RowKeyRange & expect_range) {
+        // set `is_update=false` to get full squash delete range
+        auto snap = segment->createSnapshot(dmContext(), /*for_update*/ false, CurrentMetrics::DT_SnapshotOfRead);
+        auto squash_range = snap->delta->getSquashDeleteRange(is_common_handle, rowkey_column_size);
+        ASSERT_ROWKEY_RANGE_EQ(squash_range, expect_range);
+    };
+
     {
         // Test delete range [70, 100)
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(70, 100, rowkey_column_size)});
-        // flush segment
+        auto del_row_range = DMTestEnv::getRowKeyRangeForClusteredIndex(70, 100, rowkey_column_size);
+        SCOPED_TRACE("check after range: " + del_row_range.toDebugString()); // Add trace msg when ASSERT failed
+        // mem-table
+        segment->write(dmContext(), {del_row_range});
+        check_segment_squash_delete_range(segment, del_row_range);
+        // persisted-file
         segment->flushCache(dmContext());
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        check_segment_squash_delete_range(segment, del_row_range);
     }
 
     {
@@ -551,10 +567,15 @@ try
 
     {
         // Test delete range [63, 70)
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(63, 70, rowkey_column_size)});
-        // flush segment
+        auto del_row_range = DMTestEnv::getRowKeyRangeForClusteredIndex(63, 70, rowkey_column_size);
+        auto merged_del_range = DMTestEnv::getRowKeyRangeForClusteredIndex(63, 100, rowkey_column_size);
+        SCOPED_TRACE("check after range: " + del_row_range.toDebugString()); // Add trace msg when ASSERT failed
+        // mem-table
+        segment->write(dmContext(), {del_row_range});
+        check_segment_squash_delete_range(segment, merged_del_range);
+        // persisted-file
         segment->flushCache(dmContext());
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        check_segment_squash_delete_range(segment, merged_del_range);
     }
 
     {
@@ -579,10 +600,14 @@ try
 
     {
         // Test delete range [1, 32)
-        segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
-        // flush segment
-        segment->flushCache(dmContext());
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        auto del_row_range = DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size);
+        SCOPED_TRACE("check after range: " + del_row_range.toDebugString()); // Add trace msg when ASSERT failed
+        segment->write(dmContext(), {del_row_range});
+        auto merged_del_range = DMTestEnv::getRowKeyRangeForClusteredIndex(
+            1,
+            100,
+            rowkey_column_size); // suqash_delete_range will consider [1, 100) maybe deleted
+        check_segment_squash_delete_range(segment, merged_del_range);
     }
 
     {
@@ -762,7 +787,7 @@ try
 
                 ASSERT_EQ(c1->size(), c2->size());
 
-                for (Int64 i = 0; i < Int64(c1->size()); i++)
+                for (Int64 i = 0; i < static_cast<Int64>(c1->size()); i++)
                 {
                     if (iter1->name == DMTestEnv::pk_name)
                     {
@@ -859,10 +884,12 @@ try
             // Delete some records so that the following condition can be satisfied:
             // if pk % 5 < 2, then the record would be deleted
             // if pk % 5 >= 2, then the record would be reserved
-            segment->write(dmContext(),
-                           DMTestEnv::getRowKeyRangeForClusteredIndex(Int64((num_batches_written - 1) * num_rows_per_write),
-                                                                      Int64((num_batches_written - 1) * num_rows_per_write + 2),
-                                                                      rowkey_column_size));
+            segment->write(
+                dmContext(),
+                DMTestEnv::getRowKeyRangeForClusteredIndex(
+                    static_cast<Int64>((num_batches_written - 1) * num_rows_per_write),
+                    static_cast<Int64>((num_batches_written - 1) * num_rows_per_write + 2),
+                    rowkey_column_size));
         }
 
         {
@@ -872,7 +899,7 @@ try
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)
         {
-            temp.push_back(Int64(i));
+            temp.push_back(static_cast<Int64>(i));
         }
 
         {
@@ -906,6 +933,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests
