@@ -15,4 +15,5 @@
 
 set -ueox pipefail
 
+brew install ninja
 brew install llvm@17

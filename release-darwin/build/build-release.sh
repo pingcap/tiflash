@@ -38,6 +38,7 @@ export CC="$(brew --prefix)/opt/llvm@17/bin/clang"
 export CXX="$(brew --prefix)/opt/llvm@17/bin/clang++"
 
 cmake "$SRCPATH" \
+      -GNinja \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
       -DUSE_INTERNAL_SSL_LIBRARY=ON \
       -Wno-dev \
