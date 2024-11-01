@@ -17,6 +17,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/Filter/WithANNQueryInfo.h>
 
+#include <iterator>
+
 
 namespace DB::DM
 {
@@ -161,7 +163,9 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
             // read vector type column by vector index
             auto tiny_reader = tiny_readers[current_file_index];
             auto vec_column = vec_cd.type->createColumn();
-            const std::span file_selected_rows{selected_row_begin, selected_row_end};
+            const std::span<const VectorIndexViewer::SearchResult> file_selected_rows{
+                &*selected_row_begin,
+                static_cast<size_t>(std::distance(selected_row_begin, selected_row_end))};
             tiny_reader->read(vec_column, file_selected_rows, /* rowid_start_offset= */ read_rows, file_rows);
             assert(vec_column->size() == file_rows);
 
