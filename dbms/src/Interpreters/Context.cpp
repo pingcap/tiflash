@@ -2218,6 +2218,44 @@ void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
     mpp_server_info = info;
 }
 
+const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const
+{
+    return &store_id_blocklist;
+}
+
+bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
+{
+#if SERVERLESS_PROXY == 1
+    std::istringstream iss(comma_sep_string);
+    std::string token;
+
+    while (std::getline(iss, token, ','))
+    {
+        try
+        {
+            uint64_t number = std::stoull(token);
+            store_id_blocklist.insert(number);
+        }
+        catch (...)
+        {
+            // Keep empty
+            LOG_INFO(DB::Logger::get(), "Error disagg_blocklist_wn_store_id setting, {}", comma_sep_string);
+            store_id_blocklist.clear();
+            return false;
+        }
+    }
+
+    if (!store_id_blocklist.empty())
+        LOG_DEBUG(
+            DB::Logger::get(),
+            "Blocklisted {} stores, which are {}",
+            store_id_blocklist.size(),
+            comma_sep_string);
+
+    return true;
+#endif
+}
+
 SessionCleaner::~SessionCleaner()
 {
     try
@@ -2251,4 +2289,5 @@ void SessionCleaner::run()
             break;
     }
 }
+
 } // namespace DB

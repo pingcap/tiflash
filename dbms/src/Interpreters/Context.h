@@ -190,6 +190,9 @@ private:
     }};
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
+
+    std::unordered_set<uint64_t> store_id_blocklist;
+
     /// Use copy constructor or createGlobal() instead
     Context();
 
@@ -559,6 +562,9 @@ public:
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
     void mockConfigLoaded() { is_config_loaded = true; }
+
+    bool initializeStoreIdBlockList(const String &);
+    const std::unordered_set<uint64_t> * getStoreIdBlockList() const;
 
 private:
     /** Check if the current client has access to the specified database.

@@ -1512,6 +1512,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
     format_schema_path.createDirectories();
 
+    global_context->initializeStoreIdBlockList(global_context->getSettingsRef().disagg_blocklist_wn_store_id);
+
     LOG_INFO(log, "Loading metadata.");
     loadMetadataSystem(*global_context); // Load "system" database. Its engine keeps as Ordinary.
     /// After attaching system databases we can initialize system log.

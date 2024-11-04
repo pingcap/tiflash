@@ -154,6 +154,5 @@ private:
     const FilterConditions & filter_conditions;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
-    std::unordered_set<uint64_t> store_id_blocklist;
 };
 } // namespace DB
