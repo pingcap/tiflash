@@ -30,12 +30,10 @@ using DBInfo = TiDB::DBInfo;
 
 namespace DB
 {
-
 String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, const SchemaNameMapper & name_mapper, const LoggerPtr & log);
 
 namespace tests
 {
-
 struct ParseCase
 {
     String table_info_json;
