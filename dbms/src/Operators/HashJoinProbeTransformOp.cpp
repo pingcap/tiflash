@@ -39,6 +39,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
 {
     RUNTIME_CHECK_MSG(origin_join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(origin_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+    RUNTIME_CHECK_MSG(origin_join->isFinalize(), "join should be finalized first.");
 
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
     if (needScanHashMapAfterProbe(origin_join->getKind()))
@@ -58,9 +59,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
 {
-    ProbeProcessInfo header_probe_process_info(0, 0);
-    header_probe_process_info.resetBlock(std::move(header_));
-    header_ = origin_join->joinBlock(header_probe_process_info, true);
+    header_ = origin_join->getOutputBlock();
 }
 
 void HashJoinProbeTransformOp::operateSuffixImpl()
