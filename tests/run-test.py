@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import time
+import datetime
 
 if sys.version_info.major == 2:
     # print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
@@ -35,6 +36,7 @@ else:
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
 CMD_PREFIX_TIDB = 'mysql> '
+CMD_PREFIX_TIDB_BINALY_AS_HEX = 'mysql_bin_as_hex> '
 CMD_PREFIX_FUNC = 'func> '
 RETURN_PREFIX = '#RETURN'
 SLEEP_PREFIX = 'SLEEP '
@@ -69,9 +71,10 @@ class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd, unescape = True):
-        if unescape:
-            cmd = self.dbc + ' "' + to_unescaped_str(cmd) + '" 2>&1'
+    def exe(self, cmd, unescape = True, binary_as_hex = False):
+        cmd = to_unescaped_str(cmd) if unescape else cmd
+        if binary_as_hex:
+            cmd = self.dbc + ' "' + cmd + '" --binary-as-hex=true 2>&1'
         else:
             cmd = self.dbc + ' "' + cmd + '" 2>&1'
         return exec_func(cmd)
@@ -277,24 +280,27 @@ class Matcher:
     def on_line(self, line, line_number):
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
-        elif line.startswith(CMD_PREFIX_TIDB):
+        elif line.startswith(CMD_PREFIX_TIDB) or line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX):
             unescape_flag = True
             if line.endswith(NO_UNESCAPE_SUFFIX):
                 unescape_flag = False
                 line = line[:-len(NO_UNESCAPE_SUFFIX)]
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
             self.is_mysql = True
-            self.query = line[len(CMD_PREFIX_TIDB):]
+            if line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX):
+                self.query = line[len(CMD_PREFIX_TIDB_BINALY_AS_HEX):]
+            else:
+                self.query = line[len(CMD_PREFIX_TIDB):]
             # for mysql commands ignore errors since they may be part of the test logic.
-            self.outputs, _ = self.executor_tidb.exe(self.query, unescape_flag)
+            self.outputs, _ = self.executor_tidb.exe(self.query, unescape_flag, line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX))
             self.outputs = [x.strip() for x in self.outputs if len(x.strip()) != 0]
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -306,7 +312,7 @@ class Matcher:
                 return False
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -320,7 +326,7 @@ class Matcher:
                 self.outputs = [x for x in self.outputs if x.find(ignored_output) < 0]
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
