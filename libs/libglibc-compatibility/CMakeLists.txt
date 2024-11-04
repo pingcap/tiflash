@@ -14,20 +14,34 @@
 
 enable_language (ASM)
 
+if (ARCH_AARCH64)
+    list (APPEND glibc_compatibility_sources musl/aarch64/syscall.s musl/aarch64/longjmp.s)
+elseif (ARCH_AMD64)
+    list (APPEND glibc_compatibility_sources musl/x86_64/syscall.s musl/x86_64/longjmp.s)
+else ()
+    message (FATAL_ERROR "glibc_compatibility can only be used on x86_64 or aarch64.")
+endif ()
+
 add_library (glibc-compatibility glibc-compatibility.c
 musl/pipe2.c
 musl/fallocate.c
-musl/longjmp.s
 musl/vasprintf.c
 musl/lgamma.c
 musl/posix_spawn.c
 musl/futimens.c
-musl/syscall.s
 musl/syscall_ret.c
-musl/sched_cpucount.c)
+musl/sched_cpucount.c
+${glibc_compatibility_sources})
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    set_source_files_properties(musl/longjmp.s musl/syscall.s
-            PROPERTIES COMPILE_FLAGS -Wno-unused-command-line-argument)
+    if (ARCH_AARCH64)
+        set_source_files_properties(musl/aarch64/longjmp.s musl/aarch64/syscall.s
+                PROPERTIES COMPILE_FLAGS -Wno-unused-command-line-argument)
+    elseif (ARCH_AMD64)
+        set_source_files_properties(musl/x86_64/longjmp.s musl/x86_64/syscall.s
+                PROPERTIES COMPILE_FLAGS -Wno-unused-command-line-argument)
+    else ()
+        message(FATAL_ERROR "glibc_compatibility can only be used on x86_64 or aarch64.")
+    endif ()
 endif()
 add_subdirectory (tests EXCLUDE_FROM_ALL)
