@@ -2253,6 +2253,8 @@ bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
             comma_sep_string);
 
     return true;
+#else
+    UNUSED(comma_sep_string);
 #endif
 }
 
