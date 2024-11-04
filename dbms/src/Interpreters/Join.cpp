@@ -2597,7 +2597,7 @@ void Join::finalize(const Names & parent_require)
     }
     RUNTIME_CHECK_MSG(
         output_column_names_set_after_finalize.size() == output_columns_after_finalize.size(),
-        "Logical error, the output of join containning duplicated column");
+        "Logical error, the output of join contains duplicated columns");
 
     output_block_after_finalize = Block(output_columns_after_finalize);
     Names updated_require;
