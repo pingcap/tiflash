@@ -1356,6 +1356,7 @@ Block Join::removeUselessColumn(Block & block) const
     if (!block)
         return block;
 
+    // remove useless columns and adjust the order of columns
     Block projected_block;
     for (const auto & name_and_type : output_columns_after_finalize)
     {
