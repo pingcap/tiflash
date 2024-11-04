@@ -368,7 +368,14 @@ public:
     size_t getMemTableSetRowsOffset() const { return persisted_files_snap->getRows(); }
     size_t getMemTableSetDeletesOffset() const { return persisted_files_snap->getDeletes(); }
 
-    RowKeyRange getSquashDeleteRange() const;
+    /**
+     * Get a "squash" delete range in the delta layer. We can use this to ** estimate ** how many rows in the
+     * stable layer is pending for delete.
+     * The squash delete range may be larger than that will actually removed rows. For example, if there are
+     * two delete range [0, 30) and [100, 200), the squash delete range will be [0, 200). Actually after applying
+     * the two delete range, the rows [30, 100) will not be removed.
+     */
+    RowKeyRange getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const;
 
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
     size_t getDeltaIndexEpoch() const { return delta_index_epoch; }
