@@ -191,8 +191,6 @@ private:
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
-    std::unordered_set<uint64_t> store_id_blocklist;
-
     /// Use copy constructor or createGlobal() instead
     Context();
 
