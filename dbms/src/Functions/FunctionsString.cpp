@@ -1714,16 +1714,16 @@ public:
                                   return true;
                               });
 
-                    if (!is_length_type_valid)
-                        throw Exception(fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
-                }
+                          if (!is_length_type_valid)
+                              throw Exception(fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
+                      }
 
-                // for const zero start or const zero length, return const blank string.
-                if (start_abs == 0 || (!implicit_length && length == 0))
-                {
-                    block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
-                    return true;
-                }
+                      // for const zero start or const zero length, return const blank string.
+                      if (start_abs == 0 || (!implicit_length && length == 0))
+                      {
+                          block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+                          return true;
+                      }
 
                       const auto * col = checkAndGetColumn<ColumnString>(column_string.get());
                       assert(col);
@@ -1798,24 +1798,24 @@ public:
                                   fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
                       }
 
-                // convert to vector if string is const.
-                ColumnPtr full_column_string = column_string->isColumnConst() ? column_string->convertToFullColumnIfConst() : column_string;
-                const auto * col = checkAndGetColumn<ColumnString>(full_column_string.get());
-                assert(col);
-                auto col_res = ColumnString::create();
-                if (implicit_length)
-                {
-                    SubstringUTF8Impl::vectorVectorVector<true>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
-                }
-                else
-                {
-                    SubstringUTF8Impl::vectorVectorVector<false>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
-                }
-                block.getByPosition(result).column = std::move(col_res);
-            }
+                      // convert to vector if string is const.
+                      ColumnPtr full_column_string = column_string->isColumnConst() ? column_string->convertToFullColumnIfConst() : column_string;
+                      const auto * col = checkAndGetColumn<ColumnString>(full_column_string.get());
+                      assert(col);
+                      auto col_res = ColumnString::create();
+                      if (implicit_length)
+                      {
+                          SubstringUTF8Impl::vectorVectorVector<true>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
+                      }
+                      else
+                      {
+                          SubstringUTF8Impl::vectorVectorVector<false>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
+                      }
+                      block.getByPosition(result).column = std::move(col_res);
+                  }
 
-            return true;
-        });
+                  return true;
+              });
 
         if unlikely (!is_start_type_valid)
             throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
@@ -1974,12 +1974,12 @@ public:
                               *column_vector_length,
                               0);
 
-                    // for const 0, return const blank string.
-                    if (0 == length)
-                    {
-                        block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
-                        return true;
-                    }
+                          // for const 0, return const blank string.
+                          if (0 == length)
+                          {
+                              block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+                              return true;
+                          }
 
                           RightUTF8Impl::vectorConst(
                               col_string->getChars(),
