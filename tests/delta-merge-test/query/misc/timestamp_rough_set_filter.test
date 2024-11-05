@@ -18,14 +18,11 @@
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> DBGInvoke __drop_tidb_db(default)
 => drop table if exists default.test
-=> drop database if exists default
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # Data.
-=> DBGInvoke __mock_tidb_db(default)
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64, col_2 default \'asTiDBType|timestamp(5)\'')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __put_region(4, 0, 100, default, test)
