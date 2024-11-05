@@ -1835,16 +1835,14 @@ public:
     {
         Integer val = column.getElement(index);
         if constexpr (
-            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32>
-            || std::is_same_v<Integer, Int64>)
+            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32> || std::is_same_v<Integer, Int64>)
         {
             return val < 0 ? 0 : val;
         }
         else
         {
             static_assert(
-                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
-                || std::is_same_v<Integer, UInt64>);
+                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32> || std::is_same_v<Integer, UInt64>);
             return val;
         }
     }
@@ -1876,8 +1874,7 @@ private:
     {
         Integer val = column.getElement(index);
         if constexpr (
-            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32>
-            || std::is_same_v<Integer, Int64>)
+            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32> || std::is_same_v<Integer, Int64>)
         {
             if (val < 0)
                 return {false, static_cast<size_t>(-val)};
@@ -1886,8 +1883,7 @@ private:
         else
         {
             static_assert(
-                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
-                || std::is_same_v<Integer, UInt64>);
+                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32> || std::is_same_v<Integer, UInt64>);
             return {true, val};
         }
     }
