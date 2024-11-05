@@ -24,9 +24,9 @@
 #include <common/apple_rt.h>
 #endif
 
-constexpr UInt64 SECOND_TO_NANO = 1000000000ULL;
-constexpr UInt64 MILLISECOND_TO_NANO = 1000000UL;
-constexpr UInt64 MICROSECOND_TO_NANO = 1000UL;
+static constexpr UInt64 SECOND_TO_NANO = 1000000000ULL;
+static constexpr UInt64 MILLISECOND_TO_NANO = 1000000UL;
+static constexpr UInt64 MICROSECOND_TO_NANO = 1000UL;
 
 inline UInt64 clock_gettime_ns(clockid_t clock_type = CLOCK_MONOTONIC)
 {
