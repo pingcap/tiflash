@@ -2223,6 +2223,7 @@ const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const
     return &store_id_blocklist;
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
 {
 #if SERVERLESS_PROXY == 1
