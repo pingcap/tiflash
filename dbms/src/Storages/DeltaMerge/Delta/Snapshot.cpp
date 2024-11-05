@@ -49,10 +49,10 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     return snap;
 }
 
-RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
+RowKeyRange DeltaValueSnapshot::getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const
 {
-    auto delete_range1 = mem_table_snap->getSquashDeleteRange();
-    auto delete_range2 = persisted_files_snap->getSquashDeleteRange();
+    auto delete_range1 = mem_table_snap->getSquashDeleteRange(is_common_handle, rowkey_column_size);
+    auto delete_range2 = persisted_files_snap->getSquashDeleteRange(is_common_handle, rowkey_column_size);
     return delete_range1.merge(delete_range2);
 }
 

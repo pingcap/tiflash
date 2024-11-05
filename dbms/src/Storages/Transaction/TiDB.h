@@ -185,6 +185,7 @@ struct ColumnInfo
     String name;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
+    Poco::Dynamic::Var origin_default_bit_value;
     Poco::Dynamic::Var default_bit_value;
     TP tp = TypeDecimal; // TypeDecimal is not used by TiDB.
     UInt32 flag = 0;

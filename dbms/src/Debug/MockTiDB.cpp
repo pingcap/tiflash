@@ -717,17 +717,18 @@ TiDB::TableInfoPtr MockTiDB::getTableInfoByID(TableID table_id)
 
 TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
 {
-    TiDB::DBInfoPtr db_ptr = std::make_shared<TiDB::DBInfo>(TiDB::DBInfo());
-    db_ptr->id = db_id;
     for (const auto & database : databases)
     {
         if (database.second == db_id)
         {
+            TiDB::DBInfoPtr db_ptr = std::make_shared<TiDB::DBInfo>(TiDB::DBInfo());
+            db_ptr->id = db_id;
             db_ptr->name = database.first;
-            break;
+            return db_ptr;
         }
     }
-    return db_ptr;
+    // If the database has been dropped in TiKV, TiFlash get a nullptr
+    return nullptr;
 }
 
 std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name)

@@ -32,6 +32,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Interpreters/CancellationHook.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
@@ -1044,8 +1045,6 @@ public:
       * This is needed to simplify merging of that data with other results, that are already two-level.
       */
     Blocks convertBlockToTwoLevel(const Block & block);
-
-    using CancellationHook = std::function<bool()>;
 
     /** Set a function that checks whether the current task can be aborted.
       */

@@ -176,6 +176,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);
         stream->setExtraInfo(join_probe_extra_info);
     }
+    join_ptr->setCancellationHook([&] { return context.isCancelled(); });
 }
 
 void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams)
