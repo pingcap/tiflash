@@ -102,6 +102,7 @@ public:
     }
 
     static bool isMatch(const tipb::Executor * executor) { return ExecutorImpl::isMatch(executor); }
+
 protected:
     String executor_id;
     String type;

@@ -176,7 +176,8 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
 
     current.time_processed_ns += dag_context->compile_time_ns;
     current.time_processed_ns += dag_context->minTSO_wait_time_ns;
-    if (is_source_executor) {
+    if (is_source_executor)
+    {
         current.time_minTSO_wait_ns = dag_context->minTSO_wait_time_ns;
     }
     fillTiExecutionSummary(
