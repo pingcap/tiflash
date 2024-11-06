@@ -1,4 +1,5 @@
-# Copyright 2022 PingCAP, Inc.
+#!/usr/bin/env bash
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM hub.pingcap.net/tiflash/centos:7.9.2009-amd64
 
-USER root
-WORKDIR /root/
+# Prepare basic environment for CI/CD.
 
-ENV HOME /root/
-ENV TZ Asia/Shanghai
-ENV LD_LIBRARY_PATH /tiflash
-
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-COPY tiflash /tiflash
-
-ENTRYPOINT ["/tiflash/tiflash", "server"]
+function prepare_basic() {
+    dnf upgrade-minimal -y
+    dnf install -y epel-release
+    dnf config-manager --set-enabled powertools
+    dnf install -y \
+         libtool \
+         libtool-ltdl-devel \
+         python3-devel \
+         bzip2 \
+         chrpath
+    dnf install -y curl git perl wget cmake3 glibc-static zlib-devel diffutils ninja-build gcc-toolset-10
+    dnf install -y 'perl(Data::Dumper)'
+    dnf clean all -y
+}

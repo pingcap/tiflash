@@ -78,8 +78,8 @@ debian/*.substvars
 *.pb.h
 
 # TiFlash built and test files
-release-centos7/tiflash
-release-centos7/build-release
+release-rocky8/tiflash
+release-rocky8/build-release
 release-darwin/tiflash
 release-darwin/build-release
 
@@ -91,5 +91,5 @@ tests/docker/log
 CoverageReport
 
 # installation and sysroot path
-release-centos7-llvm/tiflash
-release-centos7-llvm/build-release
+release-rocky8-llvm/tiflash
+release-rocky8-llvm/build-release
