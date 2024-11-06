@@ -29,6 +29,8 @@ public:
 
     virtual void collectRuntimeDetail() = 0;
 
+    bool isSourceExecutor() const { return is_source_executor; }
+
     virtual ~ExecutorStatisticsBase() = default;
 
     const BaseRuntimeStatistics & getBaseRuntimeStatistics() const { return base; }
@@ -38,6 +40,7 @@ public:
 protected:
     BaseRuntimeStatistics base;
     UInt64 process_time_for_join_build = 0;
+    bool is_source_executor = false;
 };
 
 using ExecutorStatisticsPtr = std::shared_ptr<ExecutorStatisticsBase>;

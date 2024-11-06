@@ -39,6 +39,7 @@ public:
         executor_id = executor->executor_id();
 
         type = ExecutorImpl::type;
+        is_source_executor = ExecutorImpl::isSourceExecutor();
     }
 
     void setChild(const String & child_id) override { children.push_back(child_id); }
@@ -101,7 +102,6 @@ public:
     }
 
     static bool isMatch(const tipb::Executor * executor) { return ExecutorImpl::isMatch(executor); }
-
 protected:
     String executor_id;
     String type;
