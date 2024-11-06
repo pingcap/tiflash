@@ -2251,9 +2251,8 @@ bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
     if (!shared->store_id_blocklist.empty())
         LOG_DEBUG(
             DB::Logger::get(),
-            "Blocklisted {} stores, which are {}",
-            shared->store_id_blocklist.size(),
-            comma_sep_string);
+            "StoreIdBlockList have been set, {}",
+            shared->store_id_blocklist);
 
     return true;
 #else
