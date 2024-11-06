@@ -81,9 +81,8 @@ void PipelineExecutor::consume(ResultHandler & result_handler)
     exec_context.consume(result_handler);
 }
 
-ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler, UInt64 minTSO_wait_time_in_ns)
+ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 {
-    exec_context.setMinTSOWaitTime(minTSO_wait_time_in_ns);
     if (result_handler)
     {
         ///                                 ┌──get_result_sink

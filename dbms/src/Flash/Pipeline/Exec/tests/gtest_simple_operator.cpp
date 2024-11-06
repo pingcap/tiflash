@@ -106,7 +106,7 @@ public:
         group_builder.transform([&](auto & builder) {
             builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_context, "", result_handler));
         });
-        auto result = group_builder.build(true, 0);
+        auto result = group_builder.build(false);
         assert(result.size() == 1);
         return std::move(result.back());
     }

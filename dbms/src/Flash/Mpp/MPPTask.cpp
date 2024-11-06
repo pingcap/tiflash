@@ -541,6 +541,7 @@ void MPPTask::runImpl()
         scheduleOrWait();
 
         auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
+        dag_context->minTSO_wait_time_ns = time_cost_in_schedule_ns;
         auto time_cost_in_schedule_ms = time_cost_in_schedule_ns / MILLISECOND_TO_NANO;
         LOG_INFO(
             log,
@@ -568,7 +569,7 @@ void MPPTask::runImpl()
         }
 #endif
 
-        auto result = query_executor_holder->execute(time_cost_in_schedule_ns);
+        auto result = query_executor_holder->execute();
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
