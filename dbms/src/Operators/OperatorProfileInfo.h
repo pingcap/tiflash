@@ -36,7 +36,6 @@ struct OperatorProfileInfo
     UInt64 execution_time = 0;
     UInt64 pipeline_breaker_wait_time = 0;
     UInt64 task_wait_time = 0;
-    UInt64 minTSO_wait_time = 0;
 
     ALWAYS_INLINE void anchor() { total_stopwatch.start(); }
 
