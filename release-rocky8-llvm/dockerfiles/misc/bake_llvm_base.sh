@@ -16,6 +16,8 @@
 
 # Build CI/CD image
 
+set -ueox pipefail
+
 function bake_llvm_base() {
     arch=$(uname -m)
     export PATH="/opt/cmake/bin:/usr/local/bin/:${PATH}"
@@ -43,10 +45,6 @@ function bake_llvm_base() {
     source $SCRIPTPATH/install_openssl.sh
     install_openssl "1_1_1w"
     export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
-
-    # Git
-    source $SCRIPTPATH/install_git.sh
-    install_git "2.40.1"
 
     # Rust
     source $SCRIPTPATH/install_rust.sh

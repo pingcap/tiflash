@@ -26,7 +26,7 @@ function prepare_basic() {
          python3-devel \
          bzip2 \
          chrpath
-    dnf install -y curl git perl wget cmake3 glibc-static zlib-devel diffutils ninja-build gcc-toolset-10
+    dnf install -y curl git perl wget cmake3 gettext glibc-static zlib-devel diffutils ninja-build gcc-toolset-10
     dnf install -y 'perl(Data::Dumper)'
     dnf clean all -y
 }

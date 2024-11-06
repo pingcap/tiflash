@@ -5,7 +5,7 @@ Scripts to build a toolchain sysroot (with cmake, clang, ccache, go) for buildin
 Usage: 
 
 ```
-make tiflash-env-x86_64.tar.xz
+SUFFIX=-llvm-17.0.6 make tiflash-env-x86_64.tar.xz
 tar xvf tiflash-env-x86_64.tar.xz
 
 # Now you can add the env variables to your init script to
