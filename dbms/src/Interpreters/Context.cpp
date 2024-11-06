@@ -2242,7 +2242,7 @@ bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
         catch (...)
         {
             // Keep empty
-            LOG_INFO(DB::Logger::get(), "Error disagg_blocklist_wn_store_id setting, {}", comma_sep_string);
+            LOG_INFO(DB::Logger::get(), "StoreIdBlockList is not set, input_str={}", comma_sep_string);
             shared->store_id_blocklist.clear();
             return false;
         }
