@@ -87,7 +87,7 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             TaskScheduler::instance->submit(std::make_unique<SimplePipelineTask>(
                 exec_context,
                 req_id,
-                build_builder.build(true, exec_context.getMinTSOWaitTime())));
+                build_builder.build(false)));
 
             return restore_probe_exec;
         }
