@@ -2249,10 +2249,7 @@ bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
     }
 
     if (!shared->store_id_blocklist.empty())
-        LOG_INFO(
-            DB::Logger::get(),
-            "StoreIdBlockList have been set, {}",
-            shared->store_id_blocklist);
+        LOG_INFO(DB::Logger::get(), "StoreIdBlockList have been set, {}", shared->store_id_blocklist);
 
     return true;
 #else
