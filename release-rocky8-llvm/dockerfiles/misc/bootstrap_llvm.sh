@@ -16,12 +16,12 @@
 INSTALL_PREFIX=${INSTALL_PREFIX:-"/usr/local"}
 
 # Boostrap LLVM envriroment for CI/CD.
-# Require: git, ninja, cmake, compiler(devtoolset-10)
-# LLVM License: https://releases.llvm.org/13.0.0/LICENSE.TXT
+# Require: git, ninja, cmake, compiler(gcc-toolset-100)
+# LLVM License: https://releases.llvm.org/17.0.6/LICENSE.TXT
 
 function bootstrap_llvm() {
     # $1: llvm_version
-    source scl_source enable devtoolset-10
+    source /opt/rh/gcc-toolset-10/enable
     git clone https://github.com/llvm/llvm-project --depth=1 -b llvmorg-$1
    
     mkdir -p llvm-project/build
@@ -50,6 +50,7 @@ function bootstrap_llvm() {
         -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;openmp;compiler-rt" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
+        -DLLVM_LIBDIR_SUFFIX=64 \
         -DCLANG_DEFAULT_LINKER=lld \
         -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
         -DCMAKE_CXX_COMPILER=clang++ \

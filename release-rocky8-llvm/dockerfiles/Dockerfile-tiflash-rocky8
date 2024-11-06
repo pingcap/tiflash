@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2022 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+FROM quay.io/rockylinux/rockylinux:8.10.20240528-ubi
 
-# Install Go for CI/CD.
-# Require: wget, tar
+USER root
+WORKDIR /root/
 
-function install_go() {
-    # $1: go_version
-    # $2: go_arch
-    wget https://dl.google.com/go/go$1.linux-$2.tar.gz 
-    tar -C /usr/local -xzvf go$1.linux-$2.tar.gz
-    rm -rf go$1.linux-$2.tar.gz
-}
+ENV HOME /root/
+ENV TZ Asia/Shanghai
+ENV LD_LIBRARY_PATH /tiflash
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+COPY tiflash /tiflash
+
+ENTRYPOINT ["/tiflash/tiflash", "server"]
