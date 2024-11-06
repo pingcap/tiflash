@@ -264,7 +264,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 it->second->getBaseRuntimeStatistics(),
                 0, // No join executors in list-based executors
                 dag_context->scan_context_map,
-                p.second->isSourceExecutor());
+                it->second->isSourceExecutor());
         }
     }
     fill_local_ru();
