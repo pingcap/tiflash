@@ -24,6 +24,7 @@ function prepare_basic() {
          libtool \
          libtool-ltdl-devel \
          python3-devel \
+         libcurl-devel \
          bzip2 \
          chrpath
     dnf install -y curl git perl wget cmake3 gettext glibc-static zlib-devel diffutils ninja-build gcc-toolset-10
