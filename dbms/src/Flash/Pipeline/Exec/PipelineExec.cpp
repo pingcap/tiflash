@@ -77,13 +77,11 @@ PipelineExec::PipelineExec(
     SourceOpPtr && source_op_,
     TransformOps && transform_ops_,
     SinkOpPtr && sink_op_,
-    bool has_pipeline_breaker_wait_time_,
-    UInt64 minTSO_wait_time_in_ns_)
+    bool has_pipeline_breaker_wait_time_)
     : source_op(std::move(source_op_))
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
     , has_pipeline_breaker_wait_time(has_pipeline_breaker_wait_time_)
-    , minTSO_wait_time_in_ns(minTSO_wait_time_in_ns_)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
 }
@@ -252,14 +250,12 @@ void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_brea
     // For the queuing_time, it is added into the source operator's execution time also.
     // Also keep these time separately to provide more info.
     source_op->getProfileInfo()->execution_time += pipeline_breaker_wait_time;
-    source_op->getProfileInfo()->execution_time += minTSO_wait_time_in_ns;
     source_op->getProfileInfo()->execution_time += queuing_time;
     if (has_pipeline_breaker_wait_time)
     {
         source_op->getProfileInfo()->pipeline_breaker_wait_time = pipeline_breaker_wait_time;
     }
     source_op->getProfileInfo()->task_wait_time = queuing_time;
-    source_op->getProfileInfo()->minTSO_wait_time = minTSO_wait_time_in_ns;
 
     UInt64 time_for_prev_op = source_op->getProfileInfo()->execution_time;
     for (const auto & transform_op : transform_ops)
