@@ -36,7 +36,6 @@ void BaseRuntimeStatistics::append(const OperatorProfileInfo & profile_info)
     allocated_bytes += profile_info.allocated_bytes;
     bool updated = execution_time_ns < profile_info.execution_time;
     execution_time_ns = updated ? profile_info.execution_time : execution_time_ns;
-    minTSO_wait_time_ns = updated ? profile_info.minTSO_wait_time : minTSO_wait_time_ns;
     queue_wait_time_ns = updated ? profile_info.task_wait_time : queue_wait_time_ns;
     pipeline_breaker_wait_time_ns = updated ? profile_info.pipeline_breaker_wait_time : pipeline_breaker_wait_time_ns;
     ++concurrency;
