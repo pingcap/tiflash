@@ -328,7 +328,7 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
                  function_json_unquote)
         {
             bool valid_check
-                = !(isScalarFunctionExpr(input_expr) && input_expr.sig() == tipb::ScalarFuncSig::CastJsonAsString);
+                = !isScalarFunctionExpr(input_expr) || input_expr.sig() != tipb::ScalarFuncSig::CastJsonAsString;
             function_json_unquote->setNeedValidCheck(valid_check);
         }
         else if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
@@ -555,6 +555,7 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"cast_json_as_string", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
      {"json_unquote", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
      {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+     {"two_value_and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"not", DAGExpressionAnalyzerHelper::buildLogicalFunction},

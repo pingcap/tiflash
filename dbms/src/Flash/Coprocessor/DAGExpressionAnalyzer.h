@@ -63,7 +63,8 @@ public:
 
     String appendWhere(
         ExpressionActionsChain & chain,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        bool null_as_false = false);
 
     GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
 
@@ -144,10 +145,12 @@ public:
 
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        bool null_as_false = false);
 
     std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        bool null_as_false = false);
 
     void buildAggFuncs(
         const tipb::Aggregation & aggregation,
