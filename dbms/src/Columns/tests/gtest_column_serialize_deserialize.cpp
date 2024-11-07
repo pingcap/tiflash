@@ -36,14 +36,7 @@ public:
         column_ptr->countSerializeByteSize(byte_size);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
-        {
-            if (i + result_byte_size[i] != byte_size[i])
-            {
-                std::cout << "i: " << i << " byte_size[i]: " << byte_size[i]
-                          << " result_byte_size[i]: " << result_byte_size[i] << std::endl;
-            }
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
-        }
     }
 
     void testCountSerialByteSizeForColumnArray(
@@ -58,14 +51,7 @@ public:
         column_array->countSerializeByteSize(byte_size);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
-        {
-            if (8 + i + result_byte_size[i] != byte_size[i])
-            {
-                std::cout << "i: " << i << " byte_size[i]: " << byte_size[i]
-                          << " result_byte_size[i]: " << result_byte_size[i] << std::endl;
-            }
             ASSERT_EQ(byte_size[i], 8 + i + result_byte_size[i]);
-        }
     }
 
     void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
