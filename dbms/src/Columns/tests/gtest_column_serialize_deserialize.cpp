@@ -58,6 +58,14 @@ public:
 
     static void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
     {
+        doTestSerializeAndDeserialize(column_ptr, false);
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+        doTestSerializeAndDeserialize(column_ptr, true);
+#endif
+    }
+
+    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool is_aligned [[maybe_unused]])
+    {
         PaddedPODArray<size_t> byte_size(column_ptr->size());
         column_ptr->countSerializeByteSize(byte_size);
         size_t total_size = 0;
@@ -77,7 +85,8 @@ public:
 
         auto new_col_ptr = column_ptr->cloneEmpty();
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        new_col_ptr->reserveAlign(byte_size.size(), AlignBufferAVX2::buffer_size);
+        if (is_aligned)
+            new_col_ptr->reserveAlign(byte_size.size(), AlignBufferAVX2::buffer_size);
 #endif
         ColumnsAlignBufferAVX2 align_buffer;
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
@@ -118,12 +127,14 @@ CATCH
 TEST_F(TestColumnSerializeDeserialize, TestColumnDecimal)
 try
 {
-    auto col_decimal
-        = createColumn<Decimal32>(std::make_tuple(8, 2), {"1.0",  "2.2",  "3.33", "4",    "5",    "6",    "7.7",
-                                                          "8.8",  "9.9",  "10",   "11",   "12",   "13.3", "14.4",
-                                                          "15.5", "16.2", "17",   "18.8", "19.9", "20.0", "21", "22", "23", "24", "25.5", "26.6", "27.7", "28.8", "29.9", "30.1", "31", "32.5", "33.9"})
-              .column;
-    testCountSerializeByteSize(col_decimal, {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4});
+    auto col_decimal = createColumn<Decimal32>(
+                           std::make_tuple(8, 2),
+                           {"1.0", "2.2",  "3.33", "4",    "5",    "6",    "7.7",  "8.8",  "9.9",  "10",   "11",
+                            "12",  "13.3", "14.4", "15.5", "16.2", "17",   "18.8", "19.9", "20.0", "21",   "22",
+                            "23",  "24",   "25.5", "26.6", "27.7", "28.8", "29.9", "30.1", "31",   "32.5", "33.9"})
+                           .column;
+    testCountSerializeByteSize(col_decimal, {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+                                             4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4});
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 12, 33}).column;
     testCountSerialByteSizeForColumnArray(col_decimal, col_offsets, {4, 8, 12, 6 * 4, 21 * 4});
 
@@ -134,10 +145,43 @@ CATCH
 TEST_F(TestColumnSerializeDeserialize, TestColumnString)
 try
 {
-    auto col_string = createColumn<String>({"123", "2", "34", "456", "5678", "6"}).column;
-    testCountSerializeByteSize(col_string, {8 + 4, 8 + 2, 8 + 3, 8 + 4, 8 + 5, 8 + 2});
-    auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
-    testCountSerialByteSizeForColumnArray(col_string, col_offsets, {8 + 4, 16 + 5, 24 + 11});
+    auto col_string = createColumn<String>({"123",
+                                            "1234567890",
+                                            "4567",
+                                            "1234567890",
+                                            "8901",
+                                            "1234567890",
+                                            "123456789012",
+                                            "234567",
+                                            "12345678",
+                                            "123456",
+                                            "123456789012",
+                                            "12345678901234567",
+                                            "12345678901234",
+                                            "123456789012",
+                                            "123456789",
+                                            "12345678901234567890"})
+                          .column;
+    testCountSerializeByteSize(
+        col_string,
+        {8 + 4,
+         8 + 11,
+         8 + 5,
+         8 + 11,
+         8 + 5,
+         8 + 11,
+         8 + 13,
+         8 + 7,
+         8 + 9,
+         8 + 7,
+         8 + 13,
+         8 + 18,
+         8 + 15,
+         8 + 13,
+         8 + 10,
+         8 + 21});
+    auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16}).column;
+    testCountSerialByteSizeForColumnArray(col_string, col_offsets, {8 + 4, 16 + 16, 24 + 27, 32 + 33, 48 + 90});
 
     testSerializeAndDeserialize(col_string);
 }
