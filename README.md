@@ -104,7 +104,7 @@ sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja cu
 </details>
 
 <details>
-<summary><b>CentOS 7</b></summary>
+<summary><b>Rocky Linux 8</b></summary>
 
 Please refer to [release-rocky8-llvm/env/prepare-sysroot.sh](./release-rocky8-llvm/env/prepare-sysroot.sh)
 
