@@ -1325,6 +1325,7 @@ void WindowTransformAction::appendBlock(Block & current_block)
 
 void WindowTransformAction::tryCalculate()
 {
+    auto start_block_index = current_row.block;
     // Start the calculations. First, advance the partition end.
     for (;;)
     {
@@ -1396,6 +1397,11 @@ void WindowTransformAction::tryCalculate()
             first_not_ready_row = current_row;
             frame_ended = false;
             frame_started = false;
+            // each `tryCalculate()` will calculate at most 1 block's data
+            // this is to make sure that in pipeline mode, the execution time
+            // of each iterator won't be too long
+            if (current_row.block != start_block_index)
+                return;
         }
 
         if (input_is_finished)
