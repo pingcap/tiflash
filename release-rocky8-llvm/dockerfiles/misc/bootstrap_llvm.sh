@@ -50,7 +50,6 @@ function bootstrap_llvm() {
         -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;openmp;compiler-rt" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
-        -DLLVM_LIBDIR_SUFFIX=64 \
         -DCLANG_DEFAULT_LINKER=lld \
         -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
         -DCMAKE_CXX_COMPILER=clang++ \
