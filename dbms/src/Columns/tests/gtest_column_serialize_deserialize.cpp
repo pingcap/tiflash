@@ -28,7 +28,7 @@ namespace tests
 class TestColumnSerializeDeserialize : public ::testing::Test
 {
 public:
-    void testCountSerializeByteSize(const ColumnPtr & column_ptr, const PaddedPODArray<size_t> & result_byte_size)
+    static void testCountSerializeByteSize(const ColumnPtr & column_ptr, const PaddedPODArray<size_t> & result_byte_size)
     {
         PaddedPODArray<size_t> byte_size(column_ptr->size());
         for (size_t i = 0; i < column_ptr->size(); ++i)
@@ -39,12 +39,12 @@ public:
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
     }
 
-    void testCountSerialByteSizeForColumnArray(
+    static void testCountSerialByteSizeForColumnArray(
         const ColumnPtr & column_ptr,
         const ColumnPtr & offsets,
         const PaddedPODArray<size_t> & result_byte_size)
     {
-        auto column_array = ColumnArray::create(column_ptr, std::move(offsets));
+        auto column_array = ColumnArray::create((*std::move(column_ptr)).mutate(), (*std::move(offsets)).mutate());
         PaddedPODArray<size_t> byte_size(column_array->size());
         for (size_t i = 0; i < column_array->size(); ++i)
             byte_size[i] = i;
@@ -54,13 +54,13 @@ public:
             ASSERT_EQ(byte_size[i], 8 + i + result_byte_size[i]);
     }
 
-    void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
+    static void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
     {
         PaddedPODArray<size_t> byte_size(column_ptr->size());
         column_ptr->countSerializeByteSize(byte_size);
         size_t total_size = 0;
-        for (size_t i = 0; i < byte_size.size(); ++i)
-            total_size += byte_size[i];
+        for (auto i : byte_size)
+            total_size += i;
         PaddedPODArray<char> memory(total_size);
         PaddedPODArray<char *> pos;
         size_t current_size = 0;
