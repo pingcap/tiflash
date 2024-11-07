@@ -715,6 +715,7 @@ void ColumnString::deserializeAndInsertFromPosForColumnArray(
     for (size_t i = 0; i < size; ++i)
     {
         size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        offsets.resize(prev_size + length);
         for (size_t j = 0; j < length; ++j)
         {
             size_t str_size;

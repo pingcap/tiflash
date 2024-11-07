@@ -240,20 +240,26 @@ public:
     /// The byte_size.size() must be equal to the column size.
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
     /// Count the serialize byte size and added to the byte_size called by ColumnArray.
+    /// array_offsets is the offsets of ColumnArray.
     /// The byte_size.size() must be equal to the array_offsets.size().
     virtual void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */) const
         = 0;
 
-    /// Serialize data of column from start to start + length into pointer of pos.
+    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
+    /// serialized data.
+    /// The pos.size() must be greater than or equal to length.
+    /// If has_null is true, then the pos[i] could be nullptr, which means the i-th element does not need to be serialized.
     virtual void serializeToPos(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */) const
         = 0;
-    /// Serialize data of column from start to start + length into pointer of pos called by ColumnArray.
+    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
+    /// serialized data.
+    /// Only called by ColumnArray.
     virtual void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -262,12 +268,19 @@ public:
         const Offsets & /* array_offsets */) const
         = 0;
 
-    /// Deserialize and insert data from pos.
+    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// The pos pointer must not be nullptr.
+    /// If AVX2 is enabled, non-temporal store may be used when data memory is aligned to AlignBufferAVX2::buffer_size(64 bytes)
+    /// by using reserveAlign or reserveAlignWithTotalMemoryHint.
+    /// If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
+    /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data
+    /// when ColumnsAlignBufferAVX2.needFlush() is true.
     virtual void deserializeAndInsertFromPos(
         PaddedPODArray<char *> & /* pos */,
         ColumnsAlignBufferAVX2 & /* align_buffer */)
         = 0;
-    /// Deserialize and insert data from pos called by ColumnArray.
+    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
     virtual void deserializeAndInsertFromPosForColumnArray(
