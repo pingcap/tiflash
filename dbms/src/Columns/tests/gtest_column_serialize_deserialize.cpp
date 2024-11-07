@@ -181,7 +181,7 @@ try
          8 + 10,
          8 + 21});
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16}).column;
-    testCountSerialByteSizeForColumnArray(col_string, col_offsets, {8 + 4, 16 + 16, 24 + 27, 32 + 33, 48 + 90});
+    testCountSerialByteSizeForColumnArray(col_string, col_offsets, {8 + 4, 16 + 16, 24 + 27, 32 + 36, 48 + 90});
 
     testSerializeAndDeserialize(col_string);
 }
