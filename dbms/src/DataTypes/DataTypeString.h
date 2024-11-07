@@ -64,6 +64,37 @@ public:
     bool isString() const override { return true; }
     bool isCategorial() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
+
+    void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
+
+    void serializeBinaryBulkWithMultipleStreams(
+        const IColumn & column,
+        const OutputStreamGetter & getter,
+        size_t offset,
+        size_t limit,
+        bool position_independent_encoding,
+        SubstreamPath & path) const override;
+
+    void deserializeBinaryBulkWithMultipleStreams(
+        IColumn & column,
+        const InputStreamGetter & getter,
+        size_t limit,
+        double avg_value_size_hint,
+        bool position_independent_encoding,
+        SubstreamPath & path) const override;
+
+    DataTypeString(Int32 version_ = 1)
+        : version(version_)
+    {
+        assert(version == 0 || version == 1);
+    }
+    Int32 getVersion() const { return version; }
+
+private:
+    // `version` == 0, use size-prefix format in serialization/deserialization.
+    // `version` == 1, seperate sizes and chars in serialization/deserialization.
+    // Default value is 1, 0 is use to read old data.
+    const Int32 version = 1;
 };
 
 } // namespace DB

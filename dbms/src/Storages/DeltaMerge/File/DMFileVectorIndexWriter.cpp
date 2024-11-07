@@ -204,7 +204,8 @@ size_t DMFileVectorIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_muta
         const auto & cd = read_columns[col_idx];
         // Save index and update column stats
         auto callback = [&](const IDataType::SubstreamPath & substream_path) -> void {
-            if (IDataType::isNullMap(substream_path) || IDataType::isArraySizes(substream_path))
+            if (IDataType::isNullMap(substream_path) || IDataType::isArraySizes(substream_path)
+                || IDataType::isStringSizes(substream_path))
                 return;
 
             std::vector<dtpb::VectorIndexFileProps> new_indexes;

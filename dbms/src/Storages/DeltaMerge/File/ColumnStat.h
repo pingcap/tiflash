@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <DataTypes/DataTypeString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -37,8 +38,8 @@ struct ColumnStat
     size_t nullmap_data_bytes = 0;
     size_t nullmap_mark_bytes = 0;
     size_t index_bytes = 0;
-    size_t array_sizes_bytes = 0;
-    size_t array_sizes_mark_bytes = 0;
+    size_t sizes_bytes = 0; // Array sizes or String sizes, depends on the data type of this column
+    size_t sizes_mark_bytes = 0;
 
     std::vector<dtpb::VectorIndexFileProps> vector_index;
 
@@ -59,8 +60,8 @@ struct ColumnStat
         stat.set_nullmap_data_bytes(nullmap_data_bytes);
         stat.set_nullmap_mark_bytes(nullmap_mark_bytes);
         stat.set_index_bytes(index_bytes);
-        stat.set_array_sizes_bytes(array_sizes_bytes);
-        stat.set_array_sizes_mark_bytes(array_sizes_mark_bytes);
+        stat.set_sizes_bytes(sizes_bytes);
+        stat.set_sizes_mark_bytes(sizes_mark_bytes);
 
         for (const auto & vec_idx : vector_index)
         {
@@ -86,8 +87,10 @@ struct ColumnStat
         nullmap_data_bytes = proto.nullmap_data_bytes();
         nullmap_mark_bytes = proto.nullmap_mark_bytes();
         index_bytes = proto.index_bytes();
-        array_sizes_bytes = proto.array_sizes_bytes();
-        array_sizes_mark_bytes = proto.array_sizes_mark_bytes();
+        sizes_bytes = proto.sizes_bytes();
+        sizes_mark_bytes = proto.sizes_mark_bytes();
+
+        checkOldStringSerializationFormat();
 
         if (proto.has_vector_index())
         {
@@ -141,6 +144,19 @@ struct ColumnStat
         readIntBinary(nullmap_data_bytes, buf);
         readIntBinary(nullmap_mark_bytes, buf);
         readIntBinary(index_bytes, buf);
+    }
+
+private:
+    void checkOldStringSerializationFormat()
+    {
+        if (sizes_bytes != 0)
+            return;
+
+        if (removeNullable(type)->getTypeId() != TypeIndex::String)
+            return;
+
+        auto t = std::make_shared<DataTypeString>(0);
+        type = type->isNullable() ? makeNullable(t) : t;
     }
 };
 

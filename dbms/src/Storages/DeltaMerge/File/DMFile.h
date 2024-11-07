@@ -273,6 +273,7 @@ private:
         Elements,
         NullMap,
         ArraySizes,
+        StringSizes,
     };
     size_t colDataSize(ColId id, ColDataType type);
 
