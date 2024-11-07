@@ -28,7 +28,9 @@ namespace tests
 class TestColumnSerializeDeserialize : public ::testing::Test
 {
 public:
-    static void testCountSerializeByteSize(const ColumnPtr & column_ptr, const PaddedPODArray<size_t> & result_byte_size)
+    static void testCountSerializeByteSize(
+        const ColumnPtr & column_ptr,
+        const PaddedPODArray<size_t> & result_byte_size)
     {
         PaddedPODArray<size_t> byte_size(column_ptr->size());
         for (size_t i = 0; i < column_ptr->size(); ++i)
