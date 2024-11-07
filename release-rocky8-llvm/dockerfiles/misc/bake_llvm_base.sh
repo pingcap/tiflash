@@ -16,7 +16,7 @@
 
 # Build CI/CD image
 
-set -ueox pipefail
+set -eox pipefail
 
 function bake_llvm_base() {
     arch=$(uname -m)
