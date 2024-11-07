@@ -231,35 +231,35 @@ void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) con
     getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }
 
-void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, end);
+        serializeToPosImpl<true>(pos, start, length);
     else
-        serializeToPosImpl<false>(pos, start, end);
+        serializeToPosImpl<false>(pos, start, length);
 }
 
 template <bool has_null>
-void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
-    if unlikely (pos.size() != size())
-        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (start > end || end >= size())
-        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (length > pos.size())
+        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start + length > size())
+        throw Exception("start + length > size of column", ErrorCodes::LOGICAL_ERROR);
 
-    for (size_t i = start; i < end; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
             if (pos[i] == nullptr)
                 continue;
         }
-        size_t length = sizeAt(i);
+        size_t length = sizeAt(start + i);
         tiflash_compiler_builtin_memcpy(pos[i], &length, sizeof(size_t));
         pos[i] += sizeof(size_t);
     }
 
-    getData().serializeToPosForColumnArray(pos, start, end, has_null, getOffsets());
+    getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }
 
 void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & /* align_buffer */)
@@ -472,10 +472,16 @@ struct Less
 void ColumnArray::reserve(size_t n)
 {
     getOffsets().reserve(n);
-    getData().reserve(
-        n); /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    getData().reserve(n);
 }
 
+void ColumnArray::reserveAlign(size_t n, size_t alignment)
+{
+    getOffsets().reserve(n);
+    /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    getData().reserveAlign(n, alignment);
+}
 
 size_t ColumnArray::byteSize() const
 {

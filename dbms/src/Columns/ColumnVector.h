@@ -322,21 +322,21 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const override;
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
     template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const;
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
-        size_t end,
+        size_t length,
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
     template <bool has_null>
     void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
-        size_t end,
+        size_t length,
         const IColumn::Offsets & array_offsets) const;
 
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
@@ -367,6 +367,7 @@ public:
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;
 
     void reserve(size_t n) override { data.reserve(n); }
+    void reserveAlign(size_t n, size_t alignment) override { data.reserve(n, alignment); }
 
     const char * getFamilyName() const override;
 

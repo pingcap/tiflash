@@ -147,31 +147,31 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
 }
 
 template <typename T>
-void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, end);
+        serializeToPosImpl<true>(pos, start, length);
     else
-        serializeToPosImpl<false>(pos, start, end);
+        serializeToPosImpl<false>(pos, start, length);
 }
 
 template <typename T>
 template <bool has_null>
-void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
-    if unlikely (pos.size() != size())
-        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (start > end || end >= size())
-        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (length > pos.size())
+        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start + length > size())
+        throw Exception("start + length > size of column", ErrorCodes::LOGICAL_ERROR);
 
-    for (size_t i = start; i < end; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
             if (pos[i] == nullptr)
                 continue;
         }
-        tiflash_compiler_builtin_memcpy(pos[i], &data[i], sizeof(T));
+        tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
         pos[i] += sizeof(T);
     }
 }
@@ -180,14 +180,14 @@ template <typename T>
 void ColumnDecimal<T>::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
-    size_t end,
+    size_t length,
     bool has_null,
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl<true>(pos, start, end, array_offsets);
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
     else
-        serializeToPosForColumnArrayImpl<false>(pos, start, end, array_offsets);
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
 }
 
 template <typename T>
@@ -195,24 +195,24 @@ template <bool has_null>
 void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
-    size_t end,
+    size_t length,
     const IColumn::Offsets & array_offsets) const
 {
-    if unlikely (pos.size() != array_offsets.size())
-        throw Exception("pos.size() != array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (start > end || end >= array_offsets.size())
-        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (length > pos.size())
+        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start + length > array_offsets.size())
+        throw Exception("start + length > array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
     if unlikely (!array_offsets.empty() && array_offsets.back() != size())
         throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
 
-    for (size_t i = start; i < end; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
             if (pos[i] == nullptr)
                 continue;
         }
-        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
         {
             tiflash_compiler_builtin_memcpy(pos[i], &data[j], sizeof(T));
             pos[i] += sizeof(T);

@@ -292,6 +292,12 @@ void ColumnString::reserve(size_t n)
     chars.reserve(n * APPROX_STRING_SIZE);
 }
 
+void ColumnString::reserveAlign(size_t n, size_t alignment)
+{
+    offsets.reserve(n, alignment);
+    chars.reserve(n * APPROX_STRING_SIZE, alignment);
+}
+
 void ColumnString::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
 {
     offsets.reserve(n);
@@ -302,6 +308,15 @@ void ColumnString::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
         chars.reserve(n * APPROX_STRING_SIZE);
 }
 
+void ColumnString::reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment)
+{
+    offsets.reserve(n, alignment);
+    total_memory_hint -= n * sizeof(offsets[0]);
+    if (total_memory_hint >= 0)
+        chars.reserve(total_memory_hint, alignment);
+    else
+        chars.reserve(n * APPROX_STRING_SIZE, alignment);
+}
 
 void ColumnString::getExtremes(Field & min, Field & max) const
 {
@@ -489,32 +504,33 @@ void ColumnString::countSerializeByteSizeForColumnArray(
             byte_size[i] += sizeof(size_t) + sizeAt(j);
 }
 
-void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, end);
+        serializeToPosImpl<true>(pos, start, length);
     else
-        serializeToPosImpl<false>(pos, start, end);
+        serializeToPosImpl<false>(pos, start, length);
 }
 
 template <bool has_null>
-void ColumnString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+void ColumnString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
-    if unlikely (pos.size() != size())
-        throw Exception("pos.size() != column size", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (length > pos.size())
+        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start + length > size())
+        throw Exception("start + length > size of column", ErrorCodes::LOGICAL_ERROR);
 
-    for (size_t i = start; i < end; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
             if (pos[i] == nullptr)
                 continue;
         }
-
-        size_t str_size = sizeAt(i);
+        size_t str_size = sizeAt(start + i);
         tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
         pos[i] += sizeof(size_t);
-        inline_memcpy(pos[i], &chars[offsetAt(i)], str_size);
+        inline_memcpy(pos[i], &chars[offsetAt(start + i)], str_size);
         pos[i] += str_size;
     }
 }
@@ -522,38 +538,38 @@ void ColumnString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start
 void ColumnString::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
-    size_t end,
+    size_t length,
     bool has_null,
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl<true>(pos, start, end, array_offsets);
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
     else
-        serializeToPosForColumnArrayImpl<false>(pos, start, end, array_offsets);
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
 }
 
 template <bool has_null>
 void ColumnString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
-    size_t end,
+    size_t length,
     const IColumn::Offsets & array_offsets) const
 {
-    if unlikely (pos.size() != array_offsets.size())
-        throw Exception("pos.size() != array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (start > end || end >= array_offsets.size())
-        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (length > pos.size())
+        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start + length > array_offsets.size())
+        throw Exception("start + length > array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
     if unlikely (!array_offsets.empty() && array_offsets.back() != size())
         throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
 
-    for (size_t i = start; i < end; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
             if (pos[i] == nullptr)
                 continue;
         }
-        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
         {
             size_t str_size = sizeAt(j);
             tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
@@ -583,6 +599,13 @@ void ColumnString::deserializeAndInsertFromPos(
     size_t offset_buffer_index = align_buffer.nextIndex();
     AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
     UInt8 & offset_buffer_size = align_buffer.getSize(offset_buffer_index);
+
+
+    union alignas(AlignBufferAVX2::buffer_size)
+    {
+        char vec_data[AlignBufferAVX2::buffer_size]{};
+        __m256i v[2];
+    };
 
     if likely (is_offset_aligned && is_char_aligned)
     {

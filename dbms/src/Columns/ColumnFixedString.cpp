@@ -153,29 +153,30 @@ void ColumnFixedString::countSerializeByteSizeForColumnArray(
         byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
 }
 
-void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const
+void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, end);
+        serializeToPosImpl<true>(pos, start, length);
     else
-        serializeToPosImpl<false>(pos, start, end);
+        serializeToPosImpl<false>(pos, start, length);
 }
 
 template <bool has_null>
-void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t end) const
+void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
-    if unlikely (pos.size() != size())
-        pos.resize(size());
+    if unlikely (length > pos.size())
+        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start + length > size())
+        throw Exception("start + length > size of column", ErrorCodes::LOGICAL_ERROR);
 
-    for (size_t i = start; i < end; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
             if (pos[i] == nullptr)
                 continue;
         }
-
-        inline_memcpy(pos[i], &chars[i * n], n);
+        inline_memcpy(pos[i], &chars[(start + i) * n], n);
         pos[i] += n;
     }
 }
@@ -183,30 +184,31 @@ void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t 
 void ColumnFixedString::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
-    size_t end,
+    size_t length,
     bool has_null,
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl<true>(pos, start, end, array_offsets);
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
     else
-        serializeToPosForColumnArrayImpl<false>(pos, start, end, array_offsets);
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
 }
 
 template <bool has_null>
 void ColumnFixedString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
-    size_t end,
+    size_t length,
     const IColumn::Offsets & array_offsets) const
 {
-    if unlikely (pos.size() != array_offsets.size())
-        pos.resize(array_offsets.size());
+    if unlikely (length > pos.size())
+        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (start + length > array_offsets.size())
+        throw Exception("start + length > array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+    if unlikely (!array_offsets.empty() && array_offsets.back() != size())
+        throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
 
-    if unlikely (start > end || end >= array_offsets.size())
-        throw Exception("Incorrect start or end", ErrorCodes::LOGICAL_ERROR);
-
-    for (size_t i = start; i < end; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
@@ -214,7 +216,7 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
                 continue;
         }
 
-        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
         {
             inline_memcpy(pos[i], &chars[j * n], n);
             pos[i] += n;

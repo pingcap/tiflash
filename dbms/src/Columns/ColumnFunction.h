@@ -133,15 +133,18 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void serializeToPos(PaddedPODArray<char *> & /* pos */, size_t /* start */, size_t /* end */, bool /* has_null */)
-        const override
+    void serializeToPos(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */) const override
     {
         throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
-        size_t /* end */,
+        size_t /* length */,
         bool /* has_null */,
         const IColumn::Offsets & /* array_offsets */) const override
     {

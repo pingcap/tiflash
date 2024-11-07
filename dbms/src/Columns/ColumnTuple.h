@@ -108,20 +108,20 @@ public:
             column->countSerializeByteSizeForColumnArray(byte_size, array_offsets);
     }
 
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t end, bool has_null) const override
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
     {
         for (const auto & column : columns)
-            column->serializeToPos(pos, start, end, has_null);
+            column->serializeToPos(pos, start, length, has_null);
     }
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
-        size_t end,
+        size_t length,
         bool has_null,
         const IColumn::Offsets & array_offsets) const override
     {
         for (const auto & column : columns)
-            column->serializeToPosForColumnArray(pos, start, end, has_null, array_offsets);
+            column->serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
     }
 
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override
@@ -170,6 +170,7 @@ public:
     void getExtremes(Field & min, Field & max) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
     void reserve(size_t n) override;
+    void reserveAlign(size_t n, size_t alignment) override;
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;

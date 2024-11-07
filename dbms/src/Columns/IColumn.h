@@ -236,22 +236,28 @@ public:
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
 
+    /// Count the serialize byte size and added to the byte_size.
+    /// The byte_size.size() must be equal to the column size.
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
+    /// Count the serialize byte size and added to the byte_size called by ColumnArray.
+    /// The byte_size.size() must be equal to the array_offsets.size().
     virtual void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */) const
         = 0;
 
+    /// Serialize data of column from start to start + length into pointer of pos.
     virtual void serializeToPos(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
-        size_t /* end */,
+        size_t /* length */,
         bool /* has_null */) const
         = 0;
+    /// Serialize data of column from start to start + length into pointer of pos called by ColumnArray.
     virtual void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
-        size_t /* end */,
+        size_t /* length */,
         bool /* has_null */,
         const Offsets & /* array_offsets */) const
         = 0;
@@ -409,11 +415,22 @@ public:
 
     /// Reserves memory for specified amount of elements. If reservation isn't possible, does nothing.
     /// It affects performance only (not correctness).
-    virtual void reserve(size_t /*n*/){};
+    virtual void reserve(size_t /*n*/) {}
+
+    /// Reserves aligned memory for specified amount of elements. If reservation isn't possible, does nothing.
+    /// It affects performance only (not correctness).
+    virtual void reserveAlign(size_t /*n*/, size_t /*alignment*/) {}
 
     /// Reserve memory for specified amount of elements with a total memory hint, the default impl is
     /// calling `reserve(n)`, columns with non-fixed size elements can overwrite it for better reserve
     virtual void reserveWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/) { reserve(n); }
+
+    /// Reserve aligned memory for specified amount of elements with a total memory hint, the default impl is
+    /// calling `reserveAlign(n)`, columns with non-fixed size elements can overwrite it for better reserve
+    virtual void reserveAlignWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/, size_t alignment)
+    {
+        reserveAlign(n, alignment);
+    }
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
