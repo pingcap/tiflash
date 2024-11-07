@@ -243,7 +243,8 @@ size_t DMFile::colDataSize(ColId id, ColDataType type)
         case ColDataType::NullMap:
             return itr->second.nullmap_data_bytes;
         case ColDataType::ArraySizes:
-            return itr->second.array_sizes_bytes;
+        case ColDataType::StringSizes:
+            return itr->second.sizes_bytes;
         }
     }
     else
@@ -258,9 +259,11 @@ size_t DMFile::colDataSize(ColId id, ColDataType type)
             namebase = getFileNameBase(id, {IDataType::Substream::NullMap});
             break;
         case ColDataType::ArraySizes:
+        case ColDataType::StringSizes:
             RUNTIME_CHECK_MSG(
-                type != ColDataType::ArraySizes,
-                "Can not get array map size by filename, col_id={} path={}",
+                false,
+                "Can not get size of {} by filename, col_id={} path={}",
+                magic_enum::enum_name(type),
                 id,
                 path());
             break;
