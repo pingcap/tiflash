@@ -33,7 +33,7 @@ public:
 
     String getName() const override { return "ScanHashMapAfterProbe"; }
 
-    Block getHeader() const override { return projected_sample_block; };
+    Block getHeader() const override { return parent.getOutputBlock(); }
 
     size_t getIndex() const { return index; }
 
@@ -59,7 +59,6 @@ private:
 
 
     Block result_sample_block;
-    Block projected_sample_block; /// same schema with join's final schema
     /// Indices of columns in left sample block
     ColumnNumbers column_indices_left;
     /// Indices of columns in right sample block

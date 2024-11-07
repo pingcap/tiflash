@@ -202,7 +202,7 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    Block joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run = false) const;
+    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
     void checkTypes(const Block & block) const;
 
@@ -333,6 +333,7 @@ public:
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }
     void finalize(const Names & parent_require);
+    bool isFinalize() const { return finalized; }
 
     OneTimeNotifyFuturePtr wait_build_finished_future;
     OneTimeNotifyFuturePtr wait_probe_finished_future;

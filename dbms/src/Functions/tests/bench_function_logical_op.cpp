@@ -163,6 +163,10 @@ LOGICAL_BENCH(_not_null_uint8_1, _constant_true, Xor);
 LOGICAL_BENCH(_not_null_uint8_1, _constant_false, Xor);
 LOGICAL_BENCH(_not_null_uint8_1, _not_null_uint8_2, Xor);
 
+#undef LOGICAL_BENCH
+#undef LEGACY_LOGICAL_BENCH
+#undef OPT_LOGICAL_BENCH
+
 #define LEGACY_LOGICAL_BENCH_MULTI_PARAM(PARAM_NUM, OP_NAME, NULLABLE)                         \
     BENCHMARK_DEFINE_F(LogicalOpBench, legacyLogicalMultiParam_##OP_NAME##PARAM_NUM##NULLABLE) \
     (benchmark::State & state)                                                                 \
@@ -328,6 +332,9 @@ LEGACY_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
 OPT_LOGICAL_BENCH_MULTI_PARAM(9, And, _nullable);
 LEGACY_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
 OPT_LOGICAL_BENCH_MULTI_PARAM(10, And, _nullable);
+
+#undef LEGACY_LOGICAL_BENCH_MULTI_PARAM
+#undef OPT_LOGICAL_BENCH_MULTI_PARAM
 
 } // namespace tests
 } // namespace DB
