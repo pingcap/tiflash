@@ -116,6 +116,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
         table_scan.isPartitionTableScan(),
         physical_table_ids,
         ranges_for_each_physical_table,
+        context.getStoreIdBlockList(),
         store_type,
         label_filter,
         &Poco::Logger::get("pingcap/coprocessor"),

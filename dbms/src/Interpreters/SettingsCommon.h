@@ -849,6 +849,7 @@ public:
     void write(WriteBuffer & buf) const { writeBinary(value, buf); }
 
     String get() const { return value; }
+    const String & getRef() const { return value; }
 
 private:
     String value;
