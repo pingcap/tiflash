@@ -53,15 +53,15 @@ NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_THINLTO=${ENABLE_THINLTO:-ON}
 ENABLE_PCH=${ENABLE_PCH:-ON}
 
-INSTALL_DIR="${SRCPATH}/release-rocky8-llvm/tiflash"
+INSTALL_DIR="${SRCPATH}/release-linux-llvm/tiflash"
 rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
 
 if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
-  BUILD_DIR="$SRCPATH/release-rocky8-llvm/build-release"
+  BUILD_DIR="$SRCPATH/release-linux-llvm/build-release"
   ENABLE_FAILPOINTS="OFF"
   JEMALLOC_NARENAS="-1"
 else
-  BUILD_DIR="$SRCPATH/release-rocky8-llvm/build-debug"
+  BUILD_DIR="$SRCPATH/release-linux-llvm/build-debug"
   ENABLE_FAILPOINTS="ON"
   JEMALLOC_NARENAS="40"
 fi
