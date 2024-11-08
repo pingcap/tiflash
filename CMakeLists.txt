@@ -152,13 +152,6 @@ endif ()
 
 if (ARCH_AMD64)
     option (USE_INTERNAL_MEMCPY "Use internal implementation of 'memcpy' function instead of provided by libc. Only for x86_64." ON)
-<<<<<<< HEAD
-
-    if (ARCH_LINUX)
-        option (GLIBC_COMPATIBILITY "Set to TRUE to enable compatibility with older glibc libraries. Only for x86_64, Linux. Implies USE_INTERNAL_MEMCPY." ON)
-    endif()
-=======
->>>>>>> c5558c4812 (Enable glibc-compatibility on arm (#6572))
 endif ()
 
 if ((ARCH_AMD64 OR ARCH_AARCH64) AND OS_LINUX)
