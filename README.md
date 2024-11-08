@@ -104,9 +104,9 @@ sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja cu
 </details>
 
 <details>
-<summary><b>CentOS 7</b></summary>
+<summary><b>Rocky Linux 8</b></summary>
 
-Please refer to [release-centos7-llvm/env/prepare-sysroot.sh](./release-centos7-llvm/env/prepare-sysroot.sh)
+Please refer to [release-linux-llvm/env/prepare-sysroot.sh](./release-linux-llvm/env/prepare-sysroot.sh)
 
 </details>
 
@@ -325,10 +325,10 @@ More usages are available via `./dbms/bench_dbms --help`.
 
 ## Generate LLVM Coverage Report
 
-To build coverage report, run the script under `release-centos7-llvm`
+To build coverage report, run the script under `release-linux-llvm`
 
 ```shell
-cd release-centos7-llvm
+cd release-linux-llvm
 ./gen_coverage.sh
 # Or run with filter:
 # FILTER='*DMFile*:*DeltaMerge*:*Segment*' ./gen_coverage.sh
@@ -350,7 +350,7 @@ Before submitting a pull request, please resolve clang-tidy errors and use [form
 ```shell
 # In the TiFlash repository root:
 merge_base=$(git merge-base upstream/master HEAD)
-python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only`
+python3 release-linux-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only`
 # if there are too much errors, you can try to run the script again with `-fix`
 python3 format-diff.py --diff_from $merge_base
 ```
