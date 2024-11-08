@@ -99,4 +99,14 @@ RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoP
     return std::make_shared<WithANNQueryInfo>(op, ann_query_info);
 }
 
+ANNQueryInfoPtr getANNQueryInfo(const RSOperatorPtr & op)
+{
+    if (op == nullptr)
+        return nullptr;
+    auto with_ann = std::dynamic_pointer_cast<WithANNQueryInfo>(op);
+    if (with_ann == nullptr)
+        return nullptr;
+    return with_ann->ann_query_info;
+}
+
 } // namespace DB::DM

@@ -42,7 +42,7 @@ String DMFileVectorIndexReader::PerfStat::toString() const
         duration_read_vec_column);
 }
 
-std::vector<VectorIndexViewer::Key> DMFileVectorIndexReader::load()
+std::vector<VectorIndexViewer::SearchResult> DMFileVectorIndexReader::load()
 {
     if (loaded)
         return {};
@@ -165,17 +165,25 @@ String DMFileVectorIndexReader::perfStat() const
         perf_stat.selected_nodes);
 }
 
-std::vector<VectorIndexViewer::Key> DMFileVectorIndexReader::loadVectorSearchResult()
+std::vector<VectorIndexViewer::SearchResult> DMFileVectorIndexReader::loadVectorSearchResult()
 {
     Stopwatch watch;
 
     auto perf_begin = PerfContext::vector_search;
 
     RUNTIME_CHECK(valid_rows.size() >= dmfile->getRows(), valid_rows.size(), dmfile->getRows());
-    auto sorted_results = vec_index->search(ann_query_info, valid_rows);
-    std::sort(sorted_results.begin(), sorted_results.end());
+    auto search_results = vec_index->search(ann_query_info, valid_rows);
+    // Sort by key
+    std::sort(search_results.begin(), search_results.end(), [](const auto & lhs, const auto & rhs) {
+        return lhs.key < rhs.key;
+    });
     // results must not contain duplicates. Usually there should be no duplicates.
-    sorted_results.erase(std::unique(sorted_results.begin(), sorted_results.end()), sorted_results.end());
+    search_results.erase(
+        std::unique(
+            search_results.begin(),
+            search_results.end(),
+            [](const auto & lhs, const auto & rhs) { return lhs.key == rhs.key; }),
+        search_results.end());
 
     perf_stat.discarded_nodes = PerfContext::vector_search.discarded_nodes - perf_begin.discarded_nodes;
     perf_stat.visited_nodes = PerfContext::vector_search.visited_nodes - perf_begin.visited_nodes;
@@ -185,7 +193,7 @@ std::vector<VectorIndexViewer::Key> DMFileVectorIndexReader::loadVectorSearchRes
     scan_context->total_vector_idx_search_discarded_nodes += perf_stat.discarded_nodes;
     scan_context->total_vector_idx_search_visited_nodes += perf_stat.visited_nodes;
 
-    return sorted_results;
+    return search_results;
 }
 
 void DMFileVectorIndexReader::read(
