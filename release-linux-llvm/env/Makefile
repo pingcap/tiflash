@@ -15,7 +15,7 @@
 DOCKER ?= docker
 ARCH=$(shell uname -m)
 MOUNT=$(shell realpath tiflash-env)
-DOCKER_TAG=$(shell [[ "$(ARCH)" == "aarch64" ]] && echo "aarch64" || echo "amd64" )
+SUFFIX ?= ""
 
 # make the shell scripts as phony so that always replace with newer one
 .PHONY: scripts clean
@@ -32,7 +32,7 @@ scripts: tiflash-env
 tiflash-env-$(ARCH).tar.xz: scripts
 	# Add the z to modify the selinux label of the host file or directory being mounted into the container.
 	# Reference: https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label
-	$(DOCKER) run --rm -v $(MOUNT):/tiflash-env:z hub.pingcap.net/tiflash/tiflash-llvm-base:$(DOCKER_TAG) /tiflash-env/prepare-sysroot.sh
+	$(DOCKER) run --rm -v $(MOUNT):/tiflash-env:z hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /tiflash-env/prepare-sysroot.sh
 	tar -cvaf tiflash-env-$(ARCH).tar.xz tiflash-env
 
 clean:
