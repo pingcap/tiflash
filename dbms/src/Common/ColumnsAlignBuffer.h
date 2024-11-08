@@ -30,7 +30,7 @@ struct AlignBufferAVX2
 
     union
     {
-        char data[buffer_size]{};
+        char data[full_vector_size]{};
         __m256i v[2];
     };
 };
