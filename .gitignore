@@ -90,5 +90,5 @@ tests/docker/log
 CoverageReport
 
 # installation and sysroot path
-release-rocky8-llvm/tiflash
-release-rocky8-llvm/build-release
+release-linux-llvm/tiflash
+release-linux-llvm/build-release

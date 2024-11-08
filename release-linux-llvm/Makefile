@@ -21,7 +21,7 @@ image_tiflash_llvm_base:
 
 # Build tiflash binaries under directory "tiflash"
 build_tiflash_release:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-rocky8-llvm/scripts/build-release.sh
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-release.sh
 
 # Package tiflash docker image using the binaries under directory "tiflash"
 image_tiflash_release:
@@ -29,13 +29,13 @@ image_tiflash_release:
 
 # Add build_tiflash_debug target to enable FailPoints. Since outputs are the same as release version, no new package targets added. 
 build_tiflash_debug:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-rocky8-llvm/scripts/build-debug.sh
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-debug.sh
 
 build_tiflash_tsan:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-rocky8-llvm/scripts/build-tsan.sh
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-tsan.sh
 
 build_tiflash_asan:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-rocky8-llvm/scripts/build-asan.sh
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-asan.sh
 
 # Base docker with prerequisites running CI
 image_tiflash_ci_base:
