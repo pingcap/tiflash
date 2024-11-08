@@ -270,7 +270,7 @@ public:
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// The pos pointer must not be nullptr.
-    /// If AVX2 is enabled, non-temporal store may be used when data memory is aligned to AlignBufferAVX2::buffer_size(64 bytes)
+    /// If AVX2 is enabled, non-temporal store may be used when data memory is aligned to AlignBufferAVX2::full_vector_size(64 bytes)
     /// by using reserveAlign or reserveAlignWithTotalMemoryHint.
     /// If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
     /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data

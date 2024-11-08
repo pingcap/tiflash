@@ -26,7 +26,7 @@ namespace DB
 struct AlignBufferAVX2
 {
     static constexpr size_t vector_size = sizeof(__m256i);
-    static constexpr size_t buffer_size = 2 * vector_size;
+    static constexpr size_t full_vector_size = 2 * vector_size;
 
     union
     {
@@ -42,8 +42,8 @@ public:
 
     void resize(size_t n)
     {
-        buffers.resize(n, AlignBufferAVX2::buffer_size);
-        sizes.resize_fill_zero(n, AlignBufferAVX2::buffer_size);
+        buffers.resize(n, AlignBufferAVX2::full_vector_size);
+        sizes.resize_fill_zero(n, AlignBufferAVX2::full_vector_size);
     }
 
     void reset(bool need_flush_)
@@ -77,7 +77,7 @@ private:
     size_t current_index = 0;
     bool need_flush = false;
     PaddedPODArray<AlignBufferAVX2> buffers;
-    static_assert(UINT8_MAX >= AlignBufferAVX2::buffer_size);
+    static_assert(UINT8_MAX >= AlignBufferAVX2::full_vector_size);
     PaddedPODArray<UInt8> sizes;
 };
 

@@ -228,7 +228,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
     size_t prev_size = data.size();
     size_t size = pos.size();
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    data.resize(prev_size + size, AlignBufferAVX2::buffer_size);
+    data.resize(prev_size + size, AlignBufferAVX2::full_vector_size);
 #else
     data.resize(prev_size + size);
 #endif
@@ -236,17 +236,17 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
     size_t i = 0;
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    if constexpr (AlignBufferAVX2::buffer_size % sizeof(T) == 0)
+    if constexpr (AlignBufferAVX2::full_vector_size % sizeof(T) == 0)
     {
         size_t buffer_index = align_buffer.nextIndex();
         AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
         UInt8 & buffer_size = align_buffer.getSize(buffer_index);
-        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::buffer_size == 0;
+        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::full_vector_size == 0;
         if likely (is_aligned)
         {
             if (buffer_size != 0)
             {
-                size_t count = std::min(size, i + (AlignBufferAVX2::buffer_size - buffer_size) / sizeof(T));
+                size_t count = std::min(size, i + (AlignBufferAVX2::full_vector_size - buffer_size) / sizeof(T));
                 for (; i < count; ++i)
                 {
                     tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
@@ -254,7 +254,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                     pos[i] += sizeof(T);
                 }
 
-                if (buffer_size < AlignBufferAVX2::buffer_size)
+                if (buffer_size < AlignBufferAVX2::full_vector_size)
                 {
                     if unlikely (align_buffer.needFlush())
                     {
@@ -264,7 +264,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                     return;
                 }
 
-                assert(buffer_size == AlignBufferAVX2::buffer_size);
+                assert(buffer_size == AlignBufferAVX2::full_vector_size);
                 _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
                 _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[1]);
@@ -274,11 +274,11 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
             union alignas(64)
             {
-                char vec_data[AlignBufferAVX2::buffer_size]{};
+                char vec_data[AlignBufferAVX2::full_vector_size]{};
                 __m256i v[2];
             };
             size_t vec_size = 0;
-            constexpr size_t simd_width = AlignBufferAVX2::buffer_size / sizeof(T);
+            constexpr size_t simd_width = AlignBufferAVX2::full_vector_size / sizeof(T);
             for (; i + simd_width <= size; i += simd_width)
             {
                 for (size_t j = 0; j < simd_width; ++j)
