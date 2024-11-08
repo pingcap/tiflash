@@ -841,13 +841,13 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
       F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
-    M(tiflash_resource_group_task_cnt,                                                                                              \
+    M(tiflash_request_count_per_resource_group,                                                                                     \
       "number of handling request for each resource group",                                                                         \
       Counter,                                                                                                                      \
-      F(type_handling_mpp_task_dispatch, {"type", "handling_mpp_task_dispatch"}),                                                   \
-      F(type_handling_mpp_task_establish, {"type", "handling_mpp_task_establish"}),                                                 \
-      F(type_handling_mpp_task_cancel, {"type", "handling_mpp_task_cancel"}),                                                       \
-      F(type_handling_mpp_task_run, {"type", "handling_mpp_task_run"}))                                                             \
+      F(type_mpp_task_dispatch, {"type", "mpp_task_dispatch"}),                                                            \
+      F(type_mpp_task_establish, {"type", "mpp_task_establish"}),                                                          \
+      F(type_mpp_task_cancel, {"type", "mpp_task_cancel"}),                                                                \
+      F(type_mpp_task_run, {"type", "mpp_task_run"}))                                                                      \
     M(tiflash_compute_request_unit,                                                                                                 \
       "Request Unit used by tiflash compute for each resource group",                                                               \
       Counter,                                                                                                                      \
