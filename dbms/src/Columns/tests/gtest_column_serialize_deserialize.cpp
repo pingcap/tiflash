@@ -32,7 +32,8 @@ public:
         const ColumnPtr & column_ptr,
         const PaddedPODArray<size_t> & result_byte_size)
     {
-        PaddedPODArray<size_t> byte_size(column_ptr->size());
+        PaddedPODArray<size_t> byte_size;
+        byte_size.resize_fill_zero(column_ptr->size());
         for (size_t i = 0; i < column_ptr->size(); ++i)
             byte_size[i] = i;
         column_ptr->countSerializeByteSize(byte_size);
@@ -47,7 +48,8 @@ public:
         const PaddedPODArray<size_t> & result_byte_size)
     {
         auto column_array = ColumnArray::create(column_ptr->cloneFullColumn(), offsets->cloneFullColumn());
-        PaddedPODArray<size_t> byte_size(column_array->size());
+        PaddedPODArray<size_t> byte_size;
+        byte_size.resize_fill_zero(column_array->size());
         for (size_t i = 0; i < column_array->size(); ++i)
             byte_size[i] = i;
         column_array->countSerializeByteSize(byte_size);
@@ -66,11 +68,12 @@ public:
 
     static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool is_aligned [[maybe_unused]])
     {
-        PaddedPODArray<size_t> byte_size(column_ptr->size());
+        PaddedPODArray<size_t> byte_size;
+        byte_size.resize_fill_zero(column_ptr->size());
         column_ptr->countSerializeByteSize(byte_size);
         size_t total_size = 0;
-        for (auto i : byte_size)
-            total_size += i;
+        for (size_t i = 0; i < byte_size.size(); ++i)
+            total_size += byte_size[i];
         PaddedPODArray<char> memory(total_size);
         PaddedPODArray<char *> pos;
         size_t current_size = 0;
@@ -117,8 +120,8 @@ try
 {
     auto col_vector = createColumn<UInt64>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).column;
     testCountSerializeByteSize(col_vector, {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8});
-    //auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16}).column;
-    //testCountSerialByteSizeForColumnArray(col_vector, col_offsets, {8, 16, 24, 32, 48});
+    auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16}).column;
+    testCountSerialByteSizeForColumnArray(col_vector, col_offsets, {8, 16, 24, 32, 48});
 
     testSerializeAndDeserialize(col_vector);
 }
