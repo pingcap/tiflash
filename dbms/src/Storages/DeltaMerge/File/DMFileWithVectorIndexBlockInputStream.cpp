@@ -86,7 +86,7 @@ Block DMFileWithVectorIndexBlockInputStream::read(FilterPtr & res_filter, bool r
 
 Block DMFileWithVectorIndexBlockInputStream::readImpl(FilterPtr & res_filter)
 {
-    load();
+    internalLoad();
 
     auto [res, real_rows] = reader.read_columns.empty() ? readByIndexReader() : readByFollowingOtherColumns();
 
@@ -212,12 +212,30 @@ std::tuple<Block, size_t> DMFileWithVectorIndexBlockInputStream::readByFollowing
     return {block_others, block_selected_rows.size()};
 }
 
-void DMFileWithVectorIndexBlockInputStream::load()
+std::vector<VectorIndexViewer::SearchResult> DMFileWithVectorIndexBlockInputStream::load()
+{
+    if (loaded)
+        return {};
+
+    auto search_results = vec_index_reader->load();
+    return search_results;
+}
+
+void DMFileWithVectorIndexBlockInputStream::internalLoad()
 {
     if (loaded)
         return;
 
-    sorted_results = vec_index_reader->load();
+    auto search_results = vec_index_reader->load();
+    sorted_results.reserve(search_results.size());
+    for (const auto & row : search_results)
+        sorted_results.push_back(row.key);
+
+    updateRSResult();
+}
+
+void DMFileWithVectorIndexBlockInputStream::updateRSResult()
+{
     // Vector index is very likely to filter out some packs. For example,
     // if we query for Top 1, then only 1 pack will be remained. So we
     // update the pack filter used by the DMFileReader to avoid reading
@@ -254,6 +272,15 @@ void DMFileWithVectorIndexBlockInputStream::load()
         "All packs has been visited but not all results are consumed");
 
     loaded = true;
+}
+
+void DMFileWithVectorIndexBlockInputStream::setSelectedRows(const std::span<const UInt32> & selected_rows)
+{
+    sorted_results.clear();
+    sorted_results.reserve(selected_rows.size());
+    std::copy(selected_rows.begin(), selected_rows.end(), std::back_inserter(sorted_results));
+
+    updateRSResult();
 }
 
 } // namespace DB::DM

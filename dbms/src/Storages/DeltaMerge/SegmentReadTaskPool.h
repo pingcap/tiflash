@@ -15,11 +15,13 @@
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
+
 
 namespace DB::DM
 {

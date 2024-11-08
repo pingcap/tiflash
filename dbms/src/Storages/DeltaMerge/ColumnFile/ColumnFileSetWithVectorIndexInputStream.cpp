@@ -21,13 +21,13 @@
 namespace DB::DM
 {
 
-ColumnFileSetInputStreamPtr ColumnFileSetWithVectorIndexInputStream::tryBuild(
+SkippableBlockInputStreamPtr ColumnFileSetWithVectorIndexInputStream::tryBuild(
     const DMContext & context,
     const ColumnFileSetSnapshotPtr & delta_snap,
     const ColumnDefinesPtr & col_defs,
     const RowKeyRange & segment_range_,
     const IColumnFileDataProviderPtr & data_provider,
-    const RSOperatorPtr & rs_operator,
+    const ANNQueryInfoPtr & ann_query_info,
     const BitmapFilterPtr & bitmap_filter,
     size_t offset,
     ReadTag read_tag_)
@@ -36,15 +36,7 @@ ColumnFileSetInputStreamPtr ColumnFileSetWithVectorIndexInputStream::tryBuild(
         return std::make_shared<ColumnFileSetInputStream>(context, delta_snap, col_defs, segment_range_, read_tag_);
     };
 
-    if (rs_operator == nullptr || bitmap_filter == nullptr)
-        return fallback();
-
-    auto filter_with_ann = std::dynamic_pointer_cast<WithANNQueryInfo>(rs_operator);
-    if (filter_with_ann == nullptr)
-        return fallback();
-
-    auto ann_query_info = filter_with_ann->ann_query_info;
-    if (!ann_query_info)
+    if (!bitmap_filter || !ann_query_info)
         return fallback();
 
     // Fast check: ANNQueryInfo is available in the whole read path. However we may not reading vector column now.
@@ -140,16 +132,8 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
         if (tiny_readers[current_file_index] != nullptr)
         {
             const auto file_rows = column_files[current_file_index]->getRows();
-            auto selected_row_begin = std::lower_bound(
-                selected_rows.cbegin(),
-                selected_rows.cend(),
-                read_rows,
-                [](const auto & row, UInt32 offset) { return row.key < offset; });
-            auto selected_row_end = std::lower_bound(
-                selected_row_begin,
-                selected_rows.cend(),
-                read_rows + file_rows,
-                [](const auto & row, UInt32 offset) { return row.key < offset; });
+            auto selected_row_begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), read_rows);
+            auto selected_row_end = std::lower_bound(selected_row_begin, sorted_results.cend(), read_rows + file_rows);
             size_t selected_rows = std::distance(selected_row_begin, selected_row_end);
             // If all rows are filtered out, skip this file.
             if (selected_rows == 0)
@@ -186,7 +170,7 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
             {
                 filter.clear();
                 filter.resize_fill(file_rows, 0);
-                for (const auto & [rowid, _] : file_selected_rows)
+                for (const auto rowid : file_selected_rows)
                     filter[rowid - read_rows] = 1;
                 res_filter = &filter;
             }
@@ -213,13 +197,14 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
     return {};
 }
 
-void ColumnFileSetWithVectorIndexInputStream::load()
+std::vector<VectorIndexViewer::SearchResult> ColumnFileSetWithVectorIndexInputStream::load()
 {
     if (loaded)
-        return;
+        return {};
 
     tiny_readers.reserve(column_files.size());
     UInt32 precedes_rows = 0;
+    std::vector<VectorIndexViewer::SearchResult> search_results;
     for (const auto & column_file : column_files)
     {
         if (auto * tiny_file = column_file->tryToTinyFile();
@@ -235,7 +220,7 @@ void ColumnFileSetWithVectorIndexInputStream::load()
             auto sr = tiny_reader->load();
             for (auto & row : sr)
                 row.key += precedes_rows;
-            selected_rows.insert(selected_rows.end(), sr.begin(), sr.end());
+            search_results.insert(search_results.end(), sr.begin(), sr.end());
             tiny_readers.push_back(tiny_reader);
             // avoid virutal function call
             precedes_rows += tiny_file->getRows();
@@ -247,18 +232,26 @@ void ColumnFileSetWithVectorIndexInputStream::load()
         }
     }
     // Keep the top k minimum distances rows.
-    auto select_size = selected_rows.size() > ann_query_info->top_k() ? ann_query_info->top_k() : selected_rows.size();
-    auto top_k_end = selected_rows.begin() + select_size;
-    std::nth_element(selected_rows.begin(), top_k_end, selected_rows.end(), [](const auto & lhs, const auto & rhs) {
+    auto select_size
+        = search_results.size() > ann_query_info->top_k() ? ann_query_info->top_k() : search_results.size();
+    auto top_k_end = search_results.begin() + select_size;
+    std::nth_element(search_results.begin(), top_k_end, search_results.end(), [](const auto & lhs, const auto & rhs) {
         return lhs.distance < rhs.distance;
     });
-    selected_rows.resize(select_size);
+    search_results.resize(select_size);
     // Sort by key again.
-    std::sort(selected_rows.begin(), selected_rows.end(), [](const auto & lhs, const auto & rhs) {
+    std::sort(search_results.begin(), search_results.end(), [](const auto & lhs, const auto & rhs) {
         return lhs.key < rhs.key;
     });
 
     loaded = true;
+    return search_results;
+}
+
+void ColumnFileSetWithVectorIndexInputStream::setSelectedRows(const std::span<const UInt32> & selected_rows)
+{
+    sorted_results.reserve(selected_rows.size());
+    std::copy(selected_rows.begin(), selected_rows.end(), std::back_inserter(sorted_results));
 }
 
 } // namespace DB::DM

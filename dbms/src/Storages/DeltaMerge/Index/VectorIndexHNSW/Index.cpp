@@ -308,27 +308,7 @@ auto VectorIndexHNSWViewer::searchImpl(const ANNQueryInfoPtr & query_info, const
     return result;
 }
 
-std::vector<VectorIndexViewer::Key> VectorIndexHNSWViewer::search(
-    const ANNQueryInfoPtr & query_info,
-    const RowFilter & valid_rows) const
-{
-    auto result = searchImpl(query_info, valid_rows);
-
-    // For some reason usearch does not always do the predicate for all search results.
-    // So we need to filter again.
-    const size_t result_size = result.size();
-    std::vector<Key> keys;
-    keys.reserve(result_size);
-    for (size_t i = 0; i < result_size; ++i)
-    {
-        const auto rowid = result[i].member.key;
-        if (valid_rows[rowid])
-            keys.push_back(rowid);
-    }
-    return keys;
-}
-
-std::vector<VectorIndexViewer::SearchResult> VectorIndexHNSWViewer::searchWithDistance(
+std::vector<VectorIndexViewer::SearchResult> VectorIndexHNSWViewer::search(
     const ANNQueryInfoPtr & query_info,
     const RowFilter & valid_rows) const
 {

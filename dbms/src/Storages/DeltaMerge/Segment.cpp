@@ -26,6 +26,7 @@
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetWithVectorIndexInputStream.h>
+#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -3330,13 +3331,14 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
         columns_to_read_ptr,
         this->rowkey_range,
         read_tag);
+    auto ann_query_info = getANNQueryInfo(filter);
     SkippableBlockInputStreamPtr persisted_files_stream = ColumnFileSetWithVectorIndexInputStream::tryBuild(
         dm_context,
         persisted_files,
         columns_to_read_ptr,
         this->rowkey_range,
         persisted_files->getDataProvider(),
-        filter,
+        ann_query_info,
         bitmap_filter,
         segment_snap->stable->getDMFilesRows(),
         read_tag);
@@ -3345,6 +3347,8 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     assert(stream != nullptr);
     stream->appendChild(persisted_files_stream, persisted_files->getRows());
     stream->appendChild(mem_table_stream, memtable->getRows());
+    if (ann_query_info)
+        stream->setTopK(ann_query_info->top_k());
     return stream;
 }
 

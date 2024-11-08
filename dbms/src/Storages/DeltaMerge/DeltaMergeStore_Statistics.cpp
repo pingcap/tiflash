@@ -235,21 +235,15 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
             const auto & delta = segment->getDelta();
             if (const auto lock = delta->getLock(); lock)
             {
-                const auto & mem_table = delta->getMemTableSet();
-                index_stats.rows_delta_not_indexed += mem_table->getRows();
+                index_stats.rows_delta_not_indexed += delta->getRows();
                 const auto & persisted = delta->getPersistedFileSet();
                 for (const auto & file : persisted->getFiles())
                 {
-                    if (const auto * tiny_file = file->tryToTinyFile(); tiny_file)
+                    if (const auto * tiny_file = file->tryToTinyFile();
+                        tiny_file && tiny_file->hasIndex(index_stats.index_id))
                     {
-                        if (tiny_file->hasIndex(index_stats.index_id))
-                            index_stats.rows_delta_indexed += tiny_file->getRows();
-                        else
-                            index_stats.rows_delta_not_indexed += tiny_file->getRows();
-                    }
-                    else
-                    {
-                        index_stats.rows_delta_not_indexed += file->getRows();
+                        index_stats.rows_delta_indexed += tiny_file->getRows();
+                        index_stats.rows_delta_not_indexed -= tiny_file->getRows();
                     }
                 }
             }

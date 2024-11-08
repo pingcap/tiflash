@@ -80,7 +80,7 @@ public:
     // others will be filled with default values.
     void read(
         MutableColumnPtr & vec_column,
-        const std::span<const VectorIndexViewer::SearchResult> & read_rowids,
+        const std::span<const VectorIndexViewer::Key> & read_rowids,
         size_t rowid_start_offset,
         size_t read_rows);
 

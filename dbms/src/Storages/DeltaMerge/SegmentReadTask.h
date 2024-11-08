@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
+#include <grpcpp/support/sync_stream.h>
 
 namespace DB::DM
 {

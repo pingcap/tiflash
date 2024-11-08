@@ -83,13 +83,13 @@ public:
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.
-    std::vector<VectorIndexViewer::Key> load();
+    std::vector<VectorIndexViewer::SearchResult> load();
 
     String perfStat() const;
 
 private:
     void loadVectorIndex();
-    std::vector<VectorIndexViewer::Key> loadVectorSearchResult();
+    std::vector<VectorIndexViewer::SearchResult> loadVectorSearchResult();
 };
 
 using DMFileVectorIndexReaderPtr = std::shared_ptr<DMFileVectorIndexReader>;

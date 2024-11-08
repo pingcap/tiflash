@@ -140,7 +140,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         return build(dmfile, read_columns, rowkey_ranges, scan_context);
     };
 
-    if (rs_filter == nullptr)
+    if (!rs_filter)
         return fallback();
 
     // Fast Scan and Clean Read does not affect our behavior. (TODO(vector-index): Confirm?)
@@ -148,11 +148,11 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     //    return fallback();
 
     auto filter_with_ann = std::dynamic_pointer_cast<WithANNQueryInfo>(rs_filter);
-    if (filter_with_ann == nullptr)
+    if (!filter_with_ann)
         return fallback();
 
     auto ann_query_info = filter_with_ann->ann_query_info;
-    if (!ann_query_info || ann_query_info->top_k() == std::numeric_limits<UInt32>::max())
+    if (!ann_query_info)
         return fallback();
 
     if (!bitmap_filter.has_value())
