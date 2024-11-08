@@ -25,13 +25,6 @@
 #include <common/types.h>
 #include <fmt/chrono.h>
 
-<<<<<<< HEAD
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
-
-=======
->>>>>>> 5dd3a733a2 (Disagg: refresh expiration time of snapshot when calling getSnapshot (#9570))
 namespace DB::DM::Remote
 {
 /**
@@ -77,38 +70,22 @@ public:
         std::unique_lock lock(mtx);
         LOG_INFO(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
-<<<<<<< HEAD
         // Since EstablishDisagg may be retried, there may be existing snapshot.
         // We replace these existing snapshot using a new one.
-        snapshots.insert_or_assign(task_id, SnapshotWithExpireTime{.snap = snap, .expired_at = expired_at});
+        snapshots[task_id] = std::make_unique<SnapshotWithExpireTime>(snap, refresh_duration);
         return true;
-=======
-            // Since EstablishDisagg may be retried, there may be existing snapshot.
-            // We replace these existing snapshot using a new one.
-            snapshots[task_id] = std::make_unique<SnapshotWithExpireTime>(snap, refresh_duration);
-            return true;
-        });
->>>>>>> 5dd3a733a2 (Disagg: refresh expiration time of snapshot when calling getSnapshot (#9570))
     }
 
     DisaggReadSnapshotPtr getSnapshot(const DisaggTaskId & task_id, bool refresh_expiration = false) const
     {
-<<<<<<< HEAD
         std::shared_lock read_lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            return iter->second.snap;
+        {
+            if (refresh_expiration)
+                iter->second->refreshExpiredTime();
+            return iter->second->snap;
+        }
         return nullptr;
-=======
-        return snapshots.withShared([&](auto & snapshots) {
-            if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            {
-                if (refresh_expiration)
-                    iter->second->refreshExpiredTime();
-                return iter->second->snap;
-            }
-            return DisaggReadSnapshotPtr{nullptr};
-        });
->>>>>>> 5dd3a733a2 (Disagg: refresh expiration time of snapshot when calling getSnapshot (#9570))
     }
 
     bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
@@ -131,12 +108,8 @@ private:
     void clearExpiredSnapshots();
 
 private:
-<<<<<<< HEAD
     mutable std::shared_mutex mtx;
-    std::unordered_map<DisaggTaskId, SnapshotWithExpireTime> snapshots;
-=======
-    SharedMutexProtected<std::unordered_map<DisaggTaskId, SnapshotWithExpireTimePtr>> snapshots;
->>>>>>> 5dd3a733a2 (Disagg: refresh expiration time of snapshot when calling getSnapshot (#9570))
+    std::unordered_map<DisaggTaskId, SnapshotWithExpireTimePtr> snapshots;
 
     BackgroundProcessingPool & pool;
     BackgroundProcessingPool::TaskHandle handle;

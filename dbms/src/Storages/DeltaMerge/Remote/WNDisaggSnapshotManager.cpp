@@ -52,30 +52,14 @@ void WNDisaggSnapshotManager::clearExpiredSnapshots()
     Timepoint now = Clock::now();
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /*empty*/)
     {
-        if (iter->second.expired_at < now)
+        if (iter->second->expired_at < now)
         {
-<<<<<<< HEAD
             LOG_INFO(
                 log,
                 "Remove expired Disaggregated Snapshot, task_id={} expired_at={:%Y-%m-%d %H:%M:%S}",
                 iter->first,
-                iter->second.expired_at);
+                iter->second->expired_at);
             iter = snapshots.erase(iter);
-=======
-            if (iter->second->expired_at < now)
-            {
-                LOG_INFO(
-                    log,
-                    "Remove expired Disaggregated Snapshot, task_id={} expired_at={:%Y-%m-%d %H:%M:%S}",
-                    iter->first,
-                    iter->second->expired_at);
-                iter = snapshots.erase(iter);
-            }
-            else
-            {
-                ++iter;
-            }
->>>>>>> 5dd3a733a2 (Disagg: refresh expiration time of snapshot when calling getSnapshot (#9570))
         }
         else
         {
