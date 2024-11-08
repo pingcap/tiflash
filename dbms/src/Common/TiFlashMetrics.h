@@ -842,7 +842,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
       F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
     M(tiflash_request_count_per_resource_group,                                                                                     \
-      "number of handling request for each resource group",                                                                         \
+      "number of mpp request count for each resource group",                                                                         \
       Counter,                                                                                                                      \
       F(type_mpp_task_dispatch, {"type", "mpp_task_dispatch"}),                                                            \
       F(type_mpp_task_establish, {"type", "mpp_task_establish"}),                                                          \
