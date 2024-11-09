@@ -106,9 +106,8 @@ public:
         for (size_t i = byte_size.size() / 2; i < byte_size.size() - 1; ++i)
             pos[i - byte_size.size() / 2] -= byte_size[i];
         pos.resize(pos.size() - 1);
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        align_buffer.reset(true);
-#endif
+
+        align_buffer.resetIndex(true);
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
         new_col_ptr->insertFrom(*column_ptr, byte_size.size() - 1);
         ASSERT_COLUMN_EQ(std::move(new_col_ptr), column_ptr);

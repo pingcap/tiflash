@@ -21,6 +21,7 @@
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/WriteHelpers.h>
+#include <common/memcpy.h>
 #include <common/unaligned.h>
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
@@ -227,26 +228,25 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 {
     size_t prev_size = data.size();
     size_t size = pos.size();
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    data.resize(prev_size + size, AlignBufferAVX2::full_vector_size);
-#else
-    data.resize(prev_size + size);
-#endif
-
-    size_t i = 0;
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if constexpr (AlignBufferAVX2::full_vector_size % sizeof(T) == 0)
     {
         size_t buffer_index = align_buffer.nextIndex();
         AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
-        UInt8 & buffer_size = align_buffer.getSize(buffer_index);
+        UInt8 & buffer_size_ref = align_buffer.getSize(buffer_index);
+        // Better use register rather than reference for frequently-updated variable
+        UInt8 buffer_size = buffer_size_ref;
+        SCOPE_EXIT({ buffer_size_ref = buffer_size; });
+
         bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::full_vector_size == 0;
         if likely (is_aligned)
         {
+            constexpr size_t avx2_width = AlignBufferAVX2::full_vector_size / sizeof(T);
+            size_t i = 0;
             if (buffer_size != 0)
             {
-                size_t count = std::min(size, i + (AlignBufferAVX2::full_vector_size - buffer_size) / sizeof(T));
+                size_t count = std::min(size, (AlignBufferAVX2::full_vector_size - buffer_size) / sizeof(T));
                 for (; i < count; ++i)
                 {
                     tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
@@ -258,13 +258,16 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                 {
                     if unlikely (align_buffer.needFlush())
                     {
-                        std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                        data.resize(prev_size + buffer_size / sizeof(T), AlignBufferAVX2::full_vector_size);
+                        inline_memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
                         buffer_size = 0;
                     }
                     return;
                 }
 
                 assert(buffer_size == AlignBufferAVX2::full_vector_size);
+                data.resize(prev_size + avx2_width, AlignBufferAVX2::full_vector_size);
+
                 _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[0]);
                 prev_size += AlignBufferAVX2::vector_size / sizeof(T);
                 _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[1]);
@@ -272,16 +275,17 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                 buffer_size = 0;
             }
 
-            union alignas(64)
+            union alignas(AlignBufferAVX2::full_vector_size)
             {
                 char vec_data[AlignBufferAVX2::full_vector_size]{};
                 __m256i v[2];
             };
             size_t vec_size = 0;
-            constexpr size_t simd_width = AlignBufferAVX2::full_vector_size / sizeof(T);
-            for (; i + simd_width <= size; i += simd_width)
+
+            data.resize(prev_size + (size - i) / avx2_width * avx2_width, AlignBufferAVX2::full_vector_size);
+            for (; i + avx2_width <= size; i += avx2_width)
             {
-                for (size_t j = 0; j < simd_width; ++j)
+                for (size_t j = 0; j < avx2_width; ++j)
                 {
                     tiflash_compiler_builtin_memcpy(&vec_data[vec_size], pos[i + j], sizeof(T));
                     vec_size += sizeof(T);
@@ -304,22 +308,27 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
             if unlikely (align_buffer.needFlush())
             {
-                std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                data.resize(prev_size + buffer_size / sizeof(T), AlignBufferAVX2::full_vector_size);
+                inline_memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
                 buffer_size = 0;
             }
 
             return;
         }
 
+        // Bad case when this column data is aligned first and then becomes unaligned due to calling other functions
         if unlikely (buffer_size != 0)
         {
-            std::memcpy(static_cast<void *>(&data[prev_size] - buffer_size), buffer.data, buffer_size);
+            data.resize(prev_size + buffer_size / sizeof(T), AlignBufferAVX2::full_vector_size);
+            inline_memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+            prev_size += buffer_size / sizeof(T);
             buffer_size = 0;
         }
     }
 #endif
 
-    for (; i < size; ++i)
+    data.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
     {
         tiflash_compiler_builtin_memcpy(static_cast<void *>(&data[prev_size]), pos[i], sizeof(T));
         ++prev_size;

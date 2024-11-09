@@ -595,17 +595,17 @@ void ColumnString::deserializeAndInsertFromPos(
 
     size_t char_buffer_index = align_buffer.nextIndex();
     AlignBufferAVX2 & char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
-    UInt8 & char_buffer_size = align_buffer.getSize(char_buffer_index);
+    UInt8 & char_buffer_size_ref = align_buffer.getSize(char_buffer_index);
+    // Better use register rather than reference for frequently-updated variable
+    UInt8 char_buffer_size = char_buffer_size_ref;
+    SCOPE_EXIT({ char_buffer_size_ref = char_buffer_size; });
 
     size_t offset_buffer_index = align_buffer.nextIndex();
     AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
-    UInt8 & offset_buffer_size = align_buffer.getSize(offset_buffer_index);
-
-    union alignas(AlignBufferAVX2::full_vector_size)
-    {
-        char vec_data[AlignBufferAVX2::full_vector_size]{};
-        __m256i v[2];
-    };
+    UInt8 & offset_buffer_size_ref = align_buffer.getSize(offset_buffer_index);
+    // Better use register rather than reference for frequently-updated variable
+    UInt8 offset_buffer_size = offset_buffer_size_ref;
+    SCOPE_EXIT({ offset_buffer_size_ref = offset_buffer_size; });
 
     if likely (is_offset_aligned && is_char_aligned)
     {

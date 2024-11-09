@@ -46,7 +46,7 @@ public:
         sizes.resize_fill_zero(n, AlignBufferAVX2::full_vector_size);
     }
 
-    void reset(bool need_flush_)
+    void resetIndex(bool need_flush_)
     {
         current_index = 0;
         need_flush = need_flush_;
@@ -84,6 +84,9 @@ private:
 #else
 class ColumnsAlignBufferAVX2
 {
+public:
+    void resize(size_t /*n*/) {}
+    void resetIndex(bool /*need_flush*/) {}
 };
 #endif
 } // namespace DB
