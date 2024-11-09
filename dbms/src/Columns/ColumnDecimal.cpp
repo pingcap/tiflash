@@ -313,8 +313,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 
         if unlikely (buffer_size != 0)
         {
-            std::memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
-            prev_size += buffer_size / sizeof(T);
+            std::memcpy(static_cast<void *>(&data[prev_size] - buffer_size), buffer.data, buffer_size);
             buffer_size = 0;
         }
     }

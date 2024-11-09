@@ -247,8 +247,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
 
         if unlikely (buffer_size != 0)
         {
-            std::memcpy(&data[prev_size], buffer.data, buffer_size);
-            prev_size += buffer_size / sizeof(T);
+            std::memcpy(&data[prev_size] - buffer_size, buffer.data, buffer_size);
             buffer_size = 0;
         }
     }
