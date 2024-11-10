@@ -20,6 +20,8 @@
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
+#include <ext/scope_guard.h>
+
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
 #endif

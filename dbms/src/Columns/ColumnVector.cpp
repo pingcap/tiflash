@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstring>
 #include <ext/bit_cast.h>
+#include <ext/scope_guard.h>
 
 #if __SSE2__
 #include <emmintrin.h>
