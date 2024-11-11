@@ -137,7 +137,8 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */) const override
+        bool /* has_null */,
+        bool /* ensure_uniqueness */) const override
     {
         throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -146,6 +147,7 @@ public:
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
+        bool /* ensure_uniqueness */,
         const IColumn::Offsets & /* array_offsets */) const override
     {
         throw Exception(

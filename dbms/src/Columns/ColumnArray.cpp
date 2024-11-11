@@ -231,16 +231,22 @@ void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) con
     getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }
 
-void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnArray::serializeToPos(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    bool ensure_uniqueness) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, length);
+        serializeToPosImpl<true>(pos, start, length, ensure_uniqueness);
     else
-        serializeToPosImpl<false>(pos, start, length);
+        serializeToPosImpl<false>(pos, start, length, ensure_uniqueness);
 }
 
 template <bool has_null>
-void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, bool ensure_uniqueness)
+    const
 {
     if unlikely (length > pos.size())
         throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
@@ -254,12 +260,12 @@ void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start,
             if (pos[i] == nullptr)
                 continue;
         }
-        size_t length = sizeAt(start + i);
-        tiflash_compiler_builtin_memcpy(pos[i], &length, sizeof(size_t));
+        size_t len = sizeAt(start + i);
+        tiflash_compiler_builtin_memcpy(pos[i], &len, sizeof(size_t));
         pos[i] += sizeof(size_t);
     }
 
-    getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
+    getData().serializeToPosForColumnArray(pos, start, length, has_null, ensure_uniqueness, getOffsets());
 }
 
 void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & /* align_buffer */)

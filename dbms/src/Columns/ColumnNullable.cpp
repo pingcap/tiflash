@@ -293,10 +293,15 @@ void ColumnNullable::countSerializeByteSizeForColumnArray(
     getNestedColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
 }
 
-void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnNullable::serializeToPos(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    bool ensure_uniqueness) const
 {
-    getNullMapColumn().serializeToPos(pos, start, length, has_null);
-    getNestedColumn().serializeToPos(pos, start, length, has_null);
+    getNullMapColumn().serializeToPos(pos, start, length, has_null, ensure_uniqueness);
+    getNestedColumn().serializeToPos(pos, start, length, has_null, ensure_uniqueness);
 }
 
 void ColumnNullable::serializeToPosForColumnArray(
@@ -304,10 +309,11 @@ void ColumnNullable::serializeToPosForColumnArray(
     size_t start,
     size_t length,
     bool has_null,
+    bool ensure_uniqueness,
     const IColumn::Offsets & array_offsets) const
 {
-    getNullMapColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
-    getNestedColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
+    getNullMapColumn().serializeToPosForColumnArray(pos, start, length, has_null, ensure_uniqueness, array_offsets);
+    getNestedColumn().serializeToPosForColumnArray(pos, start, length, has_null, ensure_uniqueness, array_offsets);
 }
 
 void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer)

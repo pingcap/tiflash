@@ -83,7 +83,12 @@ void ColumnVector<T>::countSerializeByteSizeForColumnArray(
 }
 
 template <typename T>
-void ColumnVector<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnVector<T>::serializeToPos(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    bool /* ensure_uniqueness */) const
 {
     if (has_null)
         serializeToPosImpl<true>(pos, start, length);
@@ -118,6 +123,7 @@ void ColumnVector<T>::serializeToPosForColumnArray(
     size_t start,
     size_t length,
     bool has_null,
+    bool /* ensure_uniqueness */,
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
@@ -170,8 +176,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
         size_t buffer_index = align_buffer.nextIndex();
         AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
         UInt8 & buffer_size_ref = align_buffer.getSize(buffer_index);
-        // Better use register rather than reference for frequently-updated variable
-        UInt8 buffer_size = buffer_size_ref;
+        // Better use a register rather than a reference for a frequently-updated variable        UInt8 buffer_size = buffer_size_ref;
         SCOPE_EXIT({ buffer_size_ref = buffer_size; });
 
         bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::full_vector_size == 0;

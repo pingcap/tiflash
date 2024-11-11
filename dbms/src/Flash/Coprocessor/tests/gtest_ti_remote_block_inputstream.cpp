@@ -46,7 +46,7 @@ bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & righ
 {
     /// We only sampled some fields to compare equality in this test.
     /// It would be better to check all fields.
-    /// This can be done by using C++20's default comparsion feature when we switched to use C++20:
+    /// This can be done by using C++20's default comparison feature when we switched to use C++20:
     /// https://en.cppreference.com/w/cpp/language/default_comparisons
     return (left.concurrency == right.concurrency) && //
         (left.num_iterations == right.num_iterations) && //

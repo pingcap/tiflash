@@ -60,13 +60,19 @@ public:
 
     static void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
     {
-        doTestSerializeAndDeserialize(column_ptr, false);
+        for (bool ensure_uniqueness : {false, true})
+        {
+            doTestSerializeAndDeserialize(column_ptr, ensure_uniqueness, false);
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        doTestSerializeAndDeserialize(column_ptr, true);
+            doTestSerializeAndDeserialize(column_ptr, ensure_uniqueness, true);
 #endif
+        }
     }
 
-    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool is_aligned [[maybe_unused]])
+    static void doTestSerializeAndDeserialize(
+        const ColumnPtr & column_ptr,
+        bool ensure_uniqueness,
+        bool is_aligned [[maybe_unused]])
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
@@ -82,7 +88,7 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
+        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false, ensure_uniqueness);
         for (size_t i = 0; i < byte_size.size() / 2; ++i)
             pos[i] -= byte_size[i];
 
@@ -102,7 +108,12 @@ public:
             current_size += byte_size[i];
         }
         pos.push_back(nullptr);
-        column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
+        column_ptr->serializeToPos(
+            pos,
+            byte_size.size() / 2,
+            byte_size.size() - byte_size.size() / 2,
+            true,
+            ensure_uniqueness);
         for (size_t i = byte_size.size() / 2; i < byte_size.size() - 1; ++i)
             pos[i - byte_size.size() / 2] -= byte_size[i];
         pos.resize(pos.size() - 1);

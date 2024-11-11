@@ -506,7 +506,12 @@ void ColumnString::countSerializeByteSizeForColumnArray(
             byte_size[i] += sizeof(size_t) + sizeAt(j);
 }
 
-void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnString::serializeToPos(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    bool /* ensure_uniqueness */) const
 {
     if (has_null)
         serializeToPosImpl<true>(pos, start, length);
@@ -542,6 +547,7 @@ void ColumnString::serializeToPosForColumnArray(
     size_t start,
     size_t length,
     bool has_null,
+    bool /* ensure_uniqueness */,
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
@@ -601,14 +607,12 @@ void ColumnString::deserializeAndInsertFromPos(
 
     AlignBufferAVX2 & char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
     UInt8 & char_buffer_size_ref = align_buffer.getSize(char_buffer_index);
-    // Better use register rather than reference for frequently-updated variable
-    UInt8 char_buffer_size = char_buffer_size_ref;
+    // Better use a register rather than a reference for a frequently-updated variable    UInt8 char_buffer_size = char_buffer_size_ref;
     SCOPE_EXIT({ char_buffer_size_ref = char_buffer_size; });
 
     AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
     UInt8 & offset_buffer_size_ref = align_buffer.getSize(offset_buffer_index);
-    // Better use register rather than reference for frequently-updated variable
-    UInt8 offset_buffer_size = offset_buffer_size_ref;
+    // Better use a register rather than a reference for a frequently-updated variable    UInt8 offset_buffer_size = offset_buffer_size_ref;
     SCOPE_EXIT({ offset_buffer_size_ref = offset_buffer_size; });
 
     if likely (is_offset_aligned && is_char_aligned)
