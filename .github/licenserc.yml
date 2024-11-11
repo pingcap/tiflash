@@ -18,7 +18,7 @@ header:
     - '.github/'
     - 'docs/'
     - 'tests/testsdata/'
-    - 'release-centos7-llvm/dockerfiles/'
+    - 'release-linux-llvm/dockerfiles/'
     - '**/.gitignore'
     - '**/*.md'
     - '**/*.json'

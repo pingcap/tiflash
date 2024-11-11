@@ -1,4 +1,5 @@
-# Copyright 2022 PingCAP, Inc.
+#!/usr/bin/env bash
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM hub.pingcap.net/tiflash/centos:7.9.2009-amd64
 
-USER root
-WORKDIR /root/
+# Install cmake for CI/CD.
+# Require: wget
+# CMake License: https://gitlab.kitware.com/cmake/cmake/raw/master/Copyright.txt
 
-ENV HOME /root/
-ENV TZ Asia/Shanghai
-ENV LD_LIBRARY_PATH /tiflash
-
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-COPY tiflash /tiflash
-
-ENTRYPOINT ["/tiflash/tiflash", "server"]
+function install_cmake() {
+    # $1: cmake_version
+    arch=$(uname -m)
+    wget https://github.com/Kitware/CMake/releases/download/v$1/cmake-$1-linux-${arch}.sh
+    mkdir -p /opt/cmake
+    sh cmake-$1-linux-${arch}.sh --prefix=/opt/cmake --skip-license --exclude-subdir
+    rm -rf cmake-$1-linux-${arch}.sh
+}
