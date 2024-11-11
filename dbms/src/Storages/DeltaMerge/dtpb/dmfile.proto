@@ -16,6 +16,8 @@ syntax = "proto2";
 
 package dtpb;
 
+import "vector_index.proto"; // for VectorIndexFileProps
+
 message PackProperty {
     // when gc_safe_point exceed this version, there must be some data obsolete in this pack
     required uint64 gc_hint_version = 1;
@@ -81,18 +83,4 @@ message StableLayerMeta {
     optional uint64 valid_rows = 1;
     optional uint64 valid_bytes = 2;
     repeated StableFile files = 3;
-}
-
-// Note: This message is something different to VectorIndexDefinition.
-// VectorIndexDefinition defines an index, comes from table DDL.
-// It includes information about how index should be constructed,
-// for example, it contains HNSW's 'efConstruct' parameter.
-// However, VectorIndexFileProps provides information for read out the index,
-// for example, very basic information about what the index is, and how it is stored.
-message VectorIndexFileProps {
-    optional string index_kind = 1;       // The value is tipb.VectorIndexKind
-    optional string distance_metric = 2;  // The value is tipb.VectorDistanceMetric
-    optional uint64 dimensions = 3;
-    optional int64 index_id = 4;
-    optional uint64 index_bytes = 5;
 }

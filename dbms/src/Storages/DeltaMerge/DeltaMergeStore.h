@@ -739,9 +739,17 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
-    void segmentEnsureStableIndex(DMContext & dm_context, const LocalIndexBuildInfo & index_build_info);
+    void segmentEnsureStableLocalIndex(DMContext & dm_context, const LocalIndexBuildInfo & index_build_info);
 
-    void segmentEnsureStableIndexWithErrorReport(DMContext & dm_context, const LocalIndexBuildInfo & index_build_info);
+    void segmentEnsureStableLocalIndexWithErrorReport(
+        DMContext & dm_context,
+        const LocalIndexBuildInfo & index_build_info);
+
+    void segmentEnsureDeltaLocalIndex(
+        DMContext & dm_context,
+        const LocalIndexInfosPtr & index_info,
+        const DeltaValueSpacePtr & delta,
+        const String & source_segment_info);
 
     /**
      * Ingest a DMFile into the segment, optionally causing a new segment being created.
@@ -895,7 +903,7 @@ private:
      *
      * @returns true if index is missing and a build task is added in background.
      */
-    bool segmentEnsureStableIndexAsync(const SegmentPtr & segment);
+    bool segmentEnsureStableLocalIndexAsync(const SegmentPtr & segment);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -903,7 +911,25 @@ private:
 public:
 #endif
 
+    /**
+      * Ensure the segment has delta index.
+      * If the segment has no delta index, it will be built in background.
+      * Note: This function can not be called in constructor, since shared_from_this() is not available.
+      *
+      * @returns true if index is missing and a build task is added in background.
+      */
+    bool segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segment);
+
     void applyLocalIndexChange(const TiDB::TableInfo & new_table_info);
+
+    /**
+      * Wait until the segment has delta index.
+      * If the index is ready or no need to build, it will return immediately.
+      * Only used for testing.
+      *
+      * @returns false if index is still missing after wait timed out.
+      */
+    bool segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment) const;
 
     /**
      * Wait until the segment has stable index.
@@ -912,7 +938,7 @@ public:
      *
      * @returns false if index is still missing after wait timed out.
      */
-    bool segmentWaitStableIndexReady(const SegmentPtr & segment) const;
+    bool segmentWaitStableLocalIndexReady(const SegmentPtr & segment) const;
 
     void dropAllSegments(bool keep_first_segment);
     String getLogTracingId(const DMContext & dm_ctx);

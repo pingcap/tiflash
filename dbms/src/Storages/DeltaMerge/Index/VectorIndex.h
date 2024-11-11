@@ -57,7 +57,8 @@ public:
         ProceedCheckFn should_proceed)
         = 0;
 
-    virtual void save(std::string_view path) const = 0;
+    virtual void saveToFile(std::string_view path) const = 0;
+    virtual void saveToBuffer(WriteBuffer & write_buf) const = 0;
 
 public:
     const IndexID index_id;
@@ -71,6 +72,13 @@ class VectorIndexViewer
 public:
     /// The key is the row's offset in the DMFile.
     using Key = VectorIndexBuilder::Key;
+    using Distance = Float32;
+
+    struct SearchResult
+    {
+        Key key;
+        Distance distance;
+    };
 
     /// True bit means the row is valid and should be kept in the search result.
     /// False bit lets the row filtered out and will search for more results.
@@ -78,6 +86,7 @@ public:
 
 public:
     static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & file_props, std::string_view path);
+    static VectorIndexViewerPtr load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf);
 
 public:
     explicit VectorIndexViewer(const dtpb::VectorIndexFileProps & file_props_)
@@ -88,6 +97,10 @@ public:
 
     // Invalid rows in `valid_rows` will be discared when applying the search
     virtual std::vector<Key> search(const ANNQueryInfoPtr & queryInfo, const RowFilter & valid_rows) const = 0;
+    virtual std::vector<SearchResult> searchWithDistance(
+        const ANNQueryInfoPtr & query_info,
+        const RowFilter & valid_rows) const
+        = 0;
 
     virtual size_t size() const = 0;
 

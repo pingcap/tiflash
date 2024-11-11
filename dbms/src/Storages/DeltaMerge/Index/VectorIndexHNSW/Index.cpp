@@ -23,14 +23,12 @@
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <tipb/executor.pb.h>
 
-#include <algorithm>
 #include <ext/scope_guard.h>
 
 namespace DB::ErrorCodes
 {
 extern const int INCORRECT_DATA;
 extern const int INCORRECT_QUERY;
-extern const int CANNOT_ALLOCATE_MEMORY;
 extern const int ABORTED;
 } // namespace DB::ErrorCodes
 
@@ -133,13 +131,25 @@ void VectorIndexHNSWBuilder::addBlock(
     last_reported_memory_usage = current_memory_usage;
 }
 
-void VectorIndexHNSWBuilder::save(std::string_view path) const
+void VectorIndexHNSWBuilder::saveToFile(std::string_view path) const
 {
     Stopwatch w;
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
 
     auto result = index.save(unum::usearch::output_file_t(path.data()));
     RUNTIME_CHECK_MSG(result, "Failed to save vector index: {} path={}", result.error.what(), path);
+}
+
+void VectorIndexHNSWBuilder::saveToBuffer(WriteBuffer & write_buf) const
+{
+    Stopwatch w;
+    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
+
+    auto result = index.save_to_stream([&](void const * buffer, std::size_t length) {
+        write_buf.write(reinterpret_cast<const char *>(buffer), length);
+        return true;
+    });
+    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
 }
 
 VectorIndexHNSWBuilder::~VectorIndexHNSWBuilder()
@@ -196,9 +206,45 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProp
     return vi;
 }
 
-std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
-    const ANNQueryInfoPtr & query_info,
-    const RowFilter & valid_rows) const
+VectorIndexViewerPtr VectorIndexHNSWViewer::load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf)
+{
+    RUNTIME_CHECK(file_props.index_kind() == tipb::VectorIndexKind_Name(kind()));
+
+    tipb::VectorDistanceMetric metric;
+    RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
+    RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
+
+    Stopwatch w;
+    SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
+
+    auto vi = std::make_shared<VectorIndexHNSWViewer>(file_props);
+
+    vi->index = USearchImplType::make(
+        unum::usearch::metric_punned_t( //
+            file_props.dimensions(),
+            getUSearchMetricKind(metric)),
+        unum::usearch::index_dense_config_t(
+            unum::usearch::default_connectivity(),
+            unum::usearch::default_expansion_add(),
+            16 /* default is 64 */));
+
+    // Currently may have a lot of threads querying concurrently
+    auto limit = unum::usearch::index_limits_t(0, /* threads */ std::thread::hardware_concurrency() * 10);
+    vi->index.reserve(limit);
+
+    auto result = vi->index.load_from_stream([&](void * buffer, std::size_t length) {
+        return buf.read(reinterpret_cast<char *>(buffer), length) == length;
+    });
+    RUNTIME_CHECK_MSG(result, "Failed to load vector index: {}", result.error.what());
+
+    auto current_memory_usage = vi->index.memory_usage();
+    GET_METRIC(tiflash_vector_index_memory_usage, type_view).Increment(static_cast<double>(current_memory_usage));
+    vi->last_reported_memory_usage = current_memory_usage;
+
+    return vi;
+}
+
+auto VectorIndexHNSWViewer::searchImpl(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const
 {
     RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32));
     auto query_vec_size = readLittleEndian<UInt32>(query_info->ref_vec_f32().data());
@@ -211,7 +257,7 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
             query_info->index_id(),
             query_info->column_id());
 
-    RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32) + query_vec_size * sizeof(Float32));
+    RUNTIME_CHECK(query_info->ref_vec_f32().size() == sizeof(UInt32) + query_vec_size * sizeof(Float32));
 
     if (tipb::VectorDistanceMetric_Name(query_info->distance_metric()) != file_props.distance_metric())
         throw Exception(
@@ -257,19 +303,49 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
     if (has_exception_in_search)
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Exception happened occurred during search");
 
-    std::vector<Key> keys(result.size());
-    result.dump_to(keys.data());
-
     PerfContext::vector_search.visited_nodes += visited_nodes;
     PerfContext::vector_search.discarded_nodes += discarded_nodes;
+    return result;
+}
+
+std::vector<VectorIndexViewer::Key> VectorIndexHNSWViewer::search(
+    const ANNQueryInfoPtr & query_info,
+    const RowFilter & valid_rows) const
+{
+    auto result = searchImpl(query_info, valid_rows);
 
     // For some reason usearch does not always do the predicate for all search results.
     // So we need to filter again.
-    keys.erase(
-        std::remove_if(keys.begin(), keys.end(), [&valid_rows](Key key) { return !valid_rows[key]; }),
-        keys.end());
-
+    const size_t result_size = result.size();
+    std::vector<Key> keys;
+    keys.reserve(result_size);
+    for (size_t i = 0; i < result_size; ++i)
+    {
+        const auto rowid = result[i].member.key;
+        if (valid_rows[rowid])
+            keys.push_back(rowid);
+    }
     return keys;
+}
+
+std::vector<VectorIndexViewer::SearchResult> VectorIndexHNSWViewer::searchWithDistance(
+    const ANNQueryInfoPtr & query_info,
+    const RowFilter & valid_rows) const
+{
+    auto result = searchImpl(query_info, valid_rows);
+
+    // For some reason usearch does not always do the predicate for all search results.
+    // So we need to filter again.
+    const size_t result_size = result.size();
+    std::vector<SearchResult> search_results;
+    search_results.reserve(result_size);
+    for (size_t i = 0; i < result_size; ++i)
+    {
+        const auto rowid = result[i].member.key;
+        if (valid_rows[rowid])
+            search_results.emplace_back(rowid, result[i].distance);
+    }
+    return search_results;
 }
 
 size_t VectorIndexHNSWViewer::size() const

@@ -42,6 +42,7 @@ struct ColumnGeneratorOpts
     //    the num of elems == array_elems_max_size
     DataDistribution array_elems_distribution = DataDistribution::RANDOM;
     size_t array_elems_max_size = 10;
+    bool gen_bool = false;
 };
 
 class ColumnGenerator : public ext::Singleton<ColumnGenerator>
@@ -56,6 +57,7 @@ private:
 
     DataTypePtr createDecimalType();
 
+    template <bool two_value = true>
     void genBool(MutableColumnPtr & col);
     template <typename IntegerType>
     void genInt(MutableColumnPtr & col);
