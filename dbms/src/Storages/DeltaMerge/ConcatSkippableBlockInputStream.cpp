@@ -200,7 +200,7 @@ void ConcatVectorIndexBlockInputStream::load()
     std::vector<VectorIndexViewer::SearchResult> search_results;
     for (size_t i = 0; i < stream->children.size(); ++i)
     {
-        if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(children[i].get()); index_stream)
+        if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(stream->children[i].get()); index_stream)
         {
             auto sr = index_stream->load();
             for (auto & row : sr)
@@ -233,7 +233,7 @@ void ConcatVectorIndexBlockInputStream::load()
         // Convert to local offset.
         for (auto it = begin; it != end; ++it)
             *it -= precedes_rows;
-        if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(children[i].get()); index_stream)
+        if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(stream->children[i].get()); index_stream)
             index_stream->setSelectedRows({begin, end});
         else
             RUNTIME_CHECK(begin == end);
