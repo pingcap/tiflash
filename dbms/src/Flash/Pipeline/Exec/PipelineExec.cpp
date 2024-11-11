@@ -247,6 +247,13 @@ void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_brea
     // However, if there are multiple pipeline breaker operators within a single pipeline, it can become very complex.
     // Therefore, to simplify matters, we will include the pipeline schedule duration in the execution time of the source operator.
     //
+    // Currently pipeline_breaker_wait_time only works for join probe pipelines. We put the wait time in source op
+    // instead of join operator due to multiple concurrent builds cases:
+    // A(build) -> [B(build) -> C(probe)], A and B will run concurrently to reduce total latency, and pipeline_breaker_wait_time
+    // recorded in C pipeline_exec is actually max(A_Build, B_build). Thus we can't easily calculate the exact build time for each
+    // Join operator.
+    // TODO: We can record pipeline_breaker_wait_time with source pipeline ids in the future to map join build time to exact join executor
+    //
     // For the queuing_time, it is added into the source operator's execution time also.
     // Also keep these time separately to provide more info.
     source_op->getProfileInfo()->execution_time += pipeline_breaker_wait_time;
