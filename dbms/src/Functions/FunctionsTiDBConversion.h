@@ -953,11 +953,12 @@ struct TiDBConvertToDecimal
         else if (v_scale > scale)
         {
             context.getDAGContext()->handleTruncateError("cast decimal as decimal");
-            const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
+            const bool neg = (value < 0);
+            const bool need_to_round = ((neg ? -value : value) % scale_mul) >= (scale_mul / 2);
             value /= scale_mul;
             if (need_to_round)
             {
-                if (value < 0)
+                if (neg)
                     --value;
                 else
                     ++value;
