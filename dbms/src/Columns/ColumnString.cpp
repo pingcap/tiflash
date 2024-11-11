@@ -601,18 +601,20 @@ void ColumnString::deserializeAndInsertFromPos(
         = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % AlignBufferAVX2::full_vector_size == 0;
     bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % AlignBufferAVX2::full_vector_size == 0;
 
-    // Get two next indexes first then get the references to avoid the hang pointer issue
+    /// Get two next indexes first then get the references to avoid the hang pointer issue
     size_t char_buffer_index = align_buffer.nextIndex();
     size_t offset_buffer_index = align_buffer.nextIndex();
 
     AlignBufferAVX2 & char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
     UInt8 & char_buffer_size_ref = align_buffer.getSize(char_buffer_index);
-    // Better use a register rather than a reference for a frequently-updated variable    UInt8 char_buffer_size = char_buffer_size_ref;
+    /// Better use a register rather than a reference for a frequently-updated variable
+    UInt8 char_buffer_size = char_buffer_size_ref;
     SCOPE_EXIT({ char_buffer_size_ref = char_buffer_size; });
 
     AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
     UInt8 & offset_buffer_size_ref = align_buffer.getSize(offset_buffer_index);
-    // Better use a register rather than a reference for a frequently-updated variable    UInt8 offset_buffer_size = offset_buffer_size_ref;
+    /// Better use a register rather than a reference for a frequently-updated variable
+    UInt8 offset_buffer_size = offset_buffer_size_ref;
     SCOPE_EXIT({ offset_buffer_size_ref = offset_buffer_size; });
 
     if likely (is_offset_aligned && is_char_aligned)
@@ -676,6 +678,7 @@ void ColumnString::deserializeAndInsertFromPos(
         return;
     }
 
+    /// Bad case when this column data is aligned first and then becomes unaligned due to calling other functions
     if unlikely (char_buffer_size != 0)
     {
         chars.resize(char_size + char_buffer_size, AlignBufferAVX2::full_vector_size);

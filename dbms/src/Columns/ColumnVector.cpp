@@ -176,7 +176,8 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
         size_t buffer_index = align_buffer.nextIndex();
         AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
         UInt8 & buffer_size_ref = align_buffer.getSize(buffer_index);
-        // Better use a register rather than a reference for a frequently-updated variable        UInt8 buffer_size = buffer_size_ref;
+        /// Better use a register rather than a reference for a frequently-updated variable
+        UInt8 buffer_size = buffer_size_ref;
         SCOPE_EXIT({ buffer_size_ref = buffer_size; });
 
         bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::full_vector_size == 0;
@@ -256,7 +257,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
             return;
         }
 
-        // Bad case when this column data is aligned first and then becomes unaligned due to calling other functions
+        /// Bad case when this column data is aligned first and then becomes unaligned due to calling other functions
         if unlikely (buffer_size != 0)
         {
             data.resize(prev_size + buffer_size / sizeof(T), AlignBufferAVX2::full_vector_size);
