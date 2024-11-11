@@ -86,7 +86,6 @@ bool ConcatSkippableBlockInputStream<need_row_id>::getSkippedRows(size_t & skip_
 template <bool need_row_id>
 size_t ConcatSkippableBlockInputStream<need_row_id>::skipNextBlock()
 {
-    RUNTIME_CHECK(topk == 0);
     while (current_stream != children.end())
     {
         auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
@@ -110,7 +109,6 @@ size_t ConcatSkippableBlockInputStream<need_row_id>::skipNextBlock()
 template <bool need_row_id>
 Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn::Filter & filter)
 {
-    RUNTIME_CHECK(topk == 0);
     Block res;
 
     while (current_stream != children.end())
@@ -137,8 +135,6 @@ Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn
 template <bool need_row_id>
 Block ConcatSkippableBlockInputStream<need_row_id>::read(FilterPtr & res_filter, bool return_filter)
 {
-    load();
-
     Block res;
 
     while (current_stream != children.end())
@@ -192,15 +188,17 @@ void ConcatSkippableBlockInputStream<need_row_id>::addReadBytes(UInt64 bytes)
     }
 }
 
-template <bool need_row_id>
-void ConcatSkippableBlockInputStream<need_row_id>::load()
+template class ConcatSkippableBlockInputStream<false>;
+template class ConcatSkippableBlockInputStream<true>;
+
+void ConcatVectorIndexBlockInputStream::load()
 {
     if (loaded || topk == 0)
         return;
 
     UInt32 precedes_rows = 0;
     std::vector<VectorIndexViewer::SearchResult> search_results;
-    for (size_t i = 0; i < children.size(); ++i)
+    for (size_t i = 0; i < stream->children.size(); ++i)
     {
         if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(children[i].get()); index_stream)
         {
@@ -209,7 +207,7 @@ void ConcatSkippableBlockInputStream<need_row_id>::load()
                 row.key += precedes_rows;
             search_results.insert(search_results.end(), sr.begin(), sr.end());
         }
-        precedes_rows += rows[i];
+        precedes_rows += stream->rows[i];
     }
 
     // Keep the top k minimum distances rows.
@@ -228,10 +226,10 @@ void ConcatSkippableBlockInputStream<need_row_id>::load()
 
     precedes_rows = 0;
     auto sr_it = selected_rows.begin();
-    for (size_t i = 0; i < children.size(); ++i)
+    for (size_t i = 0; i < stream->children.size(); ++i)
     {
         auto begin = std::lower_bound(sr_it, selected_rows.end(), precedes_rows);
-        auto end = std::lower_bound(begin, selected_rows.end(), precedes_rows + rows[i]);
+        auto end = std::lower_bound(begin, selected_rows.end(), precedes_rows + stream->rows[i]);
         // Convert to local offset.
         for (auto it = begin; it != end; ++it)
             *it -= precedes_rows;
@@ -239,14 +237,11 @@ void ConcatSkippableBlockInputStream<need_row_id>::load()
             index_stream->setSelectedRows({begin, end});
         else
             RUNTIME_CHECK(begin == end);
-        precedes_rows += rows[i];
+        precedes_rows += stream->rows[i];
         sr_it = end;
     }
 
     loaded = true;
 }
-
-template class ConcatSkippableBlockInputStream<false>;
-template class ConcatSkippableBlockInputStream<true>;
 
 } // namespace DB::DM

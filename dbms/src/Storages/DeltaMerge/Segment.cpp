@@ -3347,8 +3347,9 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     assert(stream != nullptr);
     stream->appendChild(persisted_files_stream, persisted_files->getRows());
     stream->appendChild(mem_table_stream, memtable->getRows());
+
     if (ann_query_info)
-        stream->setTopK(ann_query_info->top_k());
+        return std::make_shared<ConcatVectorIndexBlockInputStream>(stream, ann_query_info->top_k());
     return stream;
 }
 

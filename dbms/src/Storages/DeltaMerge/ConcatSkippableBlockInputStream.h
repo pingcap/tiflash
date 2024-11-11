@@ -52,11 +52,8 @@ public:
 
     Block read(FilterPtr & res_filter, bool return_filter) override;
 
-    void setTopK(UInt32 topk_) { topk = topk_; }
-
 private:
-    void load();
-
+    friend class ConcatVectorIndexBlockInputStream;
     ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit);
 
     void addReadBytes(UInt64 bytes);
@@ -66,6 +63,45 @@ private:
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
     LACBytesCollector lac_bytes_collector;
+};
+
+class ConcatVectorIndexBlockInputStream : public SkippableBlockInputStream
+{
+public:
+    ConcatVectorIndexBlockInputStream(std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream, UInt32 topk_)
+        : stream(std::move(stream))
+        , topk(topk_)
+    {}
+
+    String getName() const override { return "ConcatVectorIndex"; }
+
+    Block getHeader() const override { return stream->getHeader(); }
+
+    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
+    size_t skipNextBlock() override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
+    Block readWithFilter(const IColumn::Filter &) override
+    {
+        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    Block read() override
+    {
+        FilterPtr filter = nullptr;
+        return read(filter, false);
+    }
+
+    Block read(FilterPtr & res_filter, bool return_filter) override
+    {
+        load();
+        return stream->read(res_filter, return_filter);
+    }
+
+private:
+    void load();
+
+    std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream;
     UInt32 topk = 0;
     bool loaded = false;
 };
