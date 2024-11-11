@@ -487,7 +487,7 @@ public:
     MutablePtr cloneFullColumn() const
     {
         MutablePtr res = clone();
-        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->clone(); });
+        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->cloneFullColumn(); });
         return res;
     }
 

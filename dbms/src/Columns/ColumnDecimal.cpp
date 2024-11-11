@@ -193,7 +193,7 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
     if unlikely (start + length > size())
         throw Exception("start + length > size of column", ErrorCodes::LOGICAL_ERROR);
 
-    T tmp_data;
+    T tmp_data{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -274,7 +274,7 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
     if unlikely (!array_offsets.empty() && array_offsets.back() != size())
         throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
 
-    T tmp_data;
+    T tmp_data{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)

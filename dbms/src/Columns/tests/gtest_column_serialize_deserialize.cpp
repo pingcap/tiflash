@@ -63,8 +63,10 @@ public:
         for (bool ensure_uniqueness : {false, true})
         {
             doTestSerializeAndDeserialize(column_ptr, ensure_uniqueness, false);
+            doTestSerializeAndDeserialize2(column_ptr, ensure_uniqueness, false);
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
             doTestSerializeAndDeserialize(column_ptr, ensure_uniqueness, true);
+            doTestSerializeAndDeserialize2(column_ptr, ensure_uniqueness, true);
 #endif
         }
     }
@@ -118,16 +120,115 @@ public:
             pos[i - byte_size.size() / 2] -= byte_size[i];
         pos.resize(pos.size() - 1);
 
-        align_buffer.resetIndex(true);
+        align_buffer.resetIndex(false);
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
         new_col_ptr->insertFrom(*column_ptr, byte_size.size() - 1);
-        ASSERT_COLUMN_EQ(std::move(new_col_ptr), column_ptr);
+
+        current_size = 0;
+        pos.clear();
+        for (size_t i = 0; i < byte_size.size(); ++i)
+        {
+            pos.push_back(memory.data() + current_size);
+            current_size += byte_size[i];
+        }
+        column_ptr->serializeToPos(pos, 0, byte_size.size(), true, ensure_uniqueness);
+        for (size_t i = 0; i < byte_size.size(); ++i)
+            pos[i] -= byte_size[i];
+
+        align_buffer.resetIndex(true);
+        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+
+        auto result_col_ptr = column_ptr->cloneFullColumn();
+        for (size_t i = 0; i < column_ptr->size(); ++i)
+            result_col_ptr->insertFrom(*column_ptr, i);
+
+        ASSERT_COLUMN_EQ(std::move(new_col_ptr), std::move(result_col_ptr));
+    }
+
+    static void doTestSerializeAndDeserialize2(
+        const ColumnPtr & column_ptr,
+        bool ensure_uniqueness,
+        bool is_aligned [[maybe_unused]])
+    {
+        if (column_ptr->size() < 2)
+            return;
+        PaddedPODArray<size_t> byte_size;
+        byte_size.resize_fill_zero(column_ptr->size());
+        column_ptr->countSerializeByteSize(byte_size);
+        size_t total_size = 0;
+        for (size_t i = 0; i < byte_size.size(); ++i)
+            total_size += byte_size[i];
+        PaddedPODArray<char> memory(total_size);
+        PaddedPODArray<char *> pos;
+        size_t current_size = 0;
+        for (size_t i = 0; i < byte_size.size() / 2 - 1; ++i)
+        {
+            pos.push_back(memory.data() + current_size);
+            current_size += byte_size[i];
+        }
+        pos.push_back(nullptr);
+        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true, ensure_uniqueness);
+        for (size_t i = 0; i < byte_size.size() / 2 - 1; ++i)
+            pos[i] -= byte_size[i];
+        pos.resize(pos.size() - 1);
+
+        auto new_col_ptr = column_ptr->cloneEmpty();
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+        if (is_aligned)
+            new_col_ptr->reserveAlign(byte_size.size(), AlignBufferAVX2::full_vector_size);
+#endif
+        ColumnsAlignBufferAVX2 align_buffer;
+        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+        new_col_ptr->insertFrom(*column_ptr, byte_size.size() / 2 - 1);
+
+        current_size = 0;
+        pos.clear();
+        for (size_t i = byte_size.size() / 2; i < byte_size.size(); ++i)
+        {
+            pos.push_back(memory.data() + current_size);
+            current_size += byte_size[i];
+        }
+        column_ptr->serializeToPos(
+            pos,
+            byte_size.size() / 2,
+            byte_size.size() - byte_size.size() / 2,
+            false,
+            ensure_uniqueness);
+        for (size_t i = byte_size.size() / 2; i < byte_size.size(); ++i)
+            pos[i - byte_size.size() / 2] -= byte_size[i];
+
+        align_buffer.resetIndex(false);
+        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+
+        current_size = 0;
+        pos.clear();
+        for (size_t i = 0; i < byte_size.size(); ++i)
+        {
+            pos.push_back(memory.data() + current_size);
+            current_size += byte_size[i];
+        }
+        column_ptr->serializeToPos(pos, 0, byte_size.size(), true, ensure_uniqueness);
+        for (size_t i = 0; i < byte_size.size(); ++i)
+            pos[i] -= byte_size[i];
+
+        align_buffer.resetIndex(true);
+        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+
+        auto result_col_ptr = column_ptr->cloneFullColumn();
+        for (size_t i = 0; i < column_ptr->size(); ++i)
+            result_col_ptr->insertFrom(*column_ptr, i);
+
+        ASSERT_COLUMN_EQ(std::move(new_col_ptr), std::move(result_col_ptr));
     }
 };
 
 TEST_F(TestColumnSerializeDeserialize, TestColumnVector)
 try
 {
+    auto col_vector_1 = createColumn<UInt32>({1}).column;
+    testCountSerializeByteSize(col_vector_1, {4});
+    testSerializeAndDeserialize(col_vector_1);
+
     auto col_vector = createColumn<UInt64>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).column;
     testCountSerializeByteSize(col_vector, {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8});
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16}).column;
@@ -140,11 +241,15 @@ CATCH
 TEST_F(TestColumnSerializeDeserialize, TestColumnDecimal)
 try
 {
+    auto col_decimal_1 = createColumn<Decimal128>(std::make_tuple(10, 3), {"1234567.333"}).column;
+    testCountSerializeByteSize(col_decimal_1, {16});
+    testSerializeAndDeserialize(col_decimal_1);
+
     auto col_decimal = createColumn<Decimal32>(
                            std::make_tuple(8, 2),
-                           {"1.0", "2.2",  "3.33", "4",    "5",    "6",    "7.7",  "8.8",  "9.9",  "10",   "11",
-                            "12",  "13.3", "14.4", "15.5", "16.2", "17",   "18.8", "19.9", "20.0", "21",   "22",
-                            "23",  "24",   "25.5", "26.6", "27.7", "28.8", "29.9", "30.1", "31",   "32.5", "33.9"})
+                           {"-1.0", "2.2",   "3.33",  "4",     "5",    "6",    "7.7",  "8.8",  "9.9",  "10",   "11",
+                            "12",   "-13.3", "14.4",  "-15.5", "16.2", "17",   "18.8", "19.9", "20.0", "21",   "22",
+                            "23",   "24",    "-25.5", "26.6",  "27.7", "28.8", "29.9", "30.1", "31",   "32.5", "33.9"})
                            .column;
     testCountSerializeByteSize(col_decimal, {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
                                              4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4});
@@ -152,16 +257,62 @@ try
     testCountSerialByteSizeForColumnArray(col_decimal, col_offsets, {4, 8, 12, 6 * 4, 21 * 4});
 
     testSerializeAndDeserialize(col_decimal);
+
+    auto col_decimal_256 = createColumn<Decimal256>(
+                               std::make_tuple(61, 4),
+                               {"1.0",
+                                "-2.2",
+                                "333333333333333333333333333333333333333333333333333333333.33",
+                                "-4",
+                                "-999999999999999999999999999999999999999999999999999999999.99",
+                                "6",
+                                "7.7",
+                                "8.8",
+                                "-9.9",
+                                "10",
+                                "11",
+                                "12",
+                                "13.3",
+                                "-1412384819234.444",
+                                "15.5",
+                                "16.2",
+                                "17",
+                                "18.8",
+                                "-19.9",
+                                "20.0",
+                                "21",
+                                "22",
+                                "23",
+                                "24",
+                                "25.5",
+                                "26.6",
+                                "-27.7",
+                                "28.8",
+                                "-29.9",
+                                "30.1",
+                                "31",
+                                "32.5",
+                                "-33.9999"})
+                               .column;
+    testCountSerializeByteSize(col_decimal_256, {48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48,
+                                                 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48});
+    testCountSerialByteSizeForColumnArray(col_decimal_256, col_offsets, {48, 2 * 48, 3 * 48, 6 * 48, 21 * 48});
+
+    testSerializeAndDeserialize(col_decimal_256);
 }
 CATCH
 
 TEST_F(TestColumnSerializeDeserialize, TestColumnString)
 try
 {
+    auto col_string_1 = createColumn<String>({"sdafyuwer123"}).column;
+    testCountSerializeByteSize(col_string_1, {8 + 13});
+    testSerializeAndDeserialize(col_string_1);
+
     auto col_string = createColumn<String>({"123",
                                             "1234567890",
                                             "4567",
-                                            "1234567890",
+                                            "-234567890",
                                             "8901",
                                             "1234567890",
                                             "123456789012",
@@ -222,19 +373,28 @@ CATCH
 TEST_F(TestColumnSerializeDeserialize, TestColumnNullable)
 try
 {
+    auto col_nullable_vec1
+        = createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"123456789012345678901234567890"}, {1}).column;
+    testCountSerializeByteSize(col_nullable_vec1, {49});
+    testSerializeAndDeserialize(col_nullable_vec1);
+
     auto col_nullable_vec = createNullableColumn<UInt64>({1, 2, 3, 4, 5, 6}, {0, 1, 0, 1, 0, 1}).column;
     testCountSerializeByteSize(col_nullable_vec, {9, 9, 9, 9, 9, 9});
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
     testCountSerialByteSizeForColumnArray(col_nullable_vec, col_offsets, {9, 18, 27});
-
     testSerializeAndDeserialize(col_nullable_vec);
 
     auto col_nullable_string
         = createNullableColumn<String>({"123", "2", "34", "456", "5678", "6"}, {0, 1, 0, 1, 0, 1}).column;
     testCountSerializeByteSize(col_nullable_string, {9 + 4, 9 + 1, 9 + 3, 9 + 1, 9 + 5, 9 + 1});
     testCountSerialByteSizeForColumnArray(col_nullable_string, col_offsets, {9 + 4, 18 + 4, 27 + 7});
-
     testSerializeAndDeserialize(col_nullable_string);
+
+    auto col_vector = createColumn<Float32>({1.0, 2.2, 3.3, 4.4, 5.5, 6.1}).column;
+    auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
+    auto col_nullable_array_vec = ColumnNullable::create(col_array_vec, createColumn<UInt8>({1, 1, 1}).column);
+    testCountSerializeByteSize(col_nullable_array_vec, {1 + 8 + 4, 1 + 8 + 8, 1 + 8 + 12});
+    testSerializeAndDeserialize(col_nullable_array_vec);
 }
 CATCH
 
@@ -257,6 +417,49 @@ try
     auto col_array_nullable_string = ColumnArray::create(col_nullable_string, col_offsets);
     testCountSerializeByteSize(col_array_nullable_string, {8 + 9 + 4, 8 + 18 + 4, 8 + 27 + 7});
     testSerializeAndDeserialize(col_array_nullable_string);
+
+    auto col_decimal_256 = createColumn<Decimal256>(
+                               std::make_tuple(20, 4),
+                               {"1.0",
+                                "2.2",
+                                "-3333333333333333.3333",
+                                "-4567654867645846",
+                                "5",
+                                "6",
+                                "7.7",
+                                "1232148.8",
+                                "9.9",
+                                "12341210",
+                                "11",
+                                "567612",
+                                "-13.3",
+                                "8745614.4557",
+                                "15.5",
+                                "16.2",
+                                "-17",
+                                "18.8",
+                                "19.9",
+                                "20.0",
+                                "21",
+                                "22",
+                                "-23",
+                                "24",
+                                "25122412234.5",
+                                "26.6",
+                                "27.7",
+                                "-1911239401927328.8999",
+                                "29.9",
+                                "30.1",
+                                "31",
+                                "32.5",
+                                "33.9999"})
+                               .column;
+    auto col_offsets_decimal = createColumn<IColumn::Offset>({3, 8, 15, 20, 30, 31, 32, 33}).column;
+    auto col_array_decimal_256 = ColumnArray::create(col_decimal_256, col_offsets_decimal);
+    testCountSerializeByteSize(
+        col_array_decimal_256,
+        {8 + 3 * 48, 8 + 5 * 48, 8 + 7 * 48, 8 + 5 * 48, 8 + 10 * 48, 8 + 48, 8 + 48, 8 + 48});
+    testSerializeAndDeserialize(col_array_decimal_256);
 }
 CATCH
 
