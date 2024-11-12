@@ -121,8 +121,7 @@ namespace DB
     M(disable_flush_cache)                                   \
     M(force_agg_two_level_hash_table_before_merge)           \
     M(force_thread_0_no_agg_spill)                           \
-    M(force_checkpoint_dump_throw_datafile)                  \
-    M(fake_execution_wait_time)
+    M(force_checkpoint_dump_throw_datafile)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)    \
     M(pause_with_alter_locks_acquired)            \
