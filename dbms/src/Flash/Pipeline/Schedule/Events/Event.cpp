@@ -28,7 +28,6 @@ namespace FailPoints
 {
 extern const char random_pipeline_model_event_schedule_failpoint[];
 extern const char random_pipeline_model_event_finish_failpoint[];
-extern const char fake_execution_wait_time[];
 } // namespace FailPoints
 
 // if any exception throw here, we should record err msg and then cancel the query.
@@ -120,6 +119,7 @@ void Event::schedule()
         log,
         "unfinished_inputs must be 0 in `schedule`, but actual value is {}",
         unfinished_inputs);
+    schedule_duration = stopwatch.elapsed();
     if (is_source)
     {
         assertStatus(EventStatus::SCHEDULED);
@@ -137,8 +137,6 @@ void Event::schedule()
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
-    schedule_duration = stopwatch.elapsed();
-    fiu_do_on(FailPoints::fake_execution_wait_time, { schedule_duration = 2048; });
     scheduleTasks();
 }
 

@@ -22,7 +22,6 @@ namespace FailPoints
 {
 extern const char random_pipeline_model_execute_prefix_failpoint[];
 extern const char random_pipeline_model_execute_suffix_failpoint[];
-extern const char fake_execution_wait_time[];
 } // namespace FailPoints
 
 #define HANDLE_OP_STATUS(op, op_status, expect_status)                                                         \
@@ -242,7 +241,6 @@ OperatorStatus PipelineExec::awaitImpl()
 
 void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_breaker_wait_time)
 {
-    fiu_do_on(FailPoints::fake_execution_wait_time, { queuing_time = 4096; });
     // For the pipeline_breaker_wait_time, it should be added to the pipeline breaker operator(AggConvergent and JoinProbe),
     // However, if there are multiple pipeline breaker operators within a single pipeline, it can become very complex.
     // Therefore, to simplify matters, we will include the pipeline schedule duration in the execution time of the source operator.
