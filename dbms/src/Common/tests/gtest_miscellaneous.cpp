@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/TiFlashTestBasic.h>
 #include <Common/getNumberOfCPUCores.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -27,7 +27,7 @@ TEST(CommonMiscellaneousTest, cpuRelated)
 
     computeAndSetNumberOfPhysicalCPUCores(number_of_logical_cpu_cores, hardware_logical_cpu_cores);
     ASSERT_EQ(getNumberOfPhysicalCPUCores(), hardware_logical_cpu_cores);
-    
+
     computeAndSetNumberOfPhysicalCPUCores(number_of_logical_cpu_cores, 0);
     ASSERT_EQ(1, getNumberOfPhysicalCPUCores());
 
