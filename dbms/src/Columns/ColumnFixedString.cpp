@@ -182,7 +182,7 @@ void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t 
             if (pos[i] == nullptr)
                 continue;
         }
-        inline_memcpy(pos[i], &chars[(start + i) * n], n);
+        inline_memcpy(pos[i], &chars[n * (start + i)], n);
         pos[i] += n;
     }
 }
@@ -229,11 +229,9 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
                 continue;
         }
 
-        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
-        {
-            inline_memcpy(pos[i], &chars[j * n], n);
-            pos[i] += n;
-        }
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        inline_memcpy(pos[i], &chars[n * array_offsets[start + i - 1]], n * len);
+        pos[i] += n * len;
     }
 }
 
@@ -272,21 +270,15 @@ void ColumnFixedString::deserializeAndInsertFromPosForColumnArray(
         array_offsets[start_point - 1],
         size());
 
-    size_t prev_size = chars.size();
-    chars.resize(array_offsets.back());
+    chars.resize(array_offsets.back() * n);
 
     size_t size = pos.size();
     for (size_t i = 0; i < size; ++i)
     {
-        size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        for (size_t j = 0; j < length; ++j)
-        {
-            inline_memcpy(&chars[prev_size], pos[i], n);
-            prev_size += n;
-            pos[i] += n;
-        }
+        size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        inline_memcpy(&chars[n * array_offsets[start_point + i - 1]], pos[i], n * len);
+        pos[i] += n * len;
     }
-    assert(prev_size == array_offsets.back());
 }
 
 void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const

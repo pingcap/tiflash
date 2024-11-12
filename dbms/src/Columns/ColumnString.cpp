@@ -507,8 +507,8 @@ void ColumnString::countSerializeByteSizeForColumnArray(
 
     size_t size = array_offsets.size();
     for (size_t i = 0; i < size; ++i)
-        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
-            byte_size[i] += sizeof(size_t) + sizeAt(j);
+        byte_size[i] += sizeof(size_t) * (array_offsets[i] - array_offsets[i - 1]) + offsetAt(array_offsets[i])
+            - offsetAt(array_offsets[i - 1]);
 }
 
 void ColumnString::serializeToPos(
@@ -591,9 +591,10 @@ void ColumnString::serializeToPosForColumnArrayImpl(
             size_t str_size = sizeAt(j);
             tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
             pos[i] += sizeof(size_t);
-            inline_memcpy(pos[i], &chars[offsetAt(j)], str_size);
-            pos[i] += str_size;
         }
+        size_t strs_size = offsetAt(array_offsets[start + i]) - offsetAt(array_offsets[start + i - 1]);
+        inline_memcpy(pos[i], &chars[offsetAt(array_offsets[start + i - 1])], strs_size);
+        pos[i] += strs_size;
     }
 }
 
@@ -725,26 +726,24 @@ void ColumnString::deserializeAndInsertFromPosForColumnArray(
         array_offsets[start_point - 1],
         size());
 
+    offsets.resize(array_offsets.back());
+
     size_t size = pos.size();
-    size_t prev_size = offsets.size();
     size_t char_size = chars.size();
     for (size_t i = 0; i < size; ++i)
     {
-        size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        offsets.resize(prev_size + length);
-        for (size_t j = 0; j < length; ++j)
+        size_t prev_char_size = char_size;
+        for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
         {
             size_t str_size;
             tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
             pos[i] += sizeof(size_t);
-
-            chars.resize(char_size + str_size);
-            inline_memcpy(&chars[char_size], pos[i], str_size);
             char_size += str_size;
-            offsets[prev_size] = char_size;
-            ++prev_size;
-            pos[i] += str_size;
+            offsets[j] = char_size;
         }
+        chars.resize(char_size);
+        inline_memcpy(&chars[prev_char_size], pos[i], char_size - prev_char_size);
+        pos[i] += char_size - prev_char_size;
     }
 }
 

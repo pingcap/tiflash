@@ -288,9 +288,9 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
+        if constexpr (ensure_uniqueness)
         {
-            if constexpr (ensure_uniqueness)
+            for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
                 /// Clear the data and only set the necessary parts to ensure the uniqueness
                 memset(static_cast<void *>(&tmp_data), 0, sizeof(T));
@@ -303,12 +303,14 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
                 if (val.sign() != tmp_val.sign())
                     tmp_val.negate();
                 tiflash_compiler_builtin_memcpy(pos[i], &tmp_data, sizeof(T));
+                pos[i] += sizeof(T);
             }
-            else
-            {
-                tiflash_compiler_builtin_memcpy(pos[i], &data[j], sizeof(T));
-            }
-            pos[i] += sizeof(T);
+        }
+        else
+        {
+            size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], sizeof(T) * len);
+            pos[i] += sizeof(T) * len;
         }
     }
 }
@@ -440,21 +442,15 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
         array_offsets[start_point - 1],
         size());
 
-    size_t prev_size = data.size();
     data.resize(array_offsets.back());
 
     size_t size = pos.size();
     for (size_t i = 0; i < size; ++i)
     {
-        size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        for (size_t j = 0; j < length; ++j)
-        {
-            tiflash_compiler_builtin_memcpy(&data[prev_size], pos[i], sizeof(T));
-            ++prev_size;
-            pos[i] += sizeof(T);
-        }
+        size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        inline_memcpy(static_cast<void *>(&data[array_offsets[start_point + i - 1]]), pos[i], sizeof(T) * len);
+        pos[i] += sizeof(T) * len;
     }
-    assert(prev_size == array_offsets.back());
 }
 
 template <typename T>

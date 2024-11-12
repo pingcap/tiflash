@@ -51,10 +51,10 @@ private:
     /// For convenience, every string ends with terminating zero byte. Note that strings could contain zero bytes in the middle.
     Chars_t chars;
 
-    /// offset[-1] is 0.
+    /// offset[-1] is 0 which is a guarantee from PODArray.
     size_t ALWAYS_INLINE offsetAt(ssize_t i) const { return offsets[i - 1]; }
 
-    /// Size of i-th element, including terminating zero. offset[-1] is 0.
+    /// Size of i-th element, including terminating zero. offset[-1] is 0 which is a guarantee from PODArray.
     size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return offsets[i] - offsets[i - 1]; }
 
     template <bool positive>

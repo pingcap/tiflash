@@ -142,7 +142,7 @@ public:
         for (size_t i = 0; i < column_ptr->size(); ++i)
             result_col_ptr->insertFrom(*column_ptr, i);
 
-        ASSERT_COLUMN_EQ(std::move(new_col_ptr), std::move(result_col_ptr));
+        ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
 
     static void doTestSerializeAndDeserialize2(
@@ -217,7 +217,7 @@ public:
         for (size_t i = 0; i < column_ptr->size(); ++i)
             result_col_ptr->insertFrom(*column_ptr, i);
 
-        ASSERT_COLUMN_EQ(std::move(new_col_ptr), std::move(result_col_ptr));
+        ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
 };
 

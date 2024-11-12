@@ -160,11 +160,9 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
-        {
-            tiflash_compiler_builtin_memcpy(pos[i], &data[j], sizeof(T));
-            pos[i] += sizeof(T);
-        }
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], sizeof(T) * len);
+        pos[i] += sizeof(T) * len;
     }
 }
 
@@ -295,21 +293,15 @@ void ColumnVector<T>::deserializeAndInsertFromPosForColumnArray(
         array_offsets[start_point - 1],
         size());
 
-    size_t prev_size = data.size();
     data.resize(array_offsets.back());
 
     size_t size = pos.size();
     for (size_t i = 0; i < size; ++i)
     {
-        size_t length = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        for (size_t j = 0; j < length; ++j)
-        {
-            tiflash_compiler_builtin_memcpy(&data[prev_size], pos[i], sizeof(T));
-            ++prev_size;
-            pos[i] += sizeof(T);
-        }
+        size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        inline_memcpy(&data[array_offsets[start_point + i - 1]], pos[i], sizeof(T) * len);
+        pos[i] += sizeof(T) * len;
     }
-    assert(prev_size == array_offsets.back());
 }
 
 template <typename T>
