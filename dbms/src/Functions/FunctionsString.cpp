@@ -4982,7 +4982,7 @@ public:
         if (c0_const && c1_string)
         {
             const String & c0_str = c0_const->getValue<String>();
-            if unlikely (c0_str.size() == 0)
+            if unlikely (c0_str.empty())
             {
                 for (size_t i = 0; i < row_num; i++)
                     vec_res[i] = 1;
