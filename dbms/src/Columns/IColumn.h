@@ -276,7 +276,7 @@ public:
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// The pos pointer must not be nullptr.
-    /// If AVX2 is enabled, non-temporal store may be used when data memory is aligned to AlignBufferAVX2::full_vector_size(64 bytes)
+    /// If AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes)
     /// by using reserveAlign or reserveAlignWithTotalMemoryHint.
     /// If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
     /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data
@@ -284,7 +284,7 @@ public:
     /// Example:
     ///     auto column_ptr = ColumnVector<UInt64>::create();
     ///     #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    ///     column_ptr->reserveAlign(xxx, AlignBufferAVX2::full_vector_size);
+    ///     column_ptr->reserveAlign(xxx, FULL_VECTOR_SIZE_AVX2);
     ///     #endif
     ///     ColumnAlignBufferAVX2 align_buffer;
     ///     /// Resize align_buffer if you want.

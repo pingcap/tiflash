@@ -177,7 +177,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
     size_t size = pos.size();
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    if constexpr (AlignBufferAVX2::full_vector_size % sizeof(T) == 0)
+    if constexpr (FULL_VECTOR_SIZE_AVX2 % sizeof(T) == 0)
     {
         size_t buffer_index = align_buffer.nextIndex();
         AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
@@ -186,14 +186,14 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
         UInt8 buffer_size = buffer_size_ref;
         SCOPE_EXIT({ buffer_size_ref = buffer_size; });
 
-        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::full_vector_size == 0;
+        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
         if likely (is_aligned)
         {
-            constexpr size_t avx2_width = AlignBufferAVX2::full_vector_size / sizeof(T);
+            constexpr size_t avx2_width = FULL_VECTOR_SIZE_AVX2 / sizeof(T);
             size_t i = 0;
             if (buffer_size != 0)
             {
-                size_t count = std::min(size, (AlignBufferAVX2::full_vector_size - buffer_size) / sizeof(T));
+                size_t count = std::min(size, (FULL_VECTOR_SIZE_AVX2 - buffer_size) / sizeof(T));
                 for (; i < count; ++i)
                 {
                     tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
@@ -201,49 +201,45 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
                     pos[i] += sizeof(T);
                 }
 
-                if (buffer_size < AlignBufferAVX2::full_vector_size)
+                if (buffer_size < FULL_VECTOR_SIZE_AVX2)
                 {
                     if unlikely (align_buffer.needFlush())
                     {
-                        data.resize(prev_size + buffer_size / sizeof(T), AlignBufferAVX2::full_vector_size);
+                        data.resize(prev_size + buffer_size / sizeof(T), FULL_VECTOR_SIZE_AVX2);
                         inline_memcpy(&data[prev_size], buffer.data, buffer_size);
                         buffer_size = 0;
                     }
                     return;
                 }
 
-                assert(buffer_size == AlignBufferAVX2::full_vector_size);
-                data.resize(prev_size + avx2_width, AlignBufferAVX2::full_vector_size);
+                assert(buffer_size == FULL_VECTOR_SIZE_AVX2);
+                data.resize(prev_size + avx2_width, FULL_VECTOR_SIZE_AVX2);
 
                 _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[0]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
                 _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[1]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
                 buffer_size = 0;
             }
 
-            union alignas(AlignBufferAVX2::full_vector_size)
-            {
-                char vec_data[AlignBufferAVX2::full_vector_size]{};
-                __m256i v[2];
-            };
-            size_t vec_size = 0;
+            AlignBufferAVX2 tmp_buffer;
+            UInt8 tmp_buffer_size = 0;
 
-            data.resize(prev_size + (size - i) / avx2_width * avx2_width, AlignBufferAVX2::full_vector_size);
+            data.resize(prev_size + (size - i) / avx2_width * avx2_width, FULL_VECTOR_SIZE_AVX2);
             for (; i + avx2_width <= size; i += avx2_width)
             {
                 for (size_t j = 0; j < avx2_width; ++j)
                 {
-                    tiflash_compiler_builtin_memcpy(&vec_data[vec_size], pos[i + j], sizeof(T));
-                    vec_size += sizeof(T);
+                    tiflash_compiler_builtin_memcpy(&tmp_buffer.data[tmp_buffer_size], pos[i + j], sizeof(T));
+                    tmp_buffer_size += sizeof(T);
                     pos[i + j] += sizeof(T);
                 }
 
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[0]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[1]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                vec_size = 0;
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), tmp_buffer.v[0]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), tmp_buffer.v[1]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
+                tmp_buffer_size = 0;
             }
 
             for (; i < size; ++i)
@@ -255,7 +251,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
 
             if unlikely (align_buffer.needFlush())
             {
-                data.resize(prev_size + buffer_size / sizeof(T), AlignBufferAVX2::full_vector_size);
+                data.resize(prev_size + buffer_size / sizeof(T), FULL_VECTOR_SIZE_AVX2);
                 inline_memcpy(&data[prev_size], buffer.data, buffer_size);
                 buffer_size = 0;
             }

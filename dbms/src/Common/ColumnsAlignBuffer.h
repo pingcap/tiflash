@@ -23,16 +23,14 @@
 namespace DB
 {
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-struct AlignBufferAVX2
-{
-    static constexpr size_t vector_size = sizeof(__m256i);
-    static constexpr size_t full_vector_size = 2 * vector_size;
 
-    union
-    {
-        char data[full_vector_size]{};
-        __m256i v[2];
-    };
+static constexpr size_t VECTOR_SIZE_AVX2 = sizeof(__m256i);
+static constexpr size_t FULL_VECTOR_SIZE_AVX2 = 2 * VECTOR_SIZE_AVX2;
+
+union alignas(FULL_VECTOR_SIZE_AVX2) AlignBufferAVX2
+{
+    char data[FULL_VECTOR_SIZE_AVX2]{};
+    __m256i v[2];
 };
 
 class ColumnsAlignBufferAVX2
@@ -42,8 +40,8 @@ public:
 
     void resize(size_t n)
     {
-        buffers.resize(n, AlignBufferAVX2::full_vector_size);
-        sizes.resize_fill_zero(n, AlignBufferAVX2::full_vector_size);
+        buffers.resize(n, FULL_VECTOR_SIZE_AVX2);
+        sizes.resize_fill_zero(n, FULL_VECTOR_SIZE_AVX2);
     }
 
     void resetIndex(bool need_flush_)
@@ -77,7 +75,7 @@ private:
     size_t current_index = 0;
     bool need_flush = false;
     PaddedPODArray<AlignBufferAVX2> buffers;
-    static_assert(UINT8_MAX >= AlignBufferAVX2::full_vector_size);
+    static_assert(UINT8_MAX >= FULL_VECTOR_SIZE_AVX2);
     PaddedPODArray<UInt8> sizes;
 };
 

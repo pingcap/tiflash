@@ -97,7 +97,7 @@ public:
         auto new_col_ptr = column_ptr->cloneEmpty();
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
         if (is_aligned)
-            new_col_ptr->reserveAlign(byte_size.size(), AlignBufferAVX2::full_vector_size);
+            new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
 #endif
         ColumnsAlignBufferAVX2 align_buffer;
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
@@ -175,7 +175,7 @@ public:
         auto new_col_ptr = column_ptr->cloneEmpty();
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
         if (is_aligned)
-            new_col_ptr->reserveAlign(byte_size.size(), AlignBufferAVX2::full_vector_size);
+            new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
 #endif
         ColumnsAlignBufferAVX2 align_buffer;
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
