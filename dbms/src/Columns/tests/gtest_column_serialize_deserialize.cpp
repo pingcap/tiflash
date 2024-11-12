@@ -372,23 +372,27 @@ CATCH
 TEST_F(TestColumnSerializeDeserialize, TestColumnNullable)
 try
 {
+    // ColumnNullable(ColumnDecimal)
     auto col_nullable_vec1
         = createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"123456789012345678901234567890"}, {1}).column;
     testCountSerializeByteSize(col_nullable_vec1, {49});
     testSerializeAndDeserialize(col_nullable_vec1);
 
+    // ColumnNullable(ColumnVector)
     auto col_nullable_vec = createNullableColumn<UInt64>({1, 2, 3, 4, 5, 6}, {0, 1, 0, 1, 0, 1}).column;
     testCountSerializeByteSize(col_nullable_vec, {9, 9, 9, 9, 9, 9});
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
     testCountSerialByteSizeForColumnArray(col_nullable_vec, col_offsets, {9, 18, 27});
     testSerializeAndDeserialize(col_nullable_vec);
 
+    // ColumnNullable(ColumnString)
     auto col_nullable_string
         = createNullableColumn<String>({"123", "2", "34", "456", "5678", "6"}, {0, 1, 0, 1, 0, 1}).column;
     testCountSerializeByteSize(col_nullable_string, {9 + 4, 9 + 1, 9 + 3, 9 + 1, 9 + 5, 9 + 1});
     testCountSerialByteSizeForColumnArray(col_nullable_string, col_offsets, {9 + 4, 18 + 4, 27 + 7});
     testSerializeAndDeserialize(col_nullable_string);
 
+    // ColumnNullable(ColumnArray(ColumnVector))
     auto col_vector = createColumn<Float32>({1.0, 2.2, 3.3, 4.4, 5.5, 6.1}).column;
     auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
     auto col_nullable_array_vec = ColumnNullable::create(col_array_vec, createColumn<UInt8>({1, 1, 1}).column);
@@ -400,23 +404,27 @@ CATCH
 TEST_F(TestColumnSerializeDeserialize, TestColumnArray)
 try
 {
+    // ColumnArray(ColumnVector)
     auto col_vector = createColumn<Float32>({1.0, 2.2, 3.3, 4.4, 5.5, 6.1}).column;
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
     auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
     testCountSerializeByteSize(col_array_vec, {8 + 4, 8 + 8, 8 + 12});
     testSerializeAndDeserialize(col_array_vec);
 
+    // ColumnArray(ColumnString)
     auto col_string = createColumn<String>({"123", "2", "34", "456", "5678", "6"}).column;
     auto col_array_string = ColumnArray::create(col_string, col_offsets);
     testCountSerializeByteSize(col_array_string, {8 + 8 + 4, 8 + 16 + 5, 8 + 24 + 11});
     testSerializeAndDeserialize(col_array_string);
 
+    // ColumnArray(ColumnNullable(ColumnString))
     auto col_nullable_string
         = createNullableColumn<String>({"123", "2", "34", "456", "5678", "6"}, {0, 1, 0, 1, 0, 1}).column;
     auto col_array_nullable_string = ColumnArray::create(col_nullable_string, col_offsets);
     testCountSerializeByteSize(col_array_nullable_string, {8 + 9 + 4, 8 + 18 + 4, 8 + 27 + 7});
     testSerializeAndDeserialize(col_array_nullable_string);
 
+    // ColumnArray(ColumnDecimal)
     auto col_decimal_256 = createColumn<Decimal256>(
                                std::make_tuple(20, 4),
                                {"1.0",
@@ -459,6 +467,19 @@ try
         col_array_decimal_256,
         {8 + 3 * 48, 8 + 5 * 48, 8 + 7 * 48, 8 + 5 * 48, 8 + 10 * 48, 8 + 48, 8 + 48, 8 + 48});
     testSerializeAndDeserialize(col_array_decimal_256);
+
+    // ColumnArray(ColumnFixedString)
+    auto col_fixed_string_mut = ColumnFixedString::create(2);
+    col_fixed_string_mut->insertData("aa", 2);
+    col_fixed_string_mut->insertData("bc", 2);
+    col_fixed_string_mut->insertData("c", 1);
+    col_fixed_string_mut->insertData("d", 1);
+    col_fixed_string_mut->insertData("e1", 2);
+    col_fixed_string_mut->insertData("ff", 2);
+    ColumnPtr col_fixed_string = std::move(col_fixed_string_mut);
+    auto col_array_fixed_string = ColumnArray::create(col_fixed_string, col_offsets);
+    testCountSerializeByteSize(col_array_fixed_string, {8 + 2, 8 + 4, 8 + 6});
+    testSerializeAndDeserialize(col_array_fixed_string);
 }
 CATCH
 
