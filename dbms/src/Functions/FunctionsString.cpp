@@ -5002,9 +5002,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override {
-        collator = collator_;
-    }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -5038,7 +5036,7 @@ public:
         if (c0_const && c1_string)
         {
             const String & c0_str = c0_const->getValue<String>();
-            if (c0_str.size() == 0)
+            if unlikely (c0_str.size() == 0)
             {
                 for (size_t i = 0; i < row_num; i++)
                     vec_res[i] = 1;
@@ -5046,25 +5044,50 @@ public:
             else
             {
                 if (collator != nullptr && collator->isCI())
-                    constVector<true>(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+                    constVector<true>(
+                        c0_const->getValue<String>(),
+                        c1_string->getChars(),
+                        c1_string->getOffsets(),
+                        vec_res);
                 else
-                    constVector<false>(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
-
+                    constVector<false>(
+                        c0_const->getValue<String>(),
+                        c1_string->getChars(),
+                        c1_string->getOffsets(),
+                        vec_res);
             }
         }
         else if (c0_string && c1_string)
         {
             if (collator != nullptr && collator->isCI())
-                vectorVector<true>(c0_string->getChars(), c0_string->getOffsets(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+                vectorVector<true>(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_string->getChars(),
+                    c1_string->getOffsets(),
+                    vec_res);
             else
-                vectorVector<false>(c0_string->getChars(), c0_string->getOffsets(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+                vectorVector<false>(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_string->getChars(),
+                    c1_string->getOffsets(),
+                    vec_res);
         }
         else if (c0_string && c1_const)
         {
             if (collator != nullptr && collator->isCI())
-                vectorConst<true>(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
+                vectorConst<true>(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_const->getValue<String>(),
+                    vec_res);
             else
-                vectorConst<false>(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
+                vectorConst<false>(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_const->getValue<String>(),
+                    vec_res);
         }
         else
             throw Exception(
@@ -5093,7 +5116,7 @@ public:
             size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
 
-            if (col0_str_len == 0)
+            if unlikely (col0_str_len == 0)
             {
                 res[i] = 1;
             }
@@ -5101,23 +5124,28 @@ public:
             {
                 if constexpr (is_ci)
                 {
-                    UTF8CaseInsensitiveStringSearcher searcher = 
-                        UTF8CaseInsensitiveStringSearcher(
-                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+                    UTF8CaseInsensitiveStringSearcher searcher = UTF8CaseInsensitiveStringSearcher(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len);
 
-                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
+                        - &col1_data[prev_col1_str_offset];
                 }
                 else
                 {
-                    LibCASCIICaseSensitiveStringSearcher searcher = 
-                        LibCASCIICaseSensitiveStringSearcher(
-                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+                    LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len);
 
-                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
+                        - &col1_data[prev_col1_str_offset];
                 }
 
                 if (pos != col1_str_len)
-                    res[i] = 1 + getPositionUTF8(reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]), reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
+                    res[i] = 1
+                        + getPositionUTF8(
+                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
                 else
                     res[i] = 0;
             }
@@ -5143,7 +5171,7 @@ public:
         {
             size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
 
-            if (col0_str_len == 0)
+            if unlikely (col0_str_len == 0)
             {
                 res[i] = 1;
             }
@@ -5151,25 +5179,25 @@ public:
             {
                 if constexpr (is_ci)
                 {
-                    UTF8CaseInsensitiveStringSearcher searcher = 
-                        UTF8CaseInsensitiveStringSearcher(
-                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+                    UTF8CaseInsensitiveStringSearcher searcher = UTF8CaseInsensitiveStringSearcher(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len);
 
                     pos = searcher.search(
-                        reinterpret_cast<const UInt8 *>(col1_str.c_str()),
-                        reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
-                            - reinterpret_cast<const UInt8 *>(col1_str.c_str());
+                              reinterpret_cast<const UInt8 *>(col1_str.c_str()),
+                              reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
+                        - reinterpret_cast<const UInt8 *>(col1_str.c_str());
                 }
                 else
                 {
-                    LibCASCIICaseSensitiveStringSearcher searcher = 
-                        LibCASCIICaseSensitiveStringSearcher(
-                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+                    LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len);
 
                     pos = searcher.search(
-                        reinterpret_cast<const UInt8 *>(col1_str.c_str()),
-                        reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
-                            - reinterpret_cast<const UInt8 *>(col1_str.c_str());
+                              reinterpret_cast<const UInt8 *>(col1_str.c_str()),
+                              reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
+                        - reinterpret_cast<const UInt8 *>(col1_str.c_str());
                 }
 
                 if (pos != col1_str_len)
@@ -5194,20 +5222,27 @@ public:
         ColumnString::Offset prev_col1_str_offset = 0;
 
         // One construction will be wasted, but it's acceptable
-        UTF8CaseInsensitiveStringSearcher searcher_ci = UTF8CaseInsensitiveStringSearcher(col0_str.c_str(), col0_str.size());
-        LibCASCIICaseSensitiveStringSearcher searcher_cs = LibCASCIICaseSensitiveStringSearcher(col0_str.c_str(), col0_str.size());
+        UTF8CaseInsensitiveStringSearcher searcher_ci
+            = UTF8CaseInsensitiveStringSearcher(col0_str.c_str(), col0_str.size());
+        LibCASCIICaseSensitiveStringSearcher searcher_cs
+            = LibCASCIICaseSensitiveStringSearcher(col0_str.c_str(), col0_str.size());
 
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
 
             if constexpr (is_ci)
-                pos = searcher_ci.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+                pos = searcher_ci.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
+                    - &col1_data[prev_col1_str_offset];
             else
-                pos = searcher_cs.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+                pos = searcher_cs.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
+                    - &col1_data[prev_col1_str_offset];
 
             if (pos != col1_str_len)
-                res[i] = 1 + getPositionUTF8(reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]), reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
+                res[i] = 1
+                    + getPositionUTF8(
+                             reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                             reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
             else
                 res[i] = 0;
 
