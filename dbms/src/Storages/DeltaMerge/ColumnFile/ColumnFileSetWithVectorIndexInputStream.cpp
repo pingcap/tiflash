@@ -39,19 +39,6 @@ SkippableBlockInputStreamPtr ColumnFileSetWithVectorIndexInputStream::tryBuild(
     if (!bitmap_filter || !ann_query_info)
         return fallback();
 
-    // Fast check: ANNQueryInfo is available in the whole read path. However we may not reading vector column now.
-    bool is_matching_ann_query = false;
-    for (const auto & cd : *col_defs)
-    {
-        if (cd.id == ann_query_info->column_id())
-        {
-            is_matching_ann_query = true;
-            break;
-        }
-    }
-    if (!is_matching_ann_query)
-        return fallback();
-
     std::optional<ColumnDefine> vec_cd;
     auto rest_columns = std::make_shared<ColumnDefines>();
     rest_columns->reserve(col_defs->size() - 1);

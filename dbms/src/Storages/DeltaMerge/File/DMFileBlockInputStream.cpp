@@ -143,36 +143,15 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     if (!rs_filter)
         return fallback();
 
-    // Fast Scan and Clean Read does not affect our behavior. (TODO(vector-index): Confirm?)
-    // if (is_fast_scan || enable_del_clean_read || enable_handle_clean_read)
-    //    return fallback();
-
     auto filter_with_ann = std::dynamic_pointer_cast<WithANNQueryInfo>(rs_filter);
     if (!filter_with_ann)
-        return fallback();
-
-    auto ann_query_info = filter_with_ann->ann_query_info;
-    if (!ann_query_info)
         return fallback();
 
     if (!bitmap_filter.has_value())
         return fallback();
 
-    // Fast check: ANNQueryInfo is available in the whole read path. However we may not reading vector column now.
-    bool is_matching_ann_query = false;
-    for (const auto & cd : read_columns)
-    {
-        // Note that it requires ann_query_info->column_id match
-        if (cd.id == ann_query_info->column_id())
-        {
-            is_matching_ann_query = true;
-            break;
-        }
-    }
-    if (!is_matching_ann_query)
-        return fallback();
-
     Block header_layout = toEmptyBlock(read_columns);
+    auto ann_query_info = filter_with_ann->ann_query_info;
 
     // Copy out the vector column for later use. Copy is intentionally performed after the
     // fast check so that in fallback conditions we don't need unnecessary copies.

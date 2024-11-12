@@ -14,7 +14,6 @@
 
 #include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
 
 #include <algorithm>
 
@@ -200,7 +199,7 @@ void ConcatVectorIndexBlockInputStream::load()
     std::vector<VectorIndexViewer::SearchResult> search_results;
     for (size_t i = 0; i < stream->children.size(); ++i)
     {
-        if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(stream->children[i].get()); index_stream)
+        if (auto * index_stream = index_streams[i]; index_stream)
         {
             auto sr = index_stream->load();
             for (auto & row : sr)
@@ -233,7 +232,7 @@ void ConcatVectorIndexBlockInputStream::load()
         // Convert to local offset.
         for (auto it = begin; it != end; ++it)
             *it -= precedes_rows;
-        if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(stream->children[i].get()); index_stream)
+        if (auto * index_stream = index_streams[i]; index_stream)
             index_stream->setSelectedRows({begin, end});
         else
             RUNTIME_CHECK(begin == end);
@@ -241,7 +240,37 @@ void ConcatVectorIndexBlockInputStream::load()
         sr_it = end;
     }
 
+    // Not used anymore, release memory.
+    index_streams.clear();
     loaded = true;
+}
+
+SkippableBlockInputStreamPtr ConcatVectorIndexBlockInputStream::build(
+    std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
+    const ANNQueryInfoPtr & ann_query_info)
+{
+    if (!ann_query_info)
+        return stream;
+    bool has_vector_index_stream = false;
+    std::vector<VectorIndexBlockInputStream *> index_streams;
+    index_streams.reserve(stream->children.size());
+    for (const auto & sub_stream : stream->children)
+    {
+        if (auto * index_stream = dynamic_cast<VectorIndexBlockInputStream *>(sub_stream.get()); index_stream)
+        {
+            has_vector_index_stream = true;
+            index_streams.push_back(index_stream);
+            continue;
+        }
+        index_streams.push_back(nullptr);
+    }
+    if (!has_vector_index_stream)
+        return stream;
+
+    return std::make_shared<ConcatVectorIndexBlockInputStream>(
+        stream,
+        std::move(index_streams),
+        ann_query_info->top_k());
 }
 
 } // namespace DB::DM

@@ -16,6 +16,7 @@
 
 namespace DB
 {
+
 SquashingBlockInputStream::SquashingBlockInputStream(
     const BlockInputStreamPtr & src,
     size_t min_block_size_rows,
@@ -28,7 +29,7 @@ SquashingBlockInputStream::SquashingBlockInputStream(
 }
 
 
-Block SquashingBlockInputStream::readImpl()
+Block SquashingBlockInputStream::read()
 {
     if (all_read)
         return {};
