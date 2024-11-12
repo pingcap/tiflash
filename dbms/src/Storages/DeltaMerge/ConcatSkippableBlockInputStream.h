@@ -15,8 +15,11 @@
 #pragma once
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
+#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
+
 
 namespace DB::DM
 {
@@ -68,10 +71,18 @@ private:
 class ConcatVectorIndexBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    ConcatVectorIndexBlockInputStream(std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream, UInt32 topk_)
+    ConcatVectorIndexBlockInputStream(
+        std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
+        std::vector<VectorIndexBlockInputStream *> && index_streams,
+        UInt32 topk_)
         : stream(std::move(stream))
+        , index_streams(std::move(index_streams))
         , topk(topk_)
     {}
+
+    static SkippableBlockInputStreamPtr build(
+        std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
+        const ANNQueryInfoPtr & ann_query_info);
 
     String getName() const override { return "ConcatVectorIndex"; }
 
@@ -102,6 +113,7 @@ private:
     void load();
 
     std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream;
+    std::vector<VectorIndexBlockInputStream *> index_streams;
     UInt32 topk = 0;
     bool loaded = false;
 };

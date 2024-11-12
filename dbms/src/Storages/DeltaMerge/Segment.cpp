@@ -3347,10 +3347,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     assert(stream != nullptr);
     stream->appendChild(persisted_files_stream, persisted_files->getRows());
     stream->appendChild(mem_table_stream, memtable->getRows());
-
-    if (ann_query_info)
-        return std::make_shared<ConcatVectorIndexBlockInputStream>(stream, ann_query_info->top_k());
-    return stream;
+    return ConcatVectorIndexBlockInputStream::build(stream, ann_query_info);
 }
 
 BlockInputStreamPtr Segment::getLateMaterializationStream(
@@ -3514,7 +3511,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             read_data_block_rows);
     }
 
-    auto stream = getConcatSkippableBlockInputStream(
+    auto skippable_stream = getConcatSkippableBlockInputStream(
         bitmap_filter,
         segment_snap,
         dm_context,
@@ -3524,7 +3521,18 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         start_ts,
         read_data_block_rows,
         ReadTag::Query);
-    return std::make_shared<BitmapFilterBlockInputStream>(columns_to_read, stream, bitmap_filter);
+    auto * vector_index_stream = dynamic_cast<ConcatVectorIndexBlockInputStream *>(skippable_stream.get());
+    auto stream = std::make_shared<BitmapFilterBlockInputStream>(columns_to_read, skippable_stream, bitmap_filter);
+    if (vector_index_stream)
+    {
+        // Squash blocks to reduce the number of blocks.
+        return std::make_shared<SquashingBlockInputStream>(
+            stream,
+            /*min_block_size_rows=*/read_data_block_rows,
+            /*min_block_size_bytes=*/0,
+            dm_context.tracing_id);
+    }
+    return stream;
 }
 
 // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
