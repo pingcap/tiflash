@@ -5000,6 +5000,12 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override {
+        collator = collator_;
+    }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 2)
@@ -5018,52 +5024,208 @@ public:
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        Field c0_field;
 
         const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
         const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
         const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
-        Field c1_field;
 
-        if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
-            throw Exception(
-                fmt::format("Illegal argument of function {}", getName()),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        if (c0_col->size() != c1_col->size())
-            throw Exception(
-                fmt::format("Function {} column number is inconformity", getName()),
-                ErrorCodes::LOGICAL_ERROR);
+        size_t row_num = c0_col->size();
 
         auto col_res = ColumnInt64::create();
-        int val_num = c0_col->size();
-        col_res->reserve(val_num);
+        PaddedPODArray<Int64> & vec_res = col_res->getData();
+        vec_res.resize(row_num);
 
-        for (int i = 0; i < val_num; i++)
+        if (c0_const && c1_string)
         {
-            c0_col->get(i, c0_field);
-            c1_col->get(i, c1_field);
+            const String & c0_str = c0_const->getValue<String>();
+            if (c0_str.size() == 0)
+            {
+                for (size_t i = 0; i < row_num; i++)
+                    vec_res[i] = 1;
+            }
+            else
+            {
+                if (collator != nullptr && collator->isCI())
+                    constVector<true>(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+                else
+                    constVector<false>(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
 
-            String c0_str = c0_field.get<String>();
-            String c1_str = c1_field.get<String>();
-
-            // return -1 when c1_str not contains the c0_str
-            Int64 idx = c1_str.find(c0_str);
-            col_res->insert(getPositionUTF8(c1_str, idx));
+            }
         }
+        else if (c0_string && c1_string)
+        {
+            if (collator != nullptr && collator->isCI())
+                vectorVector<true>(c0_string->getChars(), c0_string->getOffsets(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+            else
+                vectorVector<false>(c0_string->getChars(), c0_string->getOffsets(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+        }
+        else if (c0_string && c1_const)
+        {
+            if (collator != nullptr && collator->isCI())
+                vectorConst<true>(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
+            else
+                vectorConst<false>(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
+        }
+        else
+            throw Exception(
+                "Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
+                    + block.getByPosition(arguments[1]).column->getName() + " of arguments of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(col_res);
     }
 
-private:
-    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
+    template <bool is_ci>
+    void vectorVector(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res) const
     {
-        if (idx == -1)
-            return 0;
+        size_t pos;
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+        ColumnString::Offset prev_col1_str_offset = 0;
 
-        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
-        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+
+            if (col0_str_len == 0)
+            {
+                res[i] = 1;
+            }
+            else
+            {
+                if constexpr (is_ci)
+                {
+                    UTF8CaseInsensitiveStringSearcher searcher = 
+                        UTF8CaseInsensitiveStringSearcher(
+                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+
+                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+                }
+                else
+                {
+                    LibCASCIICaseSensitiveStringSearcher searcher = 
+                        LibCASCIICaseSensitiveStringSearcher(
+                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+
+                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+                }
+
+                if (pos != col1_str_len)
+                    res[i] = 1 + getPositionUTF8(reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]), reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
+                else
+                    res[i] = 0;
+            }
+
+            prev_col0_str_offset = col0_offsets[i];
+            prev_col1_str_offset = col1_offsets[i];
+        }
     }
+
+    template <bool is_ci>
+    void vectorConst(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const String & col1_str,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t pos;
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+        size_t col1_str_len = col1_str.size();
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+
+            if (col0_str_len == 0)
+            {
+                res[i] = 1;
+            }
+            else
+            {
+                if constexpr (is_ci)
+                {
+                    UTF8CaseInsensitiveStringSearcher searcher = 
+                        UTF8CaseInsensitiveStringSearcher(
+                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+
+                    pos = searcher.search(
+                        reinterpret_cast<const UInt8 *>(col1_str.c_str()),
+                        reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
+                            - reinterpret_cast<const UInt8 *>(col1_str.c_str());
+                }
+                else
+                {
+                    LibCASCIICaseSensitiveStringSearcher searcher = 
+                        LibCASCIICaseSensitiveStringSearcher(
+                            reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len);
+
+                    pos = searcher.search(
+                        reinterpret_cast<const UInt8 *>(col1_str.c_str()),
+                        reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
+                            - reinterpret_cast<const UInt8 *>(col1_str.c_str());
+                }
+
+                if (pos != col1_str_len)
+                    res[i] = 1 + getPositionUTF8(col1_str.c_str(), col1_str.c_str() + pos);
+                else
+                    res[i] = 0;
+            }
+
+            prev_col0_str_offset = col0_offsets[i];
+        }
+    }
+
+    template <bool is_ci>
+    void constVector(
+        const String & col0_str,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t pos;
+        size_t row_num = col1_offsets.size();
+        ColumnString::Offset prev_col1_str_offset = 0;
+
+        // One construction will be wasted, but it's acceptable
+        UTF8CaseInsensitiveStringSearcher searcher_ci = UTF8CaseInsensitiveStringSearcher(col0_str.c_str(), col0_str.size());
+        LibCASCIICaseSensitiveStringSearcher searcher_cs = LibCASCIICaseSensitiveStringSearcher(col0_str.c_str(), col0_str.size());
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+
+            if constexpr (is_ci)
+                pos = searcher_ci.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+            else
+                pos = searcher_cs.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1]) - &col1_data[prev_col1_str_offset];
+
+            if (pos != col1_str_len)
+                res[i] = 1 + getPositionUTF8(reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]), reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
+            else
+                res[i] = 0;
+
+            prev_col1_str_offset = col1_offsets[i];
+        }
+    }
+
+private:
+    static Int64 getPositionUTF8(const char * begin, const char * end)
+    {
+        size_t res = 0;
+        for (const char * it = begin; it != end; ++it)
+            if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
+                ++res;
+        return res;
+    }
+
+    TiDB::TiDBCollatorPtr collator{};
 };
 
 class FunctionSubStringIndex : public IFunction
