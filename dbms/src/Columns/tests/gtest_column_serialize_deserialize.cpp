@@ -122,7 +122,6 @@ public:
 
         align_buffer.resetIndex(false);
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
-        new_col_ptr->insertFrom(*column_ptr, byte_size.size() - 1);
 
         current_size = 0;
         pos.clear();
@@ -139,6 +138,7 @@ public:
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
 
         auto result_col_ptr = column_ptr->cloneFullColumn();
+        result_col_ptr->popBack(1);
         for (size_t i = 0; i < column_ptr->size(); ++i)
             result_col_ptr->insertFrom(*column_ptr, i);
 
@@ -179,23 +179,22 @@ public:
 #endif
         ColumnsAlignBufferAVX2 align_buffer;
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
-        new_col_ptr->insertFrom(*column_ptr, byte_size.size() / 2 - 1);
 
         current_size = 0;
         pos.clear();
-        for (size_t i = byte_size.size() / 2; i < byte_size.size(); ++i)
+        for (size_t i = byte_size.size() / 2 - 1; i < byte_size.size(); ++i)
         {
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
         column_ptr->serializeToPos(
             pos,
-            byte_size.size() / 2,
-            byte_size.size() - byte_size.size() / 2,
+            byte_size.size() / 2 - 1,
+            byte_size.size() - byte_size.size() / 2 + 1,
             false,
             ensure_uniqueness);
-        for (size_t i = byte_size.size() / 2; i < byte_size.size(); ++i)
-            pos[i - byte_size.size() / 2] -= byte_size[i];
+        for (size_t i = byte_size.size() / 2 - 1; i < byte_size.size(); ++i)
+            pos[i - byte_size.size() / 2 + 1] -= byte_size[i];
 
         align_buffer.resetIndex(false);
         new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
@@ -229,10 +228,10 @@ try
     testCountSerializeByteSize(col_vector_1, {4});
     testSerializeAndDeserialize(col_vector_1);
 
-    auto col_vector = createColumn<UInt64>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).column;
-    testCountSerializeByteSize(col_vector, {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8});
-    auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16}).column;
-    testCountSerialByteSizeForColumnArray(col_vector, col_offsets, {8, 16, 24, 32, 48});
+    auto col_vector = createColumn<UInt64>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}).column;
+    testCountSerializeByteSize(col_vector, {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8});
+    auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16, 18}).column;
+    testCountSerialByteSizeForColumnArray(col_vector, col_offsets, {8, 16, 24, 32, 48, 16});
 
     testSerializeAndDeserialize(col_vector);
 }

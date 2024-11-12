@@ -678,20 +678,10 @@ void ColumnString::deserializeAndInsertFromPos(
         return;
     }
 
-    /// Bad case when this column data is aligned first and then becomes unaligned due to calling other functions
-    if unlikely (char_buffer_size != 0)
+    if unlikely (char_buffer_size != 0 || offset_buffer_size != 0)
     {
-        chars.resize(char_size + char_buffer_size, AlignBufferAVX2::full_vector_size);
-        inline_memcpy(&chars[char_size], char_buffer.data, char_buffer_size);
-        char_size += char_buffer_size;
-        char_buffer_size = 0;
-    }
-    if unlikely (offset_buffer_size != 0)
-    {
-        offsets.resize(prev_size + offset_buffer_size / sizeof(size_t), AlignBufferAVX2::full_vector_size);
-        inline_memcpy(&offsets[prev_size], offset_buffer.data, offset_buffer_size);
-        prev_size += offset_buffer_size / sizeof(size_t);
-        offset_buffer_size = 0;
+        /// This column data is aligned first and then becomes unaligned due to calling other functions
+        throw Exception("AlignBuffer is not empty when the data is not aligned", ErrorCodes::LOGICAL_ERROR);
     }
 #endif
 

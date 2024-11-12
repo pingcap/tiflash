@@ -230,6 +230,7 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
     }
 }
 
+/// TODO: optimize by using align_buffer
 void ColumnFixedString::deserializeAndInsertFromPos(
     PaddedPODArray<char *> & pos,
     ColumnsAlignBufferAVX2 & /* align_buffer */)

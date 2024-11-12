@@ -253,17 +253,13 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
                 inline_memcpy(&data[prev_size], buffer.data, buffer_size);
                 buffer_size = 0;
             }
-
             return;
         }
 
-        /// Bad case when this column data is aligned first and then becomes unaligned due to calling other functions
         if unlikely (buffer_size != 0)
         {
-            data.resize(prev_size + buffer_size / sizeof(T), AlignBufferAVX2::full_vector_size);
-            inline_memcpy(&data[prev_size], buffer.data, buffer_size);
-            prev_size += buffer_size / sizeof(T);
-            buffer_size = 0;
+            /// This column data is aligned first and then becomes unaligned due to calling other functions
+            throw Exception("AlignBuffer is not empty when the data is not aligned", ErrorCodes::LOGICAL_ERROR);
         }
     }
 #endif

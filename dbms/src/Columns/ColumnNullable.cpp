@@ -49,6 +49,9 @@ ColumnNullable::ColumnNullable(MutableColumnPtr && nested_column_, MutableColumn
 
     if (null_map->isColumnConst())
         throw Exception("ColumnNullable cannot have constant null map", ErrorCodes::ILLEGAL_COLUMN);
+
+    if (!typeid_cast<const ColumnUInt8 *>(null_map.get()))
+        throw Exception("null_map must be a ColumnUInt8", ErrorCodes::ILLEGAL_COLUMN);
 }
 
 
