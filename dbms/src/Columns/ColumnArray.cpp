@@ -481,7 +481,7 @@ void ColumnArray::reserve(size_t n)
 
 void ColumnArray::reserveAlign(size_t n, size_t alignment)
 {
-    getOffsets().reserveAlign(n, alignment);
+    getOffsets().reserve(n, alignment);
     /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
     getData().reserveAlign(n, alignment);
 }
