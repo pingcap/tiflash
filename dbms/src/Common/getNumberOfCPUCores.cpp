@@ -65,10 +65,10 @@ void computeAndSetNumberOfPhysicalCPUCores(
     // - `number_of_logical_cpu_cores_ / (hardware_logical_cpu_cores / number_of_hardware_physical_cores)` means how many physical cpu cores the tiflash process could use. (Actually, it's needless to get physical cpu cores in virtual environment, but we must ensure the behavior `1` is not broken)
     auto hardware_logical_cpu_cores = std::thread::hardware_concurrency();
 
-    UInt16 cpu_num_per_physical_core = hardware_logical_cpu_cores / number_of_hardware_physical_cores;
-    cpu_num_per_physical_core = std::max<UInt16>(1, cpu_num_per_physical_core);
+    UInt16 thread_num_per_physical_core = hardware_logical_cpu_cores / number_of_hardware_physical_cores;
+    thread_num_per_physical_core = std::max<UInt16>(1, thread_num_per_physical_core);
 
-    UInt16 physical_cpu_cores = number_of_logical_cpu_cores_ / cpu_num_per_physical_core;
+    UInt16 physical_cpu_cores = number_of_logical_cpu_cores_ / thread_num_per_physical_core;
     CPUCores::number_of_physical_cpu_cores = physical_cpu_cores > 0 ? physical_cpu_cores : 1;
     LOG_INFO(
         DB::Logger::get(),
