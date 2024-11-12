@@ -14,6 +14,7 @@
 
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
 #include "Functions/FunctionHelpers.h"
 
 namespace DB
@@ -31,7 +32,7 @@ public:
         Field x;
         col_ptr_clone->get(0, x);
         col_ptr_clone->assumeMutable()->insert(x);
-        // Test whether the clone is the deep copy, i.e the original column does not changed 
+        // Test whether the clone is the deep copy, i.e the original column does not changed
         ASSERT_EQ(col_ptr_str, column_ptr->dumpStructure());
 
         auto col_nullmap = ColumnUInt8::create();
@@ -58,8 +59,9 @@ try
     auto col_string = createColumn<String>({"sdafyuwer123"}).column;
     testCloneFullColumn(col_string);
     auto col_array = createColumn<Array>(
-                std::make_tuple(std::make_shared<DataTypeFloat32>()), //
-                {Array{}, Array{1.0, 2.0}, Array{1.0, 2.0, 3.0}}).column;
+                         std::make_tuple(std::make_shared<DataTypeFloat32>()), //
+                         {Array{}, Array{1.0, 2.0}, Array{1.0, 2.0, 3.0}})
+                         .column;
     testCloneFullColumn(col_array);
     ColumnPtr col_fixed_string = ColumnFixedString::create(2);
     col_fixed_string->assumeMutable()->insertData("12", 2);
