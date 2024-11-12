@@ -221,8 +221,7 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
 
 void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    if unlikely (byte_size.size() != size())
-        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
     for (size_t i = 0; i < size; ++i)
@@ -248,10 +247,8 @@ template <bool has_null>
 void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, bool ensure_uniqueness)
     const
 {
-    if unlikely (length > pos.size())
-        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (start + length > size())
-        throw Exception("start + length > size of column", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
     for (size_t i = 0; i < length; ++i)
     {

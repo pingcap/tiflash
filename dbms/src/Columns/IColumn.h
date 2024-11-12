@@ -280,7 +280,25 @@ public:
     /// by using reserveAlign or reserveAlignWithTotalMemoryHint.
     /// If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
     /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data
-    /// when ColumnsAlignBufferAVX2.needFlush() is true.
+    /// when ColumnsAlignBufferAVX2.needFlush() is true(by calling ColumnsAlignBufferAVX2.resetIndex(true)).
+    /// Example:
+    ///     auto column_ptr = ColumnVector<UInt64>::create();
+    ///     #ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    ///     column_ptr->reserveAlign(xxx, AlignBufferAVX2::full_vector_size);
+    ///     #endif
+    ///     ColumnAlignBufferAVX2 align_buffer;
+    ///     /// Resize align_buffer if you want.
+    ///     /// Note that different column type needs different size of align_buffer.
+    ///     /// E.g. 1 for ColumnVector/ColumnDecimal, 2 for ColumnString/ColumnNullable(ColumnVector), 3 for ColumnNullable(ColumnString).
+    ///     align_buffer.resize(1);
+    ///     column_ptr->deserializeAndInsertFromPos(pos1, align_buffer);
+    ///     align_buffer.resetIndex(false);
+    ///     column_ptr->deserializeAndInsertFromPos(pos2, align_buffer);
+    ///     /// Last call to resetIndex must be true to copy the unaligned data from align_buffer to column data.
+    ///     align_buffer.resetIndex(true);
+    ///     column_ptr->deserializeAndInsertFromPos(pos3, align_buffer);
+    /// During the process, any function that may change the alignment of column data should not be called otherwise
+    /// the exception will be thrown.
     virtual void deserializeAndInsertFromPos(
         PaddedPODArray<char *> & /* pos */,
         ColumnsAlignBufferAVX2 & /* align_buffer */)
@@ -289,6 +307,7 @@ public:
     /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
+    /// TODO: Optimize by adding align_buffer like deserializeAndInsertFromPos.
     virtual void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const Offsets & /* array_offsets */)

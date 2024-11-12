@@ -134,8 +134,7 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
 
 void ColumnFixedString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    if (byte_size.size() != size())
-        throw Exception("byte_size.size() != column size", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
     for (size_t i = 0; i < size; ++i)
@@ -146,8 +145,12 @@ void ColumnFixedString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    if unlikely (byte_size.size() != array_offsets.size())
-        byte_size.resize(array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        byte_size.size() == array_offsets.size(),
+        "size of byte_size({}) != size of array_offsets({})",
+        byte_size.size(),
+        array_offsets.size());
+
     size_t size = array_offsets.size();
     for (size_t i = 0; i < size; ++i)
         byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
@@ -169,10 +172,8 @@ void ColumnFixedString::serializeToPos(
 template <bool has_null>
 void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
-    if unlikely (length > pos.size())
-        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (start + length > size())
-        throw Exception("start + length > size of column", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
     for (size_t i = 0; i < length; ++i)
     {
@@ -207,12 +208,18 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
     size_t length,
     const IColumn::Offsets & array_offsets) const
 {
-    if unlikely (length > pos.size())
-        throw Exception("length > pos.size()", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (start + length > array_offsets.size())
-        throw Exception("start + length > array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
-    if unlikely (!array_offsets.empty() && array_offsets.back() != size())
-        throw Exception("The last array offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(
+        start + length <= array_offsets.size(),
+        "start({}) + length({}) > size of array_offsets({})",
+        start,
+        length,
+        array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        array_offsets.empty() || array_offsets.back() == size(),
+        "The last array offset({}) doesn't match size of column({})",
+        array_offsets.back(),
+        size());
 
     for (size_t i = 0; i < length; ++i)
     {
@@ -252,11 +259,18 @@ void ColumnFixedString::deserializeAndInsertFromPosForColumnArray(
 {
     if unlikely (pos.empty())
         return;
-    if unlikely (pos.size() > array_offsets.size())
-        throw Exception("pos.size() > array_offsets.size()", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        pos.size() <= array_offsets.size(),
+        "size of pos({}) > size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
     size_t start_point = array_offsets.size() - pos.size();
-    if unlikely (array_offsets[start_point - 1] != size())
-        throw Exception("Offset doesn't match column size", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        array_offsets[start_point - 1] == size(),
+        "array_offset[start_point({}) - 1]({}) doesn't match size of column({})",
+        start_point,
+        array_offsets[start_point - 1],
+        size());
 
     size_t prev_size = chars.size();
     chars.resize(array_offsets.back());

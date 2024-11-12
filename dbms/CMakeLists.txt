@@ -105,6 +105,9 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnsCommon.cpp
     src/Columns/ColumnVector.cpp
     src/Columns/ColumnDecimal.cpp
+    src/Columns/ColumnArray.cpp
+    src/Columns/ColumnNullable.cpp
+    src/Columns/ColumnFixedString.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
     src/IO/Compression/EncodingUtil.cpp
