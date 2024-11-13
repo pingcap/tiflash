@@ -3525,7 +3525,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     auto stream = std::make_shared<BitmapFilterBlockInputStream>(columns_to_read, skippable_stream, bitmap_filter);
     if (vector_index_stream)
     {
-        // Squash blocks to reduce the number of blocks.
+        // For vector search, there are more likely to return small blocks from different sub-streams.
+        // Squash blocks to reduce the number of blocks thus improve the performance of upper layer.
         return std::make_shared<SquashingBlockInputStream>(
             stream,
             /*min_block_size_rows=*/read_data_block_rows,
