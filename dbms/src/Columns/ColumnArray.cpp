@@ -223,9 +223,20 @@ void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) con
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
+    if unlikely (!getOffsets().empty() && getOffsets().back() > UINT32_MAX)
+    {
+        size_t sz = size();
+        for (size_t i = 0; i < sz; ++i)
+            RUNTIME_CHECK_MSG(
+                sizeAt(i) > UINT32_MAX,
+                "size of ({}) is ({}), which is greater than UINT32_MAX",
+                i,
+                sizeAt(i));
+    }
+
     size_t size = byte_size.size();
     for (size_t i = 0; i < size; ++i)
-        byte_size[i] += sizeof(size_t);
+        byte_size[i] += sizeof(UInt32);
 
     getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }
@@ -250,6 +261,7 @@ void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start,
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
+    /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -257,9 +269,9 @@ void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start,
             if (pos[i] == nullptr)
                 continue;
         }
-        size_t len = sizeAt(start + i);
-        tiflash_compiler_builtin_memcpy(pos[i], &len, sizeof(size_t));
-        pos[i] += sizeof(size_t);
+        UInt32 len = sizeAt(start + i);
+        tiflash_compiler_builtin_memcpy(pos[i], &len, sizeof(UInt32));
+        pos[i] += sizeof(UInt32);
     }
 
     getData().serializeToPosForColumnArray(pos, start, length, has_null, ensure_uniqueness, getOffsets());
@@ -270,12 +282,14 @@ void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, Colu
     auto & offsets = getOffsets();
     size_t prev_size = offsets.size();
     size_t size = pos.size();
+
     offsets.resize(prev_size + size);
     for (size_t i = 0; i < size; ++i)
     {
-        tiflash_compiler_builtin_memcpy(&offsets[prev_size + i], pos[i], sizeof(size_t));
-        offsets[prev_size + i] += offsets[prev_size + i - 1];
-        pos[i] += sizeof(size_t);
+        UInt32 len;
+        tiflash_compiler_builtin_memcpy(&len, pos[i], sizeof(UInt32));
+        offsets[prev_size + i] = len + offsets[prev_size + i - 1];
+        pos[i] += sizeof(UInt32);
     }
 
     getData().deserializeAndInsertFromPosForColumnArray(pos, offsets);

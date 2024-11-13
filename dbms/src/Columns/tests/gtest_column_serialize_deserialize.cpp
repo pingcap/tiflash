@@ -55,7 +55,7 @@ public:
         column_array->countSerializeByteSize(byte_size);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
-            ASSERT_EQ(byte_size[i], 8 + i + result_byte_size[i]);
+            ASSERT_EQ(byte_size[i], sizeof(UInt32) + i + result_byte_size[i]);
     }
 
     static void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
@@ -305,7 +305,7 @@ TEST_F(TestColumnSerializeDeserialize, TestColumnString)
 try
 {
     auto col_string_1 = createColumn<String>({"sdafyuwer123"}).column;
-    testCountSerializeByteSize(col_string_1, {8 + 13});
+    testCountSerializeByteSize(col_string_1, {4 + 13});
     testSerializeAndDeserialize(col_string_1);
 
     auto col_string = createColumn<String>({"123",
@@ -327,24 +327,24 @@ try
                           .column;
     testCountSerializeByteSize(
         col_string,
-        {8 + 4,
-         8 + 11,
-         8 + 5,
-         8 + 11,
-         8 + 5,
-         8 + 11,
-         8 + 13,
-         8 + 7,
-         8 + 9,
-         8 + 7,
-         8 + 13,
-         8 + 18,
-         8 + 15,
-         8 + 13,
-         8 + 10,
-         8 + 21});
+        {4 + 4,
+         4 + 11,
+         4 + 5,
+         4 + 11,
+         4 + 5,
+         4 + 11,
+         4 + 13,
+         4 + 7,
+         4 + 9,
+         4 + 7,
+         4 + 13,
+         4 + 18,
+         4 + 15,
+         4 + 13,
+         4 + 10,
+         4 + 21});
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6, 10, 16}).column;
-    testCountSerialByteSizeForColumnArray(col_string, col_offsets, {8 + 4, 16 + 16, 24 + 27, 32 + 36, 48 + 90});
+    testCountSerialByteSizeForColumnArray(col_string, col_offsets, {4 + 4, 8 + 16, 12 + 27, 16 + 36, 24 + 90});
 
     testSerializeAndDeserialize(col_string);
 }
@@ -388,15 +388,15 @@ try
     // ColumnNullable(ColumnString)
     auto col_nullable_string
         = createNullableColumn<String>({"123", "2", "34", "456", "5678", "6"}, {0, 1, 0, 1, 0, 1}).column;
-    testCountSerializeByteSize(col_nullable_string, {9 + 4, 9 + 1, 9 + 3, 9 + 1, 9 + 5, 9 + 1});
-    testCountSerialByteSizeForColumnArray(col_nullable_string, col_offsets, {9 + 4, 18 + 4, 27 + 7});
+    testCountSerializeByteSize(col_nullable_string, {5 + 4, 5 + 1, 5 + 3, 5 + 1, 5 + 5, 5 + 1});
+    testCountSerialByteSizeForColumnArray(col_nullable_string, col_offsets, {5 + 4, 10 + 4, 15 + 7});
     testSerializeAndDeserialize(col_nullable_string);
 
     // ColumnNullable(ColumnArray(ColumnVector))
     auto col_vector = createColumn<Float32>({1.0, 2.2, 3.3, 4.4, 5.5, 6.1}).column;
     auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
     auto col_nullable_array_vec = ColumnNullable::create(col_array_vec, createColumn<UInt8>({1, 1, 1}).column);
-    testCountSerializeByteSize(col_nullable_array_vec, {1 + 8 + 4, 1 + 8 + 8, 1 + 8 + 12});
+    testCountSerializeByteSize(col_nullable_array_vec, {1 + 4 + 4, 1 + 4 + 8, 1 + 4 + 12});
     testSerializeAndDeserialize(col_nullable_array_vec);
 }
 CATCH
@@ -408,20 +408,20 @@ try
     auto col_vector = createColumn<Float32>({1.0, 2.2, 3.3, 4.4, 5.5, 6.1}).column;
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
     auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
-    testCountSerializeByteSize(col_array_vec, {8 + 4, 8 + 8, 8 + 12});
+    testCountSerializeByteSize(col_array_vec, {4 + 4, 4 + 8, 4 + 12});
     testSerializeAndDeserialize(col_array_vec);
 
     // ColumnArray(ColumnString)
     auto col_string = createColumn<String>({"123", "2", "34", "456", "5678", "6"}).column;
     auto col_array_string = ColumnArray::create(col_string, col_offsets);
-    testCountSerializeByteSize(col_array_string, {8 + 8 + 4, 8 + 16 + 5, 8 + 24 + 11});
+    testCountSerializeByteSize(col_array_string, {4 + 4 + 4, 4 + 8 + 5, 4 + 12 + 11});
     testSerializeAndDeserialize(col_array_string);
 
     // ColumnArray(ColumnNullable(ColumnString))
     auto col_nullable_string
         = createNullableColumn<String>({"123", "2", "34", "456", "5678", "6"}, {0, 1, 0, 1, 0, 1}).column;
     auto col_array_nullable_string = ColumnArray::create(col_nullable_string, col_offsets);
-    testCountSerializeByteSize(col_array_nullable_string, {8 + 9 + 4, 8 + 18 + 4, 8 + 27 + 7});
+    testCountSerializeByteSize(col_array_nullable_string, {4 + 5 + 4, 4 + 10 + 4, 4 + 15 + 7});
     testSerializeAndDeserialize(col_array_nullable_string);
 
     // ColumnArray(ColumnDecimal)
@@ -465,7 +465,7 @@ try
     auto col_array_decimal_256 = ColumnArray::create(col_decimal_256, col_offsets_decimal);
     testCountSerializeByteSize(
         col_array_decimal_256,
-        {8 + 3 * 48, 8 + 5 * 48, 8 + 7 * 48, 8 + 5 * 48, 8 + 10 * 48, 8 + 48, 8 + 48, 8 + 48});
+        {4 + 3 * 48, 4 + 5 * 48, 4 + 7 * 48, 4 + 5 * 48, 4 + 10 * 48, 4 + 48, 4 + 48, 4 + 48});
     testSerializeAndDeserialize(col_array_decimal_256);
 
     // ColumnArray(ColumnFixedString)
@@ -478,7 +478,7 @@ try
     col_fixed_string_mut->insertData("ff", 2);
     ColumnPtr col_fixed_string = std::move(col_fixed_string_mut);
     auto col_array_fixed_string = ColumnArray::create(col_fixed_string, col_offsets);
-    testCountSerializeByteSize(col_array_fixed_string, {8 + 2, 8 + 4, 8 + 6});
+    testCountSerializeByteSize(col_array_fixed_string, {4 + 2, 4 + 4, 4 + 6});
     testSerializeAndDeserialize(col_array_fixed_string);
 }
 CATCH
@@ -489,9 +489,9 @@ try
     auto col_tuple = ColumnTuple::create(
         {createColumn<UInt64>({1, 2, 3, 4, 5, 6}).column,
          createColumn<String>({"123", "2", "34", "456", "5678", "6"}).column});
-    testCountSerializeByteSize(col_tuple, {8 + 8 + 4, 8 + 8 + 2, 8 + 8 + 3, 8 + 8 + 4, 8 + 8 + 5, 8 + 8 + 2});
+    testCountSerializeByteSize(col_tuple, {8 + 4 + 4, 8 + 4 + 2, 8 + 4 + 3, 8 + 4 + 4, 8 + 4 + 5, 8 + 4 + 2});
     auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
-    testCountSerialByteSizeForColumnArray(col_tuple, col_offsets, {8 + 8 + 4, 16 + 16 + 5, 24 + 24 + 11});
+    testCountSerialByteSizeForColumnArray(col_tuple, col_offsets, {8 + 4 + 4, 16 + 8 + 5, 24 + 12 + 11});
 
     testSerializeAndDeserialize(col_tuple);
 }

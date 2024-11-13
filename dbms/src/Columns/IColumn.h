@@ -282,21 +282,24 @@ public:
     /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data
     /// when ColumnsAlignBufferAVX2.needFlush() is true(by calling ColumnsAlignBufferAVX2.resetIndex(true)).
     /// Example:
-    ///     auto column_ptr = ColumnVector<UInt64>::create();
-    ///     #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    ///     column_ptr->reserveAlign(xxx, FULL_VECTOR_SIZE_AVX2);
-    ///     #endif
+    /// #ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->reserveAlign(xxx, FULL_VECTOR_SIZE_AVX2);
+    /// #endif
     ///     ColumnAlignBufferAVX2 align_buffer;
     ///     /// Resize align_buffer if you want.
     ///     /// Note that different column type needs different size of align_buffer.
     ///     /// E.g. 1 for ColumnVector/ColumnDecimal, 2 for ColumnString/ColumnNullable(ColumnVector), 3 for ColumnNullable(ColumnString).
-    ///     align_buffer.resize(1);
-    ///     column_ptr->deserializeAndInsertFromPos(pos1, align_buffer);
+    ///     align_buffer.resize(x);
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->deserializeAndInsertFromPos(pos1, align_buffer);
     ///     align_buffer.resetIndex(false);
-    ///     column_ptr->deserializeAndInsertFromPos(pos2, align_buffer);
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->deserializeAndInsertFromPos(pos2, align_buffer);
     ///     /// Last call to resetIndex must be true to copy the unaligned data from align_buffer to column data.
     ///     align_buffer.resetIndex(true);
-    ///     column_ptr->deserializeAndInsertFromPos(pos3, align_buffer);
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->deserializeAndInsertFromPos(pos3, align_buffer);
     /// During the process, any function that may change the alignment of column data should not be called otherwise
     /// the exception will be thrown.
     virtual void deserializeAndInsertFromPos(
