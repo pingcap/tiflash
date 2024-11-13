@@ -43,6 +43,8 @@ struct TableScanImpl
     {
         return executor->has_tbl_scan() || executor->has_partition_table_scan();
     }
+
+    static bool isSourceExecutor() { return true; }
 };
 using TableScanStatisticsBase = ExecutorStatistics<TableScanImpl>;
 
