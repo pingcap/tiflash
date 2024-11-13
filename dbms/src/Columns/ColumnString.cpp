@@ -661,7 +661,7 @@ void ColumnString::deserializeAndInsertFromPos(
             do
             {
                 UInt8 remain = FULL_VECTOR_SIZE_AVX2 - char_buffer_size;
-                UInt8 copy_bytes = std::min(remain, str_size);
+                UInt8 copy_bytes = static_cast<UInt8>(std::min(static_cast<UInt32>(remain), str_size));
                 inline_memcpy(&char_buffer.data[char_buffer_size], pos[i], copy_bytes);
                 pos[i] += copy_bytes;
                 char_buffer_size += copy_bytes;
