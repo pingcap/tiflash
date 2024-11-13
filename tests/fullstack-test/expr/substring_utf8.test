@@ -43,9 +43,9 @@ mysql> drop table if exists test.t
 
 mysql> drop table if exists test.t1
 mysql> create table test.t1 (c1 int, c2 int)
-mysql> insert into test.t1 (c1, c2) values (-82 ,  -4), (  1 ,   4);
-mysql> alter table test.t1 set tiflash replica 1;
-func> wait_table test test.t1
+mysql> insert into test.t1 (c1, c2) values (-82 ,  -4), (  1 ,   4)
+mysql> alter table test.t1 set tiflash replica 1
+func> wait_table test t1
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select c2, substring('abc', c2) as b FROM test.t1 order by 1, 2
 +------+------+
