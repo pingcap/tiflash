@@ -88,7 +88,7 @@ protected:
             first_snap->delta->getSharedDeltaIndex()->getRNCacheKey());
 
         // hack to change the "immutable" delta-index on delta-snapshot for testing
-        (*const_cast<DeltaIndexPtr *>(&first_snap->delta->shared_delta_index)) = broken_delta_index;
+        (*const_cast<DeltaIndexPtr *>(&first_snap->delta->getSharedDeltaIndex())) = broken_delta_index;
 
         auto task = std::make_shared<DM::SegmentReadTask>(
             first,
