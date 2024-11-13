@@ -3569,8 +3569,7 @@ public:
         }
     }
 
-    static void addTrailingZero(ColumnString::Chars_t & res,
-            ColumnString::Offset & res_offset)
+    static void addTrailingZero(ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
     {
         res.resize(res.size() + 1);
         res[res_offset] = '\0';
