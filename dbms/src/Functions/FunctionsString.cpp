@@ -3569,6 +3569,14 @@ public:
         }
     }
 
+    static void addTrailingZero(ColumnString::Chars_t & res,
+            ColumnString::Offset & res_offset)
+    {
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        res_offset++;
+    }
+
     // Do padding for one row.
     // data_size/padding_size includes the tailing '\0'.
     // Return true if result is null.
@@ -3587,6 +3595,7 @@ public:
 
         if (target_len < 0 || (data_len < static_cast<ColumnString::Offset>(target_len) && pad_len == 0))
         {
+            addTrailingZero(res, res_offset);
             return true;
         }
 
@@ -3638,10 +3647,7 @@ public:
                 ++left;
             }
         }
-        // Add trailing zero.
-        res.resize(res.size() + 1);
-        res[res_offset] = '\0';
-        res_offset++;
+        addTrailingZero(res, res_offset);
         return false;
     }
 
@@ -3661,6 +3667,7 @@ public:
 
         if (target_len < 0 || (data_len < static_cast<ColumnString::Offset>(target_len) && pad_len == 0))
         {
+            addTrailingZero(res, res_offset);
             return true;
         }
 
@@ -3713,10 +3720,7 @@ public:
             copyResult(res, res_offset, data, 0, tmp_target_len);
             res_offset += tmp_target_len;
         }
-        // Add trailing zero.
-        res.resize(res.size() + 1);
-        res[res_offset] = '\0';
-        res_offset++;
+        addTrailingZero(res, res_offset);
         return false;
     }
 
