@@ -113,6 +113,7 @@ private:
     void load();
 
     std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream;
+    // Pointers to stream's children, nullptr if the child is not a VectorIndexBlockInputStream.
     std::vector<VectorIndexBlockInputStream *> index_streams;
     UInt32 topk = 0;
     bool loaded = false;
