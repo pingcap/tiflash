@@ -348,29 +348,24 @@ struct CloneColumnFilesHelper
         WriteBatches & wbs);
 };
 
-class DeltaValueSnapshot
-    : public std::enable_shared_from_this<DeltaValueSnapshot>
-    , private boost::noncopyable
+class DeltaValueSnapshot : private boost::noncopyable
 {
     friend class DeltaValueSpace;
     friend struct DB::DM::Remote::Serializer;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     const bool is_update{false};
 
     // The delta index of cached.
     const DeltaIndexPtr shared_delta_index;
     const UInt64 delta_index_epoch;
 
+    // mem-table may not be ready when the snapshot is creating under disagg arch, so it is not "const"
     ColumnFileSetSnapshotPtr mem_table_snap;
     const ColumnFileSetSnapshotPtr persisted_files_snap;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
-    DeltaValueSpacePtr delta;
+    const DeltaValueSpacePtr delta;
 
     const CurrentMetrics::Metric type;
 
@@ -380,16 +375,14 @@ public:
         // We only allow one for_update snapshots to exist, so it cannot be cloned.
         RUNTIME_CHECK(!is_update);
 
-        auto c = std::make_shared<DeltaValueSnapshot>(
+        return std::make_shared<DeltaValueSnapshot>(
             type,
             is_update,
             mem_table_snap->clone(),
             persisted_files_snap->clone(),
+            delta,
             shared_delta_index,
             delta_index_epoch);
-        c->delta = delta;
-
-        return c;
     }
 
     DeltaValueSnapshot(
@@ -397,6 +390,7 @@ public:
         bool update_,
         ColumnFileSetSnapshotPtr mem_snap,
         const ColumnFileSetSnapshotPtr persisted_snap,
+        DeltaValueSpacePtr delta_vs,
         DeltaIndexPtr delta_index,
         UInt64 index_epoch)
         : is_update(update_)
@@ -404,6 +398,7 @@ public:
         , delta_index_epoch(index_epoch)
         , mem_table_snap(std::move(mem_snap))
         , persisted_files_snap(std::move(persisted_snap))
+        , delta(std::move(delta_vs))
         , type(type_)
     {
         CurrentMetrics::add(type);

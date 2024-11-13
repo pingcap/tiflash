@@ -162,10 +162,11 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
         false,
         std::move(mem_snap),
         std::move(persisted_snap),
+        // There is no DeltaValueSpace in the disagg arch read node
+        /*delta_vs*/ nullptr,
         std::move(delta_index),
         // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
         proto.delta_index_epoch());
-    // delta_snap->delta is nullptr because there is no DeltaValueSpace in the disagg arch read node
 
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
     DMFiles dmfiles;

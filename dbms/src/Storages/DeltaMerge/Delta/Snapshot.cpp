@@ -52,9 +52,9 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(
         for_update,
         std::move(mem_snap),
         std::move(persisted_snap),
+        /*delta_vs=*/this->shared_from_this(),
         delta_index,
         delta_index_epoch);
-    snap->delta = this->shared_from_this();
 
     return snap;
 }
