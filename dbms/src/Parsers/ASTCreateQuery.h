@@ -92,7 +92,6 @@ class ASTCreateQuery : public ASTQueryWithOutput
 public:
     bool attach{false}; /// Query ATTACH TABLE, not CREATE TABLE.
     bool if_not_exists{false};
-    bool is_view{false};
     bool is_materialized_view{false};
     bool is_populate{false};
     String database;
@@ -145,8 +144,6 @@ protected:
 
         {
             std::string what = "TABLE";
-            if (is_view)
-                what = "VIEW";
             if (is_materialized_view)
                 what = "MATERIALIZED VIEW";
 

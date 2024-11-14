@@ -220,7 +220,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr select;
     bool attach = false;
     bool if_not_exists = false;
-    bool is_view = false;
     bool is_materialized_view = false;
     bool is_populate = false;
 
@@ -318,8 +317,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             is_materialized_view = true;
         }
-        else
-            is_view = true;
 
         if (!s_view.ignore(pos, expected))
             return false;
@@ -384,7 +381,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     query->attach = attach;
     query->if_not_exists = if_not_exists;
-    query->is_view = is_view;
     query->is_materialized_view = is_materialized_view;
     query->is_populate = is_populate;
 

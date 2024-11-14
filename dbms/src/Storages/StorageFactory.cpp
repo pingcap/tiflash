@@ -71,63 +71,47 @@ StoragePtr StorageFactory::get(
     ASTs args;
     ASTStorage * storage_def = query.storage;
 
-    if (query.is_view)
-    {
-        if (query.storage)
-            throw Exception("Specifying ENGINE is not allowed for a View", ErrorCodes::INCORRECT_QUERY);
+    /// Check for some special types, that are not allowed to be stored in tables. Example: NULL data type.
+    /// Exception: any type is allowed in View, because plain (non-materialized) View does not store anything itself.
+    checkAllTypesAreAllowedInTable(columns.getAll());
 
-        name = "View";
+    if (query.is_materialized_view)
+    {
+        name = "MaterializedView";
     }
     else
     {
-        /// Check for some special types, that are not allowed to be stored in tables. Example: NULL data type.
-        /// Exception: any type is allowed in View, because plain (non-materialized) View does not store anything itself.
-        checkAllTypesAreAllowedInTable(columns.getAll());
+        if (!storage_def)
+            throw Exception("Incorrect CREATE query: ENGINE required", ErrorCodes::ENGINE_REQUIRED);
 
-        if (query.is_materialized_view)
+        const ASTFunction & engine_def = *storage_def->engine;
+
+        if (engine_def.parameters)
+            throw Exception(
+                "Engine definition cannot take the form of a parametric function",
+                ErrorCodes::FUNCTION_CANNOT_HAVE_PARAMETERS);
+
+        if (engine_def.arguments)
+            args = engine_def.arguments->children;
+
+        name = engine_def.name;
+
+        if ((storage_def->partition_by || storage_def->order_by || storage_def->sample_by || storage_def->settings)
+            && !endsWith(name, "MergeTree"))
         {
-            name = "MaterializedView";
+            throw Exception(
+                "Engine " + name
+                    + " doesn't support PARTITION BY, ORDER BY, SAMPLE BY or SETTINGS clauses. "
+                      "Currently only the MergeTree family of engines supports them",
+                ErrorCodes::BAD_ARGUMENTS);
         }
-        else
+
+        if (name == "MaterializedView")
         {
-            if (!storage_def)
-                throw Exception("Incorrect CREATE query: ENGINE required", ErrorCodes::ENGINE_REQUIRED);
-
-            const ASTFunction & engine_def = *storage_def->engine;
-
-            if (engine_def.parameters)
-                throw Exception(
-                    "Engine definition cannot take the form of a parametric function",
-                    ErrorCodes::FUNCTION_CANNOT_HAVE_PARAMETERS);
-
-            if (engine_def.arguments)
-                args = engine_def.arguments->children;
-
-            name = engine_def.name;
-
-            if ((storage_def->partition_by || storage_def->order_by || storage_def->sample_by || storage_def->settings)
-                && !endsWith(name, "MergeTree"))
-            {
-                throw Exception(
-                    "Engine " + name
-                        + " doesn't support PARTITION BY, ORDER BY, SAMPLE BY or SETTINGS clauses. "
-                          "Currently only the MergeTree family of engines supports them",
-                    ErrorCodes::BAD_ARGUMENTS);
-            }
-
-            if (name == "View")
-            {
-                throw Exception(
-                    "Direct creation of tables with ENGINE View is not supported, use CREATE VIEW statement",
-                    ErrorCodes::INCORRECT_QUERY);
-            }
-            else if (name == "MaterializedView")
-            {
-                throw Exception(
-                    "Direct creation of tables with ENGINE MaterializedView is not supported, use CREATE MATERIALIZED "
-                    "VIEW statement",
-                    ErrorCodes::INCORRECT_QUERY);
-            }
+            throw Exception(
+                "Direct creation of tables with ENGINE MaterializedView is not supported, use CREATE MATERIALIZED "
+                "VIEW statement",
+                ErrorCodes::INCORRECT_QUERY);
         }
     }
 

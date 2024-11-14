@@ -470,11 +470,6 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
         ASTPtr as_create_ptr = context.getCreateTableQuery(as_database_name, as_table_name);
         const auto & as_create = typeid_cast<const ASTCreateQuery &>(*as_create_ptr);
 
-        if (as_create.is_view)
-            throw Exception(
-                "Cannot CREATE a table AS " + as_database_name + "." + as_table_name + ", it is a View",
-                ErrorCodes::INCORRECT_QUERY);
-
         create.set(create.storage, as_create.storage->ptr());
     }
 }
@@ -585,7 +580,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     if (create.to_database.empty())
         create.to_database = current_database;
 
-    if (create.select && (create.is_view || create.is_materialized_view))
+    if (create.select && create.is_materialized_view)
         create.select->setDatabaseIfNeeded(current_database);
 
     Block as_select_sample;
@@ -660,7 +655,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     }
 
     /// If the query is a CREATE SELECT, insert the data into the table.
-    if (create.select && !create.attach && !create.is_view && (!create.is_materialized_view || create.is_populate))
+    if (create.select && !create.attach && (!create.is_materialized_view || create.is_populate))
     {
         auto insert = std::make_shared<ASTInsertQuery>();
 
