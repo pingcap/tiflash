@@ -3626,7 +3626,7 @@ public:
     {
         res.resize(res.size() + 1);
         res[res_offset] = '\0';
-        res_offset++;
+        ++res_offset;
     }
 
     // Do padding for one row.
