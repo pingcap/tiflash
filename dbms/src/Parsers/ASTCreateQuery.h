@@ -92,7 +92,6 @@ class ASTCreateQuery : public ASTQueryWithOutput
 public:
     bool attach{false}; /// Query ATTACH TABLE, not CREATE TABLE.
     bool if_not_exists{false};
-    bool is_materialized_view{false};
     bool is_populate{false};
     String database;
     String table;
@@ -144,9 +143,6 @@ protected:
 
         {
             std::string what = "TABLE";
-            if (is_materialized_view)
-                what = "MATERIALIZED VIEW";
-
             settings.ostr << (settings.hilite ? hilite_keyword : "") << (attach ? "ATTACH " : "CREATE ") << what << " "
                           << (if_not_exists ? "IF NOT EXISTS " : "") << (settings.hilite ? hilite_none : "")
                           << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);

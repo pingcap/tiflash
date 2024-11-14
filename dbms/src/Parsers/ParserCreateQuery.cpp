@@ -220,7 +220,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr select;
     bool attach = false;
     bool if_not_exists = false;
-    bool is_materialized_view = false;
     bool is_populate = false;
 
     if (!s_create.ignore(pos, expected))
@@ -312,68 +311,7 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
     else
     {
-        /// VIEW or MATERIALIZED VIEW
-        if (s_materialized.ignore(pos, expected))
-        {
-            is_materialized_view = true;
-        }
-
-        if (!s_view.ignore(pos, expected))
-            return false;
-
-        if (s_if_not_exists.ignore(pos, expected))
-            if_not_exists = true;
-
-        if (!name_p.parse(pos, table, expected))
-            return false;
-
-        if (s_dot.ignore(pos, expected))
-        {
-            database = table;
-            if (!name_p.parse(pos, table, expected))
-                return false;
-        }
-
-        // TO [db.]table
-        if (ParserKeyword{"TO"}.ignore(pos, expected))
-        {
-            if (!name_p.parse(pos, to_table, expected))
-                return false;
-
-            if (s_dot.ignore(pos, expected))
-            {
-                to_database = to_table;
-                if (!name_p.parse(pos, to_table, expected))
-                    return false;
-            }
-        }
-
-        /// Optional - a list of columns can be specified. It must fully comply with SELECT.
-        if (s_lparen.ignore(pos, expected))
-        {
-            if (!columns_p.parse(pos, columns, expected))
-                return false;
-
-            if (!s_rparen.ignore(pos, expected))
-                return false;
-        }
-
-        if (is_materialized_view && !to_table)
-        {
-            /// Internal ENGINE for MATERIALIZED VIEW must be specified.
-            if (!storage_p.parse(pos, storage, expected))
-                return false;
-
-            if (s_populate.ignore(pos, expected))
-                is_populate = true;
-        }
-
-        /// AS SELECT ...
-        if (!s_as.ignore(pos, expected))
-            return false;
-
-        if (!select_p.parse(pos, select, expected))
-            return false;
+        return false;
     }
 
     auto query = std::make_shared<ASTCreateQuery>();
@@ -381,7 +319,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     query->attach = attach;
     query->if_not_exists = if_not_exists;
-    query->is_materialized_view = is_materialized_view;
     query->is_populate = is_populate;
 
     if (database)

@@ -580,9 +580,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     if (create.to_database.empty())
         create.to_database = current_database;
 
-    if (create.select && create.is_materialized_view)
-        create.select->setDatabaseIfNeeded(current_database);
-
     Block as_select_sample;
     if (create.select && (!create.attach || !create.columns))
         as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context);
@@ -655,7 +652,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     }
 
     /// If the query is a CREATE SELECT, insert the data into the table.
-    if (create.select && !create.attach && (!create.is_materialized_view || create.is_populate))
+    if (create.select && !create.attach && create.is_populate)
     {
         auto insert = std::make_shared<ASTInsertQuery>();
 
