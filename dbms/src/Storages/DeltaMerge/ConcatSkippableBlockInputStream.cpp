@@ -29,6 +29,7 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     , scan_context(scan_context_)
     , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
 {
+    assert(inputs_.size() == 1); // otherwise the `rows` is not correct
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();
 }
@@ -43,6 +44,7 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     , scan_context(scan_context_)
     , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
 {
+    assert(rows.size() == inputs_.size());
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();
 }
@@ -87,10 +89,9 @@ size_t ConcatSkippableBlockInputStream<need_row_id>::skipNextBlock()
 {
     while (current_stream != children.end())
     {
-        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>(current_stream->get());
 
         size_t skipped_rows = skippable_stream->skipNextBlock();
-
         if (skipped_rows > 0)
         {
             return skipped_rows;
@@ -112,9 +113,8 @@ Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn
 
     while (current_stream != children.end())
     {
-        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+        auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>(current_stream->get());
         res = skippable_stream->readWithFilter(filter);
-
         if (res)
         {
             res.setStartOffset(res.startOffset() + precede_stream_rows);
@@ -139,7 +139,6 @@ Block ConcatSkippableBlockInputStream<need_row_id>::read(FilterPtr & res_filter,
     while (current_stream != children.end())
     {
         res = (*current_stream)->read(res_filter, return_filter);
-
         if (res)
         {
             res.setStartOffset(res.startOffset() + precede_stream_rows);
@@ -196,6 +195,8 @@ void ConcatVectorIndexBlockInputStream::load()
         return;
 
     UInt32 precedes_rows = 0;
+    // otherwise the `row.key` of the search result is not correct
+    assert(stream->children.size() == index_streams.size());
     std::vector<VectorIndexViewer::SearchResult> search_results;
     for (size_t i = 0; i < stream->children.size(); ++i)
     {
@@ -210,16 +211,14 @@ void ConcatVectorIndexBlockInputStream::load()
     }
 
     // Keep the top k minimum distances rows.
-    auto select_size = search_results.size() > topk ? topk : search_results.size();
+    const auto select_size = std::min(search_results.size(), topk);
     auto top_k_end = search_results.begin() + select_size;
     std::nth_element(search_results.begin(), top_k_end, search_results.end(), [](const auto & lhs, const auto & rhs) {
         return lhs.distance < rhs.distance;
     });
-    search_results.resize(select_size);
-    std::vector<UInt32> selected_rows;
-    selected_rows.reserve(search_results.size());
-    for (const auto & row : search_results)
-        selected_rows.push_back(row.key);
+    std::vector<UInt32> selected_rows(select_size);
+    for (size_t i = 0; i < select_size; ++i)
+        selected_rows[i] = search_results[i].key;
     // Sort by key again.
     std::sort(selected_rows.begin(), selected_rows.end());
 

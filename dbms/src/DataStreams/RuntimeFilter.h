@@ -17,7 +17,7 @@
 #include <Columns/IColumn.h>
 #include <Interpreters/Set.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
