@@ -195,6 +195,8 @@ void ConcatVectorIndexBlockInputStream::load()
         return;
 
     UInt32 precedes_rows = 0;
+    // otherwise the `row.key` of the search result is not correct
+    assert(stream->children.size() == index_streams.size());
     std::vector<VectorIndexViewer::SearchResult> search_results;
     for (size_t i = 0; i < stream->children.size(); ++i)
     {
@@ -209,16 +211,14 @@ void ConcatVectorIndexBlockInputStream::load()
     }
 
     // Keep the top k minimum distances rows.
-    auto select_size = search_results.size() > topk ? topk : search_results.size();
+    const auto select_size = std::min(search_results.size(), topk);
     auto top_k_end = search_results.begin() + select_size;
     std::nth_element(search_results.begin(), top_k_end, search_results.end(), [](const auto & lhs, const auto & rhs) {
         return lhs.distance < rhs.distance;
     });
-    search_results.resize(select_size);
-    std::vector<UInt32> selected_rows;
-    selected_rows.reserve(search_results.size());
-    for (const auto & row : search_results)
-        selected_rows.push_back(row.key);
+    std::vector<UInt32> selected_rows(select_size);
+    for (size_t i = 0; i < select_size; ++i)
+        selected_rows[i] = search_results[i].key;
     // Sort by key again.
     std::sort(selected_rows.begin(), selected_rows.end());
 
