@@ -78,12 +78,7 @@ public:
         : stream(std::move(stream))
         , index_streams(std::move(index_streams))
         , topk(topk_)
-    {
-        // If there is no VectorIndexBlockInputStream, we don't need to load the index.
-        loaded = !std::any_of(index_streams.begin(), index_streams.end(), [](auto * index_stream) {
-            return index_stream != nullptr;
-        });
-    }
+    {}
 
     static SkippableBlockInputStreamPtr build(
         std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
