@@ -21,7 +21,6 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <string>
 #include <vector>
 
 #pragma GCC diagnostic push
@@ -37,6 +36,8 @@ namespace tests
 class StringPosition : public DB::tests::FunctionTest
 {
 };
+
+// TODO add right padding
 
 TEST_F(StringPosition, position)
 {

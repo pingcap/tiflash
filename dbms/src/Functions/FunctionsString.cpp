@@ -34,6 +34,7 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <cstring>
 #include <ext/range.h>
 #include <magic_enum.hpp>
 
@@ -5115,6 +5116,11 @@ public:
         ColumnString::Offset prev_col0_str_offset = 0;
         ColumnString::Offset prev_col1_str_offset = 0;
 
+        String col0_container;
+        String col1_container;
+
+        std::vector<size_t> lens;
+
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
@@ -5128,12 +5134,28 @@ public:
             {
                 if constexpr (is_ci)
                 {
-                    UTF8CaseInsensitiveStringSearcher searcher = UTF8CaseInsensitiveStringSearcher(
+                    const StringRef & col0_collation_str = collator->sortKey(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                        col0_str_len);
+                        col0_str_len,
+                        col0_container);
+                    const StringRef & col1_collation_str = collator->convert(
+                        reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                        col1_str_len,
+                        col1_container,
+                        &lens);
+                    void * res_start = memmem(
+                        col1_collation_str.data,
+                        col1_collation_str.size,
+                        col0_collation_str.data,
+                        col0_collation_str.size);
 
-                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
-                        - &col1_data[prev_col1_str_offset];
+                    if (res_start == nullptr)
+                        res[i] = 0;
+                    else
+                    {
+                        size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
+                        res[i] = 1 + getPositionWithCollationString(pos, lens);
+                    }
                 }
                 else
                 {
@@ -5143,15 +5165,15 @@ public:
 
                     pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
                         - &col1_data[prev_col1_str_offset];
-                }
 
-                if (pos != col1_str_len)
-                    res[i] = 1
-                        + getPositionUTF8(
-                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
-                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
-                else
-                    res[i] = 0;
+                    if (pos != col1_str_len)
+                        res[i] = 1
+                            + getPositionUTF8(
+                                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
+                    else
+                        res[i] = 0;
+                }
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5171,6 +5193,14 @@ public:
         ColumnString::Offset prev_col0_str_offset = 0;
         size_t col1_str_len = col1_str.size();
 
+        String col0_container;
+        String col1_container;
+        std::vector<size_t> lens;
+        StringRef col1_collation_str;
+
+        if constexpr (is_ci)
+            col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
+
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
@@ -5183,14 +5213,23 @@ public:
             {
                 if constexpr (is_ci)
                 {
-                    UTF8CaseInsensitiveStringSearcher searcher = UTF8CaseInsensitiveStringSearcher(
+                    const StringRef & col0_collation_str = collator->sortKey(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                        col0_str_len);
+                        col0_str_len,
+                        col0_container);
+                    void * res_start = memmem(
+                        col1_collation_str.data,
+                        col1_collation_str.size,
+                        col0_collation_str.data,
+                        col0_collation_str.size);
 
-                    pos = searcher.search(
-                              reinterpret_cast<const UInt8 *>(col1_str.c_str()),
-                              reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
-                        - reinterpret_cast<const UInt8 *>(col1_str.c_str());
+                    if (res_start == nullptr)
+                        res[i] = 0;
+                    else
+                    {
+                        size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
+                        res[i] = 1 + getPositionWithCollationString(pos, lens);
+                    }
                 }
                 else
                 {
@@ -5202,12 +5241,12 @@ public:
                               reinterpret_cast<const UInt8 *>(col1_str.c_str()),
                               reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
                         - reinterpret_cast<const UInt8 *>(col1_str.c_str());
-                }
 
-                if (pos != col1_str_len)
-                    res[i] = 1 + getPositionUTF8(col1_str.c_str(), col1_str.c_str() + pos);
-                else
-                    res[i] = 0;
+                    if (pos != col1_str_len)
+                        res[i] = 1 + getPositionUTF8(col1_str.c_str(), col1_str.c_str() + pos);
+                    else
+                        res[i] = 0;
+                }
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5225,30 +5264,56 @@ public:
         size_t row_num = col1_offsets.size();
         ColumnString::Offset prev_col1_str_offset = 0;
 
-        // One construction will be wasted, but it's acceptable
-        UTF8CaseInsensitiveStringSearcher searcher_ci
-            = UTF8CaseInsensitiveStringSearcher(col0_str.c_str(), col0_str.size());
+        String col0_container;
+        String col1_container;
+        std::vector<size_t> lens;
+        StringRef col0_collation_str;
+
+        if constexpr (is_ci)
+            col0_collation_str = collator->sortKey(col0_str.c_str(), col0_str.size(), col0_container);
+
+        // This construction will be wasted when is_ci is true, but it's acceptable
         LibCASCIICaseSensitiveStringSearcher searcher_cs
-            = LibCASCIICaseSensitiveStringSearcher(col0_str.c_str(), col0_str.size());
+            = LibCASCIICaseSensitiveStringSearcher(col0_str.data(), col0_str.size());
 
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
 
             if constexpr (is_ci)
-                pos = searcher_ci.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
-                    - &col1_data[prev_col1_str_offset];
+            {
+                const StringRef & col1_collation_str = collator->convert(
+                    reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                    col1_str_len,
+                    col1_container,
+                    &lens);
+                void * res_start = memmem(
+                    col1_collation_str.data,
+                    col1_collation_str.size,
+                    col0_collation_str.data,
+                    col0_collation_str.size);
+
+                if (res_start == nullptr)
+                    res[i] = 0;
+                else
+                {
+                    size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
+                    res[i] = 1 + getPositionWithCollationString(pos, lens);
+                }
+            }
             else
+            {
                 pos = searcher_cs.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
                     - &col1_data[prev_col1_str_offset];
 
-            if (pos != col1_str_len)
-                res[i] = 1
-                    + getPositionUTF8(
-                             reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
-                             reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
-            else
-                res[i] = 0;
+                if (pos != col1_str_len)
+                    res[i] = 1
+                        + getPositionUTF8(
+                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
+                else
+                    res[i] = 0;
+            }
 
             prev_col1_str_offset = col1_offsets[i];
         }
@@ -5262,6 +5327,19 @@ private:
             if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
                 ++res;
         return res;
+    }
+
+    static Int64 getPositionWithCollationString(size_t pos, const std::vector<size_t> & lens)
+    {
+        Int64 actual_pos = 0;
+        size_t idx = 0;
+        while (pos > 0)
+        {
+            actual_pos++;
+            pos -= lens[idx];
+            idx++;
+        }
+        return actual_pos;
     }
 
     TiDB::TiDBCollatorPtr collator{};
