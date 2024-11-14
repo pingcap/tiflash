@@ -99,6 +99,7 @@ public:
     // Convert raw string to collate string and return the length of each character
     virtual StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
         = 0;
+    virtual StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const = 0;
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }

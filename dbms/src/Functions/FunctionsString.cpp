@@ -5076,7 +5076,7 @@ public:
             {
                 if constexpr (is_ci)
                 {
-                    const StringRef & col0_collation_str = collator->sortKey(
+                    const StringRef & col0_collation_str = collator->sortKeyNoTrim(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
                         col0_str_len,
                         col0_container);
@@ -5155,7 +5155,7 @@ public:
             {
                 if constexpr (is_ci)
                 {
-                    const StringRef & col0_collation_str = collator->sortKey(
+                    const StringRef & col0_collation_str = collator->sortKeyNoTrim(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
                         col0_str_len,
                         col0_container);
@@ -5212,7 +5212,7 @@ public:
         StringRef col0_collation_str;
 
         if constexpr (is_ci)
-            col0_collation_str = collator->sortKey(col0_str.c_str(), col0_str.size(), col0_container);
+            col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
 
         // This construction will be wasted when is_ci is true, but it's acceptable
         LibCASCIICaseSensitiveStringSearcher searcher_cs

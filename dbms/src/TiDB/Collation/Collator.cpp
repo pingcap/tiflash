@@ -193,11 +193,17 @@ public:
         return DB::BinCollatorSortKey<padding>(s, length);
     }
 
+    // So far, no case needs to call this function belonging to BinCollator
+    StringRef sortKeyNoTrim(const char * s, size_t length, std::string &) const override
+    {
+        return DB::BinCollatorSortKey<false>(s, length);
+    }
+
     // So far, no case needs the length of each character in binary collator.
     // So we don't handle the fourth parameter.
     StringRef convert(const char * s, size_t length, std::string &, std::vector<size_t> *) const override
     {
-        return DB::BinCollatorSortKey<padding>(s, length);
+        return DB::BinCollatorSortKey<false>(s, length);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
@@ -263,18 +269,29 @@ public:
 
     StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
     {
-        return convertImpl<true>(s, length, container, lens);
+        return convertImpl<true, false>(s, length, container, lens);
     }
 
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
-        return convertImpl<false>(s, length, container, nullptr);
+        return convertImpl<false, true>(s, length, container, nullptr);
     }
 
-    template <bool need_len>
+    StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false, false>(s, length, container, nullptr);
+    }
+
+    template <bool need_len, bool need_trim>
     StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
     {
-        auto v = rtrim(s, length);
+        std::string_view v;
+
+        if constexpr (need_trim)
+            v = rtrim(s, length);
+        else
+            v = std::string_view(s, length);
+
         if (length * sizeof(WeightType) > container.size())
             container.resize(length * sizeof(WeightType));
         size_t offset = 0;
@@ -458,18 +475,29 @@ public:
 
     StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
     {
-        return convertImpl<true>(s, length, container, lens);
+        return convertImpl<true, false>(s, length, container, lens);
     }
 
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
-        return convertImpl<false>(s, length, container, nullptr);
+        return convertImpl<false, true>(s, length, container, nullptr);
     }
 
-    template <bool need_len>
+    StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false, false>(s, length, container, nullptr);
+    }
+
+    template <bool need_len, bool need_trim>
     StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
     {
-        std::string_view v = preprocess(s, length);
+        std::string_view v;
+
+        if constexpr (need_trim)
+            v = preprocess(s, length);
+        else
+            v = std::string_view(s, length);
+
         // every char have 8 uint16 at most.
         if (8 * length * sizeof(uint16_t) > container.size())
             container.resize(8 * length * sizeof(uint16_t));
