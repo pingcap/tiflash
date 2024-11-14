@@ -30,6 +30,10 @@ void fillTiExecutionSummary(
     execution_summary->set_num_iterations(current.num_iterations);
     execution_summary->set_concurrency(current.concurrency);
     execution_summary->mutable_tiflash_scan_context()->CopyFrom(current.scan_context->serialize());
+    execution_summary->mutable_tiflash_wait_summary()->set_mintso_wait_ns(current.time_minTSO_wait_ns);
+    execution_summary->mutable_tiflash_wait_summary()->set_pipeline_breaker_wait_ns(
+        current.time_pipeline_breaker_wait_ns);
+    execution_summary->mutable_tiflash_wait_summary()->set_pipeline_queue_wait_ns(current.time_pipeline_queue_ns);
     RUNTIME_CHECK(current.ru_consumption.SerializeToString(execution_summary->mutable_ru_consumption()));
 
     // tree-based executors will have executor_id.

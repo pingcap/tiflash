@@ -360,6 +360,7 @@ public:
     String dummy_query_string;
     ASTPtr dummy_ast;
     Int64 compile_time_ns = 0;
+    Int64 minTSO_wait_time_ns = 0;
     size_t final_concurrency = 1;
     size_t initialize_concurrency = 1;
     bool has_read_wait_index = false;
