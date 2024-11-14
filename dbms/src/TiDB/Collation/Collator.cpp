@@ -193,6 +193,13 @@ public:
         return DB::BinCollatorSortKey<padding>(s, length);
     }
 
+    // So far, no case needs the length of each character in binary collator.
+    // So we don't handle the fourth parameter.
+    StringRef convert(const char * s, size_t length, std::string &, std::vector<size_t> *) const override
+    {
+        return DB::BinCollatorSortKey<padding>(s, length);
+    }
+
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
 
 private:
@@ -254,20 +261,42 @@ public:
         return (offset1 < v1.length()) - (offset2 < v2.length());
     }
 
+    StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
+    {
+        return convertImpl<true>(s, length, container, lens);
+    }
+
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false>(s, length, container, nullptr);
+    }
+
+    template <bool need_len>
+    StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
     {
         auto v = rtrim(s, length);
         if (length * sizeof(WeightType) > container.size())
             container.resize(length * sizeof(WeightType));
         size_t offset = 0;
         size_t total_size = 0;
+        size_t v_length = v.length();
 
-        while (offset < v.length())
+        if constexpr (need_len)
+        {
+            if (lens->capacity() < v_length)
+                lens->reserve(v_length);
+            lens->resize(0);
+        }
+
+        while (offset < v_length)
         {
             auto c = decodeChar(s, offset);
             auto sk = weight(c);
-            container[total_size++] = char(sk >> 8);
-            container[total_size++] = char(sk);
+            container[total_size++] = static_cast<char>(sk >> 8);
+            container[total_size++] = static_cast<char>(sk);
+
+            if constexpr (need_len)
+                lens->push_back(2);
         }
 
         return StringRef(container.data(), total_size);
@@ -427,7 +456,18 @@ public:
         }
     }
 
+    StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
+    {
+        return convertImpl<true>(s, length, container, lens);
+    }
+
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false>(s, length, container, nullptr);
+    }
+
+    template <bool need_len>
+    StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
     {
         std::string_view v = preprocess(s, length);
         // every char have 8 uint16 at most.
@@ -438,12 +478,30 @@ public:
         size_t v_length = v.length();
 
         uint64_t first = 0, second = 0;
+        size_t idx = 0;
+
+        if constexpr (need_len)
+        {
+            if (lens->capacity() < v_length)
+                lens->reserve(v_length);
+            lens->resize(0);
+        }
 
         while (offset < v_length)
         {
             weight(first, second, offset, v_length, s);
+
+            if constexpr (need_len)
+                (*lens)[idx] = total_size;
+
             writeResult(first, container, total_size);
             writeResult(second, container, total_size);
+
+            if constexpr (need_len)
+            {
+                (*lens)[idx] = total_size - (*lens)[idx];
+                idx++;
+            }
         }
 
         return StringRef(container.data(), total_size);
@@ -463,8 +521,8 @@ private:
     {
         while (w != 0)
         {
-            container[total_size++] = char(w >> 8);
-            container[total_size++] = char(w);
+            container[total_size++] = static_cast<char>(w >> 8);
+            container[total_size++] = static_cast<char>(w);
             w >>= 16;
         }
     }
@@ -756,7 +814,7 @@ struct TiDBCollatorPtrMap
 {
     // static constexpr auto MAX_TYPE_CNT = static_cast<uint32_t>(ITiDBCollator::CollatorType::MAX_);
 
-    std::unordered_map<int32_t, TiDBCollatorPtr> id_map{};
+    std::unordered_map<int32_t, TiDBCollatorPtr> id_map;
     // std::array<TiDBCollatorPtr, MAX_TYPE_CNT> type_map{};
     std::unordered_map<std::string, TiDBCollatorPtr> name_map;
     std::unordered_map<const void *, ITiDBCollator::CollatorType> addr_to_type;
