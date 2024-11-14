@@ -400,28 +400,12 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
 }
 
 
-ColumnsDescription InterpreterCreateQuery::setColumns(
-    ASTCreateQuery & create,
-    const Block & as_select_sample) const
+ColumnsDescription InterpreterCreateQuery::setColumns(ASTCreateQuery & create) const
 {
-    ColumnsDescription res;
+    if (!create.columns)
+        throw Exception("Incorrect CREATE query: required list of column descriptions", ErrorCodes::INCORRECT_QUERY);
 
-    if (create.columns)
-    {
-        res = getColumnsDescription(*create.columns, context);
-    }
-    else if (create.select)
-    {
-        for (size_t i = 0; i < as_select_sample.columns(); ++i)
-            res.ordinary.emplace_back(
-                as_select_sample.safeGetByPosition(i).name,
-                as_select_sample.safeGetByPosition(i).type);
-    }
-    else
-        throw Exception(
-            "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.",
-            ErrorCodes::INCORRECT_QUERY);
-
+    ColumnsDescription res = getColumnsDescription(*create.columns, context);
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
     ASTPtr new_columns = formatColumns(res);
     if (create.columns)
@@ -552,12 +536,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         create.attach = true;
     }
 
-    Block as_select_sample;
-    if (create.select && (!create.attach || !create.columns))
-        as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context);
-
     /// Set and retrieve list of columns.
-    ColumnsDescription columns = setColumns(create, as_select_sample);
+    ColumnsDescription columns = setColumns(create);
 
     {
         std::unique_ptr<DDLGuard> guard;
@@ -607,19 +587,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
         // the table has been created completely
         database->attachTable(table_name, res);
-    }
-
-    /// If the query is a CREATE SELECT, insert the data into the table.
-    if (create.select && !create.attach && create.is_populate)
-    {
-        auto insert = std::make_shared<ASTInsertQuery>();
-
-        insert->database = database_name;
-
-        insert->table = table_name;
-        insert->select = create.select->clone();
-
-        return InterpreterInsertQuery(insert, context, false).execute();
     }
 
     return {};

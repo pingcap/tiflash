@@ -197,7 +197,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_table("TABLE");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserKeyword s_as("AS");
     ParserKeyword s_populate("POPULATE");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -211,7 +210,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr table;
     ASTPtr columns;
     ASTPtr storage;
-    ASTPtr select;
     bool attach = false;
     bool if_not_exists = false;
     bool is_populate = false;
@@ -270,16 +268,7 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         }
         else
         {
-            storage_p.parse(pos, storage, expected);
-
-            if (!s_as.ignore(pos, expected))
-                return false;
-
-            if (!select_p.parse(pos, select, expected)) /// AS SELECT ...
-            {
-                /// Optional - ENGINE can be specified.
-                storage_p.parse(pos, storage, expected);
-            }
+            return false;
         }
     }
     else if (s_database.ignore(pos, expected))
@@ -311,7 +300,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     query->set(query->columns, columns);
     query->set(query->storage, storage);
-    query->set(query->select, select);
 
     return true;
 }

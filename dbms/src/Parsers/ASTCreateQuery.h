@@ -97,7 +97,6 @@ public:
     String table;
     ASTExpressionList * columns = nullptr;
     ASTStorage * storage = nullptr;
-    ASTSelectWithUnionQuery * select = nullptr;
 
     /** Get the text that identifies this element. */
     String getID() const override { return (attach ? "AttachQuery_" : "CreateQuery_") + database + "_" + table; }
@@ -111,8 +110,6 @@ public:
             res->set(res->columns, columns->clone());
         if (storage)
             res->set(res->storage, storage->clone());
-        if (select)
-            res->set(res->select, select->clone());
 
         cloneOutputOptions(*res);
 
@@ -160,13 +157,6 @@ protected:
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE"
                           << (settings.hilite ? hilite_none : "");
-        }
-
-        if (select)
-        {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS" << settings.nl_or_ws
-                          << (settings.hilite ? hilite_none : "");
-            select->formatImpl(settings, state, frame);
         }
     }
 };

@@ -54,9 +54,6 @@ String getTableDefinitionFromCreateQuery(const ASTPtr & query)
     create.if_not_exists = false;
     create.is_populate = false;
 
-    /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
-    create.select = nullptr;
-
     create.format = nullptr;
     create.out_file = nullptr;
 
@@ -76,8 +73,6 @@ String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
     create.table.clear();
     create.if_not_exists = false;
     create.is_populate = false;
-
-    create.select = nullptr;
 
     create.format = nullptr;
     create.out_file = nullptr;

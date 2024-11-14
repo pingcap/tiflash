@@ -48,10 +48,10 @@ static void checkAllTypesAreAllowedInTable(const NamesAndTypesList & names_and_t
 
 void StorageFactory::registerStorage(const std::string & name, Creator creator)
 {
-    if (!storages.emplace(name, std::move(creator)).second)
-        throw Exception(
-            "TableFunctionFactory: the table function name '" + name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(
+        storages.emplace(name, std::move(creator)).second,
+        "TableFunctionFactory: the table function name '{}' is not unique",
+        name);
 }
 
 
