@@ -40,6 +40,8 @@ public:
 
     std::string getFileName() const override { return file->getFileName(); }
 
+    std::string getInitialFileName() const override { return file->getFileName(); }
+
     int getFd() const override { return file->getFd(); }
 
     bool isClosed() const override { return file->isClosed(); }
