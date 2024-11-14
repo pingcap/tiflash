@@ -51,8 +51,6 @@ String getTableDefinitionFromCreateQuery(const ASTPtr & query)
     /// We remove everything that is not needed for ATTACH from the query.
     create.attach = true;
     create.database.clear();
-    create.as_database.clear();
-    create.as_table.clear();
     create.if_not_exists = false;
     create.is_populate = false;
 
@@ -76,8 +74,6 @@ String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
     /// We remove everything that is not needed for ATTACH from the query
     create.attach = true;
     create.table.clear();
-    create.as_database.clear();
-    create.as_table.clear();
     create.if_not_exists = false;
     create.is_populate = false;
 

@@ -402,18 +402,13 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
 
 ColumnsDescription InterpreterCreateQuery::setColumns(
     ASTCreateQuery & create,
-    const Block & as_select_sample,
-    const StoragePtr & as_storage) const
+    const Block & as_select_sample) const
 {
     ColumnsDescription res;
 
     if (create.columns)
     {
         res = getColumnsDescription(*create.columns, context);
-    }
-    else if (!create.as_table.empty())
-    {
-        res = as_storage->getColumns();
     }
     else if (create.select)
     {
@@ -453,26 +448,6 @@ ColumnsDescription InterpreterCreateQuery::setColumns(
     return res;
 }
 
-void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
-{
-    if (create.storage)
-    {
-        return;
-    }
-
-    if (!create.as_table.empty())
-    {
-        /// NOTE Getting the structure from the table specified in the AS is done not atomically with the creation of the table.
-
-        String as_database_name = create.as_database.empty() ? context.getCurrentDatabase() : create.as_database;
-        String as_table_name = create.as_table;
-
-        ASTPtr as_create_ptr = context.getCreateTableQuery(as_database_name, as_table_name);
-        const auto & as_create = typeid_cast<const ASTCreateQuery &>(*as_create_ptr);
-
-        create.set(create.storage, as_create.storage->ptr());
-    }
-}
 
 
 /**
@@ -577,29 +552,12 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         create.attach = true;
     }
 
-    if (create.to_database.empty())
-        create.to_database = current_database;
-
     Block as_select_sample;
     if (create.select && (!create.attach || !create.columns))
         as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context);
 
-    String as_database_name = create.as_database.empty() ? current_database : create.as_database;
-    String as_table_name = create.as_table;
-
-    StoragePtr as_storage;
-    TableStructureLockHolder as_storage_lock;
-    if (!as_table_name.empty())
-    {
-        as_storage = context.getTable(as_database_name, as_table_name);
-        as_storage_lock = as_storage->lockStructureForShare(context.getCurrentQueryId());
-    }
-
     /// Set and retrieve list of columns.
-    ColumnsDescription columns = setColumns(create, as_select_sample, as_storage);
-
-    /// Set the table engine if it was not specified explicitly.
-    setEngine(create);
+    ColumnsDescription columns = setColumns(create, as_select_sample);
 
     {
         std::unique_ptr<DDLGuard> guard;

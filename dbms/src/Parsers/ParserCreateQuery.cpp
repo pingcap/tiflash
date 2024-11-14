@@ -198,8 +198,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserKeyword s_as("AS");
-    ParserKeyword s_view("VIEW");
-    ParserKeyword s_materialized("MATERIALIZED");
     ParserKeyword s_populate("POPULATE");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -212,11 +210,7 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr database;
     ASTPtr table;
     ASTPtr columns;
-    ASTPtr to_database;
-    ASTPtr to_table;
     ASTPtr storage;
-    ASTPtr as_database;
-    ASTPtr as_table;
     ASTPtr select;
     bool attach = false;
     bool if_not_exists = false;
@@ -283,17 +277,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
             if (!select_p.parse(pos, select, expected)) /// AS SELECT ...
             {
-                /// AS [db.]table
-                if (!name_p.parse(pos, as_table, expected))
-                    return false;
-
-                if (s_dot.ignore(pos, expected))
-                {
-                    as_database = as_table;
-                    if (!name_p.parse(pos, as_table, expected))
-                        return false;
-                }
-
                 /// Optional - ENGINE can be specified.
                 storage_p.parse(pos, storage, expected);
             }
@@ -326,17 +309,8 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (table)
         query->table = typeid_cast<ASTIdentifier &>(*table).name;
 
-    if (to_database)
-        query->to_database = typeid_cast<ASTIdentifier &>(*to_database).name;
-    if (to_table)
-        query->to_table = typeid_cast<ASTIdentifier &>(*to_table).name;
-
     query->set(query->columns, columns);
     query->set(query->storage, storage);
-    if (as_database)
-        query->as_database = typeid_cast<ASTIdentifier &>(*as_database).name;
-    if (as_table)
-        query->as_table = typeid_cast<ASTIdentifier &>(*as_table).name;
     query->set(query->select, select);
 
     return true;
