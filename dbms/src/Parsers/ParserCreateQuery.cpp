@@ -64,10 +64,7 @@ bool ParserIdentifierWithParameters::parseImpl(Pos & pos, ASTPtr & node, Expecte
         return true;
 
     ParserNestedTable nested;
-    if (nested.parse(pos, node, expected))
-        return true;
-
-    return false;
+    return nested.parse(pos, node, expected);
 }
 
 
@@ -196,7 +193,6 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_create("CREATE");
-    ParserKeyword s_temporary("TEMPORARY");
     ParserKeyword s_attach("ATTACH");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_database("DATABASE");
@@ -227,7 +223,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     bool is_view = false;
     bool is_materialized_view = false;
     bool is_populate = false;
-    bool is_temporary = false;
 
     if (!s_create.ignore(pos, expected))
     {
@@ -235,11 +230,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             attach = true;
         else
             return false;
-    }
-
-    if (s_temporary.ignore(pos, expected))
-    {
-        is_temporary = true;
     }
 
     if (s_table.ignore(pos, expected))
@@ -283,7 +273,7 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (!s_rparen.ignore(pos, expected))
                 return false;
 
-            if (!storage_p.parse(pos, storage, expected) && !is_temporary)
+            if (!storage_p.parse(pos, storage, expected))
                 return false;
         }
         else
@@ -311,8 +301,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             }
         }
     }
-    else if (is_temporary)
-        return false;
     else if (s_database.ignore(pos, expected))
     {
         if (s_if_not_exists.ignore(pos, expected))
@@ -399,7 +387,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->is_view = is_view;
     query->is_materialized_view = is_materialized_view;
     query->is_populate = is_populate;
-    query->is_temporary = is_temporary;
 
     if (database)
         query->database = typeid_cast<ASTIdentifier &>(*database).name;

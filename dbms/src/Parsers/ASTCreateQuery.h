@@ -95,7 +95,6 @@ public:
     bool is_view{false};
     bool is_materialized_view{false};
     bool is_populate{false};
-    bool is_temporary{false};
     String database;
     String table;
     ASTExpressionList * columns = nullptr;
@@ -107,7 +106,7 @@ public:
     ASTSelectWithUnionQuery * select = nullptr;
 
     /** Get the text that identifies this element. */
-    String getID() const override { return (attach ? "AttachQuery_" : "CreateQuery_") + database + "_" + table; };
+    String getID() const override { return (attach ? "AttachQuery_" : "CreateQuery_") + database + "_" + table; }
 
     ASTPtr clone() const override
     {
@@ -151,8 +150,7 @@ protected:
             if (is_materialized_view)
                 what = "MATERIALIZED VIEW";
 
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << (attach ? "ATTACH " : "CREATE ")
-                          << (is_temporary ? "TEMPORARY " : "") << what << " "
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << (attach ? "ATTACH " : "CREATE ") << what << " "
                           << (if_not_exists ? "IF NOT EXISTS " : "") << (settings.hilite ? hilite_none : "")
                           << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
         }

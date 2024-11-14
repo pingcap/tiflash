@@ -457,23 +457,10 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
 {
     if (create.storage)
     {
-        if (create.is_temporary && create.storage->engine->name != "Memory")
-            throw Exception(
-                "Temporary tables can only be created with ENGINE = Memory, not " + create.storage->engine->name,
-                ErrorCodes::INCORRECT_QUERY);
-
         return;
     }
 
-    if (create.is_temporary)
-    {
-        auto engine_ast = std::make_shared<ASTFunction>();
-        engine_ast->name = "Memory";
-        auto storage_ast = std::make_shared<ASTStorage>();
-        storage_ast->set(storage_ast->engine, engine_ast);
-        create.set(create.storage, storage_ast);
-    }
-    else if (!create.as_table.empty())
+    if (!create.as_table.empty())
     {
         /// NOTE Getting the structure from the table specified in the AS is done not atomically with the creation of the table.
 
@@ -625,30 +612,22 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     {
         std::unique_ptr<DDLGuard> guard;
 
-        String data_path;
-        DatabasePtr database;
+        DatabasePtr database = context.getDatabase(database_name);
+        String data_path = database->getDataPath();
 
-        if (!create.is_temporary)
+        guard = tryGetDDLGuard(
+            context,
+            database_name,
+            table_name,
+            create.if_not_exists,
+            /*timeout_seconds=*/5,
+            log_suffix);
+        if (!guard)
         {
-            database = context.getDatabase(database_name);
-            data_path = database->getDataPath();
-
-            guard = tryGetDDLGuard(
-                context,
-                database_name,
-                table_name,
-                create.if_not_exists,
-                /*timeout_seconds=*/5,
-                log_suffix);
-            if (!guard)
-            {
                 // Not the owner to create IStorage instance, and the table is created
                 // completely, let's return
                 return {};
-            }
         }
-        else if (context.tryGetExternalTable(table_name) && create.if_not_exists)
-            return {};
 
         // Guard is acquired, let's create the IStorage instance
         StoragePtr res = StorageFactory::instance().get(
@@ -671,18 +650,13 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         // If we do step 2 before step 1, we may run into "can't find .sql file" error when applying DDL jobs.
         // Besides, we make step 3 the final one, to ensure once we pass the check of context.isTableExist(database_name, table_name)`, the table must be created completely.
 
-        if (create.is_temporary)
-            context.getSessionContext().addExternalTable(table_name, res, query_ptr);
-        else
-            database->createTable(context, table_name, query_ptr);
+        database->createTable(context, table_name, query_ptr);
 
         // register the storage instance into `ManagedStorages`
         res->startup();
 
-        if (!create.is_temporary)
-            database->attachTable(table_name, res);
-
         // the table has been created completely
+        database->attachTable(table_name, res);
     }
 
     /// If the query is a CREATE SELECT, insert the data into the table.
@@ -690,14 +664,12 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     {
         auto insert = std::make_shared<ASTInsertQuery>();
 
-        if (!create.is_temporary)
-            insert->database = database_name;
+        insert->database = database_name;
 
         insert->table = table_name;
         insert->select = create.select->clone();
 
-        return InterpreterInsertQuery(insert, create.is_temporary ? context.getSessionContext() : context, false)
-            .execute();
+        return InterpreterInsertQuery(insert, context, false).execute();
     }
 
     return {};
@@ -738,11 +710,6 @@ void InterpreterCreateQuery::checkAccess(const ASTCreateQuery & create)
     if (!create.database.empty() && create.table.empty())
     {
         throw Exception("Cannot create database in readonly mode", ErrorCodes::READONLY);
-    }
-
-    if (create.is_temporary && readonly >= 2)
-    {
-        return;
     }
 
     throw Exception("Cannot create table in readonly mode", ErrorCodes::READONLY);
