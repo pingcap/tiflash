@@ -96,11 +96,7 @@ public:
     virtual ~VectorIndexViewer() = default;
 
     // Invalid rows in `valid_rows` will be discared when applying the search
-    virtual std::vector<Key> search(const ANNQueryInfoPtr & queryInfo, const RowFilter & valid_rows) const = 0;
-    virtual std::vector<SearchResult> searchWithDistance(
-        const ANNQueryInfoPtr & query_info,
-        const RowFilter & valid_rows) const
-        = 0;
+    virtual std::vector<SearchResult> search(const ANNQueryInfoPtr & queryInfo, const RowFilter & valid_rows) const = 0;
 
     virtual size_t size() const = 0;
 
