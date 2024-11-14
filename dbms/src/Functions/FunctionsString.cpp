@@ -2964,6 +2964,13 @@ private:
 
 class TidbPadImpl
 {
+    static void addTrailingZero(ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
+    {
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        ++res_offset;
+    }
+
 public:
     template <typename IntType, bool IsUTF8, bool IsLeft>
     static void tidbExecutePadImpl(Block & block, const ColumnNumbers & arguments, const size_t result, const String & func_name)
@@ -3143,9 +3150,7 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             string_prev_offset = string_offsets[i];
@@ -3180,9 +3185,7 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             string_prev_offset = string_offsets[i];
@@ -3216,9 +3219,7 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             padding_prev_offset = (*padding_offsets)[i];
@@ -3251,20 +3252,11 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             result_offsets[i] = res_prev_offset;
         }
-    }
-
-    static void addTrailingZero(ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
-    {
-        res.resize(res.size() + 1);
-        res[res_offset] = '\0';
-        ++res_offset;
     }
 
     // Do padding for one row.
