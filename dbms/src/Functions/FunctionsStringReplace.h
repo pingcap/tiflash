@@ -103,9 +103,9 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const ColumnPtr & column_src = block.getByPosition(arguments[0]).column;
-        const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
-        const ColumnPtr & column_replacement = block.getByPosition(arguments[2]).column;
+        ColumnPtr column_src = block.getByPosition(arguments[0]).column;
+        ColumnPtr column_needle = block.getByPosition(arguments[1]).column;
+        ColumnPtr column_replacement = block.getByPosition(arguments[2]).column;
         const ColumnPtr column_pos = arguments.size() > 3 ? block.getByPosition(arguments[3]).column : nullptr;
         const ColumnPtr column_occ = arguments.size() > 4 ? block.getByPosition(arguments[4]).column : nullptr;
         const ColumnPtr column_match_type = arguments.size() > 5 ? block.getByPosition(arguments[5]).column : nullptr;
@@ -124,6 +124,11 @@ public:
 
         bool needle_const = column_needle->isColumnConst();
         bool replacement_const = column_replacement->isColumnConst();
+        
+        if (const auto * column_src_const = checkAndGetColumn<ColumnConst>(column_src.get()))
+        {
+            column_src = column_src_const->convertToFullColumn();
+        }
 
         if (needle_const && replacement_const)
         {
