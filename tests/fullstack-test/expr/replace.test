@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# test regexp and regexp_like
 mysql> drop table if exists test.t
 mysql> create table test.t(c1 varchar(100), c2 varchar(100), c3 varchar(100))
 mysql> insert into test.t values('hello world', 'hello', '???')
