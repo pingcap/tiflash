@@ -157,7 +157,7 @@ private:
         const HaystackSource & src_h,
         const NeedleSource & src_n,
         const ReplacementSource & src_r,
-        ColumnString::MutablePtr res_col)
+        ColumnString::MutablePtr res_col) const
     {
         while (!src_h.isEnd())
         {
