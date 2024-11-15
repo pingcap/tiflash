@@ -815,9 +815,9 @@ void resizeConstantSize(ArraySource && array_source, ValueSource && value_source
 
 template <typename Impl, typename HaystackSource, typename NeedleSource, typename ReplacementSource>
 void replace(
-    const HaystackSource & src_h,
-    const NeedleSource & src_n,
-    const ReplacementSource & src_r,
+    HaystackSource && src_h,
+    NeedleSource && src_n,
+    ReplacementSource && src_r,
     ColumnString::MutablePtr & res_col)
 {
     while (!src_h.isEnd())
