@@ -22,11 +22,4 @@ void TiFlashStorageTestBasic::reload()
     reload({});
 }
 
-void TiFlashStorageTestBasic::reload(const DB::Settings & db_settings)
-{
-    Strings test_paths;
-    test_paths.push_back(getTemporaryPath());
-    db_context = DB::tests::TiFlashTestEnv::getContext(db_settings, test_paths);
-}
-
 } // namespace DB::base

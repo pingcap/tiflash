@@ -326,11 +326,7 @@ DeltaMergeStore::DeltaMergeStore(
 
     setUpBackgroundTask(dm_context);
 
-    LOG_INFO(
-        log,
-        "Restore DeltaMerge Store end, ps_run_mode={} num_segments={}",
-        magic_enum::enum_name(page_storage_run_mode),
-        segments.size());
+    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", magic_enum::enum_name(page_storage_run_mode));
 }
 
 DeltaMergeStorePtr DeltaMergeStore::create(
