@@ -63,7 +63,7 @@ inline ::testing::AssertionResult RowKeyRangeCompare(
     const RowKeyRange & lhs,
     const RowKeyRange & rhs)
 {
-    if (lhs == rhs)
+    if (lhs.is_common_handle == rhs.is_common_handle && lhs == rhs)
         return ::testing::AssertionSuccess();
     return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
 }
