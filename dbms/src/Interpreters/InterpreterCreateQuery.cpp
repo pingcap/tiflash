@@ -493,10 +493,17 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
 }
 
 
-/** If the table already exists, and the request specifies IF NOT EXISTS,
- *  then we allow concurrent CREATE queries (which do nothing).
- * Otherwise, concurrent queries for creating a table, if the table does not exist,
- *  can throw an exception, even if IF NOT EXISTS is specified.
+/**
+ * Try to acquire a DDLGuard to execute the "CREATE TABLE" actions.
+ *
+ * Return the gurad if this thread become the owner to execute "CREATE TABLE".
+ * If the thread does not is the owner to execute "CREATE TABLE".
+ *   - If the table already exists, and the request specifies IF NOT EXISTS,
+ *     then we allow concurrent CREATE queries (which do nothing).
+ *   - Otherwise, concurrent queries for creating a table, if the table does not exist,
+ *     wait for `timeout_seconds` at max to check whether the table creation is completly
+ *     created. If the table has been created within timeout, then do nothing and return.
+ *     If timeout happen at last, throw an exception.
  */
 std::unique_ptr<DDLGuard> tryGetDDLGuard(
     Context & context,
@@ -518,7 +525,7 @@ std::unique_ptr<DDLGuard> tryGetDDLGuard(
         if (!guard)
         {
             if (create_if_not_exists)
-                return {};
+                return {}; // return a null guard
             else
                 throw Exception(
                     "Table " + database_name + "." + table_name + " already exists.",
@@ -533,8 +540,8 @@ std::unique_ptr<DDLGuard> tryGetDDLGuard(
         if (e.code() == ErrorCodes::TABLE_ALREADY_EXISTS || e.code() == ErrorCodes::DDL_GUARD_IS_ACTIVE)
         {
             auto log = Logger::get(log_suffix);
-            LOG_WARNING(log, "createTable failed, error_code={} error_msg={}", e.code(), e.message());
-            for (size_t i = 0; i < max_retries; i++)
+            LOG_WARNING(log, "Concurrent create table happens, error_code={} error_msg={}", e.code(), e.message());
+            for (size_t i = 0; i < max_retries; ++i)
             {
                 // Once we can get the table from `context`, consider the table create has been "completed"
                 // and return a null guard
@@ -542,15 +549,19 @@ std::unique_ptr<DDLGuard> tryGetDDLGuard(
                     return {};
 
                 // sleep a while and retry
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
-                    "createTable failed but table not exist now, we will sleep for {} ms and try again",
+                    "Waiting for the completion of concurrent table creation action"
+                    ", sleep for {} ms and try again",
                     wait_useconds / 1000);
                 usleep(wait_useconds);
             }
+
+            // timeout, throw an exception
             LOG_ERROR(
                 log,
-                "still failed to createTable in InterpreterCreateQuery for retry {} times, stack_info={}",
+                "still failed to wait for the completion of concurrent table creation in InterpreterCreateQuery, "
+                "max_retries={} stack_info={}",
                 max_retries,
                 e.getStackTrace().toString());
             e.rethrow();
@@ -621,11 +632,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             database = context.getDatabase(database_name);
             data_path = database->getDataPath();
 
-            /** If the table already exists, and the request specifies IF NOT EXISTS,
-              *  then we allow concurrent CREATE queries (which do nothing).
-              * Otherwise, concurrent queries for creating a table, if the table does not exist,
-              *  can throw an exception, even if IF NOT EXISTS is specified.
-              */
             guard = tryGetDDLGuard(
                 context,
                 database_name,
@@ -633,6 +639,12 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                 create.if_not_exists,
                 /*timeout_seconds=*/5,
                 log_suffix);
+            if (!guard)
+            {
+                // Not the owner to create IStorage instance, and the table is created
+                // completely, let's return
+                return {};
+            }
         }
         else if (context.tryGetExternalTable(table_name) && create.if_not_exists)
             return {};
@@ -668,6 +680,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
         if (!create.is_temporary)
             database->attachTable(table_name, res);
+
+        // the table has been created completely
     }
 
     /// If the query is a CREATE SELECT, insert the data into the table.
