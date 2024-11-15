@@ -124,7 +124,7 @@ public:
 
         bool needle_const = column_needle->isColumnConst();
         bool replacement_const = column_replacement->isColumnConst();
-        
+
         if (const auto * column_src_const = checkAndGetColumn<ColumnConst>(column_src.get()))
         {
             column_src = column_src_const->convertToFullColumn();
