@@ -22,6 +22,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/Sources.h>
 #include <Functions/IFunction.h>
 
@@ -152,28 +153,6 @@ private:
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 
-    template <typename HaystackSource, typename NeedleSource, typename ReplacementSource>
-    void replace(
-        const HaystackSource & src_h,
-        const NeedleSource & src_n,
-        const ReplacementSource & src_r,
-        ColumnString::MutablePtr res_col) const
-    {
-        while (!src_h.isEnd())
-        {
-            const auto slice_h = src_h.getWhole();
-            const auto slice_n = src_n.getWhole();
-            const auto slice_r = src_r.getWhole();
-
-            const String str_h(slice_h.data, slice_h.size);
-            const String str_n(slice_n.data, slice_n.size);
-            const String str_r(slice_r.data, slice_r.size);
-            String res;
-            Impl::constant(str_h, str_n, str_r, res);
-            res_col->insertData(res.data(), res.size());
-        }
-    }
-
     void executeImplConstHaystack(
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
@@ -201,10 +180,11 @@ private:
             RUNTIME_CHECK(column_needle_string);
             RUNTIME_CHECK(column_replacement_string);
 
-            replace(
+            GatherUtils::replace<Impl>(
                 ConstSource<StringSource>(*column_src_const),
                 StringSource(*column_needle_string),
                 StringSource(*column_replacement_string),
+                collator,
                 res_col);
         }
         else if (needle_const && !replacement_const)
@@ -214,10 +194,11 @@ private:
             RUNTIME_CHECK(column_needle_const);
             RUNTIME_CHECK(column_replacement_string);
 
-            replace(
+            GatherUtils::replace<Impl>(
                 ConstSource<StringSource>(*column_src_const),
                 ConstSource<StringSource>(*column_needle_const),
                 StringSource(*column_replacement_string),
+                collator,
                 res_col);
         }
         else if (!needle_const && replacement_const)
@@ -227,10 +208,11 @@ private:
             RUNTIME_CHECK(column_needle_string);
             RUNTIME_CHECK(column_replacement_const);
 
-            replace(
+            GatherUtils::replace<Impl>(
                 ConstSource<StringSource>(*column_src_const),
                 StringSource(*column_needle_string),
                 ConstSource<StringSource>(*column_replacement_const),
+                collator,
                 res_col);
         }
 

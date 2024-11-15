@@ -813,4 +813,27 @@ void resizeConstantSize(ArraySource && array_source, ValueSource && value_source
     }
 }
 
+template <typename Impl, typename HaystackSource, typename NeedleSource, typename ReplacementSource>
+void replace(
+    const HaystackSource & src_h,
+    const NeedleSource & src_n,
+    const ReplacementSource & src_r,
+    const TiDB::TiDBCollatorPtr & collator,
+    ColumnString::MutablePtr & res_col)
+{
+    while (!src_h.isEnd())
+    {
+        const auto slice_h = src_h.getWhole();
+        const auto slice_n = src_n.getWhole();
+        const auto slice_r = src_r.getWhole();
+
+        const String str_h(reinterpret_cast<const char *>(slice_h.data), slice_h.size);
+        const String str_n(reinterpret_cast<const char *>(slice_n.data), slice_n.size);
+        const String str_r(reinterpret_cast<const char *>(slice_r.data), slice_r.size);
+        String res;
+        Impl::constant(str_h, str_n, str_r, collator, res);
+        res_col->insertData(res.data(), res.size());
+    }
+}
+
 } // namespace DB::GatherUtils
