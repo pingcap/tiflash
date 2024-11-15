@@ -15,12 +15,6 @@
 #include <Common/FailPoint.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/InterpreterDropQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTDropQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/parseQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
@@ -35,19 +29,17 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int SYNTAX_ERROR;
-} // namespace ErrorCodes
+} // namespace DB::ErrorCodes
 
-namespace FailPoints
+namespace DB::FailPoints
 {
 extern const char sync_schema_request_failure[];
-} // namespace FailPoints
+} // namespace DB::FailPoints
 
-namespace tests
+namespace DB::tests
 {
 class SyncSchemaTest : public ::testing::Test
 {
@@ -173,5 +165,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests
