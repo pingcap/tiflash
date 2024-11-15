@@ -540,12 +540,10 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     ColumnsDescription columns = setColumns(create);
 
     {
-        std::unique_ptr<DDLGuard> guard;
-
         DatabasePtr database = context.getDatabase(database_name);
         String data_path = database->getDataPath();
 
-        guard = tryGetDDLGuard(
+        const auto guard = tryGetDDLGuard(
             context,
             database_name,
             table_name,
