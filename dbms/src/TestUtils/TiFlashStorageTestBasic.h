@@ -16,9 +16,7 @@
 
 #include <TestUtils/TiFlashTestBasic.h>
 
-namespace DB
-{
-namespace base
+namespace DB::base
 {
 class TiFlashStorageTestBasic : public ::testing::Test
 {
@@ -107,16 +105,10 @@ protected:
 
     void reload();
 
-    void reload(const DB::Settings & db_settings)
-    {
-        Strings test_paths;
-        test_paths.push_back(getTemporaryPath());
-        db_context = DB::tests::TiFlashTestEnv::getContext(db_settings, test_paths);
-    }
+    void reload(const DB::Settings & db_settings);
 
 protected:
     ContextPtr db_context;
 };
 
-} // namespace base
-} // namespace DB
+} // namespace DB::base

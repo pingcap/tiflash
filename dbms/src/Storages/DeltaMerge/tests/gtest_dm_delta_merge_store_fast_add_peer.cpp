@@ -239,7 +239,7 @@ protected:
         page_storage->dumpIncrementalCheckpoint(opts);
     }
 
-    void clearData()
+    [[nodiscard]] DeltaMergeStorePtr dropDataOnStoreThenCreateNewStore()
     {
         // clear data
         store->clearData();
@@ -248,6 +248,15 @@ protected:
         store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1));
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
         store->mergeDeltaAll(*db_context);
+
+        verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
+
+        store->drop();
+        store.reset();
+        LOG_WARNING(Logger::get("DeltaMergeStoreTestFastAddPeer"), "The store has been drop successfully, reloading store");
+        auto s = reload(table_column_defines);
+        LOG_WARNING(Logger::get("DeltaMergeStoreTestFastAddPeer"), "Reload store success");
+        return s;
     }
 
     void verifyRows(const RowKeyRange & range, size_t rows)
@@ -289,13 +298,10 @@ protected:
 TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPoint)
 try
 {
+    /// Prepare a store_id with some DeltaMergeStore data uploaded
     UInt64 write_store_id = current_store_id + 1;
     resetStoreId(write_store_id);
-    {
-        auto table_column_defines = DMTestEnv::getDefaultColumns();
-
-        store = reload(table_column_defines);
-    }
+    store = reload(DMTestEnv::getDefaultColumns());
 
     const size_t num_rows_write = 128;
     // write DMFile
@@ -358,25 +364,21 @@ try
 
     dumpCheckpoint(write_store_id);
 
-    clearData();
-
-    verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
+    store = dropDataOnStoreThenCreateNewStore();
 
     setStorageFormat(restore_format_version);
 
+    /// Download the manifest of `write_store_id` in `current_store_id`
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(write_store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = write_store_id;
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
+
+    /// Mock that FAP ingest the segments info from `write_store_id` to `current_store_id`
     resetStoreId(current_store_id);
-    {
-        auto table_column_defines = DMTestEnv::getDefaultColumns();
-
-        store = reload(table_column_defines);
-    }
-
+    store = reload(DMTestEnv::getDefaultColumns());
     auto segments = store->buildSegmentsFromCheckpointInfo(
         *db_context,
         GeneralCancelHandle::genNotCanceled(),
@@ -494,9 +496,7 @@ try
     UInt64 write_store_id = current_store_id + 1;
     dumpCheckpoint(write_store_id);
 
-    clearData();
-
-    verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
+    store = dropDataOnStoreThenCreateNewStore();
 
     setStorageFormat(restore_format_version);
 
