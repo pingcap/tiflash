@@ -832,6 +832,10 @@ void replace(
         String res;
         Impl::constant(str_h, str_n, str_r, res);
         res_col->insertData(res.data(), res.size());
+
+        src_h.next();
+        src_n.next();
+        src_r.next();
     }
 }
 
