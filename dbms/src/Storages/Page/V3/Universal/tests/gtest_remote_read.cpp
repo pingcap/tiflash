@@ -14,11 +14,10 @@
 
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/Ctl.h>
-#include <IO/Encryption/MockKeyManager.h>
-#include <IO/BaseFile/PosixWritableFile.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
@@ -996,7 +995,10 @@ try
         // Read all the data in order, should reuse the underlying read buffer
         UniversalPageIdAndEntries to_read = gen_read_entries({0, 1, 2, 3, 4});
 
-        auto data_source = PS::V3::CPWriteDataSourceBlobStore::create(blob_store, std::shared_ptr<FileProvider>(nullptr), 5 * 1024 * 1024);
+        auto data_source = PS::V3::CPWriteDataSourceBlobStore::create(
+            blob_store,
+            std::shared_ptr<FileProvider>(nullptr),
+            5 * 1024 * 1024);
         ASSERT_EQ(nullptr, getReadBuffFromDataSource(data_source));
 
         Page page = data_source->read(to_read[0]);
@@ -1036,7 +1038,10 @@ try
         // Read page_0, page_2, page_4, page_3, page_1
         UniversalPageIdAndEntries to_read = gen_read_entries({0, 2, 4, 3, 1});
 
-        auto data_source = PS::V3::CPWriteDataSourceBlobStore::create(blob_store, std::shared_ptr<FileProvider>(nullptr), 5 * 1024 * 1024);
+        auto data_source = PS::V3::CPWriteDataSourceBlobStore::create(
+            blob_store,
+            std::shared_ptr<FileProvider>(nullptr),
+            5 * 1024 * 1024);
         ASSERT_EQ(nullptr, getReadBuffFromDataSource(data_source));
 
         Page page = data_source->read(to_read[0]);
