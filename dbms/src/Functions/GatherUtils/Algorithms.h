@@ -818,7 +818,6 @@ void replace(
     const HaystackSource & src_h,
     const NeedleSource & src_n,
     const ReplacementSource & src_r,
-    const TiDB::TiDBCollatorPtr & collator,
     ColumnString::MutablePtr & res_col)
 {
     while (!src_h.isEnd())
@@ -831,7 +830,7 @@ void replace(
         const String str_n(reinterpret_cast<const char *>(slice_n.data), slice_n.size);
         const String str_r(reinterpret_cast<const char *>(slice_r.data), slice_r.size);
         String res;
-        Impl::constant(str_h, str_n, str_r, collator, res);
+        Impl::constant(str_h, str_n, str_r, res);
         res_col->insertData(res.data(), res.size());
     }
 }
