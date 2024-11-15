@@ -48,8 +48,6 @@ public:
     bool isVariadic() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isStringOrFixedString())
@@ -129,7 +127,6 @@ private:
                 col->getOffsets(),
                 needle,
                 replacement,
-                collator,
                 col_res->getChars(),
                 col_res->getOffsets());
             column_result.column = std::move(col_res);
@@ -142,7 +139,6 @@ private:
                 col->getN(),
                 needle,
                 replacement,
-                collator,
                 col_res->getChars(),
                 col_res->getOffsets());
             column_result.column = std::move(col_res);
@@ -166,7 +162,7 @@ private:
 
         RUNTIME_CHECK_MSG(
             !needle_const || !replacement_const,
-            "should got here when all argments of replace is constant");
+            "should not got here when all argments of replace are constant");
 
         const auto * column_src_const = checkAndGetColumnConst<ColumnString>(column_src.get());
         RUNTIME_CHECK(column_src_const);
@@ -184,7 +180,6 @@ private:
                 ConstSource<StringSource>(*column_src_const),
                 StringSource(*column_needle_string),
                 StringSource(*column_replacement_string),
-                collator,
                 res_col);
         }
         else if (needle_const && !replacement_const)
@@ -198,7 +193,6 @@ private:
                 ConstSource<StringSource>(*column_src_const),
                 ConstSource<StringSource>(*column_needle_const),
                 StringSource(*column_replacement_string),
-                collator,
                 res_col);
         }
         else if (!needle_const && replacement_const)
@@ -212,7 +206,6 @@ private:
                 ConstSource<StringSource>(*column_src_const),
                 StringSource(*column_needle_string),
                 ConstSource<StringSource>(*column_replacement_const),
-                collator,
                 res_col);
         }
 
@@ -240,7 +233,6 @@ private:
                     col_needle->getChars(),
                     col_needle->getOffsets(),
                     replacement,
-                    collator,
                     col_res->getChars(),
                     col_res->getOffsets());
                 column_result.column = std::move(col_res);
@@ -254,7 +246,6 @@ private:
                     col_needle->getChars(),
                     col_needle->getOffsets(),
                     replacement,
-                    collator,
                     col_res->getChars(),
                     col_res->getOffsets());
                 column_result.column = std::move(col_res);
@@ -291,7 +282,6 @@ private:
                     needle,
                     col_replacement->getChars(),
                     col_replacement->getOffsets(),
-                    collator,
                     col_res->getChars(),
                     col_res->getOffsets());
                 column_result.column = std::move(col_res);
@@ -305,7 +295,6 @@ private:
                     needle,
                     col_replacement->getChars(),
                     col_replacement->getOffsets(),
-                    collator,
                     col_res->getChars(),
                     col_res->getOffsets());
                 column_result.column = std::move(col_res);
@@ -342,7 +331,6 @@ private:
                     col_needle->getOffsets(),
                     col_replacement->getChars(),
                     col_replacement->getOffsets(),
-                    collator,
                     col_res->getChars(),
                     col_res->getOffsets());
                 column_result.column = std::move(col_res);
@@ -357,7 +345,6 @@ private:
                     col_needle->getOffsets(),
                     col_replacement->getChars(),
                     col_replacement->getOffsets(),
-                    collator,
                     col_res->getChars(),
                     col_res->getOffsets());
                 column_result.column = std::move(col_res);
@@ -374,7 +361,5 @@ private:
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
-
-    TiDB::TiDBCollatorPtr collator{};
 };
 } // namespace DB
