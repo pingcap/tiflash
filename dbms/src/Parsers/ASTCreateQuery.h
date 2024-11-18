@@ -92,7 +92,6 @@ class ASTCreateQuery : public ASTQueryWithOutput
 public:
     bool attach{false}; /// Query ATTACH TABLE, not CREATE TABLE.
     bool if_not_exists{false};
-    bool is_populate{false};
     String database;
     String table;
     ASTExpressionList * columns = nullptr;
@@ -153,11 +152,6 @@ protected:
         if (storage)
             storage->formatImpl(settings, state, frame);
 
-        if (is_populate)
-        {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE"
-                          << (settings.hilite ? hilite_none : "");
-        }
     }
 };
 

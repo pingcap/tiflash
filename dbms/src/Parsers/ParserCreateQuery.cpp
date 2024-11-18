@@ -197,7 +197,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_table("TABLE");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserKeyword s_populate("POPULATE");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
@@ -212,7 +211,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr storage;
     bool attach = false;
     bool if_not_exists = false;
-    bool is_populate = false;
 
     if (!s_create.ignore(pos, expected))
     {
@@ -291,7 +289,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     query->attach = attach;
     query->if_not_exists = if_not_exists;
-    query->is_populate = is_populate;
 
     if (database)
         query->database = typeid_cast<ASTIdentifier &>(*database).name;

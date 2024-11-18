@@ -41,8 +41,9 @@ static void checkAllTypesAreAllowedInTable(const NamesAndTypesList & names_and_t
     for (const auto & elem : names_and_types)
         if (elem.type->cannotBeStoredInTables())
             throw Exception(
-                "Data type " + elem.type->getName() + " cannot be used in tables",
-                ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_TABLES);
+                ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_TABLES,
+                "Data type {} cannot be used in tables",
+                elem.type->getName());
 }
 
 
@@ -67,8 +68,6 @@ StoragePtr StorageFactory::get(
     bool attach,
     bool has_force_restore_data_flag) const
 {
-    String name;
-    ASTs args;
     ASTStorage * storage_def = query.storage;
 
     /// Check for some special types, that are not allowed to be stored in tables. Example: NULL data type.
@@ -79,25 +78,24 @@ StoragePtr StorageFactory::get(
         throw Exception("Incorrect CREATE query: ENGINE required", ErrorCodes::ENGINE_REQUIRED);
 
     const ASTFunction & engine_def = *storage_def->engine;
-
     if (engine_def.parameters)
         throw Exception(
             "Engine definition cannot take the form of a parametric function",
             ErrorCodes::FUNCTION_CANNOT_HAVE_PARAMETERS);
-
+    ASTs args;
     if (engine_def.arguments)
         args = engine_def.arguments->children;
 
-    name = engine_def.name;
+    String name = engine_def.name;
 
     if ((storage_def->partition_by || storage_def->order_by || storage_def->sample_by || storage_def->settings)
         && !endsWith(name, "MergeTree"))
     {
         throw Exception(
-            "Engine " + name
-                + " doesn't support PARTITION BY, ORDER BY, SAMPLE BY or SETTINGS clauses. "
-                  "Currently only the MergeTree family of engines supports them",
-            ErrorCodes::BAD_ARGUMENTS);
+            ErrorCodes::BAD_ARGUMENTS,
+            "Engine {} doesn't support PARTITION BY, ORDER BY, SAMPLE BY or SETTINGS clauses. "
+            "Currently only the MergeTree family of engines supports them",
+            name);
     }
 
     auto it = storages.find(name);

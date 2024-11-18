@@ -213,19 +213,13 @@ protected:
   * CREATE|ATTACH TABLE [IF NOT EXISTS] [db.]name AS [db2.]name2 [ENGINE = engine]
   *
   * Or:
-  * CREATE|ATTACH TABLE [IF NOT EXISTS] [db.]name AS ENGINE = engine SELECT ...
-  *
-  * Or:
   * CREATE|ATTACH DATABASE db [ENGINE = engine]
-  *
-  * Or:
-  * CREATE|ATTACH [MATERIALIZED] VIEW [IF NOT EXISTS] [db.]name [TO [db.]name] [ENGINE = engine] [POPULATE] AS SELECT ...
   */
 class ParserCreateQuery : public IParserBase
 {
 protected:
-    const char * getName() const { return "CREATE TABLE or ATTACH TABLE query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "CREATE TABLE or ATTACH TABLE query"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 } // namespace DB

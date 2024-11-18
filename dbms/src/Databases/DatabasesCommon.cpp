@@ -52,7 +52,6 @@ String getTableDefinitionFromCreateQuery(const ASTPtr & query)
     create.attach = true;
     create.database.clear();
     create.if_not_exists = false;
-    create.is_populate = false;
 
     create.format = nullptr;
     create.out_file = nullptr;
@@ -72,7 +71,6 @@ String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
     create.attach = true;
     create.table.clear();
     create.if_not_exists = false;
-    create.is_populate = false;
 
     create.format = nullptr;
     create.out_file = nullptr;
