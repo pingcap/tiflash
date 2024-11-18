@@ -5044,51 +5044,21 @@ public:
             }
             else
             {
-                if (collator != nullptr && collator->isCI())
-                    constVector<true>(
-                        c0_const->getValue<String>(),
-                        c1_string->getChars(),
-                        c1_string->getOffsets(),
-                        vec_res);
-                else
-                    constVector<false>(
-                        c0_const->getValue<String>(),
-                        c1_string->getChars(),
-                        c1_string->getOffsets(),
-                        vec_res);
+                constVector(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
             }
         }
         else if (c0_string && c1_string)
         {
-            if (collator != nullptr && collator->isCI())
-                vectorVector<true>(
-                    c0_string->getChars(),
-                    c0_string->getOffsets(),
-                    c1_string->getChars(),
-                    c1_string->getOffsets(),
-                    vec_res);
-            else
-                vectorVector<false>(
-                    c0_string->getChars(),
-                    c0_string->getOffsets(),
-                    c1_string->getChars(),
-                    c1_string->getOffsets(),
-                    vec_res);
+            vectorVector(
+                c0_string->getChars(),
+                c0_string->getOffsets(),
+                c1_string->getChars(),
+                c1_string->getOffsets(),
+                vec_res);
         }
         else if (c0_string && c1_const)
         {
-            if (collator != nullptr && collator->isCI())
-                vectorConst<true>(
-                    c0_string->getChars(),
-                    c0_string->getOffsets(),
-                    c1_const->getValue<String>(),
-                    vec_res);
-            else
-                vectorConst<false>(
-                    c0_string->getChars(),
-                    c0_string->getOffsets(),
-                    c1_const->getValue<String>(),
-                    vec_res);
+            vectorConst(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
         }
         else
             throw Exception(
@@ -5099,23 +5069,17 @@ public:
         block.getByPosition(result).column = std::move(col_res);
     }
 
-    template <bool is_ci>
-    void vectorVector(
+    static void vectorVector(
         const ColumnString::Chars_t & col0_data,
         const ColumnString::Offsets & col0_offsets,
         const ColumnString::Chars_t & col1_data,
         const ColumnString::Offsets & col1_offsets,
-        PaddedPODArray<Int64> & res) const
+        PaddedPODArray<Int64> & res)
     {
         size_t pos;
         size_t row_num = col0_offsets.size();
         ColumnString::Offset prev_col0_str_offset = 0;
         ColumnString::Offset prev_col1_str_offset = 0;
-
-        String col0_container;
-        String col1_container;
-
-        std::vector<size_t> lens;
 
         for (size_t i = 0; i < row_num; i++)
         {
@@ -5128,48 +5092,17 @@ public:
             }
             else
             {
-                if constexpr (is_ci)
-                {
-                    const StringRef & col0_collation_str = collator->sortKeyNoTrim(
-                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                        col0_str_len,
-                        col0_container);
-                    const StringRef & col1_collation_str = collator->convert(
-                        reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
-                        col1_str_len,
-                        col1_container,
-                        &lens);
-                    void * res_start = memmem(
-                        col1_collation_str.data,
-                        col1_collation_str.size,
-                        col0_collation_str.data,
-                        col0_collation_str.size);
+                LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
+                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                    col0_str_len);
 
-                    if (res_start == nullptr)
-                        res[i] = 0;
-                    else
-                    {
-                        size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
-                        res[i] = 1 + getPositionWithCollationString(pos, lens);
-                    }
-                }
+                pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
+                    - &col1_data[prev_col1_str_offset];
+
+                if (pos != col1_str_len)
+                    res[i] = 1 + pos;
                 else
-                {
-                    LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
-                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                        col0_str_len);
-
-                    pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
-                        - &col1_data[prev_col1_str_offset];
-
-                    if (pos != col1_str_len)
-                        res[i] = 1
-                            + getPositionUTF8(
-                                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
-                                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
-                    else
-                        res[i] = 0;
-                }
+                    res[i] = 0;
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5177,25 +5110,16 @@ public:
         }
     }
 
-    template <bool is_ci>
-    void vectorConst(
+    static void vectorConst(
         const ColumnString::Chars_t & col0_data,
         const ColumnString::Offsets & col0_offsets,
         const String & col1_str,
-        PaddedPODArray<Int64> & res) const
+        PaddedPODArray<Int64> & res)
     {
         size_t pos;
         size_t row_num = col0_offsets.size();
         ColumnString::Offset prev_col0_str_offset = 0;
         size_t col1_str_len = col1_str.size();
-
-        String col0_container;
-        String col1_container;
-        std::vector<size_t> lens;
-        StringRef col1_collation_str;
-
-        if constexpr (is_ci)
-            col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
 
         for (size_t i = 0; i < row_num; i++)
         {
@@ -5207,77 +5131,171 @@ public:
             }
             else
             {
-                if constexpr (is_ci)
-                {
-                    const StringRef & col0_collation_str = collator->sortKeyNoTrim(
-                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                        col0_str_len,
-                        col0_container);
-                    void * res_start = memmem(
-                        col1_collation_str.data,
-                        col1_collation_str.size,
-                        col0_collation_str.data,
-                        col0_collation_str.size);
+                LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
+                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                    col0_str_len);
 
-                    if (res_start == nullptr)
-                        res[i] = 0;
-                    else
-                    {
-                        size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
-                        res[i] = 1 + getPositionWithCollationString(pos, lens);
-                    }
-                }
+                pos = searcher.search(
+                          reinterpret_cast<const UInt8 *>(col1_str.c_str()),
+                          reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
+                    - reinterpret_cast<const UInt8 *>(col1_str.c_str());
+
+                if (pos != col1_str_len)
+                    res[i] = 1 + pos;
                 else
-                {
-                    LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
-                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                        col0_str_len);
-
-                    pos = searcher.search(
-                              reinterpret_cast<const UInt8 *>(col1_str.c_str()),
-                              reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
-                        - reinterpret_cast<const UInt8 *>(col1_str.c_str());
-
-                    if (pos != col1_str_len)
-                        res[i] = 1 + getPositionUTF8(col1_str.c_str(), col1_str.c_str() + pos);
-                    else
-                        res[i] = 0;
-                }
+                    res[i] = 0;
             }
 
             prev_col0_str_offset = col0_offsets[i];
         }
     }
 
-    template <bool is_ci>
-    void constVector(
+    static void constVector(
         const String & col0_str,
         const ColumnString::Chars_t & col1_data,
         const ColumnString::Offsets & col1_offsets,
-        PaddedPODArray<Int64> & res) const
+        PaddedPODArray<Int64> & res)
     {
         size_t pos;
         size_t row_num = col1_offsets.size();
         ColumnString::Offset prev_col1_str_offset = 0;
 
-        String col0_container;
-        String col1_container;
-        std::vector<size_t> lens;
-        StringRef col0_collation_str;
-
-        if constexpr (is_ci)
-            col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
-
-        // This construction will be wasted when is_ci is true, but it's acceptable
-        LibCASCIICaseSensitiveStringSearcher searcher_cs
+        LibCASCIICaseSensitiveStringSearcher searcher
             = LibCASCIICaseSensitiveStringSearcher(col0_str.data(), col0_str.size());
 
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
 
-            if constexpr (is_ci)
+            pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
+                - &col1_data[prev_col1_str_offset];
+
+            if (pos != col1_str_len)
+                res[i] = 1 + pos;
+            else
+                res[i] = 0;
+
+            prev_col1_str_offset = col1_offsets[i];
+        }
+    }
+
+private:
+    TiDB::TiDBCollatorPtr collator{};
+};
+
+class FunctionPositionUTF8 : public IFunction
+{
+public:
+    static constexpr auto name = "positionUTF8";
+    FunctionPositionUTF8() = default;
+
+    static FunctionPtr create(const Context & /*context*/) { return std::make_shared<FunctionPositionUTF8>(); }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 2)
+            throw Exception(
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be 2.",
+                    getName(),
+                    arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (collator == nullptr)
+            throw Exception("collator is nullptr in positionUTF8 function");
+
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+
+        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
+        const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
+
+        size_t row_num = c0_col->size();
+
+        auto col_res = ColumnInt64::create();
+        PaddedPODArray<Int64> & vec_res = col_res->getData();
+        vec_res.resize(row_num);
+
+        if (c0_const && c1_string)
+        {
+            const String & c0_str = c0_const->getValue<String>();
+            if unlikely (c0_str.empty())
             {
+                for (size_t i = 0; i < row_num; i++)
+                    vec_res[i] = 1;
+            }
+            else
+            {
+                constVector(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+            }
+        }
+        else if (c0_string && c1_string)
+        {
+            vectorVector(
+                c0_string->getChars(),
+                c0_string->getOffsets(),
+                c1_string->getChars(),
+                c1_string->getOffsets(),
+                vec_res);
+        }
+        else if (c0_string && c1_const)
+        {
+            vectorConst(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
+        }
+        else
+            throw Exception(
+                "Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
+                    + block.getByPosition(arguments[1]).column->getName() + " of arguments of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+    void vectorVector(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+        ColumnString::Offset prev_col1_str_offset = 0;
+
+        String col0_container;
+        String col1_container;
+
+        std::vector<size_t> lens;
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+
+            if unlikely (col0_str_len == 0)
+            {
+                res[i] = 1;
+            }
+            else
+            {
+                const StringRef & col0_collation_str = collator->sortKeyNoTrim(
+                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                    col0_str_len,
+                    col0_container);
                 const StringRef & col1_collation_str = collator->convert(
                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
                     col1_str_len,
@@ -5297,18 +5315,98 @@ public:
                     res[i] = 1 + getPositionWithCollationString(pos, lens);
                 }
             }
+
+            prev_col0_str_offset = col0_offsets[i];
+            prev_col1_str_offset = col1_offsets[i];
+        }
+    }
+
+    void vectorConst(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const String & col1_str,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+
+        String col0_container;
+        String col1_container;
+        std::vector<size_t> lens;
+        StringRef col1_collation_str;
+
+        col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+
+            if unlikely (col0_str_len == 0)
+            {
+                res[i] = 1;
+            }
             else
             {
-                pos = searcher_cs.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
-                    - &col1_data[prev_col1_str_offset];
+                const StringRef & col0_collation_str = collator->sortKeyNoTrim(
+                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                    col0_str_len,
+                    col0_container);
+                void * res_start = memmem(
+                    col1_collation_str.data,
+                    col1_collation_str.size,
+                    col0_collation_str.data,
+                    col0_collation_str.size);
 
-                if (pos != col1_str_len)
-                    res[i] = 1
-                        + getPositionUTF8(
-                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
-                                 reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset + pos]));
-                else
+                if (res_start == nullptr)
                     res[i] = 0;
+                else
+                {
+                    size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
+                    res[i] = 1 + getPositionWithCollationString(pos, lens);
+                }
+            }
+            prev_col0_str_offset = col0_offsets[i];
+        }
+    }
+
+    void constVector(
+        const String & col0_str,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t row_num = col1_offsets.size();
+        ColumnString::Offset prev_col1_str_offset = 0;
+
+        String col0_container;
+        String col1_container;
+        std::vector<size_t> lens;
+        StringRef col0_collation_str;
+
+        col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+
+            const StringRef & col1_collation_str = collator->convert(
+                reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                col1_str_len,
+                col1_container,
+                &lens);
+
+            void * res_start = memmem(
+                col1_collation_str.data,
+                col1_collation_str.size,
+                col0_collation_str.data,
+                col0_collation_str.size);
+
+            if (res_start == nullptr)
+                res[i] = 0;
+            else
+            {
+                size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
+                res[i] = 1 + getPositionWithCollationString(pos, lens);
             }
 
             prev_col1_str_offset = col1_offsets[i];
@@ -5316,15 +5414,6 @@ public:
     }
 
 private:
-    static Int64 getPositionUTF8(const char * begin, const char * end)
-    {
-        size_t res = 0;
-        for (const char * it = begin; it != end; ++it)
-            if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
-                ++res;
-        return res;
-    }
-
     static Int64 getPositionWithCollationString(size_t pos, const std::vector<size_t> & lens)
     {
         Int64 actual_pos = 0;
@@ -6887,6 +6976,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
+    factory.registerFunction<FunctionPositionUTF8>();
     factory.registerFunction<FunctionSubStringIndex>();
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
