@@ -816,10 +816,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & offsets,
         const std::string & needle,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -904,10 +900,6 @@ struct ReplaceStringImpl
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -978,10 +970,6 @@ struct ReplaceStringImpl
         const std::string & needle,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1070,10 +1058,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & needle_offsets,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1146,10 +1130,6 @@ struct ReplaceStringImpl
         size_t n,
         const std::string & needle,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1244,10 +1224,6 @@ struct ReplaceStringImpl
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1319,10 +1295,6 @@ struct ReplaceStringImpl
         const std::string & needle,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1421,10 +1393,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & needle_offsets,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1498,10 +1466,6 @@ struct ReplaceStringImpl
         const std::string & data,
         const std::string & needle,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         std::string & res_data)
     {
         if (needle.empty())
