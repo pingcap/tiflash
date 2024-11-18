@@ -46,7 +46,7 @@ private:
     std::vector<VectorIndexViewer::Key> sorted_results;
     std::vector<ColumnFileTinyVectorIndexReaderPtr> tiny_readers;
 
-    ColumnFiles & column_files;
+    const ColumnFiles & column_files;
 
     const Block header;
     IColumn::Filter filter;
