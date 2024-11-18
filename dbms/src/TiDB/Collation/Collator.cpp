@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/UTF8Helpers.h>
 #include <Poco/String.h>
 #include <TiDB/Collation/Collator.h>
 #include <TiDB/Collation/CollatorUtils.h>
@@ -193,17 +194,25 @@ public:
         return DB::BinCollatorSortKey<padding>(s, length);
     }
 
-    // So far, no case needs to call this function belonging to BinCollator
     StringRef sortKeyNoTrim(const char * s, size_t length, std::string &) const override
     {
-        return DB::BinCollatorSortKey<false>(s, length);
+        std::string tmp;
+        return convertImpl<false>(s, length, tmp, nullptr);
     }
 
-    // So far, no case needs the length of each character in binary collator.
-    // So we don't handle the fourth parameter.
-    StringRef convert(const char * s, size_t length, std::string &, std::vector<size_t> *) const override
+    StringRef convert(const char * s, size_t length, std::string &, std::vector<size_t> * lens) const override
     {
-        return DB::BinCollatorSortKey<false>(s, length);
+        std::string tmp;
+        return convertImpl<true>(s, length, tmp, lens);
+    }
+
+    template <bool need_len>
+    StringRef convertImpl(const char * s, size_t length, std::string &, std::vector<size_t> * lens) const
+    {
+        if constexpr (need_len)
+            fillLens(s, s + length, lens);
+
+        return StringRef(s, length);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
@@ -214,6 +223,14 @@ private:
 private:
     using WeightType = T;
     using CharType = T;
+
+    static void fillLens(const char * start, const char * end, std::vector<size_t> * lens)
+    {
+        lens->resize(0);
+        for (const char * it = start; it != end; ++it)
+            if (!DB::UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
+                lens->push_back(DB::UTF8::seqLength(static_cast<UInt8>(*it)));
+    }
 
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
