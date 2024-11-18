@@ -20,14 +20,20 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyVectorIndexReader.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
 
 
 namespace DB::DM
 {
 
-class ColumnFileSetWithVectorIndexInputStream : public ColumnFileSetInputStream
+class ColumnFileSetWithVectorIndexInputStream : public VectorIndexBlockInputStream
 {
 private:
+    ColumnFileSetReader reader;
+
+    std::vector<ColumnFileReaderPtr>::iterator cur_column_file_reader;
+    size_t read_rows = 0;
+
     const IColumnFileDataProviderPtr data_provider;
     const ANNQueryInfoPtr ann_query_info;
     const BitmapFilterView valid_rows;
@@ -37,10 +43,10 @@ private:
     const ColumnDefinesPtr rest_col_defs;
 
     // Set after load(). Top K search results in files with vector index.
-    std::vector<VectorIndexViewer::SearchResult> selected_rows;
+    std::vector<VectorIndexViewer::Key> sorted_results;
     std::vector<ColumnFileTinyVectorIndexReaderPtr> tiny_readers;
 
-    ColumnFiles & column_files;
+    const ColumnFiles & column_files;
 
     const Block header;
     IColumn::Filter filter;
@@ -59,7 +65,7 @@ public:
         ColumnDefine && vec_cd_,
         const ColumnDefinesPtr & rest_col_defs_,
         ReadTag read_tag_)
-        : ColumnFileSetInputStream(context_, delta_snap_, col_defs_, segment_range_, read_tag_)
+        : reader(context_, delta_snap_, col_defs_, segment_range_, read_tag_)
         , data_provider(data_provider_)
         , ann_query_info(ann_query_info_)
         , valid_rows(std::move(valid_rows_))
@@ -67,26 +73,39 @@ public:
         , vec_cd(std::move(vec_cd_))
         , rest_col_defs(rest_col_defs_)
         , column_files(reader.snapshot->getColumnFiles())
-        , header(getHeader())
-    {}
+        , header(toEmptyBlock(*(reader.col_defs)))
+    {
+        cur_column_file_reader = reader.column_file_readers.begin();
+    }
 
-    static ColumnFileSetInputStreamPtr tryBuild(
+    static SkippableBlockInputStreamPtr tryBuild(
         const DMContext & context,
         const ColumnFileSetSnapshotPtr & delta_snap,
         const ColumnDefinesPtr & col_defs,
         const RowKeyRange & segment_range_,
         const IColumnFileDataProviderPtr & data_provider,
-        const RSOperatorPtr & rs_operator,
+        const ANNQueryInfoPtr & ann_query_info,
         const BitmapFilterPtr & bitmap_filter,
         size_t offset,
         ReadTag read_tag_);
 
     String getName() const override { return "ColumnFileSetWithVectorIndex"; }
+    Block getHeader() const override { return header; }
+
+    Block read() override
+    {
+        FilterPtr filter = nullptr;
+        return read(filter, false);
+    }
 
     // When all rows in block are not filtered out,
     // `res_filter` will be set to null.
     // The caller needs to do handle this situation.
     Block read(FilterPtr & res_filter, bool return_filter) override;
+
+    std::vector<VectorIndexViewer::SearchResult> load() override;
+
+    void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
 private:
     Block readImpl(FilterPtr & res_filter);
@@ -94,8 +113,6 @@ private:
     Block readOtherColumns();
 
     void toNextFile(size_t current_file_index, size_t current_file_rows);
-
-    void load();
 };
 
 } // namespace DB::DM

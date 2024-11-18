@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -40,8 +41,6 @@ class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 class PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 

@@ -34,7 +34,12 @@ void BaseRuntimeStatistics::append(const OperatorProfileInfo & profile_info)
     blocks += profile_info.blocks;
     bytes += profile_info.bytes;
     allocated_bytes += profile_info.allocated_bytes;
-    execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
+    if (execution_time_ns < profile_info.execution_time)
+    {
+        execution_time_ns = profile_info.execution_time;
+        queue_wait_time_ns = profile_info.task_wait_time;
+        pipeline_breaker_wait_time_ns = profile_info.pipeline_breaker_wait_time;
+    }
     ++concurrency;
 }
 } // namespace DB

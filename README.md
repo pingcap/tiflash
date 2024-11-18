@@ -37,7 +37,7 @@ And the following operating systems:
 The following packages are required:
 
 - CMake 3.23.0+
-- Clang 17.0.0+ under Linux or AppleClang 14.0.0+ under MacOS
+- Clang 17.0.0+
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
@@ -104,9 +104,9 @@ sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja cu
 </details>
 
 <details>
-<summary><b>CentOS 7</b></summary>
+<summary><b>Rocky Linux 8</b></summary>
 
-Please refer to [release-centos7-llvm/env/prepare-sysroot.sh](./release-centos7-llvm/env/prepare-sysroot.sh)
+Please refer to [release-linux-llvm/env/prepare-sysroot.sh](./release-linux-llvm/env/prepare-sysroot.sh)
 
 </details>
 
@@ -123,11 +123,7 @@ xcode-select --install
 
 # Install other dependencies
 brew install ninja cmake openssl@1.1 ccache
-```
 
-If your MacOS is higher or equal to 13.0 (Ventura), it should work out of the box because by default Xcode 14.3 provides Apple clang 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
-
-```shell
 brew install llvm@17
 
 # check llvm version
@@ -163,9 +159,9 @@ In MacOS, if you install llvm clang, you need to explicitly specify to use llvm 
 
 Add the following lines to your shell environment, e.g. `~/.bash_profile`.
 ```shell
-export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-export CC="/opt/homebrew/opt/llvm/bin/clang"
-export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+export PATH="$(brew --prefix)/opt/llvm/bin:$PATH"
+export CC="$(brew --prefix)/opt/llvm/bin/clang"
+export CXX="$(brew --prefix)/opt/llvm/bin/clang++"
 ```
 
 Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
@@ -173,7 +169,7 @@ Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like
 mkdir cmake-build-debug
 cd cmake-build-debug
 
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER="$(brew --prefix)/opt/llvm/bin/clang" -DCMAKE_CXX_COMPILER="$(brew --prefix)/opt/llvm/bin/clang++"
 
 ninja tiflash
 ```
@@ -329,10 +325,10 @@ More usages are available via `./dbms/bench_dbms --help`.
 
 ## Generate LLVM Coverage Report
 
-To build coverage report, run the script under `release-centos7-llvm`
+To build coverage report, run the script under `release-linux-llvm`
 
 ```shell
-cd release-centos7-llvm
+cd release-linux-llvm
 ./gen_coverage.sh
 # Or run with filter:
 # FILTER='*DMFile*:*DeltaMerge*:*Segment*' ./gen_coverage.sh
@@ -354,7 +350,7 @@ Before submitting a pull request, please resolve clang-tidy errors and use [form
 ```shell
 # In the TiFlash repository root:
 merge_base=$(git merge-base upstream/master HEAD)
-python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only`
+python3 release-linux-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only`
 # if there are too much errors, you can try to run the script again with `-fix`
 python3 format-diff.py --diff_from $merge_base
 ```

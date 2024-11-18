@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
@@ -29,9 +30,6 @@ namespace DM
 {
 
 struct WriteBatches;
-
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
