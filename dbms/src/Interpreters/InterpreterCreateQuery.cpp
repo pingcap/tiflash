@@ -531,6 +531,7 @@ std::unique_ptr<DDLGuard> tryGetDDLGuard(
                     "Table " + database_name + "." + table_name + " already exists.",
                     ErrorCodes::TABLE_ALREADY_EXISTS);
         }
+        return guard;
     }
     catch (Exception & e)
     {
