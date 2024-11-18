@@ -34,7 +34,7 @@ using StoragePtr = std::shared_ptr<IStorage>;
 class InterpreterCreateQuery : public IInterpreter
 {
 public:
-    InterpreterCreateQuery(const ASTPtr & query_ptr_, Context & context_, std::string_view log_suffix_="");
+    InterpreterCreateQuery(const ASTPtr & query_ptr_, Context & context_, std::string_view log_suffix_ = "");
 
     BlockIO execute() override;
 
