@@ -4976,7 +4976,7 @@ public:
 
         size_t row_num = c0_col->size();
 
-        auto col_res = ColumnInt64::create();
+        auto col_res = ColumnInt64::create(row_num, 0);
         PaddedPODArray<Int64> & vec_res = col_res->getData();
         vec_res.resize(row_num);
 
@@ -5172,9 +5172,8 @@ public:
 
         size_t row_num = c0_col->size();
 
-        auto col_res = ColumnInt64::create();
+        auto col_res = ColumnInt64::create(row_num, 0);
         PaddedPODArray<Int64> & vec_res = col_res->getData();
-        vec_res.resize(row_num);
 
         if (c0_const && c1_string)
         {
