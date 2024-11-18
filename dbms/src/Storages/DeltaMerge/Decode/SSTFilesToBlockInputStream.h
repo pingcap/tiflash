@@ -175,7 +175,7 @@ private:
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`
     const SSTFilesToBlockInputStreamPtr _raw_child; // NOLINT(readability-identifier-naming)
-    std::unique_ptr<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>> mvcc_compact_stream;
+    std::unique_ptr<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>> mvcc_compact_stream;
 };
 
 } // namespace DM

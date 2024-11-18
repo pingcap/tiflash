@@ -22,14 +22,10 @@
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
-/// ======================================================
-/// Helper methods.
-/// ======================================================
-std::pair<size_t, size_t> copyColumnsData(
+
+std::pair<size_t, size_t> ColumnFileReader::copyColumnsData(
     const Columns & from,
     const ColumnPtr & pk_col,
     MutableColumns & to,
@@ -128,5 +124,4 @@ String columnFilesToString(const T & column_files)
 template String columnFilesToString<ColumnFiles>(const ColumnFiles & column_files);
 template String columnFilesToString<ColumnFilePersisteds>(const ColumnFilePersisteds & column_files);
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

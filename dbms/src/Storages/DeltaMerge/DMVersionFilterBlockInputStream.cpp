@@ -24,7 +24,7 @@ namespace DB
 {
 namespace DM
 {
-template <int MODE>
+template <DMVersionFilterMode MODE>
 void DMVersionFilterBlockInputStream<MODE>::readPrefix()
 {
     forEachChild([](IBlockInputStream & child) {
@@ -33,7 +33,7 @@ void DMVersionFilterBlockInputStream<MODE>::readPrefix()
     });
 }
 
-template <int MODE>
+template <DMVersionFilterMode MODE>
 void DMVersionFilterBlockInputStream<MODE>::readSuffix()
 {
     forEachChild([](IBlockInputStream & child) {
@@ -42,7 +42,7 @@ void DMVersionFilterBlockInputStream<MODE>::readSuffix()
     });
 }
 
-template <int MODE>
+template <DMVersionFilterMode MODE>
 Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
 {
     while (true)
@@ -87,7 +87,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         // so that optimizer could use vectorized optimization.
         // The original logic can be seen in #checkWithNextIndex().
 
-        if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
+        if constexpr (MODE == DMVersionFilterMode::MVCC)
         {
             /// filter[i] = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit)
             {
@@ -140,7 +140,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 }
             }
         }
-        else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
+        else if constexpr (MODE == DMVersionFilterMode::COMPACT)
         {
             /// filter[i] = cur_version >= version_limit || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
 
@@ -333,11 +333,11 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             if (!initNextBlock())
             {
                 // No more block.
-                if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
+                if constexpr (MODE == DMVersionFilterMode::MVCC)
                 {
                     filter[rows - 1] = !deleted && cur_version <= version_limit;
                 }
-                else if (MODE == DM_VERSION_FILTER_MODE_COMPACT)
+                else if (MODE == DMVersionFilterMode::COMPACT)
                 {
                     filter[rows - 1] = cur_version >= version_limit || !deleted;
                     not_clean[rows - 1] = filter[rows - 1] && deleted;
@@ -362,12 +362,12 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             {
                 auto next_handle = rowkey_column->getRowKeyValue(0);
                 auto next_version = (*version_col_data)[0];
-                if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
+                if constexpr (MODE == DMVersionFilterMode::MVCC)
                 {
                     filter[rows - 1] = !deleted && cur_version <= version_limit
                         && (cur_handle != next_handle || next_version > version_limit);
                 }
-                else if (MODE == DM_VERSION_FILTER_MODE_COMPACT)
+                else if (MODE == DMVersionFilterMode::COMPACT)
                 {
                     filter[rows - 1] = cur_version >= version_limit
                         || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
@@ -388,7 +388,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
         const size_t passed_count = countBytesInFilter(filter);
 
-        if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
+        if constexpr (MODE == DMVersionFilterMode::COMPACT)
         {
             not_clean_rows += countBytesInFilter(not_clean);
             deleted_rows += countBytesInFilter(is_deleted);
@@ -442,8 +442,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
     }
 }
 
-template class DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>;
-template class DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>;
+template class DMVersionFilterBlockInputStream<DMVersionFilterMode::MVCC>;
+template class DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>;
 
 } // namespace DM
 } // namespace DB

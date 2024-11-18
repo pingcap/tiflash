@@ -666,7 +666,7 @@ public:
     static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     /// Create a stream which merged delta and stable streams together.
-    template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
+    template <bool skippable_place = false>
     static SkippableBlockInputStreamPtr getPlacedStream(
         const DMContext & dm_context,
         const ColumnDefines & read_columns,
@@ -674,8 +674,8 @@ public:
         const RSOperatorPtr & filter,
         const StableSnapshotPtr & stable_snap,
         const DeltaValueReaderPtr & delta_reader,
-        const IndexIterator & delta_index_begin,
-        const IndexIterator & delta_index_end,
+        const DeltaIndexIterator & delta_index_begin,
+        const DeltaIndexIterator & delta_index_end,
         size_t expected_block_size,
         ReadTag read_tag,
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
