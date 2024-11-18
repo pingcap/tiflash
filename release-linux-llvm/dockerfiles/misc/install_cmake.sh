@@ -20,9 +20,9 @@
 
 function install_cmake() {
     # $1: cmake_version
-    # $2: cmake_arch
-    wget https://github.com/Kitware/CMake/releases/download/v$1/cmake-$1-linux-$2.sh
+    arch=$(uname -m)
+    wget https://github.com/Kitware/CMake/releases/download/v$1/cmake-$1-linux-${arch}.sh
     mkdir -p /opt/cmake
-    sh cmake-$1-linux-$2.sh --prefix=/opt/cmake --skip-license --exclude-subdir
-    rm -rf cmake-$1-linux-$2.sh
+    sh cmake-$1-linux-${arch}.sh --prefix=/opt/cmake --skip-license --exclude-subdir
+    rm -rf cmake-$1-linux-${arch}.sh
 }

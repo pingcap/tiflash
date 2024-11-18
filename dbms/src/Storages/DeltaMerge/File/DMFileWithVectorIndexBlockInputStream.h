@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
-#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
 
 
 namespace DB::DM
@@ -50,7 +50,7 @@ namespace DB::DM
  * exists on the corresponding column. If the index does not exist, the caller
  * should use the standard DMFileBlockInputStream.
  */
-class DMFileWithVectorIndexBlockInputStream : public SkippableBlockInputStream
+class DMFileWithVectorIndexBlockInputStream : public VectorIndexBlockInputStream
 {
 public:
     static DMFileWithVectorIndexBlockInputStreamPtr create(
@@ -106,26 +106,13 @@ public:
     // The caller needs to do handle this situation.
     Block readImpl(FilterPtr & res_filter);
 
-    bool getSkippedRows(size_t &) override
-    {
-        RUNTIME_CHECK_MSG(false, "DMFileWithVectorIndexBlockInputStream does not support getSkippedRows");
-    }
-
-    size_t skipNextBlock() override
-    {
-        RUNTIME_CHECK_MSG(false, "DMFileWithVectorIndexBlockInputStream does not support skipNextBlock");
-    }
-
-    Block readWithFilter(const IColumn::Filter &) override
-    {
-        // We don't support the normal late materialization, because
-        // we are already doing it.
-        RUNTIME_CHECK_MSG(false, "DMFileWithVectorIndexBlockInputStream does not support late materialization");
-    }
-
     String getName() const override { return "DMFileWithVectorIndex"; }
 
     Block getHeader() const override { return header; }
+
+    std::vector<VectorIndexViewer::SearchResult> load() override;
+
+    void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
 private:
     // Only used in readByIndexReader()
@@ -141,8 +128,11 @@ private:
     // when there are other columns to read.
     std::tuple<Block, size_t> readByFollowingOtherColumns();
 
-private:
-    void load();
+    // Load vector index and update sorted_results.
+    void internalLoad();
+
+    // Update the RSResult according to the sorted_results.
+    void updateRSResult();
 
 private:
     const LoggerPtr log;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,18 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Install git for CI/CD.
-# Require: openssl
 
-function install_git() {
-    # $1: git version
-    wget -O git.tar.gz https://github.com/git/git/archive/refs/tags/v$1.tar.gz
-    mkdir git && cd git
-    tar -xzvf ../git.tar.gz --strip-components=1
-    make configure
-    ./configure --with-openssl $OPENSSL_ROOT_DIR --prefix /usr/local
-    make -j
-    make install
-    cd ..
-    rm -rf git git.tar.gz
+# Prepare basic environment for CI/CD.
+
+function prepare_basic() {
+    dnf upgrade-minimal -y
+    dnf install -y epel-release
+    dnf config-manager --set-enabled powertools
+    dnf install -y \
+         libtool \
+         libtool-ltdl-devel \
+         python3-devel \
+         libcurl-devel \
+         bzip2 \
+         chrpath
+    dnf install -y curl git perl wget cmake3 gettext glibc-static zlib-devel diffutils ninja-build gcc-toolset-10
+    dnf install -y 'perl(Data::Dumper)'
+    dnf clean all -y
 }

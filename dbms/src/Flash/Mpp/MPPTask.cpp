@@ -513,11 +513,10 @@ void MPPTask::runImpl()
     const auto & resource_group = dag_context->getResourceGroupName();
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_run, resource_group).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_request_count_per_resource_group, type_mpp_task_run, resource_group).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_handling_mpp_task_run, resource_group).Decrement();
     });
 
     // set cancellation hook
@@ -528,7 +527,8 @@ void MPPTask::runImpl()
     {
         LOG_DEBUG(log, "task starts preprocessing");
         preprocess();
-        auto time_cost_in_preprocess_ms = stopwatch.elapsedMilliseconds();
+        auto time_cost_in_preprocess_ns = stopwatch.elapsed();
+        auto time_cost_in_preprocess_ms = time_cost_in_preprocess_ns / MILLISECOND_TO_NANO;
         LOG_DEBUG(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
         LOG_DEBUG(
@@ -540,7 +540,9 @@ void MPPTask::runImpl()
 
         scheduleOrWait();
 
-        auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
+        auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
+        dag_context->minTSO_wait_time_ns = time_cost_in_schedule_ns;
+        auto time_cost_in_schedule_ms = time_cost_in_schedule_ns / MILLISECOND_TO_NANO;
         LOG_INFO(
             log,
             "task starts running, time cost in schedule: {} ms, time cost in preprocess: {} ms",
@@ -594,7 +596,7 @@ void MPPTask::runImpl()
         LOG_DEBUG(
             log,
             "finish with {} seconds, {} rows, {} blocks, {} bytes",
-            runtime_statistics.execution_time_ns / static_cast<double>(1000000000),
+            runtime_statistics.execution_time_ns / static_cast<double>(SECOND_TO_NANO),
             runtime_statistics.rows,
             runtime_statistics.blocks,
             runtime_statistics.bytes);

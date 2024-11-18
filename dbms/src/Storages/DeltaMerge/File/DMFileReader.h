@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/File/ColumnStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -31,9 +32,6 @@ namespace DB::DM
 {
 
 class DMFileWithVectorIndexBlockInputStream;
-
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 
 class DMFileReader
