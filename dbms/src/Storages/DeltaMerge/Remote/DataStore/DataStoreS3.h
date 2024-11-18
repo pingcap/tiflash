@@ -36,6 +36,18 @@ public:
     void putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, bool remove_local) override;
 
     /**
+      * @brief Note: Unlike putDMFile, this function intentionally does not
+      * remove any local files, because it is only a "put".
+      *
+      * @param local_dir The path of the local DMFile
+      * @param local_files File names to upload
+      */
+    void putDMFileLocalFiles(
+        const String & local_dir,
+        const std::vector<String> & local_files,
+        const S3::DMFileOID & oid) override;
+
+    /**
      * Blocks until a DMFile in the remote data store is successfully prepared in a local cache.
      * If the DMFile exists in the local cache, it will not be prepared again.
      *
@@ -78,7 +90,7 @@ public:
 
     ~S3PreparedDMFileToken() override = default;
 
-    DMFilePtr restore(DMFileMeta::ReadMode read_mode) override;
+    DMFilePtr restore(DMFileMeta::ReadMode read_mode, UInt64 meta_version) override;
 };
 
 } // namespace DB::DM::Remote

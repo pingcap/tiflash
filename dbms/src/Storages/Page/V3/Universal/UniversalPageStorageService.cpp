@@ -282,16 +282,20 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     };
 
     const auto write_stats = uni_page_storage->dumpIncrementalCheckpoint(opts);
-    GET_METRIC(tiflash_storage_checkpoint_flow, type_incremental).Increment(write_stats.incremental_data_bytes);
-    GET_METRIC(tiflash_storage_checkpoint_flow, type_compaction).Increment(write_stats.compact_data_bytes);
+    if (write_stats.has_value())
+    {
+        GET_METRIC(tiflash_storage_checkpoint_flow, type_incremental)
+            .Increment(write_stats.value().incremental_data_bytes);
+        GET_METRIC(tiflash_storage_checkpoint_flow, type_compaction).Increment(write_stats.value().compact_data_bytes);
 
-    LOG_INFO(
-        log,
-        "Upload checkpoint success,{} upload_sequence={} incremental_bytes={} compact_bytes={}",
-        force_sync_data ? " sync_all=true" : "",
-        upload_info.upload_sequence,
-        write_stats.incremental_data_bytes,
-        write_stats.compact_data_bytes);
+        LOG_INFO(
+            log,
+            "Upload checkpoint success,{} upload_sequence={} incremental_bytes={} compact_bytes={}",
+            force_sync_data ? " sync_all=true" : "",
+            upload_info.upload_sequence,
+            write_stats->incremental_data_bytes,
+            write_stats->compact_data_bytes);
+    }
 
     return true;
 }

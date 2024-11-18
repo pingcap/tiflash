@@ -194,6 +194,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     int rf_max_wait_time_ms)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
+    static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
 
     QueryProcessingStage::Enum stage;
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
@@ -203,6 +204,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
+            empty_ann_query_info,
             empty_pushed_down_filters, // Not care now
             scan_column_infos,
             runtime_filter_ids,
@@ -231,6 +233,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
+            empty_ann_query_info,
             empty_pushed_down_filters, // Not care now
             scan_column_infos,
             runtime_filter_ids,
@@ -254,6 +257,7 @@ void MockStorage::buildExecFromDeltaMerge(
     int rf_max_wait_time_ms)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
+    static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
 
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     if (filter_conditions && filter_conditions->hasValue())
@@ -262,6 +266,7 @@ void MockStorage::buildExecFromDeltaMerge(
         auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
+            empty_ann_query_info,
             empty_pushed_down_filters, // Not care now
             scan_column_infos,
             runtime_filter_ids,
@@ -295,6 +300,7 @@ void MockStorage::buildExecFromDeltaMerge(
         auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
+            empty_ann_query_info,
             empty_pushed_down_filters, // Not care now
             scan_column_infos,
             runtime_filter_ids,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -65,7 +66,8 @@ SegmentReadTask::SegmentReadTask(
     StoreID store_id_,
     const String & store_address,
     KeyspaceID keyspace_id,
-    TableID physical_table_id)
+    TableID physical_table_id,
+    ColumnID pk_col_id)
     : store_id(store_id_)
 {
     CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
@@ -86,6 +88,7 @@ SegmentReadTask::SegmentReadTask(
         /* min_version */ 0,
         keyspace_id,
         physical_table_id,
+        pk_col_id,
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,
         db_context.getSettingsRef(),
@@ -110,6 +113,7 @@ SegmentReadTask::SegmentReadTask(
         ranges.push_back(RowKeyRange::deserialize(rb));
     }
 
+    // The index page of ColumnFileTiny is also included.
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
     {
@@ -128,6 +132,19 @@ SegmentReadTask::SegmentReadTask(
                 remote_page_ids.emplace_back(tiny->getDataPageId());
                 remote_page_sizes.emplace_back(tiny->getDataPageSize());
                 ++count;
+                // Add vector index pages.
+                if (auto index_infos = tiny->getIndexInfos(); index_infos)
+                {
+                    for (const auto & index_info : *index_infos)
+                    {
+                        if (index_info.vector_index)
+                        {
+                            remote_page_ids.emplace_back(index_info.index_page_id);
+                            remote_page_sizes.emplace_back(index_info.vector_index->index_bytes());
+                            ++count;
+                        }
+                    }
+                }
             }
         }
         return count;

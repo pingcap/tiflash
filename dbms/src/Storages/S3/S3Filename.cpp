@@ -71,7 +71,7 @@ constexpr static std::string_view fmt_lock_prefix = "lock/";
 constexpr static std::string_view fmt_lock_datafile_prefix = "lock/s{store_id}/{subpath}.lock_";
 constexpr static std::string_view fmt_lock_file = "lock/s{store_id}/{subpath}.lock_s{lock_store}_{lock_seq}";
 
-// If you want to read/write S3 object as file throught `FileProvider`, file path must starts with `s3_filename_prefix`. 
+// If you want to read/write S3 object as file throught `FileProvider`, file path must starts with `s3_filename_prefix`.
 constexpr static std::string_view s3_filename_prefix = "s3://";
 // clang-format on
 

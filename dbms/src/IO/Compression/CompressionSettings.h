@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <DataTypes/IDataType.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/CompressionMethod.h>
 #include <common/types.h>
@@ -48,9 +49,12 @@ const std::unordered_map<CompressionMethodByte, CompressionMethod> method_map = 
 struct CompressionSetting
 {
     CompressionMethod method;
-    CompressionMethodByte method_byte;
     int level;
+    // The type of data to be compressed.
+    // It may be used to determine the codec to use.
     CompressionDataType data_type = CompressionDataType::Unknown;
+    // Always use method_byte to determine the codec to use except for LZ4HC codec
+    CompressionMethodByte method_byte;
 
     CompressionSetting()
         : CompressionSetting(CompressionMethod::LZ4)
@@ -58,23 +62,26 @@ struct CompressionSetting
 
     explicit CompressionSetting(CompressionMethod method_)
         : method(method_)
-        , method_byte(method_byte_map[static_cast<size_t>(method_)])
         , level(getDefaultLevel(method))
+        , method_byte(method_byte_map[static_cast<size_t>(method_)])
     {}
 
     explicit CompressionSetting(CompressionMethodByte method_byte_)
         : method(method_map.at(method_byte_))
-        , method_byte(method_byte_)
         , level(getDefaultLevel(method))
+        , method_byte(method_byte_)
     {}
 
     CompressionSetting(CompressionMethod method_, int level_)
         : method(method_)
-        , method_byte(method_byte_map[static_cast<size_t>(method_)])
         , level(level_)
+        , method_byte(method_byte_map[static_cast<size_t>(method_)])
     {}
 
     explicit CompressionSetting(const Settings & settings);
+
+    template <typename T>
+    static CompressionSetting create(T method, int level, const IDataType & type);
 
     static int getDefaultLevel(CompressionMethod method);
 };

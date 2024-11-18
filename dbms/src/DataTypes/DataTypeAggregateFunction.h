@@ -45,7 +45,7 @@ public:
     std::string getFunctionName() const { return function->getName(); }
     AggregateFunctionPtr getFunction() const { return function; }
 
-    TypeIndex getTypeId() const override { return TypeIndex::AggregateFunction; };
+    TypeIndex getTypeId() const override { return TypeIndex::AggregateFunction; }
 
     std::string getName() const override;
 
@@ -53,7 +53,7 @@ public:
 
     bool canBeInsideNullable() const override { return false; }
 
-    DataTypePtr getReturnType() const { return function->getReturnType(); };
+    DataTypePtr getReturnType() const { return function->getReturnType(); }
     DataTypes getArgumentsDataTypes() const { return argument_types; }
 
     /// NOTE These two functions for serializing single values are incompatible with the functions below.
@@ -73,9 +73,6 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
         const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
-    void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
     MutableColumnPtr createColumn() const override;
 

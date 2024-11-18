@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
@@ -23,6 +25,9 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3GCManager.h>
 #include <TiDB/OwnerManager.h>
+#include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 
 #include <boost/algorithm/string.hpp>
@@ -30,6 +35,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char sync_schema_request_failure[];
+} // namespace FailPoints
+
 HttpRequestRes HandleHttpRequestSyncStatus(
     EngineStoreServerWrap * server,
     std::string_view path,
@@ -277,6 +287,101 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     };
 }
 
+// Acquiring load schema to sync schema from TiKV in this TiFlash node with given keyspace id.
+HttpRequestRes HandleHttpRequestSyncSchema(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
+    TableID table_id = InvalidTableID;
+    HttpRequestStatus status = HttpRequestStatus::Ok;
+    auto log = Logger::get("HandleHttpRequestSyncSchema");
+
+    auto & global_context = server->tmt->getContext();
+    // For compute node, simply return OK
+    if (global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        return HttpRequestRes{
+            .status = status,
+            .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
+        };
+    }
+
+    {
+        LOG_TRACE(log, "handling sync schema request, path: {}, api_name: {}", path, api_name);
+
+        // schema: /keyspace/{keyspace_id}/table/{table_id}
+        auto query = path.substr(api_name.size());
+        std::vector<std::string> query_parts;
+        boost::split(query_parts, query, boost::is_any_of("/"));
+        if (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
+        {
+            LOG_ERROR(log, "invalid SyncSchema request: {}", query);
+            status = HttpRequestStatus::ErrorParam;
+            return HttpRequestRes{
+                .status = HttpRequestStatus::ErrorParam,
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+        }
+
+        try
+        {
+            keyspace_id = std::stoll(query_parts[1]);
+            table_id = std::stoll(query_parts[3]);
+        }
+        catch (...)
+        {
+            status = HttpRequestStatus::ErrorParam;
+        }
+
+        if (status != HttpRequestStatus::Ok)
+            return HttpRequestRes{
+                .status = status,
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+    }
+
+    std::string err_msg;
+    try
+    {
+        auto & tmt_ctx = *server->tmt;
+        bool done = tmt_ctx.getSchemaSyncerManager()->syncTableSchema(global_context, keyspace_id, table_id);
+        if (!done)
+        {
+            err_msg = "sync schema failed";
+        }
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::sync_schema_request_failure);
+    }
+    catch (const DB::Exception & e)
+    {
+        err_msg = e.message();
+    }
+    catch (...)
+    {
+        err_msg = "sync schema failed, unknown exception";
+    }
+
+    if (!err_msg.empty())
+    {
+        Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+        json->set("errMsg", err_msg);
+        std::stringstream ss;
+        json->stringify(ss);
+
+        auto * s = RawCppString::New(ss.str());
+        return HttpRequestRes{
+            .status = HttpRequestStatus::ErrorParam,
+            .res = CppStrWithView{
+                .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
+                .view = BaseBuffView{s->data(), s->size()}}};
+    }
+
+    return HttpRequestRes{
+        .status = status,
+        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+}
+
 using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
     EngineStoreServerWrap *,
     std::string_view,
@@ -286,6 +391,7 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
 
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
+    {"/tiflash/sync-schema/", HandleHttpRequestSyncSchema},
     {"/tiflash/store-status", HandleHttpRequestStoreStatus},
     {"/tiflash/remote/owner/info", HandleHttpRequestRemoteOwnerInfo},
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},

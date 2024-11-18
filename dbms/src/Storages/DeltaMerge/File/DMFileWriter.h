@@ -23,10 +23,10 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
-namespace DB
+
+namespace DB::DM
 {
-namespace DM
-{
+
 namespace detail
 {
 static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
@@ -38,6 +38,7 @@ static inline size_t getFrameSizeOrDefault(DMFile & dmfile)
     return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
 }
 } // namespace detail
+
 class DMFileWriter
 {
 public:
@@ -65,12 +66,18 @@ public:
                 /*flags*/ -1,
                 /*mode*/ 0666,
                 max_compress_block_size))
-            , compressed_buf(CompressedWriteBuffer<>::build(
-                  *plain_file,
-                  compression_settings,
-                  !dmfile->getConfiguration().has_value()))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
+            assert(compression_settings.settings.size() == 1);
+            auto setting = CompressionSetting::create<>(
+                compression_settings.settings[0].method,
+                compression_settings.settings[0].level,
+                *type);
+            compressed_buf = CompressedWriteBuffer<>::build(
+                *plain_file,
+                CompressionSettings(setting),
+                !dmfile->getConfiguration());
+
             if (!dmfile->useMetaV2())
             {
                 // will not used in DMFileFormat::V3, could be removed when v3 is default
@@ -181,5 +188,4 @@ private:
     bool is_empty_file = true;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

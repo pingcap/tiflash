@@ -23,7 +23,6 @@
 namespace DB
 {
 
-// TODO: metrics
 
 namespace ErrorCodes
 {
@@ -31,8 +30,9 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-CompressionCodecLightweight::CompressionCodecLightweight(CompressionDataType data_type_)
-    : data_type(data_type_)
+CompressionCodecLightweight::CompressionCodecLightweight(CompressionDataType data_type_, int level_)
+    : ctx(level_)
+    , data_type(data_type_)
 {}
 
 UInt8 CompressionCodecLightweight::getMethodByte() const
@@ -44,12 +44,6 @@ UInt32 CompressionCodecLightweight::getMaxCompressedDataSize(UInt32 uncompressed
 {
     // 1 byte for bytes_size, 1 byte for mode, and the rest for compressed data
     return 1 + 1 + LZ4_COMPRESSBOUND(uncompressed_size);
-}
-
-CompressionCodecLightweight::~CompressionCodecLightweight()
-{
-    if (ctx.isCompression())
-        LOG_INFO(Logger::get(), "lightweight codec: {}", ctx.toDebugString());
 }
 
 UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 source_size, char * dest) const

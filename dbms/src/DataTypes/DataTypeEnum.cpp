@@ -200,12 +200,6 @@ void DataTypeEnum<Type>::serializeTextJSON(
 }
 
 template <typename Type>
-void DataTypeEnum<Type>::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    writeXMLString(getNameForValue(static_cast<const ColumnType &>(column).getData()[row_num]), ostr);
-}
-
-template <typename Type>
 void DataTypeEnum<Type>::deserializeTextJSON(IColumn & column, ReadBuffer & istr) const
 {
     std::string name;
@@ -214,25 +208,8 @@ void DataTypeEnum<Type>::deserializeTextJSON(IColumn & column, ReadBuffer & istr
 }
 
 template <typename Type>
-void DataTypeEnum<Type>::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    writeCSVString(getNameForValue(static_cast<const ColumnType &>(column).getData()[row_num]), ostr);
-}
-
-template <typename Type>
-void DataTypeEnum<Type>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const
-{
-    std::string name;
-    readCSVString(name, istr, delimiter);
-    static_cast<ColumnType &>(column).getData().push_back(getValue(StringRef(name)));
-}
-
-template <typename Type>
-void DataTypeEnum<Type>::serializeBinaryBulk(
-    const IColumn & column,
-    WriteBuffer & ostr,
-    const size_t offset,
-    size_t limit) const
+void DataTypeEnum<Type>::serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit)
+    const
 {
     const auto & x = typeid_cast<const ColumnType &>(column).getData();
     const auto size = x.size();
@@ -247,8 +224,8 @@ template <typename Type>
 void DataTypeEnum<Type>::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
-    const size_t limit,
-    const double /*avg_value_size_hint*/) const
+    size_t limit,
+    double /*avg_value_size_hint*/) const
 {
     auto & x = typeid_cast<ColumnType &>(column).getData();
     const auto initial_size = x.size();

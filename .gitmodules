@@ -146,3 +146,12 @@
 [submodule "contrib/not_null"]
 	path = contrib/not_null
 	url = https://github.com/bitwizeshift/not_null.git
+[submodule "contrib/usearch"]
+	path = contrib/usearch
+	url = https://github.com/unum-cloud/usearch.git
+[submodule "contrib/simsimd"]
+	path = contrib/simsimd
+	url = https://github.com/ashvardanian/SimSIMD
+[submodule "contrib/highfive"]
+	path = contrib/highfive
+	url = https://github.com/BlueBrain/HighFive

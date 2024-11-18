@@ -136,6 +136,7 @@ public:
                     /* page_id= */ 0,
                     path,
                     DMFileMeta::ReadMode::none(),
+                    0 /* a meta version that must exist */,
                     path_pool->getKeyspaceID());
                 if (unlikely(!dmfile))
                 {
@@ -389,7 +390,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
     if (updateGCSafePoint())
     {
-        /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
+        /// Note that `task.dm_context->global_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
         LOG_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
     }
@@ -415,11 +416,15 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         }
         case TaskType::Compact:
             task.segment->compactDelta(*task.dm_context);
+            // After compact delta, try to create delta local index.
+            segmentEnsureDeltaLocalIndexAsync(task.segment);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         case TaskType::Flush:
             task.segment->flushCache(*task.dm_context);
+            // After flush cache, try to create delta local index.
+            segmentEnsureDeltaLocalIndexAsync(task.segment);
             // After flush cache, better place delta index.
             task.segment->placeDeltaIndex(*task.dm_context);
             left = task.segment;
@@ -522,7 +527,9 @@ bool shouldCompactDeltaWithStable(
     double invalid_data_ratio_threshold,
     const LoggerPtr & log)
 {
-    auto actual_delete_range = snap->delta->getSquashDeleteRange().shrink(segment_range);
+    const auto actual_delete_range
+        = snap->delta->getSquashDeleteRange(segment_range.is_common_handle, segment_range.rowkey_column_size)
+              .shrink(segment_range);
     if (actual_delete_range.none())
         return false;
 

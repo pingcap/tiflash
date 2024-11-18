@@ -40,7 +40,7 @@ public:
 
     bool read(MutableColumns & columns) override;
     void readPrefix() override;
-    bool allowSyncAfterError() const override { return true; };
+    bool allowSyncAfterError() const override { return true; }
     void syncAfterError() override;
 
     std::string getDiagnosticInfo() override;

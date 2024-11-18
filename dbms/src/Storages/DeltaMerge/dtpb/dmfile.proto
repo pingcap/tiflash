@@ -16,6 +16,8 @@ syntax = "proto2";
 
 package dtpb;
 
+import "vector_index.proto"; // for VectorIndexFileProps
+
 message PackProperty {
     // when gc_safe_point exceed this version, there must be some data obsolete in this pack
     required uint64 gc_hint_version = 1;
@@ -61,6 +63,11 @@ message ColumnStat {
     optional uint64 index_bytes = 9;
     optional uint64 array_sizes_bytes = 10;
     optional uint64 array_sizes_mark_bytes = 11;
+
+    // Only used in tests. Modifying other fields of ColumnStat is hard.
+    optional string additional_data_for_test = 101;
+    optional VectorIndexFileProps vector_index = 102;
+    repeated VectorIndexFileProps vector_indexes = 103;
 }
 
 message ColumnStats {
@@ -69,6 +76,7 @@ message ColumnStats {
 
 message StableFile {
     optional uint64 page_id = 1;
+    optional uint64 meta_version = 2;
 }
 
 message StableLayerMeta {

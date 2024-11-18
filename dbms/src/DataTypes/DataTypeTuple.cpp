@@ -262,48 +262,9 @@ void DataTypeTuple::deserializeTextJSON(IColumn & column, ReadBuffer & istr) con
     assertChar(']', istr);
 }
 
-void DataTypeTuple::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    writeCString("<tuple>", ostr);
-    for (const auto i : ext::range(0, ext::size(elems)))
-    {
-        writeCString("<elem>", ostr);
-        elems[i]->serializeTextXML(extractElementColumn(column, i), row_num, ostr);
-        writeCString("</elem>", ostr);
-    }
-    writeCString("</tuple>", ostr);
-}
-
-void DataTypeTuple::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    for (const auto i : ext::range(0, ext::size(elems)))
-    {
-        if (i != 0)
-            writeChar(',', ostr);
-        elems[i]->serializeTextCSV(extractElementColumn(column, i), row_num, ostr);
-    }
-}
-
-void DataTypeTuple::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const
-{
-    addElementSafe(elems, column, [&] {
-        const size_t size = elems.size();
-        for (const auto i : ext::range(0, size))
-        {
-            if (i != 0)
-            {
-                skipWhitespaceIfAny(istr);
-                assertChar(delimiter, istr);
-                skipWhitespaceIfAny(istr);
-            }
-            elems[i]->deserializeTextCSV(extractElementColumn(column, i), istr, delimiter);
-        }
-    });
-}
-
 void DataTypeTuple::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
 {
-    path.push_back(Substream::TupleElement);
+    path.emplace_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))
     {
         path.back().tuple_element_name = names[i];
@@ -319,7 +280,7 @@ void DataTypeTuple::serializeBinaryBulkWithMultipleStreams(
     bool position_independent_encoding,
     SubstreamPath & path) const
 {
-    path.push_back(Substream::TupleElement);
+    path.emplace_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))
     {
         path.back().tuple_element_name = names[i];
@@ -341,7 +302,7 @@ void DataTypeTuple::deserializeBinaryBulkWithMultipleStreams(
     bool position_independent_encoding,
     SubstreamPath & path) const
 {
-    path.push_back(Substream::TupleElement);
+    path.emplace_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))
     {
         path.back().tuple_element_name = names[i];

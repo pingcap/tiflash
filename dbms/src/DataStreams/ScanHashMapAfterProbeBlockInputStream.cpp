@@ -206,9 +206,6 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(
     columns_left.resize(column_indices_left.size());
     columns_right.resize(column_indices_right.size());
     current_partition_index = index;
-    projected_sample_block = result_sample_block;
-
-    projected_sample_block = parent.removeUselessColumn(projected_sample_block);
 }
 
 Block ScanHashMapAfterProbeBlockInputStream::readImpl()

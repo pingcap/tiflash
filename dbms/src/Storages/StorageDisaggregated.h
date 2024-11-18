@@ -21,6 +21,7 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
@@ -36,12 +37,6 @@
 namespace DB
 {
 class DAGContext;
-
-namespace DM
-{
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
-} // namespace DM
 
 class StorageDisaggregated : public IStorage
 {
@@ -142,6 +137,9 @@ private:
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
+
+    size_t getBuildTaskRPCTimeout() const;
+    size_t getBuildTaskIOThreadPoolTimeout() const;
 
 private:
     Context & context;

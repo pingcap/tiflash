@@ -390,7 +390,6 @@ INSTANTIATE_TEST_CASE_P(
             generateSeq<UInt32>(G(RandomGenerator<UInt32>(0, 0, 1000'000'000))),
             generateSeq<UInt64>(G(RandomGenerator<UInt64>(0, 0, 1000'000'000))))));
 
-
 INSTANTIATE_TEST_CASE_P(
     RepeatInt,
     CodecTest,

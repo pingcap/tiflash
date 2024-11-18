@@ -12,12 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-protobuf_generate_cpp(
-        dtpb_srcs dtpb_hdrs
-        dmfile.proto
-        column_file.proto
-        segment.proto
-)
+file(GLOB PROTO_FILES CONFIGURE_DEPENDS *.proto)
+protobuf_generate_cpp(dtpb_srcs dtpb_hdrs ${PROTO_FILES})
 
 add_library(dtpb ${dtpb_srcs})
 target_include_directories(dtpb PUBLIC ${Protobuf_INCLUDE_DIR})

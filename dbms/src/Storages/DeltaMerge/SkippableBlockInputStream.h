@@ -14,18 +14,15 @@
 
 #pragma once
 
-#include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/ScanContext_fwd.h>
 
-namespace DB
+
+namespace DB::DM
 {
-namespace DM
-{
+
 class SkippableBlockInputStream : public IBlockInputStream
 {
 public:
@@ -69,43 +66,7 @@ public:
     Block read() override { return {}; }
 
 private:
-    ColumnDefines read_columns{};
+    ColumnDefines read_columns;
 };
 
-template <bool need_row_id = false>
-class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
-{
-public:
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, const ScanContextPtr & scan_context_);
-
-    ConcatSkippableBlockInputStream(
-        SkippableBlockInputStreams inputs_,
-        std::vector<size_t> && rows_,
-        const ScanContextPtr & scan_context_);
-
-    String getName() const override { return "ConcatSkippable"; }
-
-    Block getHeader() const override { return children.at(0)->getHeader(); }
-
-    bool getSkippedRows(size_t & skip_rows) override;
-
-    size_t skipNextBlock() override;
-
-    Block readWithFilter(const IColumn::Filter & filter) override;
-
-    Block read() override;
-
-private:
-    ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit);
-
-    void addReadBytes(UInt64 bytes);
-
-    BlockInputStreams::iterator current_stream;
-    std::vector<size_t> rows;
-    size_t precede_stream_rows;
-    const ScanContextPtr scan_context;
-    LACBytesCollector lac_bytes_collector;
-};
-
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

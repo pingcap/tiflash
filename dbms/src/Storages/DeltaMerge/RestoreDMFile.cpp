@@ -26,7 +26,8 @@ namespace DB::DM
 DMFilePtr restoreDMFileFromRemoteDataSource(
     const DMContext & dm_context,
     Remote::IDataStorePtr remote_data_store,
-    UInt64 file_page_id)
+    UInt64 file_page_id,
+    UInt64 meta_version)
 {
     auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
     auto wn_ps = dm_context.global_context.getWriteNodePageStorage();
@@ -39,13 +40,13 @@ DMFilePtr restoreDMFileFromRemoteDataSource(
     const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
     auto file_oid = lock_key_view.asDataFile().getDMFileOID();
     auto prepared = remote_data_store->prepareDMFile(file_oid, file_page_id);
-    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), meta_version);
     // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
     path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
     return dmfile;
 }
 
-DMFilePtr restoreDMFileFromLocal(const DMContext & dm_context, UInt64 file_page_id)
+DMFilePtr restoreDMFileFromLocal(const DMContext & dm_context, UInt64 file_page_id, UInt64 meta_version)
 {
     auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
     auto file_id = dm_context.storage_pool->dataReader()->getNormalPageId(file_page_id);
@@ -56,6 +57,7 @@ DMFilePtr restoreDMFileFromLocal(const DMContext & dm_context, UInt64 file_page_
         file_page_id,
         file_parent_path,
         DMFileMeta::ReadMode::all(),
+        meta_version,
         dm_context.keyspace_id);
     auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
     RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
@@ -67,7 +69,8 @@ DMFilePtr restoreDMFileFromCheckpoint(
     Remote::IDataStorePtr remote_data_store,
     UniversalPageStoragePtr temp_ps,
     WriteBatches & wbs,
-    UInt64 file_page_id)
+    UInt64 file_page_id,
+    UInt64 meta_version)
 {
     auto full_page_id = UniversalPageIdFormat::toFullPageId(
         UniversalPageIdFormat::toFullPrefix(dm_context.keyspace_id, StorageType::Data, dm_context.physical_table_id),
@@ -85,7 +88,7 @@ DMFilePtr restoreDMFileFromCheckpoint(
     };
     wbs.data.putRemoteExternal(new_local_page_id, loc);
     auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
-    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), meta_version);
     wbs.writeLogAndData();
     // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
     delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());

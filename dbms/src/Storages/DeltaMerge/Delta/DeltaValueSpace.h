@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetInputStream.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
@@ -32,7 +33,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 
@@ -338,30 +338,34 @@ public:
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
-class DeltaValueSnapshot
-    : public std::enable_shared_from_this<DeltaValueSnapshot>
-    , private boost::noncopyable
+template <class ColumnFileT>
+struct CloneColumnFilesHelper
+{
+    static std::vector<ColumnFileT> clone(
+        DMContext & dm_context,
+        const std::vector<ColumnFileT> & src,
+        const RowKeyRange & target_range,
+        WriteBatches & wbs);
+};
+
+class DeltaValueSnapshot : private boost::noncopyable
 {
     friend class DeltaValueSpace;
     friend struct DB::DM::Remote::Serializer;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     const bool is_update{false};
 
     // The delta index of cached.
-    DeltaIndexPtr shared_delta_index;
-    UInt64 delta_index_epoch = 0;
+    const DeltaIndexPtr shared_delta_index;
+    const UInt64 delta_index_epoch;
 
+    // mem-table may not be ready when the snapshot is creating under disagg arch, so it is not "const"
     ColumnFileSetSnapshotPtr mem_table_snap;
-
-    ColumnFileSetSnapshotPtr persisted_files_snap;
+    const ColumnFileSetSnapshotPtr persisted_files_snap;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
-    DeltaValueSpacePtr delta;
+    const DeltaValueSpacePtr delta;
 
     const CurrentMetrics::Metric type;
 
@@ -371,19 +375,30 @@ public:
         // We only allow one for_update snapshots to exist, so it cannot be cloned.
         RUNTIME_CHECK(!is_update);
 
-        auto c = std::make_shared<DeltaValueSnapshot>(type, is_update);
-        c->shared_delta_index = shared_delta_index;
-        c->delta_index_epoch = delta_index_epoch;
-        c->mem_table_snap = mem_table_snap->clone();
-        c->persisted_files_snap = persisted_files_snap->clone();
-
-        c->delta = delta;
-
-        return c;
+        return std::make_shared<DeltaValueSnapshot>(
+            type,
+            is_update,
+            mem_table_snap->clone(),
+            persisted_files_snap->clone(),
+            delta,
+            shared_delta_index,
+            delta_index_epoch);
     }
 
-    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_, bool update_)
+    DeltaValueSnapshot(
+        CurrentMetrics::Metric type_,
+        bool update_,
+        ColumnFileSetSnapshotPtr mem_snap,
+        const ColumnFileSetSnapshotPtr persisted_snap,
+        DeltaValueSpacePtr delta_vs,
+        DeltaIndexPtr delta_index,
+        UInt64 index_epoch)
         : is_update(update_)
+        , shared_delta_index(std::move(delta_index))
+        , delta_index_epoch(index_epoch)
+        , mem_table_snap(std::move(mem_snap))
+        , persisted_files_snap(std::move(persisted_snap))
+        , delta(std::move(delta_vs))
         , type(type_)
     {
         CurrentMetrics::add(type);
@@ -410,13 +425,23 @@ public:
     size_t getMemTableSetRowsOffset() const { return persisted_files_snap->getRows(); }
     size_t getMemTableSetDeletesOffset() const { return persisted_files_snap->getDeletes(); }
 
-    RowKeyRange getSquashDeleteRange() const;
+    /**
+     * Get a "squash" delete range in the delta layer. We can use this to ** estimate ** how many rows in the
+     * stable layer is pending for delete.
+     * The squash delete range may be larger than that will actually removed rows. For example, if there are
+     * two delete range [0, 30) and [100, 200), the squash delete range will be [0, 200). Actually after applying
+     * the two delete range, the rows [30, 100) will not be removed.
+     */
+    RowKeyRange getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const;
 
     const auto & getSharedDeltaIndex() const { return shared_delta_index; }
     size_t getDeltaIndexEpoch() const { return delta_index_epoch; }
 
     bool isForUpdate() const { return is_update; }
 
+    // Semantically speaking this is a "hack" for the "snapshot".
+    // But we need this because under disagg arch, we fetch the mem-table by streaming way.
+    // After all mem-table fetched, we set the mem-table-set snapshot to the DeltaValueSnapshot.
     void setMemTableSetSnapshot(const ColumnFileSetSnapshotPtr & mem_table_snap_) { mem_table_snap = mem_table_snap_; }
 };
 
@@ -480,7 +505,7 @@ public:
         UInt64 start_ts);
 };
 
-class DeltaValueInputStream : public SkippableBlockInputStream
+class DeltaValueInputStream : public IBlockInputStream
 {
 private:
     ColumnFileSetInputStream mem_table_input_stream;
@@ -507,48 +532,6 @@ public:
 
     String getName() const override { return "DeltaValue"; }
     Block getHeader() const override { return persisted_files_input_stream.getHeader(); }
-
-    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
-
-    /// Skip next block in the stream.
-    /// Return the number of rows skipped.
-    /// Return 0 if meet the end of the stream.
-    size_t skipNextBlock() override
-    {
-        size_t skipped_rows = 0;
-        if (persisted_files_done)
-        {
-            skipped_rows = mem_table_input_stream.skipNextBlock();
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-
-        if (skipped_rows = persisted_files_input_stream.skipNextBlock(); skipped_rows > 0)
-        {
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-        else
-        {
-            persisted_files_done = true;
-            skipped_rows = mem_table_input_stream.skipNextBlock();
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-    }
-
-    Block readWithFilter(const IColumn::Filter & filter) override
-    {
-        auto block = read();
-        if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
-        {
-            for (auto & col : block)
-            {
-                col.column = col.column->filter(filter, passed_count);
-            }
-        }
-        return block;
-    }
 
     Block read() override
     {

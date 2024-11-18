@@ -278,24 +278,6 @@ void DataTypeString::deserializeTextJSON(IColumn & column, ReadBuffer & istr) co
 }
 
 
-void DataTypeString::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    writeXMLString(static_cast<const ColumnString &>(column).getDataAt(row_num), ostr);
-}
-
-
-void DataTypeString::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    writeCSVString<>(static_cast<const ColumnString &>(column).getDataAt(row_num), ostr);
-}
-
-
-void DataTypeString::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
-{
-    read(column, [&](ColumnString::Chars_t & data) { readCSVStringInto(data, istr); });
-}
-
-
 MutableColumnPtr DataTypeString::createColumn() const
 {
     return ColumnString::create();

@@ -147,11 +147,13 @@ SemiJoinHelper<KIND, Mapped>::SemiJoinHelper(
     size_t left_columns_,
     const std::vector<size_t> & right_column_indices_to_added_,
     size_t max_block_size_,
-    const JoinNonEqualConditions & non_equal_conditions_)
+    const JoinNonEqualConditions & non_equal_conditions_,
+    CancellationHook is_cancelled_)
     : block(block_)
     , left_columns(left_columns_)
     , right_column_indices_to_add(right_column_indices_to_added_)
     , max_block_size(max_block_size_)
+    , is_cancelled(is_cancelled_)
     , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == Semi || KIND == Anti || KIND == LeftOuterAnti || KIND == LeftOuterSemi);
@@ -178,6 +180,8 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
 
     while (!res_list.empty())
     {
+        if (is_cancelled())
+            return;
         MutableColumns columns(block_columns);
         for (size_t i = 0; i < block_columns; ++i)
         {

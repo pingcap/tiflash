@@ -183,12 +183,12 @@ void DMFileMeta::readConfiguration(const FileProviderPtr & file_provider)
             = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
         auto stream = InputStreamWrapper{buf};
         configuration.emplace(stream);
-        version = DMFileFormat::V2;
+        format_version = DMFileFormat::V2;
     }
     else
     {
         configuration.reset();
-        version = DMFileFormat::V1;
+        format_version = DMFileFormat::V1;
     }
 }
 

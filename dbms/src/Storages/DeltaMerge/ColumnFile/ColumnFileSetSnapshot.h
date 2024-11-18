@@ -43,7 +43,7 @@ public:
     {}
 
     bool isBlock() { return static_cast<bool>(block); }
-    auto & getBlock() { return block; };
+    auto & getBlock() { return block; }
     auto getBlockOffset() const { return block_offset; }
     auto & getDeleteRange() { return delete_range; }
 };
@@ -59,13 +59,10 @@ class ColumnFileSetSnapshot
     friend struct Remote::Serializer;
 
 private:
-    ColumnFiles column_files;
-    size_t rows{0};
-    size_t bytes{0};
-    size_t deletes{0};
-
-    bool is_common_handle{false};
-    size_t rowkey_column_size{0};
+    const ColumnFiles column_files;
+    const size_t rows{0};
+    const size_t bytes{0};
+    const size_t deletes{0};
 
 public:
     /// This field is public writeable intentionally. It allows us to build a snapshot first,
@@ -75,32 +72,47 @@ public:
     /// Why we don't know the data provider at that time? Because when we have remote proto, data is not yet received.
     IColumnFileDataProviderPtr data_provider = nullptr;
 
-    explicit ColumnFileSetSnapshot(const IColumnFileDataProviderPtr & data_provider_)
-        : data_provider{data_provider_}
+    ColumnFileSetSnapshot(
+        const IColumnFileDataProviderPtr & data_provider_,
+        ColumnFiles && column_files_,
+        size_t rows_,
+        size_t bytes_,
+        size_t deletes_)
+        : column_files(std::move(column_files_))
+        , rows(rows_)
+        , bytes(bytes_)
+        , deletes(deletes_)
+        , data_provider{data_provider_}
     {}
+
+    static ColumnFileSetSnapshotPtr buildFromColumnFiles(
+        const IColumnFileDataProviderPtr & data_provider_,
+        ColumnFiles && column_files_)
+    {
+        size_t rows = 0, bytes = 0, deletes = 0;
+        for (const auto & column_file : column_files_)
+        {
+            rows += column_file->getRows();
+            bytes += column_file->getBytes();
+            deletes += column_file->getDeletes();
+        }
+        return std::make_shared<ColumnFileSetSnapshot>(data_provider_, std::move(column_files_), rows, bytes, deletes);
+    }
 
     ColumnFileSetSnapshotPtr clone()
     {
-        auto c = std::make_shared<ColumnFileSetSnapshot>(data_provider);
-        c->data_provider = data_provider;
-        c->column_files = column_files;
-        c->rows = rows;
-        c->bytes = bytes;
-        c->deletes = deletes;
-        c->is_common_handle = is_common_handle;
-        c->rowkey_column_size = rowkey_column_size;
-
-        return c;
+        ColumnFiles cf_copy = column_files;
+        return std::make_shared<ColumnFileSetSnapshot>(data_provider, std::move(cf_copy), rows, bytes, deletes);
     }
 
-    ColumnFiles & getColumnFiles() { return column_files; }
+    const ColumnFiles & getColumnFiles() const { return column_files; }
 
     size_t getColumnFileCount() const { return column_files.size(); }
     size_t getRows() const { return rows; }
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }
 
-    RowKeyRange getSquashDeleteRange() const;
+    RowKeyRange getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const;
 
     const auto & getDataProvider() const { return data_provider; }
 };

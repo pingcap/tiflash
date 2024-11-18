@@ -146,20 +146,6 @@ void DataTypeDecimal<T>::deserializeTextJSON(IColumn &, ReadBuffer &) const
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    serializeText(column, row_num, ostr);
-}
-
-template <typename T>
-void DataTypeDecimal<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
-{
-    T x{};
-    readCSVDecimal(x, istr, precision, scale);
-    static_cast<ColumnType &>(column).getData().push_back(x);
-}
-
-template <typename T>
 MutableColumnPtr DataTypeDecimal<T>::createColumn() const
 {
     return ColumnType::create(0, scale);

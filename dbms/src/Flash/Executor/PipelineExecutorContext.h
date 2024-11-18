@@ -34,6 +34,10 @@ using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<Op
 class SharedQueue;
 using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 
+class OneTimeNotifyFuture;
+using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
+class DAGContext;
+
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -51,12 +55,14 @@ public:
         const String & query_id_,
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
+        DAGContext * dag_context_ = nullptr,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
+        , dag_context(dag_context_)
         , auto_spill_trigger(auto_spill_trigger_)
         , register_operator_spill_context(register_operator_spill_context_)
         , resource_group_name(resource_group_name_)
@@ -131,8 +137,12 @@ public:
 
     void addSharedQueue(const SharedQueuePtr & shared_queue);
 
+    void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
+
+    String getTrimmedErrMsg();
 
     // Need to be called under lock.
     bool isWaitMode();
@@ -140,6 +150,9 @@ private:
     ResultQueuePtr getConsumedResultQueue();
 
     void cancelSharedQueues();
+
+    void cancelOneTimeFutures();
+
     void cancelResultQueueIfNeed();
 
 private:
@@ -148,6 +161,8 @@ private:
     LoggerPtr log;
 
     MemoryTrackerPtr mem_tracker;
+
+    DAGContext * dag_context{nullptr};
 
     std::mutex mu;
     std::condition_variable cv;
@@ -170,5 +185,7 @@ private:
     const String resource_group_name;
 
     std::vector<SharedQueuePtr> shared_queues;
+
+    std::vector<OneTimeNotifyFuturePtr> one_time_futures;
 };
 } // namespace DB

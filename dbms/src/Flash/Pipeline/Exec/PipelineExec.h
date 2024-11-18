@@ -26,7 +26,11 @@ namespace DB
 class PipelineExec : private boost::noncopyable
 {
 public:
-    PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_);
+    PipelineExec(
+        SourceOpPtr && source_op_,
+        TransformOps && transform_ops_,
+        SinkOpPtr && sink_op_,
+        bool has_pipeline_breaker_wait_time_);
 
     void executePrefix();
     void executeSuffix();
@@ -75,6 +79,7 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+    bool has_pipeline_breaker_wait_time = false;
 
     // hold the operator which is ready for executing await.
     Operator * awaitable = nullptr;

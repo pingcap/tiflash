@@ -526,21 +526,6 @@ void readBackQuotedStringWithSQLStyle(String & s, ReadBuffer & buf);
 
 void readStringUntilEOF(String & s, ReadBuffer & buf);
 
-
-/** Read string in CSV format.
-  * Parsing rules:
-  * - string could be placed in quotes; quotes could be single: ' or double: ";
-  * - or string could be unquoted - this is determined by first character;
-  * - if string is unquoted, then it is read until next delimiter,
-  *   either until end of line (CR or LF),
-  *   or until end of stream;
-  *   but spaces and tabs at begin and end of unquoted string are consumed but ignored (note that this behaviour differs from RFC).
-  * - if string is in quotes, then it will be read until closing quote,
-  *   but sequences of two consecutive quotes are parsed as single quote inside string;
-  */
-void readCSVString(String & s, ReadBuffer & buf, char delimiter = ',');
-
-
 /// Read and append result to array of characters.
 template <typename Vector>
 void readStringInto(Vector & s, ReadBuffer & buf);
@@ -559,9 +544,6 @@ void readBackQuotedStringInto(Vector & s, ReadBuffer & buf);
 
 template <typename Vector>
 void readStringUntilEOFInto(Vector & s, ReadBuffer & buf);
-
-template <typename Vector>
-void readCSVStringInto(Vector & s, ReadBuffer & buf, char delimiter = ',');
 
 /// ReturnType is either bool or void. If bool, the function will return false instead of throwing an exception.
 template <typename Vector, typename ReturnType = void>
@@ -981,104 +963,6 @@ inline void readDoubleQuoted(LocalDateTime & x, ReadBuffer & buf)
     assertChar('"', buf);
     readDateTimeText(x, buf);
     assertChar('"', buf);
-}
-
-
-/// CSV, for numbers, dates: quotes are optional, no special escaping rules.
-template <typename T>
-inline void readCSVSimple(T & x, ReadBuffer & buf)
-{
-    if (buf.eof())
-        throwReadAfterEOF();
-
-    char maybe_quote = *buf.position();
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        ++buf.position();
-
-    readText(x, buf);
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        assertChar(maybe_quote, buf);
-}
-
-template <typename T>
-inline void readCSVDecimal(Decimal<T> & x, ReadBuffer & buf, PrecType precision, ScaleType scale)
-{
-    if (buf.eof())
-        throwReadAfterEOF();
-
-    char maybe_quote = *buf.position();
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        ++buf.position();
-
-    readDecimalText(x, buf, precision, scale);
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        assertChar(maybe_quote, buf);
-}
-
-inline void readMyDateTimeCSV(UInt64 & datetime, int fsp, ReadBuffer & buf)
-{
-    if (buf.eof())
-        throwReadAfterEOF();
-
-    char maybe_quote = *buf.position();
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        ++buf.position();
-
-    readMyDateTimeText(datetime, fsp, buf);
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        assertChar(maybe_quote, buf);
-}
-
-inline void readDateTimeCSV(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
-{
-    if (buf.eof())
-        throwReadAfterEOF();
-
-    char maybe_quote = *buf.position();
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        ++buf.position();
-
-    readDateTimeText(datetime, buf, date_lut);
-
-    if (maybe_quote == '\'' || maybe_quote == '\"')
-        assertChar(maybe_quote, buf);
-}
-
-template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void> readCSV(T & x, ReadBuffer & buf)
-{
-    readCSVSimple(x, buf);
-}
-
-inline void readCSV(String & x, ReadBuffer & buf, const char delimiter = ',')
-{
-    readCSVString(x, buf, delimiter);
-}
-inline void readCSV(LocalDate & x, ReadBuffer & buf)
-{
-    readCSVSimple(x, buf);
-}
-inline void readCSV(LocalDateTime & x, ReadBuffer & buf)
-{
-    readCSVSimple(x, buf);
-}
-inline void readCSV(UUID & x, ReadBuffer & buf)
-{
-    readCSVSimple(x, buf);
-}
-inline void readCSV(UInt128 &, ReadBuffer &)
-{
-    /** Because UInt128 isn't a natural type, without arithmetic operator and only use as an intermediary type -for UUID-
-     *  it should never arrive here. But because we used the DataTypeNumber class we should have at least a definition of it.
-     */
-    throw Exception("UInt128 cannot be read as a text", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 template <typename T>

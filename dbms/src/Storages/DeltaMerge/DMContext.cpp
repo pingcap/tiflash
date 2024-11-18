@@ -33,9 +33,10 @@ DMContext::DMContext(
     const Context & session_context_,
     const StoragePathPoolPtr & path_pool_,
     const StoragePoolPtr & storage_pool_,
-    const DB::Timestamp min_version_,
+    DB::Timestamp min_version_,
     KeyspaceID keyspace_id_,
     TableID physical_table_id_,
+    ColumnID pk_col_id_,
     bool is_common_handle_,
     size_t rowkey_column_size_,
     const DB::Settings & settings,
@@ -47,6 +48,7 @@ DMContext::DMContext(
     , min_version(min_version_)
     , keyspace_id(keyspace_id_)
     , physical_table_id(physical_table_id_)
+    , pk_col_id(pk_col_id_)
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , segment_limit_rows(settings.dt_segment_limit_rows)

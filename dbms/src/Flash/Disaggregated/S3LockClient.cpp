@@ -177,6 +177,7 @@ String S3LockClient::updateOwnerAddr(const Timepoint & deadline, const LoggerPtr
     using namespace std::chrono_literals;
     while (true)
     {
+        RUNTIME_CHECK(s3gc_owner != nullptr);
         auto owner_info = s3gc_owner->getOwnerID();
         switch (owner_info.status)
         {

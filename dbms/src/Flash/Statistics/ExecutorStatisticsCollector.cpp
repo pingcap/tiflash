@@ -164,7 +164,8 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
     const String & executor_id,
     const BaseRuntimeStatistics & statistic,
     UInt64 join_build_time,
-    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
+    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map,
+    bool is_source_executor) const
 {
     ExecutionSummary current;
     current.fill(statistic);
@@ -174,6 +175,11 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
         current.scan_context->merge(*(iter->second));
 
     current.time_processed_ns += dag_context->compile_time_ns;
+    current.time_processed_ns += dag_context->minTSO_wait_time_ns;
+    if (is_source_executor)
+    {
+        current.time_minTSO_wait_ns = dag_context->minTSO_wait_time_ns;
+    }
     fillTiExecutionSummary(
         *dag_context,
         response.add_execution_summaries(),
@@ -242,7 +248,8 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 p.first,
                 p.second->getBaseRuntimeStatistics(),
                 p.second->processTimeForJoinBuild(),
-                dag_context->scan_context_map);
+                dag_context->scan_context_map,
+                p.second->isSourceExecutor());
     }
     else
     {
@@ -257,7 +264,8 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 executor_id,
                 it->second->getBaseRuntimeStatistics(),
                 0, // No join executors in list-based executors
-                dag_context->scan_context_map);
+                dag_context->scan_context_map,
+                it->second->isSourceExecutor());
         }
     }
     fill_local_ru();

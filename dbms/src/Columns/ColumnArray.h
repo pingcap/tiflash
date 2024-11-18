@@ -103,11 +103,7 @@ public:
     }
 
     void insertDefault() override;
-    void insertManyDefaults(size_t length) override
-    {
-        for (size_t i = 0; i < length; ++i)
-            insertDefault();
-    }
+    void insertManyDefaults(size_t length) override;
     void popBack(size_t n) override;
     /// TODO: If result_size_hint < 0, makes reserve() using size of filtered column, not source column to avoid some OOM issues.
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
@@ -176,16 +172,16 @@ public:
 
     std::pair<UInt32, StringRef> getElementRef(size_t element_idx) const;
 
-private:
-    ColumnPtr data;
-    ColumnPtr offsets;
-
-    size_t ALWAYS_INLINE offsetAt(size_t i) const { return i == 0 ? 0 : getOffsets()[i - 1]; }
     size_t ALWAYS_INLINE sizeAt(size_t i) const
     {
         return i == 0 ? getOffsets()[0] : (getOffsets()[i] - getOffsets()[i - 1]);
     }
 
+private:
+    ColumnPtr data;
+    ColumnPtr offsets;
+
+    size_t ALWAYS_INLINE offsetAt(size_t i) const { return i == 0 ? 0 : getOffsets()[i - 1]; }
 
     /// Multiply values if the nested column is ColumnVector<T>.
     template <typename T>

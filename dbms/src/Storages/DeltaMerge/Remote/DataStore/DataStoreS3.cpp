@@ -42,29 +42,42 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     const auto local_dir = local_dmfile->path();
     const auto local_files = local_dmfile->listFilesForUpload();
     auto itr_meta = std::find_if(local_files.cbegin(), local_files.cend(), [](const auto & file_name) {
-        return file_name == DMFileMetaV2::metaFileName();
+        // We always ensure meta v0 exists.
+        return file_name == DMFileMetaV2::metaFileName(0);
     });
     RUNTIME_CHECK(itr_meta != local_files.cend());
+
+    putDMFileLocalFiles(local_dir, local_files, oid);
+
+    if (remove_local)
+        local_dmfile->switchToRemote(oid);
+}
+
+void DataStoreS3::putDMFileLocalFiles(
+    const String & local_dir,
+    const std::vector<String> & local_files,
+    const S3::DMFileOID & oid)
+{
+    Stopwatch sw;
 
     const auto remote_dir = S3::S3Filename::fromDMFileOID(oid).toFullKey();
     LOG_DEBUG(
         log,
-        "Start upload DMFile, local_dir={} remote_dir={} local_files={}",
+        "Start upload DMFile local files, local_dir={} remote_dir={} local_files={}",
         local_dir,
         remote_dir,
         local_files);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
+    // First, upload non-meta files.
     std::vector<std::future<void>> upload_results;
     upload_results.reserve(local_files.size() - 1);
     for (const auto & fname : local_files)
     {
-        if (fname == DMFileMetaV2::metaFileName())
-        {
-            // meta file will be upload at last.
+        if (DMFileMetaV2::isMetaFileName(fname))
             continue;
-        }
+
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
         auto task = std::make_shared<std::packaged_task<void()>>(
@@ -73,30 +86,40 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
                     *s3_client,
                     local_fname,
                     remote_fname,
-                    EncryptionPath(local_dmfile->path(), fname, oid.keyspace_id),
+                    EncryptionPath(local_dir, fname, oid.keyspace_id),
                     file_provider);
             });
         upload_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
     for (auto & f : upload_results)
-    {
         f.get();
-    }
 
+    // Then, upload meta files.
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
-    auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFileMetaV2::metaFileName());
-    auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFileMetaV2::metaFileName());
-    S3::uploadFile(
-        *s3_client,
-        local_meta_fname,
-        remote_meta_fname,
-        EncryptionPath(local_dmfile->path(), DMFileMetaV2::metaFileName(), oid.keyspace_id),
-        file_provider);
-    if (remove_local)
+    upload_results.clear();
+    for (const auto & fname : local_files)
     {
-        local_dmfile->switchToRemote(oid);
+        if (!DMFileMetaV2::isMetaFileName(fname))
+            continue;
+
+        auto local_fname = fmt::format("{}/{}", local_dir, fname);
+        auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
+        auto task = std::make_shared<std::packaged_task<void()>>(
+            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
+                S3::uploadFile(
+                    *s3_client,
+                    local_fname,
+                    remote_fname,
+                    EncryptionPath(local_dir, fname, oid.keyspace_id),
+                    file_provider);
+            });
+        upload_results.push_back(task->get_future());
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
+    for (auto & f : upload_results)
+        f.get();
+
     LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
 }
 
@@ -261,7 +284,7 @@ IPreparedDMFileTokenPtr DataStoreS3::prepareDMFileByKey(const String & remote_ke
     return prepareDMFile(oid, 0);
 }
 
-DMFilePtr S3PreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode)
+DMFilePtr S3PreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode, UInt64 meta_version)
 {
     return DMFile::restore(
         file_provider,
@@ -269,6 +292,7 @@ DMFilePtr S3PreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode)
         page_id,
         S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKeyWithPrefix(),
         read_mode,
+        meta_version,
         oid.keyspace_id);
 }
 } // namespace DB::DM::Remote

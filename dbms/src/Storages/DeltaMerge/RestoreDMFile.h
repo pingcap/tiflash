@@ -27,15 +27,17 @@ namespace DB::DM
 DMFilePtr restoreDMFileFromRemoteDataSource(
     const DMContext & dm_context,
     Remote::IDataStorePtr remote_data_store,
-    UInt64 file_page_id);
+    UInt64 file_page_id,
+    UInt64 meta_version);
 
-DMFilePtr restoreDMFileFromLocal(const DMContext & dm_context, UInt64 file_page_id);
+DMFilePtr restoreDMFileFromLocal(const DMContext & dm_context, UInt64 file_page_id, UInt64 meta_version);
 
 DMFilePtr restoreDMFileFromCheckpoint(
     const DMContext & dm_context,
     Remote::IDataStorePtr remote_data_store,
     UniversalPageStoragePtr temp_ps,
     WriteBatches & wbs,
-    UInt64 file_page_id);
+    UInt64 file_page_id,
+    UInt64 meta_version);
 
 } // namespace DB::DM

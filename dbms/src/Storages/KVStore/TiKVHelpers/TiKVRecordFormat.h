@@ -87,6 +87,11 @@ inline UInt64 encodeUInt64(const UInt64 x)
     return toBigEndian(x);
 }
 
+inline UInt32 encodeUInt32(const UInt32 x)
+{
+    return toBigEndian(x);
+}
+
 inline UInt64 encodeInt64(const Int64 x)
 {
     return encodeUInt64(static_cast<UInt64>(x) ^ SIGN_MASK);

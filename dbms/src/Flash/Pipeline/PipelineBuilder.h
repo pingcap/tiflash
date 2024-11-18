@@ -79,6 +79,8 @@ public:
         return PipelineBuilder(id_generator, PipelineBreaker{pipeline, breaker_node}, log->identifier());
     }
 
+    void setHasPipelineBreakerWaitTime(bool value) { pipeline->setHasPipelineBreakerWaitTime(value); }
+
     PipelinePtr build()
     {
         RUNTIME_CHECK(pipeline);

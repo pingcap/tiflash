@@ -84,7 +84,6 @@ public:
         const IColumnFileDataProviderPtr & data_provider,
         bool need_mem_data);
 
-private:
     static RemotePb::RemoteSegment serializeSegment(
         const SegmentSnapshotPtr & snap,
         PageIdU64 segment_id,
@@ -94,6 +93,7 @@ private:
         MemTrackerWrapper & mem_tracker_wrapper,
         bool need_mem_data);
 
+private:
     static google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> serializeColumnFileSet(
         const ColumnFileSetSnapshotPtr & snap,
         MemTrackerWrapper & mem_tracker_wrapper,

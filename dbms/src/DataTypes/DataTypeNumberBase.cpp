@@ -179,20 +179,6 @@ void DataTypeNumberBase<T>::deserializeTextJSON(IColumn & column, ReadBuffer & i
 }
 
 template <typename T>
-void DataTypeNumberBase<T>::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    serializeText(column, row_num, ostr);
-}
-
-template <typename T>
-void DataTypeNumberBase<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
-{
-    FieldType x;
-    readCSV(x, istr);
-    static_cast<ColumnVector<T> &>(column).getData().push_back(x);
-}
-
-template <typename T>
 Field DataTypeNumberBase<T>::getDefault() const
 {
     return typename NearestFieldType<FieldType>::Type();

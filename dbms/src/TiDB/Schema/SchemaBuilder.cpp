@@ -391,7 +391,6 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     auto & tmt_context = context.getTMTContext();
     if (table_info->replica_info.count == 0)
     {
-        // Replicat number is to 0, mark the table as tombstone in TiFlash
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
@@ -402,7 +401,14 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             return;
         }
 
-        applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
+        // We can not mark the table is safe to be physically drop from the tiflash instances when
+        // the number of tiflash replica is set to be 0.
+        // There could be a concurrent issue that cause data loss. Check the following link for details:
+        // https://github.com/pingcap/tiflash/issues/9438#issuecomment-2360370761
+        // applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
+
+        // Now only update the replica number to be 0 instead
+        updateTiFlashReplicaNumOnStorage(database_id, table_id, storage, table_info);
         return;
     }
 
@@ -933,7 +939,10 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateDatabaseByInfo(const TiDB::DB
 
     ASTPtr ast = parseCreateStatement(statement);
 
-    InterpreterCreateQuery interpreter(ast, context);
+    InterpreterCreateQuery interpreter(
+        ast,
+        context,
+        fmt::format("keyspace={} database_id={}", keyspace_id, db_info->id));
     interpreter.setInternal(true);
     interpreter.setForceRestoreData(false);
     interpreter.execute();
@@ -1163,7 +1172,15 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     ast_create_query->if_not_exists = true;
     ast_create_query->database = database_mapped_name;
 
-    InterpreterCreateQuery interpreter(ast, context);
+    InterpreterCreateQuery interpreter(
+        ast,
+        context,
+        fmt::format(
+            "keyspace={} database_id={} table_id={} action={}",
+            keyspace_id,
+            database_id,
+            table_info->id,
+            action));
     interpreter.setInternal(true);
     interpreter.setForceRestoreData(false);
     interpreter.execute();

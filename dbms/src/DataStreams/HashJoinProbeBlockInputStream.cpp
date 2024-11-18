@@ -33,13 +33,12 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
     RUNTIME_CHECK_MSG(original_join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(original_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+    RUNTIME_CHECK_MSG(original_join->isFinalize(), "join should be finalized first.");
 
     probe_exec.set(HashJoinProbeExec::build(req_id, original_join, stream_index, input, max_block_size_));
     probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
 
-    ProbeProcessInfo header_probe_process_info(0, 0);
-    header_probe_process_info.resetBlock(input->getHeader());
-    header = original_join->joinBlock(header_probe_process_info, true);
+    header = original_join->getOutputBlock();
 }
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()

@@ -53,7 +53,7 @@ public:
     AutoPassThroughHashAggContext(
         const Block & child_header_,
         const Aggregator::Params & params_,
-        Aggregator::CancellationHook && hook,
+        CancellationHook && hook,
         const String & req_id_,
         UInt64 row_limit_unit_,
         UInt64 normal_unit_num_ = DEF_NORMAL_UNIT_NUM,

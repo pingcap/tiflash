@@ -195,7 +195,8 @@ protected:
 
     DMFilePtr restoreDMFile(const DMFileOID & oid)
     {
-        return data_store->prepareDMFile(oid)->restore(DMFileMeta::ReadMode::all());
+        return data_store->prepareDMFile(oid, /* page_id= */ 0)
+            ->restore(DMFileMeta::ReadMode::all(), /* meta_version= */ 0);
     }
 
     LoggerPtr log;

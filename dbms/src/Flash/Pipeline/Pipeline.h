@@ -90,6 +90,8 @@ public:
 
     String getFinalPlanExecId() const;
 
+    void setHasPipelineBreakerWaitTime(bool value) { has_pipeline_breaker_wait_time = value; }
+
 private:
     void toTreeStringImpl(FmtBuffer & buffer, size_t level) const;
     void toSelfString(FmtBuffer & buffer, size_t level) const;
@@ -113,5 +115,6 @@ private:
     std::vector<PipelinePtr> children;
 
     mutable String tree_string;
+    bool has_pipeline_breaker_wait_time = false;
 };
 } // namespace DB

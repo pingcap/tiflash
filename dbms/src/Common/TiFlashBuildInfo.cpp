@@ -15,6 +15,8 @@
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/config.h>
 #include <Common/config_version.h>
+#include <VectorSearch/DistanceSIMDFeatures.h>
+#include <VectorSearch/SIMDFeatures.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
@@ -140,6 +142,17 @@ String getEnabledFeatures()
             "fdo",
 #endif
     };
+    {
+        auto f = DB::DM::VectorIndexHNSWSIMDFeatures::get();
+        for (const auto & feature : f)
+            features.push_back(feature);
+    }
+    {
+        auto f = DB::VectorDistanceSIMDFeatures::get();
+        for (const auto & feature : f)
+            features.push_back(feature);
+    }
+
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
 // clang-format on

@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
+#include <grpcpp/support/sync_stream.h>
 
 namespace DB::DM
 {
@@ -50,6 +51,7 @@ struct ExtraRemoteSegmentInfo
     String store_address;
     // DisaggTaskId is corresponding to a storage snapshot in write node.
     // Returned by EstablishDisaggTask and used by FetchDisaggPages.
+    // The index pages of ColumnFileTiny are also included.
     DisaggTaskId snapshot_id;
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
@@ -83,7 +85,8 @@ public:
         StoreID store_id,
         const String & store_address,
         KeyspaceID keyspace_id,
-        TableID physical_table_id);
+        TableID physical_table_id,
+        ColumnID pk_col_id);
 
     ~SegmentReadTask();
 

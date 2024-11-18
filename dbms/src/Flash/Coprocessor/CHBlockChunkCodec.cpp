@@ -98,7 +98,13 @@ void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuff
     IDataType::OutputStreamGetter output_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &ostr;
     };
-    type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {});
+    type.serializeBinaryBulkWithMultipleStreams(
+        *full_column,
+        output_stream_getter,
+        offset,
+        limit,
+        /*position_independent_encoding=*/true,
+        {});
 }
 
 void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
@@ -106,7 +112,13 @@ void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadB
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
     };
-    type.deserializeBinaryBulkWithMultipleStreams(column, input_stream_getter, rows, 0, false, {});
+    type.deserializeBinaryBulkWithMultipleStreams(
+        column,
+        input_stream_getter,
+        rows,
+        0,
+        /*position_independent_encoding=*/true,
+        {});
 }
 
 size_t ApproxBlockBytes(const Block & block)

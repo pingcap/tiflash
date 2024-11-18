@@ -233,6 +233,7 @@ bool SegmentReadTaskScheduler::isStop() const
 
 std::tuple<UInt64, UInt64, UInt64> SegmentReadTaskScheduler::scheduleOneRound()
 {
+    Stopwatch sw;
     UInt64 erased_pool_count = 0;
     UInt64 sched_null_count = 0;
     UInt64 sched_succ_count = 0;
@@ -265,6 +266,7 @@ std::tuple<UInt64, UInt64, UInt64> SegmentReadTaskScheduler::scheduleOneRound()
         ++sched_succ_count;
         SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
     }
+    GET_METRIC(tiflash_read_thread_internal_us, type_schedule_one_round).Observe(sw.elapsed() / 1000.0);
     return std::make_tuple(erased_pool_count, sched_null_count, sched_succ_count);
 }
 

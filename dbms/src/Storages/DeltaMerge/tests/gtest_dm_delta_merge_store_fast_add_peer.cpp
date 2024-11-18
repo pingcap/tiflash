@@ -31,6 +31,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -161,18 +162,20 @@ public:
 
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+        DeltaMergeStorePtr s = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
             fmt::format("t_{}", table_id),
             keyspace_id,
             table_id,
+            /*pk_col_id*/ 0,
             true,
             *cols,
             handle_column_define,
             is_common_handle,
             rowkey_column_size,
+            nullptr,
             DeltaMergeStore::Settings());
         return s;
     }
@@ -376,6 +379,7 @@ try
 
     auto segments = store->buildSegmentsFromCheckpointInfo(
         *db_context,
+        GeneralCancelHandle::genNotCanceled(),
         db_context->getSettingsRef(),
         RowKeyRange::newAll(false, 1),
         checkpoint_info);
@@ -506,6 +510,7 @@ try
     {
         auto segments = store->buildSegmentsFromCheckpointInfo(
             *db_context,
+            GeneralCancelHandle::genNotCanceled(),
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)),
             checkpoint_info);
@@ -530,6 +535,7 @@ try
     {
         auto segments = store->buildSegmentsFromCheckpointInfo(
             *db_context,
+            GeneralCancelHandle::genNotCanceled(),
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(num_rows_write / 2, num_rows_write)),
             checkpoint_info);

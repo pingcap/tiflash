@@ -82,7 +82,8 @@ public:
     ColumnFileReaderPtr getReader(
         const DMContext & dm_context,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const override;
+        const ColumnDefinesPtr & col_defs,
+        ReadTag) const override;
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
     void serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool save_schema) const override;
@@ -146,7 +147,7 @@ private:
     Block cur_block;
     Columns cur_block_data; // The references to columns in cur_block, for faster access.
 
-    ReadTag read_tag = ReadTag::Internal;
+    ReadTag read_tag;
 
 private:
     void initStream();
@@ -165,10 +166,12 @@ public:
     ColumnFileBigReader(
         const DMContext & dm_context_,
         const ColumnFileBig & column_file_,
-        const ColumnDefinesPtr & col_defs_)
+        const ColumnDefinesPtr & col_defs_,
+        ReadTag read_tag_)
         : dm_context(dm_context_)
         , column_file(column_file_)
         , col_defs(col_defs_)
+        , read_tag(read_tag_)
     {
         if (col_defs_->size() == 1)
         {
@@ -200,9 +203,7 @@ public:
 
     size_t skipNextBlock() override;
 
-    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
-
-    void setReadTag(ReadTag read_tag_) override;
+    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag) override;
 };
 
 } // namespace DB::DM

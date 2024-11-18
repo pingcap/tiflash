@@ -25,7 +25,15 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using CheckpointRegionInfoAndData
     = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
-FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
+FastAddPeerRes genFastAddPeerRes(
+    FastAddPeerStatus status,
+    std::string && apply_str,
+    std::string && region_str,
+    uint64_t shard_ver,
+    std::string && inner_key_str,
+    std::string && enc_key_str,
+    std::string && txn_file_ref_str);
+FastAddPeerRes genFastAddPeerResFail(FastAddPeerStatus status);
 std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,

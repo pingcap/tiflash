@@ -38,27 +38,31 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap = std::make_shared<DeltaValueSnapshot>(type, for_update);
-    snap->delta = this->shared_from_this();
-
     auto storage_snap = std::make_shared<StorageSnapshot>(
         *context.storage_pool,
         context.getReadLimiter(),
         context.tracing_id,
         /*snapshot_read*/ true);
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
-    snap->persisted_files_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
-    snap->mem_table_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
-    snap->shared_delta_index = delta_index;
-    snap->delta_index_epoch = delta_index_epoch;
+    auto persisted_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
+    auto mem_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
+
+    auto snap = std::make_shared<DeltaValueSnapshot>(
+        type,
+        for_update,
+        std::move(mem_snap),
+        std::move(persisted_snap),
+        /*delta_vs=*/this->shared_from_this(),
+        delta_index,
+        delta_index_epoch);
 
     return snap;
 }
 
-RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
+RowKeyRange DeltaValueSnapshot::getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const
 {
-    auto delete_range1 = mem_table_snap->getSquashDeleteRange();
-    auto delete_range2 = persisted_files_snap->getSquashDeleteRange();
+    auto delete_range1 = mem_table_snap->getSquashDeleteRange(is_common_handle, rowkey_column_size);
+    auto delete_range2 = persisted_files_snap->getSquashDeleteRange(is_common_handle, rowkey_column_size);
     return delete_range1.merge(delete_range2);
 }
 

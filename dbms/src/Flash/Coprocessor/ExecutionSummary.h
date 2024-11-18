@@ -29,6 +29,9 @@ struct BaseRuntimeStatistics;
 struct ExecutionSummary
 {
     UInt64 time_processed_ns = 0;
+    UInt64 time_minTSO_wait_ns = 0;
+    UInt64 time_pipeline_breaker_wait_ns = 0;
+    UInt64 time_pipeline_queue_ns = 0;
     UInt64 num_produced_rows = 0;
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;

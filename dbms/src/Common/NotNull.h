@@ -16,7 +16,6 @@
 
 #include <Common/Exception.h>
 
-#include <memory>
 #include <not_null.hpp>
 
 namespace DB
@@ -30,7 +29,7 @@ using NotNull = cpp::bitwizeshift::not_null<T>;
 template <class T>
 auto newNotNull(T && ptr)
 {
-    return cpp::bitwizeshift::check_not_null(std::move(ptr));
+    return cpp::bitwizeshift::check_not_null(std::forward<T>(ptr));
 }
 
 template <class T, class... Args>

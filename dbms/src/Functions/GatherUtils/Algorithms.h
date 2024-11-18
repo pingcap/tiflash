@@ -192,7 +192,7 @@ void concat(const std::vector<std::unique_ptr<IArraySource>> & array_sources, Si
     size_t sources_num = array_sources.size();
     std::vector<char> is_const(sources_num);
 
-    auto checkAndGetSizeToReserve = [](auto source, IArraySource * array_source) {
+    auto check_and_get_size_to_reserve = [](auto source, IArraySource * array_source) {
         if (source == nullptr)
             throw Exception(
                 "Concat function expected " + demangle(typeid(Source).name()) + " or "
@@ -205,17 +205,18 @@ void concat(const std::vector<std::unique_ptr<IArraySource>> & array_sources, Si
     size_t size_to_reserve = 0;
     for (auto i : ext::range(0, sources_num))
     {
-        auto & source = array_sources[i];
+        const auto & source = array_sources[i];
         is_const[i] = source->isConst();
         if (is_const[i])
-            size_to_reserve += checkAndGetSizeToReserve(typeid_cast<ConstSource<Source> *>(source.get()), source.get());
+            size_to_reserve
+                += check_and_get_size_to_reserve(typeid_cast<ConstSource<Source> *>(source.get()), source.get());
         else
-            size_to_reserve += checkAndGetSizeToReserve(typeid_cast<Source *>(source.get()), source.get());
+            size_to_reserve += check_and_get_size_to_reserve(typeid_cast<Source *>(source.get()), source.get());
     }
 
     sink.reserve(size_to_reserve);
 
-    auto writeNext = [&sink](auto source) {
+    auto write_next = [&sink](auto source) {
         writeSlice(source->getWhole(), sink);
         source->next();
     };
@@ -224,11 +225,11 @@ void concat(const std::vector<std::unique_ptr<IArraySource>> & array_sources, Si
     {
         for (auto i : ext::range(0, sources_num))
         {
-            auto & source = array_sources[i];
+            const auto & source = array_sources[i];
             if (is_const[i])
-                writeNext(static_cast<ConstSource<Source> *>(source.get()));
+                write_next(static_cast<ConstSource<Source> *>(source.get()));
             else
-                writeNext(static_cast<Source *>(source.get()));
+                write_next(static_cast<Source *>(source.get()));
         }
         sink.next();
     }
@@ -389,11 +390,11 @@ void NO_INLINE pad(SourceA && src, SourceB && padding, Sink && sink, ssize_t len
             size_t left = static_cast<size_t>(length) - slice.size;
             if (is_left)
             {
-                StringSource::Slice padSlice = padding.getWhole();
-                while (left > padSlice.size && padSlice.size != 0)
+                StringSource::Slice pad_slice = padding.getWhole();
+                while (left > pad_slice.size && pad_slice.size != 0)
                 {
-                    writeSlice(padSlice, sink);
-                    left -= padSlice.size;
+                    writeSlice(pad_slice, sink);
+                    left -= pad_slice.size;
                 }
 
                 writeSlice(padding.getSliceFromLeft(0, left), sink);
@@ -402,11 +403,11 @@ void NO_INLINE pad(SourceA && src, SourceB && padding, Sink && sink, ssize_t len
             else
             {
                 writeSlice(slice, sink);
-                StringSource::Slice padSlice = padding.getWhole();
-                while (left > padSlice.size && padSlice.size != 0)
+                StringSource::Slice pad_slice = padding.getWhole();
+                while (left > pad_slice.size && pad_slice.size != 0)
                 {
-                    writeSlice(padSlice, sink);
-                    left -= padSlice.size;
+                    writeSlice(pad_slice, sink);
+                    left -= pad_slice.size;
                 }
 
                 writeSlice(padding.getSliceFromLeft(0, left), sink);

@@ -37,7 +37,7 @@ PhysicalPlanNodePtr PhysicalFilter::build(
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_filter_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
-    String filter_column_name = analyzer.buildFilterColumn(before_filter_actions, selection.conditions());
+    String filter_column_name = analyzer.buildFilterColumn(before_filter_actions, selection.conditions(), true);
 
     auto physical_filter = std::make_shared<PhysicalFilter>(
         executor_id,

@@ -25,6 +25,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
+#include <TiDB/Schema/VectorIndex.h>
 
 #include <limits>
 #include <memory>

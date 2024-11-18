@@ -365,8 +365,7 @@ void MPPTunnelSetWriterBase::passThroughWrite(
 void MPPTunnelSetWriterBase::partitionWrite(Blocks & blocks, int16_t partition_id)
 {
     auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
-    if (!tracked_packet)
-        return;
+    assert(tracked_packet);
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     writeToTunnel(std::move(tracked_packet), partition_id);
@@ -392,8 +391,7 @@ void MPPTunnelSetWriterBase::partitionWrite(
     size_t original_size = 0;
     auto tracked_packet
         = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, compression_method, original_size);
-    if (!tracked_packet)
-        return;
+    assert(tracked_packet);
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
@@ -434,9 +432,6 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
         compression_method,
         original_size);
 
-    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
-        return;
-
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     writeToTunnel(std::move(tracked_packet), partition_id);
@@ -458,9 +453,6 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
         fine_grained_shuffle_stream_count,
         num_columns,
         result_field_types);
-
-    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
-        return;
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);

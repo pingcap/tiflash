@@ -70,7 +70,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
 {
     if (!executed)
     {
-        Aggregator::CancellationHook hook = [&]() {
+        CancellationHook hook = [&]() {
             return this->isCancelled();
         };
         aggregator.setCancellationHook(hook);

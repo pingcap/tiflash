@@ -201,7 +201,7 @@ PipelineExecGroup Pipeline::buildExecGroup(
     {
         plan_node->buildPipelineExecGroup(exec_context, builder, context, concurrency);
     }
-    return builder.build();
+    return builder.build(has_pipeline_breaker_wait_time);
 }
 
 /**

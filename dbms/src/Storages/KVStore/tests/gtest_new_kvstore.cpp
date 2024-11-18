@@ -33,7 +33,6 @@
 #include <limits>
 
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
-
 namespace DB::tests
 {
 

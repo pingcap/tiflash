@@ -30,7 +30,7 @@ public:
 
     const char * getFamilyName() const override { return TypeName<T>::get(); }
 
-    TypeIndex getTypeId() const override { return TypeId<T>::value; };
+    TypeIndex getTypeId() const override { return TypeId<T>::value; }
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
@@ -43,8 +43,6 @@ public:
         WriteBuffer & ostr,
         const FormatSettingsJSON & settings) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
-    void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
     Field getDefault() const override;
 
     /** Format is platform-dependent. */
@@ -63,7 +61,7 @@ public:
     bool haveSubtypes() const override { return false; }
     bool shouldAlignRightInPrettyFormats() const override { return true; }
     bool textCanContainOnlyValidUTF8() const override { return true; }
-    bool isComparable() const override { return true; };
+    bool isComparable() const override { return true; }
     bool isValueRepresentedByNumber() const override { return true; }
     bool isValueRepresentedByInteger() const override;
     bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return true; }

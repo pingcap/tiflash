@@ -19,12 +19,14 @@
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
 #include <IO/FileProvider/FileProvider_fwd.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
+#include <Storages/DeltaMerge/LocalIndexerScheduler_fwd.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -33,6 +35,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+
 
 namespace pingcap
 {
@@ -107,6 +110,8 @@ enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
+class VectorIndexCache;
+class ColumnCacheLongTerm;
 class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
@@ -180,8 +185,12 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
+
     /// Use copy constructor or createGlobal() instead
     Context();
 
@@ -237,8 +246,8 @@ public:
     /// Compute and set actual user settings, client_info.current_user should be set
     void calculateUserSettings();
 
-    ClientInfo & getClientInfo() { return client_info; };
-    const ClientInfo & getClientInfo() const { return client_info; };
+    ClientInfo & getClientInfo() { return client_info; }
+    const ClientInfo & getClientInfo() const { return client_info; }
 
     void setQuota(
         const String & name,
@@ -375,6 +384,9 @@ public:
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
 
+    bool isCancelled() const { return is_cancelled(); }
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
+
     /// List all queries.
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
@@ -390,6 +402,14 @@ public:
     void setMinMaxIndexCache(size_t cache_size_in_bytes);
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
+
+    void setVectorIndexCache(size_t cache_entities);
+    std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
+    void dropVectorIndexCache() const;
+
+    void setColumnCacheLongTerm(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::ColumnCacheLongTerm> getColumnCacheLongTerm() const;
+    void dropColumnCacheLongTerm() const;
 
     bool isDeltaIndexLimited() const;
     void setDeltaIndexManager(size_t cache_size_in_bytes);
@@ -451,6 +471,9 @@ public:
     bool initializeGlobalPageIdAllocator();
     DM::GlobalPageIdAllocatorPtr getGlobalPageIdAllocator() const;
 
+    bool initializeGlobalLocalIndexerScheduler(size_t pool_size, size_t memory_limit);
+    DM::LocalIndexerSchedulerPtr getGlobalLocalIndexerScheduler() const;
+
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
@@ -505,8 +528,8 @@ public:
 
     SharedQueriesPtr getSharedQueries();
 
-    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
-    TimezoneInfo & getTimezoneInfo() { return timezone_info; };
+    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; }
+    TimezoneInfo & getTimezoneInfo() { return timezone_info; }
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;
@@ -537,6 +560,9 @@ public:
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
     void mockConfigLoaded() { is_config_loaded = true; }
+
+    bool initializeStoreIdBlockList(const String &);
+    const std::unordered_set<uint64_t> * getStoreIdBlockList() const;
 
 private:
     /** Check if the current client has access to the specified database.

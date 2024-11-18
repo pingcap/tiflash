@@ -25,6 +25,7 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -168,7 +169,8 @@ struct MockExchangeWriter
         // make only part 0 use local tunnel
         return index == 0;
     }
-    bool isWritable() const { throw Exception("Unsupport async write"); }
+    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
+    static void notifyNextPipelineWriter() {}
 
 private:
     MockExchangeWriterChecker checker;

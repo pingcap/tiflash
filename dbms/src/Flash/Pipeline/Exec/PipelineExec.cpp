@@ -72,10 +72,15 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
         return (op_status);                                                                                    \
     }
 
-PipelineExec::PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_)
+PipelineExec::PipelineExec(
+    SourceOpPtr && source_op_,
+    TransformOps && transform_ops_,
+    SinkOpPtr && sink_op_,
+    bool has_pipeline_breaker_wait_time_)
     : source_op(std::move(source_op_))
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
+    , has_pipeline_breaker_wait_time(has_pipeline_breaker_wait_time_)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
 }
@@ -240,28 +245,30 @@ void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_brea
     // However, if there are multiple pipeline breaker operators within a single pipeline, it can become very complex.
     // Therefore, to simplify matters, we will include the pipeline schedule duration in the execution time of the source operator.
     //
-    // For the queuing_time, it should be evenly distributed across all operators.
+    // Currently pipeline_breaker_wait_time only works for join probe pipelines. We put the wait time in source op
+    // instead of join operator due to multiple concurrent builds cases:
+    // A(build) -> [B(build) -> C(probe)], A and B will run concurrently to reduce total latency, and pipeline_breaker_wait_time
+    // recorded in C pipeline_exec is actually max(A_Build, B_build). Thus we can't easily calculate the exact build time for each
+    // Join operator.
+    // TODO: We can record pipeline_breaker_wait_time with source pipeline ids in the future to map join build time to exact join executor
     //
-    // TODO Refining execution summary, excluding extra time from execution time.
-    // For example: [total_time:6s, execution_time:1s, queuing_time:2s, pipeline_breaker_wait_time:3s]
-
-    // The execution time of operator[i] = self_time_from_profile_info + sum(self_time_from_profile_info[i-1, .., 0]) + (i + 1) * extra_time / operator_num.
-
+    // For the queuing_time, it is added into the source operator's execution time also.
+    // Also keep these time separately to provide more info.
     source_op->getProfileInfo()->execution_time += pipeline_breaker_wait_time;
+    source_op->getProfileInfo()->execution_time += queuing_time;
+    if (has_pipeline_breaker_wait_time)
+    {
+        source_op->getProfileInfo()->pipeline_breaker_wait_time = pipeline_breaker_wait_time;
+    }
+    source_op->getProfileInfo()->task_wait_time = queuing_time;
 
-    UInt64 operator_num = 2 + transform_ops.size();
-    UInt64 per_operator_queuing_time = queuing_time / operator_num;
-
-    source_op->getProfileInfo()->execution_time += per_operator_queuing_time;
-    // Compensate for the values missing due to rounding.
-    source_op->getProfileInfo()->execution_time += (queuing_time - (per_operator_queuing_time * operator_num));
     UInt64 time_for_prev_op = source_op->getProfileInfo()->execution_time;
     for (const auto & transform_op : transform_ops)
     {
-        transform_op->getProfileInfo()->execution_time += (per_operator_queuing_time + time_for_prev_op);
+        transform_op->getProfileInfo()->execution_time += time_for_prev_op;
         time_for_prev_op = transform_op->getProfileInfo()->execution_time;
     }
-    sink_op->getProfileInfo()->execution_time += (per_operator_queuing_time + time_for_prev_op);
+    sink_op->getProfileInfo()->execution_time += time_for_prev_op;
 }
 
 } // namespace DB

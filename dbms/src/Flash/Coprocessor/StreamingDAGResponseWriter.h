@@ -36,9 +36,12 @@ public:
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         DAGContext & dag_context_);
-    void write(const Block & block) override;
-    bool isWritable() const override;
-    void flush() override;
+    WaitResult waitForWritable() const override;
+
+protected:
+    bool doWrite(const Block & block) override;
+    bool doFlush() override;
+    void notifyNextPipelineWriter() override;
 
 private:
     void encodeThenWriteBlocks();

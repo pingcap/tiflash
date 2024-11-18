@@ -1,0 +1,45 @@
+# Copyright 2024 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+path = "/tmp/tiflash/data"
+capacity = "10737418240"
+
+tcp_port = 9000
+
+[flash]
+service_addr = "0.0.0.0:3930"
+[flash.proxy]
+addr = "0.0.0.0:20170"
+advertise-addr = "tiflash0:20170"
+data-dir = "/tmp/tiflash/proxy"
+config = "/proxy.toml"
+log-file = "/tmp/tiflash/log/tiflash_tikv.log"
+engine-addr = "tiflash0:3930"
+status-addr = "0.0.0.0:20181"
+advertise-status-addr = "tiflash0:20181"
+
+[logger]
+count = 10
+log = "/tmp/tiflash/log/tiflash.log"
+errorlog = "/tmp/tiflash/log/tiflash_error.log"
+size = "1000M"
+level = "trace"
+
+[raft]
+pd_addr = "pd0:2379"
+
+[profiles]
+[profiles.default]
+dt_compression_method = "Lightweight"
+dt_compression_level = 3

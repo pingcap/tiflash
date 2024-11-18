@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/CancellationHook.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
@@ -137,7 +138,8 @@ public:
         size_t left_columns,
         const std::vector<size_t> & right_column_indices_to_add,
         size_t max_block_size,
-        const JoinNonEqualConditions & non_equal_conditions);
+        const JoinNonEqualConditions & non_equal_conditions,
+        CancellationHook is_cancelled_);
 
     void joinResult(std::list<Result *> & res_list);
 
@@ -156,6 +158,7 @@ private:
     size_t right_columns;
     std::vector<size_t> right_column_indices_to_add;
     size_t max_block_size;
+    CancellationHook is_cancelled;
 
     const JoinNonEqualConditions & non_equal_conditions;
 };

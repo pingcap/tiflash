@@ -19,14 +19,11 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 /// This test file is mainly test on the correctness of read in fast mode.
-/// Because the basic functions are tested in gtest_dm_delta_merge_storage.cpp, we will not cover it here.
+/// Because the basic functions are tested in gtest_dm_delta_merge_store.cpp, we will not cover it here.
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
 {
     /// test under only insert data (no update, no delete) with all range
@@ -61,8 +58,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -137,8 +133,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithRangeFilter)
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -204,17 +199,16 @@ try
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -227,8 +221,8 @@ try
             store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
-        case TestMode::V2_Mix: // disk + memory
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk: // disk + memory
+        case TestMode::Current_MemoryAndDisk:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -262,9 +256,8 @@ try
             /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             ASSERT_INPUTSTREAM_COLS_UR(
                 in,
@@ -272,8 +265,8 @@ try
                 createColumns({createColumn<Int64>(createNumbers<Int64>(0, 3 * num_write_rows))}));
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -295,8 +288,8 @@ try
                 createColumns({createColumn<Int64>(pk_coldata)}));
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             // persist first, then memory, finally stable
             auto pk_coldata = []() {
@@ -338,17 +331,16 @@ try
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -361,8 +353,8 @@ try
             store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -398,11 +390,10 @@ try
             /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_BlockOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_MemoryOnly:
+        case TestMode::Current_DiskOnly:
         {
             ASSERT_INPUTSTREAM_COLS_UR(
                 in,
@@ -410,8 +401,8 @@ try
                 createColumns({createColumn<Int64>(createNumbers<Int64>(0, 3 * num_write_rows))}));
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -452,17 +443,16 @@ try
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -475,8 +465,8 @@ try
             store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -513,11 +503,10 @@ try
             /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_BlockOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_MemoryOnly:
+        case TestMode::Current_DiskOnly:
         {
             ASSERT_INPUTSTREAM_COLS_UR(
                 in,
@@ -525,8 +514,8 @@ try
                 createColumns({createColumn<Int64>(createNumbers<Int64>(0, 3 * num_write_rows))}));
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -567,17 +556,16 @@ try
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -590,8 +578,8 @@ try
             store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -657,17 +645,16 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -678,8 +665,8 @@ try
             store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
@@ -692,7 +679,7 @@ try
         }
         }
 
-        // in V1_BlockOnly and V2_BlockOnly mode, flush cache will make sort
+        // in MemoryOnly mode, flush cache will make sort
         store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
@@ -717,9 +704,8 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -743,8 +729,8 @@ try
                 createColumns({createColumn<Int64>(pk_coldata)}));
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -766,8 +752,8 @@ try
                 createColumns({createColumn<Int64>(pk_coldata)}));
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -853,8 +839,7 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             break;
@@ -935,8 +920,7 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -1012,8 +996,7 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -1079,17 +1062,16 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -1100,8 +1082,8 @@ try
             store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
@@ -1114,7 +1096,7 @@ try
         }
         }
 
-        // in V1_BlockOnly and V2_BlockOnly mode, flush cache will make sort
+        // in MemoryOnly mode, flush cache will make sort
         store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
@@ -1147,9 +1129,8 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -1173,8 +1154,8 @@ try
                 createColumns({createColumn<Int64>(pk_coldata)}));
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -1196,8 +1177,8 @@ try
                 createColumns({createColumn<Int64>(pk_coldata)}));
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -1258,9 +1239,8 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -1363,17 +1343,16 @@ try
         auto block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -1386,8 +1365,8 @@ try
             store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -1459,6 +1438,5 @@ try
     ASSERT_EQ(before_split, after_split);
 }
 CATCH
-} // namespace tests
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM::tests

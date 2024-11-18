@@ -16,16 +16,17 @@
 #include <Storages/DeltaMerge/DMContext.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 ColumnFileReaderPtr ColumnFileDeleteRange::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr &,
-    const ColumnDefinesPtr &) const
+    const ColumnDefinesPtr &,
+    ReadTag) const
 {
-    return std::make_shared<ColumnFileEmptyReader>();
+    // ColumnFileDeleteRange is not readable.
+    return nullptr;
 }
 
 void ColumnFileDeleteRange::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -50,9 +51,4 @@ ColumnFilePersistedPtr ColumnFileDeleteRange::deserializeMetadata(const dtpb::Co
     return std::make_shared<ColumnFileDeleteRange>(RowKeyRange::deserialize(dr_pb.range()));
 }
 
-ColumnFileReaderPtr ColumnFileEmptyReader::createNewReader(const ColumnDefinesPtr &)
-{
-    return std::make_shared<ColumnFileEmptyReader>();
-}
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -22,10 +22,12 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/WaitResult.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
@@ -92,10 +94,12 @@ enum class TunnelSenderMode
 
 /// TunnelSender is responsible for consuming data from Tunnel's internal send_queue and do the actual sending work
 /// After TunnelSend finished its work, either normally or abnormally, set ConsumerState to inform Tunnel
-class TunnelSender : private boost::noncopyable
+class TunnelSender
+    : private boost::noncopyable
+    , public NotifyFuture
 {
 public:
-    virtual ~TunnelSender() = default;
+    ~TunnelSender() override = default;
     TunnelSender(
         MemoryTrackerPtr & memory_tracker_,
         const LoggerPtr & log_,
@@ -115,6 +119,7 @@ public:
     virtual bool finish() = 0;
 
     virtual bool isWritable() const = 0;
+    virtual void notifyNextPipelineWriter() = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg() { return consumer_state.getMsg(); }
@@ -193,6 +198,10 @@ public:
 
     bool isWritable() const override { return send_queue.isWritable(); }
 
+    void notifyNextPipelineWriter() override { send_queue.notifyNextPipelineWriter(); }
+
+    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
+
 private:
     friend class tests::TestMPPTunnel;
     void sendJob(PacketWriter * writer);
@@ -243,6 +252,8 @@ public:
 
     bool isWritable() const override { return queue.isWritable(); }
 
+    void notifyNextPipelineWriter() override { queue.notifyNextPipelineWriter(); }
+
     void cancelWith(const String & reason) override { queue.cancelWith(reason); }
 
     const String & getCancelReason() const { return queue.getCancelReason(); }
@@ -253,6 +264,8 @@ public:
     }
 
     void subDataSizeMetric(size_t size) { ::DB::MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, size); }
+
+    void registerTask(TaskPtr && task) override { queue.registerPipeWriteTask(std::move(task)); }
 
 private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
@@ -311,13 +324,35 @@ public:
         }
     }
 
+    void notifyNextPipelineWriter() override
+    {
+        if constexpr (local_only)
+            local_request_handler.notifyNextPipelineWriter();
+        else
+        {
+            std::lock_guard lock(mu);
+            local_request_handler.notifyNextPipelineWriter();
+        }
+    }
+
+    void registerTask(TaskPtr && task) override
+    {
+        if constexpr (local_only)
+            local_request_handler.registerPipeWriteTask(std::move(task));
+        else
+        {
+            std::lock_guard lock(mu);
+            local_request_handler.registerPipeWriteTask(std::move(task));
+        }
+    }
+
 private:
     friend class tests::TestMPPTunnel;
 
     template <bool is_force>
     bool pushImpl(TrackedMppDataPacketPtr && data)
     {
-        if (unlikely(checkPacketErr(data)))
+        if (unlikely(is_done || checkPacketErr(data)))
             return false;
 
         // When ExchangeReceiver receives data from local and remote tiflash, number of local tunnel threads
@@ -404,6 +439,9 @@ public:
     bool finish() override { return send_queue.finish(); }
 
     bool isWritable() const override { return send_queue.isWritable(); }
+    void notifyNextPipelineWriter() override { send_queue.notifyNextPipelineWriter(); }
+
+    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
 
 private:
     bool cancel_reason_sent = false;
@@ -472,13 +510,20 @@ public:
     void write(TrackedMppDataPacketPtr && data);
 
     // forceWrite write a single packet to the tunnel's send queue without blocking,
-    // and need to call isReadForWrite first.
+    // and need to call waitForWritable first.
     // ```
-    // while (!isWritable()) {}
+    // auto res = waitForWritable();
+    // switch (res) case...
     // forceWrite(std::move(data));
     // ```
+    WaitResult waitForWritable() const;
     void forceWrite(TrackedMppDataPacketPtr && data);
-    bool isWritable() const;
+
+    void notifyNextPipelineWriter()
+    {
+        assert(tunnel_sender != nullptr);
+        tunnel_sender->notifyNextPipelineWriter();
+    }
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();

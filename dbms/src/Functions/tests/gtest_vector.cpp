@@ -203,29 +203,40 @@ TEST_F(Vector, CosineDistance)
 try
 {
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Float64>>({0.0, std::nullopt, 0.0, 1.0, 2.0, 0.0, 2.0, std::nullopt}),
+        createColumn<Nullable<Float64>>(
+            {0.0,
+             1.0, // CosDistance to (0,0) cannot be calculated, clapped to 1.0
+             0.0,
+             1.0,
+             2.0,
+             0.0,
+             2.0,
+             std::nullopt}),
         executeFunction(
-            "vecCosineDistance",
-            createColumn<Array>(
-                std::make_tuple(std::make_shared<DataTypeFloat32>()), //
-                {Array{1.0, 2.0},
-                 Array{1.0, 2.0},
-                 Array{1.0, 1.0},
-                 Array{1.0, 0.0},
-                 Array{1.0, 1.0},
-                 Array{1.0, 1.0},
-                 Array{1.0, 1.0},
-                 Array{3e38}}),
-            createColumn<Array>(
-                std::make_tuple(std::make_shared<DataTypeFloat32>()), //
-                {Array{2.0, 4.0},
-                 Array{0.0, 0.0},
-                 Array{1.0, 1.0},
-                 Array{0.0, 2.0},
-                 Array{-1.0, -1.0},
-                 Array{1.1, 1.1},
-                 Array{-1.1, -1.1},
-                 Array{3e38}})));
+            "tidbRoundWithFrac",
+            executeFunction(
+                "vecCosineDistance",
+                createColumn<Array>(
+                    std::make_tuple(std::make_shared<DataTypeFloat32>()), //
+                    {Array{1.0, 2.0},
+                     Array{1.0, 2.0},
+                     Array{1.0, 1.0},
+                     Array{1.0, 0.0},
+                     Array{1.0, 1.0},
+                     Array{1.0, 1.0},
+                     Array{1.0, 1.0},
+                     Array{3e38}}),
+                createColumn<Array>(
+                    std::make_tuple(std::make_shared<DataTypeFloat32>()), //
+                    {Array{2.0, 4.0},
+                     Array{0.0, 0.0},
+                     Array{1.0, 1.0},
+                     Array{0.0, 2.0},
+                     Array{-1.0, -1.0},
+                     Array{1.1, 1.1},
+                     Array{-1.1, -1.1},
+                     Array{3e38}})),
+            createConstColumn<int>(8, 1)));
 
     ASSERT_THROW(
         executeFunction(

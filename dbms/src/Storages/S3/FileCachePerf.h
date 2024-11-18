@@ -1,0 +1,37 @@
+// Copyright 2024 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <common/types.h>
+
+/// Remove the population of thread_local from Poco
+#ifdef thread_local
+#undef thread_local
+#endif
+
+namespace DB::PerfContext
+{
+
+struct FileCachePerfContext
+{
+    size_t fg_download_from_s3 = 0;
+    size_t fg_wait_download_from_s3 = 0;
+
+    void reset() { *this = {}; }
+};
+
+extern thread_local FileCachePerfContext file_cache;
+
+} // namespace DB::PerfContext

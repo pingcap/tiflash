@@ -26,6 +26,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
+#include <Storages/KVStore/MultiRaft/Disagg/ServerlessUtils.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
@@ -55,15 +56,34 @@ extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 } // namespace FailPoints
 
-FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
+FastAddPeerRes genFastAddPeerRes(
+    FastAddPeerStatus status,
+    std::string && apply_str,
+    std::string && region_str,
+    uint64_t shard_ver,
+    std::string && inner_key_str,
+    std::string && enc_key_str,
+    std::string && txn_file_ref_str)
 {
     auto * apply = RawCppString::New(apply_str);
     auto * region = RawCppString::New(region_str);
+    auto * inner_key = RawCppString::New(inner_key_str);
+    auto * enc_key = RawCppString::New(enc_key_str);
+    auto * txn_file_ref = RawCppString::New(txn_file_ref_str);
     return FastAddPeerRes{
         .status = status,
         .apply_state = CppStrWithView{.inner = GenRawCppPtr(apply, RawCppPtrTypeImpl::String), .view = BaseBuffView{apply->data(), apply->size()}},
         .region = CppStrWithView{.inner = GenRawCppPtr(region, RawCppPtrTypeImpl::String), .view = BaseBuffView{region->data(), region->size()}},
+        .shard_ver = shard_ver,
+        .inner_key = CppStrWithView{.inner = GenRawCppPtr(inner_key, RawCppPtrTypeImpl::String), .view = BaseBuffView{inner_key->data(), inner_key->size()}},
+        .enc_key = CppStrWithView{.inner = GenRawCppPtr(enc_key, RawCppPtrTypeImpl::String), .view = BaseBuffView{enc_key->data(), enc_key->size()}},
+        .txn_file_ref = CppStrWithView{.inner = GenRawCppPtr(txn_file_ref, RawCppPtrTypeImpl::String), .view = BaseBuffView{txn_file_ref->data(), txn_file_ref->size()}},
     };
+}
+
+FastAddPeerRes genFastAddPeerResFail(FastAddPeerStatus status)
+{
+    return genFastAddPeerRes(status, "", "", 0, "", "", "");
 }
 
 std::vector<StoreID> getCandidateStoreIDsForRegion(TMTContext & tmt_context, UInt64 region_id, UInt64 current_store_id)
@@ -208,7 +228,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
         GET_METRIC(tiflash_fap_task_result, type_failed_no_suitable).Increment();
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     }
     LOG_DEBUG(log, "Begin to select checkpoint for region_id={}", region_id);
 
@@ -269,7 +289,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                     region_id,
                     new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
-                return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+                return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
             }
             SYNC_FOR("in_FastAddPeerImplSelect::before_sleep");
             if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000)))
@@ -280,7 +300,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 fap_ctx->tasks_trace->leakingDiscardTask(region_id);
                 // We immediately increase this metrics when cancel, since a canceled task may not be fetched.
                 GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-                return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+                return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
             }
         }
     }
@@ -294,11 +314,9 @@ FastAddPeerRes FastAddPeerImplWrite(
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time)
 {
-    auto log = Logger::get("FastAddPeer");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
-
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage).Observe(watch.elapsedSeconds()); });
     GET_METRIC(tiflash_fap_task_state, type_writing_stage).Increment();
@@ -308,16 +326,19 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
+
+    auto log = Logger::get(fmt::format(
+        "FastAddPeer(region_id={} keyspace={} table_id={} new_peer_id={})",
+        region_id,
+        keyspace_id,
+        table_id,
+        new_peer_id));
+
     const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region_id, keyspace_id, table_id, tmt);
     if (!storage)
     {
-        LOG_WARNING(
-            log,
-            "FAP failed because the table can not be found, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
-        return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
+        LOG_WARNING(log, "FAP failed because the table can not be found");
+        return genFastAddPeerResFail(FastAddPeerStatus::BadData);
     }
     UNUSED(schema_snap);
     RUNTIME_CHECK_MSG(storage->engineType() == TiDB::StorageEngine::DT, "ingest into unsupported storage engine");
@@ -330,21 +351,16 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled before write, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_INFO(log, "FAP is canceled before write");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
     }
 
     DM::Segments segments;
     try
     {
-        segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+        segments = dm_storage->buildSegmentsFromCheckpointInfo(cancel_handle, new_key_range, checkpoint_info, settings);
     }
     catch (...)
     {
@@ -356,6 +372,15 @@ FastAddPeerRes FastAddPeerImplWrite(
         throw;
     }
     GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_build).Observe(watch.elapsedSecondsFromLastTime());
+
+    // Note that the task may be canceled during `buildSegmentsFromCheckpointInfo`. So we must check here before further operations.
+    if (cancel_handle->isCanceled())
+    {
+        LOG_INFO(log, "FAP is canceled after build segments");
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
+    }
 
     fap_ctx->insertCheckpointIngestInfo(
         tmt,
@@ -370,34 +395,52 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled after write segments, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_INFO(log, "FAP is canceled after write segments");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
     }
 
-    // Write raft log to uni ps, we do this here because we store raft log seperately.
-    // Currently, FAP only handle when the peer is newly created in this store.
-    // TODO(fap) However, Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
+    // Now, the FAP snapshot is persisted. And we will later send it to ourselves to have is acked by the raftstore.
+    // Later, we directly write the raft log into formal unips. We do this here because we store raft log seperately.
+
+    // TODO(fap) Currently, FAP only handle when the peer is newly created in this store,
+    // Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
     UniversalWriteBatch wb;
     RUNTIME_CHECK(checkpoint_info->temp_ps != nullptr);
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
+
+    bool too_many_raft_logs = false;
+    size_t log_count = 0;
     raft_data_reader.traverseRemoteRaftLogForRegion(
         region_id,
+        [&](size_t raft_log_count) {
+            GET_METRIC(tiflash_raft_raft_log_gap_count, type_unhandled_fap_raft_log).Observe(raft_log_count);
+            log_count = raft_log_count;
+            if (raft_log_count > 1500)
+            {
+                too_many_raft_logs = true;
+                // Will early abort.
+                return false;
+            }
+            return true;
+        },
         [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
-            LOG_DEBUG(
-                log,
-                "Write raft log size {}, region_id={} index={}",
-                size,
-                region_id,
-                UniversalPageIdFormat::getU64ID(page_id));
             wb.putRemotePage(page_id, 0, size, location, {});
         });
+
+    if (too_many_raft_logs)
+    {
+        LOG_INFO(
+            log,
+            "FAP is canceled when write raft log, too_many_raft_logs={}, log_count={}, applied_index={}",
+            too_many_raft_logs,
+            log_count,
+            apply_state.applied_index());
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
+    }
     GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_raft).Observe(watch.elapsedSecondsFromLastTime());
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     RUNTIME_CHECK(wn_ps != nullptr);
@@ -405,21 +448,21 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(
-            log,
-            "FAP is canceled after write raft log, region_id={} keyspace={} table_id={}",
-            region_id,
-            keyspace_id,
-            table_id);
+        LOG_INFO(log, "FAP is canceled after write raft log");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
     }
-    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={} keyspace={} table_id={}", region_id, keyspace_id, table_id);
+    LOG_DEBUG(log, "Finish write FAP snapshot, log_count={}", log_count);
+    auto tmp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
         apply_state.SerializeAsString(),
-        region_state.region().SerializeAsString());
+        region_state.region().SerializeAsString(),
+        getShardVer(tmp_ps, region_id),
+        getCompactibleInnerKey(tmp_ps, keyspace_id, region_id),
+        getCompactibleEncKey(tmp_ps, keyspace_id, region_id),
+        getTxnFileRef(tmp_ps, region_id));
 }
 
 // This function executes FAP phase 1 from a thread in a dedicated pool.
@@ -477,7 +520,7 @@ FastAddPeerRes FastAddPeerImpl(
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
         // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState,
         // since a FastAddPeerStatus::BadData result will lead to a fallback in Proxy.
-        return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::BadData);
     }
     catch (...)
     {
@@ -490,7 +533,7 @@ FastAddPeerRes FastAddPeerImpl(
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
         // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState.
         // since a FastAddPeerStatus::BadData result will lead to a fallback in Proxy.
-        return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::BadData);
     }
 }
 
@@ -650,12 +693,12 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     {
         auto log = Logger::get("FastAddPeer");
         if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-            return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
+            return genFastAddPeerResFail(FastAddPeerStatus::OtherError);
         auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
         if (fap_ctx == nullptr)
         {
             LOG_WARNING(log, "FAP Context is not initialized. Should only enable FAP in DisaggregatedStorageMode.");
-            return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+            return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
         }
         if (!fap_ctx->tasks_trace->isScheduled(region_id))
         {
@@ -682,7 +725,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                     new_peer_id);
                 // It is already canceled in queue.
                 GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-                return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+                return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
             });
             if (res)
             {
@@ -699,7 +742,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                     new_peer_id,
                     region_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_other).Increment();
-                return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
+                return genFastAddPeerResFail(FastAddPeerStatus::OtherError);
             }
         }
 
@@ -747,10 +790,10 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 }
                 GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
                 // Return Canceled because it is cancel from outside FAP worker.
-                return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+                return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
             }
             LOG_DEBUG(log, "Task is still pending new_peer_id={} region_id={}", new_peer_id, region_id);
-            return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
+            return genFastAddPeerResFail(FastAddPeerStatus::WaitForData);
         }
     }
     catch (const Exception & e)
@@ -762,7 +805,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 region_id,
                 new_peer_id,
                 e.message()));
-        return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::OtherError);
     }
     catch (...)
     {
@@ -772,7 +815,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 "Failed when try to restore from checkpoint region_id={} new_peer_id={}",
                 region_id,
                 new_peer_id));
-        return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::OtherError);
     }
 }
 

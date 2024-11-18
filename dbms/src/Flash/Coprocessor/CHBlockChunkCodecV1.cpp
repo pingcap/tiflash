@@ -136,7 +136,7 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
                 [&](const IDataType::SubstreamPath &) { return &istr; },
                 sz,
                 0,
-                {},
+                /*position_independent_encoding=*/true,
                 {});
         }
     }

@@ -93,7 +93,8 @@ struct MockStreamWriter
     {}
 
     void write(tipb::SelectResponse & response) { checker(response); }
-    static bool isWritable() { throw Exception("Unsupport async write"); }
+    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
+    static void notifyNextPipelineWriter() {}
 
 private:
     MockStreamWriterChecker checker;

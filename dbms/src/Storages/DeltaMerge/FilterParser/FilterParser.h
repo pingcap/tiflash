@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/KVStore/Types.h>
 #include <tipb/executor.pb.h>
@@ -30,9 +31,6 @@ struct DAGQueryInfo;
 
 namespace DM
 {
-
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class FilterParser
 {

@@ -34,6 +34,8 @@ struct OperatorProfileInfo
     size_t allocated_bytes = 0;
     // execution time is the total time spent on current Operator
     UInt64 execution_time = 0;
+    UInt64 pipeline_breaker_wait_time = 0;
+    UInt64 task_wait_time = 0;
 
     ALWAYS_INLINE void anchor() { total_stopwatch.start(); }
 

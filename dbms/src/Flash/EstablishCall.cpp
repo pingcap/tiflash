@@ -167,6 +167,7 @@ void EstablishCallData::initRpc()
 
         connection_id = fmt::format("tunnel{}+{}", request.sender_meta().task_id(), request.receiver_meta().task_id());
         query_id = MPPQueryId(request.sender_meta()).toString();
+        resource_group_name = request.sender_meta().resource_group_name();
         auto res = service->establishMPPConnectionAsync(this);
 
         if (!res.ok())

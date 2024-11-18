@@ -21,8 +21,6 @@
 
 namespace DB
 {
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class DMSegmentThreadSourceOp : public SourceOp
 {

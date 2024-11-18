@@ -19,7 +19,7 @@ namespace DB
 void AggregateContext::initBuild(
     const Aggregator::Params & params,
     size_t max_threads_,
-    Aggregator::CancellationHook && hook,
+    CancellationHook && hook,
     const RegisterOperatorSpillContext & register_operator_spill_context)
 {
     assert(status.load() == AggStatus::init);

@@ -131,6 +131,39 @@ public:
                 ErrorCodes::LOGICAL_ERROR);
     }
 
+    void addBatchSinglePlace(
+        size_t start_offset,
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos) const override
+    {
+        const auto & nc = assert_cast<const ColumnNullable &>(*columns[0]);
+        const UInt8 * null_map = nc.getNullMapData().data();
+        addBatchSinglePlaceNotNull(start_offset, batch_size, place, columns, null_map, arena, if_argument_pos);
+    }
+
+    void addBatchSinglePlaceNotNull(
+        size_t start_offset,
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena *,
+        ssize_t if_argument_pos) const override
+    {
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            data(place).count += countBytesInFilterWithNull(flags, null_map, start_offset, batch_size);
+        }
+        else
+        {
+            data(place).count += batch_size - countBytesInFilter(null_map, start_offset, batch_size);
+        }
+    }
+
     String getName() const override { return "count"; }
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }

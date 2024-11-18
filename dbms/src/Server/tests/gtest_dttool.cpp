@@ -91,6 +91,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 1,
+            /*pk_col_id*/ 0,
             false,
             1,
             db_context->getSettingsRef());

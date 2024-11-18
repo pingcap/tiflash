@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
@@ -349,7 +351,7 @@ std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_i
     return {start_key, end_key};
 }
 
-Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted)
 {
     RUNTIME_CHECK(start_key <= end_key);
     if (end_key == start_key)
@@ -367,6 +369,11 @@ Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool i
         1,
         true,
         is_deleted);
+}
+
+Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+{
+    return prepareWriteBlockImpl(start_key, end_key, is_deleted);
 }
 
 Block sortvstackBlocks(std::vector<Block> && blocks)
@@ -481,11 +488,48 @@ void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std
     operation_statistics["write"]++;
 }
 
+BlockInputStreamPtr SegmentTestBasic::getIngestDTFileInputStream(
+    PageIdU64 segment_id,
+    UInt64 write_rows,
+    std::optional<Int64> start_at,
+    std::optional<size_t> pack_size,
+    bool check_range)
+{
+    if (pack_size)
+        RUNTIME_CHECK(start_at.has_value());
+
+    auto rows_per_block = pack_size ? *pack_size : DEFAULT_MERGE_BLOCK_SIZE;
+    std::vector<BlockInputStreamPtr> streams;
+    for (UInt64 written = 0; written < write_rows; written += rows_per_block)
+    {
+        rows_per_block = std::min(rows_per_block, write_rows - written);
+        std::optional<Int64> start;
+        if (start_at)
+            start.emplace(*start_at + written);
+
+        if (check_range)
+        {
+            auto block = prepareWriteBlockInSegmentRange(segment_id, rows_per_block, start, /* is_deleted */ false);
+            streams.push_back(std::make_shared<OneBlockInputStream>(std::move(block)));
+        }
+        else
+        {
+            auto start_key = start ? *start : 0;
+            auto end_key = start_key + rows_per_block;
+            auto block = prepareWriteBlock(start_key, end_key);
+            streams.push_back(std::make_shared<OneBlockInputStream>(std::move(block)));
+        }
+    }
+    return std::make_shared<ConcatBlockInputStream>(std::move(streams), "");
+}
+
 void SegmentTestBasic::ingestDTFileIntoDelta(
     PageIdU64 segment_id,
     UInt64 write_rows,
     std::optional<Int64> start_at,
-    bool clear)
+    bool clear,
+    std::optional<size_t> pack_size,
+    bool check_range)
 {
     LOG_INFO(logger_op, "ingestDTFileIntoDelta, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -506,13 +550,11 @@ void SegmentTestBasic::ingestDTFileIntoDelta(
         end_key);
 
     {
-        auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+        auto input_stream = getIngestDTFileInputStream(segment_id, write_rows, start_at, pack_size, check_range);
         WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-        auto input_stream = std::make_shared<OneBlockInputStream>(block);
-
         auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
@@ -536,8 +578,9 @@ void SegmentTestBasic::ingestDTFileIntoDelta(
 
         ingest_wbs.rollbackWrittenLogAndData();
     }
-
-    EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
+    // If check_range is false, we may generate some data that range is larger than segment.
+    if (check_range)
+        EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["ingest"]++;
 }
 
@@ -703,6 +746,63 @@ void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const DMFilePtr 
         operation_statistics["replaceData"]++;
 }
 
+bool SegmentTestBasic::replaceSegmentStableData(PageIdU64 segment_id, const DMFilePtr & file)
+{
+    LOG_INFO(
+        logger_op,
+        "replaceSegmentStableData, segment_id={} file=dmf_{}(v={})",
+        segment_id,
+        file->fileId(),
+        file->metaVersion());
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    bool success = false;
+    auto segment = segments[segment_id];
+    {
+        auto lock = segment->mustGetUpdateLock();
+        auto new_segment = segment->replaceStableMetaVersion(lock, *dm_context, {file});
+        if (new_segment != nullptr)
+        {
+            segments[new_segment->segmentId()] = new_segment;
+            success = true;
+        }
+    }
+
+    operation_statistics["replaceStableData"]++;
+    return success;
+}
+
+bool SegmentTestBasic::ensureSegmentStableLocalIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos)
+{
+    LOG_INFO(logger_op, "EnsureSegmentStableLocalIndex, segment_id={}", segment_id);
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+
+    bool success = false;
+    auto segment = segments[segment_id];
+    auto dm_files = segment->getStable()->getDMFiles();
+    auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos, dm_files);
+
+    // Build index
+    DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
+        .path_pool = storage_path_pool,
+        .index_infos = build_info.indexes_to_build,
+        .dm_files = dm_files,
+        .dm_context = *dm_context,
+    });
+    auto new_dmfiles = iw.build();
+    RUNTIME_CHECK(new_dmfiles.size() == 1);
+
+    LOG_INFO(logger_op, "EnsureSegmentStableLocalIndex, build index done, segment_id={}", segment_id);
+
+    // Replace stable data
+    success = replaceSegmentStableData(segment_id, new_dmfiles[0]);
+
+    operation_statistics["ensureStableLocalIndex"]++;
+    return success;
+}
+
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageIdU64> & segments_id) const
 {
     RUNTIME_CHECK(segments_id.size() >= 2);
@@ -830,6 +930,7 @@ SegmentPtr SegmentTestBasic::reload(
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(
                                 is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
                                                   : pre_define_columns;
+    prepareColumns(cols);
     setColumns(cols);
 
     // Always return the first segment
@@ -856,6 +957,7 @@ std::unique_ptr<DMContext> SegmentTestBasic::createDMContext()
         /*min_version_*/ 0,
         NullspaceID,
         /*physical_table_id*/ 100,
+        /*pk_col_id*/ options.pk_col_id,
         options.is_common_handle,
         1,
         db_context->getSettingsRef());

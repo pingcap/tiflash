@@ -19,6 +19,7 @@
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -515,6 +516,24 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
     // New column after ddl is not exist in this DMFile, fill with default value
     if (!column_streams.contains(DMFile::getFileNameBase(cd.id)))
         return createColumnWithDefaultValue(cd, read_rows);
+
+    if (column_cache_long_term && cd.id == pk_col_id && ColumnCacheLongTerm::isCacheableColumn(cd))
+    {
+        // ColumnCacheLongTerm only caches user assigned PrimaryKey column.
+        auto data_type = dmfile->getColumnStat(cd.id).type;
+        auto column_all_data
+            = column_cache_long_term->get(dmfile->parentPath(), dmfile->fileId(), cd.id, [&]() -> IColumn::Ptr {
+                  // Always read all packs when filling cache
+                  ColumnPtr column;
+                  readFromDiskOrSharingCache(cd, column, 0, dmfile->getPacks(), dmfile->getRows());
+                  return column;
+              });
+
+        auto column = data_type->createColumn();
+        column->reserve(read_rows);
+        column->insertRangeFrom(*column_all_data, next_row_offset - read_rows, read_rows);
+        return convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+    }
 
     // Not cached
     if (!enable_column_cache || !isCacheableColumn(cd))

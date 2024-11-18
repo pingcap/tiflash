@@ -67,9 +67,10 @@ void ColumnFileBig::removeData(WriteBatches & wbs) const
 ColumnFileReaderPtr ColumnFileBig::getReader(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr &,
-    const ColumnDefinesPtr & col_defs) const
+    const ColumnDefinesPtr & col_defs,
+    ReadTag read_tag) const
 {
-    return std::make_shared<ColumnFileBigReader>(dm_context, *this, col_defs);
+    return std::make_shared<ColumnFileBigReader>(dm_context, *this, col_defs, read_tag);
 }
 
 void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -85,6 +86,7 @@ void ColumnFileBig::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool /*
     big_pb->set_id(file->pageId());
     big_pb->set_valid_rows(valid_rows);
     big_pb->set_valid_bytes(valid_bytes);
+    big_pb->set_meta_version(file->metaVersion());
 }
 
 ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
@@ -100,8 +102,10 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     readIntBinary(valid_bytes, buf);
 
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, file_page_id)
-                                    : restoreDMFileFromLocal(dm_context, file_page_id);
+    // In this version, ColumnFileBig's meta_version is always 0.
+    auto dmfile = remote_data_store
+        ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, file_page_id, /* meta_version */ 0)
+        : restoreDMFileFromLocal(dm_context, file_page_id, /* meta_version */ 0);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -112,8 +116,9 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     const dtpb::ColumnFileBig & cf_pb)
 {
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, cf_pb.id())
-                                    : restoreDMFileFromLocal(dm_context, cf_pb.id());
+    auto dmfile = remote_data_store
+        ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, cf_pb.id(), cf_pb.meta_version())
+        : restoreDMFileFromLocal(dm_context, cf_pb.id(), cf_pb.meta_version());
     auto * dp_file = new ColumnFileBig(dmfile, cf_pb.valid_rows(), cf_pb.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -132,8 +137,11 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
+    // In this version, ColumnFileBig's meta_version is always 0.
+    UInt64 meta_version = 0;
+
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id, meta_version);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -148,9 +156,10 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     UInt64 file_page_id = cf_pb.id();
     size_t valid_rows = cf_pb.valid_rows();
     size_t valid_bytes = cf_pb.valid_bytes();
+    size_t meta_version = cf_pb.meta_version();
 
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id, meta_version);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -372,17 +381,10 @@ size_t ColumnFileBigReader::skipNextBlock()
     }
 }
 
-ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag)
 {
     // Currently we don't reuse the cache data.
-    return std::make_shared<ColumnFileBigReader>(dm_context, column_file, new_col_defs);
-}
-
-void ColumnFileBigReader::setReadTag(ReadTag read_tag_)
-{
-    // `read_tag` should be set before `file_stream` is initialized.
-    RUNTIME_CHECK(file_stream == nullptr);
-    read_tag = read_tag_;
+    return std::make_shared<ColumnFileBigReader>(dm_context, column_file, new_col_defs, read_tag);
 }
 
 } // namespace DB::DM

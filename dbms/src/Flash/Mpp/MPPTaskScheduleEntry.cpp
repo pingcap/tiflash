@@ -42,11 +42,7 @@ bool MPPTaskScheduleEntry::schedule(ScheduleState state)
     if (schedule_state == ScheduleState::WAITING)
     {
         auto log_level = state == ScheduleState::SCHEDULED ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_WARNING;
-        LOG_IMPL(
-            log,
-            log_level,
-            "task is {}.",
-            state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
+        LOG_IMPL(log, log_level, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : "failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
         return true;

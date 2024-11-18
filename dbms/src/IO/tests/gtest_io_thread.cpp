@@ -146,4 +146,49 @@ TEST(IOThreadPool, TaskChain)
                     buildReadTasksForWNs(a, b, c, d);
 }
 
+TEST(IOThreadPool, WaitTimeout)
+{
+    auto & thread_pool = BuildReadTaskPool::get();
+    const auto queue_size = thread_pool.getQueueSize();
+    std::atomic<bool> stop_flag{false};
+    IOPoolHelper::FutureContainer futures(Logger::get());
+    auto loop_until_stop = [&]() {
+        while (!stop_flag)
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+    };
+    for (size_t i = 0; i < queue_size; ++i)
+    {
+        auto f = thread_pool.scheduleWithFuture(loop_until_stop);
+        futures.add(std::move(f));
+    }
+    ASSERT_EQ(thread_pool.active(), queue_size);
+
+    auto try_result = thread_pool.trySchedule(loop_until_stop);
+    ASSERT_FALSE(try_result);
+
+    try
+    {
+        auto f = thread_pool.scheduleWithFuture(loop_until_stop);
+        futures.add(std::move(f));
+        FAIL() << "Should throw exception.";
+    }
+    catch (Exception & e)
+    {
+        ASSERT_TRUE(e.message().starts_with("Cannot schedule a task: no free thread (timeout=0)"));
+    }
+
+    try
+    {
+        auto f = thread_pool.scheduleWithFuture(loop_until_stop, 10000);
+        futures.add(std::move(f));
+        FAIL() << "Should throw exception.";
+    }
+    catch (Exception & e)
+    {
+        ASSERT_TRUE(e.message().starts_with("Cannot schedule a task: no free thread (timeout=10000)"));
+    }
+
+    stop_flag.store(true);
+    futures.getAllResults();
+}
 } // namespace DB::tests
