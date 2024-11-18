@@ -148,6 +148,10 @@ public:
     }
 
     virtual String toString() const = 0;
+
+    /// Debugging string
+    template <typename T>
+    static String filesToString(const T & column_files);
 };
 
 
@@ -162,10 +166,10 @@ public:
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.
     /// Returns <actual_offset, actual_limit>
     virtual std::pair<size_t, size_t> readRows(
-        MutableColumns & /*output_cols*/,
-        size_t /*rows_offset*/,
-        size_t /*rows_limit*/,
-        const RowKeyRange * /*range*/)
+        MutableColumns & output_cols,
+        size_t rows_offset,
+        size_t rows_limit,
+        const RowKeyRange * range)
         = 0;
 
     /// This method is only used to read raw data.
@@ -185,9 +189,5 @@ public:
         size_t rows_limit,
         const RowKeyRange * range);
 };
-
-/// Debugging string
-template <typename T>
-String columnFilesToString(const T & column_files);
 
 } // namespace DB::DM

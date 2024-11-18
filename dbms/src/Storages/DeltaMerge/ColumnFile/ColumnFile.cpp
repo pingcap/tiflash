@@ -100,28 +100,29 @@ ColumnFilePersisted * ColumnFile::tryToColumnFilePersisted()
 }
 
 template <class T>
-String columnFilesToString(const T & column_files)
+String ColumnFile::filesToString(const T & column_files)
 {
-    String column_files_info = "[";
-    for (const auto & f : column_files)
-    {
-        if (f->isInMemoryFile())
-            column_files_info += "M_" + DB::toString(f->getRows()) + ",";
-        else if (f->isTinyFile())
-            column_files_info += "T_" + DB::toString(f->getRows()) + ",";
-        else if (f->isBigFile())
-            column_files_info += "F_" + DB::toString(f->getRows()) + ",";
-        else if (auto * f_delete = f->tryToDeleteRange(); f_delete)
-            column_files_info += "D_" + f_delete->getDeleteRange().toString() + ",";
-    }
-
-    if (!column_files.empty())
-        column_files_info.erase(column_files_info.size() - 1);
-    column_files_info += "]";
-    return column_files_info;
+    FmtBuffer buffer;
+    buffer.append("[");
+    buffer.joinStr(
+        column_files.cbegin(),
+        column_files.cend(),
+        [](const auto & f, FmtBuffer & fb) {
+            if (f->isInMemoryFile())
+                fb.fmtAppend("M_{}", f->getRows());
+            else if (f->isTinyFile())
+                fb.fmtAppend("T_{}", f->getRows());
+            else if (f->isBigFile())
+                fb.fmtAppend("F_{}", f->getRows());
+            else if (auto * f_delete = f->tryToDeleteRange(); f_delete)
+                fb.fmtAppend("D_{}", f_delete->getDeleteRange().toString());
+        },
+        ",");
+    buffer.append("]");
+    return buffer.toString();
 }
 
-template String columnFilesToString<ColumnFiles>(const ColumnFiles & column_files);
-template String columnFilesToString<ColumnFilePersisteds>(const ColumnFilePersisteds & column_files);
+template String ColumnFile::filesToString<ColumnFiles>(const ColumnFiles & column_files);
+template String ColumnFile::filesToString<ColumnFilePersisteds>(const ColumnFilePersisteds & column_files);
 
 } // namespace DB::DM
