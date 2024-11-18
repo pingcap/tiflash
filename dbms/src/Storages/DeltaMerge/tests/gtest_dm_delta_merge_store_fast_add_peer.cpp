@@ -359,6 +359,11 @@ try
 
     dumpCheckpoint(write_store_id);
 
+    /// The test will then create a new UniPS based on the persist files of the currrent UniPS.
+    /// In some cases, a "FullGC" could happen concurrently with the creation of the creation of the delta merge instance,
+    /// in the `reload` method. The panic will happen if DMStore tries to recover some segments, and failed to read them from UniPS.
+    /// So we here to explicitly drop all segments, in order to reduce the cases.
+    store->drop();
     LOG_INFO(DB::Logger::get(), "clear data to prepare for FAP");
     clearData();
 
@@ -497,12 +502,8 @@ try
 
     UInt64 write_store_id = current_store_id + 1;
     dumpCheckpoint(write_store_id);
-    /// The test will then create a new UniPS based on the persist files of the currrent UniPS.
-    /// In some cases, a "FullGC" could happen concurrently with the creation of the creation of the delta merge instance,
-    /// in the `reload` method. The panic will happen if DMStore tries to recover some segments, and failed to read them from UniPS.
-    /// So we here to explicitly drop all segments, in order to reduce the cases.
-    store->drop();
 
+    LOG_INFO(DB::Logger::get(), "clear data to prepare for FAP");
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
