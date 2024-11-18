@@ -1097,6 +1097,7 @@ struct ReplaceStringImpl
     /// support match type during the string search, used in regexp
     static const bool support_match_type = false;
 
+<<<<<<< HEAD
     static void vector(const ColumnString::Chars_t & data,
                        const ColumnString::Offsets & offsets,
                        const std::string & needle,
@@ -1107,6 +1108,15 @@ struct ReplaceStringImpl
                        TiDB::TiDBCollatorPtr /* collator */,
                        ColumnString::Chars_t & res_data,
                        ColumnString::Offsets & res_offsets)
+=======
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const std::string & needle,
+        const std::string & replacement,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+>>>>>>> 11ce13fffa (fix error when first argument of replace function is const (#9615))
     {
         const UInt8 * begin = &data[0];
         const UInt8 * pos = begin;
@@ -1189,10 +1199,6 @@ struct ReplaceStringImpl
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1263,10 +1269,6 @@ struct ReplaceStringImpl
         const std::string & needle,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1355,10 +1357,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & needle_offsets,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1426,6 +1424,7 @@ struct ReplaceStringImpl
 
     /// Note: this function converts fixed-length strings to variable-length strings
     ///       and each variable-length string should ends with zero byte.
+<<<<<<< HEAD
     static void vectorFixed(const ColumnString::Chars_t & data,
                             size_t n,
                             const std::string & needle,
@@ -1436,6 +1435,15 @@ struct ReplaceStringImpl
                             TiDB::TiDBCollatorPtr /* collator */,
                             ColumnString::Chars_t & res_data,
                             ColumnString::Offsets & res_offsets)
+=======
+    static void vectorFixed(
+        const ColumnString::Chars_t & data,
+        size_t n,
+        const std::string & needle,
+        const std::string & replacement,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+>>>>>>> 11ce13fffa (fix error when first argument of replace function is const (#9615))
     {
         const UInt8 * begin = &data[0];
         const UInt8 * pos = begin;
@@ -1528,10 +1536,6 @@ struct ReplaceStringImpl
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1603,10 +1607,6 @@ struct ReplaceStringImpl
         const std::string & needle,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1705,10 +1705,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & needle_offsets,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1778,7 +1774,15 @@ struct ReplaceStringImpl
         }
     }
 
+<<<<<<< HEAD
     static void constant(const std::string & data, const std::string & needle, const std::string & replacement, const Int64 & /* pos */, const Int64 & /* occ */, const std::string & /* match_type */, TiDB::TiDBCollatorPtr /* collator */, std::string & res_data)
+=======
+    static void constant(
+        const std::string & data,
+        const std::string & needle,
+        const std::string & replacement,
+        std::string & res_data)
+>>>>>>> 11ce13fffa (fix error when first argument of replace function is const (#9615))
     {
         if (needle.empty())
         {
