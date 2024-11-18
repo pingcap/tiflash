@@ -33,8 +33,8 @@ namespace DB
 class ParserNestedTable : public IParserBase
 {
 protected:
-    const char * getName() const { return "nested table"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "nested table"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 
@@ -47,8 +47,8 @@ protected:
 class ParserIdentifierWithParameters : public IParserBase
 {
 protected:
-    const char * getName() const { return "identifier with parameters"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "identifier with parameters"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 
@@ -58,15 +58,15 @@ protected:
 class ParserIdentifierWithOptionalParameters : public IParserBase
 {
 protected:
-    const char * getName() const { return "identifier with optional parameters"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "identifier with optional parameters"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 class ParserTypeInCastExpression : public IParserBase
 {
 protected:
-    const char * getName() const { return "type in cast expression"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "type in cast expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 
@@ -74,8 +74,8 @@ template <typename NameParser>
 class IParserNameTypePair : public IParserBase
 {
 protected:
-    const char * getName() const { return "name and type pair"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "name and type pair"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 /** The name and type are separated by a space. For example, URL String. */
@@ -107,8 +107,8 @@ bool IParserNameTypePair<NameParser>::parseImpl(Pos & pos, ASTPtr & node, Expect
 class ParserNameTypePairList : public IParserBase
 {
 protected:
-    const char * getName() const { return "name and type pair list"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "name and type pair list"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 
@@ -116,8 +116,8 @@ template <typename NameParser>
 class IParserColumnDeclaration : public IParserBase
 {
 protected:
-    const char * getName() const { return "column declaration"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "column declaration"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 using ParserColumnDeclaration = IParserColumnDeclaration<ParserIdentifier>;
@@ -187,8 +187,8 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
 class ParserColumnDeclarationList : public IParserBase
 {
 protected:
-    const char * getName() const { return "column declaration list"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "column declaration list"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 
@@ -196,8 +196,8 @@ protected:
 class ParserStorage : public IParserBase
 {
 protected:
-    const char * getName() const { return "storage definition"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    const char * getName() const override { return "storage definition"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
 

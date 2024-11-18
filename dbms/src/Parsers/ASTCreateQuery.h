@@ -151,7 +151,6 @@ protected:
 
         if (storage)
             storage->formatImpl(settings, state, frame);
-
     }
 };
 

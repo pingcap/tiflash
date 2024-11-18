@@ -433,7 +433,6 @@ ColumnsDescription InterpreterCreateQuery::setColumns(ASTCreateQuery & create) c
 }
 
 
-
 /**
  * Try to acquire a DDLGuard to execute the "CREATE TABLE" actions.
  *
@@ -552,9 +551,9 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             log_suffix);
         if (!guard)
         {
-                // Not the owner to create IStorage instance, and the table is created
-                // completely, let's return
-                return {};
+            // Not the owner to create IStorage instance, and the table is created
+            // completely, let's return
+            return {};
         }
 
         // Guard is acquired, let's create the IStorage instance
@@ -583,8 +582,9 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         // register the storage instance into `ManagedStorages`
         res->startup();
 
-        // the table has been created completely
         database->attachTable(table_name, res);
+
+        // the table has been created completely
     }
 
     return {};
