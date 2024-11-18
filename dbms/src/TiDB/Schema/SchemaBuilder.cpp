@@ -939,7 +939,10 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateDatabaseByInfo(const TiDB::DB
 
     ASTPtr ast = parseCreateStatement(statement);
 
-    InterpreterCreateQuery interpreter(ast, context);
+    InterpreterCreateQuery interpreter(
+        ast,
+        context,
+        fmt::format("keyspace={} database_id={}", keyspace_id, db_info->id));
     interpreter.setInternal(true);
     interpreter.setForceRestoreData(false);
     interpreter.execute();
@@ -1169,7 +1172,15 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     ast_create_query->if_not_exists = true;
     ast_create_query->database = database_mapped_name;
 
-    InterpreterCreateQuery interpreter(ast, context);
+    InterpreterCreateQuery interpreter(
+        ast,
+        context,
+        fmt::format(
+            "keyspace={} database_id={} table_id={} action={}",
+            keyspace_id,
+            database_id,
+            table_info->id,
+            action));
     interpreter.setInternal(true);
     interpreter.setForceRestoreData(false);
     interpreter.execute();
