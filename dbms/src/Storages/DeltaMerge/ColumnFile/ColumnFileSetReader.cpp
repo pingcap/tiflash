@@ -96,7 +96,7 @@ ColumnFileSetReader::ColumnFileSetReader(
     , segment_range(segment_range_)
 {
     size_t total_rows = 0;
-    for (auto & f : snapshot->getColumnFiles())
+    for (const auto & f : snapshot->getColumnFiles())
     {
         total_rows += f->getRows();
         column_file_rows.push_back(f->getRows());
@@ -206,7 +206,7 @@ void ColumnFileSetReader::getPlaceItems(
     size_t place_rows_offset)
 {
     /// Note that we merge the consecutive ColumnFileInMemory or ColumnFileTiny together, which are seperated in groups by ColumnFileDeleteRange and ColumnFileBig.
-    auto & column_files = snapshot->getColumnFiles();
+    const auto & column_files = snapshot->getColumnFiles();
 
     auto [start_file_index, rows_start_in_start_file] = findColumnFile(column_files, rows_begin, deletes_begin);
     auto [end_file_index, rows_end_in_end_file] = findColumnFile(column_files, rows_end, deletes_end);
@@ -270,12 +270,12 @@ bool ColumnFileSetReader::shouldPlace(
     UInt64 start_ts,
     size_t placed_rows)
 {
-    auto & column_files = snapshot->getColumnFiles();
+    const auto & column_files = snapshot->getColumnFiles();
     auto [start_file_index, rows_start_in_start_file] = locatePosByAccumulation(column_file_rows_end, placed_rows);
 
     for (size_t file_index = start_file_index; file_index < snapshot->getColumnFileCount(); ++file_index)
     {
-        auto & column_file = column_files[file_index];
+        const auto & column_file = column_files[file_index];
 
         // Always do place index if ColumnFileBig exists.
         if (column_file->isBigFile())

@@ -24,25 +24,24 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/logger_useful.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
-/// Use the latest rows. For rows with the same handle, only take the rows with biggest version and version <= version_limit.
-static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
-/// Remove the outdated rows. For rows with the same handle, take
-/// 1. rows with version >= version_limit are taken,
-/// 2. for the rows with smaller verion than version_limit, then take the biggest one of them, if it is not deleted.
-static constexpr int DM_VERSION_FILTER_MODE_COMPACT = 1;
 
-template <int MODE>
+enum class DMVersionFilterMode
+{
+    // Use the latest rows. For rows with the same handle, only take the rows with biggest version and version <= version_limit.
+    MVCC = 0,
+    // Remove the outdated rows. For rows with the same handle, take
+    // 1. rows with version >= version_limit are taken,
+    // 2. for the rows with smaller verion than version_limit, then take the biggest one of them, if it is not deleted.
+    COMPACT = 1,
+};
+
+template <DMVersionFilterMode MODE>
 class DMVersionFilterBlockInputStream : public IBlockInputStream
 {
     static constexpr size_t UNROLL_BATCH = 64;
-    static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
-
-    constexpr static const char * MVCC_FILTER_NAME = "mode=MVCC";
-    constexpr static const char * COMPACT_FILTER_NAME = "mode=COMPACT";
+    static_assert(MODE == DMVersionFilterMode::MVCC || MODE == DMVersionFilterMode::COMPACT);
 
 public:
     DMVersionFilterBlockInputStream(
@@ -57,7 +56,7 @@ public:
         , header(toEmptyBlock(read_columns))
         , select_by_colid_action(input->getHeader(), header)
         , scan_context(scan_context_)
-        , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME), tracing_id))
+        , log(Logger::get(fmt::format("mode={}", magic_enum::enum_name(MODE)), tracing_id))
     {
         children.push_back(input);
 
@@ -108,17 +107,17 @@ public:
 private:
     inline void checkWithNextIndex(size_t i)
     {
-#define cur_handle rowkey_column->getRowKeyValue(i)
-#define next_handle rowkey_column->getRowKeyValue(i + 1)
-#define cur_version (*version_col_data)[i]
-#define next_version (*version_col_data)[i + 1]
-#define deleted (*delete_col_data)[i]
-        if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
+        const auto cur_handle = rowkey_column->getRowKeyValue(i);
+        const auto next_handle = rowkey_column->getRowKeyValue(i + 1);
+        const auto cur_version = (*version_col_data)[i];
+        const auto next_version = (*version_col_data)[i + 1];
+        const auto deleted = (*delete_col_data)[i];
+        if constexpr (MODE == DMVersionFilterMode::MVCC)
         {
             filter[i] = !deleted && cur_version <= version_limit
                 && (cur_handle != next_handle || next_version > version_limit);
         }
-        else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
+        else if constexpr (MODE == DMVersionFilterMode::COMPACT)
         {
             filter[i] = cur_version >= version_limit
                 || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
@@ -134,11 +133,6 @@ private:
         {
             throw Exception("Unsupported mode");
         }
-#undef cur_handle
-#undef next_handle
-#undef cur_version
-#undef next_version
-#undef deleted
     }
 
     bool initNextBlock()
@@ -277,5 +271,5 @@ private:
 
     const LoggerPtr log;
 };
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM

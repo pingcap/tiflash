@@ -24,10 +24,9 @@
 #include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 
 class ColumnFile;
@@ -149,6 +148,10 @@ public:
     }
 
     virtual String toString() const = 0;
+
+    /// Debugging string
+    template <typename T>
+    static String filesToString(const T & column_files);
 };
 
 
@@ -163,35 +166,28 @@ public:
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.
     /// Returns <actual_offset, actual_limit>
     virtual std::pair<size_t, size_t> readRows(
-        MutableColumns & /*output_cols*/,
-        size_t /*rows_offset*/,
-        size_t /*rows_limit*/,
-        const RowKeyRange * /*range*/)
-    {
-        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
-    }
+        MutableColumns & output_cols,
+        size_t rows_offset,
+        size_t rows_limit,
+        const RowKeyRange * range)
+        = 0;
 
     /// This method is only used to read raw data.
-    virtual Block readNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
+    virtual Block readNextBlock() = 0;
 
     /// This method used to skip next block.
-    virtual size_t skipNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
+    virtual size_t skipNextBlock() = 0;
 
     /// Create a new reader from current reader with different columns to read.
     virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs, ReadTag read_tag) = 0;
+
+    static std::pair<size_t, size_t> copyColumnsData(
+        const Columns & from,
+        const ColumnPtr & pk_col,
+        MutableColumns & to,
+        size_t rows_offset,
+        size_t rows_limit,
+        const RowKeyRange * range);
 };
 
-std::pair<size_t, size_t> copyColumnsData(
-    const Columns & from,
-    const ColumnPtr & pk_col,
-    MutableColumns & to,
-    size_t rows_offset,
-    size_t rows_limit,
-    const RowKeyRange * range);
-
-
-/// Debugging string
-template <typename T>
-String columnFilesToString(const T & column_files);
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

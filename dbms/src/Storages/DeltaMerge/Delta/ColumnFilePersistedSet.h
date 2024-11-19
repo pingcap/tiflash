@@ -111,7 +111,7 @@ public:
             deletes.load());
     }
     /// Thread safe part end
-    String detailInfo() const { return columnFilesToString(persisted_files); }
+    String detailInfo() const { return ColumnFile::filesToString(persisted_files); }
 
     const ColumnFilePersisteds & getFiles() const { return persisted_files; }
 
