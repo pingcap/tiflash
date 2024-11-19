@@ -135,21 +135,21 @@ std::pair</* New */ ColumnFiles, /* Flushed */ ColumnFiles> MemTableSet::diffCol
     // Remaining Snapshot CFs must be not flushed, remains in the memtable and is the prefix of the memtable.
     RUNTIME_CHECK(
         flushed_n <= column_files_in_snapshot.size(),
-        columnFilesToString(column_files_in_snapshot),
-        columnFilesToString(column_files));
+        ColumnFile::filesToString(column_files_in_snapshot),
+        ColumnFile::filesToString(column_files));
     size_t unflushed_n = column_files_in_snapshot.size() - flushed_n;
     RUNTIME_CHECK( // Those unflushed CFs must be still in memtable.
         column_files.size() >= unflushed_n,
-        columnFilesToString(column_files_in_snapshot),
-        columnFilesToString(column_files));
+        ColumnFile::filesToString(column_files_in_snapshot),
+        ColumnFile::filesToString(column_files));
     for (size_t i = 0; i < unflushed_n; ++i)
     {
         RUNTIME_CHECK( // Verify prefix
             column_files_in_snapshot[flushed_n + i]->getId() == column_files[i]->getId()
                 && column_files_in_snapshot[flushed_n + i]->getType() == column_files[i]->getType()
                 && column_files_in_snapshot[flushed_n + i]->getRows() == column_files[i]->getRows(),
-            columnFilesToString(column_files_in_snapshot),
-            columnFilesToString(column_files));
+            ColumnFile::filesToString(column_files_in_snapshot),
+            ColumnFile::filesToString(column_files));
     }
     return {
         /* new */ std::vector<ColumnFilePtr>( //
@@ -317,7 +317,7 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
             flush_task->getFlushDeletes(),
             rows.load(),
             deletes.load(),
-            columnFilesToString(column_files));
+            ColumnFile::filesToString(column_files));
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 

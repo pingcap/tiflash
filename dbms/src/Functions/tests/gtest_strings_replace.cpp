@@ -220,7 +220,7 @@ try
         toVec({"你好世好", "你好好界", "你学世界", "习好世界"}),
         executeFunction(
             "replaceAll",
-            createConstColumn<String>(3, "你好世界"),
+            createConstColumn<String>(4, "你好世界"),
             toVec({"界", "世", "好", "你"}),
             toVec({"好", "好", "学", "习"})));
 }
