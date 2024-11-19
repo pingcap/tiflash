@@ -158,20 +158,11 @@ export CXX="/usr/bin/clang++-17"
 In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
 
 Add the following lines to your shell environment, e.g. `~/.bash_profile`.
+
 ```shell
-export PATH="$(brew --prefix)/opt/llvm/bin:$PATH"
-export CC="$(brew --prefix)/opt/llvm/bin/clang"
-export CXX="$(brew --prefix)/opt/llvm/bin/clang++"
-```
-
-Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
-```shell
-mkdir cmake-build-debug
-cd cmake-build-debug
-
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER="$(brew --prefix)/opt/llvm/bin/clang" -DCMAKE_CXX_COMPILER="$(brew --prefix)/opt/llvm/bin/clang++"
-
-ninja tiflash
+export PATH="$(brew --prefix)/opt/llvm@17/bin:$PATH"
+export CC="$(brew --prefix)/opt/llvm@17/bin/clang"
+export CXX="$(brew --prefix)/opt/llvm@17/bin/clang++"
 ```
 
 After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
