@@ -4949,8 +4949,6 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 2)
@@ -5022,7 +5020,6 @@ public:
         const ColumnString::Offsets & col1_offsets,
         PaddedPODArray<Int64> & res)
     {
-        size_t pos;
         size_t row_num = col0_offsets.size();
         ColumnString::Offset prev_col0_str_offset = 0;
         ColumnString::Offset prev_col1_str_offset = 0;
@@ -5038,17 +5035,15 @@ public:
             }
             else
             {
-                LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
-                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                    col0_str_len);
+                const unsigned char * col0_start = &col0_data[prev_col0_str_offset];
+                const unsigned char * col1_start = &col1_data[prev_col1_str_offset];
+                void * res_start = memmem(col1_start, col1_str_len, col0_start, col0_str_len);
 
-                pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
-                    - &col1_data[prev_col1_str_offset];
-
-                if (pos != col1_str_len)
-                    res[i] = 1 + pos;
-                else
-                    res[i] = 0;
+                fillResult(
+                    i,
+                    reinterpret_cast<const char *>(res_start),
+                    reinterpret_cast<const char *>(col1_start),
+                    res);
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5062,7 +5057,6 @@ public:
         const String & col1_str,
         PaddedPODArray<Int64> & res)
     {
-        size_t pos;
         size_t row_num = col0_offsets.size();
         ColumnString::Offset prev_col0_str_offset = 0;
         size_t col1_str_len = col1_str.size();
@@ -5077,19 +5071,10 @@ public:
             }
             else
             {
-                LibCASCIICaseSensitiveStringSearcher searcher = LibCASCIICaseSensitiveStringSearcher(
-                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                    col0_str_len);
+                void * res_start
+                    = memmem(col1_str.c_str(), col1_str_len, &col0_data[prev_col0_str_offset], col0_str_len);
 
-                pos = searcher.search(
-                          reinterpret_cast<const UInt8 *>(col1_str.c_str()),
-                          reinterpret_cast<const UInt8 *>(col1_str.c_str() + col1_str_len))
-                    - reinterpret_cast<const UInt8 *>(col1_str.c_str());
-
-                if (pos != col1_str_len)
-                    res[i] = 1 + pos;
-                else
-                    res[i] = 0;
+                fillResult(i, reinterpret_cast<const char *>(res_start), col1_str.c_str(), res);
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5102,7 +5087,6 @@ public:
         const ColumnString::Offsets & col1_offsets,
         PaddedPODArray<Int64> & res)
     {
-        size_t pos;
         size_t row_num = col1_offsets.size();
         ColumnString::Offset prev_col1_str_offset = 0;
 
@@ -5112,21 +5096,26 @@ public:
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+            const unsigned char * col1_start = &col1_data[prev_col1_str_offset];
 
-            pos = searcher.search(&col1_data[prev_col1_str_offset], &col1_data[col1_offsets[i] - 1])
-                - &col1_data[prev_col1_str_offset];
+            void * res_start = memmem(col1_start, col1_str_len, col0_str.c_str(), col0_str.size());
 
-            if (pos != col1_str_len)
-                res[i] = 1 + pos;
-            else
-                res[i] = 0;
-
+            fillResult(i, reinterpret_cast<const char *>(res_start), reinterpret_cast<const char *>(col1_start), res);
             prev_col1_str_offset = col1_offsets[i];
         }
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator{};
+    static void fillResult(size_t i, const char * res_start, const char * col1_start, PaddedPODArray<Int64> & res)
+    {
+        if (res_start == nullptr)
+            res[i] = 0;
+        else
+        {
+            Int64 pos = reinterpret_cast<const char *>(res_start) - col1_start;
+            res[i] = 1 + pos;
+        }
+    }
 };
 
 class FunctionPositionUTF8 : public IFunction
@@ -5252,13 +5241,7 @@ public:
                     col0_collation_str.data,
                     col0_collation_str.size);
 
-                if (res_start == nullptr)
-                    res[i] = 0;
-                else
-                {
-                    size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
-                    res[i] = 1 + getPositionWithCollationString(pos, lens);
-                }
+                fillResult(i, reinterpret_cast<const char *>(res_start), col1_collation_str.data, lens, res);
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5302,13 +5285,7 @@ public:
                     col0_collation_str.data,
                     col0_collation_str.size);
 
-                if (res_start == nullptr)
-                    res[i] = 0;
-                else
-                {
-                    size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
-                    res[i] = 1 + getPositionWithCollationString(pos, lens);
-                }
+                fillResult(i, reinterpret_cast<const char *>(res_start), col1_collation_str.data, lens, res);
             }
             prev_col0_str_offset = col0_offsets[i];
         }
@@ -5346,30 +5323,37 @@ public:
                 col0_collation_str.data,
                 col0_collation_str.size);
 
-            if (res_start == nullptr)
-                res[i] = 0;
-            else
-            {
-                size_t pos = reinterpret_cast<const char *>(res_start) - col1_collation_str.data;
-                res[i] = 1 + getPositionWithCollationString(pos, lens);
-            }
-
+            fillResult(i, reinterpret_cast<const char *>(res_start), col1_collation_str.data, lens, res);
             prev_col1_str_offset = col1_offsets[i];
         }
     }
 
 private:
-    static Int64 getPositionWithCollationString(size_t pos, const std::vector<size_t> & lens)
+    static void fillResult(
+        size_t i,
+        const char * res_start,
+        const char * col1_start,
+        const std::vector<size_t> & lens,
+        PaddedPODArray<Int64> & res)
     {
-        Int64 actual_pos = 0;
+        if (res_start == nullptr)
+            res[i] = 0;
+        else
+        {
+            Int64 pos = reinterpret_cast<const char *>(res_start) - col1_start;
+            res[i] = 1 + getPositionWithCollationString(pos, lens);
+        }
+    }
+
+    static Int64 getPositionWithCollationString(Int64 pos, const std::vector<size_t> & lens)
+    {
         size_t idx = 0;
         while (pos > 0)
         {
-            actual_pos++;
             pos -= lens[idx];
             idx++;
         }
-        return actual_pos;
+        return idx;
     }
 
     TiDB::TiDBCollatorPtr collator{};
