@@ -305,30 +305,6 @@ TEST_F(StringPosition, positionUTF8)
                         collator));
             }
         }
-
-        // no collator
-        // {
-        //     ASSERT_COLUMN_EQ(
-        //         createConstColumn<Int64>(1, 5),
-        //         executeFunction(
-        //             "positionUTF8",
-        //             {createConstColumn<String>(1, ".*"), createConstColumn<String>(1, "123啊.*f啊")},
-        //             nullptr));
-
-        //     ASSERT_COLUMN_EQ(
-        //         createConstColumn<Int64>(1, 5),
-        //         executeFunction(
-        //             "positionUTF8",
-        //             {createConstColumn<String>(1, "aBc"), createConstColumn<String>(1, "1啊23aBc啊")},
-        //             nullptr));
-
-        //     ASSERT_COLUMN_EQ(
-        //         createConstColumn<Int64>(2, 0),
-        //         executeFunction(
-        //             "positionUTF8",
-        //             {createConstColumn<String>(2, "aBc"), createConstColumn<String>(2, "1啊23abc啊")},
-        //             nullptr));
-        // }
     }
 
     // const vector
@@ -402,28 +378,6 @@ TEST_F(StringPosition, positionUTF8)
                         collator));
             }
         }
-
-        // no collator
-        // {
-        //     ASSERT_COLUMN_EQ(
-        //         createColumn<Int64>({}),
-        //         executeFunction("positionUTF8", {createConstColumn<String>(0, ""), createColumn<String>({})}, nullptr));
-
-        //     ASSERT_COLUMN_EQ(
-        //         createColumn<Int64>({1, 1}),
-        //         executeFunction(
-        //             "positionUTF8",
-        //             {createConstColumn<String>(2, ""), createColumn<String>({"", "12A哇"})},
-        //             nullptr));
-
-        //     ASSERT_COLUMN_EQ(
-        //         createColumn<Int64>({0, 5, 0}),
-        //         executeFunction(
-        //             "positionUTF8",
-        //             {createConstColumn<String>(3, "a啊B.*"),
-        //              createColumn<String>({"", "2aF啊a啊B.*fe#", "2aF啊A啊b.*fe"})},
-        //             nullptr));
-        // }
     }
 
     // vector const
