@@ -275,10 +275,12 @@ public:
         = 0;
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
-    /// The pos pointer must not be nullptr.
-    /// If AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes)
+    /// Note:
+    /// 1. The pos pointer must not be nullptr.
+    /// 2. The memory of pos must be accessible to overflow 15 bytes(i.e. PaddedPODArray) for speeding up memcpy.(e.g. ColumnString)
+    /// 3. If AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes)
     /// by using reserveAlign or reserveAlignWithTotalMemoryHint.
-    /// If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
+    /// 4. If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
     /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data
     /// when ColumnsAlignBufferAVX2.needFlush() is true(by calling ColumnsAlignBufferAVX2.resetIndex(true)).
     /// Example:

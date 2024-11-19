@@ -652,6 +652,17 @@ void ColumnString::deserializeAndInsertFromPos(
 
     if likely (is_offset_aligned && is_char_aligned)
     {
+        struct
+        {
+            AlignBufferAVX2 buffer;
+            char padding[15];
+        } tmp_char_buf;
+
+        AlignBufferAVX2 & char_buffer = tmp_char_buf.buffer;
+
+        tiflash_compiler_builtin_memcpy(&char_buffer, &saved_char_buffer, sizeof(AlignBufferAVX2));
+        SCOPE_EXIT({ tiflash_compiler_builtin_memcpy(&saved_char_buffer, &char_buffer, sizeof(AlignBufferAVX2)); });
+
         for (size_t i = 0; i < size; ++i)
         {
             UInt32 str_size;
@@ -662,7 +673,7 @@ void ColumnString::deserializeAndInsertFromPos(
             {
                 UInt8 remain = FULL_VECTOR_SIZE_AVX2 - char_buffer_size;
                 UInt8 copy_bytes = static_cast<UInt8>(std::min(static_cast<UInt32>(remain), str_size));
-                inline_memcpy(&char_buffer.data[char_buffer_size], pos[i], copy_bytes);
+                memcpySmallAllowReadWriteOverflow15(&char_buffer.data[char_buffer_size], pos[i], copy_bytes);
                 pos[i] += copy_bytes;
                 char_buffer_size += copy_bytes;
                 str_size -= copy_bytes;

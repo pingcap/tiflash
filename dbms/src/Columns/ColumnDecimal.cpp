@@ -375,12 +375,16 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
             data.resize(prev_size + (size - i) / avx2_width * avx2_width, FULL_VECTOR_SIZE_AVX2);
             for (; i + avx2_width <= size; i += avx2_width)
             {
+                /// Loop unrolling
                 for (size_t j = 0; j < avx2_width; ++j)
                 {
-                    tiflash_compiler_builtin_memcpy(&tmp_buffer.data[tmp_buffer_size], pos[i + j], sizeof(T));
-                    tmp_buffer_size += sizeof(T);
+                    tiflash_compiler_builtin_memcpy(
+                        &tmp_buffer.data[tmp_buffer_size + j * sizeof(T)],
+                        pos[i + j],
+                        sizeof(T));
                     pos[i + j] += sizeof(T);
                 }
+                tmp_buffer_size += avx2_width * sizeof(T);
 
                 _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), tmp_buffer.v[0]);
                 prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
