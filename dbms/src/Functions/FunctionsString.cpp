@@ -5035,15 +5035,9 @@ public:
             }
             else
             {
-                const unsigned char * col0_start = &col0_data[prev_col0_str_offset];
-                const unsigned char * col1_start = &col1_data[prev_col1_str_offset];
-                void * res_start = memmem(col1_start, col1_str_len, col0_start, col0_str_len);
-
-                fillResult(
-                    i,
-                    reinterpret_cast<const char *>(res_start),
-                    reinterpret_cast<const char *>(col1_start),
-                    res);
+                const char * col0_start = reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]);
+                const char * col1_start = reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]);
+                fillResult(i, col0_start, col0_str_len, col1_start, col1_str_len, res);
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5066,16 +5060,9 @@ public:
             size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
 
             if unlikely (col0_str_len == 0)
-            {
                 res[i] = 1;
-            }
             else
-            {
-                void * res_start
-                    = memmem(col1_str.c_str(), col1_str_len, &col0_data[prev_col0_str_offset], col0_str_len);
-
-                fillResult(i, reinterpret_cast<const char *>(res_start), col1_str.c_str(), res);
-            }
+                fillResult(i, reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len, col1_str.c_str(), col1_str_len, res);
 
             prev_col0_str_offset = col0_offsets[i];
         }
@@ -5096,23 +5083,23 @@ public:
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
-            const unsigned char * col1_start = &col1_data[prev_col1_str_offset];
+            const char * col1_start = reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]);
 
-            void * res_start = memmem(col1_start, col1_str_len, col0_str.c_str(), col0_str.size());
-
-            fillResult(i, reinterpret_cast<const char *>(res_start), reinterpret_cast<const char *>(col1_start), res);
+            fillResult(i, col0_str.c_str(), col0_str.size(), col1_start, col1_str_len, res);
             prev_col1_str_offset = col1_offsets[i];
         }
     }
 
 private:
-    static void fillResult(size_t i, const char * res_start, const char * col1_start, PaddedPODArray<Int64> & res)
+    static void fillResult(size_t i, const char * col0_str_start, size_t col0_str_len, const char * col1_str_start, size_t col1_str_len, PaddedPODArray<Int64> & res)
     {
+        const char * res_start = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
+        
         if (res_start == nullptr)
             res[i] = 0;
         else
         {
-            Int64 pos = reinterpret_cast<const char *>(res_start) - col1_start;
+            Int64 pos = reinterpret_cast<const char *>(res_start) - col1_str_start;
             res[i] = 1 + pos;
         }
     }
@@ -5235,13 +5222,8 @@ public:
                     col1_str_len,
                     col1_container,
                     &lens);
-                void * res_start = memmem(
-                    col1_collation_str.data,
-                    col1_collation_str.size,
-                    col0_collation_str.data,
-                    col0_collation_str.size);
 
-                fillResult(i, reinterpret_cast<const char *>(res_start), col1_collation_str.data, lens, res);
+                searchAndFillResult(i, col0_collation_str.data, col0_collation_str.size, col1_collation_str.data, col1_collation_str.size, lens, res);
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5279,13 +5261,8 @@ public:
                     reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
                     col0_str_len,
                     col0_container);
-                void * res_start = memmem(
-                    col1_collation_str.data,
-                    col1_collation_str.size,
-                    col0_collation_str.data,
-                    col0_collation_str.size);
 
-                fillResult(i, reinterpret_cast<const char *>(res_start), col1_collation_str.data, lens, res);
+                searchAndFillResult(i, col0_collation_str.data, col0_collation_str.size, col1_collation_str.data, col1_collation_str.size, lens, res);
             }
             prev_col0_str_offset = col0_offsets[i];
         }
@@ -5317,32 +5294,27 @@ public:
                 col1_container,
                 &lens);
 
-            void * res_start = memmem(
-                col1_collation_str.data,
-                col1_collation_str.size,
-                col0_collation_str.data,
-                col0_collation_str.size);
-
-            fillResult(i, reinterpret_cast<const char *>(res_start), col1_collation_str.data, lens, res);
+            searchAndFillResult(i, col0_collation_str.data, col0_collation_str.size, col1_collation_str.data, col1_collation_str.size, lens, res);
             prev_col1_str_offset = col1_offsets[i];
         }
     }
 
 private:
-    static void fillResult(
+    static void searchAndFillResult(
         size_t i,
-        const char * res_start,
-        const char * col1_start,
+        const char * col0_str_start,
+        size_t col0_str_len,
+        const char * col1_str_start,
+        size_t col1_str_len,
         const std::vector<size_t> & lens,
         PaddedPODArray<Int64> & res)
     {
+        const char * res_start = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
+        
         if (res_start == nullptr)
             res[i] = 0;
         else
-        {
-            Int64 pos = reinterpret_cast<const char *>(res_start) - col1_start;
-            res[i] = 1 + getPositionWithCollationString(pos, lens);
-        }
+            res[i] = 1 + getPositionWithCollationString(res_start - col1_str_start, lens);
     }
 
     static Int64 getPositionWithCollationString(Int64 pos, const std::vector<size_t> & lens)
