@@ -37,6 +37,10 @@ public:
 
     virtual std::string getFileName() const = 0;
 
+    // This is a temporary hack interface for `S3RandomAccessFile`
+    // See the difference on `S3RandomAccessFile::getFileName` and `S3RandomAccessFile::getInitialFileName`
+    virtual std::string getInitialFileName() const = 0;
+
     virtual int getFd() const = 0;
 
     virtual bool isClosed() const = 0;
