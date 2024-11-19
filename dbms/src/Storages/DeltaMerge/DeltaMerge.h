@@ -22,6 +22,7 @@
 #include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
@@ -32,19 +33,18 @@ namespace ProfileEvents
 extern const Event DTDeltaIndexError;
 } // namespace ProfileEvents
 
-namespace DB
-{
-namespace ErrorCodes
+
+namespace DB::ErrorCodes
 {
 extern const int DT_DELTA_INDEX_ERROR;
 }
 
-namespace DM
+namespace DB::DM
 {
 /// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
 /// The first column must be PK column.
 /// This class does not guarantee that the rows in the return blocks are filltered by range.
-template <class DeltaValueReader, class IndexIterator, bool skippable_place = false, bool need_row_id = false>
+template <bool skippable_place = false, bool need_row_id = false>
 class DeltaMergeBlockInputStream final
     : public SkippableBlockInputStream
     , Allocator<false>
@@ -53,7 +53,6 @@ class DeltaMergeBlockInputStream final
 
 private:
     using DeltaValueReaderPtr = std::shared_ptr<DeltaValueReader>;
-    using SharedLock = std::shared_lock<std::shared_mutex>;
 
     SkippableBlockInputStreamPtr stable_input_stream;
 
@@ -70,8 +69,8 @@ private:
     Block sk_first_block;
 
     DeltaValueReaderPtr delta_value_reader;
-    IndexIterator delta_index_it;
-    IndexIterator delta_index_end;
+    DeltaIndexIterator delta_index_it;
+    DeltaIndexIterator delta_index_end;
 
     RowKeyRange rowkey_range;
     bool is_common_handle;
@@ -117,8 +116,8 @@ public:
     DeltaMergeBlockInputStream(
         const SkippableBlockInputStreamPtr & stable_input_stream_,
         const DeltaValueReaderPtr & delta_value_reader_,
-        const IndexIterator & delta_index_start_,
-        const IndexIterator & delta_index_end_,
+        const DeltaIndexIterator & delta_index_start_,
+        const DeltaIndexIterator & delta_index_end_,
         const RowKeyRange rowkey_range_,
         size_t max_block_size_,
         UInt64 stable_rows_,
@@ -226,7 +225,7 @@ private:
 
             auto rowkey_column = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
             const auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
-            for (size_t i = 0; i < rowkey_column.column->size(); ++i)
+            for (size_t i = 0; i < version_column.size(); ++i)
             {
                 auto rowkey_value = rowkey_column.getRowKeyValue(i);
                 auto version = version_column[i];
@@ -327,7 +326,7 @@ private:
 
     inline void fillSegmentRowId(UInt64 start, UInt64 limit)
     {
-        ColumnUInt32::Container & v = seg_row_id_col->getData();
+        auto & v = seg_row_id_col->getData();
         auto offset = v.size();
         v.resize(v.size() + limit);
         for (UInt64 i = 0; i < limit; ++i)
@@ -338,7 +337,7 @@ private:
 
     inline void fillSegmentRowId(const std::vector<UInt32> & row_ids)
     {
-        ColumnUInt32::Container & v = seg_row_id_col->getData();
+        auto & v = seg_row_id_col->getData();
         auto offset = v.size();
         v.resize(v.size() + row_ids.size());
         for (UInt32 i = 0; i < row_ids.size(); ++i)
@@ -541,6 +540,10 @@ private:
         auto offset = cur_stable_block_pos;
         auto limit = copy_rows;
 
+        // To get the final offset and limit of the rows within the range.
+        // Note: Actually, it is not necessary, since handle column RoughSetFilter can filter out the packs out of range,
+        // and the DMRowKeyFilterBlockInputStream can filter out the rest rows out of range.
+        // TODO: Remove this.
         auto [final_offset, final_limit]
             = RowKeyFilter::getPosRangeOfSorted(rowkey_range, cur_stable_block_columns[0], offset, limit);
 
@@ -646,5 +649,4 @@ private:
     }
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

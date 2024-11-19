@@ -351,7 +351,7 @@ void StableValueSpace::calculateStableProperty(
                       .onlyReadOnePackEveryTime()
                       .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
                       .build(file, read_columns, RowKeyRanges{rowkey_range}, context.scan_context);
-            auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+            auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
                 data_stream,
                 read_columns,
                 0,
