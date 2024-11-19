@@ -400,33 +400,12 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
 }
 
 
-ColumnsDescription InterpreterCreateQuery::setColumns(
-    ASTCreateQuery & create,
-    const Block & as_select_sample,
-    const StoragePtr & as_storage) const
+ColumnsDescription InterpreterCreateQuery::setColumns(ASTCreateQuery & create) const
 {
-    ColumnsDescription res;
+    if (!create.columns)
+        throw Exception("Incorrect CREATE query: required list of column descriptions", ErrorCodes::INCORRECT_QUERY);
 
-    if (create.columns)
-    {
-        res = getColumnsDescription(*create.columns, context);
-    }
-    else if (!create.as_table.empty())
-    {
-        res = as_storage->getColumns();
-    }
-    else if (create.select)
-    {
-        for (size_t i = 0; i < as_select_sample.columns(); ++i)
-            res.ordinary.emplace_back(
-                as_select_sample.safeGetByPosition(i).name,
-                as_select_sample.safeGetByPosition(i).type);
-    }
-    else
-        throw Exception(
-            "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.",
-            ErrorCodes::INCORRECT_QUERY);
-
+    ColumnsDescription res = getColumnsDescription(*create.columns, context);
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
     ASTPtr new_columns = formatColumns(res);
     if (create.columns)
@@ -451,45 +430,6 @@ ColumnsDescription InterpreterCreateQuery::setColumns(
         check_column_already_exists(elem);
 
     return res;
-}
-
-void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
-{
-    if (create.storage)
-    {
-        if (create.is_temporary && create.storage->engine->name != "Memory")
-            throw Exception(
-                "Temporary tables can only be created with ENGINE = Memory, not " + create.storage->engine->name,
-                ErrorCodes::INCORRECT_QUERY);
-
-        return;
-    }
-
-    if (create.is_temporary)
-    {
-        auto engine_ast = std::make_shared<ASTFunction>();
-        engine_ast->name = "Memory";
-        auto storage_ast = std::make_shared<ASTStorage>();
-        storage_ast->set(storage_ast->engine, engine_ast);
-        create.set(create.storage, storage_ast);
-    }
-    else if (!create.as_table.empty())
-    {
-        /// NOTE Getting the structure from the table specified in the AS is done not atomically with the creation of the table.
-
-        String as_database_name = create.as_database.empty() ? context.getCurrentDatabase() : create.as_database;
-        String as_table_name = create.as_table;
-
-        ASTPtr as_create_ptr = context.getCreateTableQuery(as_database_name, as_table_name);
-        const auto & as_create = typeid_cast<const ASTCreateQuery &>(*as_create_ptr);
-
-        if (as_create.is_view)
-            throw Exception(
-                "Cannot CREATE a table AS " + as_database_name + "." + as_table_name + ", it is a View",
-                ErrorCodes::INCORRECT_QUERY);
-
-        create.set(create.storage, as_create.storage->ptr());
-    }
 }
 
 
@@ -595,60 +535,26 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         create.attach = true;
     }
 
-    if (create.to_database.empty())
-        create.to_database = current_database;
-
-    if (create.select && (create.is_view || create.is_materialized_view))
-        create.select->setDatabaseIfNeeded(current_database);
-
-    Block as_select_sample;
-    if (create.select && (!create.attach || !create.columns))
-        as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context);
-
-    String as_database_name = create.as_database.empty() ? current_database : create.as_database;
-    String as_table_name = create.as_table;
-
-    StoragePtr as_storage;
-    TableStructureLockHolder as_storage_lock;
-    if (!as_table_name.empty())
-    {
-        as_storage = context.getTable(as_database_name, as_table_name);
-        as_storage_lock = as_storage->lockStructureForShare(context.getCurrentQueryId());
-    }
-
     /// Set and retrieve list of columns.
-    ColumnsDescription columns = setColumns(create, as_select_sample, as_storage);
-
-    /// Set the table engine if it was not specified explicitly.
-    setEngine(create);
+    ColumnsDescription columns = setColumns(create);
 
     {
-        std::unique_ptr<DDLGuard> guard;
+        DatabasePtr database = context.getDatabase(database_name);
+        String data_path = database->getDataPath();
 
-        String data_path;
-        DatabasePtr database;
-
-        if (!create.is_temporary)
+        const auto guard = tryGetDDLGuard(
+            context,
+            database_name,
+            table_name,
+            create.if_not_exists,
+            /*timeout_seconds=*/5,
+            log_suffix);
+        if (!guard)
         {
-            database = context.getDatabase(database_name);
-            data_path = database->getDataPath();
-
-            guard = tryGetDDLGuard(
-                context,
-                database_name,
-                table_name,
-                create.if_not_exists,
-                /*timeout_seconds=*/5,
-                log_suffix);
-            if (!guard)
-            {
-                // Not the owner to create IStorage instance, and the table is created
-                // completely, let's return
-                return {};
-            }
-        }
-        else if (context.tryGetExternalTable(table_name) && create.if_not_exists)
+            // Not the owner to create IStorage instance, and the table is created
+            // completely, let's return
             return {};
+        }
 
         // Guard is acquired, let's create the IStorage instance
         StoragePtr res = StorageFactory::instance().get(
@@ -671,33 +577,14 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         // If we do step 2 before step 1, we may run into "can't find .sql file" error when applying DDL jobs.
         // Besides, we make step 3 the final one, to ensure once we pass the check of context.isTableExist(database_name, table_name)`, the table must be created completely.
 
-        if (create.is_temporary)
-            context.getSessionContext().addExternalTable(table_name, res, query_ptr);
-        else
-            database->createTable(context, table_name, query_ptr);
+        database->createTable(context, table_name, query_ptr);
 
         // register the storage instance into `ManagedStorages`
         res->startup();
 
-        if (!create.is_temporary)
-            database->attachTable(table_name, res);
+        database->attachTable(table_name, res);
 
         // the table has been created completely
-    }
-
-    /// If the query is a CREATE SELECT, insert the data into the table.
-    if (create.select && !create.attach && !create.is_view && (!create.is_materialized_view || create.is_populate))
-    {
-        auto insert = std::make_shared<ASTInsertQuery>();
-
-        if (!create.is_temporary)
-            insert->database = database_name;
-
-        insert->table = table_name;
-        insert->select = create.select->clone();
-
-        return InterpreterInsertQuery(insert, create.is_temporary ? context.getSessionContext() : context, false)
-            .execute();
     }
 
     return {};
@@ -738,11 +625,6 @@ void InterpreterCreateQuery::checkAccess(const ASTCreateQuery & create)
     if (!create.database.empty() && create.table.empty())
     {
         throw Exception("Cannot create database in readonly mode", ErrorCodes::READONLY);
-    }
-
-    if (create.is_temporary && readonly >= 2)
-    {
-        return;
     }
 
     throw Exception("Cannot create table in readonly mode", ErrorCodes::READONLY);

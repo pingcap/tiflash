@@ -59,11 +59,7 @@ private:
     BlockIO createTable(ASTCreateQuery & create);
 
     /// Calculate list of columns of table and return it.
-    ColumnsDescription setColumns(
-        ASTCreateQuery & create,
-        const Block & as_select_sample,
-        const StoragePtr & as_storage) const;
-    void setEngine(ASTCreateQuery & create) const;
+    ColumnsDescription setColumns(ASTCreateQuery & create) const;
     void checkAccess(const ASTCreateQuery & create);
 
     ASTPtr query_ptr;
