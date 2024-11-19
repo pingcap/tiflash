@@ -231,7 +231,7 @@ void ConcatVectorIndexBlockInputStream::load()
         for (auto it = begin; it != end; ++it)
             *it -= precedes_rows;
         if (auto * index_stream = index_streams[i]; index_stream)
-            index_stream->setSelectedRows({begin, end});
+            index_stream->setSelectedRows({&*begin, static_cast<size_t>(std::distance(begin, end))});
         else
             RUNTIME_CHECK(begin == end);
         precedes_rows += stream->rows[i];
