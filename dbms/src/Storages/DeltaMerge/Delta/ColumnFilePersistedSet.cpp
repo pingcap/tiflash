@@ -25,10 +25,9 @@
 
 #include <ext/scope_guard.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 inline UInt64 serializeColumnFilePersisteds(WriteBuffer & buf, const ColumnFilePersisteds & persisted_files)
 {
     serializeSavedColumnFiles(buf, persisted_files);
@@ -82,8 +81,8 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersisteds & new_c
         new_deletes,
         rows.load(),
         deletes.load(),
-        columnFilesToString(persisted_files),
-        columnFilesToString(new_column_files));
+        ColumnFile::filesToString(persisted_files),
+        ColumnFile::filesToString(new_column_files));
 }
 
 ColumnFilePersistedSet::ColumnFilePersistedSet( //
@@ -193,7 +192,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles &
             log,
             "{}, Delta Check head failed, unexpected size. head column files: {}, persisted column files: {}",
             info(),
-            columnFilesToString(previous_column_files),
+            ColumnFile::filesToString(previous_column_files),
             detailInfo());
         throw Exception("Check head failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
@@ -403,24 +402,21 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
 
 ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFileDataProviderPtr & data_provider)
 {
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
-    snap->rows = rows;
-    snap->bytes = bytes;
-    snap->deletes = deletes;
-
     size_t total_rows = 0;
     size_t total_deletes = 0;
+    ColumnFiles column_files;
+    column_files.reserve(persisted_files.size());
     for (const auto & file : persisted_files)
     {
         if (auto * t = file->tryToTinyFile(); (t && t->getCache()))
         {
             // Compact threads could update the value of ColumnTinyFile::cache,
             // and since ColumnFile is not multi-threads safe, we should create a new column file object.
-            snap->column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
+            column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
         }
         else
         {
-            snap->column_files.push_back(file);
+            column_files.push_back(file);
         }
         total_rows += file->getRows();
         total_deletes += file->getDeletes();
@@ -438,7 +434,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFil
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 
-    return snap;
+    return std::make_shared<ColumnFileSetSnapshot>(data_provider, std::move(column_files), rows, bytes, deletes);
 }
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM

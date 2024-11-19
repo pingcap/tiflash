@@ -30,8 +30,6 @@ extern const char pause_when_reading_from_dt_stream[];
 
 namespace DM
 {
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {

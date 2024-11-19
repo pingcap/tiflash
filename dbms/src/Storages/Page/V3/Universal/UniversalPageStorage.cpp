@@ -540,7 +540,8 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
         .data_file_id_pattern = options.data_file_id_pattern,
         .manifest_file_path = manifest_file_path,
         .manifest_file_id = manifest_file_id,
-        .data_source = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store, file_provider),
+        .data_source
+        = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store, file_provider, /*prefetch_size=*/5 * 1024 * 1024),
         .must_locked_files = options.must_locked_files,
         .sequence = sequence,
         .max_data_file_size = options.max_data_file_size,

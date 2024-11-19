@@ -18,7 +18,6 @@
 #include <Debug/dbgFuncSchema.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
