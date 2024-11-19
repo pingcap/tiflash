@@ -638,7 +638,7 @@ void ColumnString::deserializeAndInsertFromPos(
     size_t char_buffer_index = align_buffer.nextIndex();
     size_t offset_buffer_index = align_buffer.nextIndex();
 
-    AlignBufferAVX2 & char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
+    AlignBufferAVX2 & saved_char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
     UInt8 & char_buffer_size_ref = align_buffer.getSize(char_buffer_index);
     /// Better use a register rather than a reference for a frequently-updated variable
     UInt8 char_buffer_size = char_buffer_size_ref;
@@ -655,7 +655,7 @@ void ColumnString::deserializeAndInsertFromPos(
         struct
         {
             AlignBufferAVX2 buffer;
-            char padding[15];
+            char padding[15]{};
         } tmp_char_buf;
 
         AlignBufferAVX2 & char_buffer = tmp_char_buf.buffer;
