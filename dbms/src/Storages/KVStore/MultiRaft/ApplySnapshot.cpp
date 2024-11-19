@@ -358,9 +358,16 @@ void KVStore::onSnapshot(
 template <typename RegionPtrWrap>
 void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
+    auto keyspace_id = new_region->getKeyspaceID();
+    auto table_id = new_region->getMappedTableID();
     try
     {
-        LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
+        LOG_INFO(
+            log,
+            "Begin apply snapshot, new_region={} keyspace_id={} table_id={}",
+            new_region->toString(true),
+            keyspace_id,
+            table_id);
 
         Stopwatch watch;
         SCOPE_EXIT({
@@ -373,11 +380,21 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
         FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
         // `new_region` may change in the previous function, just log the region_id down
-        LOG_INFO(log, "Finish apply snapshot, cost={:.3f}s region_id={}", watch.elapsedSeconds(), new_region->id());
+        LOG_INFO(
+            log,
+            "Finish apply snapshot, cost={:.3f}s region_id={} keyspace_id={} table_id={}",
+            watch.elapsedSeconds(),
+            new_region->id(),
+            keyspace_id,
+            table_id);
     }
     catch (Exception & e)
     {
-        e.addMessage(fmt::format("(while applyPreHandledSnapshot region_id={})", new_region->id()));
+        e.addMessage(fmt::format(
+            "(while applyPreHandledSnapshot region_id={} keyspace_id={} table_id={})",
+            new_region->id(),
+            keyspace_id,
+            table_id));
         e.rethrow();
     }
 }

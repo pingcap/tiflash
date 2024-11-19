@@ -95,6 +95,14 @@ namespace tests
 #define ASSERT_FIELD_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::fieldCompare, val1, val2)
 #define EXPECT_FIELD_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::tests::fieldCompare, val1, val2)
 
+::testing::AssertionResult StringViewCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    std::string_view lhs,
+    std::string_view rhs);
+
+#define ASSERT_STRVIEW_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::StringViewCompare, val1, val2)
+
 // A simple helper for getting DataType from type name
 inline DataTypePtr typeFromString(const String & str)
 {
@@ -116,7 +124,7 @@ inline DataTypes typesFromString(const String & str)
 #define CHECK_TESTS_WITH_DATA_ENABLED                                                                 \
     if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                    \
     {                                                                                                 \
-        const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info();             \
+        const auto * test_info = ::testing::UnitTest::GetInstance() -> current_test_info();           \
         LOG_INFO(                                                                                     \
             &Poco::Logger::get("GTEST"),                                                              \
             fmt::format("Test: {}.{} is disabled.", test_info->test_case_name(), test_info->name())); \
