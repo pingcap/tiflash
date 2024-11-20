@@ -207,12 +207,8 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
             memset(static_cast<void *>(&tmp_data), 0, sizeof(T));
 
             const auto & val = data[start + i].value.backend();
-            const auto limb_count = val.size();
             auto & tmp_val = tmp_data.value.backend();
-            tmp_val.resize(limb_count, limb_count);
-            inline_memcpy(tmp_val.limbs(), val.limbs(), limb_count * sizeof(boost::multiprecision::limb_type));
-            if (val.sign() != tmp_val.sign())
-                tmp_val.negate();
+            tmp_val.assign(val);
             tiflash_compiler_builtin_memcpy(pos[i], &tmp_data, sizeof(T));
         }
         else
@@ -296,12 +292,8 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
                 memset(static_cast<void *>(&tmp_data), 0, sizeof(T));
 
                 const auto & val = data[j].value.backend();
-                const auto limb_count = val.size();
                 auto & tmp_val = tmp_data.value.backend();
-                tmp_val.resize(limb_count, limb_count);
-                inline_memcpy(tmp_val.limbs(), val.limbs(), limb_count * sizeof(boost::multiprecision::limb_type));
-                if (val.sign() != tmp_val.sign())
-                    tmp_val.negate();
+                tmp_val.assign(val);
                 tiflash_compiler_builtin_memcpy(pos[i], &tmp_data, sizeof(T));
                 pos[i] += sizeof(T);
             }
