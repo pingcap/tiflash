@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 
 namespace DB::DM
 {
 
-RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pack_count, ColId column_id)
+RangeWithStrategys ColumnCache::getReadStrategyImpl(
+    size_t start_pack_idx,
+    size_t pack_count,
+    ColId column_id,
+    std::function<bool(size_t, ColId)> is_hit)
 {
     PackRange target_range{start_pack_idx, start_pack_idx + pack_count};
 
@@ -27,7 +32,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pa
     size_t range_start = 0;
     for (size_t cursor = target_range.first; cursor < target_range.second; ++cursor)
     {
-        if (isPackInCache(cursor, column_id))
+        if (is_hit(cursor, column_id))
         {
             if (strategy == Strategy::Memory)
             {
@@ -59,49 +64,38 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pa
     return range_and_strategys;
 }
 
-RangeWithStrategys ColumnCache::getReadStrategy(
+RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pack_count, ColId column_id)
+{
+    const auto strategies
+        = getReadStrategyImpl(start_pack_idx, pack_count, column_id, [this](size_t pack_id, ColId column_id) {
+              return isPackInCache(pack_id, column_id);
+          });
+    for (const auto & [range, strategy] : strategies)
+    {
+        switch (strategy)
+        {
+        case Strategy::Memory:
+            GET_METRIC(tiflash_storage_column_cache_packs, type_hit).Increment(range.second - range.first);
+            break;
+        case Strategy::Disk:
+            GET_METRIC(tiflash_storage_column_cache_packs, type_miss).Increment(range.second - range.first);
+            break;
+        default:
+            break;
+        }
+    }
+    return strategies;
+}
+
+RangeWithStrategys ColumnCache::getCleanReadStrategy(
     size_t start_pack_idx,
     size_t pack_count,
     const std::vector<size_t> & clean_read_pack_idx)
 {
-    PackRange target_range{start_pack_idx, start_pack_idx + pack_count};
-
-    RangeWithStrategys range_and_strategys;
-    range_and_strategys.reserve(pack_count);
-    auto strategy = Strategy::Unknown;
-    size_t range_start = 0;
-    for (size_t cursor = target_range.first; cursor < target_range.second; ++cursor)
-    {
-        if (std::find(clean_read_pack_idx.cbegin(), clean_read_pack_idx.cend(), cursor) != clean_read_pack_idx.cend())
-        {
-            if (strategy == Strategy::Memory)
-            {
-                continue;
-            }
-            else if (strategy == Strategy::Disk)
-            {
-                range_and_strategys.emplace_back(PackRange{range_start, cursor}, Strategy::Disk);
-            }
-            range_start = cursor;
-            strategy = Strategy::Memory;
-        }
-        else
-        {
-            if (strategy == Strategy::Memory)
-            {
-                range_and_strategys.emplace_back(PackRange{range_start, cursor}, Strategy::Memory);
-            }
-            else if (strategy == Strategy::Disk)
-            {
-                continue;
-            }
-            range_start = cursor;
-            strategy = Strategy::Disk;
-        }
-    }
-    range_and_strategys.emplace_back(PackRange{range_start, target_range.second}, strategy);
-    range_and_strategys.shrink_to_fit();
-    return range_and_strategys;
+    return getReadStrategyImpl(start_pack_idx, pack_count, 0, [&clean_read_pack_idx](size_t pack_id, ColId) {
+        return std::find(clean_read_pack_idx.cbegin(), clean_read_pack_idx.cend(), pack_id)
+            != clean_read_pack_idx.cend();
+    });
 }
 
 void ColumnCache::tryPutColumn(
@@ -151,9 +145,29 @@ ColumnCacheElement ColumnCache::getColumn(size_t pack_id, ColId column_id)
         }
     }
     throw Exception(
-        "Cannot find column in cache for pack id: " + std::to_string(pack_id)
-            + " column id: " + std::to_string(column_id),
-        ErrorCodes::LOGICAL_ERROR);
+        ErrorCodes::LOGICAL_ERROR,
+        "Cannot find column in cache for pack id: {}, column id: {}",
+        pack_id,
+        column_id);
+}
+
+void ColumnCache::delColumn(ColId column_id, size_t upper_pack_id)
+{
+    for (auto iter = column_caches.begin(); iter != column_caches.end();)
+    {
+        auto & columns = iter->second.columns;
+        if (iter->first < upper_pack_id)
+            columns.erase(column_id);
+
+        if (columns.empty())
+        {
+            iter = column_caches.erase(iter);
+        }
+        else
+        {
+            ++iter;
+        }
+    }
 }
 
 bool ColumnCache::isPackInCache(PackId pack_id, ColId column_id)

@@ -23,7 +23,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/ReadMode.h>
-#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/DMFileReaderPool.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/MarkCache.h>
@@ -37,6 +37,7 @@ class DMFileWithVectorIndexBlockInputStream;
 class DMFileReader
 {
     friend class DMFileWithVectorIndexBlockInputStream;
+    friend class DMFileReaderPoolSharding;
 
 public:
     static bool isCacheableColumn(const ColumnDefine & cd);
@@ -93,7 +94,6 @@ public:
         // For DMFileReader, always use the readable path.
         return getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFileStatus::READABLE);
     }
-    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 
     friend class MarkLoader;
     friend class ColumnReadStream;
@@ -107,14 +107,9 @@ private:
         size_t pack_count,
         size_t read_rows,
         const std::vector<size_t> & clean_read_packs);
-    void readFromDisk(
-        const ColumnDefine & column_define,
-        MutableColumnPtr & column,
-        size_t start_pack_id,
-        size_t read_rows);
-    void readFromDiskOrSharingCache(
-        const ColumnDefine & column_define,
-        ColumnPtr & column,
+    ColumnPtr readFromDisk(const ColumnDefine & cd, size_t start_pack_id, size_t read_rows);
+    ColumnPtr readFromDiskOrSharingCache(
+        const ColumnDefine & cd,
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows);
@@ -124,7 +119,22 @@ private:
         size_t rows_count,
         std::pair<size_t, size_t> range,
         const DMFileMeta::PackStats & pack_stats);
-    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
+
+    void addColumnToCache(
+        ColumnCachePtr data_cache,
+        ColId col_id,
+        size_t start_pack_id,
+        size_t pack_count,
+        ColumnPtr & col);
+    void getColumnFromCache(
+        ColumnCachePtr data_cache,
+        const ColumnDefine & cd,
+        size_t start_pack_id,
+        size_t pack_count,
+        size_t read_rows,
+        MutableColumnPtr & result_col,
+        // column_define, column_id, start_pack_id, pack_count, read_rows
+        std::function<ColumnPtr(const ColumnDefine &, size_t, size_t, size_t)> on_cache_miss);
 
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
@@ -175,7 +185,7 @@ private:
     LoggerPtr log;
 
     // DataSharing
-    std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
+    ColumnCachePtr data_sharing_col_data_cache;
 
     // <start_pack, pack_count>
     // Each pair object indicates several continuous packs with RSResult::All and will be read as a Block.

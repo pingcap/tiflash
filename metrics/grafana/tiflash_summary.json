@@ -8224,28 +8224,12 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"get_cache_hit|get_cache_copy\"}[1m]))",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "get_cache_hit",
-              "refId": "C"
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"get_cache_miss|get_cache_hit|get_cache_part|get_cache_copy\"}[1m]))",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "get_cache_total",
-              "refId": "B"
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"get_cache_hit|get_cache_copy\"}[1m]))/sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"get_cache_miss|get_cache_hit|get_cache_part|get_cache_copy\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m]))/sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit|miss\"}[1m]))",
               "hide": false,
               "instant": false,
               "interval": "",
               "legendFormat": "cache_hit_ratio",
-              "refId": "D"
+              "refId": "B"
             }
           ],
           "thresholds": [],

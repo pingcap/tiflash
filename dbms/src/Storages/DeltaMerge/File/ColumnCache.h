@@ -27,9 +27,7 @@ using ColId = DB::ColumnID;
 using PackId = size_t;
 using PackRange = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
-class ColumnCache
-    : public std::enable_shared_from_this<ColumnCache>
-    , private boost::noncopyable
+class ColumnCache : private boost::noncopyable
 {
 public:
     enum class Strategy
@@ -44,15 +42,22 @@ public:
     using RangeWithStrategy = std::pair<PackRange, ColumnCache::Strategy>;
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
     RangeWithStrategys getReadStrategy(size_t start_pack_idx, size_t pack_count, ColId column_id);
-    static RangeWithStrategys getReadStrategy(
+    static RangeWithStrategys getCleanReadStrategy(
         size_t start_pack_idx,
         size_t pack_count,
         const std::vector<size_t> & clean_read_pack_idx);
+    static RangeWithStrategys getReadStrategyImpl(
+        size_t start_pack_idx,
+        size_t pack_count,
+        ColId column_id,
+        std::function<bool(size_t, ColId)> is_hit);
 
     void tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 
     using ColumnCacheElement = std::pair<ColumnPtr, std::pair<size_t, size_t>>;
     ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
+
+    void delColumn(ColId column_id, size_t upper_pack_id);
 
     void clear() { column_caches.clear(); }
 
