@@ -149,6 +149,8 @@ public:
     void SetUp() override
     {
         DeltaMergeStoreTest::SetUp();
+        auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getTMTContext().initS3GCManager(nullptr);
         initReadNodePageCacheIfUninitialized();
     }
 
