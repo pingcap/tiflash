@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -40,6 +41,8 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getTMTContext().initS3GCManager(nullptr);
         store = reload();
     }
 
