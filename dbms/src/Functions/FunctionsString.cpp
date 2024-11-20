@@ -5131,9 +5131,6 @@ public:
         size_t row_num = col1_offsets.size();
         ColumnString::Offset prev_col1_str_offset = 0;
 
-        LibCASCIICaseSensitiveStringSearcher searcher
-            = LibCASCIICaseSensitiveStringSearcher(col0_str.data(), col0_str.size());
-
         for (size_t i = 0; i < row_num; i++)
         {
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
@@ -5376,6 +5373,7 @@ private:
         size_t idx = 0;
         while (pos > 0)
         {
+            assert(idx < lens.size());
             pos -= lens[idx];
             idx++;
         }
