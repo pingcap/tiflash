@@ -227,9 +227,13 @@ private:
     static void fillLens(const char * start, const char * end, std::vector<size_t> * lens)
     {
         lens->resize(0);
-        for (const char * it = start; it != end; ++it)
-            if (!DB::UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
-                lens->push_back(DB::UTF8::seqLength(static_cast<UInt8>(*it)));
+        const char * it = start;
+        while (it != end)
+        {
+            UInt8 len = DB::UTF8::seqLength(static_cast<UInt8>(*it));
+            lens->push_back(len);
+            it += len;
+        }
     }
 
     static inline CharType decodeChar(const char * s, size_t & offset)
@@ -523,7 +527,6 @@ public:
         size_t v_length = v.length();
 
         uint64_t first = 0, second = 0;
-        size_t idx = 0;
 
         if constexpr (need_len)
         {
@@ -537,15 +540,15 @@ public:
             weight(first, second, offset, v_length, s);
 
             if constexpr (need_len)
-                (*lens)[idx] = total_size;
+                lens->push_back(total_size);
 
             writeResult(first, container, total_size);
             writeResult(second, container, total_size);
 
             if constexpr (need_len)
             {
-                (*lens)[idx] = total_size - (*lens)[idx];
-                idx++;
+                size_t end_idx = lens->size() - 1;
+                (*lens)[end_idx] = total_size - (*lens)[end_idx];
             }
         }
 
