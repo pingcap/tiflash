@@ -63,8 +63,11 @@ class RegionKVStoreTestFAP : public KVStoreTestBase
 public:
     void SetUp() override
     {
+        // Need S3 for S3 lock client, otherwise UniversalPageStorage::write would block waiting.
+        DB::tests::TiFlashTestEnv::enableS3Config();
         test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_fap_test");
         auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getTMTContext().initS3GCManager(nullptr);
         // clean data and create path pool instance
         path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
 
