@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/KVStore/TMTContext.h>
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -21,6 +20,7 @@
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <TestUtils/InputStreamTestUtils.h>
 
