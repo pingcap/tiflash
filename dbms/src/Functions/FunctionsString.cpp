@@ -5116,7 +5116,13 @@ public:
             if unlikely (col0_str_len == 0)
                 res[i] = 1;
             else
-                fillResult(i, reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]), col0_str_len, col1_str.c_str(), col1_str_len, res);
+                fillResult(
+                    i,
+                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                    col0_str_len,
+                    col1_str.c_str(),
+                    col1_str_len,
+                    res);
 
             prev_col0_str_offset = col0_offsets[i];
         }
@@ -5142,10 +5148,17 @@ public:
     }
 
 private:
-    static void fillResult(size_t i, const char * col0_str_start, size_t col0_str_len, const char * col1_str_start, size_t col1_str_len, PaddedPODArray<Int64> & res)
+    static void fillResult(
+        size_t i,
+        const char * col0_str_start,
+        size_t col0_str_len,
+        const char * col1_str_start,
+        size_t col1_str_len,
+        PaddedPODArray<Int64> & res)
     {
-        const char * res_start = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
-        
+        const char * res_start
+            = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
+
         if (res_start == nullptr)
             res[i] = 0;
         else
@@ -5264,17 +5277,30 @@ public:
             }
             else
             {
-                const StringRef & col0_collation_str = collator->sortKeyNoTrim(
-                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                    col0_str_len,
-                    col0_container);
+                StringRef col0_collation_str;
+
+                if (collator->isPaddingBinary())
+                    col0_collation_str = StringRef(&col0_data[prev_col0_str_offset], col0_str_len);
+                else
+                    col0_collation_str = collator->sortKeyNoTrim(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        col0_container);
+
                 const StringRef & col1_collation_str = collator->convert(
                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
                     col1_str_len,
                     col1_container,
                     &lens);
 
-                searchAndFillResult(i, col0_collation_str.data, col0_collation_str.size, col1_collation_str.data, col1_collation_str.size, lens, res);
+                searchAndFillResult(
+                    i,
+                    col0_collation_str.data,
+                    col0_collation_str.size,
+                    col1_collation_str.data,
+                    col1_collation_str.size,
+                    lens,
+                    res);
             }
 
             prev_col0_str_offset = col0_offsets[i];
@@ -5308,12 +5334,24 @@ public:
             }
             else
             {
-                const StringRef & col0_collation_str = collator->sortKeyNoTrim(
-                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
-                    col0_str_len,
-                    col0_container);
+                StringRef col0_collation_str;
 
-                searchAndFillResult(i, col0_collation_str.data, col0_collation_str.size, col1_collation_str.data, col1_collation_str.size, lens, res);
+                if (collator->isPaddingBinary())
+                    col0_collation_str = StringRef(&col0_data[prev_col0_str_offset], col0_str_len);
+                else
+                    col0_collation_str = collator->sortKeyNoTrim(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        col0_container);
+
+                searchAndFillResult(
+                    i,
+                    col0_collation_str.data,
+                    col0_collation_str.size,
+                    col1_collation_str.data,
+                    col1_collation_str.size,
+                    lens,
+                    res);
             }
             prev_col0_str_offset = col0_offsets[i];
         }
@@ -5333,7 +5371,10 @@ public:
         std::vector<size_t> lens;
         StringRef col0_collation_str;
 
-        col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
+        if (collator->isPaddingBinary())
+            col0_collation_str = StringRef(col0_str.c_str(), col0_str.size());
+        else
+            col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
 
         for (size_t i = 0; i < row_num; i++)
         {
@@ -5345,7 +5386,14 @@ public:
                 col1_container,
                 &lens);
 
-            searchAndFillResult(i, col0_collation_str.data, col0_collation_str.size, col1_collation_str.data, col1_collation_str.size, lens, res);
+            searchAndFillResult(
+                i,
+                col0_collation_str.data,
+                col0_collation_str.size,
+                col1_collation_str.data,
+                col1_collation_str.size,
+                lens,
+                res);
             prev_col1_str_offset = col1_offsets[i];
         }
     }
@@ -5360,8 +5408,9 @@ private:
         const std::vector<size_t> & lens,
         PaddedPODArray<Int64> & res)
     {
-        const char * res_start = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
-        
+        const char * res_start
+            = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
+
         if (res_start == nullptr)
             res[i] = 0;
         else
