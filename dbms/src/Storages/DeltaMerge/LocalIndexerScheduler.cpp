@@ -191,7 +191,7 @@ void LocalIndexerScheduler::taskOnSchedule(std::unique_lock<std::mutex> &, const
         UNUSED(it);
     }
 
-    LOG_DEBUG( //
+    LOG_INFO( //
         logger,
         "Start LocalIndex task, keyspace_id={} table_id={} file_ids={} "
         "memory_[this/total/limit]_mb={:.1f}/{:.1f}/{:.1f} all_tasks={}",
@@ -220,7 +220,7 @@ void LocalIndexerScheduler::taskOnFinish(std::unique_lock<std::mutex> & lock, co
     auto elapsed_since_create = task->created_at.elapsedSeconds();
     auto elapsed_since_schedule = task->scheduled_at.elapsedSeconds();
 
-    LOG_DEBUG( //
+    LOG_INFO( //
         logger,
         "Finish LocalIndex task, keyspace_id={} table_id={} file_ids={} "
         "memory_[this/total/limit]_mb={:.1f}/{:.1f}/{:.1f} "
