@@ -388,6 +388,7 @@ public:
         TiFlashStorageTestBasic::SetUp();
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getTMTContext().initS3GCManager(nullptr);
 
         ASSERT_TRUE(global_context.getSharedContextDisagg()->remote_data_store == nullptr);
         global_context.getSharedContextDisagg()->initRemoteDataStore(
