@@ -65,6 +65,7 @@ public:
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         TiFlashStorageTestBasic::SetUp();
         auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getTMTContext().initS3GCManager(nullptr);
         if (global_context.getSharedContextDisagg()->remote_data_store == nullptr)
         {
             already_initialize_data_store = false;

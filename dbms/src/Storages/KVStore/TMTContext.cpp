@@ -205,6 +205,7 @@ void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
+        LOG_INFO(Logger::get(), "Build s3lock client success");
         S3::S3GCConfig remote_gc_config;
         {
             Int64 gc_method_int = context.getSettingsRef().remote_gc_method;
