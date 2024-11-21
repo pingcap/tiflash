@@ -5282,20 +5282,32 @@ public:
             else
             {
                 StringRef col0_collation_str;
+                StringRef col1_collation_str;
 
                 if (collator->isPaddingBinary())
-                    col0_collation_str = StringRef(&col0_data[prev_col0_str_offset], col0_str_len);
+                {
+                    col0_collation_str = fastPath<false>(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        nullptr);
+                    col1_collation_str = fastPath<true>(
+                        reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                        col1_str_len,
+                        &lens);
+                }
                 else
+                {
                     col0_collation_str = collator->sortKeyNoTrim(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
                         col0_str_len,
                         col0_container);
 
-                const StringRef & col1_collation_str = collator->convert(
-                    reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
-                    col1_str_len,
-                    col1_container,
-                    &lens);
+                    col1_collation_str = collator->convert(
+                        reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                        col1_str_len,
+                        col1_container,
+                        &lens);
+                }
 
                 searchAndFillResult(
                     i,
@@ -5326,7 +5338,10 @@ public:
         std::vector<size_t> lens;
         StringRef col1_collation_str;
 
-        col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
+        if (collator->isPaddingBinary())
+            col1_collation_str = fastPath<true>(col1_str.data(), col1_str.size(), &lens);
+        else
+            col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
 
         for (size_t i = 0; i < row_num; i++)
         {
@@ -5341,7 +5356,10 @@ public:
                 StringRef col0_collation_str;
 
                 if (collator->isPaddingBinary())
-                    col0_collation_str = StringRef(&col0_data[prev_col0_str_offset], col0_str_len);
+                    col0_collation_str = fastPath<false>(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        nullptr);
                 else
                     col0_collation_str = collator->sortKeyNoTrim(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
@@ -5376,7 +5394,7 @@ public:
         StringRef col0_collation_str;
 
         if (collator->isPaddingBinary())
-            col0_collation_str = StringRef(col0_str.c_str(), col0_str.size());
+            col0_collation_str = fastPath<false>(col0_str.c_str(), col0_str.size(), nullptr);
         else
             col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
 
@@ -5384,11 +5402,18 @@ public:
         {
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
 
-            const StringRef & col1_collation_str = collator->convert(
-                reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
-                col1_str_len,
-                col1_container,
-                &lens);
+            StringRef col1_collation_str;
+            if (collator->isPaddingBinary())
+                col1_collation_str = fastPath<true>(
+                    reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                    col1_str_len,
+                    &lens);
+            else
+                col1_collation_str = collator->convert(
+                    reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                    col1_str_len,
+                    col1_container,
+                    &lens);
 
             searchAndFillResult(
                 i,
@@ -5431,6 +5456,12 @@ private:
             idx++;
         }
         return idx;
+    }
+
+    template <bool need_len>
+    static StringRef fastPath(const char * start, size_t len, std::vector<size_t> * lens)
+    {
+        return TiDB::convertForBinCollator<need_len>(start, len, lens);
     }
 
     TiDB::TiDBCollatorPtr collator{};
