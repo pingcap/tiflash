@@ -821,6 +821,7 @@ private:
                 res_data[res_offset] = 0;
                 ++res_offset;
                 res_offsets[column_index] = res_offset;
+                prev_offset = offsets[column_index];
                 return;
             }
             start = start_offsets.size() - original_start_abs + 1;
