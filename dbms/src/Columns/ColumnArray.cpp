@@ -228,7 +228,7 @@ void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) con
         size_t sz = size();
         for (size_t i = 0; i < sz; ++i)
             RUNTIME_CHECK_MSG(
-                sizeAt(i) > UINT32_MAX,
+                sizeAt(i) <= UINT32_MAX,
                 "size of ({}) is ({}), which is greater than UINT32_MAX",
                 i,
                 sizeAt(i));

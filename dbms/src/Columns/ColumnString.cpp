@@ -490,7 +490,7 @@ void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) co
         size_t sz = size();
         for (size_t i = 0; i < sz; ++i)
             RUNTIME_CHECK_MSG(
-                sizeAt(i) > UINT32_MAX,
+                sizeAt(i) <= UINT32_MAX,
                 "size of ({}) is ({}), which is greater than UINT32_MAX",
                 i,
                 sizeAt(i));
@@ -521,7 +521,7 @@ void ColumnString::countSerializeByteSizeForColumnArray(
         size_t sz = size();
         for (size_t i = 0; i < sz; ++i)
             RUNTIME_CHECK_MSG(
-                sizeAt(i) > UINT32_MAX,
+                sizeAt(i) <= UINT32_MAX,
                 "size of ({}) is ({}), which is greater than UINT32_MAX",
                 i,
                 sizeAt(i));
