@@ -1561,7 +1561,7 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionReplaceOne>();
     factory.registerFunction<FunctionReplaceAll>();
     // factory.registerFunction<FunctionPosition>();
-    factory.registerFunction<FunctionPositionUTF8>();
+    // factory.registerFunction<FunctionPositionUTF8>();
     factory.registerFunction<FunctionPositionCaseInsensitive>();
     factory.registerFunction<FunctionPositionCaseInsensitiveUTF8>();
     factory.registerFunction<FunctionMatch>();
