@@ -5203,9 +5203,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (collator == nullptr)
-            throw Exception("collator is nullptr in positionUTF8 function");
-
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
@@ -5284,7 +5281,7 @@ public:
                 StringRef col0_collation_str;
                 StringRef col1_collation_str;
 
-                if (collator->isPaddingBinary())
+                if (collator == nullptr || collator->isPaddingBinary())
                 {
                     col0_collation_str = fastPath<false>(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
@@ -5338,7 +5335,7 @@ public:
         std::vector<size_t> lens;
         StringRef col1_collation_str;
 
-        if (collator->isPaddingBinary())
+        if (collator == nullptr || collator->isPaddingBinary())
             col1_collation_str = fastPath<true>(col1_str.data(), col1_str.size(), &lens);
         else
             col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
@@ -5355,7 +5352,7 @@ public:
             {
                 StringRef col0_collation_str;
 
-                if (collator->isPaddingBinary())
+                if (collator == nullptr || collator->isPaddingBinary())
                     col0_collation_str = fastPath<false>(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
                         col0_str_len,
@@ -5393,7 +5390,7 @@ public:
         std::vector<size_t> lens;
         StringRef col0_collation_str;
 
-        if (collator->isPaddingBinary())
+        if (collator == nullptr || collator->isPaddingBinary())
             col0_collation_str = fastPath<false>(col0_str.c_str(), col0_str.size(), nullptr);
         else
             col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
@@ -5403,7 +5400,7 @@ public:
             size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
 
             StringRef col1_collation_str;
-            if (collator->isPaddingBinary())
+            if (collator == nullptr || collator->isPaddingBinary())
                 col1_collation_str = fastPath<true>(
                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
                     col1_str_len,
