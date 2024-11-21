@@ -383,8 +383,19 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        inline_memcpy(static_cast<void *>(&data[array_offsets[start_point + i - 1]]), pos[i], sizeof(T) * len);
-        pos[i] += sizeof(T) * len;
+        if (len <= 4)
+        {
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    &data[array_offsets[start_point + i - 1] + j],
+                    pos[i] + j * sizeof(T),
+                    sizeof(T));
+        }
+        else
+        {
+            inline_memcpy(&data[array_offsets[start_point + i - 1]], pos[i], len * sizeof(T));
+        }
+        pos[i] += len * sizeof(T);
     }
 }
 
