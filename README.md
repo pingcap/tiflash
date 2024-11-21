@@ -65,6 +65,13 @@ sudo ./llvm.sh 17 all
 sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev ccache
 ```
 
+Then, expose the LLVM17 toolchain as the default one in order to use it later in compile:
+
+```shell
+export CC="/usr/bin/clang-17"
+export CXX="/usr/bin/clang++-17"
+```
+
 **Note for Ubuntu 18.04 and Ubuntu 20.04:**
 
 The default installed cmake may be not recent enough. You can install a newer cmake from the [Kitware APT Repository](https://apt.kitware.com):
@@ -125,9 +132,14 @@ xcode-select --install
 brew install ninja cmake openssl@1.1 ccache
 
 brew install llvm@17
+```
 
-# check llvm version
-clang --version # should be 17.0.0 or higher
+Then, expose the LLVM17 toolchain as the default one in order to use it later in compile:
+
+```shell
+export PATH="$(brew --prefix)/opt/llvm@17/bin:$PATH"
+export CC="$(brew --prefix)/opt/llvm@17/bin/clang"
+export CXX="$(brew --prefix)/opt/llvm@17/bin/clang++"
 ```
 
 </details>
@@ -148,33 +160,15 @@ To build TiFlash for development:
 cmake --workflow --preset dev
 ```
 
-Note: In Linux, usually you need to explicitly specify to use LLVM.
+Or if you don't like the preset:
 
 ```shell
-export CC="/usr/bin/clang-17"
-export CXX="/usr/bin/clang++-17"
-```
-
-In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
-
-Add the following lines to your shell environment, e.g. `~/.bash_profile`.
-```shell
-export PATH="$(brew --prefix)/opt/llvm/bin:$PATH"
-export CC="$(brew --prefix)/opt/llvm/bin/clang"
-export CXX="$(brew --prefix)/opt/llvm/bin/clang++"
-```
-
-Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
-```shell
+# In the TiFlash repository root:
 mkdir cmake-build-debug
 cd cmake-build-debug
-
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER="$(brew --prefix)/opt/llvm/bin/clang" -DCMAKE_CXX_COMPILER="$(brew --prefix)/opt/llvm/bin/clang++"
-
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
 ninja tiflash
 ```
-
-After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
 
 ### Build Options
 
