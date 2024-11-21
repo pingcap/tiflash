@@ -92,21 +92,15 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void serializeToPos(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        bool has_null,
-        bool ensure_uniqueness) const override;
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
     template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, bool ensure_uniqueness) const;
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
-        bool /* ensure_uniqueness */,
         const IColumn::Offsets & /* array_offsets */) const override
     {
         throw Exception(

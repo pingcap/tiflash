@@ -252,15 +252,11 @@ public:
     /// Note:
     /// 1. The pos.size() must be greater than or equal to length.
     /// 2. If has_null is true, then the pos[i] could be nullptr, which means the i-th element does not need to be serialized.
-    /// 3. If ensure_uniqueness is true, it means the serialized data must ensure the uniqueness, and it may be used for
-    ///    comparison, such as join key and agg key. At the time of writing, only the ColumnDecimal<Decimal256> needs to
-    ///    consider this flag.
     virtual void serializeToPos(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */,
-        bool /* ensure_uniqueness */) const
+        bool /* has_null */) const
         = 0;
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
     /// serialized data.
@@ -270,7 +266,6 @@ public:
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
-        bool /* ensure_uniqueness */,
         const Offsets & /* array_offsets */) const
         = 0;
 

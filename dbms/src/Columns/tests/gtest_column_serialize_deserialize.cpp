@@ -60,21 +60,15 @@ public:
 
     static void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
     {
-        for (bool ensure_uniqueness : {false, true})
-        {
-            doTestSerializeAndDeserialize(column_ptr, ensure_uniqueness, false);
-            doTestSerializeAndDeserialize2(column_ptr, ensure_uniqueness, false);
+        doTestSerializeAndDeserialize(column_ptr, false);
+        doTestSerializeAndDeserialize2(column_ptr, false);
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            doTestSerializeAndDeserialize(column_ptr, ensure_uniqueness, true);
-            doTestSerializeAndDeserialize2(column_ptr, ensure_uniqueness, true);
+        doTestSerializeAndDeserialize(column_ptr, true);
+        doTestSerializeAndDeserialize2(column_ptr, true);
 #endif
-        }
     }
 
-    static void doTestSerializeAndDeserialize(
-        const ColumnPtr & column_ptr,
-        bool ensure_uniqueness,
-        bool is_aligned [[maybe_unused]])
+    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool is_aligned [[maybe_unused]])
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
@@ -90,7 +84,7 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false, ensure_uniqueness);
+        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
         for (size_t i = 0; i < byte_size.size() / 2; ++i)
             pos[i] -= byte_size[i];
 
@@ -110,12 +104,7 @@ public:
             current_size += byte_size[i];
         }
         pos.push_back(nullptr);
-        column_ptr->serializeToPos(
-            pos,
-            byte_size.size() / 2,
-            byte_size.size() - byte_size.size() / 2,
-            true,
-            ensure_uniqueness);
+        column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
         for (size_t i = byte_size.size() / 2; i < byte_size.size() - 1; ++i)
             pos[i - byte_size.size() / 2] -= byte_size[i];
         pos.resize(pos.size() - 1);
@@ -130,7 +119,7 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(pos, 0, byte_size.size(), true, ensure_uniqueness);
+        column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         for (size_t i = 0; i < byte_size.size(); ++i)
             pos[i] -= byte_size[i];
 
@@ -145,10 +134,7 @@ public:
         ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
 
-    static void doTestSerializeAndDeserialize2(
-        const ColumnPtr & column_ptr,
-        bool ensure_uniqueness,
-        bool is_aligned [[maybe_unused]])
+    static void doTestSerializeAndDeserialize2(const ColumnPtr & column_ptr, bool is_aligned [[maybe_unused]])
     {
         if (column_ptr->size() < 2)
             return;
@@ -167,7 +153,7 @@ public:
             current_size += byte_size[i];
         }
         pos.push_back(nullptr);
-        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true, ensure_uniqueness);
+        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true);
         for (size_t i = 0; i < byte_size.size() / 2 - 1; ++i)
             pos[i] -= byte_size[i];
         pos.resize(pos.size() - 1);
@@ -187,12 +173,7 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(
-            pos,
-            byte_size.size() / 2 - 1,
-            byte_size.size() - byte_size.size() / 2 + 1,
-            false,
-            ensure_uniqueness);
+        column_ptr->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
         for (size_t i = byte_size.size() / 2 - 1; i < byte_size.size(); ++i)
             pos[i - byte_size.size() / 2 + 1] -= byte_size[i];
 
@@ -206,7 +187,7 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(pos, 0, byte_size.size(), true, ensure_uniqueness);
+        column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         for (size_t i = 0; i < byte_size.size(); ++i)
             pos[i] -= byte_size[i];
 

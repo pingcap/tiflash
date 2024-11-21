@@ -241,22 +241,16 @@ void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) con
     getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }
 
-void ColumnArray::serializeToPos(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    bool ensure_uniqueness) const
+void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, length, ensure_uniqueness);
+        serializeToPosImpl<true>(pos, start, length);
     else
-        serializeToPosImpl<false>(pos, start, length, ensure_uniqueness);
+        serializeToPosImpl<false>(pos, start, length);
 }
 
 template <bool has_null>
-void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, bool ensure_uniqueness)
-    const
+void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
@@ -274,7 +268,7 @@ void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start,
         pos[i] += sizeof(UInt32);
     }
 
-    getData().serializeToPosForColumnArray(pos, start, length, has_null, ensure_uniqueness, getOffsets());
+    getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }
 
 void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & /* align_buffer */)

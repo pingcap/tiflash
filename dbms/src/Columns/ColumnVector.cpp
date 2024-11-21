@@ -85,12 +85,7 @@ void ColumnVector<T>::countSerializeByteSizeForColumnArray(
 }
 
 template <typename T>
-void ColumnVector<T>::serializeToPos(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    bool /* ensure_uniqueness */) const
+void ColumnVector<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
         serializeToPosImpl<true>(pos, start, length);
@@ -123,7 +118,6 @@ void ColumnVector<T>::serializeToPosForColumnArray(
     size_t start,
     size_t length,
     bool has_null,
-    bool /* ensure_uniqueness */,
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
@@ -161,8 +155,19 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
                 continue;
         }
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], sizeof(T) * len);
-        pos[i] += sizeof(T) * len;
+        if (len <= 4)
+        {
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    pos[i] + j * sizeof(T),
+                    &data[array_offsets[start + i - 1] + j],
+                    sizeof(T));
+        }
+        else
+        {
+            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+        }
+        pos[i] += len * sizeof(T);
     }
 }
 

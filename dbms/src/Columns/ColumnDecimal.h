@@ -152,13 +152,8 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void serializeToPos(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        bool has_null,
-        bool ensure_uniqueness) const override;
-    template <bool has_null, bool ensure_uniqueness>
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
+    template <bool has_null>
     void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
     void serializeToPosForColumnArray(
@@ -166,9 +161,8 @@ public:
         size_t start,
         size_t length,
         bool has_null,
-        bool ensure_uniqueness,
         const IColumn::Offsets & array_offsets) const override;
-    template <bool has_null, bool ensure_uniqueness>
+    template <bool has_null>
     void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,

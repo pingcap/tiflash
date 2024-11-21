@@ -152,48 +152,25 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
 }
 
 template <typename T>
-void ColumnDecimal<T>::serializeToPos(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    bool ensure_uniqueness) const
+void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
-    /// Only Decimal256 needs special handling for the ensure_uniqueness case
     if (has_null)
     {
-        if constexpr (is_Decimal256)
-        {
-            if (ensure_uniqueness)
-            {
-                serializeToPosImpl<true, true>(pos, start, length);
-                return;
-            }
-        }
-        serializeToPosImpl<true, false>(pos, start, length);
+        serializeToPosImpl<true>(pos, start, length);
     }
     else
     {
-        if constexpr (is_Decimal256)
-        {
-            if (ensure_uniqueness)
-            {
-                serializeToPosImpl<false, true>(pos, start, length);
-                return;
-            }
-        }
-        serializeToPosImpl<false, false>(pos, start, length);
+        serializeToPosImpl<false>(pos, start, length);
     }
 }
 
 template <typename T>
-template <bool has_null, bool ensure_uniqueness>
+template <bool has_null>
 void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
-    T tmp_data{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -201,20 +178,7 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
             if (pos[i] == nullptr)
                 continue;
         }
-        if constexpr (ensure_uniqueness)
-        {
-            /// Clear the data and only set the necessary parts to ensure the uniqueness
-            memset(static_cast<void *>(&tmp_data), 0, sizeof(T));
-
-            const auto & val = data[start + i].value.backend();
-            auto & tmp_val = tmp_data.value.backend();
-            tmp_val.assign(val);
-            tiflash_compiler_builtin_memcpy(pos[i], &tmp_data, sizeof(T));
-        }
-        else
-        {
-            tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
-        }
+        tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
         pos[i] += sizeof(T);
     }
 }
@@ -225,38 +189,20 @@ void ColumnDecimal<T>::serializeToPosForColumnArray(
     size_t start,
     size_t length,
     bool has_null,
-    bool ensure_uniqueness,
     const IColumn::Offsets & array_offsets) const
 {
-    /// Only Decimal256 needs special handling for the ensure_uniqueness case
     if (has_null)
     {
-        if constexpr (is_Decimal256)
-        {
-            if (ensure_uniqueness)
-            {
-                serializeToPosForColumnArrayImpl<true, true>(pos, start, length, array_offsets);
-                return;
-            }
-        }
-        serializeToPosForColumnArrayImpl<true, false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
     }
     else
     {
-        if constexpr (is_Decimal256)
-        {
-            if (ensure_uniqueness)
-            {
-                serializeToPosForColumnArrayImpl<false, true>(pos, start, length, array_offsets);
-                return;
-            }
-        }
-        serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
     }
 }
 
 template <typename T>
-template <bool has_null, bool ensure_uniqueness>
+template <bool has_null>
 void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -276,7 +222,6 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    T tmp_data{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -284,26 +229,20 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        if constexpr (ensure_uniqueness)
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        if (len <= 4)
         {
-            for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
-            {
-                /// Clear the data and only set the necessary parts to ensure the uniqueness
-                memset(static_cast<void *>(&tmp_data), 0, sizeof(T));
-
-                const auto & val = data[j].value.backend();
-                auto & tmp_val = tmp_data.value.backend();
-                tmp_val.assign(val);
-                tiflash_compiler_builtin_memcpy(pos[i], &tmp_data, sizeof(T));
-                pos[i] += sizeof(T);
-            }
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    pos[i] + j * sizeof(T),
+                    &data[array_offsets[start + i - 1] + j],
+                    sizeof(T));
         }
         else
         {
-            size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], sizeof(T) * len);
-            pos[i] += sizeof(T) * len;
+            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
         }
+        pos[i] += len * sizeof(T);
     }
 }
 

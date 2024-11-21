@@ -533,12 +533,7 @@ void ColumnString::countSerializeByteSizeForColumnArray(
             - offsetAt(array_offsets[i - 1]);
 }
 
-void ColumnString::serializeToPos(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    bool /* ensure_uniqueness */) const
+void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
         serializeToPosImpl<true>(pos, start, length);
@@ -573,7 +568,6 @@ void ColumnString::serializeToPosForColumnArray(
     size_t start,
     size_t length,
     bool has_null,
-    bool /* ensure_uniqueness */,
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
