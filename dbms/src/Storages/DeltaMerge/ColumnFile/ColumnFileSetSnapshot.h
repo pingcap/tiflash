@@ -45,7 +45,7 @@ public:
     {}
 
     bool isBlock() { return static_cast<bool>(block); }
-    auto & getBlock() { return block; };
+    auto & getBlock() { return block; }
     auto getBlockOffset() const { return block_offset; }
     auto & getDeleteRange() { return delete_range; }
 };
@@ -65,9 +65,6 @@ private:
     size_t rows{0};
     size_t bytes{0};
     size_t deletes{0};
-
-    bool is_common_handle{false};
-    size_t rowkey_column_size{0};
 
 public:
     /// This field is public writeable intentionally. It allows us to build a snapshot first,
@@ -89,8 +86,6 @@ public:
         c->rows = rows;
         c->bytes = bytes;
         c->deletes = deletes;
-        c->is_common_handle = is_common_handle;
-        c->rowkey_column_size = rowkey_column_size;
 
         return c;
     }
@@ -102,7 +97,7 @@ public:
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }
 
-    RowKeyRange getSquashDeleteRange() const;
+    RowKeyRange getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const;
 
     const auto & getDataProvider() const { return data_provider; }
 };
