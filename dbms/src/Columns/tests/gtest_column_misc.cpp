@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Functions/FunctionHelpers.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "Functions/FunctionHelpers.h"
 
 namespace DB
 {

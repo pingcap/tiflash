@@ -219,6 +219,75 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
     return pos;
 }
 
+void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
+
+    if unlikely (!getOffsets().empty() && getOffsets().back() > UINT32_MAX)
+    {
+        size_t sz = size();
+        for (size_t i = 0; i < sz; ++i)
+            RUNTIME_CHECK_MSG(
+                sizeAt(i) <= UINT32_MAX,
+                "size of ({}) is ({}), which is greater than UINT32_MAX",
+                i,
+                sizeAt(i));
+    }
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(UInt32);
+
+    getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
+}
+
+void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, length);
+    else
+        serializeToPosImpl<false>(pos, start, length);
+}
+
+template <bool has_null>
+void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        UInt32 len = sizeAt(start + i);
+        tiflash_compiler_builtin_memcpy(pos[i], &len, sizeof(UInt32));
+        pos[i] += sizeof(UInt32);
+    }
+
+    getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
+}
+
+void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & /* align_buffer */)
+{
+    auto & offsets = getOffsets();
+    size_t prev_size = offsets.size();
+    size_t size = pos.size();
+
+    offsets.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt32 len;
+        tiflash_compiler_builtin_memcpy(&len, pos[i], sizeof(UInt32));
+        offsets[prev_size + i] = len + offsets[prev_size + i - 1];
+        pos[i] += sizeof(UInt32);
+    }
+
+    getData().deserializeAndInsertFromPosForColumnArray(pos, offsets);
+}
 
 void ColumnArray::updateHashWithValue(
     size_t n,
@@ -414,10 +483,16 @@ struct Less
 void ColumnArray::reserve(size_t n)
 {
     getOffsets().reserve(n);
-    getData().reserve(
-        n); /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    getData().reserve(n);
 }
 
+void ColumnArray::reserveAlign(size_t n, size_t alignment)
+{
+    getOffsets().reserve(n, alignment);
+    /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    getData().reserveAlign(n, alignment);
+}
 
 size_t ColumnArray::byteSize() const
 {
