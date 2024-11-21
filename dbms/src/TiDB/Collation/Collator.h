@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/Exception.h>
+#include <Common/UTF8Helpers.h>
 #include <TiDB/Collation/CollatorCompare.h>
 #include <TiDB/Schema/TiDB_fwd.h>
 #include <common/StringRef.h>
@@ -147,5 +149,28 @@ extern std::vector<std::string> dummy_sort_key_contaners;
 extern std::string dummy_sort_key_contaner;
 
 ITiDBCollator::CollatorType GetTiDBCollatorType(const void * collator);
+
+inline void fillLensForBinCollator(const char * start, const char * end, std::vector<size_t> * lens)
+{
+    lens->resize(0);
+    const char * it = start;
+    while (it != end)
+    {
+        UInt8 len = DB::UTF8::seqLength(static_cast<UInt8>(*it));
+        lens->push_back(len);
+        it += len;
+
+        if unlikely (it > end)
+            throw DB::Exception("Encounter invalid character");
+    }
+}
+
+template <bool need_len>
+StringRef convertForBinCollator(const char * start, size_t len, std::vector<size_t> * lens)
+{
+    if constexpr (need_len)
+        TiDB::fillLensForBinCollator(start, start + len, lens);
+    return DB::BinCollatorSortKey<false>(start, len);
+}
 
 } // namespace TiDB

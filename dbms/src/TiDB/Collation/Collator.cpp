@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
-#include <Common/UTF8Helpers.h>
 #include <Poco/String.h>
 #include <TiDB/Collation/Collator.h>
 #include <TiDB/Collation/CollatorUtils.h>
@@ -196,23 +194,12 @@ public:
 
     StringRef sortKeyNoTrim(const char * s, size_t length, std::string &) const override
     {
-        std::string tmp;
-        return convertImpl<false>(s, length, tmp, nullptr);
+        return convertForBinCollator<false>(s, length, nullptr);
     }
 
     StringRef convert(const char * s, size_t length, std::string &, std::vector<size_t> * lens) const override
     {
-        std::string tmp;
-        return convertImpl<true>(s, length, tmp, lens);
-    }
-
-    template <bool need_len>
-    StringRef convertImpl(const char * s, size_t length, std::string &, std::vector<size_t> * lens) const
-    {
-        if constexpr (need_len)
-            fillLens(s, s + length, lens);
-
-        return StringRef(s, length);
+        return convertForBinCollator<true>(s, length, lens);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
@@ -223,18 +210,6 @@ private:
 private:
     using WeightType = T;
     using CharType = T;
-
-    static void fillLens(const char * start, const char * end, std::vector<size_t> * lens)
-    {
-        lens->resize(0);
-        const char * it = start;
-        while (it != end)
-        {
-            UInt8 len = DB::UTF8::seqLength(static_cast<UInt8>(*it));
-            lens->push_back(len);
-            it += len;
-        }
-    }
 
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
