@@ -922,7 +922,7 @@ try
     auto check_segment_squash_delete_range = [this](SegmentPtr & segment, const HandleRange & expect_range) {
         // set `is_update=false` to get full squash delete range
         auto snap = segment->createSnapshot(dmContext(), /*for_update*/ false, CurrentMetrics::DT_SnapshotOfRead);
-        auto squash_range = snap->delta->getSquashDeleteRange();
+        auto squash_range = snap->delta->getSquashDeleteRange(/*is_common_handle=*/false, /*rowkey_column_size=*/1);
         ASSERT_ROWKEY_RANGE_EQ(squash_range, RowKeyRange::fromHandleRange(expect_range));
     };
 
@@ -968,6 +968,7 @@ try
         HandleRange del{1, 32};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
+        // suqash_delete_range will consider [1, 100) maybe deleted
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
     }
 
