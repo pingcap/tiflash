@@ -161,7 +161,7 @@ inline void fillLensForBinCollator(const char * start, const char * end, std::ve
         UInt8 len = DB::UTF8::seqLength(static_cast<UInt8>(*it));
         lens->push_back(len);
 
-        if likely (end - it <= len)
+        if likely (end - it >= len)
             it += len;
         else
             throw DB::Exception("Encounter invalid character");
