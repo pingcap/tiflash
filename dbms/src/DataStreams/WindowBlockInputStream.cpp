@@ -31,7 +31,6 @@
 #include <magic_enum.hpp>
 #include <tuple>
 #include <type_traits>
-#include "Core/Block.h"
 
 namespace DB
 {
@@ -318,11 +317,11 @@ bool WindowBlockInputStream::returnIfCancelledOrKilled()
 Block WindowBlockInputStream::readImpl()
 {
     // first try to get result without reading from children
-    if (Block block = action.tryGetOutputBlock())
+    if (auto block = action.tryGetOutputBlock())
         return block;
 
     const auto & stream = children.back();
-    // read from children and try to get at least one result block
+    // keep reading from children until one result block is generated
     while (!action.input_is_finished)
     {
         if (returnIfCancelledOrKilled())
@@ -333,7 +332,7 @@ Block WindowBlockInputStream::readImpl()
             action.input_is_finished = true;
         else
             action.appendBlock(block);
-        if (Block block = action.tryGetOutputBlock())
+        if (auto block = action.tryGetOutputBlock())
             return block;
     }
 
@@ -390,7 +389,9 @@ bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partitio
 
 void WindowTransformAction::advancePartitionEnd()
 {
-    RUNTIME_ASSERT(!partition_ended, log, "partition_ended should be false here.");
+    // if partition_ended is true, we don't need to advance partition_end
+    if (partition_ended)
+        return;
     const RowNumber end = blocksEnd();
 
     // If we're at the total end of data, we must end the partition. This is one
@@ -1241,7 +1242,7 @@ void WindowTransformAction::writeOutCurrentRow()
 
 Block WindowTransformAction::tryGetOutputBlock()
 {
-    // first try calculate the window function
+    // first try calculate the window function if there is input data
     tryCalculate();
     // then return block if it is ready
     assert(first_not_ready_row.block >= first_block_number);
@@ -1332,6 +1333,9 @@ void WindowTransformAction::appendBlock(Block & current_block)
 
 void WindowTransformAction::tryCalculate()
 {
+    // if there is no input data, we don't need to calculate
+    if (window_blocks.empty())
+        return;
     auto start_block_index = current_row.block;
     // Start the calculations. First, advance the partition end.
     for (;;)
