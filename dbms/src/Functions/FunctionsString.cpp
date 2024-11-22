@@ -5225,11 +5225,11 @@ public:
 
                 if (collator == nullptr || collator->isPaddingBinary())
                 {
-                    col0_collation_str = convertWithCollation<false>(
+                    col0_collation_str = convertWithBinCollation<false>(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
                         col0_str_len,
                         nullptr);
-                    col1_collation_str = convertWithCollation<true>(
+                    col1_collation_str = convertWithBinCollation<true>(
                         reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
                         col1_str_len,
                         &lens);
@@ -5278,7 +5278,7 @@ public:
         StringRef col1_collation_str;
 
         if (collator == nullptr || collator->isPaddingBinary())
-            col1_collation_str = convertWithCollation<true>(col1_str.data(), col1_str.size(), &lens);
+            col1_collation_str = convertWithBinCollation<true>(col1_str.data(), col1_str.size(), &lens);
         else
             col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
 
@@ -5295,7 +5295,7 @@ public:
                 StringRef col0_collation_str;
 
                 if (collator == nullptr || collator->isPaddingBinary())
-                    col0_collation_str = convertWithCollation<false>(
+                    col0_collation_str = convertWithBinCollation<false>(
                         reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
                         col0_str_len,
                         nullptr);
@@ -5333,7 +5333,7 @@ public:
         StringRef col0_collation_str;
 
         if (collator == nullptr || collator->isPaddingBinary())
-            col0_collation_str = convertWithCollation<false>(col0_str.c_str(), col0_str.size(), nullptr);
+            col0_collation_str = convertWithBinCollation<false>(col0_str.c_str(), col0_str.size(), nullptr);
         else
             col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
 
@@ -5343,7 +5343,7 @@ public:
 
             StringRef col1_collation_str;
             if (collator == nullptr || collator->isPaddingBinary())
-                col1_collation_str = convertWithCollation<true>(
+                col1_collation_str = convertWithBinCollation<true>(
                     reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
                     col1_str_len,
                     &lens);
@@ -5398,7 +5398,7 @@ private:
     }
 
     template <bool need_len>
-    static StringRef convertWithCollation(const char * start, size_t len, std::vector<size_t> * lens)
+    static StringRef convertWithBinCollation(const char * start, size_t len, std::vector<size_t> * lens)
     {
         return TiDB::convertForBinCollator<need_len>(start, len, lens);
     }
