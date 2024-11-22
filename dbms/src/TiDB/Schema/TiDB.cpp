@@ -1431,6 +1431,7 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
                 tidb_column_info.origin_default_value = empty_val;
                 break;
             }
+            // else fallthrough
         // The above types will be processed again when defaultValueToField is called.
         // By distinguishing the type of the string type(by synchronizing the default values in the schema, its type is string),
         // we can distinguish whether it needs to be processed.
