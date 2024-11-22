@@ -236,8 +236,7 @@ Field ColumnInfo::defaultValueToField() const
         }
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
             // When we got bit_value from tipb, we have decoded it.
-            auto is_int = bit_value.isInteger();
-            if (is_int)
+            if (auto is_int = bit_value.isInteger(); is_int)
                 return bit_value.convert<UInt64>();
             return getBitValue(bit_value.convert<String>());
         });
@@ -250,11 +249,9 @@ Field ColumnInfo::defaultValueToField() const
     case TypeDatetime:
     case TypeTimestamp:
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
-            auto is_int = value.isInteger();
-            if (is_int)
-            {
+            // When we got value from tipb, we have decoded it.
+            if (auto is_int = value.isInteger(); is_int)
                 return value.convert<UInt64>();
-            }
             return DB::parseMyDateTime(value.convert<String>());
         });
     case TypeVarchar:
@@ -295,11 +292,9 @@ Field ColumnInfo::defaultValueToField() const
         });
     case TypeTime:
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
-            auto is_int = value.isInteger();
-            if (is_int)
-            {
+            // When we got value from tipb, we have decoded it.
+            if (auto is_int = value.isInteger(); is_int)
                 return value.convert<UInt64>();
-            }
             return getTimeValue(value.convert<String>());
         });
     case TypeYear:
@@ -307,11 +302,9 @@ Field ColumnInfo::defaultValueToField() const
         return getYearValue(value.convert<String>());
     case TypeSet:
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
-            auto is_int = value.isInteger();
-            if (is_int)
-            {
+            // When we got value from tipb, we have decoded it.
+            if (auto is_int = value.isInteger(); is_int)
                 return value.convert<UInt64>();
-            }
             return getSetValue(value.convert<String>());
         });
     case TypeTiDBVectorFloat32:
@@ -1399,12 +1392,10 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     // TiFlash get default value from origin_default_value, check `Field ColumnInfo::defaultValueToField() const`
     // So we need to set origin_default_value to tipb_column_info.default_val()
     // Related logic in tidb, https://github.com/pingcap/tidb/blob/45318da24d8e4c0c6aab836d291a33f949dd18bf/pkg/table/tables/tables.go#L2303-L2329
-    if (tidb_column_info.tp != TypeBit)
-        tidb_column_info.origin_default_value = tipb_column_info.default_val();
-    // Decode tipb_column_info.default_val.
+    // And, decode tipb_column_info.default_val.
     {
         // The default value is null.
-        if (tidb_column_info.origin_default_value.size() == 0)
+        if (tipb_column_info.default_val().empty())
         {
             Poco::Dynamic::Var empty_val;
             tidb_column_info.origin_default_value = empty_val;
