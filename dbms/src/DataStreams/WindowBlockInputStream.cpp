@@ -31,6 +31,7 @@
 #include <magic_enum.hpp>
 #include <tuple>
 #include <type_traits>
+#include "Core/Block.h"
 
 namespace DB
 {
@@ -316,26 +317,29 @@ bool WindowBlockInputStream::returnIfCancelledOrKilled()
 
 Block WindowBlockInputStream::readImpl()
 {
+    // first try to get result without reading from children
+    if (Block block = action.tryGetOutputBlock())
+        return block;
+
     const auto & stream = children.back();
+    // read from children and try to get at least one result block
     while (!action.input_is_finished)
     {
         if (returnIfCancelledOrKilled())
             return {};
-
-        if (Block output_block = action.tryGetOutputBlock())
-            return output_block;
 
         Block block = stream->read();
         if (!block)
             action.input_is_finished = true;
         else
             action.appendBlock(block);
-        action.tryCalculate();
+        if (Block block = action.tryGetOutputBlock())
+            return block;
     }
 
     if (returnIfCancelledOrKilled())
         return {};
-    // return last partition block, if already return then return null
+    // input is finished, calculate the window functions result for the remaining data
     return action.tryGetOutputBlock();
 }
 
@@ -1237,6 +1241,9 @@ void WindowTransformAction::writeOutCurrentRow()
 
 Block WindowTransformAction::tryGetOutputBlock()
 {
+    // first try calculate the window function
+    tryCalculate();
+    // then return block if it is ready
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
     // calculated the window functions for all input rows. That's why the
