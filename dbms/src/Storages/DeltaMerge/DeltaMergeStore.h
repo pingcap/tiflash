@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -64,8 +65,6 @@ namespace DM
 {
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 struct ExternalDTFileInfo;

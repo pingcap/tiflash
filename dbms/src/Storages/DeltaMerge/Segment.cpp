@@ -26,6 +26,7 @@
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetWithVectorIndexInputStream.h>
+#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -165,7 +166,7 @@ DMFilePtr writeIntoNewDMFile(
         dm_context.keyspace_id);
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.global_context, dmfile, *schema_snap);
     const auto * mvcc_stream
-        = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
+        = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
     output_stream->writePrefix();
@@ -1054,7 +1055,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     }
 
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, real_ranges, 0);
-    stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
+    stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::MVCC>>(
         stream,
         columns_to_read,
         start_ts,
@@ -1124,7 +1125,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(
             EXTRA_HANDLE_COLUMN_ID,
             is_common_handle);
     }
-    data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+    data_stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
         data_stream,
         *read_info.read_columns,
         dm_context.min_version,
@@ -2108,7 +2109,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
         my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_ranges, 0);
         my_data
             = std::make_shared<PKSquashingBlockInputStream<false>>(my_data, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
-        my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+        my_data = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
             my_data,
             *read_info.read_columns,
             dm_context.min_version,
@@ -2142,7 +2143,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             other_data,
             EXTRA_HANDLE_COLUMN_ID,
             is_common_handle);
-        other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+        other_data = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
             other_data,
             *read_info.read_columns,
             dm_context.min_version,
@@ -2344,7 +2345,7 @@ StableValueSpacePtr Segment::prepareMerge(
             stream,
             EXTRA_HANDLE_COLUMN_ID,
             dm_context.is_common_handle);
-        stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+        stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
             stream,
             *read_info.read_columns,
             dm_context.min_version,
@@ -2360,7 +2361,7 @@ StableValueSpacePtr Segment::prepareMerge(
 
     BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(input_streams, /*req_id=*/"");
     // for the purpose to calculate StableProperty of the new segment
-    merged_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+    merged_stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
         merged_stream,
         *schema_snap,
         dm_context.min_version,
@@ -2690,7 +2691,7 @@ ColumnDefinesPtr Segment::arrangeReadColumns(const ColumnDefine & handle, const 
     return std::make_shared<ColumnDefines>(std::move(new_columns_to_read));
 }
 
-template <bool skippable_place, class IndexIterator>
+template <bool skippable_place>
 SkippableBlockInputStreamPtr Segment::getPlacedStream(
     const DMContext & dm_context,
     const ColumnDefines & read_columns,
@@ -2698,8 +2699,8 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
     const RSOperatorPtr & filter,
     const StableSnapshotPtr & stable_snap,
     const DeltaValueReaderPtr & delta_reader,
-    const IndexIterator & delta_index_begin,
-    const IndexIterator & delta_index_end,
+    const DeltaIndexIterator & delta_index_begin,
+    const DeltaIndexIterator & delta_index_end,
     size_t expected_block_size,
     ReadTag read_tag,
     UInt64 start_ts,
@@ -2724,8 +2725,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
         : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
     if (!need_row_id)
     {
-        return std::make_shared<
-            DeltaMergeBlockInputStream<DeltaValueReader, IndexIterator, skippable_place, /*need_row_id*/ false>>( //
+        return std::make_shared<DeltaMergeBlockInputStream<skippable_place, /*need_row_id*/ false>>( //
             stable_input_stream,
             delta_reader,
             delta_index_begin,
@@ -2737,8 +2737,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
     }
     else
     {
-        return std::make_shared<
-            DeltaMergeBlockInputStream<DeltaValueReader, IndexIterator, skippable_place, /*need_row_id*/ true>>( //
+        return std::make_shared<DeltaMergeBlockInputStream<skippable_place, /*need_row_id*/ true>>( //
             stable_input_stream,
             delta_reader,
             delta_index_begin,
@@ -3270,7 +3269,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     const ColumnDefines read_columns{
         getExtraHandleColumnDefine(is_common_handle),
     };
-    stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
+    stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::MVCC>>(
         stream,
         read_columns,
         start_ts,
@@ -3330,13 +3329,14 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
         columns_to_read_ptr,
         this->rowkey_range,
         read_tag);
+    auto ann_query_info = getANNQueryInfo(filter);
     SkippableBlockInputStreamPtr persisted_files_stream = ColumnFileSetWithVectorIndexInputStream::tryBuild(
         dm_context,
         persisted_files,
         columns_to_read_ptr,
         this->rowkey_range,
         persisted_files->getDataProvider(),
-        filter,
+        ann_query_info,
         bitmap_filter,
         segment_snap->stable->getDMFilesRows(),
         read_tag);
@@ -3345,7 +3345,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     assert(stream != nullptr);
     stream->appendChild(persisted_files_stream, persisted_files->getRows());
     stream->appendChild(mem_table_stream, memtable->getRows());
-    return stream;
+    return ConcatVectorIndexBlockInputStream::build(stream, ann_query_info);
 }
 
 BlockInputStreamPtr Segment::getLateMaterializationStream(
@@ -3509,7 +3509,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             read_data_block_rows);
     }
 
-    auto stream = getConcatSkippableBlockInputStream(
+    auto skippable_stream = getConcatSkippableBlockInputStream(
         bitmap_filter,
         segment_snap,
         dm_context,
@@ -3519,7 +3519,20 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         start_ts,
         read_data_block_rows,
         ReadTag::Query);
-    return std::make_shared<BitmapFilterBlockInputStream>(columns_to_read, stream, bitmap_filter);
+    auto stream = std::make_shared<BitmapFilterBlockInputStream>(columns_to_read, skippable_stream, bitmap_filter);
+    if (auto * vector_index_stream = dynamic_cast<ConcatVectorIndexBlockInputStream *>(skippable_stream.get());
+        vector_index_stream)
+    {
+        // For vector search, there are more likely to return small blocks from different
+        // sub-streams. Squash blocks to reduce the number of blocks thus improve the
+        // performance of upper layer.
+        return std::make_shared<SquashingBlockInputStream>(
+            stream,
+            /*min_block_size_rows=*/read_data_block_rows,
+            /*min_block_size_bytes=*/0,
+            dm_context.tracing_id);
+    }
+    return stream;
 }
 
 // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.

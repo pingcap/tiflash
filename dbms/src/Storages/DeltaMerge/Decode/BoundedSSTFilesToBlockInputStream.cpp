@@ -46,7 +46,7 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
         pk_column_id,
         is_common_handle,
         split_id);
-    mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+    mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
         stream,
         *(schema_snap->column_defines),
         _raw_child->opts.gc_safepoint,

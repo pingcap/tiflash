@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <TestUtils/InputStreamTestUtils.h>
 
@@ -40,6 +41,8 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getTMTContext().initS3GCManager(nullptr);
         store = reload();
     }
 
@@ -247,22 +250,20 @@ try
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.0}));
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-        // stable 72.0, delta 128.0
-        read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
+        ann_query_info->set_top_k(2);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-        // stable 72.0, delta 128.0
-        read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
 }
 CATCH
@@ -309,10 +310,10 @@ try
     // read with ANN query
     {
         ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({172.1}));
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-        read(range, filter, createVecFloat32Column<Array>({{172.0}, {173.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 }
 CATCH
@@ -842,7 +843,7 @@ try
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{2.0}, {128.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
@@ -852,7 +853,7 @@ try
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{127.0}, {222.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
 }
 CATCH
@@ -929,7 +930,7 @@ try
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{2.0}, {128.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
@@ -939,7 +940,7 @@ try
 
         auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
-        read(range, filter, createVecFloat32Column<Array>({{127.0}, {222.0}}));
+        read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
 
     {

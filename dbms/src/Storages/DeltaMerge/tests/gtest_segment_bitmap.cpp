@@ -125,7 +125,7 @@ protected:
             SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
             if (unit.pack_size)
             {
-                db_context->getSettingsRef().set("dt_segment_stable_pack_rows", *(unit.pack_size));
+                db_context->getSettingsRef().dt_segment_stable_pack_rows = *(unit.pack_size);
                 reloadDMContext();
                 ASSERT_EQ(dm_context->stable_pack_rows, *(unit.pack_size));
             }

@@ -37,6 +37,8 @@ public:
 
     std::string getFileName() const override;
 
+    std::string getInitialFileName() const;
+
     int getFD() const override;
 
 private:
@@ -45,6 +47,6 @@ private:
 private:
     RandomAccessFilePtr file;
 };
-
-using ReadBufferFromRandomAccessFilePtr = std::unique_ptr<ReadBufferFromRandomAccessFile>;
+using ReadBufferFromRandomAccessFilePtr = std::shared_ptr<ReadBufferFromRandomAccessFile>;
+using ReadBufferFromRandomAccessFileUPtr = std::unique_ptr<ReadBufferFromRandomAccessFile>;
 } // namespace DB

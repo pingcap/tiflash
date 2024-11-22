@@ -95,8 +95,8 @@ class PODArrayBase
 protected:
     /// Round padding up to an whole number of elements to simplify arithmetic.
     static constexpr size_t pad_right = integerRoundUp(pad_right_, ELEMENT_SIZE);
-    /// pad_left is also rounded up to 16 bytes to maintain alignment of allocated memory.
-    static constexpr size_t pad_left = integerRoundUp(integerRoundUp(pad_left_, ELEMENT_SIZE), 16);
+    /// pad_left is also rounded up to 64 bytes to maintain alignment of allocated memory.
+    static constexpr size_t pad_left = integerRoundUp(integerRoundUp(pad_left_, ELEMENT_SIZE), 64);
     /// Empty array will point to this static memory as padding.
     static constexpr char * null = pad_left ? const_cast<char *>(EmptyPODArray) + EmptyPODArraySize : nullptr;
 
@@ -397,23 +397,25 @@ public:
     const_iterator cend() const { return t_end(); }
 
     /// Same as resize, but zeroes new elements.
-    void resize_fill(size_t n)
+    template <typename... TAllocatorParams>
+    void resize_fill_zero(size_t n, TAllocatorParams &&... allocator_params)
     {
         size_t old_size = this->size();
         if (n > old_size)
         {
-            this->reserve(n);
+            this->reserve(n, std::forward<TAllocatorParams>(allocator_params)...);
             memset(this->c_end, 0, this->byte_size(n - old_size));
         }
         this->c_end = this->c_start + this->byte_size(n);
     }
 
-    void resize_fill(size_t n, const T & value)
+    template <typename... TAllocatorParams>
+    void resize_fill(size_t n, const T & value, TAllocatorParams &&... allocator_params)
     {
         size_t old_size = this->size();
         if (n > old_size)
         {
-            this->reserve(n);
+            this->reserve(n, std::forward<TAllocatorParams>(allocator_params)...);
             std::fill(t_end(), t_end() + n - old_size, value);
         }
         this->c_end = this->c_start + this->byte_size(n);

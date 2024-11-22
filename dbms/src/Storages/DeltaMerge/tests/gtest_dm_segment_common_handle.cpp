@@ -38,6 +38,7 @@ extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
+
 namespace DB::DM::tests
 {
 
@@ -679,10 +680,8 @@ try
         auto del_row_range = DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size);
         SCOPED_TRACE("check after range: " + del_row_range.toDebugString()); // Add trace msg when ASSERT failed
         segment->write(dmContext(), {del_row_range});
-        auto merged_del_range = DMTestEnv::getRowKeyRangeForClusteredIndex(
-            1,
-            100,
-            rowkey_column_size); // suqash_delete_range will consider [1, 100) maybe deleted
+        // suqash_delete_range will consider [1, 100) maybe deleted
+        auto merged_del_range = DMTestEnv::getRowKeyRangeForClusteredIndex(1, 100, rowkey_column_size);
         check_segment_squash_delete_range(segment, merged_del_range);
     }
 

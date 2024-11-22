@@ -242,7 +242,7 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
         {
             RUNTIME_CHECK_MSG(
                 column_array.getOffsetsColumn().empty(),
-                "try to deserialize Array type to non-empty column without position idenpendent encoding, type_name={}",
+                "try to deserialize Array type to non-empty column without position independent encoding, type_name={}",
                 getName());
             DataTypeNumber<ColumnArray::Offset>()
                 .deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0);

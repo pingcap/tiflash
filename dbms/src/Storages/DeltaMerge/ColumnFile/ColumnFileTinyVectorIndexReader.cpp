@@ -26,7 +26,7 @@ namespace DB::DM
 
 void ColumnFileTinyVectorIndexReader::read(
     MutableColumnPtr & vec_column,
-    const std::span<const VectorIndexViewer::SearchResult> & read_rowids,
+    const std::span<const VectorIndexViewer::Key> & read_rowids,
     size_t rowid_start_offset,
     size_t read_rows)
 {
@@ -36,9 +36,10 @@ void ColumnFileTinyVectorIndexReader::read(
     vec_column->reserve(read_rows);
     std::vector<Float32> value;
     size_t current_rowid = rowid_start_offset;
-    for (const auto & [rowid, _] : read_rowids)
+    for (const auto & rowid : read_rowids)
     {
-        vec_index->get(rowid, value);
+        // Each ColomnFileTiny has its own vector index, rowid_start_offset is the offset of the ColmnFilePersistSet.
+        vec_index->get(rowid - rowid_start_offset, value);
         if (rowid > current_rowid)
         {
             UInt32 nulls = rowid - current_rowid;
@@ -135,7 +136,7 @@ std::vector<VectorIndexViewer::SearchResult> ColumnFileTinyVectorIndexReader::lo
     auto perf_begin = PerfContext::vector_search;
     RUNTIME_CHECK(valid_rows.size() == tiny_file.getRows(), valid_rows.size(), tiny_file.getRows());
 
-    auto search_results = vec_index->searchWithDistance(ann_query_info, valid_rows);
+    auto search_results = vec_index->search(ann_query_info, valid_rows);
     // Sort by key
     std::sort(search_results.begin(), search_results.end(), [](const auto & lhs, const auto & rhs) {
         return lhs.key < rhs.key;

@@ -41,4 +41,14 @@ namespace DB::tests
     return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
 }
 
+::testing::AssertionResult StringViewCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    std::string_view lhs,
+    std::string_view rhs)
+{
+    if (strncmp(lhs.data(), rhs.data(), lhs.size()) == 0)
+        return ::testing::AssertionSuccess();
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, String(lhs), String(rhs), false);
+}
 } // namespace DB::tests

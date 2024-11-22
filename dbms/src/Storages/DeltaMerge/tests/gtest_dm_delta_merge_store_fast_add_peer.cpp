@@ -244,6 +244,7 @@ protected:
         // clear data
         store->clearData();
         auto table_column_defines = DMTestEnv::getDefaultColumns();
+        LOG_INFO(DB::Logger::get(), "reload to clear data");
         store = reload(table_column_defines);
         store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1));
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
@@ -358,6 +359,11 @@ try
 
     dumpCheckpoint(write_store_id);
 
+    /// The test will then create a new UniPS based on the persist files of the currrent UniPS.
+    /// In some cases, a "FullGC" could happen concurrently with the creation of the creation of the delta merge instance,
+    /// in the `reload` method. The panic will happen if DMStore tries to recover some segments, and failed to read them from UniPS.
+
+    LOG_INFO(DB::Logger::get(), "clear data to prepare for FAP");
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
@@ -374,6 +380,7 @@ try
     {
         auto table_column_defines = DMTestEnv::getDefaultColumns();
 
+        LOG_INFO(DB::Logger::get(), "reload to apple fap snapshot");
         store = reload(table_column_defines);
     }
 
@@ -431,6 +438,7 @@ try
         RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
         num_rows_write / 2 + 2 * num_rows_write);
 
+    LOG_INFO(DB::Logger::get(), "reload to check consistency");
     reload();
 
     verifyRows(
@@ -494,6 +502,7 @@ try
     UInt64 write_store_id = current_store_id + 1;
     dumpCheckpoint(write_store_id);
 
+    LOG_INFO(DB::Logger::get(), "clear data to prepare for FAP");
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);

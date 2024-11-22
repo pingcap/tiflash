@@ -58,10 +58,7 @@ public:
 
     ~VectorIndexHNSWViewer() override;
 
-    std::vector<Key> search(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const override;
-
-    std::vector<SearchResult> searchWithDistance(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows)
-        const override;
+    std::vector<SearchResult> search(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const override;
 
     size_t size() const override;
 

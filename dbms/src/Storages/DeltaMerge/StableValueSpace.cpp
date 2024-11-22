@@ -14,6 +14,7 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -350,7 +351,7 @@ void StableValueSpace::calculateStableProperty(
                       .onlyReadOnePackEveryTime()
                       .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
                       .build(file, read_columns, RowKeyRanges{rowkey_range}, context.scan_context);
-            auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+            auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
                 data_stream,
                 read_columns,
                 0,
