@@ -41,9 +41,6 @@
 #include <magic_enum.hpp>
 #include <string>
 
-#include "Core/Field.h"
-#include "common/types.h"
-
 namespace DB
 {
 namespace ErrorCodes
@@ -241,9 +238,7 @@ Field ColumnInfo::defaultValueToField() const
             // When we got bit_value from tipb, we have decoded it.
             auto is_int = bit_value.isInteger();
             if (is_int)
-            {
                 return bit_value.convert<UInt64>();
-            }
             return getBitValue(bit_value.convert<String>());
         });
     }
