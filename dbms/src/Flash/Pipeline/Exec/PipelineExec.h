@@ -26,7 +26,11 @@ namespace DB
 class PipelineExec : private boost::noncopyable
 {
 public:
-    PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_);
+    PipelineExec(
+        SourceOpPtr && source_op_,
+        TransformOps && transform_ops_,
+        SinkOpPtr && sink_op_,
+        bool has_pipeline_breaker_wait_time_);
 
     void executePrefix();
     void executeSuffix();
@@ -37,7 +41,9 @@ public:
 
     OperatorStatus await();
 
-    void finalizeProfileInfo(UInt64 extra_time);
+    void notify();
+
+    void finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_breaker_wait_time);
 
 private:
     inline OperatorStatus executeImpl();
@@ -62,16 +68,27 @@ private:
         io_op = op;
     }
 
+    ALWAYS_INLINE void fillWaitingForNotifyOp(Operator * op)
+    {
+        assert(!waiting_for_notify);
+        assert(op);
+        waiting_for_notify = op;
+    }
+
 private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+    bool has_pipeline_breaker_wait_time = false;
 
     // hold the operator which is ready for executing await.
     Operator * awaitable = nullptr;
 
     // hold the operator which is ready for executing io.
     Operator * io_op = nullptr;
+
+    // hold the operator which is waiting for notify.
+    Operator * waiting_for_notify = nullptr;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.

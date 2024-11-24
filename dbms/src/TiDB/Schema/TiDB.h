@@ -20,6 +20,9 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDBTypes.h>
+#include <TiDB/Schema/TiDB_fwd.h>
+#include <TiDB/Schema/VectorIndex.h>
 #include <tipb/schema.pb.h>
 
 #include <optional>
@@ -52,52 +55,6 @@ using DB::NullspaceID;
 using DB::String;
 using DB::TableID;
 using DB::Timestamp;
-
-// Column types.
-// In format:
-// TiDB type, int value, codec flag, CH type.
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define COLUMN_TYPES(M)                       \
-    M(Decimal, 0, Decimal, Decimal32)         \
-    M(Tiny, 1, VarInt, Int8)                  \
-    M(Short, 2, VarInt, Int16)                \
-    M(Long, 3, VarInt, Int32)                 \
-    M(Float, 4, Float, Float32)               \
-    M(Double, 5, Float, Float64)              \
-    M(Null, 6, Nil, Nothing)                  \
-    M(Timestamp, 7, UInt, MyDateTime)         \
-    M(LongLong, 8, Int, Int64)                \
-    M(Int24, 9, VarInt, Int32)                \
-    M(Date, 10, UInt, MyDate)                 \
-    M(Time, 11, Duration, Int64)              \
-    M(Datetime, 12, UInt, MyDateTime)         \
-    M(Year, 13, Int, Int16)                   \
-    M(NewDate, 14, Int, MyDate)               \
-    M(Varchar, 15, CompactBytes, String)      \
-    M(Bit, 16, VarInt, UInt64)                \
-    M(JSON, 0xf5, Json, String)               \
-    M(NewDecimal, 0xf6, Decimal, Decimal32)   \
-    M(Enum, 0xf7, VarUInt, Enum16)            \
-    M(Set, 0xf8, VarUInt, UInt64)             \
-    M(TinyBlob, 0xf9, CompactBytes, String)   \
-    M(MediumBlob, 0xfa, CompactBytes, String) \
-    M(LongBlob, 0xfb, CompactBytes, String)   \
-    M(Blob, 0xfc, CompactBytes, String)       \
-    M(VarString, 0xfd, CompactBytes, String)  \
-    M(String, 0xfe, CompactBytes, String)     \
-    M(Geometry, 0xff, CompactBytes, String)
-
-enum TP
-{
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(tt, v, cf, ct) Type##tt = (v),
-    COLUMN_TYPES(M)
-#undef M
-};
 
 // Column flags.
 #ifdef M
@@ -134,35 +91,6 @@ enum ColumnFlag
 #undef M
 };
 
-// Codec flags.
-// In format: TiDB codec flag, int value.
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define CODEC_FLAGS(M) \
-    M(Nil, 0)          \
-    M(Bytes, 1)        \
-    M(CompactBytes, 2) \
-    M(Int, 3)          \
-    M(UInt, 4)         \
-    M(Float, 5)        \
-    M(Decimal, 6)      \
-    M(Duration, 7)     \
-    M(VarInt, 8)       \
-    M(VarUInt, 9)      \
-    M(Json, 10)        \
-    M(Max, 250)
-
-enum CodecFlag
-{
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(cf, v) CodecFlag##cf = (v),
-    CODEC_FLAGS(M)
-#undef M
-};
-
 enum SchemaState
 {
     StateNone = 0,
@@ -188,6 +116,7 @@ struct ColumnInfo
     Int32 offset = -1;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
+    Poco::Dynamic::Var origin_default_bit_value;
     Poco::Dynamic::Var default_bit_value;
     TP tp = TypeDecimal; // TypeDecimal is not used by TiDB.
     UInt32 flag = 0;
@@ -198,24 +127,14 @@ struct ColumnInfo
     // Elems is the element list for enum and set type.
     std::vector<std::pair<std::string, Int16>> elems;
     SchemaState state = StateNone;
-    String comment;
 
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                      \
-    inline bool has##f##Flag() const \
-    {                                \
-        return (flag & (v)) != 0;    \
-    }                                \
-    inline void set##f##Flag()       \
-    {                                \
-        flag |= (v);                 \
-    }                                \
-    inline void clear##f##Flag()     \
-    {                                \
-        flag &= (~(v));              \
-    }
+#define M(f, v)                                                    \
+    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
+    inline void set##f##Flag() { flag |= (v); }                    \
+    inline void clear##f##Flag() { flag &= (~(v)); }
     COLUMN_FLAGS(M)
 #undef M
 
@@ -249,7 +168,6 @@ struct PartitionDefinition
     TableID id = DB::InvalidTableID;
     String name;
     // LessThan []string `json:"less_than"`
-    String comment;
 };
 
 struct PartitionInfo
@@ -294,8 +212,6 @@ struct DBInfo
     void deserialize(const String & json_str);
 };
 
-struct TableInfo;
-using TableInfoPtr = std::shared_ptr<TableInfo>;
 
 struct TiFlashReplicaInfo
 {
@@ -336,7 +252,6 @@ struct IndexInfo
 
     Int64 id = -1;
     String idx_name;
-    String tbl_name;
     std::vector<IndexColumnInfo> idx_cols;
     SchemaState state = StatePublic;
     Int32 index_type = -1;
@@ -344,6 +259,8 @@ struct IndexInfo
     bool is_primary = false;
     bool is_invisible = false;
     bool is_global = false;
+
+    VectorIndexDefinitionPtr vector_index = nullptr;
 };
 
 struct TableInfo
@@ -376,14 +293,12 @@ struct TableInfo
     std::vector<ColumnInfo> columns;
     /// index_infos stores the index info from TiDB. But we do not store all
     /// the index infos because most of the index info is useless in TiFlash.
-    /// If is_common_handle = true, the primary index info is stored
-    /// otherwise, all of the index info are ignored
+    /// Only the primary index info is stored now
     std::vector<IndexInfo> index_infos;
     SchemaState state = StateNone;
     bool pk_is_handle = false;
     /// when is_common_handle = true, it means this table is a clustered index table
     bool is_common_handle = false;
-    String comment;
     Timestamp update_timestamp = 0;
     bool is_partition_table = false;
     TableID belonging_table_id = DB::InvalidTableID;
@@ -397,8 +312,6 @@ struct TableInfo
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
-
-    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED; // TODO(hyy):seems could be removed
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;
@@ -417,14 +330,15 @@ struct TableInfo
     }
 
     /// should not be called if is_common_handle = false.
-    const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
+    const IndexInfo & getPrimaryIndexInfo() const;
 
-    IndexInfo & getPrimaryIndexInfo() { return index_infos[0]; }
+    size_t numColumnsInKey() const;
 };
 
-using DBInfoPtr = std::shared_ptr<DBInfo>;
 
 String genJsonNull();
+
+String genVectorFloat32Empty();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
@@ -433,3 +347,13 @@ std::vector<ColumnInfo> toTiDBColumnInfos(
     const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos);
 
 } // namespace TiDB
+
+template <>
+struct fmt::formatter<TiDB::ColumnInfo>
+{
+    template <typename FormatContext>
+    auto format(const TiDB::ColumnInfo & ci, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "{}", ci.id);
+    }
+};

@@ -29,6 +29,8 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -37,13 +39,14 @@
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
-#include <TiDB/Schema/TiDB.h>
+#include <Storages/TableNameMeta.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 
 #include <queue>
 
 namespace DB
 {
-
+struct GeneralCancelHandle;
 struct Settings;
 
 class Logger;
@@ -62,12 +65,11 @@ namespace DM
 {
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 struct ExternalDTFileInfo;
 struct GCOptions;
+struct LocalIndexBuildInfo;
 
 namespace tests
 {
@@ -172,14 +174,36 @@ struct StoreStats
     UInt64 background_tasks_length = 0;
 };
 
-class DeltaMergeStore : private boost::noncopyable
+struct LocalIndexStats
+{
+    UInt64 column_id{};
+    UInt64 index_id{};
+    String index_kind{};
+
+    UInt64 rows_stable_indexed{}; // Total rows
+    UInt64 rows_stable_not_indexed{}; // Total rows
+    UInt64 rows_delta_indexed{}; // Total rows
+    UInt64 rows_delta_not_indexed{}; // Total rows
+
+    // If the index is finally failed to be built, then this is not empty
+    String error_message{};
+};
+using LocalIndexesStats = std::vector<LocalIndexStats>;
+
+
+class DeltaMergeStore;
+using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+
+class DeltaMergeStore
+    : private boost::noncopyable
+    , public std::enable_shared_from_this<DeltaMergeStore>
 {
 public:
     friend class ::DB::DM::tests::DeltaMergeStoreTest;
     friend struct DB::CheckpointIngestInfo;
     struct Settings
     {
-        NotCompress not_compress_columns{};
+        NotCompress not_compress_columns;
     };
     static Settings EMPTY_SETTINGS;
 
@@ -259,26 +283,54 @@ public:
         BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
+private:
+    // Let the constructor be private, so that we can control the creation of DeltaMergeStore.
+    // Please use DeltaMergeStore::create to create a DeltaMergeStore
     DeltaMergeStore(
-        Context & db_context, //
+        Context & db_context,
         bool data_path_contains_database_name,
         const String & db_name,
         const String & table_name_,
         KeyspaceID keyspace_id_,
         TableID physical_table_id_,
+        ColumnID pk_col_id_,
         bool has_replica,
         const ColumnDefines & columns,
         const ColumnDefine & handle,
         bool is_common_handle_,
         size_t rowkey_column_size_,
+        LocalIndexInfosPtr local_index_infos_,
         const Settings & settings_ = EMPTY_SETTINGS,
         ThreadPool * thread_pool = nullptr);
+
+public:
+    static DeltaMergeStorePtr create(
+        Context & db_context,
+        bool data_path_contains_database_name,
+        const String & db_name,
+        const String & table_name_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        ColumnID pk_col_id_,
+        bool has_replica,
+        const ColumnDefines & columns,
+        const ColumnDefine & handle,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        LocalIndexInfosPtr local_index_infos_,
+        const Settings & settings_ = EMPTY_SETTINGS,
+        ThreadPool * thread_pool = nullptr);
+
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const { return db_name; }
-    const String & getTableName() const { return table_name; }
+    TableNameMeta getTableMeta() const
+    {
+        auto meta = table_meta.lockShared();
+        return TableNameMeta{meta->db_name, meta->table_name};
+    }
+    String getIdent() const { return fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id); }
 
     void rename(String new_path, String new_database_name, String new_table_name);
 
@@ -345,17 +397,19 @@ public:
 
     Segments buildSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
+        const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
         const DM::RowKeyRange & range,
         const CheckpointInfoPtr & checkpoint_info) const;
 
     Segments buildSegmentsFromCheckpointInfo(
         const Context & db_context,
+        const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
         const CheckpointInfoPtr & checkpoint_info)
     {
         auto dm_context = newDMContext(db_context, db_settings);
-        return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
+        return buildSegmentsFromCheckpointInfo(dm_context, cancel_handle, range, checkpoint_info);
     }
 
     UInt64 ingestSegmentsFromCheckpointInfo(
@@ -500,10 +554,10 @@ public:
      *   It is ensured that there are at least 2 elements in the returned vector.
      * When there is no mergeable segment, the returned vector will be empty.
      */
-    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
+    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & base_segment);
 
     /// Apply schema change on `table_columns`
-    void applySchemaChanges(TableInfo & table_info);
+    void applySchemaChanges(TiDB::TableInfo & table_info);
 
     ColumnDefinesPtr getStoreColumns() const
     {
@@ -523,6 +577,10 @@ public:
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
 
+    LocalIndexesStats getLocalIndexStats();
+    // Generate local index stats for non inited DeltaMergeStore
+    static std::optional<LocalIndexesStats> genLocalIndexStatsByTableInfo(const TiDB::TableInfo & table_info);
+
     bool isCommonHandle() const { return is_common_handle; }
     size_t getRowKeyColumnSize() const { return rowkey_column_size; }
 
@@ -531,6 +589,18 @@ public:
         bool is_fast_scan,
         bool keep_order,
         const PushDownFilterPtr & filter);
+
+    // Get a snap of local_index_infos for checking.
+    // Note that this is just a shallow copy of `local_index_infos`, do not
+    // modify the local indexes inside the snapshot.
+    LocalIndexInfosSnapshot getLocalIndexInfosSnapshot() const
+    {
+        std::shared_lock index_read_lock(mtx_local_index_infos);
+        if (!local_index_infos || local_index_infos->empty())
+            return nullptr;
+        // only make a shallow copy on the shared_ptr is OK
+        return local_index_infos;
+    }
 
 public:
     /// Methods mainly used by region split.
@@ -563,7 +633,7 @@ private:
     /// by returning a non-empty DM::WriteResult.
     // Deferencing `Iter` can get a pointer to a Segment.
     template <typename Iter>
-    DM::WriteResult checkSegmentsUpdateForKVStore(
+    DM::WriteResult checkSegmentsUpdateForProxy(
         const DMContextPtr & context,
         Iter begin,
         Iter end,
@@ -668,6 +738,18 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
+    void segmentEnsureStableLocalIndex(DMContext & dm_context, const LocalIndexBuildInfo & index_build_info);
+
+    void segmentEnsureStableLocalIndexWithErrorReport(
+        DMContext & dm_context,
+        const LocalIndexBuildInfo & index_build_info);
+
+    void segmentEnsureDeltaLocalIndex(
+        DMContext & dm_context,
+        const LocalIndexInfosPtr & index_info,
+        const DeltaValueSpacePtr & delta,
+        const String & source_segment_info);
+
     /**
      * Ingest a DMFile into the segment, optionally causing a new segment being created.
      *
@@ -761,6 +843,26 @@ private:
 
 private:
     /**
+      * Remove the segment from the store's memory structure.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void removeSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
+    /**
+      * Add the segment to the store's memory structure.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void addSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
+    /**
+      * Replace the old segment with the new segment in the store's memory structure.
+      * New segment should have the same segment id as the old segment.
+      * Not protected by lock, should accquire lock before calling this function.
+      */
+    void replaceSegment(
+        std::unique_lock<std::shared_mutex> &,
+        const SegmentPtr & old_segment,
+        const SegmentPtr & new_segment);
+
+    /**
      * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
      * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
      * See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
@@ -776,11 +878,67 @@ private:
         const SegmentPtr & segment,
         ThreadType thread_type,
         InputType input_type);
+
+    /**
+     * Segment update meta with new DMFiles. A lock must be provided, so that it is
+     * possible to update the meta for multiple segments all at once.
+     */
+    SegmentPtr segmentUpdateMeta(
+        std::unique_lock<std::shared_mutex> & read_write_lock,
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const DMFiles & new_dm_files);
+
+    /**
+     * Check whether there are new local indexes should be built for all segments.
+     * If dropped_indexes is not empty, try to cleanup the dropped_indexes
+     */
+    void checkAllSegmentsLocalIndex(std::vector<IndexID> && dropped_indexes);
+
+    /**
+     * Ensure the segment has stable index.
+     * If the segment has no stable index, it will be built in background.
+     * Note: This function can not be called in constructor, since shared_from_this() is not available.
+     *
+     * @returns true if index is missing and a build task is added in background.
+     */
+    bool segmentEnsureStableLocalIndexAsync(const SegmentPtr & segment);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
 public:
 #endif
+
+    /**
+      * Ensure the segment has delta index.
+      * If the segment has no delta index, it will be built in background.
+      * Note: This function can not be called in constructor, since shared_from_this() is not available.
+      *
+      * @returns true if index is missing and a build task is added in background.
+      */
+    bool segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segment);
+
+    void applyLocalIndexChange(const TiDB::TableInfo & new_table_info);
+
+    /**
+      * Wait until the segment has delta index.
+      * If the index is ready or no need to build, it will return immediately.
+      * Only used for testing.
+      *
+      * @returns false if index is still missing after wait timed out.
+      */
+    bool segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment) const;
+
+    /**
+     * Wait until the segment has stable index.
+     * If the index is ready or no need to build, it will return immediately.
+     * Only used for testing.
+     *
+     * @returns false if index is still missing after wait timed out.
+     */
+    bool segmentWaitStableLocalIndexReady(const SegmentPtr & segment) const;
+
     void dropAllSegments(bool keep_first_segment);
     String getLogTracingId(const DMContext & dm_ctx);
     // Returns segment that contains start_key and whether 'segments' is empty.
@@ -796,8 +954,7 @@ public:
     Settings settings;
     StoragePoolPtr storage_pool;
 
-    String db_name;
-    String table_name;
+    SharedMutexProtected<TableNameMeta> table_meta;
 
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;
@@ -808,6 +965,10 @@ public:
     ColumnDefines original_table_columns;
     BlockPtr original_table_header; // Used to speed up getHeader()
     ColumnDefine original_table_handle_define;
+
+    /// The user-defined PK column. If multi-column PK, or no PK, it is 0.
+    /// Note that user-defined PK will never be _tidb_rowid.
+    ColumnID pk_col_id;
 
     // The columns we actually store.
     // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
@@ -834,13 +995,36 @@ public:
 
     RowKeyValue next_gc_check_key;
 
+    // Some indexes are built in TiFlash locally. For example, Vector Index.
+    // Compares to the lightweight RoughSet Indexes, these indexes require lot
+    // of resources to build, so they will be built in separated background pool.
+    LocalIndexInfosPtr local_index_infos;
+    mutable std::shared_mutex mtx_local_index_infos;
+
+    struct DMFileIDToSegmentIDs
+    {
+    public:
+        using Key = PageIdU64; // dmfile_id
+        using Value = std::unordered_set<PageIdU64>; // segment_ids
+
+        void remove(const SegmentPtr & segment);
+
+        void add(const SegmentPtr & segment);
+
+        const Value & get(PageIdU64 dmfile_id) const;
+
+    private:
+        std::unordered_map<Key, Value> u_map;
+    };
+    // dmfile_id -> segment_ids
+    // This map is not protected by lock, should be accessed under read_write_mutex.
+    DMFileIDToSegmentIDs dmfile_id_to_segment_ids;
+
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
 
     LoggerPtr log;
-}; // namespace DM
-
-using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+};
 
 } // namespace DM
 } // namespace DB

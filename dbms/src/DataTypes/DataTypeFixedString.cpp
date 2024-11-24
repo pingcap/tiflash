@@ -155,7 +155,7 @@ static inline void read(const DataTypeFixedString & self, IColumn & column, Read
     }
 
     if (data.size() < prev_size + self.getN())
-        data.resize_fill(prev_size + self.getN());
+        data.resize_fill_zero(prev_size + self.getN());
 
     if (data.size() > prev_size + self.getN())
     {
@@ -200,28 +200,6 @@ void DataTypeFixedString::serializeTextJSON(
 void DataTypeFixedString::deserializeTextJSON(IColumn & column, ReadBuffer & istr) const
 {
     read(*this, column, [&istr](ColumnFixedString::Chars_t & data) { readJSONStringInto(data, istr); });
-}
-
-
-void DataTypeFixedString::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    const char * pos
-        = reinterpret_cast<const char *>(&static_cast<const ColumnFixedString &>(column).getChars()[n * row_num]);
-    writeXMLString(pos, pos + n, ostr);
-}
-
-
-void DataTypeFixedString::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
-{
-    const char * pos
-        = reinterpret_cast<const char *>(&static_cast<const ColumnFixedString &>(column).getChars()[n * row_num]);
-    writeCSVString(pos, pos + n, ostr);
-}
-
-
-void DataTypeFixedString::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
-{
-    read(*this, column, [&istr](ColumnFixedString::Chars_t & data) { readCSVStringInto(data, istr); });
 }
 
 

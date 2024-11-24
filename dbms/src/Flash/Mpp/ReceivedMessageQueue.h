@@ -21,8 +21,10 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/ReceivedMessage.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 
 #include <memory>
+#include <utility>
 
 namespace DB
 {
@@ -53,6 +55,31 @@ enum class ReceiverMode
     Local = 0,
     Sync,
     Async
+};
+
+class GRPCNotifyRecvQueue final
+    : public NotifyFuture
+    , public GRPCRecvQueue<ReceivedMessagePtr>
+{
+public:
+    template <typename... Args>
+    explicit GRPCNotifyRecvQueue(const LoggerPtr & log_, Args &&... args)
+        : GRPCRecvQueue<ReceivedMessagePtr>(log_, std::forward<Args>(args)...)
+    {}
+
+    void registerTask(TaskPtr && task) override { registerPipeReadTask(std::move(task)); }
+};
+
+class MSGUnboundedQueue final
+    : public NotifyFuture
+    , public LooseBoundedMPMCQueue<ReceivedMessagePtr>
+{
+public:
+    MSGUnboundedQueue()
+        : LooseBoundedMPMCQueue<ReceivedMessagePtr>(std::numeric_limits<size_t>::max())
+    {}
+
+    void registerTask(TaskPtr && task) override { registerPipeReadTask(std::move(task)); }
 };
 
 class ReceivedMessageQueue
@@ -98,6 +125,9 @@ public:
     }
 
     bool isWritable() const { return grpc_recv_queue.isWritable(); }
+    void notifyNextPipelineWriter() { grpc_recv_queue.notifyNextPipelineWriter(); }
+
+    void registerPipeWriteTask(TaskPtr && task) { grpc_recv_queue.registerPipeWriteTask(std::move(task)); }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -115,8 +145,8 @@ private:
     /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
     /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumers` in msg, if `remaining_consumers` is 0, then
     ///       remove the msg from msg_channel/grpc_recv_queue
-    std::vector<std::shared_ptr<LooseBoundedMPMCQueue<ReceivedMessagePtr>>> msg_channels_for_fine_grained_shuffle;
-    GRPCRecvQueue<ReceivedMessagePtr> grpc_recv_queue;
+    std::vector<std::unique_ptr<MSGUnboundedQueue>> msg_channels_for_fine_grained_shuffle;
+    GRPCNotifyRecvQueue grpc_recv_queue;
 };
 
 } // namespace DB

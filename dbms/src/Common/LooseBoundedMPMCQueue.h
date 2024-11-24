@@ -15,7 +15,9 @@
 #pragma once
 
 #include <Common/MPMCQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
+#include <condition_variable>
 #include <deque>
 
 namespace DB
@@ -48,46 +50,81 @@ public:
         , push_callback(std::move(push_callback_))
     {}
 
+    void registerPipeReadTask(TaskPtr && task)
+    {
+        {
+            std::lock_guard lock(mu);
+            if (queue.empty() && status == MPMCQueueStatus::NORMAL)
+            {
+                pipe_reader_cv.registerTask(std::move(task));
+                return;
+            }
+        }
+        PipeConditionVariable::notifyTaskDirectly(std::move(task));
+    }
+
+    void registerPipeWriteTask(TaskPtr && task)
+    {
+        {
+            std::lock_guard lock(mu);
+            if (isFullWithoutLock() && status == MPMCQueueStatus::NORMAL)
+            {
+                pipe_writer_cv.registerTask(std::move(task));
+                return;
+            }
+        }
+        PipeConditionVariable::notifyTaskDirectly(std::move(task));
+    }
+
     /// blocking function.
     /// Just like MPMCQueue::push.
     template <typename U>
     MPMCQueueResult push(U && data)
     {
-        std::unique_lock lock(mu);
-        writer_head.wait(lock, [&] { return !isFullWithoutLock() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
-
-        if ((likely(status == MPMCQueueStatus::NORMAL)) && !isFullWithoutLock())
+        bool notify_writer{false};
         {
-            pushFront(std::forward<U>(data));
-            return MPMCQueueResult::OK;
-        }
+            std::unique_lock lock(mu);
+            writer_cv.wait(lock, [&] { return !isFullWithoutLock() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
-        switch (status)
-        {
-        case MPMCQueueStatus::NORMAL:
-            return MPMCQueueResult::FULL;
-        case MPMCQueueStatus::CANCELLED:
-            return MPMCQueueResult::CANCELLED;
-        case MPMCQueueStatus::FINISHED:
-            return MPMCQueueResult::FINISHED;
+            if unlikely (status == MPMCQueueStatus::CANCELLED)
+                return MPMCQueueResult::CANCELLED;
+            else if unlikely (status == MPMCQueueStatus::FINISHED)
+                return MPMCQueueResult::FINISHED;
+            else
+            {
+                assert(status == MPMCQueueStatus::NORMAL);
+                assert(!isFullWithoutLock());
+                notify_writer = pushFront(std::forward<U>(data));
+            }
         }
+        if (notify_writer)
+            notifyOneWriter();
+        notifyOneReader();
+        return MPMCQueueResult::OK;
     }
 
     /// Just like MPMCQueue::tryPush.
     template <typename U>
     MPMCQueueResult tryPush(U && data)
     {
-        std::lock_guard lock(mu);
+        bool notify_writer{false};
+        {
+            std::lock_guard lock(mu);
 
-        if unlikely (status == MPMCQueueStatus::CANCELLED)
-            return MPMCQueueResult::CANCELLED;
-        if unlikely (status == MPMCQueueStatus::FINISHED)
-            return MPMCQueueResult::FINISHED;
-
-        if (isFullWithoutLock())
-            return MPMCQueueResult::FULL;
-
-        pushFront(std::forward<U>(data));
+            if unlikely (status == MPMCQueueStatus::CANCELLED)
+                return MPMCQueueResult::CANCELLED;
+            else if unlikely (status == MPMCQueueStatus::FINISHED)
+                return MPMCQueueResult::FINISHED;
+            else
+            {
+                if (isFullWithoutLock())
+                    return MPMCQueueResult::FULL;
+                notify_writer = pushFront(std::forward<U>(data));
+            }
+        }
+        if (notify_writer)
+            notifyOneWriter();
+        notifyOneReader();
         return MPMCQueueResult::OK;
     }
 
@@ -97,64 +134,74 @@ public:
     template <typename U>
     MPMCQueueResult forcePush(U && data)
     {
-        std::lock_guard lock(mu);
+        bool notify_writer{false};
+        {
+            std::lock_guard lock(mu);
 
-        if unlikely (status == MPMCQueueStatus::CANCELLED)
-            return MPMCQueueResult::CANCELLED;
-        if unlikely (status == MPMCQueueStatus::FINISHED)
-            return MPMCQueueResult::FINISHED;
-
-        pushFront(std::forward<U>(data));
+            if unlikely (status == MPMCQueueStatus::CANCELLED)
+                return MPMCQueueResult::CANCELLED;
+            else if unlikely (status == MPMCQueueStatus::FINISHED)
+                return MPMCQueueResult::FINISHED;
+            else
+                notify_writer = pushFront(std::forward<U>(data));
+        }
+        if (notify_writer)
+            notifyOneWriter();
+        notifyOneReader();
         return MPMCQueueResult::OK;
     }
 
     MPMCQueueResult pop(T & data)
     {
-        std::unique_lock lock(mu);
-        reader_head.wait(lock, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
-
-        if ((likely(status != MPMCQueueStatus::CANCELLED)) && !queue.empty())
         {
+            std::unique_lock lock(mu);
+            reader_cv.wait(lock, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
+
+            if unlikely (status == MPMCQueueStatus::CANCELLED)
+                return MPMCQueueResult::CANCELLED;
+
+            if (queue.empty())
+            {
+                assert(status == MPMCQueueStatus::FINISHED);
+                return MPMCQueueResult::FINISHED;
+            }
+
             data = popBack();
-            return MPMCQueueResult::OK;
         }
-
-        switch (status)
-        {
-        case MPMCQueueStatus::NORMAL:
-            return MPMCQueueResult::EMPTY;
-        case MPMCQueueStatus::CANCELLED:
-            return MPMCQueueResult::CANCELLED;
-        case MPMCQueueStatus::FINISHED:
-            return MPMCQueueResult::FINISHED;
-        }
+        notifyOneWriter();
+        return MPMCQueueResult::OK;
     }
 
     MPMCQueueResult tryPop(T & data)
     {
-        std::lock_guard lock(mu);
+        {
+            std::lock_guard lock(mu);
+            if unlikely (status == MPMCQueueStatus::CANCELLED)
+                return MPMCQueueResult::CANCELLED;
 
-        if unlikely (status == MPMCQueueStatus::CANCELLED)
-            return MPMCQueueResult::CANCELLED;
+            if (queue.empty())
+                return status == MPMCQueueStatus::NORMAL ? MPMCQueueResult::EMPTY : MPMCQueueResult::FINISHED;
 
-        if (queue.empty())
-            return status == MPMCQueueStatus::NORMAL ? MPMCQueueResult::EMPTY : MPMCQueueResult::FINISHED;
-
-        data = popBack();
+            data = popBack();
+        }
+        notifyOneWriter();
         return MPMCQueueResult::OK;
     }
 
     MPMCQueueResult tryDequeue()
     {
-        std::lock_guard lock(mu);
+        {
+            std::lock_guard lock(mu);
 
-        if unlikely (status == MPMCQueueStatus::CANCELLED)
-            return MPMCQueueResult::CANCELLED;
+            if unlikely (status == MPMCQueueStatus::CANCELLED)
+                return MPMCQueueResult::CANCELLED;
 
-        if (queue.empty())
-            return status == MPMCQueueStatus::NORMAL ? MPMCQueueResult::EMPTY : MPMCQueueResult::FINISHED;
+            if (queue.empty())
+                return status == MPMCQueueStatus::NORMAL ? MPMCQueueResult::EMPTY : MPMCQueueResult::FINISHED;
 
-        popBack();
+            popBack();
+        }
+        notifyOneWriter();
         return MPMCQueueResult::OK;
     }
 
@@ -172,6 +219,8 @@ public:
             return true;
         return !isFullWithoutLock();
     }
+
+    void notifyNextPipelineWriter() { pipe_writer_cv.notifyOne(); }
 
     MPMCQueueStatus getStatus() const
     {
@@ -208,6 +257,27 @@ public:
     }
 
 private:
+    void notifyOneReader()
+    {
+        reader_cv.notify_one();
+        pipe_reader_cv.notifyOne();
+    }
+
+    void notifyOneWriter()
+    {
+        writer_cv.notify_one();
+        pipe_writer_cv.notifyOne();
+    }
+
+    void notifyAll()
+    {
+        reader_cv.notify_all();
+        pipe_reader_cv.notifyAll();
+
+        writer_cv.notify_all();
+        pipe_writer_cv.notifyAll();
+    }
+
     bool isFullWithoutLock() const
     {
         assert(current_auxiliary_memory_usage >= 0);
@@ -218,15 +288,18 @@ private:
     template <typename FF>
     ALWAYS_INLINE bool changeStatus(FF && ff)
     {
-        std::lock_guard lock(mu);
-        if likely (status == MPMCQueueStatus::NORMAL)
+        bool ret{false};
         {
-            ff();
-            reader_head.notifyAll();
-            writer_head.notifyAll();
-            return true;
+            std::lock_guard lock(mu);
+            if likely (status == MPMCQueueStatus::NORMAL)
+            {
+                ff();
+                ret = true;
+            }
         }
-        return false;
+        if (ret)
+            notifyAll();
+        return ret;
     }
 
     ALWAYS_INLINE T popBack()
@@ -235,12 +308,12 @@ private:
         queue.pop_back();
         current_auxiliary_memory_usage -= element.memory_usage;
         assert(!queue.empty() || current_auxiliary_memory_usage == 0);
-        writer_head.notifyNext();
         return element.data;
     }
 
+    // If returns true, then notify writers afterward; if false, no need to notify writers.
     template <typename U>
-    ALWAYS_INLINE void pushFront(U && data)
+    ALWAYS_INLINE bool pushFront(U && data)
     {
         Int64 memory_usage = get_auxiliary_memory_usage(data);
         queue.emplace_front(std::forward<U>(data), memory_usage);
@@ -249,7 +322,7 @@ private:
         {
             push_callback(queue.front().data);
         }
-        reader_head.notifyNext();
+
         /// consider a case that the queue capacity is 2, the max_auxiliary_memory_usage is 100,
         /// T1: a writer write an object with size 100
         /// T2: two writers(w2, w3) try to write, but all blocked because of the max_auxiliary_memory_usage
@@ -260,8 +333,9 @@ private:
         /// 1. there is another reader
         /// 2. there is another writer
         /// if we notify the writer if the queue is not full here, w3 can write immediately
-        if (capacity_limits.max_bytes != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
-            writer_head.notifyNext();
+        ///
+        /// return true means that writer should be notified.
+        return capacity_limits.max_bytes != std::numeric_limits<Int64>::max() && !isFullWithoutLock();
     }
 
 private:
@@ -286,8 +360,11 @@ private:
     const PushCallback push_callback;
     Int64 current_auxiliary_memory_usage = 0;
 
-    MPMCQueueDetail::WaitingNode reader_head;
-    MPMCQueueDetail::WaitingNode writer_head;
+    std::condition_variable reader_cv;
+    std::condition_variable writer_cv;
+
+    PipeConditionVariable pipe_reader_cv;
+    PipeConditionVariable pipe_writer_cv;
 
     MPMCQueueStatus status = MPMCQueueStatus::NORMAL;
     String cancel_reason;

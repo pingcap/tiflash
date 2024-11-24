@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Debug/MockKVStore/MockFFIImpls.h>
@@ -167,16 +168,23 @@ void MockRaftStoreProxy::debugAddRegions(
 {
     UNUSED(tmt);
     int n = ranges.size();
-    auto _ = genLockGuard();
-    auto task_lock = kvs.genTaskLock();
-    auto lock = kvs.genRegionMgrWriteLock(task_lock);
-    for (int i = 0; i < n; ++i)
     {
-        regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));
-        auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
-        lock.regions.emplace(region_ids[i], region);
-        lock.index.add(region);
-        tmt.getRegionTable().updateRegion(*region);
+        auto _ = genLockGuard();
+        for (int i = 0; i < n; ++i)
+        {
+            regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));
+        }
+    }
+    {
+        auto task_lock = kvs.genTaskLock(); // No region events
+        auto lock = kvs.genRegionMgrWriteLock(task_lock); // Region mgr lock
+        for (int i = 0; i < n; ++i)
+        {
+            auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
+            lock.regions.emplace(region_ids[i], region);
+            lock.index.add(region);
+            tmt.getRegionTable().updateRegion(*region);
+        }
     }
 }
 
@@ -647,6 +655,8 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
+
+    SYNC_FOR("before_MockRaftStoreProxy::snapshot_prehandle");
     try
     {
         auto prehandle_result = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
@@ -664,7 +674,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, "mock apply snapshot error {}", e.message());
+        LOG_ERROR(log, "mock apply snapshot exception {}", e.message());
         e.rethrow();
     }
     LOG_FATAL(DB::Logger::get(), "Should not happen");
@@ -684,8 +694,8 @@ TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTCont
     }
     MockTiDB::instance().newDataBase("d");
     // Make sure there is a table with smaller id.
-    MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "", "dt");
-    UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
+    MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "");
+    UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "");
 
     auto schema_syncer = tmt.getSchemaSyncerManager();
     schema_syncer->syncSchemas(ctx, NullspaceID);

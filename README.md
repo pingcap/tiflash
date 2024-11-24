@@ -36,8 +36,8 @@ And the following operating systems:
 
 The following packages are required:
 
-- CMake 3.21.0+
-- Clang 13.0.6+
+- CMake 3.23.0+
+- Clang 17.0.0+
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
@@ -56,13 +56,20 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install LLVM, see https://apt.llvm.org for details
-# Clang will be available as /usr/bin/clang++-13
+# Clang will be available as /usr/bin/clang++-17
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 13 all
+sudo ./llvm.sh 17 all
 
 # Install other dependencies
 sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev ccache
+```
+
+Then, expose the LLVM17 toolchain as the default one in order to use it later in compile:
+
+```shell
+export CC="/usr/bin/clang-17"
+export CXX="/usr/bin/clang++-17"
 ```
 
 **Note for Ubuntu 18.04 and Ubuntu 20.04:**
@@ -104,9 +111,9 @@ sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja cu
 </details>
 
 <details>
-<summary><b>CentOS 7</b></summary>
+<summary><b>Rocky Linux 8</b></summary>
 
-Please refer to [release-centos7-llvm/env/prepare-sysroot.sh](./release-centos7-llvm/env/prepare-sysroot.sh)
+Please refer to [release-linux-llvm/env/prepare-sysroot.sh](./release-linux-llvm/env/prepare-sysroot.sh)
 
 </details>
 
@@ -123,15 +130,16 @@ xcode-select --install
 
 # Install other dependencies
 brew install ninja cmake openssl@1.1 ccache
+
+brew install llvm@17
 ```
 
-If your MacOS is higher or equal to 13.0, it should work out of the box because by default Apple clang is 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
+Then, expose the LLVM17 toolchain as the default one in order to use it later in compile:
 
 ```shell
-brew install llvm@15
-
-# check llvm version
-clang --version # should be 15.0.0 or higher
+export PATH="$(brew --prefix)/opt/llvm@17/bin:$PATH"
+export CC="$(brew --prefix)/opt/llvm@17/bin/clang"
+export CXX="$(brew --prefix)/opt/llvm@17/bin/clang++"
 ```
 
 </details>
@@ -149,38 +157,18 @@ To build TiFlash for development:
 
 ```shell
 # In the TiFlash repository root:
-mkdir cmake-build-debug  # The directory name can be customized
+cmake --workflow --preset dev
+```
+
+Or if you don't like the preset:
+
+```shell
+# In the TiFlash repository root:
+mkdir cmake-build-debug
 cd cmake-build-debug
-
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-
 ninja tiflash
 ```
-
-Note: In Linux, usually you need to explicitly specify to use LLVM.
-
-```shell
-# In cmake-build-debug directory:
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
-  -DCMAKE_C_COMPILER=/usr/bin/clang-13 \
-  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-13
-```
-
-In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
-
-Add the following lines to your shell environment, e.g. `~/.bash_profile`.
-```shell
-export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-export CC="/opt/homebrew/opt/llvm/bin/clang"
-export CXX="/opt/homebrew/opt/llvm/bin/clang++"
-```
-
-Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
-```shell
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
-```
-
-After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
 
 ### Build Options
 
@@ -270,11 +258,8 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 Unit tests are automatically enabled in debug profile. To build these unit tests:
 
 ```shell
-cd cmake-build-debug
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-ninja gtests_dbms       # Most TiFlash unit tests
-ninja gtests_libdaemon  # Settings related tests
-ninja gtests_libcommon
+# In the TiFlash repository root:
+cmake --workflow --preset unit-tests-all
 ```
 
 Then, to run these unit tests:
@@ -296,60 +281,20 @@ To build unit test executables with sanitizer enabled:
 
 ```shell
 # In the TiFlash repository root:
-mkdir cmake-build-sanitizer
-cd cmake-build-sanitizer
-cmake .. -GNinja -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
-ninja gtests_dbms
-ninja gtests_libdaemon
-ninja gtests_libcommon
+cmake --workflow --preset asan-tests-all # or tsan-tests-all
 ```
 
 There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
 
 ```shell
-LSAN_OPTIONS=suppressions=test/sanitize/asan.suppression
+LSAN_OPTIONS="suppressions=tests/sanitize/asan.suppression" ./dbms/gtests_dbms ...
+# or
+TSAN_OPTIONS="suppressions=tests/sanitize/tsan.suppression" ./dbms/gtests_dbms ...
 ```
 
 ## Run Integration Tests
 
-1. Build your own TiFlash binary using debug profile:
-
-   ```shell
-   cd cmake-build-debug
-   cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-   ninja tiflash
-   ```
-
-2. Start a local TiDB cluster with your own TiFlash binary using TiUP:
-
-   ```shell
-   cd cmake-build-debug
-   tiup playground nightly --tiflash.binpath ./dbms/src/Server/tiflash
-
-   # Or using a more stable cluster version:
-   # tiup playground v6.1.0 --tiflash.binpath ./dbms/src/Server/tiflash
-   ```
-
-   [TiUP](https://tiup.io) is the TiDB component manager. If you don't have one, you can install it via:
-
-   ```shell
-   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-   ```
-
-   If you are not running the cluster using the default port (for example, you run multiple clusters), make sure that the port and build directory in `tests/_env.sh` are correct.
-
-3. Run integration tests:
-
-   ```shell
-   # In the TiFlash repository root:
-   cd tests
-   ./run-test.sh
-
-   # Or run specific integration test:
-   # ./run-test.sh fullstack-test2/ddl
-   ```
-
-Note: some integration tests (namely, tests under `delta-merge-test`) requires a standalone TiFlash service without a TiDB cluster, otherwise they will fail. To run these integration tests: TBD
+Check out the [Integration Test Guide](/tests/README.md) for more details.
 
 ## Run MicroBenchmark Tests
 
@@ -357,10 +302,7 @@ To build micro benchmark tests, you need release profile and tests enabled:
 
 ```shell
 # In the TiFlash repository root:
-mkdir cmake-build-release
-cd cmake-build-release
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
-ninja bench_dbms
+cmake --workflow --preset benchmarks
 ```
 
 Then, to run these micro benchmarks:
@@ -377,10 +319,10 @@ More usages are available via `./dbms/bench_dbms --help`.
 
 ## Generate LLVM Coverage Report
 
-To build coverage report, run the script under `release-centos7-llvm`
+To build coverage report, run the script under `release-linux-llvm`
 
 ```shell
-cd release-centos7-llvm
+cd release-linux-llvm
 ./gen_coverage.sh
 # Or run with filter:
 # FILTER='*DMFile*:*DeltaMerge*:*Segment*' ./gen_coverage.sh
@@ -397,12 +339,12 @@ See [TiFlash Development Guide](/docs/DEVELOPMENT.md) and [TiFlash Design docume
 
 Before submitting a pull request, please resolve clang-tidy errors and use [format-diff.py](format-diff.py) to format source code, otherwise CI build may raise error.
 
-> **NOTE**: It is required to use clang-format 12.0.0+.
+> **NOTE**: It is required to use clang-format 17.0.0+.
 
 ```shell
 # In the TiFlash repository root:
 merge_base=$(git merge-base upstream/master HEAD)
-python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only`
+python3 release-linux-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only`
 # if there are too much errors, you can try to run the script again with `-fix`
 python3 format-diff.py --diff_from $merge_base
 ```

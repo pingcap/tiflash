@@ -94,21 +94,83 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
+    {
+        for (const auto & column : columns)
+            column->countSerializeByteSize(byte_size);
+    }
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override
+    {
+        for (const auto & column : columns)
+            column->countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    }
+
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
+    {
+        for (const auto & column : columns)
+            column->serializeToPos(pos, start, length, has_null);
+    }
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override
+    {
+        for (const auto & column : columns)
+            column->serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().deserializeAndInsertFromPos(pos, align_buffer);
+    }
+    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().deserializeAndInsertFromPosForColumnArray(pos, array_offsets);
+    }
+
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
+
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const override;
+    template <bool selective_block>
+    MutableColumns scatterImplForColumnTuple(
+        ColumnIndex num_columns,
+        const Selector & selector,
+        const BlockSelective & selective) const;
+
     void scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns & scatterColumns, const Selector & selector, const BlockSelective & selective)
+        const override;
+    template <bool selective_block>
+    void scatterToImplForColumnTuple(
+        ScatterColumns & scatterColumns,
+        const Selector & selector,
+        const BlockSelective & selective) const;
+
     void gather(ColumnGathererStream & gatherer_stream) override;
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
     void getExtremes(Field & min, Field & max) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
     void reserve(size_t n) override;
+    void reserveAlign(size_t n, size_t alignment) override;
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;

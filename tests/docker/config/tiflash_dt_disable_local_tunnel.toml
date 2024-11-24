@@ -12,41 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-tmp_path = "/tmp/tiflash/data/tmp"
-
-path = "/tmp/tiflash/data/db"
+path = "/tmp/tiflash/data"
 capacity = "10737418240"
 
-mark_cache_size = 1073741824
-minmax_index_cache_size = 1073741824
 tcp_port = 9000
-http_port = 8123
 
 [flash]
-tidb_status_addr = "tidb0:10080"
 service_addr = "0.0.0.0:3930"
-[flash.flash_cluster]
-update_rule_interval = 5
 [flash.proxy]
 addr = "0.0.0.0:20170"
 advertise-addr = "tiflash0:20170"
-data-dir = "/data"
+data-dir = "/tmp/tiflash/proxy"
 config = "/proxy.toml"
-log-file = "/log/proxy.log"
+log-file = "/tmp/tiflash/log/tiflash_tikv.log"
 engine-addr = "tiflash0:3930"
 status-addr = "0.0.0.0:20181"
 advertise-status-addr = "tiflash0:20181"
 
 [logger]
 count = 10
-errorlog = "/tmp/tiflash/log/error.log"
+log = "/tmp/tiflash/log/tiflash.log"
+errorlog = "/tmp/tiflash/log/tiflash_error.log"
 size = "1000M"
-log = "/tmp/tiflash/log/server.log"
 level = "trace"
 
 [raft]
 pd_addr = "pd0:2379"
-ignore_databases = "system,default"
 
 [profiles]
 [profiles.default]

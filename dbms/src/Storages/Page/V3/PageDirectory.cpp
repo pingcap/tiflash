@@ -41,10 +41,10 @@
 
 
 #ifdef FIU_ENABLE
-#include <thread>
+#include <Common/randomSeed.h>
 
-#include "Common/randomSeed.h"
-#include "pcg_random.hpp"
+#include <pcg_random.hpp>
+#include <thread>
 #endif // FIU_ENABLE
 
 #pragma GCC diagnostic push
@@ -67,6 +67,7 @@ namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
 extern const char pause_before_full_gc_prepare[];
+extern const char pause_before_page_dir_update_local_cache[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -86,7 +87,7 @@ namespace PS::V3
 template <typename Trait>
 PageLock VersionedPageEntries<Trait>::acquireLock() const NO_THREAD_SAFETY_ANALYSIS
 {
-    return std::lock_guard(m);
+    return std::lock_guard{m};
 }
 
 template <typename Trait>
@@ -321,28 +322,50 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver) NO_THREA
         return;
     }
 
-    throw Exception(fmt::format(
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
         "try to create delete version with invalid state "
         "[ver={}] [state={}]",
         ver,
-        toDebugString()));
+        toDebugString());
 }
 
 template <typename Trait>
-bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry)
-    NO_THREAD_SAFETY_ANALYSIS
+bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(
+    const PageVersion & ver,
+    const PageEntryV3 & entry,
+    bool ignore_delete) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        RUNTIME_CHECK_MSG(last_iter != entries.end() && last_iter->second.isEntry(), "{}", toDebugString());
+        if (ignore_delete)
+        {
+            // find the first non-delete entry until it is the first entry or there is no such entry
+            while (last_iter != entries.end() && last_iter != entries.begin() && last_iter->second.isDelete())
+            {
+                --last_iter;
+            }
+        }
+        RUNTIME_CHECK_MSG(
+            last_iter != entries.end() && last_iter->second.isEntry(),
+            "this={}, entries={}, ver={}, entry={}",
+            toDebugString(),
+            entries,
+            ver,
+            entry);
+
         auto & ori_entry = last_iter->second.entry.value();
         RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
+
+        // maybe another thread has in-place update the local blob location, ignored
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
         }
+
+        // update the entry in-place
         ori_entry.file_id = entry.file_id;
         ori_entry.size = entry.size;
         ori_entry.offset = entry.offset;
@@ -350,11 +373,12 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         ori_entry.checkpoint_info.is_local_data_reclaimed = false;
         return true;
     }
-    throw Exception(fmt::format(
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
         "try to update remote page with invalid state "
         "[ver={}] [state={}]",
         ver,
-        toDebugString()));
+        toDebugString());
 }
 
 // Create a new reference version with version=`ver` and `ori_page_id_`.
@@ -447,16 +471,18 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
     }
     default:
     {
-        throw Exception(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "Calling VersionedPageEntries::fromRestored with unknown type: {}",
-            static_cast<Int32>(rec.type)));
+            static_cast<Int32>(rec.type));
     }
     }
 }
 
 template <typename Trait>
-std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVersion> VersionedPageEntries<
-    Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry) NO_THREAD_SAFETY_ANALYSIS
+std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVersion> //
+VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -513,7 +539,11 @@ std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVers
     }
     else
     {
-        LOG_WARNING(Logger::get(), "Can't resolve the EditRecordType {}", magic_enum::enum_name(type));
+        LOG_WARNING(
+            Logger::get(),
+            "Can't resolve the EditRecordType, type={} type_int={}",
+            magic_enum::enum_name(type),
+            static_cast<Int32>(type));
     }
 
     return {ResolveResult::FAIL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
@@ -667,11 +697,10 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
                 if (unlikely(met_delete && ref_count_value == 1))
                 {
                     throw Exception(
-                        fmt::format(
-                            "Try to add ref to a completely deleted entry [entry={}] [ver={}]",
-                            iter->second,
-                            target_ver),
-                        ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR,
+                        "Try to add ref to a completely deleted entry [entry={}] [ver={}]",
+                        iter->second,
+                        target_ver);
                 }
                 iter->second.being_ref_count.incrRefCount(ref_ver, 1);
                 return ref_count_value + 1;
@@ -780,7 +809,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
     }
     else if (type != EditRecordType::VAR_ENTRY)
     {
-        throw Exception(fmt::format("Invalid state {}", toDebugString()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid state {}", toDebugString());
     }
 
     // type == EditRecordType::VAR_ENTRY
@@ -885,11 +914,12 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         auto iter = MapUtils::findMutLess(entries, PageVersion(deref_ver.sequence + 1, 0));
         if (iter == entries.end())
         {
-            throw Exception(fmt::format(
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]",
                 page_id,
                 deref_ver,
-                deref_count));
+                deref_count);
         }
         // ignore all "delete"
         while (iter != entries.begin() && iter->second.isDelete())
@@ -900,11 +930,12 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         if (iter->second.isDelete())
         {
             // run into the begin of `entries`, but still can not find a valid entry to decrease the ref-count
-            throw Exception(fmt::format(
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]",
                 page_id,
                 deref_ver,
-                deref_count));
+                deref_count);
         }
         assert(iter->second.isEntry());
         iter->second.being_ref_count.decrRefCountInSnap(lowest_seq, deref_count);
@@ -921,7 +952,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             page_lock);
     }
 
-    throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "calling derefAndClean with invalid state, state={}", toDebugString());
 }
 
 template <typename Trait>
@@ -933,9 +964,11 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
     {
         if (create_ver.sequence > seq)
             return;
-        // We need to keep the VAR_REF once create_ver > seq,
-        // or the being-ref entry/external won't be able to be clean
-        // after restore.
+        // - If create_ver > seq && ! is_deleted, then
+        //   we need to keep a record for {page_id, VAR_REF}
+        // - If create_ver > seq && is_deleted, then
+        //   we need to keep a record for {page_id, VAR_REF} and {page_id, VAR_DEL}
+        //   so that the page_id and being-ref page_id can be cleanup after restore
         edit.varRef(page_id, create_ver, ori_page_id);
         if (is_deleted && delete_ver.sequence <= seq)
         {
@@ -950,6 +983,11 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             return;
         auto iter = entries.find(create_ver);
         RUNTIME_CHECK(iter != entries.end());
+        // - If create_ver > seq && ! is_deleted, then
+        //   we need to keep a record for {page_id, VAR_EXT}
+        // - If create_ver > seq && is_deleted, then
+        //   we need to keep a record for {page_id, VAR_EXT} and {page_id, VAR_DEL}
+        //   so that the page_id can be ref by another page_id after restore
         edit.varExternal(page_id, create_ver, iter->second.entry.value(), being_ref_count.getRefCountInSnap(seq));
         if (is_deleted && delete_ver.sequence <= seq)
         {
@@ -960,13 +998,13 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
 
     if (type == EditRecordType::VAR_ENTRY)
     {
-        // dump the latest entry if it is not a "delete"
         auto last_iter = MapUtils::findLess(entries, PageVersion(seq + 1));
         if (last_iter == entries.end())
             return;
 
         if (last_iter->second.isEntry())
         {
+            // The latest entry is not a "delete", then "collapse" to {page_id, the latest version entry}
             const auto & entry = last_iter->second;
             edit.varEntry(
                 page_id,
@@ -979,9 +1017,14 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
         {
             if (last_iter == entries.begin())
             {
-                // only delete left, then we don't need to keep this
+                // only delete left, then we don't need to keep record for this page_id
                 return;
             }
+
+            // The latest entry is "delete",
+            // - If the last non-delete entry is not being ref, then don't need to keep record for this page_id
+            // - If the last non-delete entry is still being ref, then we keep a varEntry and varDel for this page_id
+            //   so that it can be ref by another page_id after restore
             auto last_version = last_iter->first;
             auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
             if (prev_iter->second.isEntry())
@@ -1004,7 +1047,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
         return;
     }
 
-    throw Exception(fmt::format("Calling collapseTo with invalid state [state={}]", toDebugString()));
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Calling collapseTo with invalid state, state={}", toDebugString());
 }
 
 /**************************
@@ -1135,11 +1178,10 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
                             dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
                     }
                     throw Exception(
-                        fmt::format(
-                            "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
-                            page_id,
-                            id_to_resolve),
-                        ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                        ErrorCodes::PS_ENTRY_NOT_EXISTS,
+                        "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                        page_id,
+                        id_to_resolve);
                 }
                 else
                 {
@@ -1218,11 +1260,10 @@ std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirector
                     if (throw_on_not_exist)
                     {
                         throw Exception(
-                            fmt::format(
-                                "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
-                                page_id,
-                                id_to_resolve),
-                            ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                            ErrorCodes::PS_ENTRY_NOT_EXISTS,
+                            "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                            page_id,
+                            id_to_resolve);
                     }
                     else
                     {
@@ -1308,7 +1349,10 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
                 if (throw_on_not_exist)
                 {
                     throw Exception(
-                        fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                        ErrorCodes::LOGICAL_ERROR,
+                        "Invalid page id [page_id={}] [resolve_id={}]",
+                        page_id,
+                        id_to_resolve);
                 }
                 else
                 {
@@ -1342,12 +1386,13 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
 
     if (throw_on_not_exist)
     {
-        throw Exception(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
             page_id,
             snap->sequence,
             id_to_resolve,
-            ver_to_resolve));
+            ver_to_resolve);
     }
     else
     {
@@ -1529,13 +1574,14 @@ void PageDirectory<Trait>::applyRefEditRecord(
     }(rec.ori_page_id, version);
     if (!resolve_success)
     {
-        throw Exception(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "Trying to add ref to non-exist page [page_id={}] [ori_id={}] [ver={}] [resolve_id={}] [resolve_ver={}]",
             rec.page_id,
             rec.ori_page_id,
             version,
             resolved_id,
-            resolved_ver));
+            resolved_ver);
     }
 
     SYNC_FOR("before_PageDirectory::applyRefEditRecord_create_ref");
@@ -1552,13 +1598,14 @@ void PageDirectory<Trait>::applyRefEditRecord(
         }
         else
         {
-            throw Exception(fmt::format(
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "The ori page id is not found [page_id={}] [ori_id={}] [ver={}] [resolved_id={}] [resolved_ver={}]",
                 rec.page_id,
                 rec.ori_page_id,
                 version,
                 resolved_id,
-                resolved_ver));
+                resolved_ver);
         }
     }
     SYNC_FOR("after_PageDirectory::applyRefEditRecord_incr_ref_count");
@@ -1616,7 +1663,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
             }
             else
             {
-                throw Exception("Unknown exception");
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown exception");
             }
         }
         // the `applied_data_files` will be returned by the write
@@ -1721,9 +1768,10 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 case EditRecordType::VAR_EXTERNAL:
                 case EditRecordType::VAR_REF:
                 case EditRecordType::UPDATE_DATA_FROM_REMOTE:
-                    throw Exception(fmt::format(
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
                         "should not handle edit with invalid type [type={}]",
-                        magic_enum::enum_name(r.type)));
+                        magic_enum::enum_name(r.type));
                 }
 
                 // collect the applied remote data_file_ids
@@ -1759,6 +1807,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
     const DB::PageStorageSnapshotPtr & snap_,
     const WriteLimiterPtr & write_limiter)
 {
+    FAIL_POINT_PAUSE(FailPoints::pause_before_page_dir_update_local_cache);
     std::unique_lock apply_lock(apply_mutex);
     auto seq = toConcreteSnapshot(snap_)->sequence;
     for (auto & r : edit.getMutRecords())
@@ -1772,34 +1821,57 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
 
         for (const auto & r : edit.getRecords())
         {
-            auto id_to_resolve = r.page_id;
-            auto sequence_to_resolve = seq;
-            while (true)
+            try
             {
-                auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
-                assert(iter != mvcc_table_directory.end());
-                auto & version_list = iter->second;
-                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(
-                    sequence_to_resolve,
-                    /*ignore_delete=*/id_to_resolve != r.page_id,
-                    nullptr);
-                if (resolve_state == ResolveResult::TO_NORMAL)
+                auto id_to_resolve = r.page_id;
+                auto sequence_to_resolve = seq;
+                while (true)
                 {
-                    if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                    auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
+                    assert(iter != mvcc_table_directory.end());
+                    auto & version_list = iter->second;
+                    // We need to ignore the "deletes" both when resolve page id and update local cache.
+                    // Check `PageDirectory::getByIDImpl` or the unit test
+                    // `UniPageStorageRemoteReadTest.WriteReadRefWithRestart` for details.
+                    const bool ignore_delete = id_to_resolve != r.page_id;
+                    auto [resolve_state, next_id_to_resolve, next_ver_to_resolve]
+                        = version_list->resolveToPageId(sequence_to_resolve, ignore_delete, nullptr);
+                    if (resolve_state == ResolveResult::TO_NORMAL)
                     {
-                        ignored_entries.push_back(r.entry);
+                        if (!version_list->updateLocalCacheForRemotePage(
+                                PageVersion(sequence_to_resolve, 0),
+                                r.entry,
+                                ignore_delete))
+                        {
+                            // The entry is not valid for updating the version_list.
+                            // Caller should notice these part of "ignored_entries" and release
+                            // the space allocated for these invalid entries.
+                            // For the information persisted in WAL, it should be ignored when
+                            // restoring from disk.
+                            ignored_entries.push_back(r.entry);
+                        }
+                        break;
                     }
-                    break;
+                    else if (resolve_state == ResolveResult::TO_REF)
+                    {
+                        id_to_resolve = next_id_to_resolve;
+                        sequence_to_resolve = next_ver_to_resolve.sequence;
+                    }
+                    else
+                    {
+                        RUNTIME_CHECK(false);
+                    }
                 }
-                else if (resolve_state == ResolveResult::TO_REF)
-                {
-                    id_to_resolve = next_id_to_resolve;
-                    sequence_to_resolve = next_ver_to_resolve.sequence;
-                }
-                else
-                {
-                    RUNTIME_CHECK(false);
-                }
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage(fmt::format(
+                    " type={}, page_id={}, ver={}, seq={}",
+                    magic_enum::enum_name(r.type),
+                    r.page_id,
+                    r.version,
+                    seq));
+                throw e;
             }
         }
     }
@@ -1955,7 +2027,7 @@ std::pair<typename PageDirectory<Trait>::GcEntriesMap, PageSize> PageDirectory<T
 
     LOG_INFO(
         log,
-        "Get entries by blob ids done [rewrite_ref_page_num={}] [total_page_size={}] [total_page_nums={}]", //
+        "Get entries by blob ids done, rewrite_ref_page_num={} total_page_size={} total_page_nums={}", //
         num_ref_id_rewrite,
         total_page_size, //
         total_page_nums);
@@ -2089,7 +2161,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
                     {
                         LOG_WARNING(
                             log,
-                            "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
+                            "Meet a stale snapshot, create_thread={} tracing_id={} seq={} alive_time={:.3f}",
                             snap->create_thread,
                             snap->tracing_id,
                             snap->sequence,
@@ -2242,7 +2314,7 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
         }
     }
 
-    LOG_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
+    LOG_INFO(log, "Dumped snapshot to edits, sequence={} edit_size={}", snap->sequence, edit.size());
     return edit;
 }
 

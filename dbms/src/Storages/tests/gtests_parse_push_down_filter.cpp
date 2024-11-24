@@ -16,7 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -25,7 +25,9 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <common/logger_useful.h>
+#include <tipb/executor.pb.h>
 
 #include <regex>
 
@@ -53,53 +55,61 @@ protected:
     ContextPtr ctx = DB::tests::TiFlashTestEnv::getContext();
     TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
     DM::PushDownFilterPtr generatePushDownFilter(
-        String table_info_json,
+        const String & table_info_json,
         const String & query,
         TimezoneInfo & timezone_info);
 };
 
-
-DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
-    const String table_info_json,
+DM::PushDownFilterPtr generatePushDownFilter(
+    Context & ctx,
+    const String & table_info_json,
     const String & query,
-    TimezoneInfo & timezone_info)
+    const std::optional<TimezoneInfo> & opt_tz = std::nullopt)
 {
+    auto timezone_info = opt_tz ? *opt_tz : ctx.getTimezoneInfo();
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
-        *ctx,
+        ctx,
         query,
         [&](const String &, const String &) { return table_info; },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
+    auto log = Logger::get();
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
-    ctx->setDAGContext(&dag_context);
+    ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(*ctx);
-    auto query_block = *dag.getRootQueryBlock();
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     // Push down all filters
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters
-        = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions()
-                                                        : empty_condition;
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = empty_condition;
+    google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
+        if (executor.has_selection())
+        {
+            pushed_down_filters = executor.selection().conditions();
+            return false;
+        }
+        return true;
+    });
 
-    std::unique_ptr<DAGQueryInfo> dag_query;
+    // these variables need to live long enough as it is kept as reference in `dag_query`
+    const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto runtime_filter_ids = std::vector<int>();
+
     DM::ColumnDefines columns_to_read;
     columns_to_read.reserve(table_info.columns.size());
+    for (const auto & column : table_info.columns)
     {
-        for (const auto & column : table_info.columns)
-        {
-            columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
-        }
-        dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
-            pushed_down_filters,
-            table_info.columns,
-            std::vector<int>(), // don't care runtime filter
-            0,
-            timezone_info);
+        columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
     }
+    std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
+        conditions,
+        ann_query_info,
+        pushed_down_filters,
+        table_info.columns,
+        runtime_filter_ids, // don't care runtime filter
+        0,
+        timezone_info);
 
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
@@ -113,15 +123,18 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     };
 
     auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
-        rs_operator,
-        table_info.columns,
-        pushed_down_filters,
-        columns_to_read,
-        *ctx,
-        log);
+        = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
+    auto push_down_filter
+        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, ctx, log);
     return push_down_filter;
+}
+
+DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
+    const String & table_info_json,
+    const String & query,
+    TimezoneInfo & timezone_info)
+{
+    return ::DB::tests::generatePushDownFilter(*ctx, table_info_json, query, timezone_info);
 }
 
 // Test cases for col and literal
@@ -644,12 +657,7 @@ try
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"and","children":[{"op":"unsupported","reason":"child of logical and is not function, expr.tp=ColumnRef"},{"op":"unsupported","reason":"child of logical and is not function, expr.tp=Uint64"}]})raw");
 
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
@@ -664,7 +672,6 @@ try
         EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
-    std::cout << " do query select * from default.t_111 where col_2 or 1 " << std::endl;
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto filter = generatePushDownFilter(
@@ -675,12 +682,7 @@ try
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
-            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
-            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
+            R"raw({"op":"or","children":[{"op":"unsupported","reason":"child of logical operator is not function, child_type=ColumnRef"},{"op":"unsupported","reason":"child of logical operator is not function, child_type=Uint64"}]})raw");
 
         Block before_where_block = Block{
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
@@ -717,7 +719,7 @@ try
     String datetime = "1970-01-01 00:00:01.000000";
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
-    tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
+    ASSERT_TRUE(tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer));
     const auto & time_zone_utc = DateLUT::instance("UTC");
     UInt64 converted_time = origin_time_stamp;
     std::cout << "origin_time_stamp: " << origin_time_stamp << std::endl;

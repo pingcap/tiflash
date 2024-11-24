@@ -23,10 +23,10 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
-namespace DB
+
+namespace DB::DM
 {
-namespace DM
-{
+
 namespace detail
 {
 static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
@@ -38,6 +38,7 @@ static inline size_t getFrameSizeOrDefault(DMFile & dmfile)
     return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
 }
 } // namespace detail
+
 class DMFileWriter
 {
 public:
@@ -54,7 +55,7 @@ public:
             const WriteLimiterPtr & write_limiter_,
             bool do_index)
             : plain_file(ChecksumWriteBufferBuilder::build(
-                dmfile->configuration.has_value(),
+                dmfile->getConfiguration().has_value(),
                 file_provider,
                 dmfile->colDataPath(file_base_name),
                 dmfile->encryptionDataPath(file_base_name),
@@ -65,21 +66,30 @@ public:
                 /*flags*/ -1,
                 /*mode*/ 0666,
                 max_compress_block_size))
-            , compressed_buf(CompressedWriteBuffer<>::build(*plain_file, compression_settings, !dmfile->configuration))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
+            assert(compression_settings.settings.size() == 1);
+            auto setting = CompressionSetting::create<>(
+                compression_settings.settings[0].method,
+                compression_settings.settings[0].level,
+                *type);
+            compressed_buf = CompressedWriteBuffer<>::build(
+                *plain_file,
+                CompressionSettings(setting),
+                !dmfile->getConfiguration());
+
             if (!dmfile->useMetaV2())
             {
-                mark_file = ChecksumWriteBufferBuilder::
-                    build( // will not used in DMFileFormat::V3, could be removed when v3 is default
-                        dmfile->configuration.has_value(),
-                        file_provider,
-                        dmfile->colMarkPath(file_base_name),
-                        dmfile->encryptionMarkPath(file_base_name),
-                        false,
-                        write_limiter_,
-                        detail::getAlgorithmOrNone(*dmfile),
-                        detail::getFrameSizeOrDefault(*dmfile));
+                // will not used in DMFileFormat::V3, could be removed when v3 is default
+                mark_file = ChecksumWriteBufferBuilder::build(
+                    dmfile->getConfiguration().has_value(),
+                    file_provider,
+                    dmfile->colMarkPath(file_base_name),
+                    dmfile->encryptionMarkPath(file_base_name),
+                    false,
+                    write_limiter_,
+                    detail::getAlgorithmOrNone(*dmfile),
+                    detail::getFrameSizeOrDefault(*dmfile));
             }
             else
             {
@@ -156,10 +166,7 @@ private:
     void addStreams(ColId col_id, DataTypePtr type, bool do_index);
 
     WriteBufferFromFileBasePtr createMetaFile();
-    WriteBufferFromFileBasePtr createMetaV2File();
-    WriteBufferFromFileBasePtr createPackStatsFile();
-    void finalizeMetaV1();
-    void finalizeMetaV2();
+    void finalizeMeta();
 
 private:
     DMFilePtr dmfile;
@@ -175,11 +182,10 @@ private:
     // else `meta_file` is for pack stats.
     WriteBufferFromFileBasePtr meta_file;
 
-    DMFile::MergedFileWriter merged_file;
+    DMFileMetaV2::MergedFileWriter merged_file;
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

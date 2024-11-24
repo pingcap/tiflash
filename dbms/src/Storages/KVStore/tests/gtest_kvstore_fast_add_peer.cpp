@@ -44,6 +44,8 @@ namespace FailPoints
 extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 extern const char force_not_clean_fap_on_destroy[];
+extern const char force_checkpoint_dump_throw_datafile[];
+extern const char pause_when_building_fap_segments[];
 } // namespace FailPoints
 
 namespace tests
@@ -53,6 +55,7 @@ struct FAPTestOpt
 {
     bool mock_add_new_peer = false;
     bool persist_empty_segment = false;
+    bool second_region = false;
 };
 
 class RegionKVStoreTestFAP : public KVStoreTestBase
@@ -60,8 +63,11 @@ class RegionKVStoreTestFAP : public KVStoreTestBase
 public:
     void SetUp() override
     {
+        // Need S3 for S3 lock client, otherwise UniversalPageStorage::write would block waiting.
+        DB::tests::TiFlashTestEnv::enableS3Config();
         test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_fap_test");
         auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getTMTContext().initS3GCManager(nullptr);
         // clean data and create path pool instance
         path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
 
@@ -134,7 +140,7 @@ public:
         DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
-    CheckpointRegionInfoAndData prepareForRestart(FAPTestOpt);
+    std::vector<CheckpointRegionInfoAndData> prepareForRestart(FAPTestOpt);
 
 protected:
     void dumpCheckpoint()
@@ -344,76 +350,114 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }
 
-CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt opt)
+std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt opt)
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
-    uint64_t region_id = 1;
-    auto peer_id = 1;
     KVStore & kvs = getKVS();
     global_context.getTMTContext().debugSetKVStore(kvstore);
     auto page_storage = global_context.getWriteNodePageStorage();
 
     table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
-    proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
-    auto proxy_helper = proxy_instance->generateProxyHelper();
-    auto region = proxy_instance->getRegion(region_id);
+
     auto store_id = kvs.getStore().store_id.load();
-    region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
 
+    {
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 1000000);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            global_context.getTMTContext(),
+            1,
+            std::make_pair(start.toString(), end.toString()));
+        auto proxy_helper = proxy_instance->generateProxyHelper();
+        auto region = proxy_instance->getRegion(1);
+        region->addPeer(store_id, 1, metapb::PeerRole::Learner);
+    }
+
+    if (opt.second_region)
+    {
+        auto start = RecordKVFormat::genKey(table_id, 2000000);
+        auto end = RecordKVFormat::genKey(table_id, 3000000);
+        proxy_instance->debugAddRegions(
+            kvs,
+            global_context.getTMTContext(),
+            {2},
+            {std::make_pair(start.toString(), end.toString())});
+        auto proxy_helper = proxy_instance->generateProxyHelper();
+        auto region = proxy_instance->getRegion(2);
+        region->addPeer(store_id, 2, metapb::PeerRole::Learner);
+    }
     // Write some data, and persist meta.
-    UInt64 index = 0;
-    if (!opt.persist_empty_segment)
-    {
-        LOG_DEBUG(log, "Do write to the region");
-        auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
-        auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
-        UInt64 term = 0;
-        std::tie(index, term) = proxy_instance->rawWrite(
-            region_id,
-            {k1, k1},
-            {value_default1, value_write1},
-            {WriteCmdType::Put, WriteCmdType::Put},
-            {ColumnFamilyType::Default, ColumnFamilyType::Write});
-    }
 
-    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
-    if (opt.mock_add_new_peer)
+    auto prepare_region = [&](UInt64 id, UInt64 peer_id, UInt64 k) {
+        UInt64 index = 0;
+        if (!opt.persist_empty_segment)
+        {
+            LOG_DEBUG(log, "Do write to the region");
+            auto k1 = RecordKVFormat::genKey(table_id, k, 111);
+            auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
+            UInt64 term = 0;
+            std::tie(index, term) = proxy_instance->rawWrite(
+                id,
+                {k1, k1},
+                {value_default1, value_write1},
+                {WriteCmdType::Put, WriteCmdType::Put},
+                {ColumnFamilyType::Default, ColumnFamilyType::Write});
+        }
+        kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+        if (opt.mock_add_new_peer)
+        {
+            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(peer_id, true);
+            proxy_instance->getRegion(id)->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
+        }
+        persistAfterWrite(global_context, kvs, proxy_instance, page_storage, id, index);
+    };
+
+    prepare_region(1, 2333, 888);
+    if (opt.second_region)
     {
-        *kvs.getRegion(region_id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(2333, true);
-        proxy_instance->getRegion(region_id)->addPeer(store_id, 2333, metapb::PeerRole::Learner);
+        prepare_region(2, 2334, 888 + 2000000);
     }
-    persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     RUNTIME_CHECK(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     dumpCheckpoint();
 
-    LOG_INFO(log, "build checkpoint manifest from {}", upload_sequence);
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(kvs.getStoreID(), upload_sequence).toFullKey();
-    auto checkpoint_info = std::make_shared<CheckpointInfo>();
-    checkpoint_info->remote_store_id = kvs.getStoreID();
-    checkpoint_info->region_id = 1000;
-    checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(global_context, manifest_key, /*dir_seq*/ 100);
-    {
-        auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
+    auto data_holder = buildParsedCheckpointData(global_context, manifest_key, /*dir_seq*/ 100);
+
+    auto build_for_region = [&](auto id) {
+        LOG_INFO(log, "build checkpoint manifest from {} for {}", upload_sequence, id);
+        auto region_key = UniversalPageIdFormat::toKVStoreKey(id);
+        auto checkpoint_info = std::make_shared<CheckpointInfo>();
+        checkpoint_info->remote_store_id = kvs.getStoreID();
+        // Fake a region id to mock add peer.
+        checkpoint_info->region_id = 1000 + id;
+        checkpoint_info->checkpoint_data_holder = data_holder;
         auto page = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage()
                         ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
         RUNTIME_CHECK(page.isValid());
-    }
-    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
-    RegionPtr kv_region = kvs.getRegion(1);
+        checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
+        RegionPtr kv_region = kvs.getRegion(id);
+        {
+            auto task_lock = kvs.genTaskLock();
+            auto region_lock = kvs.region_manager.genRegionTaskLock(id);
+            kvs.removeRegion(id, false, global_context.getTMTContext().getRegionTable(), task_lock, region_lock);
+        }
+
+        return std::make_tuple(
+            checkpoint_info,
+            kv_region,
+            kv_region->getMeta().clonedApplyState(),
+            kv_region->getMeta().clonedRegionState());
+    };
+
+    if (opt.second_region)
     {
-        auto task_lock = kvs.genTaskLock();
-        auto region_lock = kvs.region_manager.genRegionTaskLock(region_id);
-        kvs.removeRegion(region_id, false, global_context.getTMTContext().getRegionTable(), task_lock, region_lock);
+        return {build_for_region(1), build_for_region(2)};
     }
-    CheckpointRegionInfoAndData mock_data = std::make_tuple(
-        checkpoint_info,
-        kv_region,
-        kv_region->getMeta().clonedApplyState(),
-        kv_region->getMeta().clonedRegionState());
-    return mock_data;
+    return {build_for_region(1)};
 }
 
 // This function get tiflash replica count from local schema.
@@ -429,7 +473,7 @@ void setTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_storage)
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart1)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    auto mock_data = prepareForRestart(FAPTestOpt{})[0];
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -448,7 +492,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -505,7 +549,7 @@ CATCH
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart2)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    auto mock_data = prepareForRestart(FAPTestOpt{})[0];
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -516,7 +560,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -536,7 +580,7 @@ CATCH
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart3)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{})[0];
     KVStore & kvs = getKVS();
     RegionPtr kv_region = std::get<1>(mock_data);
 
@@ -549,7 +593,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     // Will generate and persist some information in local ps, which will not be uploaded.
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
@@ -577,11 +621,40 @@ try
 }
 CATCH
 
+
+TEST_F(RegionKVStoreTestFAP, DumpCheckpointError)
+try
+{
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    uint64_t region_id = 1;
+    auto peer_id = 1;
+    KVStore & kvs = getKVS();
+    auto page_storage = global_context.getWriteNodePageStorage();
+
+    proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
+    auto region = proxy_instance->getRegion(region_id);
+    auto store_id = kvs.getStore().store_id.load();
+    region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
+
+    // Write some data, and persist meta.
+    auto [index, term]
+        = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
+
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+    FailPointHelper::enableFailPoint(FailPoints::force_checkpoint_dump_throw_datafile);
+    EXPECT_NO_THROW(dumpCheckpoint());
+    FailPointHelper::disableFailPoint(FailPoints::force_checkpoint_dump_throw_datafile);
+}
+CATCH
+
 // Test cancel from peer select
 TEST_F(RegionKVStoreTestFAP, Cancel1)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{})[0];
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -622,9 +695,9 @@ TEST_F(RegionKVStoreTestFAP, Cancel2)
 try
 {
     using namespace std::chrono_literals;
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
+    auto mock_data = prepareForRestart(FAPTestOpt{
         .mock_add_new_peer = true,
-    });
+    })[0];
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -673,9 +746,9 @@ TEST_F(RegionKVStoreTestFAP, Cancel3)
 try
 {
     using namespace std::chrono_literals;
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
+    auto mock_data = prepareForRestart(FAPTestOpt{
         .mock_add_new_peer = true,
-    });
+    })[0];
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -720,9 +793,9 @@ TEST_F(RegionKVStoreTestFAP, Cancel4)
 try
 {
     using namespace std::chrono_literals;
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
+    auto mock_data = prepareForRestart(FAPTestOpt{
         .mock_add_new_peer = true,
-    });
+    })[0];
     KVStore & kvs = getKVS();
     RegionPtr kv_region = std::get<1>(mock_data);
 
@@ -782,18 +855,80 @@ try
 }
 CATCH
 
+// Test cancel when building segments
+TEST_F(RegionKVStoreTestFAP, Cancel5)
+try
+{
+    auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true});
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(1, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
+    });
+    std::mutex exe_mut2;
+    std::unique_lock exe_lock2(exe_mut2);
+    fap_context->tasks_trace->addTask(2, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut2);
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
+    });
+    FailPointHelper::enableFailPoint(FailPoints::pause_when_building_fap_segments);
+    std::packaged_task<FastAddPeerRes()> task([&]() {
+        return FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            1,
+            2333,
+            std::move(mock_data[0]),
+            0);
+    });
+    std::packaged_task<FastAddPeerRes()> task2([&]() {
+        return FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            2,
+            2334,
+            std::move(mock_data[1]),
+            0);
+    });
+    auto result = task.get_future();
+    auto result2 = task2.get_future();
+    std::thread t([&]() { task(); });
+    std::thread t2([&]() { task2(); });
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(1s);
+    fap_context->tasks_trace->asyncCancelTask(1);
+    FailPointHelper::disableFailPoint(FailPoints::pause_when_building_fap_segments);
+    // Can see log "FAP is canceled when building segments" and "FAP is canceled after build segments".
+    t.join();
+    t2.join();
+    exe_lock.unlock();
+    exe_lock2.unlock();
+    // ["FAP is canceled when building segments, built=0"]
+    ASSERT_EQ(result.get().status, FastAddPeerStatus::Canceled);
+    // region 2 shared the same checkpoint with region 1, however, after region 1 failed with cancel,
+    // region 2 will rebuild the segment id cache.
+    // ["Build cache for with 1 segments"] [source="region_id=1002 keyspace=4294967295 table_id=31"]
+    ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
+}
+CATCH
+
+
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{.persist_empty_segment = true});
+    auto mock_data = prepareForRestart(FAPTestOpt{.persist_empty_segment = true})[0];
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, []() {
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-    });
+    fap_context->tasks_trace->addTask(region_id, []() { return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable); });
     EXPECT_THROW(
         FastAddPeerImplWrite(
             global_context.getTMTContext(),
@@ -809,7 +944,7 @@ CATCH
 TEST_F(RegionKVStoreTestFAP, OnExistingPeer)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    auto mock_data = prepareForRestart(FAPTestOpt{})[0];
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -839,7 +974,7 @@ try
     fap_context->tasks_trace->addTask(region_id, [&]() {
         // Keep the task in `tasks_trace` to prevent from canceling.
         std::scoped_lock wait_exe_lock(exe_mut);
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();
@@ -870,7 +1005,7 @@ CATCH
 TEST_F(RegionKVStoreTestFAP, FAPWorkerException)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    auto mock_data = prepareForRestart(FAPTestOpt{})[0];
     KVStore & kvs = getKVS();
     RegionPtr kv_region = std::get<1>(mock_data);
 
@@ -925,6 +1060,41 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTestFAP, TableNotFound)
+try
+{
+    auto mock_data = prepareForRestart(FAPTestOpt{})[0];
+    RegionPtr kv_region = std::get<1>(mock_data);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = global_context.getTMTContext();
+    uint64_t region_id = 1;
+
+    auto keyspace_id = kv_region->getKeyspaceID();
+    auto table_id = kv_region->getMappedTableID();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(region_id, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
+    });
+
+    // Mock that the storage instance have been dropped
+    auto & storages = tmt.getStorages();
+    storages.remove(keyspace_id, table_id);
+    auto res = FastAddPeerImplWrite(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333,
+        std::move(mock_data),
+        0);
+    ASSERT_EQ(res.status, FastAddPeerStatus::BadData);
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

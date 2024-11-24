@@ -20,14 +20,19 @@
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
+#include <Storages/Page/V3/PageDefines.h>
+#include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <limits>
 
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
-
 namespace DB::tests
 {
 
@@ -162,7 +167,7 @@ try
         auto expected = str_key.dataSize() + str_lock_value.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         auto str_key2 = RecordKVFormat::genKey(table_id, 20, 111);
-        std::string short_value('a', 100);
+        std::string short_value(97, 'a');
         auto str_lock_value2
             = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111, &short_value)
                   .toString();
@@ -912,45 +917,326 @@ try
         std::string_view(name.data(), name.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
-    std::string namee = "";
+    ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "test1"), 1);
+    ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "test1"), 2);
+    std::string namee;
     kvs.reportThreadAllocBatch(
         std::string_view(namee.data(), namee.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
-    EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(""));
+    EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, ""));
+    // bg pool and blockable-bg pool
+    kvs.getJointThreadInfoJeallocMap()->accessStorageMap([](const JointThreadInfoJeallocMap::AllocMap & m) {
+        ASSERT_EQ(m.size(), TiFlashTestEnv::DEFAULT_BG_POOL_SIZE * 2);
+    });
+    kvs.getJointThreadInfoJeallocMap()->accessProxyMap(
+        [](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 1); });
     std::thread t([&]() {
-        kvs.reportThreadAllocInfo(std::string_view(name.data(), name.size()), ReportThreadAllocateInfoType::Reset, 0);
+        // For names not in `PROXY_RECORD_WHITE_LIST_THREAD_PREFIX`, the record operation will not update.
+        std::string name1 = "test11-1";
+        kvs.reportThreadAllocInfo(std::string_view(name1.data(), name1.size()), ReportThreadAllocateInfoType::Reset, 0);
         uint64_t mock = 999;
-        uint64_t alloc_ptr = reinterpret_cast<uint64_t>(&mock);
+        auto alloc_ptr = reinterpret_cast<uint64_t>(&mock);
         kvs.reportThreadAllocInfo(
-            std::string_view(name.data(), name.size()),
+            std::string_view(name1.data(), name1.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        kvs.recordThreadAllocInfo();
-        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "test11"), 0);
 
+        // recordThreadAllocInfoForProxy can't override if not all alloc/dealloc are provided.
         std::string name2 = "ReadIndexWkr-1";
         kvs.reportThreadAllocInfo(std::string_view(name2.data(), name2.size()), ReportThreadAllocateInfoType::Reset, 0);
+        kvs.reportThreadAllocBatch(
+            std::string_view(name2.data(), name2.size()),
+            ReportThreadAllocateInfoBatch{.alloc = 111, .dealloc = 222});
         kvs.reportThreadAllocInfo(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        kvs.recordThreadAllocInfo();
-        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 999);
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 111);
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 222);
+
+        // recordThreadAllocInfoForProxy will override if all alloc/dealloc are both provided,
+        // because the infomation from pointer is always the newest.
         uint64_t mock2 = 998;
-        uint64_t dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
+        auto dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
         kvs.reportThreadAllocInfo(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::DeallocPtr,
             dealloc_ptr);
-        kvs.recordThreadAllocInfo();
-        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 1);
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 999);
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 998);
         kvs.reportThreadAllocInfo(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::Remove,
             0);
+
+
+        kvs.reportThreadAllocInfo(std::string_view(name2.data(), name2.size()), ReportThreadAllocateInfoType::Reset, 0);
+        kvs.reportThreadAllocBatch(
+            std::string_view(name2.data(), name2.size()),
+            ReportThreadAllocateInfoBatch{.alloc = 111, .dealloc = 222});
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 111);
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 222);
     });
     t.join();
+}
+CATCH
+
+
+TEST_F(RegionKVStoreTest, MemoryTraceAgg)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    uint64_t al1 = 1;
+    uint64_t al2 = 2;
+    uint64_t dl = 3;
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    std::string name1 = "non-agg-1";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name1, ReportThreadAllocateInfoType::Reset, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name1,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al1),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name1,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    std::string name2 = "non-agg-2";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name2, ReportThreadAllocateInfoType::Reset, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name2,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al2),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name2,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    std::string name3 = "agg+1";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name3, ReportThreadAllocateInfoType::Reset, 0, '+');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name3,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al1),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name3,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    std::string name4 = "agg+2";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name4, ReportThreadAllocateInfoType::Reset, 0, '+');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name4,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al2),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name4,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->recordThreadAllocInfo();
+    ASSERT_EQ(al1 + al2, tiflash_metrics.getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "agg"));
+    ASSERT_EQ(al1, tiflash_metrics.getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "non-agg-1"));
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name1, ReportThreadAllocateInfoType::Remove, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name2, ReportThreadAllocateInfoType::Remove, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name3, ReportThreadAllocateInfoType::Remove, 0, '+');
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name4, ReportThreadAllocateInfoType::Remove, 0, '+');
+}
+CATCH
+
+#if USE_JEMALLOC // following tests depends on jemalloc
+TEST(FFIJemallocTest, JemallocThread)
+try
+{
+    std::thread t2([&]() {
+        char * a = new char[888888];
+        std::thread t1([&]() {
+            auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+            ASSERT_TRUE(allocated != nullptr);
+            ASSERT_EQ(*allocated, 0);
+            ASSERT_TRUE(deallocated != nullptr);
+            ASSERT_EQ(*deallocated, 0);
+        });
+        t1.join();
+        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+        ASSERT_TRUE(allocated != nullptr);
+        ASSERT_GE(*allocated, 888888);
+        ASSERT_TRUE(deallocated != nullptr);
+        delete[] a;
+    });
+    t2.join();
+
+    std::thread t3([&]() {
+        // Will not cover mmap memory.
+        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+        char * a = new char[120];
+        void * buf = mmap(nullptr, 6000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        ASSERT_LT(*allocated, 6000);
+        munmap(buf, 0);
+        delete[] a;
+    });
+    t3.join();
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, StorageBgPool)
+try
+{
+    using namespace std::chrono_literals;
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto & pool = ctx.getBackgroundPool();
+    const auto size = TiFlashTestEnv::DEFAULT_BG_POOL_SIZE;
+    std::atomic_bool b = false;
+    auto t = pool.addTask(
+        [&]() {
+            auto * x = new int[1000];
+            LOG_INFO(Logger::get(), "allocated");
+            while (!b.load())
+            {
+                std::this_thread::sleep_for(1500ms);
+            }
+            delete[] x;
+            LOG_INFO(Logger::get(), "released");
+            return false;
+        },
+        false,
+        5 * 60 * 1000);
+    std::this_thread::sleep_for(500ms);
+
+    JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
+    jm.recordThreadAllocInfo();
+
+    LOG_INFO(DB::Logger::get(), "bg pool size={}", size);
+    UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
+    ASSERT_GE(r, sizeof(int) * 1000);
+    jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
+        // There are some other bg thread pools
+        ASSERT_GE(m.size(), size) << m.size();
+    });
+    jm.accessProxyMap([](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
+
+    b.store(true);
+
+    ctx.getBackgroundPool().removeTask(t);
+}
+CATCH
+#endif
+
+TEST(ProxyMode, Normal)
+try
+{
+    ASSERT_EQ(SERVERLESS_PROXY, 0);
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, ParseUniPage)
+try
+{
+    String origin = "0101020000000000000835010000000000021AE8";
+    auto decode = Redact::hexStringToKey(origin.data(), origin.size());
+    const char * data = decode.data();
+    size_t len = decode.size();
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), UniversalPageIdFormat::RAFT_PREFIX);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x02);
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
+    LOG_INFO(DB::Logger::get(), "region_id={}", RecordKVFormat::readUInt64(data, len));
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    LOG_INFO(DB::Logger::get(), "index={}", RecordKVFormat::readUInt64(data, len));
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, ApplyShrinkedRegion)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+
+    initStorages();
+    KVStore & kvs = getKVS();
+    table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    LOG_INFO(&Poco::Logger::get("Test"), "generated table_id {}", table_id);
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+    auto kvr1 = kvs.getRegion(region_id);
+    auto r1 = proxy_instance->getRegion(region_id);
+    {
+        // Multiple files
+        MockSSTReader::getMockSSTData().clear();
+        MockSSTGenerator default_cf{902, 800, ColumnFamilyType::Default};
+        default_cf.insert(1, "v1");
+        default_cf.finish_file();
+        default_cf.insert(2, "v2");
+        default_cf.finish_file();
+        default_cf.insert(3, "v3");
+        default_cf.insert(4, "v4");
+        default_cf.finish_file();
+        default_cf.insert(5, "v5");
+        default_cf.insert(6, "v6");
+        default_cf.finish_file();
+        default_cf.insert(7, "v7");
+        default_cf.finish_file();
+        default_cf.freeze();
+        kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+
+        auto make_meta = [&]() {
+            auto r2 = proxy_instance->getRegion(region_id);
+            auto modified_meta = r2->getState().region();
+            modified_meta.set_id(2);
+            modified_meta.set_start_key(RecordKVFormat::genKey(table_id, 1));
+            modified_meta.set_end_key(RecordKVFormat::genKey(table_id, 4));
+            modified_meta.add_peers()->set_id(2);
+            return modified_meta;
+        };
+        auto peer_id = kvr1->getMeta().peerId();
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {2},
+            {{{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 4)}}});
+
+        // Overlap
+        EXPECT_THROW(
+            proxy_instance
+                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            Exception);
+
+        LOG_INFO(log, "Set to applying");
+        // region_state is "applying", but the key-range in proxy side still overlaps.
+        r1->mutState().set_state(raft_serverpb::PeerState::Applying);
+        ASSERT_EQ(proxy_helper->getRegionLocalState(1).state(), raft_serverpb::PeerState::Applying);
+        EXPECT_THROW(
+            proxy_instance
+                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            Exception);
+
+
+        LOG_INFO(log, "Shrink region 1");
+        // region_state is "applying", but the key-range in proxy side is not overlap.
+        r1->mutState().set_state(raft_serverpb::PeerState::Applying);
+        r1->mutState().mutable_region()->set_start_key(RecordKVFormat::genKey(table_id, 0));
+        r1->mutState().mutable_region()->set_end_key(RecordKVFormat::genKey(table_id, 1));
+        proxy_instance
+            ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false);
+    }
 }
 CATCH
 

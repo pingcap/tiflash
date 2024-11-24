@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
@@ -24,6 +25,7 @@
 #include <Storages/KVStore/FFI/SSTReader.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
+#include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
@@ -39,6 +41,7 @@ namespace CurrentMetrics
 {
 extern const Metric RaftNumPrehandlingSubTasks;
 extern const Metric RaftNumParallelPrehandlingTasks;
+extern const Metric RaftNumWaitedParallelPrehandlingTasks;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -73,6 +76,7 @@ struct PrehandleTransformCtx
     StorageDeltaMergePtr storage;
     const DM::SSTFilesToBlockInputStreamOpts & opts;
     TMTContext & tmt;
+    UInt64 snapshot_index;
 };
 
 void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parallel, size_t parallel_subtask_limit)
@@ -84,7 +88,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         {
             LOG_DEBUG(
                 log,
-                "Prehandle resource meet, limit={}, current={}, region_id={}",
+                "Prehandle resource meet, limit={} current={} region_id={}",
                 parallel_subtask_limit,
                 ongoing_prehandle_subtask_count.load(),
                 region_id);
@@ -99,6 +103,8 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         ongoing_prehandle_subtask_count.load(),
         parallel,
         region_id);
+
+    CurrentMetrics::add(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
     while (true)
     {
         std::unique_lock<std::mutex> cpu_resource_lock{cpu_resource_mut};
@@ -120,6 +126,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         watch.elapsedSeconds(),
         region_id,
         parallel);
+    CurrentMetrics::sub(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
 }
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
@@ -131,19 +138,17 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
     const auto & opts = prehandle_ctx.opts;
     auto & tmt = prehandle_ctx.tmt;
     auto & trace = prehandle_ctx.trace;
+    const auto split_id = sst_stream->getSplitId();
+    const String limit_tag = sst_stream->getSoftLimit() ? sst_stream->getSoftLimit()->toDebugString() : "";
+    const auto region_id = new_region->id();
 
-    auto region_id = new_region->id();
-    auto split_id = sst_stream->getSplitId();
     CurrentMetrics::add(CurrentMetrics::RaftNumPrehandlingSubTasks);
     SCOPE_EXIT({
         trace.releaseSubtaskResources(region_id, split_id);
         CurrentMetrics::sub(CurrentMetrics::RaftNumPrehandlingSubTasks);
     });
-    LOG_INFO(
-        log,
-        "Add prehandle task split_id={} limit={}",
-        split_id,
-        sst_stream->getSoftLimit().has_value() ? sst_stream->getSoftLimit()->toDebugString() : "");
+    Stopwatch sw;
+    LOG_INFO(log, "Add prehandle task split_id={} limit={}", split_id, limit_tag);
     std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
     // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
     // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
@@ -200,13 +205,17 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             stream->cancel();
             res = ReadFromStreamResult{.error = abort_reason.value(), .extra_msg = "", .region = new_region};
         }
+        auto keys_per_second = (sst_stream->getProcessKeys().write_cf + sst_stream->getProcessKeys().lock_cf
+                                + sst_stream->getProcessKeys().default_cf)
+            * 1.0 / sw.elapsedSeconds();
+        GET_METRIC(tiflash_raft_command_throughput, type_prehandle_snapshot).Observe(keys_per_second);
         return std::make_pair(
             std::move(res),
             PrehandleResult{
                 .ingest_ids = stream->outputFiles(),
                 .stats = PrehandleResult::Stats{
                     .parallels = 1,
-                    .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
+                    .raft_snapshot_bytes = sst_stream->getProcessKeys().totalBytes(),
                     .approx_raft_snapshot_size = 0,
                     .dt_disk_bytes = stream->getTotalBytesOnDisk(),
                     .dt_total_bytes = stream->getTotalCommittedBytes(),
@@ -214,7 +223,9 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                     .write_cf_keys = sst_stream->getProcessKeys().write_cf,
                     .lock_cf_keys = sst_stream->getProcessKeys().lock_cf,
                     .default_cf_keys = sst_stream->getProcessKeys().default_cf,
-                    .max_split_write_cf_keys = sst_stream->getProcessKeys().write_cf}});
+                    .max_split_write_cf_keys = sst_stream->getProcessKeys().write_cf,
+                },
+            });
     }
     catch (DB::Exception & e)
     {
@@ -254,6 +265,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
+    GET_METRIC(tiflash_raft_raft_events_count, type_prehandle).Increment();
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
 
     ongoing_prehandle_task_count.fetch_add(1);
@@ -323,8 +335,10 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
 
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
+#if SERVERLESS_PROXY == 0
     if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
         return std::make_pair(std::vector<std::string>{}, 0);
+#endif
     auto approx_bytes = sst_stream->getApproxBytes();
     if (approx_bytes <= parallel_prehandle_threshold)
     {
@@ -338,7 +352,9 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     }
 
     // Get this info again, since getApproxBytes maybe take some time.
-    auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
+    // Currently, the head split has not been registered as sub task yet,
+    // so we must add 1 here.
+    auto ongoing_count = kvstore->getOngoingPrehandleSubtaskCount() + 1;
     uint64_t want_split_parts = 0;
     auto total_concurrency = kvstore->getMaxParallelPrehandleSize();
     if (total_concurrency + 1 > ongoing_count)
@@ -390,8 +406,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
         LOG_INFO(
             log,
             "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
-            "region_range={} approx_bytes={} "
-            "region_id={}",
+            "region_range={} approx_bytes={} region_id={}",
             fmt_buf.toString(),
             total_concurrency,
             ongoing_count,
@@ -418,16 +433,16 @@ static void runInParallel(
     RegionPtr new_region,
     const SSTViewVec & snaps,
     const TiFlashRaftProxyHelper * proxy_helper,
-    uint64_t index,
-    uint64_t extra_id,
     ParallelPrehandleCtxPtr parallel_ctx,
     DM::SSTScanSoftLimit && part_limit)
 {
-    std::string limit_tag = part_limit.toDebugString();
+    const String limit_tag = part_limit.toDebugString();
+    const size_t split_id = part_limit.split_id;
+
     auto part_new_region = std::make_shared<Region>(new_region->getMeta().clone(), proxy_helper);
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
-        index,
+        prehandle_ctx.snapshot_index,
         snaps,
         proxy_helper,
         prehandle_ctx.tmt,
@@ -440,7 +455,7 @@ static void runInParallel(
             = executeTransform(log, prehandle_ctx, part_new_region, part_sst_stream);
         LOG_INFO(
             log,
-            "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={}, "
+            "Finished extra parallel prehandle task limit={} write_cf={} lock_cf={} default_cf={} dmfiles={} error={} "
             "split_id={} region_id={}",
             limit_tag,
             part_prehandle_result.stats.write_cf_keys,
@@ -448,7 +463,7 @@ static void runInParallel(
             part_prehandle_result.stats.default_cf_keys,
             part_prehandle_result.ingest_ids.size(),
             magic_enum::enum_name(part_result.error),
-            extra_id,
+            split_id,
             part_new_region->id());
         if (part_result.error == PrehandleTransformStatus::ErrUpdateSchema)
         {
@@ -456,8 +471,8 @@ static void runInParallel(
         }
         {
             std::scoped_lock l(parallel_ctx->mut);
-            parallel_ctx->gather_res[extra_id] = std::move(part_result);
-            parallel_ctx->gather_prehandle_res[extra_id] = std::move(part_prehandle_result);
+            parallel_ctx->gather_res[split_id] = std::move(part_result);
+            parallel_ctx->gather_prehandle_res[split_id] = std::move(part_prehandle_result);
         }
     }
     catch (Exception & e)
@@ -465,31 +480,27 @@ static void runInParallel(
         // Exceptions other than PrehandleTransformStatus.
         // The exception can be wrapped in the future, however, we abort here.
         const auto & processed_keys = part_sst_stream->getProcessKeys();
-        LOG_INFO(
+        LOG_WARNING(
             log,
             "Parallel prehandling error {}"
-            " write_cf_off={}"
-            " split_id={} region_id={}",
+            " write_cf_off={} split_id={} region_id={}",
             e.message(),
             processed_keys.write_cf,
-            extra_id,
+            split_id,
             part_new_region->id());
         prehandle_ctx.prehandle_task->abortFor(PrehandleTransformStatus::Aborted);
         throw;
     }
 }
 
-void executeParallelTransform(
+std::tuple<ReadFromStreamResult, PrehandleResult> executeParallelTransform(
     LoggerPtr log,
     PrehandleTransformCtx & prehandle_ctx,
     RegionPtr new_region,
-    ReadFromStreamResult & result,
-    PrehandleResult & prehandle_result,
     const std::vector<std::string> & split_keys,
     std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream,
     const SSTViewVec & snaps,
-    const TiFlashRaftProxyHelper * proxy_helper,
-    uint64_t index)
+    const TiFlashRaftProxyHelper * proxy_helper)
 {
     CurrentMetrics::add(CurrentMetrics::RaftNumParallelPrehandlingTasks);
     SCOPE_EXIT({ CurrentMetrics::sub(CurrentMetrics::RaftNumParallelPrehandlingTasks); });
@@ -501,112 +512,116 @@ void executeParallelTransform(
         split_key_count);
     LOG_INFO(
         log,
-        "Parallel prehandling for single big region, range={}, split keys={}, region_id={}",
+        "Parallel prehandling for single big region, range={} split_keys={} region_id={} snaps={}",
         new_region->getRange()->toDebugString(),
         split_key_count,
-        new_region->id());
+        new_region->id(),
+        snaps.len);
+
     Stopwatch watch;
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
-    sst_stream->resetSoftLimit(
-        DM::SSTScanSoftLimit(DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT, std::string(""), std::string(split_keys[0])));
+
+    const DM::SSTScanSoftLimit head_soft_limit(
+        DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
+        std::string(""),
+        std::string(split_keys[0]));
+    sst_stream->resetSoftLimit(head_soft_limit.clone());
 
     ParallelPrehandleCtxPtr parallel_ctx = std::make_shared<ParallelPrehandleCtx>();
 
-    for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
+    for (size_t split_id = 0; split_id < split_key_count; ++split_id)
     {
-        auto add_result = async_tasks.addTask(extra_id, [&, extra_id]() {
-            auto limit = DM::SSTScanSoftLimit(
-                extra_id,
-                std::string(split_keys[extra_id]),
-                extra_id + 1 == split_key_count ? std::string("") : std::string(split_keys[extra_id + 1]));
-            runInParallel(
-                log,
-                prehandle_ctx,
-                new_region,
-                snaps,
-                proxy_helper,
-                index,
-                extra_id,
-                parallel_ctx,
-                std::move(limit));
+        auto add_result = async_tasks.addTask(split_id, [&, split_id]() {
+            std::string origin_name = getThreadName();
+            SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
+            setThreadName("para-pre-snap");
+            auto part_limit = DM::SSTScanSoftLimit(
+                split_id,
+                std::string(split_keys[split_id]),
+                split_id + 1 == split_key_count ? std::string("") : std::string(split_keys[split_id + 1]));
+            runInParallel(log, prehandle_ctx, new_region, snaps, proxy_helper, parallel_ctx, std::move(part_limit));
             return true;
         });
         RUNTIME_CHECK_MSG(
             add_result,
             "Failed when adding {}-th task for prehandling region_id={}",
-            extra_id,
+            split_id,
             new_region->id());
     }
+
     // This will read the keys from the beginning to the first split key
     auto [head_result, head_prehandle_result] = executeTransform(log, prehandle_ctx, new_region, sst_stream);
     LOG_INFO(
         log,
-        "Finished extra parallel prehandle task limit={} write_cf {} lock_cf={} default_cf={} dmfiles={} "
-        "error={}, split_id={}, "
-        "region_id={}",
-        sst_stream->getSoftLimit()->toDebugString(),
+        "Finished extra parallel prehandle task, limit={} write_cf={} lock_cf={} default_cf={} dmfiles={} "
+        "error={} split_id={} region_id={}",
+        head_soft_limit.toDebugString(),
         head_prehandle_result.stats.write_cf_keys,
         head_prehandle_result.stats.lock_cf_keys,
         head_prehandle_result.stats.default_cf_keys,
         head_prehandle_result.ingest_ids.size(),
         magic_enum::enum_name(head_result.error),
-        DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
+        head_soft_limit.split_id,
         new_region->id());
 
     // Wait all threads to join. May throw.
     // If one thread throws, then all result is useless, so `async_tasks` is released directly.
-    for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
+    for (size_t split_id = 0; split_id < split_key_count; ++split_id)
     {
         // May get exception.
-        LOG_DEBUG(log, "Try fetch prehandle task split_id={}, region_id={}", extra_id, new_region->id());
-        async_tasks.fetchResult(extra_id);
+        LOG_DEBUG(log, "Try fetch prehandle task split_id={}, region_id={}", split_id, new_region->id());
+        async_tasks.fetchResult(split_id);
     }
-    if (head_result.error == PrehandleTransformStatus::Ok)
-    {
-        prehandle_result = std::move(head_prehandle_result);
-        // Aggregate results.
-        for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
-        {
-            std::scoped_lock l(parallel_ctx->mut);
-            if (parallel_ctx->gather_res[extra_id].error == PrehandleTransformStatus::Ok)
-            {
-                result.error = PrehandleTransformStatus::Ok;
-                auto & v = parallel_ctx->gather_prehandle_res[extra_id];
-                prehandle_result.ingest_ids.insert(
-                    prehandle_result.ingest_ids.end(),
-                    std::make_move_iterator(v.ingest_ids.begin()),
-                    std::make_move_iterator(v.ingest_ids.end()));
-                v.ingest_ids.clear();
-                prehandle_result.stats.mergeFrom(v.stats);
-                // Merge all uncommitted data in different splits.
-                new_region->mergeDataFrom(*parallel_ctx->gather_res[extra_id].region);
-            }
-            else
-            {
-                // Once a prehandle has non-ok result, we quit further loop
-                result = parallel_ctx->gather_res[extra_id];
-                result.extra_msg = fmt::format(", from {}", extra_id);
-                break;
-            }
-        }
-        LOG_INFO(
-            log,
-            "Finished all extra parallel prehandle task, write_cf={} dmfiles={} error={} splits={} cost={:.3f}s "
-            "region_id={}",
-            prehandle_result.stats.write_cf_keys,
-            prehandle_result.ingest_ids.size(),
-            magic_enum::enum_name(head_result.error),
-            split_key_count,
-            watch.elapsedSeconds(),
-            new_region->id());
-    }
-    else
+
+    ReadFromStreamResult result;
+    PrehandleResult prehandle_result;
+    if (head_result.error != PrehandleTransformStatus::Ok)
     {
         // Otherwise, fallback to error handling or exception handling.
         result = head_result;
         result.extra_msg = fmt::format(", from {}", DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
+        return {result, prehandle_result};
     }
+
+    assert(head_result.error == PrehandleTransformStatus::Ok);
+    prehandle_result = std::move(head_prehandle_result);
+    // Aggregate results.
+    for (size_t split_id = 0; split_id < split_key_count; ++split_id)
+    {
+        std::scoped_lock l(parallel_ctx->mut);
+        if (parallel_ctx->gather_res[split_id].error == PrehandleTransformStatus::Ok)
+        {
+            result.error = PrehandleTransformStatus::Ok;
+            auto & v = parallel_ctx->gather_prehandle_res[split_id];
+            prehandle_result.ingest_ids.insert(
+                prehandle_result.ingest_ids.end(),
+                std::make_move_iterator(v.ingest_ids.begin()),
+                std::make_move_iterator(v.ingest_ids.end()));
+            v.ingest_ids.clear();
+            prehandle_result.stats.mergeFrom(v.stats);
+            // Merge all uncommitted data in different splits.
+            new_region->mergeDataFrom(*parallel_ctx->gather_res[split_id].region);
+        }
+        else
+        {
+            // Once a prehandle has non-ok result, we quit further loop
+            result = parallel_ctx->gather_res[split_id];
+            result.extra_msg = fmt::format(", from {}", split_id);
+            break;
+        }
+    }
+    LOG_INFO(
+        log,
+        "Finished all extra parallel prehandle task, write_cf={} dmfiles={} error={} splits={} cost={:.3f}s "
+        "region_id={}",
+        prehandle_result.stats.write_cf_keys,
+        prehandle_result.ingest_ids.size(),
+        magic_enum::enum_name(head_result.error),
+        split_key_count,
+        watch.elapsedSeconds(),
+        new_region->id());
+    return {result, prehandle_result};
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
@@ -642,7 +657,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     });
 
     PrehandleResult prehandle_result;
-    TableID physical_table_id = InvalidTableID;
+    TableID physical_table_id = new_region->getMappedTableID();
 
     auto region_id = new_region->id();
     auto prehandle_task = prehandling_trace.registerTask(region_id);
@@ -654,7 +669,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstone.
-            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            const auto [table_drop_lock, storage, schema_snap]
+                = AtomicGetStorageSchema(region_id, keyspace_id, physical_table_id, tmt);
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
@@ -671,14 +687,14 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     /* ignore_cache= */ false,
                     context.getSettingsRef().safe_point_update_interval_seconds);
             }
-            physical_table_id = storage->getTableInfo().id;
 
             auto opt = DM::SSTFilesToBlockInputStreamOpts{
                 .log_prefix = fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id),
                 .schema_snap = schema_snap,
                 .gc_safepoint = gc_safepoint,
                 .force_decode = force_decode,
-                .expected_size = expected_block_size};
+                .expected_size = expected_block_size,
+            };
 
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 new_region,
@@ -696,7 +712,9 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 .job_type = job_type,
                 .storage = storage,
                 .opts = opt,
-                .tmt = tmt};
+                .tmt = tmt,
+                .snapshot_index = index,
+            };
 
             // `split_keys` do not begin with 'z'.
             auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
@@ -706,24 +724,22 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             {
                 LOG_INFO(
                     log,
-                    "Single threaded prehandling for single region, range={} region_id={}",
+                    "Single threaded prehandling for single region, range={} region_id={} snaps={}",
                     new_region->getRange()->toDebugString(),
-                    new_region->id());
+                    new_region->id(),
+                    snaps.len);
                 std::tie(result, prehandle_result) = executeTransform(log, prehandle_ctx, new_region, sst_stream);
             }
             else
             {
-                executeParallelTransform(
+                std::tie(result, prehandle_result) = executeParallelTransform(
                     log,
                     prehandle_ctx,
                     new_region,
-                    result,
-                    prehandle_result,
                     split_keys,
                     sst_stream,
                     snaps,
-                    proxy_helper,
-                    index);
+                    proxy_helper);
             }
 
             prehandle_result.stats.approx_raft_snapshot_size = approx_bytes;

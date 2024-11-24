@@ -16,6 +16,7 @@
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/TableScanBinder.h>
 #include <Storages/MutableSupport.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB::mock
 {
@@ -114,7 +115,7 @@ void TableScanBinder::buildTable(tipb::Executor * tipb_executor)
 
 ExecutorBinderPtr compileTableScan(
     size_t & executor_index,
-    TableInfo & table_info,
+    TiDB::TableInfo & table_info,
     const String & db,
     const String & table_name,
     bool append_pk_column,
@@ -123,7 +124,7 @@ ExecutorBinderPtr compileTableScan(
     DAGSchema ts_output;
     for (const auto & column_info : table_info.columns)
     {
-        ColumnInfo ci;
+        TiDB::ColumnInfo ci;
         ci.id = column_info.id;
         ci.tp = column_info.tp;
         ci.flag = column_info.flag;
@@ -132,13 +133,14 @@ ExecutorBinderPtr compileTableScan(
         ci.elems = column_info.elems;
         ci.default_value = column_info.default_value;
         ci.origin_default_value = column_info.origin_default_value;
+        ci.collate = column_info.collate;
         /// use qualified name as the column name to handle multiple table queries, not very
         /// efficient but functionally enough for mock test
         ts_output.emplace_back(std::make_pair(db + "." + table_name + "." + column_info.name, std::move(ci)));
     }
     if (append_pk_column)
     {
-        ColumnInfo ci;
+        TiDB::ColumnInfo ci;
         ci.tp = TiDB::TypeLongLong;
         ci.id = TiDBPkColumnID;
         ci.setPriKeyFlag();

@@ -32,6 +32,7 @@
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Interpreters/CancellationHook.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
@@ -128,11 +129,27 @@ struct AggregationMethodOneNumber
         : data(other.data)
     {}
 
-    /// To use one `Method` in different threads, use different `State`.
     using State = ColumnsHashing::
         HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     /// Shuffle key columns before `insertKeyIntoColumns` call if needed.
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -167,8 +184,24 @@ struct AggregationMethodString
     {}
 
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -198,10 +231,26 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
-    // Remove last zero byte.
-    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    using State = ColumnsHashing::
+        HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -232,8 +281,24 @@ struct AggregationMethodOneKeyStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     ALWAYS_INLINE static inline void insertKeyIntoColumns(
@@ -297,15 +362,31 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     using State
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     template <typename KeyType>
     ALWAYS_INLINE static inline void initAggKeys(size_t rows, IColumn * key_column)
     {
         auto * column = static_cast<typename KeyType::ColumnType *>(key_column);
-        column->getData().resize_fill(rows);
+        column->getData().resize_fill_zero(rows);
     }
 
     ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn * key_column)
@@ -358,7 +439,15 @@ struct AggregationMethodFastPathTwoKeysNoCache
         return insertAggKeyIntoColumnString(pos, key_column);
     }
 
-    ALWAYS_INLINE static inline void insertKeyIntoColumns(
+    ALWAYS_INLINE static inline void insertKeyIntoColumnsOneKey(
+        const StringRef & key,
+        std::vector<IColumn *> & key_columns,
+        size_t index)
+    {
+        insertAggKeyIntoColumn<Key1Desc>(key.data, key_columns[0], index);
+    }
+
+    ALWAYS_INLINE static inline void insertKeyIntoColumnsTwoKey(
         const StringRef & key,
         std::vector<IColumn *> & key_columns,
         size_t index)
@@ -392,8 +481,24 @@ struct AggregationMethodFixedString
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -424,8 +529,24 @@ struct AggregationMethodFixedStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -437,7 +558,6 @@ struct AggregationMethodFixedStringNoCache
         static_cast<ColumnFixedString *>(key_columns[0])->insertData(key.data, key.size);
     }
 };
-
 
 /// For the case where all keys are of fixed length, and they fit in N (for example, 128) bits.
 template <typename TData, bool has_nullable_keys_ = false, bool use_cache = true>
@@ -459,8 +579,27 @@ struct AggregationMethodKeysFixed
 
     using State
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    // Because shuffle key optimization will reorder group by key internally, which is not compatible with
+    // key_ref_agg_func optimization. Because the latter optimization also needs to reorder group by key
+    // to help skipping copy columns.
+    static bool canUseKeyRefAggFuncOptimization() { return false; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> & key_columns, const Sizes & key_sizes)
     {
         return State::shuffleKeyColumns(key_columns, key_sizes);
@@ -524,7 +663,6 @@ struct AggregationMethodKeysFixed
     }
 };
 
-
 /** Aggregates by concatenating serialized key values.
   * The serialized value differs in that it uniquely allows to deserialize it, having only the position with which it starts.
   * That is, for example, for strings, it contains first the serialized length of the string, and then the bytes.
@@ -547,8 +685,24 @@ struct AggregationMethodSerialized
     {}
 
     using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
-    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    template <bool only_lookup>
+    struct EmplaceOrFindKeyResult
+    {
+    };
 
+    template <>
+    struct EmplaceOrFindKeyResult<false>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    };
+
+    template <>
+    struct EmplaceOrFindKeyResult<true>
+    {
+        using ResultType = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+    };
+
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -995,6 +1149,8 @@ public:
 
     size_t getConcurrency() const { return concurrency; }
 
+    bool isTwoLevel() const { return is_two_level; }
+
 private:
     Block getDataForSingleLevel();
 
@@ -1030,11 +1186,11 @@ public:
     {
         /// Data structure of source blocks.
         Block src_header;
-        /// Data structure of intermediate blocks before merge.
-        Block intermediate_header;
 
         /// What to count.
         ColumnNumbers keys;
+        KeyRefAggFuncMap key_ref_agg_func;
+        AggFuncRefKeyMap agg_func_ref_key;
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
@@ -1050,6 +1206,8 @@ public:
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_,
+            const KeyRefAggFuncMap & key_ref_agg_func_,
+            const AggFuncRefKeyMap & agg_func_ref_key_,
             const AggregateDescriptions & aggregates_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
@@ -1060,6 +1218,8 @@ public:
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
+            , key_ref_agg_func(key_ref_agg_func_)
+            , agg_func_ref_key(agg_func_ref_key_)
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
@@ -1072,30 +1232,20 @@ public:
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
         {}
 
-        /// Only parameters that matter during merge.
-        Params(
-            const Block & intermediate_header_,
-            const ColumnNumbers & keys_,
-            const AggregateDescriptions & aggregates_,
-            const SpillConfig & spill_config,
-            UInt64 max_block_size_,
-            const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
-        {
-            intermediate_header = intermediate_header_;
-        }
-
         static Block getHeader(
             const Block & src_header,
-            const Block & intermediate_header,
             const ColumnNumbers & keys,
             const AggregateDescriptions & aggregates,
+            const KeyRefAggFuncMap & key_ref_agg_func,
             bool final);
 
-        Block getHeader(bool final) const
-        {
-            return getHeader(src_header, intermediate_header, keys, aggregates, final);
-        }
+        Params(const Params &) = default;
+        Params & operator=(const Params &) = delete;
+
+        Params(Params &&) = default;
+        Params & operator=(Params &&) = delete;
+
+        Block getHeader(bool final) const { return getHeader(src_header, keys, aggregates, key_ref_agg_func, final); }
 
         /// Calculate the column numbers in `keys` and `aggregates`.
         void calculateColumnNumbers(const Block & block);
@@ -1118,7 +1268,8 @@ public:
         const Params & params_,
         const String & req_id,
         size_t concurrency,
-        const RegisterOperatorSpillContext & register_operator_spill_context);
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        bool is_auto_pass_through_ = false);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
@@ -1148,7 +1299,7 @@ public:
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
     struct AggProcessInfo
     {
-        AggProcessInfo(Aggregator * aggregator_)
+        explicit AggProcessInfo(Aggregator * aggregator_)
             : aggregator(aggregator_)
         {
             assert(aggregator);
@@ -1163,6 +1314,11 @@ public:
         AggregateColumns aggregate_columns;
         AggregateFunctionInstructions aggregate_functions_instructions;
         Aggregator * aggregator;
+
+        bool only_lookup = false;
+        size_t hit_row_cnt = 0;
+        std::vector<UInt64> not_found_rows;
+
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
@@ -1177,11 +1333,26 @@ public:
             end_row = 0;
             materialized_columns.clear();
             prepare_for_agg_done = false;
+
+            hit_row_cnt = 0;
+            not_found_rows.clear();
+            not_found_rows.reserve(block_.rows() / 2);
         }
     };
 
     /// Process one block. Return false if the processing should be aborted.
     bool executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
+    bool executeOnBlockCollectHitRate(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
+    bool executeOnBlockOnlyLookup(
+        AggProcessInfo & agg_process_info,
+        AggregatedDataVariants & result,
+        size_t thread_num);
+
+    template <bool collect_hit_rate, bool only_lookup>
+    bool executeOnBlockImpl(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
 
     /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
       * Return nullptr if there are no non empty data_variant.
@@ -1200,8 +1371,6 @@ public:
       */
     Blocks convertBlockToTwoLevel(const Block & block);
 
-    using CancellationHook = std::function<bool()>;
-
     /** Set a function that checks whether the current task can be aborted.
       */
     void setCancellationHook(CancellationHook cancellation_hook);
@@ -1218,6 +1387,8 @@ public:
     /// Get data structure of the result.
     Block getHeader(bool final) const;
     Block getSourceHeader() const;
+
+    const Params & getParams() const { return params; }
 
 protected:
     friend struct AggregatedDataVariants;
@@ -1256,6 +1427,8 @@ protected:
     size_t group_by_two_level_threshold = 0;
     size_t group_by_two_level_threshold_bytes = 0;
 
+    const bool is_auto_pass_through;
+
     /// For external aggregation.
     AggSpillContextPtr agg_spill_context;
     std::atomic<bool> spill_triggered{false};
@@ -1274,22 +1447,22 @@ protected:
 
 
     /// Process one data block, aggregate the data into a hash table.
-    template <typename Method>
+    template <bool collect_hit_rate, bool only_lookup, typename Method>
     void executeImpl(
         Method & method,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <typename Method>
+    template <bool collect_hit_rate, bool only_loopup, typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <typename Method>
-    std::optional<typename Method::EmplaceResult> emplaceKey(
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
         Method & method,
         typename Method::State & state,
         size_t index,
@@ -1312,62 +1485,80 @@ protected:
     template <typename Method>
     void mergeSingleLevelDataImpl(ManyAggregatedDataVariants & non_empty_data) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlockImpl(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         MutableColumns & key_columns,
         AggregateColumnsData & aggregate_columns,
         MutableColumns & final_aggregate_columns,
         Arena * arena,
         bool final) const;
 
-    template <typename Method, typename Table>
+    // The template parameter skip_convert_key indicates whether we can skip deserializing the keys in the HashMap.
+    // For example, select first_row(c1) from t group by c1, where c1 is a string column with collator,
+    // only the result of first_row(c1) needs to be constructed. The key c1 only needs to reference to first_row(c1).
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImpl(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<MutableColumns> & key_columns_vec,
         std::vector<AggregateColumnsData> & aggregate_columns_vec,
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena,
         bool final) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<IColumn *> key_columns,
         MutableColumns & final_aggregate_columns,
         Arena * arena) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImplFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlockImplNotFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<IColumn *> key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImplNotFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
 
     template <typename Filler>
-    Block prepareBlockAndFill(AggregatedDataVariants & data_variants, bool final, size_t rows, Filler && filler) const;
+    Block prepareBlockAndFill(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler,
+        size_t convert_key_size) const;
 
     template <typename Filler>
-    BlocksList prepareBlocksAndFill(AggregatedDataVariants & data_variants, bool final, size_t rows, Filler && filler)
-        const;
+    BlocksList prepareBlocksAndFill(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler,
+        size_t convert_key_size) const;
 
     template <typename Method>
     Block convertOneBucketToBlock(

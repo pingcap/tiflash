@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -35,6 +36,7 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
+#include <gtest/gtest.h>
 
 #include <algorithm>
 #include <magic_enum.hpp>
@@ -134,6 +136,7 @@ public:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             false,
             1,
             db_context->getSettingsRef());
@@ -145,7 +148,7 @@ public:
         auto page_id = dm_file->pageId();
         auto parent_path = dm_file->parentPath();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFile::ReadMetaMode::all());
+        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFileMeta::ReadMode::all());
     }
 
     DMContext & dmContext() { return *dm_context; }
@@ -161,22 +164,22 @@ public:
 
     static void breakFileMetaV2File(const DMFilePtr & dmfile)
     {
-        PosixWritableFile file(dmfile->metav2Path(), false, -1, 0666);
+        PosixWritableFile file(dmfile->metav2Path(/* meta_version= */ 0), false, -1, 0666);
         String s = "hello";
         auto n = file.pwrite(s.data(), s.size(), 0);
         ASSERT_EQ(n, s.size());
     }
 
-    static std::vector<UInt8> & getReaderUsePacks(DMFileBlockInputStreamPtr & stream)
+    static RSResults & getReaderPackRes(DMFileBlockInputStreamPtr & stream)
     {
-        return stream->reader.pack_filter.getUsePacks();
+        return stream->reader.pack_filter.getPackRes();
     }
 
 protected:
-    std::unique_ptr<DMContext> dm_context{};
+    std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::shared_ptr<StoragePathPool> path_pool{};
-    std::shared_ptr<StoragePool> storage_pool{};
+    std::shared_ptr<StoragePathPool> path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
@@ -192,13 +195,15 @@ void DMFileMetaV2Test::checkMergedFile(
     const std::set<String> & not_uploaded_files,
     std::set<String> & checked_fnames)
 {
-    auto merged_filename = dmfile->mergedPath(merged_number);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+    ASSERT_TRUE(dmfile_meta != nullptr);
+    auto merged_filename = dmfile_meta->mergedPath(merged_number);
     auto merged_file = PosixRandomAccessFile::create(merged_filename);
 
     for (const auto & fname : not_uploaded_files)
     {
-        auto itr = dmfile->merged_sub_file_infos.find(fname);
-        ASSERT_NE(itr, dmfile->merged_sub_file_infos.end());
+        auto itr = dmfile_meta->merged_sub_file_infos.find(fname);
+        ASSERT_NE(itr, dmfile_meta->merged_sub_file_infos.end());
         if (itr->second.number != merged_number)
         {
             continue;
@@ -360,7 +365,6 @@ try
 CATCH
 
 // test multiple data  into v3, and read it
-// check there are only index and mrk and null.data in merged
 TEST_F(DMFileMetaV2Test, CheckDMFileV3WithMultiData)
 try
 {
@@ -383,7 +387,6 @@ try
 
         ASSERT_EQ(dm_file->getPackProperties().property_size(), 1);
     }
-
 
     {
         // Test read
@@ -412,7 +415,7 @@ try
                 files.insert(itr.name());
             }
         }
-        ASSERT_EQ(files.size(), 3); // handle data / col data and merged file
+        ASSERT_EQ(files.size(), 3); // handle, col data and merged file
         ASSERT(files.find("0.merged") != files.end());
         ASSERT(files.find("%2D1.dat") != files.end());
         ASSERT(files.find("1.dat") != files.end());
@@ -549,7 +552,7 @@ try
         dmfile2->fileId(),
         dmfile2->pageId(),
         dmfile2->parentPath(),
-        DMFile::ReadMetaMode::all());
+        DMFileMeta::ReadMode::all());
     LOG_DEBUG(Logger::get(), "check dmfile1 dmfile3");
     check_meta(dmfile1, dmfile3);
 
@@ -613,7 +616,7 @@ try
             dmfile->fileId(),
             dmfile->pageId(),
             dmfile->parentPath(),
-            DMFile::ReadMetaMode::all());
+            DMFileMeta::ReadMode::all());
         FAIL(); // Should not come here.
     }
     catch (const DB::Exception & e)
@@ -633,11 +636,13 @@ try
     const size_t num_rows_write = 128;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
@@ -730,16 +735,19 @@ try
     const size_t num_rows_write = 8192;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
     };
     DMFileBlockOutputStream::BlockProperty block_property3{
+        .not_clean_rows = 0,
         .deleted_rows = 3,
         .effective_num_rows = 3,
         .gc_hint_version = 3,
@@ -902,10 +910,10 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = getReaderUsePacks(stream);
-        use_packs[1] = false;
+        auto & pack_res = getReaderPackRes(stream);
+        pack_res[1] = RSResult::None;
         stream->skipNextBlock();
-        use_packs[1] = true;
+        pack_res[1] = RSResult::Some;
         std::vector<Array> partial_expect_arr_values;
         partial_expect_arr_values.insert(
             partial_expect_arr_values.cend(),
@@ -1043,16 +1051,19 @@ try
     const size_t num_rows_write = 8192;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
     };
     DMFileBlockOutputStream::BlockProperty block_property3{
+        .not_clean_rows = 0,
         .deleted_rows = 3,
         .effective_num_rows = 3,
         .gc_hint_version = 3,
@@ -1114,10 +1125,10 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = getReaderUsePacks(stream);
-        use_packs[1] = false;
+        auto & pack_res = getReaderPackRes(stream);
+        pack_res[1] = RSResult::None;
         ASSERT_EQ(stream->skipNextBlock(), num_rows_write / 3);
-        use_packs[1] = true;
+        pack_res[1] = RSResult::Some;
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),
@@ -1136,16 +1147,19 @@ try
     const size_t num_rows_write = 1024;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
+        .not_clean_rows = 0,
         .deleted_rows = 1,
         .effective_num_rows = 1,
         .gc_hint_version = 1,
     };
     DMFileBlockOutputStream::BlockProperty block_property2{
+        .not_clean_rows = 0,
         .deleted_rows = 2,
         .effective_num_rows = 2,
         .gc_hint_version = 2,
     };
     DMFileBlockOutputStream::BlockProperty block_property3{
+        .not_clean_rows = 0,
         .deleted_rows = 3,
         .effective_num_rows = 3,
         .gc_hint_version = 3,
@@ -1637,10 +1651,10 @@ try
     filters.emplace_back(one_part_filter, span_per_part); // only first part
     // <filter, num_rows_should_read>
     // (first range) And (Unsuppported) -> should filter some chunks by range
-    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test", "test")}), span_per_part);
+    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test")}), span_per_part);
     // <filter, num_rows_should_read>
     // (first range) Or (Unsupported) -> should NOT filter any chunk
-    filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test")}), num_rows_write);
+    filters.emplace_back(createOr({one_part_filter, createUnsupported("test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
@@ -1966,6 +1980,7 @@ public:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             is_common_handle,
             rowkey_column_size,
             db_context->getSettingsRef());
@@ -1978,10 +1993,10 @@ public:
 
 private:
     String path;
-    std::unique_ptr<DMContext> dm_context{};
+    std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::shared_ptr<StoragePathPool> path_pool{};
-    std::shared_ptr<StoragePool> storage_pool{};
+    std::shared_ptr<StoragePathPool> path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
@@ -2108,28 +2123,33 @@ try
         RowKeyRange range;
         Int64 start, end;
     };
-    std::vector<QueryRangeInfo> ranges;
-    ranges.emplace_back(
-        DMTestEnv::getRowKeyRangeForClusteredIndex(0, span_per_part, rowkey_column_size),
-        0,
-        span_per_part); // only first part
-    ranges.emplace_back(
-        DMTestEnv::getRowKeyRangeForClusteredIndex(800, num_rows_write, rowkey_column_size),
-        800,
-        num_rows_write);
-    ranges.emplace_back(DMTestEnv::getRowKeyRangeForClusteredIndex(256, 700, rowkey_column_size), 256, 700); //
-    ranges.emplace_back(DMTestEnv::getRowKeyRangeForClusteredIndex(0, 0, rowkey_column_size), 0, 0); // none
-    ranges.emplace_back(
-        DMTestEnv::getRowKeyRangeForClusteredIndex(0, num_rows_write, rowkey_column_size),
-        0,
-        num_rows_write); // full range
-    ranges.emplace_back(
-        DMTestEnv::getRowKeyRangeForClusteredIndex(
+    std::vector<QueryRangeInfo> ranges{
+        QueryRangeInfo{
+            DMTestEnv::getRowKeyRangeForClusteredIndex(0, span_per_part, rowkey_column_size),
+            0,
+            span_per_part // only first part
+        },
+        QueryRangeInfo{
+            DMTestEnv::getRowKeyRangeForClusteredIndex(800, num_rows_write, rowkey_column_size),
+            800,
+            num_rows_write},
+        QueryRangeInfo{DMTestEnv::getRowKeyRangeForClusteredIndex(256, 700, rowkey_column_size), 256, 700},
+        QueryRangeInfo{DMTestEnv::getRowKeyRangeForClusteredIndex(0, 0, rowkey_column_size), 0, 0}, //none
+        QueryRangeInfo{
+            DMTestEnv::getRowKeyRangeForClusteredIndex(0, num_rows_write, rowkey_column_size),
+            0,
+            num_rows_write,
+        }, // full range
+        QueryRangeInfo{
+            DMTestEnv::getRowKeyRangeForClusteredIndex(
+                std::numeric_limits<Int64>::min(),
+                std::numeric_limits<Int64>::max(),
+                rowkey_column_size),
             std::numeric_limits<Int64>::min(),
             std::numeric_limits<Int64>::max(),
-            rowkey_column_size),
-        std::numeric_limits<Int64>::min(),
-        std::numeric_limits<Int64>::max()); // full range
+        }, // full range
+    };
+
     for (const auto & range : ranges)
     {
         // Test read

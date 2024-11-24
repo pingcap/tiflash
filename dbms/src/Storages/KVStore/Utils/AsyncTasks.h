@@ -43,6 +43,53 @@ enum class TaskState
 };
 } // namespace AsyncTaskHelper
 
+struct GeneralCancelHandle
+{
+    using GeneralCancelHandlePtr = std::shared_ptr<GeneralCancelHandle>;
+    GeneralCancelHandle() = default;
+    GeneralCancelHandle(const GeneralCancelHandle &) = delete;
+
+    bool isCanceled() const { return inner.load(); }
+
+    bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout)
+    {
+        // The task could be canceled before running.
+        if (isCanceled())
+            return true;
+        std::unique_lock<std::mutex> lock(mut);
+        cv.wait_for(lock, timeout, [&]() { return isCanceled(); });
+        return isCanceled();
+    }
+
+    static GeneralCancelHandlePtr genAlreadyCanceled() noexcept
+    {
+        auto h = std::make_shared<GeneralCancelHandle>();
+        h->inner.store(true);
+        return h;
+    }
+
+    static GeneralCancelHandlePtr genNotCanceled() noexcept
+    {
+        auto h = std::make_shared<GeneralCancelHandle>();
+        h->inner.store(false);
+        return h;
+    }
+
+    // Make this private to forbid called by multiple consumers.
+    void doCancel()
+    {
+        // Use lock here to prevent losing signal.
+        std::scoped_lock lock(mut);
+        inner.store(true);
+        cv.notify_all();
+    }
+
+private:
+    std::atomic_bool inner = false;
+    std::mutex mut;
+    std::condition_variable cv;
+};
+
 // Key should support `fmt::formatter`.
 template <typename Key, typename Func, typename R>
 struct AsyncTasks
@@ -74,47 +121,8 @@ struct AsyncTasks
 
     using TaskState = AsyncTaskHelper::TaskState;
 
-    struct CancelHandle;
+    using CancelHandle = GeneralCancelHandle;
     using CancelHandlePtr = std::shared_ptr<CancelHandle>;
-    struct CancelHandle
-    {
-        CancelHandle() = default;
-        CancelHandle(const CancelHandle &) = delete;
-
-        bool isCanceled() const { return inner.load(); }
-
-        bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout)
-        {
-            // The task could be canceled before running.
-            if (isCanceled())
-                return true;
-            std::unique_lock<std::mutex> lock(mut);
-            cv.wait_for(lock, timeout, [&]() { return isCanceled(); });
-            return isCanceled();
-        }
-
-        static CancelHandlePtr genAlreadyCanceled() noexcept
-        {
-            auto h = std::make_shared<CancelHandle>();
-            h->inner.store(true);
-            return h;
-        }
-
-    private:
-        // Make this private to forbid called by multiple consumers.
-        void doCancel()
-        {
-            // Use lock here to prevent losing signal.
-            std::scoped_lock lock(mut);
-            inner.store(true);
-            cv.notify_all();
-        }
-
-        friend struct AsyncTasks;
-        std::atomic_bool inner = false;
-        std::mutex mut;
-        std::condition_variable cv;
-    };
 
     struct Elem
     {
@@ -420,4 +428,5 @@ protected:
     LoggerPtr log;
     std::atomic_bool shut = false;
 };
+
 } // namespace DB

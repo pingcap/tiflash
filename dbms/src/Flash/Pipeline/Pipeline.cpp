@@ -18,8 +18,8 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
-#include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
-#include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/FineGrainedPipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
@@ -121,7 +121,7 @@ void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 {
     assert(plan_node);
     /// For fine grained mode, all plan node should enable fine grained shuffle.
-    if (!plan_node->getFineGrainedShuffle().enable())
+    if (!plan_node->getFineGrainedShuffle().enabled())
         is_fine_grained_mode = false;
     plan_nodes.push_back(plan_node);
 }
@@ -201,7 +201,7 @@ PipelineExecGroup Pipeline::buildExecGroup(
     {
         plan_node->buildPipelineExecGroup(exec_context, builder, context, concurrency);
     }
-    return builder.build();
+    return builder.build(has_pipeline_breaker_wait_time);
 }
 
 /**

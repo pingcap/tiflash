@@ -76,9 +76,8 @@ public:
     {
         assert(task);
         task->notify();
-        task->profile_info.elapsedWaitForNotifyTime();
         assert(TaskScheduler::instance);
-        TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+        TaskScheduler::instance->submit(std::move(task));
     }
 
 private:

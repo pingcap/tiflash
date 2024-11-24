@@ -91,9 +91,17 @@ MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
 
 MPPTaskManager::~MPPTaskManager()
 {
-    std::lock_guard lock(monitor->mu);
-    monitor->is_shutdown = true;
-    monitor->cv.notify_all();
+    shutdown();
+}
+
+void MPPTaskManager::shutdown()
+{
+    if (monitor)
+    {
+        std::lock_guard lock(monitor->mu);
+        monitor->is_shutdown = true;
+        monitor->cv.notify_all();
+    }
 }
 
 MPPQueryPtr MPPTaskManager::addMPPQuery(

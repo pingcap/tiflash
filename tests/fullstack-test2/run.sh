@@ -22,9 +22,17 @@ set -xe
 
 check_env
 
-# run fullstack-tests (for engine DeltaTree)
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
+
+# FIXME: now vector does not support run with encryption-at-rest enabled
+docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
+wait_env
+docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-vector'
+
+docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
+clean_data_log
+
 
 docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
 wait_env
@@ -38,11 +46,4 @@ wait_env
 docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
 
 docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
-clean_data_log
-
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
-
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml down
 clean_data_log

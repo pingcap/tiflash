@@ -16,12 +16,12 @@
 
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -29,9 +29,11 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-#include <Storages/Page/PageDefinesBase.h>
 
-namespace DB::DM
+namespace DB
+{
+struct GeneralCancelHandle;
+namespace DM
 {
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
@@ -39,8 +41,6 @@ class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 class PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 
@@ -175,6 +175,7 @@ public:
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
     static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
         DMContext & context,
+        const std::shared_ptr<GeneralCancelHandle> & cancel_handle,
         const RowKeyRange & target_range,
         const CheckpointInfoPtr & checkpoint_info);
 
@@ -182,6 +183,7 @@ public:
     // The data of these temp segments will be included in `wbs`.
     static Segments createTargetSegmentsFromCheckpoint( //
         const LoggerPtr & parent_log,
+        UInt64 region_id,
         DMContext & context,
         StoreID remote_store_id,
         const SegmentMetaInfos & meta_infos,
@@ -254,7 +256,7 @@ public:
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & data_ranges,
+        const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
@@ -488,6 +490,22 @@ public:
         const DMFilePtr & data_file,
         SegmentSnapshotPtr segment_snap_opt = nullptr) const;
 
+    /**
+     * Replace the stable layer using the DMFile with a new meta version.
+     * Delta layer is unchanged.
+     *
+     * This API can be used to make a newly added index visible.
+     *
+     * This API does not have a prepare & apply pair, as it should be quick enough.
+     *
+     * @param new_stable_files Must be the same as the current stable DMFiles (except for the meta version).
+     *                         Otherwise replace will be failed and nullptr will be returned.
+     */
+    [[nodiscard]] SegmentPtr replaceStableMetaVersion(
+        const Lock &,
+        DMContext & dm_context,
+        const DMFiles & new_stable_files);
+
     [[nodiscard]] SegmentPtr dangerouslyReplaceDataFromCheckpoint(
         const Lock &,
         DMContext & dm_context,
@@ -528,7 +546,7 @@ public:
 
     PageIdU64 segmentId() const { return segment_id; }
     PageIdU64 nextSegmentId() const { return next_segment_id; }
-    UInt64 segmentEpoch() const { return epoch; };
+    UInt64 segmentEpoch() const { return epoch; }
 
     void check(DMContext & dm_context, const String & when) const;
 
@@ -539,6 +557,8 @@ public:
 
     String logId() const;
     String simpleInfo() const;
+    // Detail information of segment.
+    // Do not use it in read path since the segment may not in local.
     String info() const;
 
     static String simpleInfo(const std::vector<SegmentPtr> & segments);
@@ -606,6 +626,30 @@ public:
         last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed);
     }
 
+    void setIndexBuildError(const std::vector<IndexID> & index_ids, const String & err_msg)
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        for (const auto & id : index_ids)
+        {
+            local_indexed_build_error.emplace(id, err_msg);
+        }
+    }
+
+    std::unordered_map<IndexID, String> getIndexBuildError() const
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        return local_indexed_build_error;
+    }
+
+    void clearIndexBuildError(const std::vector<IndexID> & index_ids)
+    {
+        std::scoped_lock lock(mtx_local_index_message);
+        for (const auto & id : index_ids)
+        {
+            local_indexed_build_error.erase(id);
+        }
+    }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -622,7 +666,7 @@ public:
     static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     /// Create a stream which merged delta and stable streams together.
-    template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
+    template <bool skippable_place = false>
     static SkippableBlockInputStreamPtr getPlacedStream(
         const DMContext & dm_context,
         const ColumnDefines & read_columns,
@@ -630,8 +674,8 @@ public:
         const RSOperatorPtr & filter,
         const StableSnapshotPtr & stable_snap,
         const DeltaValueReaderPtr & delta_reader,
-        const IndexIterator & delta_index_begin,
-        const IndexIterator & delta_index_end,
+        const DeltaIndexIterator & delta_index_begin,
+        const DeltaIndexIterator & delta_index_end,
         size_t expected_block_size,
         ReadTag read_tag,
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
@@ -694,15 +738,16 @@ public:
         const RSOperatorPtr & filter,
         UInt64 start_ts,
         size_t expected_block_size);
-    BlockInputStreamPtr getBitmapFilterInputStream(
-        BitmapFilterPtr && bitmap_filter,
+    SkippableBlockInputStreamPtr getConcatSkippableBlockInputStream(
+        BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         UInt64 start_ts,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        ReadTag read_tag);
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -714,7 +759,7 @@ public:
         size_t read_data_block_rows);
 
     BlockInputStreamPtr getLateMaterializationStream(
-        BitmapFilterPtr && bitmap_filter,
+        BitmapFilterPtr & bitmap_filter,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
@@ -735,7 +780,6 @@ public:
         size_t expected_block_rows,
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
-
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -763,9 +807,13 @@ public:
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
 
+    mutable std::mutex mtx_local_index_message;
+    std::unordered_map<IndexID, String> local_indexed_build_error;
+
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);
-} // namespace DB::DM
+} // namespace DM
+} // namespace DB

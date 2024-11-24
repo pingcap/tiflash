@@ -17,6 +17,11 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 
+namespace DB::PS::universal::tests
+{
+class UniPageStorageRemoteReadTest;
+}
+
 namespace DB::PS::V3
 {
 
@@ -46,25 +51,39 @@ public:
      */
     explicit CPWriteDataSourceBlobStore(
         BlobStore<universal::BlobStoreTrait> & blob_store_,
-        const FileProviderPtr & file_provider_)
+        const FileProviderPtr & file_provider_,
+        size_t prefetch_size_)
         : blob_store(blob_store_)
         , remote_reader(std::make_unique<S3PageReader>())
         , file_provider(file_provider_)
+        , prefetch_size(prefetch_size_)
     {}
 
     static CPWriteDataSourcePtr create(
         BlobStore<universal::BlobStoreTrait> & blob_store_,
-        const FileProviderPtr & file_provider_)
+        const FileProviderPtr & file_provider_,
+        size_t prefetch_size = DBMS_DEFAULT_BUFFER_SIZE)
     {
-        return std::make_shared<CPWriteDataSourceBlobStore>(blob_store_, file_provider_);
+        return std::make_shared<CPWriteDataSourceBlobStore>(blob_store_, file_provider_, prefetch_size);
     }
 
     Page read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & page_id_and_entry) override;
 
 private:
     BlobStore<universal::BlobStoreTrait> & blob_store;
+
+    /// There could be some remote page stored in `blob_store` which need to be fetched
+    /// from S3 through `remote_reader`. In order to reduce the cost and also improve the
+    /// read performance, we keep a read buffer with `prefetch_size` and try to reuse the
+    /// buffer in next `read`.
+
     S3PageReaderPtr remote_reader;
     FileProviderPtr file_provider;
+    ReadBufferFromRandomAccessFilePtr current_s3file_buf;
+    const size_t prefetch_size;
+
+    // for testing
+    friend class DB::PS::universal::tests::UniPageStorageRemoteReadTest;
 };
 
 /**

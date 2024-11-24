@@ -25,6 +25,7 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/HashJoinSpillContext.h>
 #include <Interpreters/JoinHashMap.h>
@@ -103,6 +104,9 @@ struct RestoreConfig
     size_t restore_round;
     size_t restore_partition_id;
 };
+
+class OneTimeNotifyFuture;
+using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -186,7 +190,7 @@ public:
 
     RestoreConfig restore_config;
 
-    /** Call `setBuildConcurrencyAndInitJoinPartition` and `setSampleBlock`.
+    /** Call `setBuildConcurrencyAndInitJoinPartition` and `setRightSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
     void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
@@ -198,7 +202,7 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    Block joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run = false) const;
+    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
     void checkTypes(const Block & block) const;
 
@@ -279,9 +283,9 @@ public:
     bool finishOneProbe(size_t stream_index);
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
-    bool quickCheckProbeFinished() const;
+    bool isProbeFinishedForPipeline() const;
 
-    bool quickCheckBuildFinished() const;
+    bool isBuildFinishedForPipeline() const;
 
     void finishOneNonJoin(size_t partition_index);
 
@@ -311,6 +315,8 @@ public:
     void flushProbeSideMarkedSpillData(size_t stream_index);
     size_t getProbeCacheColumnThreshold() const { return probe_cache_column_threshold; }
 
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
+
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -327,6 +333,10 @@ public:
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }
     void finalize(const Names & parent_require);
+    bool isFinalize() const { return finalized; }
+
+    OneTimeNotifyFuturePtr wait_build_finished_future;
+    OneTimeNotifyFuturePtr wait_probe_finished_future;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -409,10 +419,10 @@ private:
 
     Sizes key_sizes;
 
-    /// Block with columns from the right-side table except key columns.
-    Block sample_block_without_keys;
+    /// Block with columns from the right-side table.
+    Block right_sample_block;
     /// Block with key columns in the same order they appear in the right-side table.
-    Block sample_block_only_keys;
+    Block right_sample_block_only_keys;
 
     NamesAndTypes output_columns;
     Block output_block;
@@ -446,12 +456,15 @@ private:
     // the index of vector is the stream_index.
     std::vector<MarkedSpillData> build_side_marked_spilled_data;
     std::vector<MarkedSpillData> probe_side_marked_spilled_data;
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
 
 private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void setSampleBlock(const Block & block);
+    void setRightSampleBlock(const Block & block);
 
     /** Set Join build concurrency and init hash map.
       * You must call this method before subsequent calls to insertFromBlock.

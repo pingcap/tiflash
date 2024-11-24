@@ -45,6 +45,18 @@ using KeyspaceDatabaseID = std::pair<KeyspaceID, DatabaseID>;
 
 using ColumnID = Int64;
 
+enum : ColumnID
+{
+    EmptyColumnID = 0,
+};
+
+using IndexID = Int64;
+
+enum : IndexID
+{
+    EmptyIndexID = 0,
+};
+
 // Constants for column id, prevent conflict with TiDB.
 static constexpr ColumnID TiDBPkColumnID = -1;
 static constexpr ColumnID ExtraTableIDColumnID = -3;

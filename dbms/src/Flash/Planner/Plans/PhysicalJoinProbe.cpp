@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
@@ -27,7 +28,7 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     size_t concurrency)
 {
     // Currently join probe does not support fine grained shuffle.
-    RUNTIME_CHECK(!fine_grained_shuffle.enable());
+    RUNTIME_CHECK(!fine_grained_shuffle.enabled());
     if (join_ptr->isSpilled() && group_builder.concurrency() == 1)
     {
         // When the join build operator spilled, the probe operator requires at least two or more threads to restore spilled hash partitions.
@@ -56,6 +57,11 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
             max_block_size,
             input_header));
     });
+    // The `join_ptr->wait_build_finished_future` does not need to be added to exec_context here;
+    // it is only necessary to add it during the "restore build stage."
+    // The order of build/probe here is ensured by the event.
+    exec_context.addOneTimeFuture(join_ptr->wait_probe_finished_future);
+    join_ptr->setCancellationHook([&]() { return exec_context.isCancelled(); });
     join_ptr.reset();
 }
 } // namespace DB

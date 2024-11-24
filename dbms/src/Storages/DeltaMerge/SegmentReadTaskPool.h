@@ -15,11 +15,13 @@
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
+
 
 namespace DB::DM
 {
@@ -127,12 +129,12 @@ public:
         auto total_count = blk_stat.totalCount();
         auto total_bytes = blk_stat.totalBytes();
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-        auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
+        auto approx_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         auto total_rows = blk_stat.totalRows();
         LOG_INFO(
             log,
             "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
-            "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
+            "max_queue_size={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
             "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
             pool_id,
             pop_times,
@@ -140,7 +142,7 @@ public:
             pop_empty_ratio,
             max_queue_size,
             blk_avg_bytes,
-            approximate_max_pending_block_bytes / 1024.0 / 1024.0,
+            approx_max_pending_block_bytes / 1024.0 / 1024.0,
             total_count,
             total_bytes / 1024.0 / 1024.0,
             total_rows,
@@ -256,3 +258,15 @@ using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
 } // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTaskPoolPtr>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTaskPoolPtr & pool, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", pool->pool_id);
+    }
+};

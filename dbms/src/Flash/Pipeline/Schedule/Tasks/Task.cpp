@@ -151,7 +151,13 @@ ExecTaskStatus Task::await()
 void Task::notify()
 {
     assert(task_status == ExecTaskStatus::WAIT_FOR_NOTIFY);
-    switchStatus(ExecTaskStatus::RUNNING);
+    auto next_status = notifyImpl();
+    // If the query has been canceled,
+    // move the task to WaitReactor to quickly trigger the cancel process.
+    if (unlikely(exec_context.isCancelled()))
+        next_status = ExecTaskStatus::WAITING;
+    switchStatus(next_status);
+    profile_info.elapsedWaitForNotifyTime();
 }
 
 void Task::finalize()

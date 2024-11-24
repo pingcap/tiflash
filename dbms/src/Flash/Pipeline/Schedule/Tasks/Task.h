@@ -26,12 +26,12 @@ namespace DB
  *           CANCELLED/ERROR/FINISHED
  *                      ▲
  *                      │
- *         ┌───────────────────────────────┐
- *         │     ┌──►RUNNING◄──┐           │
- * INIT───►│     │             │           │
- *         │     ▼             ▼           │
- *         │ WATITING◄────────►IO_IN/OUT   │
- *         └───────────────────────────────┘
+ * ┌───────────────────────────────────────────────┐
+ * │     ┌──────────►RUNNING◄──────────┐           │
+ * │     │                             │           │
+ * │     ▼                             ▼           │
+ * │ WATITING/WAIT_FOR_NOTIFY◄────────►IO_IN/OUT   │
+ * └───────────────────────────────────────────────┘
  */
 enum class ExecTaskStatus
 {
@@ -102,6 +102,8 @@ protected:
     virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
+
+    virtual ExecTaskStatus notifyImpl() { return ExecTaskStatus::RUNNING; }
 
     // Used to release held resources, just like `Event::finishImpl`.
     virtual void finalizeImpl() {}

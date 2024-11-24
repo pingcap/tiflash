@@ -66,12 +66,11 @@ void ParallelAggregatingBlockInputStream::cancel(bool kill)
         processor.cancel(kill);
 }
 
-
 Block ParallelAggregatingBlockInputStream::readImpl()
 {
     if (!executed)
     {
-        Aggregator::CancellationHook hook = [&]() {
+        CancellationHook hook = [&]() {
             return this->isCancelled();
         };
         aggregator.setCancellationHook(hook);

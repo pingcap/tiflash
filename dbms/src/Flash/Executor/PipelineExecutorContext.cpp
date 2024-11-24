@@ -12,8 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Executor/ResultQueue.h>
+#include <Flash/Mpp/MPPReceiverSet.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/Utils.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
+#include <Operators/SharedQueue.h>
 
 #include <exception>
 
@@ -47,6 +54,24 @@ String PipelineExecutorContext::getExceptionMsg()
     catch (...)
     {
         return getCurrentExceptionMessage(false, true);
+    }
+}
+
+String PipelineExecutorContext::getTrimmedErrMsg()
+{
+    try
+    {
+        auto cur_exception_ptr = getExceptionPtr();
+        if (!cur_exception_ptr)
+            return "";
+        std::rethrow_exception(cur_exception_ptr);
+    }
+    catch (...)
+    {
+        auto err_msg = getCurrentExceptionMessage(true, true);
+        if (likely(!err_msg.empty()))
+            trimStackTrace(err_msg);
+        return err_msg;
     }
 }
 
@@ -152,6 +177,18 @@ void PipelineExecutorContext::cancel()
     bool origin_value = false;
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
+        cancelSharedQueues();
+        cancelOneTimeFutures();
+        if (likely(dag_context))
+        {
+            // Cancel the tunnel_set and mpp_receiver_set here to prevent
+            // pipeline tasks waiting in the WAIT_FOR_NOTIFY state from never being notified.
+            if (dag_context->tunnel_set)
+                dag_context->tunnel_set->close(getTrimmedErrMsg(), false);
+            if (auto mpp_receiver_set = dag_context->getMPPReceiverSet(); mpp_receiver_set)
+                mpp_receiver_set->cancel();
+        }
+        cancelResultQueueIfNeed();
         if likely (TaskScheduler::instance && !query_id.empty())
             TaskScheduler::instance->cancel(query_id, resource_group_name);
     }
@@ -161,7 +198,59 @@ ResultQueuePtr PipelineExecutorContext::toConsumeMode(size_t queue_size)
 {
     std::lock_guard lock(mu);
     RUNTIME_ASSERT(!result_queue.has_value());
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
     result_queue.emplace(std::make_shared<ResultQueue>(queue_size));
     return *result_queue;
+}
+
+void PipelineExecutorContext::addSharedQueue(const SharedQueuePtr & shared_queue)
+{
+    std::lock_guard lock(mu);
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
+    assert(shared_queue);
+    shared_queues.push_back(shared_queue);
+}
+
+void PipelineExecutorContext::cancelSharedQueues()
+{
+    std::vector<SharedQueuePtr> tmp;
+    {
+        std::lock_guard lock(mu);
+        std::swap(tmp, shared_queues);
+    }
+    for (const auto & shared_queue : tmp)
+        shared_queue->cancel();
+}
+
+void PipelineExecutorContext::addOneTimeFuture(const OneTimeNotifyFuturePtr & future)
+{
+    std::lock_guard lock(mu);
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
+    assert(future);
+    one_time_futures.push_back(future);
+}
+
+void PipelineExecutorContext::cancelOneTimeFutures()
+{
+    std::vector<OneTimeNotifyFuturePtr> tmp;
+    {
+        std::lock_guard lock(mu);
+        std::swap(tmp, one_time_futures);
+    }
+    for (const auto & future : tmp)
+        future->finish();
+}
+
+void PipelineExecutorContext::cancelResultQueueIfNeed()
+{
+    ResultQueue * tmp{nullptr};
+    {
+        std::lock_guard lock(mu);
+        if (isWaitMode())
+            return;
+        tmp = (*result_queue).get();
+    }
+    assert(tmp);
+    tmp->cancel();
 }
 } // namespace DB

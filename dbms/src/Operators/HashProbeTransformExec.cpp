@@ -15,12 +15,13 @@
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/Tasks/SimplePipelineTask.h>
-#include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/SimplePipelineTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/StreamRestoreTask.h>
 #include <Operators/HashJoinBuildSink.h>
 #include <Operators/HashProbeTransformExec.h>
 #include <Operators/IOBlockInputStreamSourceOp.h>
 #include <Operators/Operator.h>
+#include <Operators/SharedQueue.h>
 
 #include <magic_enum.hpp>
 
@@ -81,8 +82,10 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
                 req_id,
                 restore_info->join,
                 restore_info->stream_index));
+            exec_context.addOneTimeFuture(restore_info->join->wait_build_finished_future);
+            exec_context.addOneTimeFuture(restore_info->join->wait_probe_finished_future);
             TaskScheduler::instance->submit(
-                std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build()));
+                std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build(false)));
 
             return restore_probe_exec;
         }
@@ -100,16 +103,18 @@ void HashProbeTransformExec::startRestoreProbe()
     /// StreamRestoreTask [probe_restore_stream]
     ///                       | read and push
     ///                       ▼
-    ///               probe_result_queue
+    ///               probe_source_holder
     ///                       | pop and probe
     ///                       ▼
     ///             HashProbeTransformExec (probe restored hash partition)
     assert(!is_probe_restore_done && probe_restore_stream);
     // Use 1 as the queue_size to avoid accumulating too many blocks and causing the memory to exceed the limit.
-    assert(!probe_result_queue);
-    probe_result_queue = std::make_shared<ResultQueue>(1);
+    assert(!probe_source_holder);
+
+    SharedQueueSinkHolderPtr probe_sink_holder;
+    std::tie(probe_sink_holder, probe_source_holder) = SharedQueue::build(exec_context, 1, 1, -1, 1);
     TaskScheduler::instance->submit(
-        std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_result_queue));
+        std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_sink_holder));
     probe_restore_stream.reset();
 }
 
@@ -119,18 +124,21 @@ bool HashProbeTransformExec::prepareProbeRestoredBlock()
         return true;
     if (probe_restored_block)
         return true;
-    assert(probe_result_queue);
-    auto ret = probe_result_queue->tryPop(probe_restored_block);
+    assert(probe_source_holder);
+    auto ret = probe_source_holder->tryPop(probe_restored_block);
     switch (ret)
     {
     case MPMCQueueResult::OK:
         return true;
     case MPMCQueueResult::EMPTY:
+        setNotifyFuture(probe_source_holder.get());
         return false;
     case MPMCQueueResult::FINISHED:
+    case MPMCQueueResult::CANCELLED:
         is_probe_restore_done = true;
         return true;
     default:
+        // queue result can not be full here.
         throw Exception(fmt::format("Unexpected result: {}", magic_enum::enum_name(ret)));
     }
 }
@@ -174,7 +182,7 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
         else
         {
             if (!prepareProbeRestoredBlock())
-                return OperatorStatus::WAITING;
+                return OperatorStatus::WAIT_FOR_NOTIFY;
             auto restore_ret = popProbeRestoredBlock();
             if (likely(restore_ret))
             {

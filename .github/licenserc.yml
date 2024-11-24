@@ -18,7 +18,7 @@ header:
     - '.github/'
     - 'docs/'
     - 'tests/testsdata/'
-    - 'release-centos7-llvm/dockerfiles/'
+    - 'release-linux-llvm/dockerfiles/'
     - '**/.gitignore'
     - '**/*.md'
     - '**/*.json'
@@ -39,9 +39,11 @@ header:
     - 'Cargo.lock'
     - 'Cargo.toml'
     - 'rust-toolchain'
+    - 'rust-toolchain.toml'
     - '.devcontainer/'
     - '**/OWNERS'
     - 'OWNERS_ALIASES'
     - '**/*.sql'
+    - 'dbms/src/Common/tests/tls/'
 
   comment: on-failure

@@ -17,6 +17,7 @@
 #include <Flash/Planner/Plans/PhysicalUnary.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Operators/AutoPassThroughHashAggContext.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -40,15 +41,21 @@ public:
         const PhysicalPlanNodePtr & child_,
         const ExpressionActionsPtr & before_agg_actions_,
         const Names & aggregation_keys_,
-        const TiDB::TiDBCollators & aggregation_collators_,
+        const std::unordered_map<String, String> & key_ref_agg_func_,
+        const std::unordered_map<String, String> & agg_func_ref_key_,
+        const std::unordered_map<String, TiDB::TiDBCollatorPtr> & aggregation_collators_,
         bool is_final_agg_,
+        AutoPassThroughSwitcher auto_pass_through_switcher_,
         const AggregateDescriptions & aggregate_descriptions_,
         const ExpressionActionsPtr & expr_after_agg_)
         : PhysicalUnary(executor_id_, PlanType::Aggregation, schema_, fine_grained_shuffle_, req_id, child_)
         , before_agg_actions(before_agg_actions_)
         , aggregation_keys(aggregation_keys_)
+        , key_ref_agg_func(key_ref_agg_func_)
+        , agg_func_ref_key(agg_func_ref_key_)
         , aggregation_collators(aggregation_collators_)
         , is_final_agg(is_final_agg_)
+        , auto_pass_through_switcher(auto_pass_through_switcher_)
         , aggregate_descriptions(aggregate_descriptions_)
         , expr_after_agg(expr_after_agg_)
     {}
@@ -71,8 +78,11 @@ private:
 private:
     ExpressionActionsPtr before_agg_actions;
     Names aggregation_keys;
-    TiDB::TiDBCollators aggregation_collators;
-    bool is_final_agg;
+    std::unordered_map<String, String> key_ref_agg_func;
+    std::unordered_map<String, String> agg_func_ref_key;
+    std::unordered_map<String, TiDB::TiDBCollatorPtr> aggregation_collators;
+    const bool is_final_agg;
+    const AutoPassThroughSwitcher auto_pass_through_switcher;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;
 };

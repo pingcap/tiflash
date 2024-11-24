@@ -118,6 +118,8 @@ void TiFlashTestEnv::addGlobalContext(
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
 
+    global_context->initializeGlobalLocalIndexerScheduler(1, 0);
+
     // initialize background & blockable background thread pool
     global_context->setSettings(settings_);
     Settings & settings = global_context->getSettingsRef();
@@ -158,16 +160,17 @@ void TiFlashTestEnv::addGlobalContext(
     global_context->initializeGlobalPageIdAllocator();
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+    global_context->initializeJointThreadInfoJeallocMap();
     LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
 
     raft_config.ignore_databases = {"system"};
-    raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.for_unit_test = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
+    global_context->setColumnCacheLongTerm(1024 * 1024 * 100 /*100MB*/);
 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
@@ -199,6 +202,7 @@ ContextPtr TiFlashTestEnv::getContext(const DB::Settings & settings, Strings tes
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     global_contexts[0]->tryReleaseWriteNodePageStorageForTest();
     global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
+    global_contexts[0]->initializeJointThreadInfoJeallocMap();
     context.getSettingsRef() = settings;
     return std::make_shared<Context>(context);
 }

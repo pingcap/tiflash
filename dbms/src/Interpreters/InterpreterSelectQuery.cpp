@@ -224,29 +224,35 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     // always sync schema first and then read table
     const String qualified_name = database_name + "." + table_name;
 
+    bool need_sync_schema = true;
+    if (database_name == "system")
+        need_sync_schema = false;
+    else if (database_name.empty() && context.getCurrentDatabase() == "system")
+        need_sync_schema = false;
 
     {
         auto start_time = Clock::now();
         // Since InterpreterSelectQuery will only be trigger while using ClickHouse client,
         // and we do not support keyspace feature for ClickHouse interface,
         // we could use nullspace id here safely.
-        context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, NullspaceID);
+        if (need_sync_schema)
+            context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, NullspaceID);
         auto storage_tmp = context.getTable(database_name, table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
         if (!managed_storage
             || (managed_storage->engineType() != ::TiDB::StorageEngine::DT
                 && managed_storage->engineType() != ::TiDB::StorageEngine::TMT))
         {
-            LOG_DEBUG(log, "{}.{} is not ManageableStorage", database_name, table_name);
             storage = storage_tmp;
             table_lock = storage->lockForShare(context.getCurrentQueryId());
             return;
         }
 
-        context.getTMTContext().getSchemaSyncerManager()->syncTableSchema(
-            context,
-            NullspaceID,
-            managed_storage->getTableInfo().id);
+        if (need_sync_schema)
+            context.getTMTContext().getSchemaSyncerManager()->syncTableSchema(
+                context,
+                NullspaceID,
+                managed_storage->getTableInfo().id);
         auto schema_sync_cost
             = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
@@ -449,8 +455,10 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             if (expressions.has_join)
             {
                 for (auto & stream : pipeline.streams)
-                    stream
-                        = std::make_shared<ExpressionBlockInputStream>(stream, expressions.before_join, /*req_id=*/"");
+                    stream = std::make_shared<ExpressionBlockInputStream>(
+                        stream,
+                        expressions.before_join,
+                        /*req_id=*/"");
             }
 
             if (expressions.has_where)
@@ -919,6 +927,8 @@ void InterpreterSelectQuery::executeAggregation(
     Aggregator::Params params(
         header,
         keys,
+        {}, // ignore group by skip key convert optimization.
+        {}, // ignore eliminate agg func optimization.
         aggregates,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
@@ -966,6 +976,9 @@ void InterpreterSelectQuery::executeAggregation(
 
 void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool final)
 {
+    // TiFlash will not use InterpreterSelectQuery.
+    __builtin_unreachable();
+
     Names key_names;
     AggregateDescriptions aggregates;
     query_analyzer->getAggregateInfo(key_names, aggregates);
@@ -996,7 +1009,13 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
     Aggregator::Params params(
         header,
         keys,
+        {}, // ignore group by skip key convert optimization.
+        {}, // ignore eliminate agg func optimization.
         aggregates,
+        0,
+        0,
+        0,
+        false,
         SpillConfig(
             context.getTemporaryPath(),
             "aggregation",

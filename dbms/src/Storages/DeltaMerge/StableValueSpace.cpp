@@ -14,29 +14,25 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/RestoreDMFile.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
-#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
-#include <Storages/DeltaMerge/WriteBatchesImpl.h>
-#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/PathPool.h>
 
-namespace DB
-{
-namespace ErrorCodes
+
+namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
-namespace DM
+namespace DB::DM
 {
 void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, const DMContext * dm_context)
 {
@@ -66,7 +62,8 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 dm_context->global_context.getFileProvider(),
                 dm_context->getReadLimiter(),
                 dm_context->scan_context,
-                dm_context->tracing_id);
+                dm_context->tracing_id,
+                ReadTag::Internal);
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -82,31 +79,104 @@ void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
     // The method must call `buf.count()` to get the last seralized size before `buf.tryGetReadBuffer`
-    auto data_size = saveMeta(buf);
+    auto data_size = serializeMetaToBuf(buf);
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-UInt64 StableValueSpace::saveMeta(WriteBuffer & buf) const
+UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
-    writeIntBinary(valid_rows, buf);
-    writeIntBinary(valid_bytes, buf);
-    writeIntBinary(static_cast<UInt64>(files.size()), buf);
-    for (const auto & f : files)
-        writeIntBinary(f->pageId(), buf);
+    if (likely(STORAGE_FORMAT_CURRENT.stable == StableFormat::V1))
+    {
+        writeIntBinary(valid_rows, buf);
+        writeIntBinary(valid_bytes, buf);
+        writeIntBinary(static_cast<UInt64>(files.size()), buf);
+        for (const auto & f : files)
+        {
+            RUNTIME_CHECK_MSG(
+                f->metaVersion() == 0,
+                "StableFormat::V1 cannot persist meta_version={}",
+                f->metaVersion());
+            writeIntBinary(f->pageId(), buf);
+        }
+    }
+    else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
+    {
+        dtpb::StableLayerMeta meta;
+        meta.set_valid_rows(valid_rows);
+        meta.set_valid_bytes(valid_bytes);
+        for (const auto & f : files)
+        {
+            auto * mf = meta.add_files();
+            mf->set_page_id(f->pageId());
+            mf->set_meta_version(f->metaVersion());
+        }
 
+        auto data = meta.SerializeAsString();
+        writeStringBinary(data, buf);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected version: {}", STORAGE_FORMAT_CURRENT.stable);
+    }
     return buf.count();
 }
+
+namespace
+{
+dtpb::StableLayerMeta derializeMetaV1FromBuf(ReadBuffer & buf)
+{
+    dtpb::StableLayerMeta meta;
+    UInt64 valid_rows, valid_bytes, size;
+    readIntBinary(valid_rows, buf);
+    readIntBinary(valid_bytes, buf);
+    readIntBinary(size, buf);
+    meta.set_valid_rows(valid_rows);
+    meta.set_valid_bytes(valid_bytes);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt64 page_id;
+        readIntBinary(page_id, buf);
+        meta.add_files()->set_page_id(page_id);
+    }
+    return meta;
+}
+
+dtpb::StableLayerMeta derializeMetaV2FromBuf(ReadBuffer & buf)
+{
+    dtpb::StableLayerMeta meta;
+    String data;
+    readStringBinary(data, buf);
+    RUNTIME_CHECK_MSG(
+        meta.ParseFromString(data),
+        "Failed to parse StableLayerMeta from string: {}",
+        Redact::keyToHexString(data.data(), data.size()));
+    return meta;
+}
+
+dtpb::StableLayerMeta derializeMetaFromBuf(ReadBuffer & buf)
+{
+    UInt64 version;
+    readIntBinary(version, buf);
+    if (version == StableFormat::V1)
+        return derializeMetaV1FromBuf(buf);
+    else if (version == StableFormat::V2)
+        return derializeMetaV2FromBuf(buf);
+    else
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected version: {}", version);
+}
+} // namespace
 
 std::string StableValueSpace::serializeMeta() const
 {
     WriteBufferFromOwnString wb;
-    saveMeta(wb);
+    serializeMetaToBuf(wb);
     return wb.releaseStr();
 }
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, PageIdU64 id)
 {
+    // read meta page
     Page page = dm_context.storage_pool->metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     return StableValueSpace::restore(dm_context, buf, id);
@@ -116,62 +186,20 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 
-    UInt64 version, valid_rows, valid_bytes, size;
-    readIntBinary(version, buf);
-    if (version != StableFormat::V1)
-        throw Exception("Unexpected version: " + DB::toString(version));
-
-    readIntBinary(valid_rows, buf);
-    readIntBinary(valid_bytes, buf);
-    readIntBinary(size, buf);
-    UInt64 page_id;
+    auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < size; ++i)
+    for (int i = 0; i < metapb.files().size(); ++i)
     {
-        readIntBinary(page_id, buf);
-
-        DMFilePtr dmfile;
-        auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
-        if (remote_data_store)
-        {
-            auto wn_ps = dm_context.global_context.getWriteNodePageStorage();
-            auto full_page_id = UniversalPageIdFormat::toFullPageId(
-                UniversalPageIdFormat::toFullPrefix(
-                    dm_context.keyspace_id,
-                    StorageType::Data,
-                    dm_context.physical_table_id),
-                page_id);
-            auto full_external_id = wn_ps->getNormalPageId(full_page_id);
-            auto local_external_id = UniversalPageIdFormat::getU64ID(full_external_id);
-            auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
-            const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-            auto file_oid = lock_key_view.asDataFile().getDMFileOID();
-            RUNTIME_CHECK(file_oid.keyspace_id == dm_context.keyspace_id);
-            RUNTIME_CHECK(file_oid.table_id == dm_context.physical_table_id);
-            auto prepared = remote_data_store->prepareDMFile(file_oid, page_id);
-            dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-            // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
-            path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
-        }
-        else
-        {
-            auto file_id = dm_context.storage_pool->dataReader()->getNormalPageId(page_id);
-            auto file_parent_path = path_delegate.getDTFilePath(file_id);
-            dmfile = DMFile::restore(
-                dm_context.global_context.getFileProvider(),
-                file_id,
-                page_id,
-                file_parent_path,
-                DMFile::ReadMetaMode::all(),
-                dm_context.keyspace_id);
-            auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
-            RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
-        }
+        UInt64 page_id = metapb.files(i).page_id();
+        UInt64 meta_version = metapb.files(i).meta_version();
+        auto dmfile = remote_data_store
+            ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, page_id, meta_version)
+            : restoreDMFileFromLocal(dm_context, page_id, meta_version);
         stable->files.push_back(dmfile);
     }
 
-    stable->valid_rows = valid_rows;
-    stable->valid_bytes = valid_bytes;
+    stable->valid_rows = metapb.valid_rows();
+    stable->valid_bytes = metapb.valid_bytes();
 
     return stable;
 }
@@ -192,50 +220,18 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
 
     // read stable meta info
-    UInt64 version, valid_rows, valid_bytes, size;
-    {
-        readIntBinary(version, buf);
-        if (version != StableFormat::V1)
-            throw Exception("Unexpected version: " + DB::toString(version));
-
-        readIntBinary(valid_rows, buf);
-        readIntBinary(valid_bytes, buf);
-        readIntBinary(size, buf);
-    }
-
+    auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < size; ++i)
+    for (int i = 0; i < metapb.files().size(); ++i)
     {
-        UInt64 page_id;
-        readIntBinary(page_id, buf);
-        auto full_page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toFullPrefix(
-                dm_context.keyspace_id,
-                StorageType::Data,
-                dm_context.physical_table_id),
-            page_id);
-        auto remote_data_location = temp_ps->getCheckpointLocation(full_page_id);
-        auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
-        auto file_oid = data_key_view.getDMFileOID();
-        auto data_key = data_key_view.toFullKey();
-        auto delegator = dm_context.path_pool->getStableDiskDelegator();
-        auto new_local_page_id = dm_context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-        PS::V3::CheckpointLocation loc{
-            .data_file_id = std::make_shared<String>(data_key),
-            .offset_in_file = 0,
-            .size_in_file = 0,
-        };
-        wbs.data.putRemoteExternal(new_local_page_id, loc);
-        auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
-        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-        wbs.writeLogAndData();
-        // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
-        delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());
+        UInt64 page_id = metapb.files(i).page_id();
+        UInt64 meta_version = metapb.files(i).meta_version();
+        auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, page_id, meta_version);
         stable->files.push_back(dmfile);
     }
 
-    stable->valid_rows = valid_rows;
-    stable->valid_bytes = valid_bytes;
+    stable->valid_rows = metapb.valid_rows();
+    stable->valid_bytes = metapb.valid_bytes();
 
     return stable;
 }
@@ -284,12 +280,7 @@ size_t StableValueSpace::getDMFilesBytes() const
 
 String StableValueSpace::getDMFilesString()
 {
-    String s;
-    for (auto & file : files)
-        s += "dmf_" + DB::toString(file->fileId()) + ",";
-    if (!s.empty())
-        s.erase(s.length() - 1);
-    return s;
+    return DMFile::info(files);
 }
 
 void StableValueSpace::enableDMFilesGC(DMContext & dm_context)
@@ -339,7 +330,7 @@ void StableValueSpace::calculateStableProperty(
         // `new_pack_properties` is the temporary container for the calculation result of this StableValueSpace's pack property.
         // Note that `pack_stats` stores the stat of the whole underlying DTFile,
         // and this Segment may share this DTFile with other Segment. So `pack_stats` may be larger than `new_pack_properties`.
-        DMFile::PackProperties new_pack_properties;
+        DMFileMeta::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
             LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
@@ -360,7 +351,7 @@ void StableValueSpace::calculateStableProperty(
                       .onlyReadOnePackEveryTime()
                       .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
                       .build(file, read_columns, RowKeyRanges{rowkey_range}, context.scan_context);
-            auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+            auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
                 data_stream,
                 read_columns,
                 0,
@@ -395,22 +386,24 @@ void StableValueSpace::calculateStableProperty(
             context.global_context.getFileProvider(),
             context.getReadLimiter(),
             context.scan_context,
-            context.tracing_id);
-        const auto & use_packs = pack_filter.getUsePacksConst();
+            context.tracing_id,
+            ReadTag::Internal);
+        const auto & pack_res = pack_filter.getPackResConst();
         size_t new_pack_properties_index = 0;
         const bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
-            const size_t use_packs_count = std::count(use_packs.begin(), use_packs.end(), true);
+            const size_t use_packs_count = pack_filter.countUsePack();
+
             RUNTIME_CHECK_MSG(
                 static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count,
                 "size doesn't match, new_pack_properties_size={} use_packs_size={}",
                 new_pack_properties.property_size(),
                 use_packs_count);
         }
-        for (size_t pack_id = 0; pack_id < use_packs.size(); ++pack_id)
+        for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
         {
-            if (!use_packs[pack_id])
+            if (!pack_res[pack_id].isUse())
                 continue;
             property.num_versions += pack_stats[pack_id].rows;
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
@@ -476,7 +469,8 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     bool is_fast_scan,
     bool enable_del_clean_read,
     const std::vector<IdSetPtr> & read_packs,
-    bool need_row_id)
+    bool need_row_id,
+    BitmapFilterPtr bitmap_filter)
 {
     LOG_DEBUG(
         log,
@@ -489,17 +483,32 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     std::vector<size_t> rows;
     streams.reserve(stable->files.size());
     rows.reserve(stable->files.size());
+
+    size_t last_rows = 0;
+
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.global_context);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
+            .enableColumnCacheLongTerm(context.pk_col_id)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
             .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr)
             .setReadTag(read_tag);
-        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        if (bitmap_filter)
+        {
+            builder = builder.setBitmapFilter(
+                BitmapFilterView(bitmap_filter, last_rows, last_rows + stable->files[i]->getRows()));
+            last_rows += stable->files[i]->getRows();
+        }
+
+        streams.push_back(builder.tryBuildWithVectorIndex( //
+            stable->files[i],
+            read_columns,
+            rowkey_ranges,
+            context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }
     if (need_row_id)
@@ -543,12 +552,13 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             context.global_context.getFileProvider(),
             context.getReadLimiter(),
             context.scan_context,
-            context.tracing_id);
+            context.tracing_id,
+            ReadTag::Internal);
         const auto & pack_stats = f->getPackStats();
-        const auto & use_packs = filter.getUsePacksConst();
+        const auto & pack_res = filter.getPackResConst();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
-            if (use_packs[i])
+            if (pack_res[i].isUse())
             {
                 ++match_packs;
                 total_match_rows += pack_stats[i].rows;
@@ -588,7 +598,8 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             context.global_context.getFileProvider(),
             context.getReadLimiter(),
             context.scan_context,
-            context.tracing_id);
+            context.tracing_id,
+            ReadTag::Internal);
         const auto & handle_filter_result = filter.getHandleRes();
         if (file_idx == 0)
         {
@@ -670,5 +681,4 @@ size_t StableValueSpace::avgRowBytes(const ColumnDefines & read_columns)
     return avg_bytes;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

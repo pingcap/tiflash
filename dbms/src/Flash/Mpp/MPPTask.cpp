@@ -510,19 +510,25 @@ void MPPTask::runImpl()
     }
 
     Stopwatch stopwatch;
+    const auto & resource_group = dag_context->getResourceGroupName();
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
+    GET_RESOURCE_GROUP_METRIC(tiflash_request_count_per_resource_group, type_mpp_task_run, resource_group).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
+
+    // set cancellation hook
+    context->setCancellationHook([this] { return is_cancelled.load(); });
 
     String err_msg;
     try
     {
         LOG_DEBUG(log, "task starts preprocessing");
         preprocess();
-        auto time_cost_in_preprocess_ms = stopwatch.elapsedMilliseconds();
+        auto time_cost_in_preprocess_ns = stopwatch.elapsed();
+        auto time_cost_in_preprocess_ms = time_cost_in_preprocess_ns / MILLISECOND_TO_NANO;
         LOG_DEBUG(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
         LOG_DEBUG(
@@ -534,7 +540,9 @@ void MPPTask::runImpl()
 
         scheduleOrWait();
 
-        auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
+        auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
+        dag_context->minTSO_wait_time_ns = time_cost_in_schedule_ns;
+        auto time_cost_in_schedule_ms = time_cost_in_schedule_ns / MILLISECOND_TO_NANO;
         LOG_INFO(
             log,
             "task starts running, time cost in schedule: {} ms, time cost in preprocess: {} ms",
@@ -576,9 +584,11 @@ void MPPTask::runImpl()
         auto read_bytes = dag_context->getReadBytes();
         auto read_ru = bytesToRU(read_bytes);
         LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
-        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
+        GET_RESOURCE_GROUP_METRIC(tiflash_compute_request_unit, type_mpp, dag_context->getResourceGroupName())
+            .Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRUInfo(
             RUConsumption{.cpu_ru = cpu_ru, .cpu_time_ns = cpu_time_ns, .read_ru = read_ru, .read_bytes = read_bytes});
+        mpp_task_statistics.setExtraInfo(query_executor_holder->getExtraJsonInfo());
 
         mpp_task_statistics.collectRuntimeStatistics();
 
@@ -586,7 +596,7 @@ void MPPTask::runImpl()
         LOG_DEBUG(
             log,
             "finish with {} seconds, {} rows, {} blocks, {} bytes",
-            runtime_statistics.execution_time_ns / static_cast<double>(1000000000),
+            runtime_statistics.execution_time_ns / static_cast<double>(SECOND_TO_NANO),
             runtime_statistics.rows,
             runtime_statistics.blocks,
             runtime_statistics.bytes);
@@ -745,7 +755,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         if (previous_status == FINISHED || previous_status == CANCELLED || previous_status == FAILED)
         {
             LOG_WARNING(log, "task already in {} state", magic_enum::enum_name(previous_status));
-            return;
+            break;
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))
         {
@@ -754,23 +764,24 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// so just close all tunnels here
             abortTunnels("", false);
             LOG_WARNING(log, "Finish abort task from uninitialized");
-            return;
+            break;
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, next_task_status))
         {
-            /// abort the components from top to bottom because if bottom components are aborted
-            /// first, the top components may see an error caused by the abort, which is not
+            /// abort mpptunnels first because if others components are aborted
+            /// first, the mpptunnels may see an error caused by the abort, which is not
             /// the original error
             setErrString(message);
             abortTunnels(message, false);
-            abortQueryExecutor();
             abortReceivers();
+            abortQueryExecutor();
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish abort task from running");
-            return;
+            break;
         }
     }
+    is_cancelled = true;
 }
 
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)

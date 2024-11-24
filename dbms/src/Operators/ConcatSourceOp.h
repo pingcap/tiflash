@@ -63,7 +63,7 @@ public:
         for (auto & exec_builder : exec_builder_pool)
         {
             exec_builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_context_, req_id, res));
-            exec_pool.push_back(exec_builder.build());
+            exec_pool.push_back(exec_builder.build(false));
         }
     }
 
@@ -145,6 +145,12 @@ protected:
         auto status = cur_exec->await();
         assert(status != OperatorStatus::FINISHED);
         return status;
+    }
+
+    void notifyImpl() override
+    {
+        assert(cur_exec);
+        cur_exec->notify();
     }
 
 private:

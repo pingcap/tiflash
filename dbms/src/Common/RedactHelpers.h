@@ -22,10 +22,17 @@ namespace DB
 class FieldVisitorToDebugString;
 }
 
+enum class RedactMode
+{
+    Disable,
+    Enable,
+    Marker,
+};
+
 class Redact
 {
 public:
-    static void setRedactLog(bool v);
+    static void setRedactLog(RedactMode v);
 
     static std::string handleToDebugString(int64_t handle);
     static std::string keyToDebugString(const char * key, size_t size);
@@ -37,10 +44,12 @@ public:
 
     friend class DB::FieldVisitorToDebugString;
 
+    static std::string toMarkerString(const std::string & raw, bool ignore_escape = false);
+
 protected:
     Redact() = default;
 
 private:
     // Log user data to log only when this flag is set to false.
-    static std::atomic<bool> REDACT_LOG;
+    static std::atomic<RedactMode> REDACT_LOG;
 };

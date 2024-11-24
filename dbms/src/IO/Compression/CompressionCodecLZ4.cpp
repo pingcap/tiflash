@@ -25,8 +25,6 @@ namespace ErrorCodes
 {
 extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
-extern const int ILLEGAL_SYNTAX_FOR_CODEC_TYPE;
-extern const int ILLEGAL_CODEC_PARAMETER;
 } // namespace ErrorCodes
 
 CompressionCodecLZ4::CompressionCodecLZ4(int level_)
@@ -62,7 +60,7 @@ UInt32 CompressionCodecLZ4HC::doCompressData(const char * source, UInt32 source_
 {
     auto success = LZ4_compress_HC(source, dest, source_size, LZ4_COMPRESSBOUND(source_size), level);
 
-    if (!success)
+    if (unlikely(!success))
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress with LZ4 codec");
 
     return success;
@@ -71,11 +69,5 @@ UInt32 CompressionCodecLZ4HC::doCompressData(const char * source, UInt32 source_
 CompressionCodecLZ4HC::CompressionCodecLZ4HC(int level_)
     : CompressionCodecLZ4(level_)
 {}
-
-
-CompressionCodecPtr getCompressionCodecLZ4(int level)
-{
-    return std::make_unique<CompressionCodecLZ4HC>(level);
-}
 
 } // namespace DB

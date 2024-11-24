@@ -114,9 +114,7 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         assert(fine_grained_channel_size > 0);
         msg_channels_for_fine_grained_shuffle.reserve(fine_grained_channel_size);
         for (size_t i = 0; i < fine_grained_channel_size; ++i)
-            /// these are unbounded queues
-            msg_channels_for_fine_grained_shuffle.push_back(
-                std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(std::numeric_limits<size_t>::max()));
+            msg_channels_for_fine_grained_shuffle.emplace_back(std::make_unique<MSGUnboundedQueue>());
     }
 }
 
@@ -133,7 +131,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
 
         if (res == MPMCQueueResult::OK)
         {
-            if (recv_msg->getRemainingConsumers()->fetch_sub(1) == 1)
+            if (recv_msg->getRemainingConsumers().fetch_sub(1) == 1)
             {
 #ifndef NDEBUG
                 ReceivedMessagePtr original_msg;
@@ -145,12 +143,21 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
                     "The result of 'grpc_recv_queue->tryPop' is definitely not EMPTY.");
                 if likely (original_msg != nullptr)
                     RUNTIME_CHECK_MSG(
-                        *original_msg->getRemainingConsumers() == 0,
+                        original_msg->getRemainingConsumers() == 0,
                         "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}",
-                        *original_msg->getRemainingConsumers());
+                        original_msg->getRemainingConsumers());
 #else
                 grpc_recv_queue.tryDequeue();
 #endif
+                ExchangeReceiverMetric::subDataSizeMetric(*data_size_in_queue, recv_msg->getPacket().ByteSizeLong());
+            }
+        }
+        else
+        {
+            if constexpr (!need_wait)
+            {
+                if (res == MPMCQueueResult::EMPTY)
+                    setNotifyFuture(msg_channels_for_fine_grained_shuffle[stream_id].get());
             }
         }
     }
@@ -160,13 +167,20 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
             res = grpc_recv_queue.pop(recv_msg);
         else
             res = grpc_recv_queue.tryPop(recv_msg);
-    }
 
-    if (res == MPMCQueueResult::OK)
-    {
-        ExchangeReceiverMetric::subDataSizeMetric(*data_size_in_queue, recv_msg->getPacket().ByteSizeLong());
+        if (res == MPMCQueueResult::OK)
+        {
+            ExchangeReceiverMetric::subDataSizeMetric(*data_size_in_queue, recv_msg->getPacket().ByteSizeLong());
+        }
+        else
+        {
+            if constexpr (!need_wait)
+            {
+                if (res == MPMCQueueResult::EMPTY)
+                    setNotifyFuture(&grpc_recv_queue);
+            }
+        }
     }
-
     return res;
 }
 

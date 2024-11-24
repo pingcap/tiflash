@@ -15,16 +15,17 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Parsers/IAST_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/RaftLogManager.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/StorageEngineType.h>
 
-#include <condition_variable>
 #include <magic_enum.hpp>
 
 namespace TiDB
@@ -47,13 +48,6 @@ namespace tests
 {
 class KVStoreTestBase;
 } // namespace tests
-
-enum class ReportThreadAllocateInfoType : uint64_t;
-struct ReportThreadAllocateInfoBatch;
-
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-using ASTs = std::vector<ASTPtr>;
 
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
@@ -120,26 +114,7 @@ struct ProxyConfigSummary
 {
     bool valid = false;
     size_t snap_handle_pool_size = 0;
-};
-
-struct ThreadInfoJealloc
-{
-    uint64_t allocated_ptr{0};
-    uint64_t deallocated_ptr{0};
-
-    uint64_t allocated() const
-    {
-        if (allocated_ptr == 0)
-            return 0;
-        return *reinterpret_cast<uint64_t *>(allocated_ptr);
-    }
-    uint64_t deallocated() const
-    {
-        if (deallocated_ptr == 0)
-            return 0;
-        return *reinterpret_cast<uint64_t *>(deallocated_ptr);
-    }
-    int64_t remaining() const { return static_cast<int64_t>(allocated()) - static_cast<int64_t>(deallocated()); }
+    std::string engine_addr;
 };
 
 /// KVStore manages raft replication and transactions.
@@ -172,8 +147,8 @@ public:
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
     void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
-    void recordThreadAllocInfo();
-    void stopThreadAllocInfo();
+    JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
+    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
@@ -252,6 +227,7 @@ public: // Raft Snapshot
     void releasePreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
     void abortPreHandleSnapshot(uint64_t region_id, TMTContext & tmt);
     size_t getOngoingPrehandleTaskCount() const;
+    size_t getOngoingPrehandleSubtaskCount() const;
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     size_t getMaxParallelPrehandleSize() const;
 
@@ -302,7 +278,6 @@ private:
     };
     StoreMeta & getStore();
     const StoreMeta & getStore() const;
-    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
     //  ---- Raft Snapshot ----  //
 
@@ -436,15 +411,10 @@ private:
     // Relates to `queue_size` in `can_apply_snapshot`,
     // we can't have access to these codes though.
     std::atomic<int64_t> ongoing_prehandle_task_count{0};
+    std::atomic<int64_t> ongoing_prehandle_subtask_count{0};
     ProxyConfigSummary proxy_config_summary;
 
-    mutable std::shared_mutex memory_allocation_mut;
-    std::unordered_map<std::string, ThreadInfoJealloc> memory_allocation_map;
-
-    bool is_terminated{false};
-    mutable std::mutex monitoring_mut;
-    std::condition_variable monitoring_cv;
-    std::thread * monitoring_thread{nullptr};
+    JointThreadInfoJeallocMapPtr joint_memory_allocation_map;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore
@@ -458,6 +428,12 @@ class KVStoreTaskLock : private boost::noncopyable
 };
 
 void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
-void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t &, double, double, double);
+void WaitCheckRegionReadyImpl(
+    const TMTContext &,
+    KVStore & kvstore,
+    const std::atomic_size_t &,
+    double,
+    double,
+    double);
 
 } // namespace DB

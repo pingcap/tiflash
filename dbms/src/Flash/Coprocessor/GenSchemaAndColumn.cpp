@@ -18,11 +18,12 @@
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
+
 namespace DB
 {
 namespace
 {
-DataTypePtr getPkType(const ColumnInfo & column_info)
+DataTypePtr getPkType(const TiDB::ColumnInfo & column_info)
 {
     const auto & pk_data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
     /// primary key type must be tidb_pk_column_int_type or tidb_pk_column_string_type.
@@ -60,7 +61,7 @@ String genNameForExchangeReceiver(Int32 col_index)
     return fmt::format("exchange_receiver_{}", col_index);
 }
 
-NamesAndTypes genNamesAndTypes(const ColumnInfos & column_infos, const StringRef & column_prefix)
+NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(column_infos.size());
@@ -121,7 +122,6 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
             break;
         }
         default:
-            // TODO: Is it ok to use the default value here?
             column_defines->emplace_back(DM::ColumnDefine{
                 column_info.id,
                 output_name,

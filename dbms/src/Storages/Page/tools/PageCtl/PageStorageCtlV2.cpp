@@ -178,7 +178,10 @@ try
         return 0;
     }
 
-    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(
+        4,
+        "bg-page-",
+        std::make_shared<DB::JointThreadInfoJeallocMap>());
     DB::PageStorageConfig config = parse_storage_config(argc, argv, logger);
     PageStorage storage("PageCtl", delegator, config, file_provider, *bkg_pool);
     storage.restore();

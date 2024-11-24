@@ -227,7 +227,7 @@ public:
         UInt64 max_edit_records_per_part = 100000;
     };
 
-    PS::V3::CPDataDumpStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    std::optional<PS::V3::CPDataDumpStats> dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PS::V3::CPDataFilesStatCache::CacheMap getRemoteDataFilesStatCache() const
     {

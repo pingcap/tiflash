@@ -22,19 +22,26 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/IAST.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
+#include <gtest/gtest.h>
 
 #include <ext/scope_guard.h>
 #include <limits>
+#include <memory>
 
 namespace DB
 {
@@ -43,7 +50,11 @@ namespace FailPoints
 extern const char exception_before_rename_table_old_meta_removed[];
 extern const char force_context_path[];
 extern const char force_set_num_regions_for_table[];
+extern const char random_ddl_fail_when_rename_partitions[];
 } // namespace FailPoints
+
+// defined in StorageSystemDTLocalIndexes.cpp
+std::optional<DM::LocalIndexesStats> getLocalIndexesStatsFromStorage(const StorageDeltaMergePtr & dm_storage);
 } // namespace DB
 namespace DB::tests
 {
@@ -113,6 +124,7 @@ public:
         {
             if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
             {
+                LOG_WARNING(Logger::get(), "{}", e.message());
                 return;
             }
             else
@@ -132,6 +144,7 @@ public:
         {
             if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
             {
+                LOG_WARNING(Logger::get(), "{}", e.message());
                 return;
             }
             else
@@ -164,6 +177,14 @@ public:
         auto tbl = flash_storages.get(NullspaceID, mock_tbl->id());
         RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! db_name={}, tbl_name={}", db_name, tbl_name);
         return tbl;
+    }
+
+    DatabasePtr getTiFlashDatabase(const String & db_name)
+    {
+        auto [ok, db_id] = MockTiDB::instance().getDBIDByName(db_name);
+        if (!ok)
+            return nullptr;
+        return global_ctx.tryGetDatabase(fmt::format("db_{}", db_id));
     }
 
     /*
@@ -240,7 +261,7 @@ try
         {"t1", cols, ""},
         {"t2", cols, ""},
     };
-    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS());
 
     refreshSchema();
 
@@ -270,7 +291,6 @@ TEST_F(SchemaSyncTest, PhysicalDropTable)
 try
 {
     auto pd_client = global_ctx.getTMTContext().getPDClient();
-
     const String db_name = "mock_db";
     MockTiDB::instance().newDataBase(db_name);
 
@@ -283,7 +303,7 @@ try
         {"t1", cols, ""},
         {"t2", cols, ""},
     };
-    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS());
 
     refreshSchema();
     for (auto table_id : table_ids)
@@ -338,7 +358,7 @@ try
     std::vector<std::tuple<String, ColumnsDescription, String>> tables{
         {"t1", cols, ""},
     };
-    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS());
 
     refreshSchema();
     for (auto table_id : table_ids)
@@ -408,7 +428,7 @@ try
     });
 
     MockTiDB::instance().newDataBase(db_name);
-    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
+    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "");
     auto part1_id
         = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
     auto part2_id
@@ -450,6 +470,230 @@ try
 }
 CATCH
 
+TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabase)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String new_db_name = "mock_new_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+
+    MockTiDB::instance().newDataBase(db_name);
+    MockTiDB::instance().newDataBase(new_db_name);
+
+    auto [logical_table_id, physical_table_ids] = MockTiDB::instance().newPartitionTable( //
+        db_name,
+        tbl_name,
+        cols,
+        pd_client->getTS(),
+        "",
+        {"red", "blue", "yellow"});
+
+    ASSERT_EQ(physical_table_ids.size(), 3);
+
+    refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(physical_table_ids[0]);
+    // refreshTableSchema(physical_table_ids[1]); // mock that physical_table[1] have no data neither read
+    refreshTableSchema(physical_table_ids[2]);
+
+    // check partition table are created
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, tbl_name);
+        auto part0_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+
+        // physical_table[1] is not created
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    // Rename the partition table across database
+    const String new_tbl_name = "mock_part_tbl_renamed";
+    MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
+    refreshSchema();
+
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, new_tbl_name);
+        auto part1_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+    }
+    {
+        // All partitions are not exist in the old database
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        // All partitions should be rename to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] still not created
+        EXPECT_FALSE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    {
+        // Mock that new data write into physical_table[1], it should be created under the new_database
+        refreshTableSchema(physical_table_ids[1]);
+
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] now is created
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+}
+CATCH
+
+TEST_F(SchemaSyncTest, RenamePartitionTableAcrossDatabaseWithRestart)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    const String new_db_name = "mock_new_db";
+    const String tbl_name = "mock_part_tbl";
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+
+    MockTiDB::instance().newDataBase(db_name);
+    MockTiDB::instance().newDataBase(new_db_name);
+
+    auto [logical_table_id, physical_table_ids] = MockTiDB::instance().newPartitionTable( //
+        db_name,
+        tbl_name,
+        cols,
+        pd_client->getTS(),
+        "",
+        {"red", "blue", "yellow"});
+
+    ASSERT_EQ(physical_table_ids.size(), 3);
+
+    refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(physical_table_ids[0]);
+    // refreshTableSchema(physical_table_ids[1]); // mock that physical_table[1] have no data neither read
+    refreshTableSchema(physical_table_ids[2]);
+
+    // check partition table are created
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, tbl_name);
+        auto part0_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+
+        // physical_table[1] is not created
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    // mock failures happen when renaming partitions of a partitioned table
+    FailPointHelper::enableRandomFailPoint(FailPoints::random_ddl_fail_when_rename_partitions, 0.5);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::random_ddl_fail_when_rename_partitions); });
+
+    // Rename the partition table across database
+    const String new_tbl_name = "mock_part_tbl_renamed";
+    MockTiDB::instance().renameTableTo(db_name, tbl_name, new_db_name, new_tbl_name);
+    refreshSchema();
+
+    Strings not_renamed_tbls;
+    {
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        for (const auto & tbl : Strings{
+                 fmt::format("t_{}", physical_table_ids[0]),
+                 fmt::format("t_{}", physical_table_ids[2]),
+             })
+        {
+            if (!new_db->isTableExist(global_ctx, tbl))
+                not_renamed_tbls.push_back(tbl);
+        }
+    }
+    LOG_WARNING(
+        Logger::get(),
+        "mock that these partitions are not renamed before restart, not_renamed_tables={}",
+        not_renamed_tbls);
+
+    if (!not_renamed_tbls.empty())
+    {
+        // mock that tiflash restart and run the fix logic
+        resetSchemas();
+        refreshSchema();
+    }
+
+    {
+        auto logical_tbl = mustGetSyncedTable(logical_table_id);
+        ASSERT_EQ(logical_tbl->getTableInfo().name, new_tbl_name);
+        auto part1_tbl = mustGetSyncedTable(physical_table_ids[0]);
+        auto part2_tbl = mustGetSyncedTable(physical_table_ids[2]);
+    }
+    {
+        // All partitions are not exist in the old database
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        // All partitions should be rename to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] still not created
+        EXPECT_FALSE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+
+    {
+        // Mock that new data write into physical_table[1], it should be created under the new_database
+        refreshTableSchema(physical_table_ids[1]);
+
+        // All partitions should belong to the new database
+        auto new_db = getTiFlashDatabase(new_db_name);
+        ASSERT_NE(new_db, nullptr);
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        // physical_table[1] now is created
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_TRUE(new_db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+
+        auto db = getTiFlashDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[0])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[1])));
+        EXPECT_FALSE(db->isTableExist(global_ctx, fmt::format("t_{}", physical_table_ids[2])));
+    }
+}
+CATCH
+
 TEST_F(SchemaSyncTest, PartitionTableRestart)
 try
 {
@@ -464,7 +708,7 @@ try
     });
 
     auto db_id = MockTiDB::instance().newDataBase(db_name);
-    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
+    auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "");
     auto part1_id
         = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
     auto part2_id
@@ -527,6 +771,256 @@ try
     refreshTableSchema(part3_id);
     auto part1_tbl = mustGetSyncedTable(part1_id);
     ASSERT_EQ(part1_tbl->isTombstone(), true);
+}
+CATCH
+
+TEST_F(SchemaSyncTest, VectorIndex)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("Int64")},
+        {"vec", typeFromString("Array(Float32)")},
+    });
+
+    // table_name, cols, pk_name
+    auto t1_id = MockTiDB::instance().newTable(db_name, "t1", cols, pd_client->getTS(), "");
+    refreshSchema();
+
+    auto vector_index = std::make_shared<const TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 3,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+
+    DM::tests::DeltaMergeStoreVectorBase dmsv;
+    StorageDeltaMergePtr storage = std::static_pointer_cast<StorageDeltaMerge>(mustGetSyncedTable(t1_id));
+    dmsv.store = storage->getStore();
+    dmsv.db_context = std::make_shared<Context>(global_ctx.getGlobalContext());
+    dmsv.vec_column_name = cols.getAllPhysical().back().name;
+    dmsv.vec_column_id = mustGetSyncedTable(t1_id)->getTableInfo().getColumnID(dmsv.vec_column_name);
+    const size_t num_rows_write = vector_index->dimension;
+    // write to store
+    dmsv.writeWithVecData(num_rows_write);
+    // trigger mergeDelta for all segments
+    dmsv.triggerMergeDelta();
+
+    // add a vector index
+    IndexID idx_id = 11;
+    MockTiDB::instance().addVectorIndexToTable(db_name, "t1", idx_id, cols.getAllPhysical().back(), 0, vector_index);
+
+    // sync schema, the VectorIndex in TableInfo is not get updated
+    refreshSchema();
+    auto idx_infos = mustGetSyncedTable(t1_id)->getTableInfo().index_infos;
+    ASSERT_EQ(idx_infos.size(), 0);
+
+    // sync table schema, the VectorIndex in TableInfo should be updated
+    refreshTableSchema(t1_id);
+    auto tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
+    tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
+    idx_infos = tbl_info.index_infos;
+    ASSERT_EQ(idx_infos.size(), 1);
+    for (const auto & idx : idx_infos)
+    {
+        ASSERT_EQ(idx.id, idx_id);
+        ASSERT_NE(idx.vector_index, nullptr);
+        ASSERT_EQ(idx.vector_index->kind, vector_index->kind);
+        ASSERT_EQ(idx.vector_index->dimension, vector_index->dimension);
+        ASSERT_EQ(idx.vector_index->distance_metric, vector_index->distance_metric);
+    }
+
+    // test read with ANN query after add a vector index
+    {
+        // check stable index has built for all segments
+        dmsv.waitStableLocalIndexReady();
+        LOG_INFO(Logger::get(), "waitStableLocalIndexReady done");
+        const auto range = DM::RowKeyRange::newAll(dmsv.store->is_common_handle, dmsv.store->rowkey_column_size);
+
+        // read from store
+        {
+            dmsv.read(
+                range,
+                DM::EMPTY_FILTER,
+                createVecFloat32Column<Array>(
+                    {{1.0, 2.0, 3.0}, {0.0, 0.0, 0.0}, {1.0, 2.0, 3.5}},
+                    dmsv.vec_column_name,
+                    dmsv.vec_column_id));
+        }
+
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_index_id(idx_id);
+        ann_query_info->set_column_id(dmsv.vec_column_id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+
+        // read with ANN query
+        {
+            SCOPED_TRACE(fmt::format("after add vector index, read with ANN query 1"));
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.5}));
+
+            auto filter = std::make_shared<DM::PushDownFilter>(DM::wrapWithANNQueryInfo(nullptr, ann_query_info));
+
+            dmsv.read(range, filter, createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}));
+        }
+
+        // read with ANN query
+        {
+            SCOPED_TRACE(fmt::format("after add vector index, read with ANN query 2"));
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+            auto filter = std::make_shared<DM::PushDownFilter>(DM::wrapWithANNQueryInfo(nullptr, ann_query_info));
+
+            dmsv.read(range, filter, createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}));
+        }
+    }
+
+    // drop a vector index
+    MockTiDB::instance().dropVectorIndexFromTable(db_name, "t1", idx_id);
+
+    // sync schema, the VectorIndex in TableInfo is not get updated
+    {
+        refreshSchema();
+        idx_infos = mustGetSyncedTable(t1_id)->getTableInfo().index_infos;
+        ASSERT_EQ(idx_infos.size(), 1);
+        for (const auto & idx : idx_infos)
+        {
+            if (idx.vector_index)
+            {
+                ASSERT_EQ(idx.vector_index->kind, vector_index->kind);
+                ASSERT_EQ(idx.vector_index->dimension, vector_index->dimension);
+                ASSERT_EQ(idx.vector_index->distance_metric, vector_index->distance_metric);
+            }
+        }
+    }
+
+    // sync table schema, the VectorIndex in TableInfo should be updated
+    {
+        refreshTableSchema(t1_id);
+        idx_infos = mustGetSyncedTable(t1_id)->getTableInfo().index_infos;
+        ASSERT_EQ(idx_infos.size(), 0);
+    }
+}
+CATCH
+
+TEST_F(SchemaSyncTest, SyncTableWithVectorIndexCase1)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("Int64")},
+        {"vec", typeFromString("Array(Float32)")},
+    });
+    auto t1_id = MockTiDB::instance().newTable(db_name, "t1", cols, pd_client->getTS(), "");
+    refreshSchema();
+
+    // The `StorageDeltaMerge` is created but `DeltaMergeStore` is not inited
+    StorageDeltaMergePtr storage = std::static_pointer_cast<StorageDeltaMerge>(mustGetSyncedTable(t1_id));
+    {
+        // The `DeltaMergeStore` is not inited
+        ASSERT_EQ(nullptr, storage->getStoreIfInited());
+        auto stats = getLocalIndexesStatsFromStorage(storage);
+        ASSERT_FALSE(stats.has_value());
+    }
+
+    // add a vector index
+    IndexID idx_id = 11;
+    auto vector_index = std::make_shared<const TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 3,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+    MockTiDB::instance().addVectorIndexToTable(db_name, "t1", idx_id, cols.getAllPhysical().back(), 0, vector_index);
+
+    // sync table schema, the VectorIndex in TableInfo should be updated
+    refreshTableSchema(t1_id);
+    {
+        // The `DeltaMergeStore` is not inited
+        ASSERT_EQ(nullptr, storage->getStoreIfInited());
+        auto stats = getLocalIndexesStatsFromStorage(storage);
+        ASSERT_TRUE(stats.has_value());
+        ASSERT_EQ(stats->size(), 1);
+        auto & s = (*stats)[0];
+        ASSERT_EQ(s.index_id, idx_id);
+        ASSERT_EQ(s.rows_delta_indexed, 0);
+        ASSERT_EQ(s.rows_delta_not_indexed, 0);
+        ASSERT_EQ(s.rows_stable_indexed, 0);
+        ASSERT_EQ(s.rows_stable_not_indexed, 0);
+    }
+
+    auto tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
+    auto idx_infos = tbl_info.index_infos;
+    ASSERT_EQ(idx_infos.size(), 1);
+    for (const auto & idx : idx_infos)
+    {
+        ASSERT_EQ(idx.id, idx_id);
+        ASSERT_NE(idx.vector_index, nullptr);
+        ASSERT_EQ(idx.vector_index->kind, vector_index->kind);
+        ASSERT_EQ(idx.vector_index->dimension, vector_index->dimension);
+        ASSERT_EQ(idx.vector_index->distance_metric, vector_index->distance_metric);
+    }
+}
+CATCH
+
+TEST_F(SchemaSyncTest, SyncTableWithVectorIndexCase2)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    // The table is created and vector index is added. After that, the table info is synced to TiFlash
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("Int64")},
+        {"vec", typeFromString("Array(Float32)")},
+    });
+    auto t1_id = MockTiDB::instance().newTable(db_name, "t1", cols, pd_client->getTS(), "");
+    IndexID idx_id = 11;
+    auto vector_index = std::make_shared<const TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 3,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+    MockTiDB::instance().addVectorIndexToTable(db_name, "t1", idx_id, cols.getAllPhysical().back(), 0, vector_index);
+
+    // Synced with mock tidb, and create the StorageDeltaMerge instance
+    refreshTableSchema(t1_id);
+    {
+        // The `DeltaMergeStore` is not inited
+        StorageDeltaMergePtr storage = std::static_pointer_cast<StorageDeltaMerge>(mustGetSyncedTable(t1_id));
+        ASSERT_EQ(nullptr, storage->getStoreIfInited());
+        auto stats = getLocalIndexesStatsFromStorage(storage);
+        ASSERT_TRUE(stats.has_value());
+        ASSERT_EQ(stats->size(), 1);
+        auto & s = (*stats)[0];
+        ASSERT_EQ(s.index_id, idx_id);
+        ASSERT_EQ(s.rows_delta_indexed, 0);
+        ASSERT_EQ(s.rows_delta_not_indexed, 0);
+        ASSERT_EQ(s.rows_stable_indexed, 0);
+        ASSERT_EQ(s.rows_stable_not_indexed, 0);
+    }
+
+
+    auto tbl_info = mustGetSyncedTable(t1_id)->getTableInfo();
+    auto idx_infos = tbl_info.index_infos;
+    ASSERT_EQ(idx_infos.size(), 1);
+    for (const auto & idx : idx_infos)
+    {
+        ASSERT_EQ(idx.id, idx_id);
+        ASSERT_NE(idx.vector_index, nullptr);
+        ASSERT_EQ(idx.vector_index->kind, vector_index->kind);
+        ASSERT_EQ(idx.vector_index->dimension, vector_index->dimension);
+        ASSERT_EQ(idx.vector_index->distance_metric, vector_index->distance_metric);
+    }
 }
 CATCH
 

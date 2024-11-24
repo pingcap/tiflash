@@ -19,7 +19,7 @@
 #include <Core/AutoSpillTrigger.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
-#include <Flash/Executor/ResultQueue.h>
+#include <Flash/Executor/ResultQueue_fwd.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 
 #include <atomic>
@@ -30,6 +30,14 @@ namespace DB
 {
 class OperatorSpillContext;
 using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<OperatorSpillContext> & ptr)>;
+
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
+class OneTimeNotifyFuture;
+using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
+class DAGContext;
+
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -47,12 +55,14 @@ public:
         const String & query_id_,
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
+        DAGContext * dag_context_ = nullptr,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
+        , dag_context(dag_context_)
         , auto_spill_trigger(auto_spill_trigger_)
         , register_operator_spill_context(register_operator_spill_context_)
         , resource_group_name(resource_group_name_)
@@ -92,57 +102,9 @@ public:
 
     void consume(ResultHandler & result_handler);
 
-    template <typename Duration>
-    void consumeFor(ResultHandler & result_handler, const Duration & timeout_duration)
-    {
-        RUNTIME_ASSERT(result_handler);
-        auto consumed_result_queue = getConsumedResultQueue();
-        bool is_timeout = false;
-        try
-        {
-            Block ret;
-            while (true)
-            {
-                auto res = consumed_result_queue->popTimeout(ret, timeout_duration);
-                if (res == MPMCQueueResult::TIMEOUT)
-                {
-                    is_timeout = true;
-                    break;
-                }
-                else if (res == MPMCQueueResult::OK)
-                {
-                    result_handler(ret);
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-        catch (...)
-        {
-            // If result_handler throws an error, here should notify the query to terminate, and wait for the end of the query.
-            onErrorOccurred(std::current_exception());
-        }
-        if (is_timeout)
-        {
-            LOG_WARNING(log, "wait timeout");
-            onErrorOccurred(timeout_err_msg);
-            throw Exception(timeout_err_msg);
-        }
-        else
-        {
-            // In order to ensure that `decActiveRefCount` has finished calling at this point
-            // and avoid referencing the already destructed `mu` in `decActiveRefCount`.
-            std::unique_lock lock(mu);
-            cv.wait(lock, [&] { return 0 == active_ref_count; });
-        }
-        LOG_DEBUG(log, "query finished and consume done");
-    }
-
     void cancel();
 
-    ALWAYS_INLINE bool isCancelled() { return is_cancelled.load(std::memory_order_acquire); }
+    ALWAYS_INLINE bool isCancelled() const { return is_cancelled.load(std::memory_order_acquire); }
 
     ResultQueuePtr toConsumeMode(size_t queue_size);
 
@@ -173,13 +135,25 @@ public:
 
     const String & getResourceGroupName() const { return resource_group_name; }
 
+    void addSharedQueue(const SharedQueuePtr & shared_queue);
+
+    void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
+
+    String getTrimmedErrMsg();
 
     // Need to be called under lock.
     bool isWaitMode();
 
     ResultQueuePtr getConsumedResultQueue();
+
+    void cancelSharedQueues();
+
+    void cancelOneTimeFutures();
+
+    void cancelResultQueueIfNeed();
 
 private:
     const String query_id;
@@ -187,6 +161,8 @@ private:
     LoggerPtr log;
 
     MemoryTrackerPtr mem_tracker;
+
+    DAGContext * dag_context{nullptr};
 
     std::mutex mu;
     std::condition_variable cv;
@@ -207,5 +183,9 @@ private:
     RegisterOperatorSpillContext register_operator_spill_context;
 
     const String resource_group_name;
+
+    std::vector<SharedQueuePtr> shared_queues;
+
+    std::vector<OneTimeNotifyFuturePtr> one_time_futures;
 };
 } // namespace DB

@@ -77,7 +77,10 @@ std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(
 }
 
 // Print log for MPPTask which hasn't been removed for over 25 minutes.
-void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
+void checkLongLiveMPPTasks(
+    const std::unordered_map<String, Stopwatch> & monitored_tasks,
+    bool report_metrics,
+    const LoggerPtr & log)
 {
     String log_info;
     double longest_live_time = 0;
@@ -92,7 +95,8 @@ void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitor
 
     if (!log_info.empty())
         LOG_WARNING(log, log_info);
-    GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
+    if (report_metrics)
+        GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
 }
 
 void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
@@ -109,12 +113,14 @@ void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
         if (monitor->is_shutdown)
         {
             lock.unlock();
-            checkLongLiveMPPTasks(snapshot, monitor->log);
+            // When shutting down, the `TiFlashMetrics` instance maybe release, don't
+            // report metrics at this time
+            checkLongLiveMPPTasks(snapshot, /* report_metrics */ false, monitor->log);
             return;
         }
 
         lock.unlock();
-        checkLongLiveMPPTasks(snapshot, monitor->log);
+        checkLongLiveMPPTasks(snapshot, /* report_metrics */ true, monitor->log);
     }
 }
 
@@ -152,22 +158,54 @@ TMTContext::TMTContext(
           context.getSettingsRef().task_scheduler_thread_soft_limit,
           context.getSettingsRef().task_scheduler_thread_hard_limit,
           context.getSettingsRef().task_scheduler_active_set_soft_limit)))
-    , engine(raft_config.engine)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
+    , raftproxy_config(raft_config)
 {
     startMonitorMPPTaskThread(mpp_task_manager);
-
     etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
-    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
-        && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+}
+
+void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
+{
+    if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
+        kvstore->fetchProxyConfig(proxy_helper);
+        if (kvstore->getProxyConfigSummay().valid)
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from proxy's conf engine_addr={}",
+                kvstore->getProxyConfigSummay().engine_addr);
+            s3gc_owner = OwnerManager::createS3GCOwner(
+                context,
+                /*id*/ kvstore->getProxyConfigSummay().engine_addr,
+                etcd_client);
+        }
+        else if (!raftproxy_config.pd_addrs.empty())
+        {
+            LOG_INFO(
+                Logger::get(),
+                "Build s3gc manager from tiflash's conf engine_addr={}",
+                raftproxy_config.advertise_engine_addr);
+            s3gc_owner
+                = OwnerManager::createS3GCOwner(context, /*id*/ raftproxy_config.advertise_engine_addr, etcd_client);
+        }
+        else
+        {
+#ifdef DBMS_PUBLIC_GTEST
+            s3gc_owner = OwnerManager::createMockOwner("mocked");
+#else
+            LOG_INFO(Logger::get(), "quit init s3 gc manager, no effective pd addr");
+            return;
+#endif
+        }
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
+        LOG_INFO(Logger::get(), "Build s3lock client success");
         S3::S3GCConfig remote_gc_config;
         {
             Int64 gc_method_int = context.getSettingsRef().remote_gc_method;
@@ -242,6 +280,12 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
 
 void TMTContext::shutdown()
 {
+    if (mpp_task_manager)
+    {
+        // notify end to the thread "MPPTask-Moniter"
+        mpp_task_manager->shutdown();
+    }
+
     if (s3gc_owner)
     {
         // stop the campaign loop, so the S3LockService will

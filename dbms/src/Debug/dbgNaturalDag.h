@@ -21,9 +21,6 @@
 #include <kvproto/coprocessor.pb.h>
 #include <kvproto/mpp.pb.h>
 
-#include <fstream>
-#include <iostream>
-#include <sstream>
 #include <vector>
 
 namespace DB

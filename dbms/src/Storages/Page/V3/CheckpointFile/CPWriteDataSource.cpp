@@ -24,7 +24,12 @@ Page CPWriteDataSourceBlobStore::read(const BlobStore<universal::BlobStoreTrait>
     if (page_id_and_entry.second.checkpoint_info.has_value()
         && page_id_and_entry.second.checkpoint_info.is_local_data_reclaimed)
     {
-        return remote_reader->read(page_id_and_entry);
+        // Read from S3. Try read from current cursor of the previous read buffer if possible,
+        // otherwise create a new one and seek from the beginning.
+        // Returns the read buffer we eventually read from, for later re-use.
+        auto [page, s3_file_buf] = remote_reader->readFromS3File(page_id_and_entry, current_s3file_buf, prefetch_size);
+        current_s3file_buf = s3_file_buf;
+        return page;
     }
     else
     {

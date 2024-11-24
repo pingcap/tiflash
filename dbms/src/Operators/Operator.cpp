@@ -88,6 +88,12 @@ OperatorStatus Operator::executeIO()
     return op_status;
 }
 
+void Operator::notify()
+{
+    profile_info.update();
+    notifyImpl();
+}
+
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
@@ -115,6 +121,11 @@ OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
+    // Check if it can handle selective block.
+    RUNTIME_CHECK_MSG(
+        !block || canHandleSelectiveBlock() || !block.info.selective,
+        "{} cannot handle selective block",
+        getName());
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
@@ -173,6 +184,11 @@ OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor(block);
+    // Check if it can handle selective block.
+    RUNTIME_CHECK_MSG(
+        !block || canHandleSelectiveBlock() || !block.info.selective,
+        "{} cannot handle selective block",
+        getName());
 #ifndef NDEBUG
     if (block)
     {

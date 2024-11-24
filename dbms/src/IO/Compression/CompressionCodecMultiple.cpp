@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/PODArray.h>
+#include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionCodecMultiple.h>
-#include <IO/Compression/CompressionFactory.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <IO/Operators.h>
 #include <IO/WriteHelpers.h>
@@ -90,7 +90,7 @@ void CompressionCodecMultiple::doDecompressData(
     for (int idx = compression_methods_size - 1; idx >= 0; --idx)
     {
         UInt8 compression_method = source[idx + 1];
-        const auto codec = CompressionFactory::createForDecompress(compression_method);
+        const auto codec = CompressionCodecFactory::createForDecompress(compression_method);
 
         UInt32 uncompressed_size = readDecompressedBlockSize(compressed_buf.data());
 
@@ -122,10 +122,10 @@ std::vector<UInt8> CompressionCodecMultiple::getCodecsBytesFromData(const char *
 
 bool CompressionCodecMultiple::isCompression() const
 {
+    bool is_compression = false;
     for (const auto & codec : codecs)
-        if (codec->isCompression())
-            return true;
-    return false;
+        is_compression |= codec->isCompression();
+    return is_compression;
 }
 
 } // namespace DB

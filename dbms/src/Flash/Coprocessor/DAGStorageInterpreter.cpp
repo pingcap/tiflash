@@ -168,7 +168,7 @@ std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus> Ma
                         throw TiFlashException(
                             Errors::Coprocessor::BadRequest,
                             "Income key ranges is illegal, region_id={} version={} conf_version={} request_range=[{}, "
-                            "{}) region_range=[{}, {}}",
+                            "{}) region_range=[{}, {}]",
                             r.region_id,
                             r.region_version,
                             r.region_conf_version,
@@ -266,23 +266,12 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
     });
 }
 
-String genErrMsgForLocalRead(
-    const ManageableStoragePtr & storage,
-    const KeyspaceID keyspace_id,
-    const TableID & table_id,
-    const TableID & logical_table_id)
+String genErrMsgForLocalRead(const KeyspaceID keyspace_id, const TableID & table_id, const TableID & logical_table_id)
 {
     return table_id == logical_table_id
-        ? fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, keyspace_id={} table_id={})",
-            storage->getDatabaseName(),
-            storage->getTableName(),
-            keyspace_id,
-            table_id)
+        ? fmt::format("(while creating read sources from storage, keyspace_id={} table_id={})", keyspace_id, table_id)
         : fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, keyspace_id={} table_id={} logical_table_id={})",
-            storage->getDatabaseName(),
-            storage->getTableName(),
+            "(while creating read sources from storage, keyspace_id={} table_id={} logical_table_id={})",
             keyspace_id,
             table_id,
             logical_table_id);
@@ -917,6 +906,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.query = dagContext().dummy_ast;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions.conditions,
+            table_scan.getANNQueryInfo(),
             table_scan.getPushedDownFilters(),
             table_scan.getColumns(),
             table_scan.getRuntimeFilterIDs(),
@@ -1084,14 +1074,14 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+                e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+            e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
             throw;
         }
     }
@@ -1167,14 +1157,14 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+                e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+            e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
             throw;
         }
     }
@@ -1228,8 +1218,8 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
         auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        auto expired_at = Clock::now() + std::chrono::seconds(timeout_s);
-        bool register_snapshot_ok = snaps->registerSnapshot(snap_id, disaggregated_snap, expired_at);
+        bool register_snapshot_ok
+            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
@@ -1285,8 +1275,8 @@ void DAGStorageInterpreter::buildLocalExec(
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
         auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        auto expired_at = Clock::now() + std::chrono::seconds(timeout_s);
-        bool register_snapshot_ok = snaps->registerSnapshot(snap_id, disaggregated_snap, expired_at);
+        bool register_snapshot_ok
+            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 

@@ -53,7 +53,12 @@ public:
     }
     void popBack(size_t n) override;
     ScatterColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const override;
+    ScatterColumns scatter(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector,
+        const BlockSelective & selective) const override;
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
+    void scatterTo(ScatterColumns &, const Selector &, const BlockSelective &) const override;
 
     void getExtremes(Field &, Field &) const override {}
 
@@ -115,6 +120,55 @@ public:
         throw Exception("Cannot deserialize to " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override
+    {
+        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const IColumn::Offsets & /* offsets */) const override
+    {
+        throw Exception(
+            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void serializeToPos(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */) const override
+    {
+        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const IColumn::Offsets & /* array_offsets */) const override
+    {
+        throw Exception(
+            "Method serializeToPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, ColumnsAlignBufferAVX2 & /* align_buffer */)
+        override
+    {
+        throw Exception(
+            "Method deserializeAndInsertFromPos is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const IColumn::Offsets & /* array_offsets */) override
+    {
+        throw Exception(
+            "Method deserializeAndInsertFromPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     void updateHashWithValue(size_t, SipHash &, const TiDB::TiDBCollatorPtr &, String &) const override
     {
         throw Exception("updateHashWithValue is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
@@ -126,6 +180,11 @@ public:
     }
 
     void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override
+    {
+        throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective &) const override
     {
         throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

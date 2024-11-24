@@ -121,6 +121,10 @@
                                                \
     M(S3WriteBytes)                            \
     M(S3ReadBytes)                             \
+    M(S3PageReaderReusedFile)                  \
+    M(S3PageReaderNotReusedFile)               \
+    M(S3PageReaderNotReusedFileReadback)       \
+    M(S3PageReaderNotReusedFileChangeFile)     \
     M(S3CreateMultipartUpload)                 \
     M(S3UploadPart)                            \
     M(S3CompleteMultipartUpload)               \
@@ -132,6 +136,8 @@
     M(S3CopyObject)                            \
     M(S3GetObjectRetry)                        \
     M(S3PutObjectRetry)                        \
+    M(S3IORead)                                \
+    M(S3IOSeek)                                \
     M(FileCacheHit)                            \
     M(FileCacheMiss)                           \
     M(FileCacheEvict)                          \

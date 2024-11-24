@@ -19,12 +19,17 @@
 namespace DB
 {
 
+class CompressionCodecFactory;
+
+
 class CompressionCodecZSTD : public ICompressionCodec
 {
 public:
     explicit CompressionCodecZSTD(int level_);
 
     UInt8 getMethodByte() const override;
+
+    bool isCompression() const override { return true; }
 
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
@@ -34,11 +39,9 @@ protected:
     void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size)
         const override;
 
-    bool isCompression() const override { return true; }
-    bool isGenericCompression() const override { return true; }
-
 private:
     const int level;
+    friend class CompressionCodecFactory;
 };
 
 } // namespace DB

@@ -111,7 +111,7 @@ public:
             deletes.load());
     }
     /// Thread safe part end
-    String detailInfo() const { return columnFilesToString(persisted_files); }
+    String detailInfo() const { return ColumnFile::filesToString(persisted_files); }
 
     const ColumnFilePersisteds & getFiles() const { return persisted_files; }
 
@@ -155,6 +155,10 @@ public:
     bool checkAndIncreaseFlushVersion(size_t task_flush_version);
 
     bool appendPersistedColumnFiles(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
+
+    bool updatePersistedColumnFilesAfterAddingIndex(
+        const ColumnFilePersisteds & new_persisted_files,
+        WriteBatches & wbs);
 
     /// Choose all small column files that can be compacted to larger column files
     MinorCompactionPtr pickUpMinorCompaction(DMContext & context);

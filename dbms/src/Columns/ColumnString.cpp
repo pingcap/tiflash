@@ -20,6 +20,12 @@
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
+#include <ext/scope_guard.h>
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -27,7 +33,6 @@ namespace ErrorCodes
 extern const int PARAMETER_OUT_OF_BOUND;
 extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 } // namespace ErrorCodes
-
 
 MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
 {
@@ -59,7 +64,7 @@ MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
 
         /// Empty strings are just zero terminating bytes.
 
-        res->chars.resize_fill(res->chars.size() + to_size - from_size);
+        res->chars.resize_fill_zero(res->chars.size() + to_size - from_size);
 
         res->offsets.resize(to_size);
         for (size_t i = from_size; i < to_size; ++i)
@@ -289,6 +294,12 @@ void ColumnString::reserve(size_t n)
     chars.reserve(n * APPROX_STRING_SIZE);
 }
 
+void ColumnString::reserveAlign(size_t n, size_t alignment)
+{
+    offsets.reserve(n, alignment);
+    chars.reserve(n * APPROX_STRING_SIZE, alignment);
+}
+
 void ColumnString::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
 {
     offsets.reserve(n);
@@ -299,6 +310,15 @@ void ColumnString::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
         chars.reserve(n * APPROX_STRING_SIZE);
 }
 
+void ColumnString::reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment)
+{
+    offsets.reserve(n, alignment);
+    total_memory_hint -= n * sizeof(offsets[0]);
+    if (total_memory_hint >= 0)
+        chars.reserve(total_memory_hint, alignment);
+    else
+        chars.reserve(n * APPROX_STRING_SIZE, alignment);
+}
 
 void ColumnString::getExtremes(Field & min, Field & max) const
 {
@@ -461,73 +481,430 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-void ColumnString::updateWeakHash32(
-    WeakHash32 & hash,
-    const TiDB::TiDBCollatorPtr & collator,
-    String & sort_key_container) const
+void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    auto s = offsets.size();
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
-    if (hash.getData().size() != s)
-        throw Exception(
-            fmt::format(
-                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
-                s,
-                hash.getData().size()),
-            ErrorCodes::LOGICAL_ERROR);
-
-    UInt32 * hash_data = hash.getData().data();
-
-    if (collator != nullptr)
+    if unlikely (!offsets.empty() && offsets.back() > UINT32_MAX)
     {
-        switch (collator->getCollatorType())
+        size_t sz = size();
+        for (size_t i = 0; i < sz; ++i)
+            RUNTIME_CHECK_MSG(
+                sizeAt(i) <= UINT32_MAX,
+                "size of ({}) is ({}), which is greater than UINT32_MAX",
+                i,
+                sizeAt(i));
+    }
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(UInt32) + sizeAt(i);
+}
+
+void ColumnString::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(
+        byte_size.size() == array_offsets.size(),
+        "size of byte_size({}) != size of array_offsets({})",
+        byte_size.size(),
+        array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        array_offsets.empty() || array_offsets.back() == size(),
+        "The last array offset({}) doesn't match size of column({})",
+        array_offsets.back(),
+        size());
+
+    if unlikely (!offsets.empty() && offsets.back() > UINT32_MAX)
+    {
+        size_t sz = size();
+        for (size_t i = 0; i < sz; ++i)
+            RUNTIME_CHECK_MSG(
+                sizeAt(i) <= UINT32_MAX,
+                "size of ({}) is ({}), which is greater than UINT32_MAX",
+                i,
+                sizeAt(i));
+    }
+
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1]) + offsetAt(array_offsets[i])
+            - offsetAt(array_offsets[i - 1]);
+}
+
+void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, length);
+    else
+        serializeToPosImpl<false>(pos, start, length);
+}
+
+template <bool has_null>
+void ColumnString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        UInt32 str_size = sizeAt(start + i);
+        tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
+        pos[i] += sizeof(UInt32);
+        inline_memcpy(pos[i], &chars[offsetAt(start + i)], str_size);
+        pos[i] += str_size;
+    }
+}
+
+void ColumnString::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
+    else
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
+}
+
+template <bool has_null>
+void ColumnString::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(
+        start + length <= array_offsets.size(),
+        "start({}) + length({}) > size of array_offsets({})",
+        start,
+        length,
+        array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        array_offsets.empty() || array_offsets.back() == size(),
+        "The last array offset({}) doesn't match size of column({})",
+        array_offsets.back(),
+        size());
+
+    /// countSerializeByteSizeForColumnArray has already checked that the size of one element is not greater than UINT32_MAX
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
+        {
+            UInt32 str_size = sizeAt(j);
+            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+        }
+        size_t strs_size = offsetAt(array_offsets[start + i]) - offsetAt(array_offsets[start + i - 1]);
+        inline_memcpy(pos[i], &chars[offsetAt(array_offsets[start + i - 1])], strs_size);
+        pos[i] += strs_size;
+    }
+}
+
+void ColumnString::deserializeAndInsertFromPos(
+    PaddedPODArray<char *> & pos,
+    ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
+{
+    size_t prev_size = offsets.size();
+    size_t char_size = chars.size();
+    size_t size = pos.size();
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
+    bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
+
+    /// Get two next indexes first then get the references to avoid the hang pointer issue
+    size_t char_buffer_index = align_buffer.nextIndex();
+    size_t offset_buffer_index = align_buffer.nextIndex();
+
+    AlignBufferAVX2 & saved_char_buffer = align_buffer.getAlignBuffer(char_buffer_index);
+    UInt8 & char_buffer_size_ref = align_buffer.getSize(char_buffer_index);
+    /// Better use a register rather than a reference for a frequently-updated variable
+    UInt8 char_buffer_size = char_buffer_size_ref;
+    SCOPE_EXIT({ char_buffer_size_ref = char_buffer_size; });
+
+    AlignBufferAVX2 & offset_buffer = align_buffer.getAlignBuffer(offset_buffer_index);
+    UInt8 & offset_buffer_size_ref = align_buffer.getSize(offset_buffer_index);
+    /// Better use a register rather than a reference for a frequently-updated variable
+    UInt8 offset_buffer_size = offset_buffer_size_ref;
+    SCOPE_EXIT({ offset_buffer_size_ref = offset_buffer_size; });
+
+    if likely (is_offset_aligned && is_char_aligned)
+    {
+        struct
+        {
+            AlignBufferAVX2 buffer;
+            char padding[15]{};
+        } tmp_char_buf;
+
+        AlignBufferAVX2 & char_buffer = tmp_char_buf.buffer;
+
+        tiflash_compiler_builtin_memcpy(&char_buffer, &saved_char_buffer, sizeof(AlignBufferAVX2));
+        SCOPE_EXIT({ tiflash_compiler_builtin_memcpy(&saved_char_buffer, &char_buffer, sizeof(AlignBufferAVX2)); });
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            UInt32 str_size;
+            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+
+            do
+            {
+                UInt8 remain = FULL_VECTOR_SIZE_AVX2 - char_buffer_size;
+                UInt8 copy_bytes = static_cast<UInt8>(std::min(static_cast<UInt32>(remain), str_size));
+                memcpySmallAllowReadWriteOverflow15(&char_buffer.data[char_buffer_size], pos[i], copy_bytes);
+                pos[i] += copy_bytes;
+                char_buffer_size += copy_bytes;
+                str_size -= copy_bytes;
+                if (char_buffer_size == FULL_VECTOR_SIZE_AVX2)
+                {
+                    chars.resize(char_size + FULL_VECTOR_SIZE_AVX2, FULL_VECTOR_SIZE_AVX2);
+                    _mm256_stream_si256(reinterpret_cast<__m256i *>(&chars[char_size]), char_buffer.v[0]);
+                    char_size += VECTOR_SIZE_AVX2;
+                    _mm256_stream_si256(reinterpret_cast<__m256i *>(&chars[char_size]), char_buffer.v[1]);
+                    char_size += VECTOR_SIZE_AVX2;
+                    char_buffer_size = 0;
+                }
+            } while (str_size > 0);
+
+            size_t offset = char_size + char_buffer_size;
+            tiflash_compiler_builtin_memcpy(&offset_buffer.data[offset_buffer_size], &offset, sizeof(size_t));
+            offset_buffer_size += sizeof(size_t);
+            if unlikely (offset_buffer_size == FULL_VECTOR_SIZE_AVX2)
+            {
+                offsets.resize(prev_size + FULL_VECTOR_SIZE_AVX2 / sizeof(size_t), FULL_VECTOR_SIZE_AVX2);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&offsets[prev_size]), offset_buffer.v[0]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(size_t);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&offsets[prev_size]), offset_buffer.v[1]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(size_t);
+                offset_buffer_size = 0;
+            }
+        }
+
+        if unlikely (align_buffer.needFlush())
+        {
+            if (char_buffer_size != 0)
+            {
+                chars.resize(char_size + char_buffer_size, FULL_VECTOR_SIZE_AVX2);
+                inline_memcpy(&chars[char_size], char_buffer.data, char_buffer_size);
+                char_buffer_size = 0;
+            }
+            if (offset_buffer_size != 0)
+            {
+                offsets.resize(prev_size + offset_buffer_size / sizeof(size_t), FULL_VECTOR_SIZE_AVX2);
+                inline_memcpy(&offsets[prev_size], offset_buffer.data, offset_buffer_size);
+                offset_buffer_size = 0;
+            }
+        }
+        return;
+    }
+
+    if unlikely (char_buffer_size != 0 || offset_buffer_size != 0)
+    {
+        /// This column data is aligned first and then becomes unaligned due to calling other functions
+        throw Exception("AlignBuffer is not empty when the data is not aligned", ErrorCodes::LOGICAL_ERROR);
+    }
+#endif
+
+    offsets.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt32 str_size;
+        tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+        pos[i] += sizeof(UInt32);
+
+        chars.resize(char_size + str_size);
+        inline_memcpy(&chars[char_size], pos[i], str_size);
+        char_size += str_size;
+        offsets[prev_size + i] = char_size;
+        pos[i] += str_size;
+    }
+}
+
+void ColumnString::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets)
+{
+    if unlikely (pos.empty())
+        return;
+    RUNTIME_CHECK_MSG(
+        pos.size() <= array_offsets.size(),
+        "size of pos({}) > size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
+    size_t start_point = array_offsets.size() - pos.size();
+    RUNTIME_CHECK_MSG(
+        array_offsets[start_point - 1] == size(),
+        "array_offset[start_point({}) - 1]({}) doesn't match size of column({})",
+        start_point,
+        array_offsets[start_point - 1],
+        size());
+
+    offsets.resize(array_offsets.back());
+
+    size_t size = pos.size();
+    size_t char_size = chars.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t prev_char_size = char_size;
+        for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
+        {
+            UInt32 str_size;
+            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+            char_size += str_size;
+            offsets[j] = char_size;
+        }
+        chars.resize(char_size);
+        inline_memcpy(&chars[prev_char_size], pos[i], char_size - prev_char_size);
+        pos[i] += char_size - prev_char_size;
+    }
+}
+
+void updateWeakHash32BinPadding(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
+{
+    auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
+}
+
+void updateWeakHash32BinNoPadding(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
+{
+    auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
+}
+
+void updateWeakHash32NonBin(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
+{
+    auto sort_key = info.collator->sortKey(view.data(), view.size(), info.sort_key_container);
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, (*info.hash_data)[idx]);
+}
+
+void updateWeakHash32NoCollator(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
+{
+    (*info.hash_data)[idx]
+        = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), (*info.hash_data)[idx]);
+}
+
+using LoopColumnWithHashInfoFunc = void(const std::string_view &, size_t, ColumnString::WeakHash32Info &);
+template <bool selective_block>
+FLATTEN_INLINE static inline void LoopOneColumnWithHashInfo(
+    const ColumnString::Chars_t & a_data,
+    const IColumn::Offsets & a_offsets,
+    ColumnString::WeakHash32Info & info,
+    LoopColumnWithHashInfoFunc && func)
+{
+    size_t rows;
+    if constexpr (selective_block)
+    {
+        RUNTIME_CHECK(info.selective_ptr);
+        rows = info.selective_ptr->size();
+    }
+    else
+    {
+        rows = a_offsets.size();
+    }
+
+    RUNTIME_CHECK_MSG(
+        info.hash_data->size() == rows,
+        "size of WeakHash32({}) doesn't match size of column({})",
+        info.hash_data->size(),
+        rows);
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        size_t row = i;
+        if constexpr (selective_block)
+            row = (*info.selective_ptr)[i];
+
+        size_t a_prev_offset = 0;
+        if likely (row > 0)
+            a_prev_offset = a_offsets[row - 1];
+
+        auto a_size = a_offsets[row] - a_prev_offset;
+
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i, info);
+    }
+}
+
+template <typename LoopFunc>
+void ColumnString::updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const
+{
+    if (info.collator != nullptr)
+    {
+        switch (info.collator->getCollatorType())
         {
         case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
         case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
         case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
         case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
         {
-            // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-                auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
-                *hash_data
-                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-                ++hash_data;
-            });
+            loop_func(chars, offsets, info, updateWeakHash32BinPadding);
             break;
         }
         case TiDB::ITiDBCollator::CollatorType::BINARY:
         {
-            // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-                auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
-                *hash_data
-                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-                ++hash_data;
-            });
+            loop_func(chars, offsets, info, updateWeakHash32BinNoPadding);
             break;
         }
         default:
         {
-            // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-                auto sort_key = collator->sortKey(view.data(), view.size(), sort_key_container);
-                *hash_data
-                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-                ++hash_data;
-            });
+            loop_func(chars, offsets, info, updateWeakHash32NonBin);
             break;
         }
         }
     }
     else
     {
-        // Skip last zero byte.
-        LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
-            *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), *hash_data);
-            ++hash_data;
-        });
+        loop_func(chars, offsets, info, updateWeakHash32NoCollator);
     }
+}
+
+void ColumnString::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
+    WeakHash32Info info{
+        .hash_data = &hash.getData(),
+        .sort_key_container = sort_key_container,
+        .collator = collator,
+        .selective_ptr = nullptr,
+    };
+
+    updateWeakHash32Impl(info, LoopOneColumnWithHashInfo<false>);
+}
+
+void ColumnString::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container,
+    const BlockSelective & selective) const
+{
+    WeakHash32Info info{
+        .hash_data = &hash.getData(),
+        .sort_key_container = sort_key_container,
+        .collator = collator,
+        .selective_ptr = &selective,
+    };
+    updateWeakHash32Impl(info, LoopOneColumnWithHashInfo<true>);
 }
 
 void ColumnString::updateHashWithValues(

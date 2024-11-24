@@ -17,9 +17,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/S3/S3Common.h>
+#include <sys/stat.h>
 
 #ifndef NDEBUG
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -42,17 +42,19 @@ DMFileWriter::DMFileWriter(
     // Create a new file is necessarily here. Because it will create encryption info for the whole DMFile.
     , meta_file(createMetaFile())
 {
-    dmfile->setStatus(DMFile::Status::WRITING);
+    dmfile->setStatus(DMFileStatus::WRITING);
 
     if (dmfile->useMetaV2())
     {
+        auto * dmfile_meta = typeid_cast<DMFileMetaV2 *>(dmfile->meta.get());
+        assert(dmfile_meta != nullptr);
         merged_file.buffer = WriteBufferFromWritableFileBuilder::buildPtr(
             file_provider,
-            dmfile->mergedPath(0),
-            dmfile->encryptionMergedPath(0),
+            dmfile_meta->mergedPath(0),
+            dmfile_meta->encryptionMergedPath(0),
             /*create_new_encryption_info*/ false,
             write_limiter);
-        merged_file.file_info = DMFile::MergedFile({0, 0});
+        merged_file.file_info = DMFileMetaV2::MergedFile({0, 0});
     }
 
     for (auto & cd : write_columns)
@@ -61,8 +63,20 @@ DMFileWriter::DMFileWriter(
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
+
         addStreams(cd.id, cd.type, do_index);
-        dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
+        dmfile->meta->getColumnStats().emplace(
+            cd.id,
+            ColumnStat{
+                .col_id = cd.id,
+                .type = cd.type,
+                .avg_size = 0,
+                // ... here ignore some fields with default initializers
+                .vector_index = {},
+#ifndef NDEBUG
+                .additional_data_for_test = {},
+#endif
+            });
     }
 }
 
@@ -70,47 +84,36 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 {
     if (dmfile->useMetaV2())
     {
-        return createMetaV2File();
+        return WriteBufferFromWritableFileBuilder::buildPtr(
+            file_provider,
+            dmfile->meta->metaPath(),
+            dmfile->meta->encryptionMetaPath(),
+            /*create_new_encryption_info*/ true,
+            write_limiter,
+            DMFileMetaV2::meta_buffer_size);
     }
     else
     {
-        return createPackStatsFile();
+        return ChecksumWriteBufferBuilder::build(
+            dmfile->getConfiguration().has_value(),
+            file_provider,
+            dmfile->meta->packStatPath(),
+            dmfile->meta->encryptionPackStatPath(),
+            /*create_new_encryption_info*/ true,
+            write_limiter,
+            detail::getAlgorithmOrNone(*dmfile),
+            detail::getFrameSizeOrDefault(*dmfile),
+            /*flags*/ -1,
+            /*mode*/ 0666,
+            options.max_compress_block_size);
     }
-}
-
-DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
-{
-    return WriteBufferFromWritableFileBuilder::buildPtr(
-        file_provider,
-        dmfile->metav2Path(),
-        dmfile->encryptionMetav2Path(),
-        /*create_new_encryption_info*/ true,
-        write_limiter,
-        DMFile::meta_buffer_size);
-}
-
-DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
-{
-    return ChecksumWriteBufferBuilder::build(
-        dmfile->configuration.has_value(),
-        file_provider,
-        dmfile->packStatPath(),
-        dmfile->encryptionPackStatPath(),
-        /*create_new_encryption_info*/ true,
-        write_limiter,
-        detail::getAlgorithmOrNone(*dmfile),
-        detail::getFrameSizeOrDefault(*dmfile),
-        /*flags*/ -1,
-        /*mode*/ 0666,
-        options.max_compress_block_size);
 }
 
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        bool substream_do_index
-            = do_index && !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
+        bool substream_can_index = !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
         auto stream = std::make_unique<Stream>(
             dmfile,
             stream_name,
@@ -119,13 +122,12 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            substream_do_index);
+            do_index && substream_can_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
     type->enumerateStreams(callback, {});
 }
-
 
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
@@ -135,7 +137,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 #endif
 
     is_empty_file = false;
-    DMFile::PackStat stat{};
+    DMFileMeta::PackStat stat{};
     stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
     stat.bytes = block.bytes(); // This is bytes of pack data in memory.
@@ -158,7 +160,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     dmfile->addPack(stat);
 
-    auto & properties = dmfile->getPackProperties();
+    auto & properties = dmfile->meta->getPackProperties();
     auto * property = properties.add_property();
     property->set_num_rows(block_property.effective_num_rows);
     property->set_gc_hint_version(block_property.gc_hint_version);
@@ -167,40 +169,26 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
 void DMFileWriter::finalize()
 {
+    // Some fields of ColumnStat is set in `finalizeColumn`
     for (auto & cd : write_columns)
     {
         finalizeColumn(cd.id, cd.type);
     }
     if (dmfile->useMetaV2())
     {
-        dmfile->finalizeSmallFiles(merged_file, file_provider, write_limiter);
-        // Some fields of ColumnStat is set in `finalizeColumn`, must call finalizeMetaV2 after all column finalized
-        finalizeMetaV2();
+        auto * dmfile_meta = typeid_cast<DMFileMetaV2 *>(dmfile->meta.get());
+        assert(dmfile_meta != nullptr);
+        dmfile_meta->finalizeSmallFiles(merged_file, file_provider, write_limiter);
     }
-    else
-    {
-        finalizeMetaV1();
-    }
+    finalizeMeta();
 }
 
-void DMFileWriter::finalizeMetaV1()
+void DMFileWriter::finalizeMeta()
 {
-    const auto & pack_stats = dmfile->getPackStats();
-    for (const auto & pack_stat : pack_stats)
-    {
-        writePODBinary(pack_stat, *meta_file);
-    }
+    dmfile->meta->finalize(*meta_file, file_provider, write_limiter);
     meta_file->sync();
     meta_file.reset();
-    dmfile->finalizeForFolderMode(file_provider, write_limiter);
-}
-
-void DMFileWriter::finalizeMetaV2()
-{
-    dmfile->finalizeMetaV2(*meta_file);
-    meta_file->sync();
-    meta_file.reset();
-    dmfile->finalizeDirName();
+    dmfile->finalize();
 }
 
 void DMFileWriter::writeColumn(
@@ -265,14 +253,15 @@ void DMFileWriter::writeColumn(
         },
         {});
 
-    auto & avg_size = dmfile->column_stats.at(col_id).avg_size;
+    // update avg_size in ColumnStat
+    auto & avg_size = dmfile->meta->getColumnStats().at(col_id).avg_size;
     IDataType::updateAvgValueSizeHint(column, avg_size);
 }
 
 void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
     // Update column's bytes in memory
-    auto & col_stat = dmfile->column_stats.at(col_id);
+    auto & col_stat = dmfile->meta->getColumnStats().at(col_id);
 
 #ifndef NDEBUG
     auto examine_buffer_size = [&](auto & buf, auto & fp) {
@@ -285,7 +274,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
 #endif
-
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
@@ -296,6 +284,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         // v3
         if (dmfile->useMetaV2())
         {
+            auto * dmfile_meta = typeid_cast<DMFileMetaV2 *>(dmfile->meta.get());
+            assert(dmfile_meta != nullptr);
             stream->compressed_buf->next();
             stream->plain_file->next();
             stream->plain_file->sync();
@@ -322,14 +312,14 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             // write index info into merged_file_writer
             if (stream->minmaxes and !is_empty_file)
             {
-                dmfile->checkMergedFile(merged_file, file_provider, write_limiter);
+                dmfile_meta->checkMergedFile(merged_file, file_provider, write_limiter);
 
-                auto fname = dmfile->colIndexFileName(stream_name);
+                auto fname = colIndexFileName(stream_name);
 
                 auto buffer = ChecksumWriteBufferBuilder::build(
                     merged_file.buffer,
-                    dmfile->configuration->getChecksumAlgorithm(),
-                    dmfile->configuration->getChecksumFrameLength());
+                    dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    dmfile->getConfiguration()->getChecksumFrameLength());
 
                 stream->minmaxes->write(*type, *buffer);
 
@@ -340,7 +330,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     merged_file.file_info.number,
                     merged_file.file_info.size,
                     col_stat.index_bytes};
-                dmfile->merged_sub_file_infos[fname] = info;
+                dmfile_meta->merged_sub_file_infos[fname] = info;
 
                 merged_file.file_info.size += col_stat.index_bytes;
                 buffer->next();
@@ -349,14 +339,14 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             // write mark into merged_file_writer
             if (!is_empty_file)
             {
-                dmfile->checkMergedFile(merged_file, file_provider, write_limiter);
+                dmfile_meta->checkMergedFile(merged_file, file_provider, write_limiter);
 
-                auto fname = dmfile->colMarkFileName(stream_name);
+                auto fname = colMarkFileName(stream_name);
 
                 auto buffer = ChecksumWriteBufferBuilder::build(
                     merged_file.buffer,
-                    dmfile->configuration->getChecksumAlgorithm(),
-                    dmfile->configuration->getChecksumFrameLength());
+                    dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    dmfile->getConfiguration()->getChecksumFrameLength());
 
 
                 for (const auto & mark : *(stream->marks))
@@ -366,7 +356,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 }
                 size_t mark_size = buffer->getMaterializedBytes();
                 MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, mark_size};
-                dmfile->merged_sub_file_infos[fname] = info;
+                dmfile_meta->merged_sub_file_infos[fname] = info;
 
                 merged_file.file_info.size += mark_size;
                 buffer->next();
@@ -412,7 +402,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             if (stream->minmaxes)
             {
                 auto buf = ChecksumWriteBufferBuilder::build(
-                    dmfile->configuration.has_value(),
+                    dmfile->getConfiguration().has_value(),
                     file_provider,
                     dmfile->colIndexPath(stream_name),
                     dmfile->encryptionIndexPath(stream_name),
@@ -429,7 +419,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 col_stat.index_bytes = buf->getMaterializedBytes();
                 col_stat.serialized_bytes += is_empty_file ? 0 : col_stat.index_bytes;
 #ifndef NDEBUG
-                if (dmfile->configuration)
+                if (dmfile->getConfiguration())
                 {
                     examine_buffer_size(*buf, *this->file_provider);
                 }

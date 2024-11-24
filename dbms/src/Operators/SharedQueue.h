@@ -14,7 +14,8 @@
 
 #pragma once
 
-#include <Common/MPMCQueue.h>
+#include <Common/LooseBoundedMPMCQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/Operator.h>
 
 #include <atomic>
@@ -28,10 +29,28 @@ namespace DB
 */
 class SharedQueue;
 using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
+class SharedQueueSinkHolder;
+using SharedQueueSinkHolderPtr = std::shared_ptr<SharedQueueSinkHolder>;
+
+class SharedQueueSourceHolder;
+using SharedQueueSourceHolderPtr = std::shared_ptr<SharedQueueSourceHolder>;
+
 class SharedQueue
 {
 public:
-    static SharedQueuePtr build(size_t producer, size_t consumer, Int64 max_buffered_bytes);
+    static SharedQueuePtr buildInternal(
+        size_t producer,
+        size_t consumer,
+        Int64 max_buffered_bytes = -1,
+        Int64 max_queue_size = -1);
+
+    static std::pair<SharedQueueSinkHolderPtr, SharedQueueSourceHolderPtr> build(
+        PipelineExecutorContext & exec_context,
+        size_t producer,
+        size_t consumer,
+        Int64 max_buffered_bytes = -1,
+        Int64 max_queue_size = -1);
 
     SharedQueue(CapacityLimits queue_limits, size_t init_producer);
 
@@ -40,9 +59,29 @@ public:
 
     void producerFinish();
 
+    void cancel();
+
+    void registerReadTask(TaskPtr && task) { queue.registerPipeReadTask(std::move(task)); }
+    void registerWriteTask(TaskPtr && task) { queue.registerPipeWriteTask(std::move(task)); }
+
 private:
-    MPMCQueue<Block> queue;
+    LooseBoundedMPMCQueue<Block> queue;
     std::atomic_int32_t active_producer = -1;
+};
+
+class SharedQueueSinkHolder : public NotifyFuture
+{
+public:
+    explicit SharedQueueSinkHolder(const SharedQueuePtr & queue_)
+        : queue(queue_)
+    {}
+    MPMCQueueResult tryPush(Block && block) { return queue->tryPush(std::move(block)); }
+    void finish() { queue->producerFinish(); }
+
+    void registerTask(TaskPtr && task) override { queue->registerWriteTask(std::move(task)); }
+
+private:
+    SharedQueuePtr queue;
 };
 
 class SharedQueueSinkOp : public SinkOp
@@ -51,12 +90,12 @@ public:
     explicit SharedQueueSinkOp(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const SharedQueuePtr & shared_queue_)
+        const SharedQueueSinkHolderPtr & shared_queue_)
         : SinkOp(exec_context_, req_id)
         , shared_queue(shared_queue_)
     {}
 
-    ~SharedQueueSinkOp() override { shared_queue->producerFinish(); }
+    ~SharedQueueSinkOp() override { shared_queue->finish(); }
 
     String getName() const override { return "SharedQueueSinkOp"; }
 
@@ -64,11 +103,26 @@ public:
 
     OperatorStatus writeImpl(Block && block) override;
 
-    OperatorStatus awaitImpl() override;
+private:
+    OperatorStatus tryFlush();
 
 private:
-    std::optional<Block> res;
-    SharedQueuePtr shared_queue;
+    std::optional<Block> buffer;
+    SharedQueueSinkHolderPtr shared_queue;
+};
+
+class SharedQueueSourceHolder : public NotifyFuture
+{
+public:
+    explicit SharedQueueSourceHolder(const SharedQueuePtr & queue_)
+        : queue(queue_)
+    {}
+    MPMCQueueResult tryPop(Block & block) { return queue->tryPop(block); }
+
+    void registerTask(TaskPtr && task) override { queue->registerReadTask(std::move(task)); }
+
+private:
+    SharedQueuePtr queue;
 };
 
 class SharedQueueSourceOp : public SourceOp
@@ -78,7 +132,7 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const Block & header_,
-        const SharedQueuePtr & shared_queue_)
+        const SharedQueueSourceHolderPtr & shared_queue_)
         : SourceOp(exec_context_, req_id)
         , shared_queue(shared_queue_)
     {
@@ -89,10 +143,7 @@ public:
 
     OperatorStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
-
 private:
-    std::optional<Block> res;
-    SharedQueuePtr shared_queue;
+    SharedQueueSourceHolderPtr shared_queue;
 };
 } // namespace DB

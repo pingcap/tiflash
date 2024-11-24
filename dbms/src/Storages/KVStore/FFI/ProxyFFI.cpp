@@ -1061,6 +1061,8 @@ void ReportThreadAllocateBatch(
     {
         UNUSED(server);
         UNUSED(tid);
+        // Note: We need to ensure the following code must be accessiable when
+        // tiflash process is shutting down
         KVStore::reportThreadAllocBatch(buffToStrView(name), data);
     }
     catch (...)

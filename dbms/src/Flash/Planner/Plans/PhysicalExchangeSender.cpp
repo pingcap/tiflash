@@ -61,7 +61,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     auto & dag_context = *context.getDAGContext();
 
     String extra_info;
-    if (fine_grained_shuffle.enable())
+    if (fine_grained_shuffle.enabled())
     {
         extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
@@ -86,7 +86,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
             dag_context,
-            fine_grained_shuffle.enable(),
+            fine_grained_shuffle.enabled(),
             fine_grained_shuffle.stream_count,
             fine_grained_shuffle.batch_size,
             compression_mode,
@@ -104,7 +104,7 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
     Context & context,
     size_t /*concurrency*/)
 {
-    if (fine_grained_shuffle.enable())
+    if (fine_grained_shuffle.enabled())
     {
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
         RUNTIME_CHECK(
@@ -121,7 +121,7 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
             *context.getDAGContext(),
-            fine_grained_shuffle.enable(),
+            fine_grained_shuffle.enabled(),
             fine_grained_shuffle.stream_count,
             fine_grained_shuffle.batch_size,
             compression_mode,

@@ -32,7 +32,6 @@
 #include <IO/BaseFile/fwd.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/FileProvider/FileProvider.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
@@ -54,12 +53,16 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/BackgroundService.h>
+#include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/PageConstants.h>
@@ -148,6 +151,8 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
+    mutable DM::VectorIndexCachePtr vector_index_cache;
+    mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
     ViewDependencies view_dependencies; /// Current dependencies
@@ -169,6 +174,7 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalPageIdAllocatorPtr global_page_id_allocator;
     DM::GlobalStoragePoolPtr global_storage_pool;
+    DM::LocalIndexerSchedulerPtr global_local_indexer_scheduler;
 
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
@@ -179,6 +185,10 @@ struct ContextShared
     TiFlashSecurityConfigPtr security_config;
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
+
+    JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
+
+    std::unordered_set<uint64_t> store_id_blocklist; /// Those store id are blocked from batch cop request.
 
     class SessionKeyHash
     {
@@ -276,6 +286,11 @@ struct ContextShared
         if (tmt_context)
         {
             tmt_context->shutdown();
+        }
+
+        if (joint_memory_allocation_map)
+        {
+            joint_memory_allocation_map->stopThreadAllocInfo();
         }
 
         if (schema_sync_service)
@@ -1379,6 +1394,50 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
+void Context::setVectorIndexCache(size_t cache_entities)
+{
+    auto lock = getLock();
+
+    RUNTIME_CHECK(!shared->vector_index_cache);
+
+    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_entities);
+}
+
+DM::VectorIndexCachePtr Context::getVectorIndexCache() const
+{
+    auto lock = getLock();
+    return shared->vector_index_cache;
+}
+
+void Context::dropVectorIndexCache() const
+{
+    auto lock = getLock();
+    if (shared->vector_index_cache)
+        shared->vector_index_cache.reset();
+}
+
+void Context::setColumnCacheLongTerm(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    RUNTIME_CHECK(!shared->column_cache_long_term);
+
+    shared->column_cache_long_term = std::make_shared<DM::ColumnCacheLongTerm>(cache_size_in_bytes);
+}
+
+DM::ColumnCacheLongTermPtr Context::getColumnCacheLongTerm() const
+{
+    auto lock = getLock();
+    return shared->column_cache_long_term;
+}
+
+void Context::dropColumnCacheLongTerm() const
+{
+    auto lock = getLock();
+    if (shared->column_cache_long_term)
+        shared->column_cache_long_term.reset();
+}
+
 bool Context::isDeltaIndexLimited() const
 {
     // Don't need to use a lock here, as delta_index_manager should be set at starting up.
@@ -1415,7 +1474,8 @@ BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
     if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-");
+        shared->background_pool
+            = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-", getJointThreadInfoJeallocMap(lock));
     return *shared->background_pool;
 }
 
@@ -1429,7 +1489,8 @@ BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 poo
 {
     auto lock = getLock();
     if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-block-");
+        shared->blockable_background_pool
+            = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-block-", getJointThreadInfoJeallocMap(lock));
     return *shared->blockable_background_pool;
 }
 
@@ -1445,8 +1506,10 @@ BackgroundProcessingPool & Context::getPSBackgroundPool()
     auto lock = getLock();
     // use the same size as `background_pool_size`
     if (!shared->ps_compact_background_pool)
-        shared->ps_compact_background_pool
-            = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size, "bg-page-");
+        shared->ps_compact_background_pool = std::make_shared<BackgroundProcessingPool>(
+            settings.background_pool_size,
+            "bg-page-",
+            getJointThreadInfoJeallocMap(lock));
     return *shared->ps_compact_background_pool;
 }
 
@@ -1715,6 +1778,27 @@ DM::GlobalPageIdAllocatorPtr Context::getGlobalPageIdAllocator() const
     return shared->global_page_id_allocator;
 }
 
+bool Context::initializeGlobalLocalIndexerScheduler(size_t pool_size, size_t memory_limit)
+{
+    auto lock = getLock();
+    if (!shared->global_local_indexer_scheduler)
+    {
+        shared->global_local_indexer_scheduler
+            = std::make_shared<DM::LocalIndexerScheduler>(DM::LocalIndexerScheduler::Options{
+                .pool_size = pool_size,
+                .memory_limit = memory_limit,
+                .auto_start = true,
+            });
+    }
+    return true;
+}
+
+DM::LocalIndexerSchedulerPtr Context::getGlobalLocalIndexerScheduler() const
+{
+    auto lock = getLock();
+    return shared->global_local_indexer_scheduler;
+}
+
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
@@ -1751,6 +1835,35 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+
+void Context::initializeJointThreadInfoJeallocMap()
+{
+    auto lock = getLock();
+    if (!shared->joint_memory_allocation_map)
+    {
+        shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    }
+}
+
+JointThreadInfoJeallocMapPtr Context::getJointThreadInfoJeallocMap() const
+{
+    auto lock = getLock();
+    if (!shared->joint_memory_allocation_map)
+    {
+        shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    }
+    return shared->joint_memory_allocation_map;
+}
+
+JointThreadInfoJeallocMapPtr Context::getJointThreadInfoJeallocMap(std::unique_lock<std::recursive_mutex> &) const
+{
+    if (!shared->joint_memory_allocation_map)
+    {
+        shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    }
+    return shared->joint_memory_allocation_map;
 }
 
 /**
@@ -2107,6 +2220,44 @@ void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
     mpp_server_info = info;
 }
 
+const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const
+{
+    return &shared->store_id_blocklist;
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
+{
+#if SERVERLESS_PROXY == 1
+    std::istringstream iss(comma_sep_string);
+    std::string token;
+
+    while (std::getline(iss, token, ','))
+    {
+        try
+        {
+            uint64_t number = std::stoull(token);
+            shared->store_id_blocklist.insert(number);
+        }
+        catch (...)
+        {
+            // Keep empty
+            LOG_INFO(DB::Logger::get(), "StoreIdBlockList is not set, input_str={}", comma_sep_string);
+            shared->store_id_blocklist.clear();
+            return false;
+        }
+    }
+
+    if (!shared->store_id_blocklist.empty())
+        LOG_INFO(DB::Logger::get(), "StoreIdBlockList have been set, {}", shared->store_id_blocklist);
+
+    return true;
+#else
+    UNUSED(comma_sep_string);
+    return true;
+#endif
+}
+
 SessionCleaner::~SessionCleaner()
 {
     try
@@ -2140,4 +2291,5 @@ void SessionCleaner::run()
             break;
     }
 }
+
 } // namespace DB

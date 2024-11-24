@@ -1,3 +1,6 @@
+# We want to use C++23, but GRPC is not ready
+set (CMAKE_CXX_STANDARD 20)
+
 set(_gRPC_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/grpc")
 set(_gRPC_BINARY_DIR "${TiFlash_BINARY_DIR}/contrib/grpc")
 
@@ -65,6 +68,7 @@ endif ()
 # reject to start w/o it. While this is completelly different library.
 #
 #   [3]: https://packages.debian.org/bullseye/libnsl2
+
 if (NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
   set(HAVE_LIBNSL OFF CACHE BOOL "" FORCE)
 endif()

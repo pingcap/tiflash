@@ -15,7 +15,6 @@
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/KVStore/Decode/RegionTable.h>

@@ -14,8 +14,10 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
@@ -120,6 +122,7 @@ protected:
             /*min_version_*/ 0,
             NullspaceID,
             /*physical_table_id*/ 100,
+            /*pk_col_id*/ 0,
             false,
             1,
             db_context->getSettingsRef());
@@ -910,7 +913,7 @@ try
     auto check_segment_squash_delete_range = [this](SegmentPtr & segment, const HandleRange & expect_range) {
         // set `is_update=false` to get full squash delete range
         auto snap = segment->createSnapshot(dmContext(), /*for_update*/ false, CurrentMetrics::DT_SnapshotOfRead);
-        auto squash_range = snap->delta->getSquashDeleteRange();
+        auto squash_range = snap->delta->getSquashDeleteRange(/*is_common_handle=*/false, /*rowkey_column_size=*/1);
         ASSERT_ROWKEY_RANGE_EQ(squash_range, RowKeyRange::fromHandleRange(expect_range));
     };
 
@@ -956,6 +959,7 @@ try
         HandleRange del{1, 32};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
+        // suqash_delete_range will consider [1, 100) maybe deleted
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
     }
 
@@ -1019,6 +1023,142 @@ try
         pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
 
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
+    }
+}
+CATCH
+
+TEST_F(SegmentTest, ColumnFileBigRangeGreaterThanSegment)
+try
+{
+    auto write_column_file_big = [&](size_t begin, size_t end, size_t block_num) {
+        WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto delegator = storage_path_pool->getStableDiskDelegator();
+        auto parent_path = delegator.choosePath();
+        auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+
+        std::vector<BlockInputStreamPtr> streams;
+        streams.reserve(block_num);
+        size_t step = (end - begin) / block_num;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = DMTestEnv::prepareSimpleWriteBlock(begin + i * step, begin + (i + 1) * step, false);
+            auto stream = std::make_shared<OneBlockInputStream>(block);
+            streams.push_back(stream);
+        }
+        auto input_stream = std::make_shared<ConcatBlockInputStream>(std::move(streams), dmContext().tracing_id);
+
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
+        ingest_wbs.data.putExternal(file_id, /* tag */ 0);
+        ingest_wbs.writeLogAndData();
+        delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
+
+        WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        wbs.data.putRefPage(ref_id, dm_file->pageId());
+        auto ref_file = DMFile::restore(
+            dm_context->global_context.getFileProvider(),
+            file_id,
+            ref_id,
+            parent_path,
+            DMFileMeta::ReadMode::all());
+        wbs.writeLogAndData();
+        ASSERT_TRUE(segment->ingestDataToDelta(
+            *dm_context,
+            segment->getRowKeyRange(),
+            {ref_file},
+            /* clear_data_in_range */ false));
+
+        ingest_wbs.rollbackWrittenLogAndData();
+    };
+
+    {
+        // let segment's rowkey_range be [30, 70)
+        HandleRange range(30, 70);
+        segment->rowkey_range = RowKeyRange::fromHandleRange(range);
+        // write ColumnFileBig with range [0, 20), [20, 40), [40, 60), [60, 80), [80, 100).
+        write_column_file_big(0, 100, 5);
+    }
+    {
+        // test built bitmap filter
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto read_ranges = {RowKeyRange::newAll(false, 1)};
+        auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+        auto bitmap_filter = segment->buildBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            EMPTY_RS_OPERATOR,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
+        ASSERT_EQ(bitmap_filter->size(), 60);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
+    }
+
+    ColumnDefines cols_to_read{
+        getExtraHandleColumnDefine(false),
+    };
+    {
+        // test read data
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto in = segment->getBitmapFilterInputStream(
+            dmContext(),
+            cols_to_read,
+            segment_snap,
+            {RowKeyRange::newAll(false, 1)},
+            EMPTY_FILTER,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_BLOCK_UR(
+            in,
+            Block({
+                createColumn<Int64>(createNumbers<Int64>(30, 70)),
+            }));
+    }
+
+    {
+        // let segment's rowkey_range be [30, 90)
+        HandleRange range(30, 90);
+        segment->rowkey_range = RowKeyRange::fromHandleRange(range);
+        // delete range [50, 80)
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            50,
+            80,
+            false,
+            3,
+            "_tidb_rowid",
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_INT_TYPE,
+            false,
+            1,
+            true,
+            /*is_deleted=*/true);
+        segment->write(dmContext(), std::move(block));
+        // write range [80, 90)
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(80, 90, false);
+        segment->write(dmContext(), std::move(block2));
+    }
+    {
+        // test read data with delete-range and new writes
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto in = segment->getBitmapFilterInputStream(
+            dmContext(),
+            cols_to_read,
+            segment_snap,
+            {RowKeyRange::newAll(false, 1)},
+            EMPTY_FILTER,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            DEFAULT_BLOCK_SIZE);
+        // Only the rows in [30, 50) and [80, 90) valid
+        auto vec = createNumbers<Int64>(30, 50);
+        vec.append_range(createNumbers<Int64>(80, 90));
+        ASSERT_INPUTSTREAM_BLOCK_UR(
+            in,
+            Block({
+                createColumn<Int64>(vec),
+            }));
     }
 }
 CATCH
@@ -1271,63 +1411,49 @@ try
 }
 CATCH
 
-enum SegmentTestMode
+enum class SegmentTestMode
 {
-    V1_BlockOnly,
-    V2_BlockOnly,
-    V2_FileOnly,
-    V3_BlockOnly,
-    V3_FileOnly,
+    PageStorageV2_MemoryOnly,
+    PageStorageV2_DiskOnly,
+    Current_MemoryOnly,
+    Current_DiskOnly,
 };
 
 String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
 {
-    const auto mode = info.param;
-    switch (mode)
-    {
-    case SegmentTestMode::V1_BlockOnly:
-        return "V1_BlockOnly";
-    case SegmentTestMode::V2_BlockOnly:
-        return "V2_BlockOnly";
-    case SegmentTestMode::V2_FileOnly:
-        return "V2_FileOnly";
-    case SegmentTestMode::V3_BlockOnly:
-        return "V3_BlockOnly";
-    case SegmentTestMode::V3_FileOnly:
-        return "V3_FileOnly";
-    default:
-        return "Unknown";
-    }
+    return String{magic_enum::enum_name(info.param)};
 }
 
 class SegmentTest2
     : public SegmentTest
     , public testing::WithParamInterface<SegmentTestMode>
 {
-public:
-    SegmentTest2() = default;
+    const StorageFormatVersion current_version;
 
+public:
+    SegmentTest2()
+        : current_version(STORAGE_FORMAT_CURRENT)
+    {}
 
     void SetUp() override
     {
         mode = GetParam();
         switch (mode)
         {
-        case SegmentTestMode::V1_BlockOnly:
-            setStorageFormat(1);
-            break;
-        case SegmentTestMode::V2_BlockOnly:
-        case SegmentTestMode::V2_FileOnly:
-            setStorageFormat(2);
-            break;
-        case SegmentTestMode::V3_BlockOnly:
-        case SegmentTestMode::V3_FileOnly:
+        case SegmentTestMode::PageStorageV2_MemoryOnly:
+        case SegmentTestMode::PageStorageV2_DiskOnly:
             setStorageFormat(3);
+            break;
+        case SegmentTestMode::Current_MemoryOnly:
+        case SegmentTestMode::Current_DiskOnly:
+            setStorageFormat(STORAGE_FORMAT_CURRENT);
             break;
         }
 
         SegmentTest::SetUp();
     }
+
+    ~SegmentTest2() override { setStorageFormat(current_version); }
 
     std::pair<RowKeyRange, PageIdU64s> genDMFile(DMContext & context, const Block & block)
     {
@@ -1353,7 +1479,7 @@ public:
         return {RowKeyRange::fromHandleRange(range), {file_id}};
     }
 
-    SegmentTestMode mode;
+    SegmentTestMode mode{};
 };
 
 TEST_P(SegmentTest2, FlushDuringSplitAndMerge)
@@ -1367,13 +1493,12 @@ try
             row_offset += 100;
             switch (mode)
             {
-            case SegmentTestMode::V1_BlockOnly:
-            case SegmentTestMode::V2_BlockOnly:
-            case SegmentTestMode::V3_BlockOnly:
+            case SegmentTestMode::PageStorageV2_MemoryOnly:
+            case SegmentTestMode::Current_MemoryOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case SegmentTestMode::V2_FileOnly:
-            case SegmentTestMode::V3_FileOnly:
+            case SegmentTestMode::PageStorageV2_DiskOnly:
+            case SegmentTestMode::Current_DiskOnly:
             {
                 auto delegate = dmContext().path_pool->getStableDiskDelegator();
                 auto file_provider = dmContext().global_context.getFileProvider();
@@ -1381,7 +1506,7 @@ try
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file
-                    = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
+                    = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFileMeta::ReadMode::all());
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
@@ -1481,11 +1606,10 @@ INSTANTIATE_TEST_CASE_P(
     SegmentTestMode, //
     SegmentTest2,
     testing::Values(
-        SegmentTestMode::V1_BlockOnly,
-        SegmentTestMode::V2_BlockOnly,
-        SegmentTestMode::V2_FileOnly,
-        SegmentTestMode::V3_BlockOnly,
-        SegmentTestMode::V3_FileOnly),
+        SegmentTestMode::PageStorageV2_MemoryOnly,
+        SegmentTestMode::PageStorageV2_DiskOnly,
+        SegmentTestMode::Current_MemoryOnly,
+        SegmentTestMode::Current_DiskOnly),
     testModeToString);
 
 enum class SegmentWriteType
@@ -1839,7 +1963,7 @@ try
             ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
         }
         // clear PackProperties to force it to calculate from scratch
-        dmfile->getPackProperties().clear_property();
+        dmfile->clearPackProperties();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);

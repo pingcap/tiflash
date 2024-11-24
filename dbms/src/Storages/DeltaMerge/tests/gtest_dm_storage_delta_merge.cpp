@@ -44,6 +44,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TiDB/Schema/TiDB.h>
+#include <tipb/executor.pb.h>
 
 #include <ext/scope_guard.h>
 #include <limits>
@@ -128,10 +129,12 @@ try
     // keep a ref on them
     const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
-    ColumnInfos source_columns{};
+    const auto ann_query_info = tipb::ANNQueryInfo{};
+    TiDB::ColumnInfos source_columns{};
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
+        ann_query_info,
         pushed_down_filters, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
@@ -142,9 +145,10 @@ try
     BlockInputStreamPtr in = ins[0];
     ASSERT_INPUTSTREAM_BLOCK_UR(
         in,
-        Block(
-            {createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), "col1"),
-             createColumn<String>(Strings(num_rows_write, "a"), "col2")}));
+        Block({
+            createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), "col1"),
+            createColumn<String>(Strings(num_rows_write, "a"), "col2"),
+        }));
 
     auto store_status = storage->status();
     Block status = store_status->read();
@@ -683,10 +687,12 @@ try
     // keep a ref on them
     const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
-    ColumnInfos source_columns{};
+    const auto ann_query_info = tipb::ANNQueryInfo{};
+    TiDB::ColumnInfos source_columns{};
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
+        ann_query_info,
         pushed_down_filters, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
@@ -801,10 +807,12 @@ try
         // keep a ref on them
         const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
-        ColumnInfos source_columns{};
+        TiDB::ColumnInfos source_columns{};
         const std::vector<int> runtime_filter_ids;
+        const auto ann_query_info = tipb::ANNQueryInfo{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filters,
+            ann_query_info,
             pushed_down_filters, // Not care now
             source_columns, // Not care now
             runtime_filter_ids,

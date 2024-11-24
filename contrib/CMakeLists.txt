@@ -179,6 +179,8 @@ target_include_directories(cpptoml INTERFACE
 SET (BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable google-benchmark testing" FORCE)
 SET (BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable google-benchmark testing" FORCE)
 add_subdirectory(benchmark)
+target_compile_options(benchmark PRIVATE "-Wno-error=thread-safety-analysis")
+target_no_warning(benchmark thread-safety-analysis)
 
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
 if (NOT (OS_DARWIN AND ARCH_AARCH64))
@@ -196,3 +198,12 @@ add_subdirectory(aws-cmake)
 add_subdirectory(simdjson)
 
 add_subdirectory(fastpforlib)
+
+add_subdirectory(usearch-cmake)
+
+add_subdirectory(simsimd-cmake)
+
+if (ENABLE_TESTS AND NOT CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    add_subdirectory(hdf5-cmake)
+    add_subdirectory(highfive-cmake)
+endif ()

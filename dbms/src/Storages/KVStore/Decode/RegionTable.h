@@ -146,7 +146,7 @@ public:
     using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
     static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(
         TMTContext & tmt,
-        const TiDB::TableID table_id,
+        const TableID table_id,
         const RegionPtr & region,
         const Timestamp start_ts,
         const std::unordered_set<UInt64> * bypass_lock_ts,

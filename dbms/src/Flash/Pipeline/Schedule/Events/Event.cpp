@@ -79,7 +79,10 @@ void Event::onInputFinish()
     auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
     RUNTIME_ASSERT(cur_value >= 0, log, "unfinished_inputs cannot < 0, but actual value is {}", cur_value);
     if (0 == cur_value)
+    {
         schedule();
+        LOG_INFO(log, "Event is scheduled");
+    }
 }
 
 bool Event::prepare()
@@ -116,6 +119,7 @@ void Event::schedule()
         log,
         "unfinished_inputs must be 0 in `schedule`, but actual value is {}",
         unfinished_inputs);
+    schedule_duration = stopwatch.elapsed();
     if (is_source)
     {
         assertStatus(EventStatus::SCHEDULED);
@@ -133,7 +137,6 @@ void Event::schedule()
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
-    schedule_duration = stopwatch.elapsed();
     scheduleTasks();
 }
 

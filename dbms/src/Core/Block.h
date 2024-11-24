@@ -18,12 +18,12 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 
 #include <initializer_list>
 #include <list>
 #include <map>
 #include <vector>
-
 
 namespace DB
 {
@@ -51,6 +51,8 @@ private:
     // `segment_row_id_col` is a virtual column that represents the records' row id in the corresponding segment.
     // Only used for calculating MVCC-bitmap-filter.
     ColumnPtr segment_row_id_col;
+
+    DM::RSResult rs_result = DM::RSResult::Some;
 
 public:
     BlockInfo info;
@@ -163,6 +165,9 @@ public:
     void setSegmentRowIdCol(ColumnPtr && col) { segment_row_id_col = col; }
     ColumnPtr segmentRowIdCol() const { return segment_row_id_col; }
 
+    void setRSResult(DM::RSResult r) { rs_result = r; }
+    DM::RSResult getRSResult() const { return rs_result; }
+
 private:
     void eraseImpl(size_t position);
     void initializeIndexByName();
@@ -175,11 +180,14 @@ using BucketBlocksListMap = std::map<Int32, BlocksList>;
 /// Join blocks by columns
 /// The schema of the output block is the same as the header block.
 /// The columns not in the header block will be ignored.
-/// For example:
-/// header: (a UInt32, b UInt32, c UInt32, d UInt32)
-/// block1: (a UInt32, b UInt32, c UInt32, e UInt32), rows: 3
-/// block2: (d UInt32), rows: 3
-/// result: (a UInt32, b UInt32, c UInt32, d UInt32), rows: 3
+/// NOTE: The input blocks can have columns with different sizes,
+///       but the columns in the header block must have the same size,
+///       Otherwise, an exception will be thrown.
+/// Example:
+///   header: (a UInt32, b UInt32, c UInt32, d UInt32)
+///   block1: (a UInt32, b UInt32, c UInt32, e UInt32), rows: 3
+///   block2: (d UInt32), rows: 3
+///   result: (a UInt32, b UInt32, c UInt32, d UInt32), rows: 3
 Block hstackBlocks(Blocks && blocks, const Block & header);
 
 /// Join blocks by rows

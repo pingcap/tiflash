@@ -17,9 +17,11 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
 #include <Storages/DeltaMerge/File/ColumnStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -28,12 +30,14 @@
 
 namespace DB::DM
 {
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
+
+class DMFileWithVectorIndexBlockInputStream;
 
 
 class DMFileReader
 {
+    friend class DMFileWithVectorIndexBlockInputStream;
+
 public:
     static bool isCacheableColumn(const ColumnDefine & cd);
 
@@ -87,7 +91,7 @@ public:
     {
         // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
         // For DMFileReader, always use the readable path.
-        return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
+        return getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFileStatus::READABLE);
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 
@@ -96,7 +100,7 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    size_t getReadRows();
+    std::pair<size_t, RSResult> getReadRows();
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
@@ -119,11 +123,14 @@ private:
         const ColumnDefine & cd,
         size_t rows_count,
         std::pair<size_t, size_t> range,
-        const DMFile::PackStats & pack_stats);
+        const DMFileMeta::PackStats & pack_stats);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
 
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
+
+    void initAllMatchBlockInfo();
+    size_t getReadPackLimit(size_t start_pack_id);
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;
@@ -169,6 +176,23 @@ private:
 
     // DataSharing
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
+
+    // <start_pack, pack_count>
+    // Each pair object indicates several continuous packs with RSResult::All and will be read as a Block.
+    // It is sorted by start_pack.
+    std::queue<std::pair<size_t, size_t>> all_match_block_infos;
+    std::unordered_map<ColId, bool> last_read_from_cache{};
+
+public:
+    void setColumnCacheLongTerm(ColumnCacheLongTermPtr column_cache_long_term_, ColumnID pk_col_id_)
+    {
+        column_cache_long_term = column_cache_long_term_;
+        pk_col_id = pk_col_id_;
+    }
+
+private:
+    ColumnCacheLongTermPtr column_cache_long_term = nullptr;
+    ColumnID pk_col_id = 0;
 };
 
 } // namespace DB::DM

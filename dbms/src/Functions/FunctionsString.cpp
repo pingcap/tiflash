@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
@@ -845,6 +847,7 @@ private:
                 res_data[res_offset] = 0;
                 ++res_offset;
                 res_offsets[column_index] = res_offset;
+                prev_offset = offsets[column_index];
                 return;
             }
             start = start_offsets.size() - original_start_abs + 1;
@@ -1679,15 +1682,22 @@ public:
         bool is_start_type_valid
             = getNumberType(block.getByPosition(arguments[1]).type, [&](const auto & start_type, bool) {
                   using StartType = std::decay_t<decltype(start_type)>;
-                  // Int64 / UInt64
                   using StartFieldType = typename StartType::FieldType;
+                  const ColumnVector<StartFieldType> * column_vector_start
+                      = getInnerColumnVector<StartFieldType>(column_start);
+                  if unlikely (!column_vector_start)
+                      throw Exception(
+                          fmt::format(
+                              "Illegal type {} of argument 2 of function {}",
+                              block.getByPosition(arguments[1]).type->getName(),
+                              getName()),
+                          ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
                   // vector const const
                   if (!column_string->isColumnConst() && column_start->isColumnConst()
                       && (implicit_length || block.getByPosition(arguments[2]).column->isColumnConst()))
                   {
-                      auto [is_positive, start_abs]
-                          = getValueFromStartField<StartFieldType>((*block.getByPosition(arguments[1]).column)[0]);
+                      auto [is_positive, start_abs] = getValueFromStartColumn<StartFieldType>(*column_vector_start, 0);
                       UInt64 length = 0;
                       if (!implicit_length)
                       {
@@ -1695,10 +1705,18 @@ public:
                               block.getByPosition(arguments[2]).type,
                               [&](const auto & length_type, bool) {
                                   using LengthType = std::decay_t<decltype(length_type)>;
-                                  // Int64 / UInt64
                                   using LengthFieldType = typename LengthType::FieldType;
-                                  length = getValueFromLengthField<LengthFieldType>(
-                                      (*block.getByPosition(arguments[2]).column)[0]);
+                                  const ColumnVector<LengthFieldType> * column_vector_length
+                                      = getInnerColumnVector<LengthFieldType>(block.getByPosition(arguments[2]).column);
+                                  if unlikely (!column_vector_length)
+                                      throw Exception(
+                                          fmt::format(
+                                              "Illegal type {} of argument 3 of function {}",
+                                              block.getByPosition(arguments[2]).type->getName(),
+                                              getName()),
+                                          ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+                                  length = getValueFromLengthColumn<LengthFieldType>(*column_vector_length, 0);
                                   return true;
                               });
 
@@ -1733,15 +1751,15 @@ public:
                       if (column_start->isColumnConst())
                       {
                           // func always return const value
-                          auto start_const = getValueFromStartField<StartFieldType>((*column_start)[0]);
+                          auto start_const = getValueFromStartColumn<StartFieldType>(*column_vector_start, 0);
                           get_start_func = [start_const](size_t) {
                               return start_const;
                           };
                       }
                       else
                       {
-                          get_start_func = [&column_start](size_t i) {
-                              return getValueFromStartField<StartFieldType>((*column_start)[i]);
+                          get_start_func = [column_vector_start](size_t i) {
+                              return getValueFromStartColumn<StartFieldType>(*column_vector_start, i);
                           };
                       }
 
@@ -1754,26 +1772,36 @@ public:
                               block.getByPosition(arguments[2]).type,
                               [&](const auto & length_type, bool) {
                                   using LengthType = std::decay_t<decltype(length_type)>;
-                                  // Int64 / UInt64
                                   using LengthFieldType = typename LengthType::FieldType;
+                                  const ColumnVector<LengthFieldType> * column_vector_length
+                                      = getInnerColumnVector<LengthFieldType>(column_length);
+                                  if unlikely (!column_vector_length)
+                                      throw Exception(
+                                          fmt::format(
+                                              "Illegal type {} of argument 3 of function {}",
+                                              block.getByPosition(arguments[2]).type->getName(),
+                                              getName()),
+                                          ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
                                   if (column_length->isColumnConst())
                                   {
                                       // func always return const value
-                                      auto length_const = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
+                                      auto length_const
+                                          = getValueFromLengthColumn<LengthFieldType>(*column_vector_length, 0);
                                       get_length_func = [length_const](size_t) {
                                           return length_const;
                                       };
                                   }
                                   else
                                   {
-                                      get_length_func = [column_length](size_t i) {
-                                          return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                                      get_length_func = [column_vector_length](size_t i) {
+                                          return getValueFromLengthColumn<LengthFieldType>(*column_vector_length, i);
                                       };
                                   }
                                   return true;
                               });
 
-                          if (!is_length_type_valid)
+                          if unlikely (!is_length_type_valid)
                               throw Exception(
                                   fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
                       }
@@ -1811,8 +1839,36 @@ public:
                   return true;
               });
 
-        if (!is_start_type_valid)
+        if unlikely (!is_start_type_valid)
             throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
+    }
+
+    template <typename Integer>
+    static const ColumnVector<Integer> * getInnerColumnVector(const ColumnPtr & column)
+    {
+        if (column->isColumnConst())
+            return checkAndGetColumn<ColumnVector<Integer>>(
+                checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr().get());
+        return checkAndGetColumn<ColumnVector<Integer>>(column.get());
+    }
+
+    template <typename Integer>
+    static size_t getValueFromLengthColumn(const ColumnVector<Integer> & column, size_t index)
+    {
+        Integer val = column.getElement(index);
+        if constexpr (
+            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32>
+            || std::is_same_v<Integer, Int64>)
+        {
+            return val < 0 ? 0 : val;
+        }
+        else
+        {
+            static_assert(
+                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
+                || std::is_same_v<Integer, UInt64>);
+            return val;
+        }
     }
 
 private:
@@ -1838,49 +1894,40 @@ private:
         }
     }
 
-    template <typename Integer>
-    static size_t getValueFromLengthField(const Field & length_field)
-    {
-        if constexpr (std::is_same_v<Integer, Int64>)
-        {
-            Int64 signed_length = length_field.get<Int64>();
-            return signed_length < 0 ? 0 : signed_length;
-        }
-        else
-        {
-            static_assert(std::is_same_v<Integer, UInt64>);
-            return length_field.get<UInt64>();
-        }
-    }
-
     // return {is_positive, abs}
     template <typename Integer>
-    static std::pair<bool, size_t> getValueFromStartField(const Field & start_field)
+    static std::pair<bool, size_t> getValueFromStartColumn(const ColumnVector<Integer> & column, size_t index)
     {
-        if constexpr (std::is_same_v<Integer, Int64>)
+        Integer val = column.getElement(index);
+        if constexpr (
+            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32>
+            || std::is_same_v<Integer, Int64>)
         {
-            Int64 signed_length = start_field.get<Int64>();
-
-            if (signed_length < 0)
-            {
-                return {false, static_cast<size_t>(-signed_length)};
-            }
-            else
-            {
-                return {true, static_cast<size_t>(signed_length)};
-            }
+            if (val < 0)
+                return {false, static_cast<size_t>(-val)};
+            return {true, static_cast<size_t>(val)};
         }
         else
         {
-            static_assert(std::is_same_v<Integer, UInt64>);
-            return {true, start_field.get<UInt64>()};
+            static_assert(
+                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
+                || std::is_same_v<Integer, UInt64>);
+            return {true, val};
         }
     }
 
     template <typename F>
     static bool getNumberType(DataTypePtr type, F && f)
     {
-        return castTypeToEither<DataTypeInt64, DataTypeUInt64>(type.get(), std::forward<F>(f));
+        return castTypeToEither<
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64>(type.get(), std::forward<F>(f));
     }
 };
 
@@ -1919,8 +1966,18 @@ public:
         bool is_length_type_valid
             = getLengthType(block.getByPosition(arguments[1]).type, [&](const auto & length_type, bool) {
                   using LengthType = std::decay_t<decltype(length_type)>;
-                  // Int64 / UInt64
                   using LengthFieldType = typename LengthType::FieldType;
+
+                  const ColumnVector<LengthFieldType> * column_vector_length
+                      = FunctionSubstringUTF8::getInnerColumnVector<LengthFieldType>(column_length);
+                  if unlikely (!column_vector_length)
+                      throw Exception(
+                          fmt::format(
+                              "Illegal type {} of argument 2 of function {}",
+                              block.getByPosition(arguments[1]).type->getName(),
+                              getName()),
+                          ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
 
                   auto col_res = ColumnString::create();
                   if (const auto * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
@@ -1928,7 +1985,9 @@ public:
                       if (column_length->isColumnConst())
                       {
                           // vector const
-                          size_t length = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
+                          size_t length = FunctionSubstringUTF8::getValueFromLengthColumn<LengthFieldType>(
+                              *column_vector_length,
+                              0);
 
                           // for const 0, return const blank string.
                           if (0 == length)
@@ -1948,8 +2007,10 @@ public:
                       else
                       {
                           // vector vector
-                          auto get_length_func = [&column_length](size_t i) {
-                              return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                          auto get_length_func = [column_vector_length](size_t i) {
+                              return FunctionSubstringUTF8::getValueFromLengthColumn<LengthFieldType>(
+                                  *column_vector_length,
+                                  i);
                           };
                           RightUTF8Impl::vectorVector(
                               col_string->getChars(),
@@ -1968,8 +2029,10 @@ public:
                       assert(col_string_from_const);
                       // When useDefaultImplementationForConstants is true, string and length are not both constants
                       assert(!column_length->isColumnConst());
-                      auto get_length_func = [&column_length](size_t i) {
-                          return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                      auto get_length_func = [column_vector_length](size_t i) {
+                          return FunctionSubstringUTF8::getValueFromLengthColumn<LengthFieldType>(
+                              *column_vector_length,
+                              i);
                       };
                       RightUTF8Impl::constVector(
                           column_length->size(),
@@ -1996,22 +2059,15 @@ private:
     template <typename F>
     static bool getLengthType(DataTypePtr type, F && f)
     {
-        return castTypeToEither<DataTypeInt64, DataTypeUInt64>(type.get(), std::forward<F>(f));
-    }
-
-    template <typename Integer>
-    static size_t getValueFromLengthField(const Field & length_field)
-    {
-        if constexpr (std::is_same_v<Integer, Int64>)
-        {
-            Int64 signed_length = length_field.get<Int64>();
-            return signed_length < 0 ? 0 : signed_length;
-        }
-        else
-        {
-            static_assert(std::is_same_v<Integer, UInt64>);
-            return length_field.get<UInt64>();
-        }
+        return castTypeToEither<
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64>(type.get(), std::forward<F>(f));
     }
 };
 
@@ -3091,6 +3147,13 @@ private:
 
 class TidbPadImpl
 {
+    static void addTrailingZero(ColumnString::Chars_t & res, ColumnString::Offset & res_offset)
+    {
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        ++res_offset;
+    }
+
 public:
     template <typename IntType, bool IsUTF8, bool IsLeft>
     static void tidbExecutePadImpl(
@@ -3380,9 +3443,7 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             string_prev_offset = string_offsets[i];
@@ -3441,9 +3502,7 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             string_prev_offset = string_offsets[i];
@@ -3500,9 +3559,7 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             padding_prev_offset = (*padding_offsets)[i];
@@ -3558,9 +3615,7 @@ public:
             }
             else
             {
-                result_data.resize(result_data.size() + 1);
-                result_data[res_prev_offset] = '\0';
-                res_prev_offset++;
+                addTrailingZero(result_data, res_prev_offset);
             }
 
             result_offsets[i] = res_prev_offset;
@@ -3585,6 +3640,7 @@ public:
 
         if (target_len < 0 || (data_len < static_cast<ColumnString::Offset>(target_len) && pad_len == 0))
         {
+            addTrailingZero(res, res_offset);
             return true;
         }
 
@@ -3636,10 +3692,7 @@ public:
                 ++left;
             }
         }
-        // Add trailing zero.
-        res.resize(res.size() + 1);
-        res[res_offset] = '\0';
-        res_offset++;
+        addTrailingZero(res, res_offset);
         return false;
     }
 
@@ -3659,6 +3712,7 @@ public:
 
         if (target_len < 0 || (data_len < static_cast<ColumnString::Offset>(target_len) && pad_len == 0))
         {
+            addTrailingZero(res, res_offset);
             return true;
         }
 
@@ -3711,10 +3765,7 @@ public:
             copyResult(res, res_offset, data, 0, tmp_target_len);
             res_offset += tmp_target_len;
         }
-        // Add trailing zero.
-        res.resize(res.size() + 1);
-        res[res_offset] = '\0';
-        res_offset++;
+        addTrailingZero(res, res_offset);
         return false;
     }
 
@@ -4474,9 +4525,11 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
+        if unlikely (arguments.size() != 1)
             throw Exception(
                 fmt::format(
                     "Number of arguments for function {} doesn't match: passed {}, should be 1.",
@@ -4490,30 +4543,25 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr)
+        if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        for (int i = 0; i < val_num; i++)
-        {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            Int64 res = handled_str.empty() ? 0 : static_cast<Int64>(handled_str[0]);
-            col_res->insert(res);
-        }
+        auto val_num = static_cast<ssize_t>(c0_col->size());
+        auto col_res = ColumnInt64::create();
+        ColumnInt64::Container & data = col_res->getData();
+        data.resize(val_num);
+
+        const auto & chars = c0_string->getChars();
+        const auto & offsets = c0_string->getOffsets();
+
+        for (ssize_t i = 0; i < val_num; i++)
+            data[i] = chars[offsets[i - 1]];
 
         block.getByPosition(result).column = std::move(col_res);
     }
-
-private:
 };
 
 class FunctionLength : public IFunction
@@ -4527,9 +4575,11 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
+        if unlikely (arguments.size() != 1)
             throw Exception(
                 fmt::format(
                     "Number of arguments for function {} doesn't match: passed {}, should be 1.",
@@ -4543,24 +4593,21 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnInt64::create();
-        col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr)
+        if unlikely (c0_string == nullptr)
             throw Exception(
                 fmt::format("Illegal argument of function {}", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        for (int i = 0; i < val_num; i++)
-        {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            col_res->insert(static_cast<Int64>(handled_str.size()));
-        }
+        auto val_num = static_cast<ssize_t>(c0_col->size());
+        auto col_res = ColumnInt64::create();
+        ColumnInt64::Container & data = col_res->getData();
+        data.resize(val_num);
+
+        const auto & offsets = c0_string->getOffsets();
+
+        for (ssize_t i = 0; i < val_num; i++)
+            data[i] = offsets[i] - offsets[i - 1] - 1;
 
         block.getByPosition(result).column = std::move(col_res);
     }
@@ -5212,6 +5259,7 @@ private:
         const UInt8 * pos = begin;
         const UInt8 * end = pos + data_size;
         assert(delim_size != 0);
+        assert(count != 0);
         if (count > 0)
         {
             // Fast exit when count * delim_size > data_size
@@ -5227,10 +5275,11 @@ private:
                 if (match == end || count == 0)
                 {
                     copyDataToResult(res_data, res_offset, begin, match);
-                    break;
+                    return;
                 }
                 pos = match + delim_size;
             }
+            copyDataToResult(res_data, res_offset, begin, end);
         }
         else
         {
@@ -6145,7 +6194,7 @@ private:
         auto & res_chars = res_col->getChars();
         auto & res_offsets = res_col->getOffsets();
 
-        res_offsets.resize_fill(nrow);
+        res_offsets.resize_fill_zero(nrow);
 
         for (size_t i = 0; i < nrow; ++i)
         {

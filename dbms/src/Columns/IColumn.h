@@ -15,10 +15,12 @@
 #pragma once
 
 #include <Common/COWPtr.h>
+#include <Common/ColumnsAlignBuffer.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/WeakHash.h>
+#include <Core/BlockInfo.h>
 #include <Core/Field.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
@@ -49,8 +51,10 @@ private:
     virtual MutablePtr clone() const = 0;
 
 public:
+    using Offset = UInt64;
+    using Offsets = PaddedPODArray<Offset>;
     /// Name of a Column. It is used in info messages.
-    virtual std::string getName() const { return getFamilyName(); };
+    virtual std::string getName() const { return getFamilyName(); }
 
     /// Name of a Column kind, without parameters (example: FixedString, Array).
     virtual const char * getFamilyName() const = 0;
@@ -172,6 +176,11 @@ public:
         throw Exception("Method decodeTiDBRowV2Datum is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    virtual void insertFromDatumData(const char *, size_t)
+    {
+        throw Exception("Method insertFromDatumData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Like getData, but has special behavior for columns that contain variable-length strings.
     /// In this special case inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
     virtual void insertDataWithTerminatingZero(const char * pos, size_t length) { insertData(pos, length); }
@@ -227,6 +236,83 @@ public:
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
 
+    /// Count the serialize byte size and added to the byte_size.
+    /// The byte_size.size() must be equal to the column size.
+    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
+    /// Count the serialize byte size and added to the byte_size called by ColumnArray.
+    /// array_offsets is the offsets of ColumnArray.
+    /// The byte_size.size() must be equal to the array_offsets.size().
+    virtual void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const Offsets & /* array_offsets */) const
+        = 0;
+
+    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
+    /// serialized data.
+    /// Note:
+    /// 1. The pos.size() must be greater than or equal to length.
+    /// 2. If has_null is true, then the pos[i] could be nullptr, which means the i-th element does not need to be serialized.
+    virtual void serializeToPos(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */) const
+        = 0;
+    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
+    /// serialized data.
+    /// Only called by ColumnArray.
+    virtual void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const Offsets & /* array_offsets */) const
+        = 0;
+
+    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Note:
+    /// 1. The pos pointer must not be nullptr.
+    /// 2. The memory of pos must be accessible to overflow 15 bytes(i.e. PaddedPODArray) for speeding up memcpy.(e.g. ColumnString)
+    /// 3. If AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes)
+    /// by using reserveAlign or reserveAlignWithTotalMemoryHint.
+    /// 4. If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
+    /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data
+    /// when ColumnsAlignBufferAVX2.needFlush() is true(by calling ColumnsAlignBufferAVX2.resetIndex(true)).
+    /// Example:
+    /// #ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->reserveAlign(xxx, FULL_VECTOR_SIZE_AVX2);
+    /// #endif
+    ///     ColumnAlignBufferAVX2 align_buffer;
+    ///     /// Resize align_buffer if you want.
+    ///     /// Note that different column type needs different size of align_buffer.
+    ///     /// E.g. 1 for ColumnVector/ColumnDecimal, 2 for ColumnString/ColumnNullable(ColumnVector), 3 for ColumnNullable(ColumnString).
+    ///     align_buffer.resize(x);
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->deserializeAndInsertFromPos(pos1, align_buffer);
+    ///     align_buffer.resetIndex(false);
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->deserializeAndInsertFromPos(pos2, align_buffer);
+    ///     /// Last call to resetIndex must be true to copy the unaligned data from align_buffer to column data.
+    ///     align_buffer.resetIndex(true);
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->deserializeAndInsertFromPos(pos3, align_buffer);
+    /// During the process, any function that may change the alignment of column data should not be called otherwise
+    /// the exception will be thrown.
+    virtual void deserializeAndInsertFromPos(
+        PaddedPODArray<char *> & /* pos */,
+        ColumnsAlignBufferAVX2 & /* align_buffer */)
+        = 0;
+    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Only called by ColumnArray.
+    /// array_offsets is the offsets of ColumnArray.
+    /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
+    /// TODO: Optimize by adding align_buffer like deserializeAndInsertFromPos.
+    virtual void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const Offsets & /* array_offsets */)
+        = 0;
+
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
@@ -260,6 +346,9 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const
         = 0;
+    virtual void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective &) const
+        = 0;
+
     void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /** Removes elements that don't match the filter.
@@ -314,9 +403,6 @@ public:
     /** Copies each element according offsets parameter.
       * (i-th element should be copied offsets[i] - offsets[i - 1] times.)
       */
-    using Offset = UInt64;
-    using Offsets = PaddedPODArray<Offset>;
-
     virtual Ptr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const = 0;
 
     Ptr replicate(const Offsets & offsets) const { return replicateRange(0, offsets.size(), offsets); }
@@ -329,6 +415,9 @@ public:
     using ScatterColumns = std::vector<MutablePtr>;
     using Selector = PaddedPODArray<ColumnIndex>;
     virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
+    virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const
+        = 0;
 
     void initializeScatterColumns(ScatterColumns & columns, ColumnIndex num_columns, size_t num_rows) const
     {
@@ -345,6 +434,8 @@ public:
 
     /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
     virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;
+    virtual void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const
+        = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
     /// For now it is a helper to de-virtualize calls to insert*() functions inside gather loop
@@ -362,11 +453,22 @@ public:
 
     /// Reserves memory for specified amount of elements. If reservation isn't possible, does nothing.
     /// It affects performance only (not correctness).
-    virtual void reserve(size_t /*n*/){};
+    virtual void reserve(size_t /*n*/) {}
+
+    /// Reserves aligned memory for specified amount of elements. If reservation isn't possible, does nothing.
+    /// It affects performance only (not correctness).
+    virtual void reserveAlign(size_t /*n*/, size_t /*alignment*/) {}
 
     /// Reserve memory for specified amount of elements with a total memory hint, the default impl is
     /// calling `reserve(n)`, columns with non-fixed size elements can overwrite it for better reserve
-    virtual void reserveWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/) { reserve(n); };
+    virtual void reserveWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/) { reserve(n); }
+
+    /// Reserve aligned memory for specified amount of elements with a total memory hint, the default impl is
+    /// calling `reserveAlign(n)`, columns with non-fixed size elements can overwrite it for better reserve
+    virtual void reserveAlignWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/, size_t alignment)
+    {
+        reserveAlign(n, alignment);
+    }
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
@@ -404,7 +506,7 @@ public:
     MutablePtr cloneFullColumn() const
     {
         MutablePtr res = clone();
-        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->clone(); });
+        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->cloneFullColumn(); });
         return res;
     }
 
@@ -489,10 +591,11 @@ protected:
     {
         size_t num_rows = size();
 
-        if (num_rows != selector.size())
-            throw Exception(
-                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        RUNTIME_CHECK_MSG(
+            num_rows == selector.size(),
+            "Size of selector: {} doesn't match size of column: {}",
+            selector.size(),
+            num_rows);
 
         ScatterColumns columns;
         initializeScatterColumns(columns, num_columns, num_rows);
@@ -504,17 +607,56 @@ protected:
     }
 
     template <typename Derived>
+    std::vector<MutablePtr> scatterImpl(
+        ColumnIndex num_columns,
+        const Selector & selector,
+        const BlockSelective & selective) const
+    {
+        const auto selective_rows = selective.size();
+
+        RUNTIME_CHECK_MSG(
+            selective_rows == selector.size(),
+            "Size of selector: {} doesn't match size of selective column: {}",
+            selector.size(),
+            selective_rows);
+
+        ScatterColumns columns;
+        initializeScatterColumns(columns, num_columns, selective_rows);
+
+        for (size_t i = 0; i < selective_rows; ++i)
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, selective[i]);
+
+        return columns;
+    }
+
+    template <typename Derived>
     void scatterToImpl(ScatterColumns & columns, const Selector & selector) const
     {
         size_t num_rows = size();
 
-        if (num_rows != selector.size())
-            throw Exception(
-                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        RUNTIME_CHECK_MSG(
+            num_rows == selector.size(),
+            "Size of selector: {} doesn't match size of column: {}",
+            selector.size(),
+            num_rows);
 
         for (size_t i = 0; i < num_rows; ++i)
             static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, i);
+    }
+
+    template <typename Derived>
+    void scatterToImpl(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const
+    {
+        const auto selective_rows = selective.size();
+
+        RUNTIME_CHECK_MSG(
+            selective_rows == selector.size(),
+            "Size of selector: {} doesn't match size of selective column: {}",
+            selector.size(),
+            selective_rows);
+
+        for (size_t i = 0; i < selective_rows; ++i)
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, selective[i]);
     }
 };
 

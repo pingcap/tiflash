@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Filter/And.h>
 #include <Storages/DeltaMerge/Filter/Equal.h>
 #include <Storages/DeltaMerge/Filter/Greater.h>
@@ -26,6 +28,10 @@
 #include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
+#include <Storages/DeltaMerge/Filter/WithANNQueryInfo.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+
+#include <algorithm>
 
 namespace DB::DM
 {
@@ -43,7 +49,73 @@ RSOperatorPtr createNot(const RSOperatorPtr & op)                               
 RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)            { return std::make_shared<NotEqual>(attr, value); }
 RSOperatorPtr createOr(const RSOperators & children)                            { return std::make_shared<Or>(children); }
 RSOperatorPtr createIsNull(const Attr & attr)                                   { return std::make_shared<IsNull>(attr);}
-RSOperatorPtr createUnsupported(const String & content, const String & reason)  { return std::make_shared<Unsupported>(content, reason); }
+RSOperatorPtr createUnsupported(const String & reason)                          { return std::make_shared<Unsupported>(reason); }
 // clang-format on
+
+RSOperatorPtr RSOperator::build(
+    const std::unique_ptr<DAGQueryInfo> & dag_query,
+    const TiDB::ColumnInfos & scan_column_infos,
+    const ColumnDefines & table_column_defines,
+    bool enable_rs_filter,
+    const LoggerPtr & tracing_logger)
+{
+    RUNTIME_CHECK(dag_query != nullptr);
+    // build rough set operator
+    if (unlikely(!enable_rs_filter))
+    {
+        LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
+        return EMPTY_RS_OPERATOR;
+    }
+
+    /// Query from TiDB / TiSpark
+    auto create_attr_by_column_id = [&table_column_defines](ColumnID column_id) -> Attr {
+        auto iter = std::find_if(
+            table_column_defines.begin(),
+            table_column_defines.end(),
+            [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
+        if (iter != table_column_defines.end())
+            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+    };
+    auto rs_operator = FilterParser::parseDAGQuery(
+        *dag_query,
+        scan_column_infos,
+        std::move(create_attr_by_column_id),
+        tracing_logger);
+    if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
+        LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
+
+    ANNQueryInfoPtr ann_query_info = nullptr;
+    if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
+        ann_query_info = std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info);
+    if (!ann_query_info)
+        return rs_operator;
+
+    bool is_valid_ann_query = ann_query_info->top_k() != std::numeric_limits<UInt32>::max();
+    bool is_matching_ann_query = std::any_of(
+        table_column_defines.begin(),
+        table_column_defines.end(),
+        [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
+    if (!is_valid_ann_query || !is_matching_ann_query)
+        return rs_operator;
+
+    return wrapWithANNQueryInfo(rs_operator, ann_query_info);
+}
+
+RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoPtr & ann_query_info)
+{
+    return std::make_shared<WithANNQueryInfo>(op, ann_query_info);
+}
+
+ANNQueryInfoPtr getANNQueryInfo(const RSOperatorPtr & op)
+{
+    if (op == nullptr)
+        return nullptr;
+    auto with_ann = std::dynamic_pointer_cast<WithANNQueryInfo>(op);
+    if (with_ann == nullptr)
+        return nullptr;
+    return with_ann->ann_query_info;
+}
 
 } // namespace DB::DM

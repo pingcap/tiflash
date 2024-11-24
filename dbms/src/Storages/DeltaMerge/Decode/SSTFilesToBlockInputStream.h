@@ -17,16 +17,12 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/Decode/SSTScanSoftLimit.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 
 #include <memory>
 #include <string_view>
-
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB
 {
@@ -46,50 +42,6 @@ class SSTFilesToBlockInputStream;
 using SSTFilesToBlockInputStreamPtr = std::shared_ptr<SSTFilesToBlockInputStream>;
 class BoundedSSTFilesToBlockInputStream;
 using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBlockInputStream>;
-
-struct SSTScanSoftLimit
-{
-    constexpr static size_t HEAD_OR_ONLY_SPLIT = SIZE_MAX;
-    size_t split_id;
-    TiKVKey raw_start;
-    TiKVKey raw_end;
-    DecodedTiKVKey decoded_start;
-    DecodedTiKVKey decoded_end;
-    std::optional<RawTiDBPK> start_limit;
-    std::optional<RawTiDBPK> end_limit;
-
-    SSTScanSoftLimit(size_t extra_id, TiKVKey && raw_start_, TiKVKey && raw_end_)
-        : split_id(extra_id)
-        , raw_start(std::move(raw_start_))
-        , raw_end(std::move(raw_end_))
-    {
-        if (!raw_start.empty())
-        {
-            decoded_start = RecordKVFormat::decodeTiKVKey(raw_start);
-        }
-        if (!raw_end.empty())
-        {
-            decoded_end = RecordKVFormat::decodeTiKVKey(raw_end);
-        }
-        if (decoded_start.size())
-        {
-            start_limit = RecordKVFormat::getRawTiDBPK(decoded_start);
-        }
-        if (decoded_end.size())
-        {
-            end_limit = RecordKVFormat::getRawTiDBPK(decoded_end);
-        }
-    }
-
-    const std::optional<RawTiDBPK> & getStartLimit() { return start_limit; }
-
-    const std::optional<RawTiDBPK> & getEndLimit() { return end_limit; }
-
-    std::string toDebugString() const
-    {
-        return fmt::format("{}:{}", raw_start.toDebugString(), raw_end.toDebugString());
-    }
-};
 
 struct SSTFilesToBlockInputStreamOpts
 {
@@ -142,7 +94,7 @@ public:
         size_t lock_cf_bytes = 0;
 
         inline size_t total() const { return default_cf + write_cf + lock_cf; }
-        inline size_t total_bytes() const { return default_cf_bytes + write_cf_bytes + lock_cf_bytes; }
+        inline size_t totalBytes() const { return default_cf_bytes + write_cf_bytes + lock_cf_bytes; }
     };
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
@@ -152,15 +104,15 @@ public:
     }
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
-    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
-    bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader); }
+    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
+    bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader.get()); }
 
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
-    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
+    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
     void checkFinishedState(SSTReaderPtr & reader, ColumnFamilyType cf);
 
 private:
@@ -222,8 +174,8 @@ private:
 
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`
-    const SSTFilesToBlockInputStreamPtr _raw_child;
-    std::unique_ptr<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>> mvcc_compact_stream;
+    const SSTFilesToBlockInputStreamPtr _raw_child; // NOLINT(readability-identifier-naming)
+    std::unique_ptr<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>> mvcc_compact_stream;
 };
 
 } // namespace DM

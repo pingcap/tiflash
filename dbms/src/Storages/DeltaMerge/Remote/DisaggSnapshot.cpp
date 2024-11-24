@@ -72,10 +72,21 @@ bool DisaggReadSnapshot::empty() const
     return true;
 }
 
+SegmentReadTasks DisaggReadSnapshot::releaseNoNeedFetchTasks()
+{
+    SegmentReadTasks to_release_tasks;
+    std::unique_lock lock(mtx);
+    for (auto & [table_id, table_snap] : table_snapshots)
+        table_snap->releaseNoNeedFetchTasks(to_release_tasks);
+    return to_release_tasks;
+}
+
 DisaggPhysicalTableReadSnapshot::DisaggPhysicalTableReadSnapshot(
     KeyspaceTableID ks_table_id_,
+    ColumnID pk_col_id_,
     SegmentReadTasks && tasks_)
     : ks_physical_table_id(ks_table_id_)
+    , pk_col_id(pk_col_id_)
 {
     for (auto && t : tasks_)
     {
@@ -95,4 +106,20 @@ SegmentReadTaskPtr DisaggPhysicalTableReadSnapshot::popTask(const UInt64 segment
     return nullptr;
 }
 
+void DisaggPhysicalTableReadSnapshot::releaseNoNeedFetchTasks(SegmentReadTasks & to_release_tasks)
+{
+    std::unique_lock lock(mtx);
+    for (auto itr = tasks.begin(); itr != tasks.end();)
+    {
+        if (itr->second->hasColumnFileToFetch())
+        {
+            ++itr;
+        }
+        else
+        {
+            to_release_tasks.push_back(itr->second);
+            itr = tasks.erase(itr);
+        }
+    }
+}
 } // namespace DB::DM::Remote

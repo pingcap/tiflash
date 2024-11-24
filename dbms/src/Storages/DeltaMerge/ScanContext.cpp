@@ -104,14 +104,26 @@ String ScanContext::toJson() const
     json->set("dmfile_lm_filter_skipped_rows", dmfile_lm_filter_skipped_rows.load());
     json->set("dmfile_read_time", fmt::format("{:.3f}ms", total_dmfile_read_time_ns.load() / NS_TO_MS_SCALE));
 
+    json->set(
+        "rs_pack_filter_check_time",
+        fmt::format("{:.3f}ms", total_rs_pack_filter_check_time_ns.load() / NS_TO_MS_SCALE));
+    json->set("rs_pack_filter_none", rs_pack_filter_none.load());
+    json->set("rs_pack_filter_some", rs_pack_filter_some.load());
+    json->set("rs_pack_filter_all", rs_pack_filter_all.load());
+    json->set("rs_pack_filter_all_null", rs_pack_filter_all_null.load());
+    json->set("rs_dmfile_read_with_all", rs_dmfile_read_with_all.load());
+
     json->set("num_remote_region", total_remote_region_num.load());
     json->set("num_local_region", total_local_region_num.load());
     json->set("num_stale_read", num_stale_read.load());
 
     json->set("read_bytes", user_read_bytes.load());
 
-    json->set("disagg_cache_hit_size", disagg_read_cache_hit_size.load());
-    json->set("disagg_cache_miss_size", disagg_read_cache_miss_size.load());
+    if (disagg_read_cache_hit_size.load() > 0 && disagg_read_cache_miss_size.load() > 0)
+    {
+        json->set("disagg_cache_hit_size", disagg_read_cache_hit_size.load());
+        json->set("disagg_cache_miss_size", disagg_read_cache_miss_size.load());
+    }
 
     json->set("num_segments", num_segments.load());
     json->set("num_read_tasks", num_read_tasks.load());
@@ -154,6 +166,22 @@ String ScanContext::toJson() const
         return arr;
     };
     json->set("region_num_of_instance", to_json_array(region_num_of_instance));
+
+    if (total_vector_idx_load_from_cache.load() //
+            + total_vector_idx_load_from_disk.load() //
+            + total_vector_idx_load_from_s3.load()
+        > 0)
+    {
+        Poco::JSON::Object::Ptr vec_idx = new Poco::JSON::Object();
+        vec_idx->set("tot_load", total_vector_idx_load_time_ms.load());
+        vec_idx->set("load_s3", total_vector_idx_load_from_s3.load());
+        vec_idx->set("load_disk", total_vector_idx_load_from_disk.load());
+        vec_idx->set("load_cache", total_vector_idx_load_from_cache.load());
+        vec_idx->set("tot_search", total_vector_idx_search_time_ms.load());
+        vec_idx->set("read_vec", total_vector_idx_read_vec_time_ms.load());
+        vec_idx->set("read_others", total_vector_idx_read_others_time_ms.load());
+        json->set("vector_idx", vec_idx);
+    }
 
     std::stringstream buf;
     json->stringify(buf);

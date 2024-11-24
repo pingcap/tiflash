@@ -115,7 +115,12 @@ std::pair<bool, String> S3LockClient::makeCall(
         {
             if (Clock::now() > deadline)
             {
-                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "deadline exceed, " + tracing_log->identifier());
+                throw Exception(
+                    ErrorCodes::TIMEOUT_EXCEEDED,
+                    "deadline exceed, {}, address={}, request={}",
+                    tracing_log->identifier(),
+                    address,
+                    req.ShortDebugString());
             }
             // retry
             LOG_ERROR(
@@ -141,7 +146,12 @@ std::pair<bool, String> S3LockClient::makeCall(
         {
             if (Clock::now() > deadline)
             {
-                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "deadline exceed, " + tracing_log->identifier());
+                throw Exception(
+                    ErrorCodes::TIMEOUT_EXCEEDED,
+                    "deadline exceed, {}, address={}, request={}",
+                    tracing_log->identifier(),
+                    address,
+                    req.ShortDebugString());
             }
             // retry
             auto not_owner = resp.result().not_owner();
@@ -167,6 +177,7 @@ String S3LockClient::updateOwnerAddr(const Timepoint & deadline, const LoggerPtr
     using namespace std::chrono_literals;
     while (true)
     {
+        RUNTIME_CHECK(s3gc_owner != nullptr);
         auto owner_info = s3gc_owner->getOwnerID();
         switch (owner_info.status)
         {

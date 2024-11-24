@@ -16,6 +16,7 @@
 
 #include <Columns/IColumn.h>
 #include <Common/PODArray.h>
+#include <common/memcpy.h>
 #include <string.h> // memcpy
 
 
@@ -89,8 +90,8 @@ public:
 
     void insertData(const char * pos, size_t length) override;
 
-    void insertDefault() override { chars.resize_fill(chars.size() + n); }
-    void insertManyDefaults(size_t length) override { chars.resize_fill(chars.size() + n * length); }
+    void insertDefault() override { chars.resize_fill_zero(chars.size() + n); }
+    void insertManyDefaults(size_t length) override { chars.resize_fill_zero(chars.size() + n * length); }
 
     void popBack(size_t elems) override { chars.resize_assume_reserved(chars.size() - n * elems); }
 
@@ -103,16 +104,44 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override;
+
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
+    template <bool has_null>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override;
+    template <bool has_null>
+    void serializeToPosForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets) const;
+
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        override;
+
     void updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
+        const override;
 
     int compareAt(size_t p1, size_t p2, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
-        const ColumnFixedString & rhs = static_cast<const ColumnFixedString &>(rhs_);
+        const auto & rhs = static_cast<const ColumnFixedString &>(rhs_);
         return memcmp(&chars[p1 * n], &rhs.chars[p2 * n], n);
     }
 
@@ -131,14 +160,25 @@ public:
         return scatterImpl<ColumnFixedString>(num_columns, selector);
     }
 
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector, const BlockSelective & selective)
+        const override
+    {
+        return scatterImpl<ColumnFixedString>(num_columns, selector, selective);
+    }
+
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         scatterToImpl<ColumnFixedString>(columns, selector);
     }
+    void scatterTo(ScatterColumns & columns, const Selector & selector, const BlockSelective & selective) const override
+    {
+        scatterToImpl<ColumnFixedString>(columns, selector, selective);
+    }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    void reserve(size_t size) override { chars.reserve(n * size); };
+    void reserve(size_t size) override { chars.reserve(n * size); }
+    void reserveAlign(size_t size, size_t alignment) override { chars.reserve(n * size, alignment); }
 
     void getExtremes(Field & min, Field & max) const override;
 
@@ -155,6 +195,9 @@ public:
     const Chars_t & getChars() const { return chars; }
 
     size_t getN() const { return n; }
+
+    template <bool selective_block>
+    void updateWeakHash32Impl(WeakHash32 & hash, const BlockSelective & selective) const;
 };
 
 
