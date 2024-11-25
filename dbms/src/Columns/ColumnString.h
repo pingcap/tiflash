@@ -51,10 +51,11 @@ private:
     /// For convenience, every string ends with terminating zero byte. Note that strings could contain zero bytes in the middle.
     Chars_t chars;
 
-    size_t ALWAYS_INLINE offsetAt(size_t i) const { return i == 0 ? 0 : offsets[i - 1]; }
+    /// offset[-1] is 0 which is a guarantee from PODArray.
+    size_t ALWAYS_INLINE offsetAt(ssize_t i) const { return offsets[i - 1]; }
 
-    /// Size of i-th element, including terminating zero.
-    size_t ALWAYS_INLINE sizeAt(size_t i) const { return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]); }
+    /// Size of i-th element, including terminating zero. offset[-1] is 0 which is a guarantee from PODArray.
+    size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return offsets[i] - offsets[i - 1]; }
 
     template <bool positive>
     struct less;
@@ -247,6 +248,32 @@ public:
         return pos + string_size;
     }
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override;
+
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
+    template <bool has_null>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override;
+    template <bool has_null>
+    void serializeToPosForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets) const;
+
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        override;
+
     void updateHashWithValue(
         size_t n,
         SipHash & hash,
@@ -299,7 +326,7 @@ public:
 
     void insertManyDefaults(size_t length) override
     {
-        chars.resize_fill(chars.size() + length);
+        chars.resize_fill_zero(chars.size() + length);
         offsets.reserve(offsets.size() + length);
         for (size_t i = 0; i < length; ++i)
         {
@@ -363,8 +390,10 @@ public:
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     void reserve(size_t n) override;
+    void reserveAlign(size_t n, size_t alignment) override;
 
     void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
+    void reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment) override;
 
     void getExtremes(Field & min, Field & max) const override;
 

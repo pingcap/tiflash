@@ -34,6 +34,7 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <cstring>
 #include <ext/range.h>
 #include <magic_enum.hpp>
 
@@ -5000,6 +5001,8 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 2)
@@ -5018,52 +5021,443 @@ public:
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        Field c0_field;
 
         const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
         const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
         const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
-        Field c1_field;
 
-        if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
-            throw Exception(
-                fmt::format("Illegal argument of function {}", getName()),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        size_t row_num = c0_col->size();
 
-        if (c0_col->size() != c1_col->size())
-            throw Exception(
-                fmt::format("Function {} column number is inconformity", getName()),
-                ErrorCodes::LOGICAL_ERROR);
+        auto col_res = ColumnInt64::create(row_num, 0);
+        PaddedPODArray<Int64> & vec_res = col_res->getData();
+        vec_res.resize(row_num);
 
-        auto col_res = ColumnInt64::create();
-        int val_num = c0_col->size();
-        col_res->reserve(val_num);
-
-        for (int i = 0; i < val_num; i++)
+        if (c0_const && c1_string)
         {
-            c0_col->get(i, c0_field);
-            c1_col->get(i, c1_field);
-
-            String c0_str = c0_field.get<String>();
-            String c1_str = c1_field.get<String>();
-
-            // return -1 when c1_str not contains the c0_str
-            Int64 idx = c1_str.find(c0_str);
-            col_res->insert(getPositionUTF8(c1_str, idx));
+            const String & c0_str = c0_const->getValue<String>();
+            if unlikely (c0_str.empty())
+            {
+                for (size_t i = 0; i < row_num; i++)
+                    vec_res[i] = 1;
+            }
+            else
+            {
+                constVector(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+            }
         }
+        else if (c0_string && c1_string)
+        {
+            vectorVector(
+                c0_string->getChars(),
+                c0_string->getOffsets(),
+                c1_string->getChars(),
+                c1_string->getOffsets(),
+                vec_res);
+        }
+        else if (c0_string && c1_const)
+        {
+            vectorConst(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
+        }
+        else
+            throw Exception(
+                "Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
+                    + block.getByPosition(arguments[1]).column->getName() + " of arguments of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(col_res);
     }
 
-private:
-    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
+    static void vectorVector(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res)
     {
-        if (idx == -1)
-            return 0;
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+        ColumnString::Offset prev_col1_str_offset = 0;
 
-        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
-        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+
+            if unlikely (col0_str_len == 0)
+            {
+                res[i] = 1;
+            }
+            else
+            {
+                const char * col0_start = reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]);
+                const char * col1_start = reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]);
+                fillResult(i, col0_start, col0_str_len, col1_start, col1_str_len, res);
+            }
+
+            prev_col0_str_offset = col0_offsets[i];
+            prev_col1_str_offset = col1_offsets[i];
+        }
     }
+
+    static void vectorConst(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const String & col1_str,
+        PaddedPODArray<Int64> & res)
+    {
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+        size_t col1_str_len = col1_str.size();
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+
+            if unlikely (col0_str_len == 0)
+                res[i] = 1;
+            else
+                fillResult(
+                    i,
+                    reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                    col0_str_len,
+                    col1_str.c_str(),
+                    col1_str_len,
+                    res);
+
+            prev_col0_str_offset = col0_offsets[i];
+        }
+    }
+
+    static void constVector(
+        const String & col0_str,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res)
+    {
+        size_t row_num = col1_offsets.size();
+        ColumnString::Offset prev_col1_str_offset = 0;
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+            const char * col1_start = reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]);
+
+            fillResult(i, col0_str.c_str(), col0_str.size(), col1_start, col1_str_len, res);
+            prev_col1_str_offset = col1_offsets[i];
+        }
+    }
+
+private:
+    static void fillResult(
+        size_t i,
+        const char * col0_str_start,
+        size_t col0_str_len,
+        const char * col1_str_start,
+        size_t col1_str_len,
+        PaddedPODArray<Int64> & res)
+    {
+        const char * res_start
+            = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
+
+        if (res_start == nullptr)
+            res[i] = 0;
+        else
+        {
+            Int64 pos = reinterpret_cast<const char *>(res_start) - col1_str_start;
+            res[i] = 1 + pos;
+        }
+    }
+};
+
+class FunctionPositionUTF8 : public IFunction
+{
+public:
+    static constexpr auto name = "positionUTF8";
+    FunctionPositionUTF8() = default;
+
+    static FunctionPtr create(const Context & /*context*/) { return std::make_shared<FunctionPositionUTF8>(); }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 2)
+            throw Exception(
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be 2.",
+                    getName(),
+                    arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+
+        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
+        const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
+
+        size_t row_num = c0_col->size();
+
+        auto col_res = ColumnInt64::create(row_num, 0);
+        PaddedPODArray<Int64> & vec_res = col_res->getData();
+
+        if (c0_const && c1_string)
+        {
+            const String & c0_str = c0_const->getValue<String>();
+            if unlikely (c0_str.empty())
+            {
+                for (size_t i = 0; i < row_num; i++)
+                    vec_res[i] = 1;
+            }
+            else
+            {
+                constVector(c0_const->getValue<String>(), c1_string->getChars(), c1_string->getOffsets(), vec_res);
+            }
+        }
+        else if (c0_string && c1_string)
+        {
+            vectorVector(
+                c0_string->getChars(),
+                c0_string->getOffsets(),
+                c1_string->getChars(),
+                c1_string->getOffsets(),
+                vec_res);
+        }
+        else if (c0_string && c1_const)
+        {
+            vectorConst(c0_string->getChars(), c0_string->getOffsets(), c1_const->getValue<String>(), vec_res);
+        }
+        else
+            throw Exception(
+                "Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
+                    + block.getByPosition(arguments[1]).column->getName() + " of arguments of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+    void vectorVector(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+        ColumnString::Offset prev_col1_str_offset = 0;
+
+        String col0_container;
+        String col1_container;
+
+        std::vector<size_t> lens;
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+
+            if unlikely (col0_str_len == 0)
+            {
+                res[i] = 1;
+            }
+            else
+            {
+                StringRef col0_collation_str;
+                StringRef col1_collation_str;
+
+                if (collator == nullptr || collator->isPaddingBinary())
+                {
+                    col0_collation_str = convertWithBinCollation<false>(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        nullptr);
+                    col1_collation_str = convertWithBinCollation<true>(
+                        reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                        col1_str_len,
+                        &lens);
+                }
+                else
+                {
+                    col0_collation_str = collator->sortKeyNoTrim(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        col0_container);
+
+                    col1_collation_str = collator->convert(
+                        reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                        col1_str_len,
+                        col1_container,
+                        &lens);
+                }
+
+                searchAndFillResult(
+                    i,
+                    col0_collation_str.data,
+                    col0_collation_str.size,
+                    col1_collation_str.data,
+                    col1_collation_str.size,
+                    lens,
+                    res);
+            }
+
+            prev_col0_str_offset = col0_offsets[i];
+            prev_col1_str_offset = col1_offsets[i];
+        }
+    }
+
+    void vectorConst(
+        const ColumnString::Chars_t & col0_data,
+        const ColumnString::Offsets & col0_offsets,
+        const String & col1_str,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t row_num = col0_offsets.size();
+        ColumnString::Offset prev_col0_str_offset = 0;
+
+        String col0_container;
+        String col1_container;
+        std::vector<size_t> lens;
+        StringRef col1_collation_str;
+
+        if (collator == nullptr || collator->isPaddingBinary())
+            col1_collation_str = convertWithBinCollation<true>(col1_str.data(), col1_str.size(), &lens);
+        else
+            col1_collation_str = collator->convert(col1_str.data(), col1_str.size(), col1_container, &lens);
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col0_str_len = col0_offsets[i] - prev_col0_str_offset - 1;
+
+            if unlikely (col0_str_len == 0)
+            {
+                res[i] = 1;
+            }
+            else
+            {
+                StringRef col0_collation_str;
+
+                if (collator == nullptr || collator->isPaddingBinary())
+                    col0_collation_str = convertWithBinCollation<false>(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        nullptr);
+                else
+                    col0_collation_str = collator->sortKeyNoTrim(
+                        reinterpret_cast<const char *>(&col0_data[prev_col0_str_offset]),
+                        col0_str_len,
+                        col0_container);
+
+                searchAndFillResult(
+                    i,
+                    col0_collation_str.data,
+                    col0_collation_str.size,
+                    col1_collation_str.data,
+                    col1_collation_str.size,
+                    lens,
+                    res);
+            }
+            prev_col0_str_offset = col0_offsets[i];
+        }
+    }
+
+    void constVector(
+        const String & col0_str,
+        const ColumnString::Chars_t & col1_data,
+        const ColumnString::Offsets & col1_offsets,
+        PaddedPODArray<Int64> & res) const
+    {
+        size_t row_num = col1_offsets.size();
+        ColumnString::Offset prev_col1_str_offset = 0;
+
+        String col0_container;
+        String col1_container;
+        std::vector<size_t> lens;
+        StringRef col0_collation_str;
+
+        if (collator == nullptr || collator->isPaddingBinary())
+            col0_collation_str = convertWithBinCollation<false>(col0_str.c_str(), col0_str.size(), nullptr);
+        else
+            col0_collation_str = collator->sortKeyNoTrim(col0_str.c_str(), col0_str.size(), col0_container);
+
+        for (size_t i = 0; i < row_num; i++)
+        {
+            size_t col1_str_len = col1_offsets[i] - prev_col1_str_offset - 1;
+
+            StringRef col1_collation_str;
+            if (collator == nullptr || collator->isPaddingBinary())
+                col1_collation_str = convertWithBinCollation<true>(
+                    reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                    col1_str_len,
+                    &lens);
+            else
+                col1_collation_str = collator->convert(
+                    reinterpret_cast<const char *>(&col1_data[prev_col1_str_offset]),
+                    col1_str_len,
+                    col1_container,
+                    &lens);
+
+            searchAndFillResult(
+                i,
+                col0_collation_str.data,
+                col0_collation_str.size,
+                col1_collation_str.data,
+                col1_collation_str.size,
+                lens,
+                res);
+            prev_col1_str_offset = col1_offsets[i];
+        }
+    }
+
+private:
+    static void searchAndFillResult(
+        size_t i,
+        const char * col0_str_start,
+        size_t col0_str_len,
+        const char * col1_str_start,
+        size_t col1_str_len,
+        const std::vector<size_t> & lens,
+        PaddedPODArray<Int64> & res)
+    {
+        const char * res_start
+            = reinterpret_cast<const char *>(memmem(col1_str_start, col1_str_len, col0_str_start, col0_str_len));
+
+        if (res_start == nullptr)
+            res[i] = 0;
+        else
+            res[i] = 1 + getPositionWithCollationString(res_start - col1_str_start, lens);
+    }
+
+    static Int64 getPositionWithCollationString(Int64 pos, const std::vector<size_t> & lens)
+    {
+        size_t idx = 0;
+        while (pos > 0)
+        {
+            assert(idx < lens.size());
+            pos -= lens[idx];
+            idx++;
+        }
+        return idx;
+    }
+
+    template <bool need_len>
+    static StringRef convertWithBinCollation(const char * start, size_t len, std::vector<size_t> * lens)
+    {
+        return TiDB::convertForBinCollator<need_len>(start, len, lens);
+    }
+
+    TiDB::TiDBCollatorPtr collator{};
 };
 
 class FunctionSubStringIndex : public IFunction
@@ -6194,7 +6588,7 @@ private:
         auto & res_chars = res_col->getChars();
         auto & res_offsets = res_col->getOffsets();
 
-        res_offsets.resize_fill(nrow);
+        res_offsets.resize_fill_zero(nrow);
 
         for (size_t i = 0; i < nrow; ++i)
         {
@@ -6612,6 +7006,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
+    factory.registerFunction<FunctionPositionUTF8>();
     factory.registerFunction<FunctionSubStringIndex>();
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();

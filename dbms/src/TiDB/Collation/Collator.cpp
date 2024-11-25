@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <Poco/String.h>
 #include <TiDB/Collation/Collator.h>
 #include <TiDB/Collation/CollatorUtils.h>
@@ -193,6 +192,16 @@ public:
         return DB::BinCollatorSortKey<padding>(s, length);
     }
 
+    StringRef sortKeyNoTrim(const char * s, size_t length, std::string &) const override
+    {
+        return convertForBinCollator<false>(s, length, nullptr);
+    }
+
+    StringRef convert(const char * s, size_t length, std::string &, std::vector<size_t> * lens) const override
+    {
+        return convertForBinCollator<true>(s, length, lens);
+    }
+
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
 
 private:
@@ -254,20 +263,53 @@ public:
         return (offset1 < v1.length()) - (offset2 < v2.length());
     }
 
+    StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
+    {
+        return convertImpl<true, false>(s, length, container, lens);
+    }
+
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
-        auto v = rtrim(s, length);
+        return convertImpl<false, true>(s, length, container, nullptr);
+    }
+
+    StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false, false>(s, length, container, nullptr);
+    }
+
+    template <bool need_len, bool need_trim>
+    StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
+    {
+        std::string_view v;
+
+        if constexpr (need_trim)
+            v = rtrim(s, length);
+        else
+            v = std::string_view(s, length);
+
         if (length * sizeof(WeightType) > container.size())
             container.resize(length * sizeof(WeightType));
         size_t offset = 0;
         size_t total_size = 0;
+        size_t v_length = v.length();
 
-        while (offset < v.length())
+        if constexpr (need_len)
+        {
+            if (lens->capacity() < v_length)
+                lens->reserve(v_length);
+            lens->resize(0);
+        }
+
+        while (offset < v_length)
         {
             auto c = decodeChar(s, offset);
             auto sk = weight(c);
-            container[total_size++] = char(sk >> 8);
-            container[total_size++] = char(sk);
+            container[total_size++] = static_cast<char>(sk >> 8);
+            container[total_size++] = static_cast<char>(sk);
+
+            if constexpr (need_len)
+                lens->push_back(2);
         }
 
         return StringRef(container.data(), total_size);
@@ -427,9 +469,31 @@ public:
         }
     }
 
+    StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
+    {
+        return convertImpl<true, false>(s, length, container, lens);
+    }
+
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
-        std::string_view v = preprocess(s, length);
+        return convertImpl<false, true>(s, length, container, nullptr);
+    }
+
+    StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false, false>(s, length, container, nullptr);
+    }
+
+    template <bool need_len, bool need_trim>
+    StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
+    {
+        std::string_view v;
+
+        if constexpr (need_trim)
+            v = preprocess(s, length);
+        else
+            v = std::string_view(s, length);
+
         // every char have 8 uint16 at most.
         if (8 * length * sizeof(uint16_t) > container.size())
             container.resize(8 * length * sizeof(uint16_t));
@@ -439,11 +503,28 @@ public:
 
         uint64_t first = 0, second = 0;
 
+        if constexpr (need_len)
+        {
+            if (lens->capacity() < v_length)
+                lens->reserve(v_length);
+            lens->resize(0);
+        }
+
         while (offset < v_length)
         {
             weight(first, second, offset, v_length, s);
+
+            if constexpr (need_len)
+                lens->push_back(total_size);
+
             writeResult(first, container, total_size);
             writeResult(second, container, total_size);
+
+            if constexpr (need_len)
+            {
+                size_t end_idx = lens->size() - 1;
+                (*lens)[end_idx] = total_size - (*lens)[end_idx];
+            }
         }
 
         return StringRef(container.data(), total_size);
@@ -463,8 +544,8 @@ private:
     {
         while (w != 0)
         {
-            container[total_size++] = char(w >> 8);
-            container[total_size++] = char(w);
+            container[total_size++] = static_cast<char>(w >> 8);
+            container[total_size++] = static_cast<char>(w);
             w >>= 16;
         }
     }
@@ -756,7 +837,7 @@ struct TiDBCollatorPtrMap
 {
     // static constexpr auto MAX_TYPE_CNT = static_cast<uint32_t>(ITiDBCollator::CollatorType::MAX_);
 
-    std::unordered_map<int32_t, TiDBCollatorPtr> id_map{};
+    std::unordered_map<int32_t, TiDBCollatorPtr> id_map;
     // std::array<TiDBCollatorPtr, MAX_TYPE_CNT> type_map{};
     std::unordered_map<std::string, TiDBCollatorPtr> name_map;
     std::unordered_map<const void *, ITiDBCollator::CollatorType> addr_to_type;

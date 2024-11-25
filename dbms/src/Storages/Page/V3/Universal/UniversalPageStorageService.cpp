@@ -155,6 +155,12 @@ bool UniversalPageStorageService::uploadCheckpoint()
         return false;
     }
     auto s3lock_client = tmt.getS3LockClient();
+    if (s3lock_client == nullptr)
+    {
+        LOG_INFO(log, "Skip checkpoint because s3lock_client is not initialized");
+        return false;
+    }
+
     const bool force_upload = upload_all_at_next_upload.load();
     bool upload_done = uploadCheckpointImpl(store_info, s3lock_client, remote_store, force_upload);
     if (force_upload && upload_done)

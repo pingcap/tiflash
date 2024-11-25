@@ -21,7 +21,14 @@
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/WriteHelpers.h>
+#include <common/memcpy.h>
 #include <common/unaligned.h>
+
+#include <ext/scope_guard.h>
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+ASSERT_USE_AVX2_COMPILE_FLAG
+#endif
 
 template <typename T>
 bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
@@ -115,6 +122,280 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
     {
         data.push_back(unalignedLoad<T>(pos));
         return pos + sizeof(T);
+    }
+}
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(T);
+}
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(
+        byte_size.size() == array_offsets.size(),
+        "size of byte_size({}) != size of array_offsets({})",
+        byte_size.size(),
+        array_offsets.size());
+
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+    {
+        serializeToPosImpl<true>(pos, start, length);
+    }
+    else
+    {
+        serializeToPosImpl<false>(pos, start, length);
+    }
+}
+
+template <typename T>
+template <bool has_null>
+void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
+        pos[i] += sizeof(T);
+    }
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+    {
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
+    }
+    else
+    {
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
+    }
+}
+
+template <typename T>
+template <bool has_null>
+void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(
+        start + length <= array_offsets.size(),
+        "start({}) + length({}) > size of array_offsets({})",
+        start,
+        length,
+        array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        array_offsets.empty() || array_offsets.back() == size(),
+        "The last array offset({}) doesn't match size of column({})",
+        array_offsets.back(),
+        size());
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        if (len <= 4)
+        {
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    pos[i] + j * sizeof(T),
+                    &data[array_offsets[start + i - 1] + j],
+                    sizeof(T));
+        }
+        else
+        {
+            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+        }
+        pos[i] += len * sizeof(T);
+    }
+}
+
+template <typename T>
+void ColumnDecimal<T>::deserializeAndInsertFromPos(
+    PaddedPODArray<char *> & pos,
+    ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
+{
+    size_t prev_size = data.size();
+    size_t size = pos.size();
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    if constexpr (FULL_VECTOR_SIZE_AVX2 % sizeof(T) == 0)
+    {
+        size_t buffer_index = align_buffer.nextIndex();
+        AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
+        UInt8 & buffer_size_ref = align_buffer.getSize(buffer_index);
+        /// Better use a register rather than a reference for a frequently-updated variable
+        UInt8 buffer_size = buffer_size_ref;
+        SCOPE_EXIT({ buffer_size_ref = buffer_size; });
+
+        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
+        if likely (is_aligned)
+        {
+            constexpr size_t avx2_width = FULL_VECTOR_SIZE_AVX2 / sizeof(T);
+            size_t i = 0;
+            if (buffer_size != 0)
+            {
+                size_t count = std::min(size, (FULL_VECTOR_SIZE_AVX2 - buffer_size) / sizeof(T));
+                for (; i < count; ++i)
+                {
+                    tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                    buffer_size += sizeof(T);
+                    pos[i] += sizeof(T);
+                }
+
+                if (buffer_size < FULL_VECTOR_SIZE_AVX2)
+                {
+                    if unlikely (align_buffer.needFlush())
+                    {
+                        data.resize(prev_size + buffer_size / sizeof(T), FULL_VECTOR_SIZE_AVX2);
+                        inline_memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                        buffer_size = 0;
+                    }
+                    return;
+                }
+
+                assert(buffer_size == FULL_VECTOR_SIZE_AVX2);
+                data.resize(prev_size + avx2_width, FULL_VECTOR_SIZE_AVX2);
+
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[0]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[1]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
+                buffer_size = 0;
+            }
+
+            AlignBufferAVX2 tmp_buffer;
+            UInt8 tmp_buffer_size = 0;
+
+            data.resize(prev_size + (size - i) / avx2_width * avx2_width, FULL_VECTOR_SIZE_AVX2);
+            for (; i + avx2_width <= size; i += avx2_width)
+            {
+                /// Loop unrolling
+                for (size_t j = 0; j < avx2_width; ++j)
+                {
+                    tiflash_compiler_builtin_memcpy(
+                        &tmp_buffer.data[tmp_buffer_size + j * sizeof(T)],
+                        pos[i + j],
+                        sizeof(T));
+                    pos[i + j] += sizeof(T);
+                }
+                tmp_buffer_size += avx2_width * sizeof(T);
+
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), tmp_buffer.v[0]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
+                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), tmp_buffer.v[1]);
+                prev_size += VECTOR_SIZE_AVX2 / sizeof(T);
+                tmp_buffer_size = 0;
+            }
+
+            for (; i < size; ++i)
+            {
+                tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                buffer_size += sizeof(T);
+                pos[i] += sizeof(T);
+            }
+
+            if unlikely (align_buffer.needFlush())
+            {
+                data.resize(prev_size + buffer_size / sizeof(T), FULL_VECTOR_SIZE_AVX2);
+                inline_memcpy(static_cast<void *>(&data[prev_size]), buffer.data, buffer_size);
+                buffer_size = 0;
+            }
+            return;
+        }
+
+        if unlikely (buffer_size != 0)
+        {
+            /// This column data is aligned first and then becomes unaligned due to calling other functions
+            throw Exception("AlignBuffer is not empty when the data is not aligned", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+#endif
+
+    data.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        tiflash_compiler_builtin_memcpy(&data[prev_size], pos[i], sizeof(T));
+        ++prev_size;
+        pos[i] += sizeof(T);
+    }
+}
+
+template <typename T>
+void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets)
+{
+    if unlikely (pos.empty())
+        return;
+    RUNTIME_CHECK_MSG(
+        pos.size() <= array_offsets.size(),
+        "size of pos({}) > size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
+    size_t start_point = array_offsets.size() - pos.size();
+    RUNTIME_CHECK_MSG(
+        array_offsets[start_point - 1] == size(),
+        "array_offset[start_point({}) - 1]({}) doesn't match size of column({})",
+        start_point,
+        array_offsets[start_point - 1],
+        size());
+
+    data.resize(array_offsets.back());
+
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        if (len <= 4)
+        {
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    &data[array_offsets[start_point + i - 1] + j],
+                    pos[i] + j * sizeof(T),
+                    sizeof(T));
+        }
+        else
+        {
+            inline_memcpy(&data[array_offsets[start_point + i - 1]], pos[i], len * sizeof(T));
+        }
+        pos[i] += len * sizeof(T);
     }
 }
 
