@@ -195,7 +195,8 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
 Field ColumnInfo::defaultValueToField() const
 {
     const auto & value = origin_default_value;
-    if (value.isEmpty())
+    const auto & bit_value = origin_default_bit_value;
+    if (value.isEmpty() && bit_value.isEmpty())
     {
         if (hasNotNullFlag())
             return DB::GenDefaultField(*this);
@@ -227,13 +228,6 @@ Field ColumnInfo::defaultValueToField() const
         });
     case TypeBit:
     {
-        const auto & bit_value = origin_default_bit_value;
-        if (bit_value.isEmpty())
-        {
-            if (hasNotNullFlag())
-                return DB::GenDefaultField(*this);
-            return Field();
-        }
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
             // When we got bit_value from tipb, we have decoded it.
             if (auto is_int = bit_value.isInteger(); is_int)
@@ -1421,7 +1415,7 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
             break;
         case TypeBit:
             // For TypeBit, we need to set origin_default_bit_value to tipb_column_info.default_val().
-            tidb_column_info.default_bit_value = val.get<UInt64>();
+            tidb_column_info.origin_default_bit_value = val.get<UInt64>();
             break;
         case TypeYear:
             // If the year column has 'not null' option and the value is 0, this year value is '0000'.
