@@ -386,13 +386,36 @@ TEST_F(LeadLag, crossBlock)
     executeFunctionAndAssert(
         toNullableVec<Int64>({{}, {}, {}, {}, {}, {}, {}, {}}),
         Lead2(value_col, lit(Field(static_cast<UInt64>(10)))),
-        // all input is 1 partition
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 1, 1, 1, 1}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<Int64>(/*value*/ {1, Limits<Int64>::max(), Limits<Int64>::min(), 4, 5, 6, 0, 8})});
+    executeFunctionAndAssert(
+        toNullableVec<Int64>({6, 0, 8, {}, {}, {}, {}, {}}),
+        Lead2(value_col, lit(Field(static_cast<UInt64>(5)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 1, 1, 1, 1}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<Int64>(/*value*/ {1, Limits<Int64>::max(), Limits<Int64>::min(), 4, 5, 6, 0, 8})});
+    executeFunctionAndAssert(
+        toNullableVec<Int64>({Limits<Int64>::min(), 4, 5, 6, 0, 8, {}, {}}),
+        Lead2(value_col, lit(Field(static_cast<UInt64>(2)))),
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 1, 1, 1, 1}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<Int64>(/*value*/ {1, Limits<Int64>::max(), Limits<Int64>::min(), 4, 5, 6, 0, 8})});
     executeFunctionAndAssert(
         toNullableVec<Int64>({{}, {}, {}, {}, {}, {}, {}, {}}),
         Lag2(value_col, lit(Field(static_cast<UInt64>(10)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<Int64>(/*value*/ {1, Limits<Int64>::max(), Limits<Int64>::min(), 4, 5, 6, 0, 8})});
+    executeFunctionAndAssert(
+        toNullableVec<Int64>({{}, {}, {}, {}, {}, {}, {}, {}}),
+        Lag2(value_col, lit(Field(static_cast<UInt64>(5)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<Int64>(/*value*/ {1, Limits<Int64>::max(), Limits<Int64>::min(), 4, 5, 6, 0, 8})});
+    executeFunctionAndAssert(
+        toNullableVec<Int64>({{}, {}, 1,Limits<Int64>::max(), {}, {}, 5, 6}),
+        Lag2(value_col, lit(Field(static_cast<UInt64>(2)))),
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<Int64>(/*value*/ {1, Limits<Int64>::max(), Limits<Int64>::min(), 4, 5, 6, 0, 8})});
