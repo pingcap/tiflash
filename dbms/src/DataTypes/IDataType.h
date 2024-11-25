@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Common/COWPtr.h>
 #include <Core/Field.h>
 
@@ -29,7 +30,6 @@ class WriteBuffer;
 class IDataType;
 struct FormatSettingsJSON;
 
-class IColumn;
 using ColumnPtr = COWPtr<IColumn>::Ptr;
 using MutableColumnPtr = COWPtr<IColumn>::MutablePtr;
 
@@ -154,6 +154,7 @@ public:
       * `avg_value_size_hint` - if not zero, may be used to avoid reallocations while reading column of String type.
       * `position_independent_encoding` - provide better performance when it is false, but it requires not to be
       *     deserialized the data into a column with existing data.
+      * `filter` - if not nullptr, then read only values corresponding to 1 in the filter.
       */
     virtual void deserializeBinaryBulkWithMultipleStreams(
         IColumn & column,
@@ -161,10 +162,11 @@ public:
         size_t limit,
         double avg_value_size_hint,
         bool /*position_independent_encoding*/,
-        SubstreamPath & path) const
+        SubstreamPath & path,
+        IColumn::Filter * filter) const
     {
         if (ReadBuffer * stream = getter(path))
-            deserializeBinaryBulk(column, *stream, limit, avg_value_size_hint);
+            deserializeBinaryBulk(column, *stream, limit, avg_value_size_hint, filter);
     }
 
     void deserializeBinaryBulkWithMultipleStreams(
@@ -173,7 +175,8 @@ public:
         size_t limit,
         double avg_value_size_hint,
         bool position_independent_encoding,
-        SubstreamPath && path) const
+        SubstreamPath && path,
+        IColumn::Filter * filter) const
     {
         deserializeBinaryBulkWithMultipleStreams(
             column,
@@ -181,14 +184,19 @@ public:
             limit,
             avg_value_size_hint,
             position_independent_encoding,
-            path);
+            path,
+            filter);
     }
 
     /** Override these methods for data types that require just single stream (most of data types).
       */
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;
-    virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint)
-        const;
+    virtual void deserializeBinaryBulk(
+        IColumn & column,
+        ReadBuffer & istr,
+        size_t limit,
+        double avg_value_size_hint,
+        IColumn::Filter * filter) const;
 
     /** Serialization/deserialization of individual values.
       *

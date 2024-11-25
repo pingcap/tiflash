@@ -593,7 +593,8 @@ ColumnPtr DMFileReader::readFromDisk(
         read_rows,
         top_stream->avg_size_hint,
         true,
-        {});
+        {},
+        nullptr);
     IDataType::updateAvgValueSizeHint(*mutable_col, top_stream->avg_size_hint);
     return mutable_col;
 }

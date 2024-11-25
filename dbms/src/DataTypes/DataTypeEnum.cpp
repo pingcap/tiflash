@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsCommon.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -225,13 +226,50 @@ void DataTypeEnum<Type>::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
     size_t limit,
-    double /*avg_value_size_hint*/) const
+    double /*avg_value_size_hint*/,
+    IColumn::Filter * filter) const
 {
     auto & x = typeid_cast<ColumnType &>(column).getData();
-    const auto initial_size = x.size();
-    x.resize(initial_size + limit);
-    const auto size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
-    x.resize(initial_size + size / sizeof(FieldType));
+    size_t current_size = x.size();
+    if (!filter)
+    {
+        x.resize(current_size + limit);
+        size_t size = istr.readBig(reinterpret_cast<char *>(&x[current_size]), sizeof(FieldType) * limit);
+        x.resize(current_size + size / sizeof(FieldType));
+        return;
+    }
+
+    const size_t passed = countBytesInFilter(filter->data(), limit);
+    x.resize(current_size + passed);
+    UInt8 prev = (*filter)[0];
+    size_t count = 1;
+    for (size_t i = 1; i < limit; ++i)
+    {
+        bool break_point = ((*filter)[i] != prev);
+        if (break_point && prev)
+        {
+            size_t size = istr.read(reinterpret_cast<char *>(&x[current_size]), sizeof(FieldType) * count);
+            current_size += size / sizeof(FieldType);
+            count = 1;
+        }
+        else if (break_point && !prev)
+        {
+            istr.ignore(sizeof(FieldType) * count);
+            prev = (*filter)[i];
+            count = 1;
+        }
+        else
+        {
+            ++count;
+        }
+    }
+    if (prev)
+    {
+        size_t size = istr.read(reinterpret_cast<char *>(&x[current_size]), sizeof(FieldType) * count);
+        current_size += size / sizeof(FieldType);
+    }
+
+    x.resize(current_size);
 }
 
 template <typename Type>

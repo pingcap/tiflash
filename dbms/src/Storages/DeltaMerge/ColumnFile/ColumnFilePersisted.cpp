@@ -131,7 +131,8 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_v
         rows,
         static_cast<double>(data_buf.size()) / rows,
         true,
-        {});
+        {},
+        nullptr);
 }
 
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files)

@@ -118,7 +118,8 @@ void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadB
         rows,
         0,
         /*position_independent_encoding=*/true,
-        {});
+        {},
+        nullptr);
 }
 
 size_t ApproxBlockBytes(const Block & block)

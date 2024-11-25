@@ -48,7 +48,8 @@ public:
         size_t limit,
         double avg_value_size_hint,
         bool position_independent_encoding,
-        SubstreamPath & path) const override;
+        SubstreamPath & path,
+        IColumn::Filter * filter) const override;
 
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override
     {

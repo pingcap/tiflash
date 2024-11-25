@@ -223,7 +223,8 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     size_t limit,
     double /*avg_value_size_hint*/,
     bool position_independent_encoding,
-    SubstreamPath & path) const
+    SubstreamPath & path,
+    IColumn::Filter * filter) const
 {
     ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
 
@@ -245,7 +246,7 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
                 "try to deserialize Array type to non-empty column without position independent encoding, type_name={}",
                 getName());
             DataTypeNumber<ColumnArray::Offset>()
-                .deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0);
+                .deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0, filter);
         }
     }
 
@@ -269,7 +270,8 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
         nested_limit,
         0,
         position_independent_encoding,
-        path);
+        path,
+        filter);
 
     /// Check consistency between offsets and elements subcolumns.
     /// But if elements column is empty - it's ok for columns of Nested types that was added by ALTER.
