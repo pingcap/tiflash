@@ -416,3 +416,128 @@ struct IntHash32<T, salt, std::enable_if_t<!is_fit_register<T>, void>>
         }
     }
 };
+
+inline uint64_t umul128(uint64_t v, uint64_t kmul, uint64_t * high)
+{
+    DB::Int128 res = static_cast<DB::Int128>(v) * static_cast<DB::Int128>(kmul);
+    *high = static_cast<uint64_t>(res >> 64);
+    return static_cast<uint64_t>(res);
+}
+
+template <typename T>
+inline void hash_combine(uint64_t & seed, const T & val)
+{
+    // from: https://github.com/HowardHinnant/hash_append/issues/7#issuecomment-629414712
+    seed ^= std::hash<T>{}(val) + 0x9e3779b97f4a7c15LLU + (seed << 12) + (seed >> 4);
+}
+
+inline uint64_t hash_int128(uint64_t seed, const DB::Int128 & v)
+{
+    auto low = static_cast<uint64_t>(v);
+    auto high = static_cast<uint64_t>(v >> 64);
+    hash_combine(seed, low);
+    hash_combine(seed, high);
+    return seed;
+}
+
+inline uint64_t hash_uint128(uint64_t seed, const DB::UInt128 & v)
+{
+    hash_combine(seed, v.low);
+    hash_combine(seed, v.high);
+    return seed;
+}
+
+inline uint64_t hash_int256(uint64_t seed, const DB::Int256 & v)
+{
+    const auto & backend_value = v.backend();
+    for (size_t i = 0; i < backend_value.size(); ++i)
+    {
+        hash_combine(seed, backend_value.limbs()[i]);
+    }
+    return seed;
+}
+
+inline uint64_t hash_uint256(uint64_t seed, const DB::UInt256 & v)
+{
+    hash_combine(seed, v.a);
+    hash_combine(seed, v.b);
+    hash_combine(seed, v.c);
+    hash_combine(seed, v.d);
+    return seed;
+}
+
+template <size_t n>
+struct HashWithMixSeedHelper
+{
+    inline size_t operator()(size_t) const;
+};
+
+template <>
+struct HashWithMixSeedHelper<4>
+{
+    inline size_t operator()(size_t v) const
+    {
+        // from: https://github.com/aappleby/smhasher/blob/0ff96f7835817a27d0487325b6c16033e2992eb5/src/MurmurHash3.cpp#L102
+        static constexpr uint64_t kmul = 0xcc9e2d51UL;
+        uint64_t mul = v * kmul;
+        return static_cast<size_t>(mul ^ (mul >> 32u));
+    }
+};
+
+template <>
+struct HashWithMixSeedHelper<8>
+{
+    inline size_t operator()(size_t v) const
+    {
+        // from: https://github.com/martinus/robin-hood-hashing/blob/b21730713f4b5296bec411917c46919f7b38b178/src/include/robin_hood.h#L735
+        static constexpr uint64_t kmul = 0xde5fb9d2630458e9ULL;
+        uint64_t high = 0;
+        uint64_t low = umul128(v, kmul, &high);
+        return static_cast<size_t>(high + low);
+    }
+};
+
+template <typename T>
+struct HashWithMixSeed
+{
+    inline size_t operator()(const T & v) const
+    {
+        return HashWithMixSeedHelper<sizeof(size_t)>()(std::hash<T>()(v));
+    }
+};
+
+template <>
+struct HashWithMixSeed<DB::Int128>
+{
+    inline size_t operator()(const DB::Int128 & v) const
+    {
+        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_int128(0, v));
+    }
+};
+
+template <>
+struct HashWithMixSeed<DB::UInt128>
+{
+    inline size_t operator()(const DB::UInt128 & v) const
+    {
+        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_uint128(0, v));
+    }
+};
+
+template <>
+struct HashWithMixSeed<DB::Int256>
+{
+    inline size_t operator()(const DB::Int256 & v) const
+    {
+        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_int256(0, v));
+    }
+};
+
+template <>
+struct HashWithMixSeed<DB::UInt256>
+{
+    inline size_t operator()(const DB::UInt256 & v) const
+    {
+        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_uint256(0, v));
+    }
+};
