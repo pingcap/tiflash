@@ -68,7 +68,7 @@ void IDataType::serializeBinaryBulk(const IColumn &, WriteBuffer &, size_t, size
         ErrorCodes::MULTIPLE_STREAMS_REQUIRED);
 }
 
-void IDataType::deserializeBinaryBulk(IColumn &, ReadBuffer &, size_t, double) const
+void IDataType::deserializeBinaryBulk(IColumn &, ReadBuffer &, size_t, double, const IColumn::Filter *) const
 {
     throw Exception(
         "Data type " + getName() + " must be deserialized with multiple streams",

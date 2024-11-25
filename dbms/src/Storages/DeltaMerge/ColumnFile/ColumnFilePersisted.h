@@ -56,7 +56,12 @@ void serializeColumn(
     size_t limit,
     CompressionMethod compression_method,
     Int64 compression_level);
-void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows);
+void deserializeColumn(
+    IColumn & column,
+    const DataTypePtr & type,
+    std::string_view data_buf,
+    size_t rows,
+    const IColumn::Filter * filter = nullptr);
 
 /// Serialize those column files' metadata into buf.
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files);

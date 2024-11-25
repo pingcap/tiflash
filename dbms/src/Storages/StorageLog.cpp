@@ -78,7 +78,7 @@ public:
             res.insert({name_type.type->createColumn(), name_type.type, name_type.name});
 
         return Nested::flatten(res);
-    };
+    }
 
 protected:
     Block readImpl() override;
@@ -262,13 +262,8 @@ void LogBlockInputStream::readData(
         return &it->second.compressed;
     };
 
-    type.deserializeBinaryBulkWithMultipleStreams(
-        column,
-        stream_getter,
-        max_rows_to_read,
-        0,
-        true,
-        {}); /// TODO Use avg_value_size_hint.
+    /// TODO Use avg_value_size_hint.
+    type.deserializeBinaryBulkWithMultipleStreams(column, stream_getter, max_rows_to_read, 0, true, {});
 }
 
 
@@ -405,7 +400,7 @@ StorageLog::StorageLog(
     , file_checker(path + escapeForFileName(name) + '/' + "sizes.json")
 {
     if (path.empty())
-        throw Exception("Storage " + getName() + " requires data path", ErrorCodes::INCORRECT_FILE_NAME);
+        throw Exception(ErrorCodes::INCORRECT_FILE_NAME, "Storage {} requires data path", NAME);
 
     /// create files if they do not exist
     Poco::File(path + escapeForFileName(name) + '/').createDirectories();

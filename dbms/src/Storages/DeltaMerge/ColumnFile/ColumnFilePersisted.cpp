@@ -121,7 +121,12 @@ void serializeColumn(
     compressed.next();
 }
 
-void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows)
+void deserializeColumn(
+    IColumn & column,
+    const DataTypePtr & type,
+    std::string_view data_buf,
+    size_t rows,
+    const IColumn::Filter * filter)
 {
     ReadBufferFromString buf(data_buf);
     CompressedReadBuffer compressed(buf);
@@ -131,7 +136,8 @@ void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_v
         rows,
         static_cast<double>(data_buf.size()) / rows,
         true,
-        {});
+        {},
+        filter);
 }
 
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files)

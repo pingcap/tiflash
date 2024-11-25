@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -105,19 +106,54 @@ void DataTypeFixedString::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
     size_t limit,
-    double /*avg_value_size_hint*/) const
+    double /*avg_value_size_hint*/,
+    const IColumn::Filter * filter) const
 {
-    ColumnFixedString::Chars_t & data = typeid_cast<ColumnFixedString &>(column).getChars();
+    auto & data = typeid_cast<ColumnFixedString &>(column).getChars();
+    size_t current_size = data.size();
+    if (!filter)
+    {
+        data.resize(current_size + limit * n);
+        size_t size = istr.readBig(reinterpret_cast<char *>(&data[current_size]), n * limit);
 
-    size_t initial_size = data.size();
-    size_t max_bytes = limit * n;
-    data.resize(initial_size + max_bytes);
-    size_t read_bytes = istr.readBig(reinterpret_cast<char *>(&data[initial_size]), max_bytes);
+        if (size % n != 0)
+            throw Exception("Cannot read all data of type FixedString", ErrorCodes::CANNOT_READ_ALL_DATA);
 
-    if (read_bytes % n != 0)
-        throw Exception("Cannot read all data of type FixedString", ErrorCodes::CANNOT_READ_ALL_DATA);
+        data.resize(current_size + size);
+        return;
+    }
 
-    data.resize(initial_size + read_bytes);
+    const size_t passed = countBytesInFilter(filter->data(), limit);
+    data.resize(current_size + passed * n);
+    UInt8 prev = (*filter)[0];
+    size_t count = 1;
+    for (size_t i = 1; i < limit; ++i)
+    {
+        bool break_point = ((*filter)[i] != prev);
+        if (break_point && prev)
+        {
+            size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n * count);
+            current_size += size;
+            count = 1;
+        }
+        else if (break_point && !prev)
+        {
+            istr.ignore(n * count);
+            count = 1;
+        }
+        else
+        {
+            ++count;
+        }
+        prev = (*filter)[i];
+    }
+    if (prev)
+    {
+        size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n * count);
+        current_size += size;
+    }
+
+    data.resize(current_size);
 }
 
 

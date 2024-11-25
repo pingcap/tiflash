@@ -95,13 +95,14 @@ void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
     size_t limit,
     double avg_value_size_hint,
     bool position_independent_encoding,
-    SubstreamPath & path) const
+    SubstreamPath & path,
+    const IColumn::Filter * filter) const
 {
     auto & col = static_cast<ColumnNullable &>(column);
 
     path.emplace_back(Substream::NullMap);
     if (auto * stream = getter(path))
-        DataTypeUInt8().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
+        DataTypeUInt8().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0, filter);
 
     path.back() = Substream::NullableElements;
     nested_data_type->deserializeBinaryBulkWithMultipleStreams(
@@ -110,7 +111,8 @@ void DataTypeNullable::deserializeBinaryBulkWithMultipleStreams(
         limit,
         avg_value_size_hint,
         position_independent_encoding,
-        path);
+        path,
+        filter);
 }
 
 

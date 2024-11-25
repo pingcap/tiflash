@@ -81,7 +81,8 @@ public:
         size_t limit,
         double avg_value_size_hint,
         bool position_independent_encoding,
-        SubstreamPath & path) const override;
+        SubstreamPath & path,
+        const IColumn::Filter * filter) const override;
 
     MutableColumnPtr createColumn() const override;
 

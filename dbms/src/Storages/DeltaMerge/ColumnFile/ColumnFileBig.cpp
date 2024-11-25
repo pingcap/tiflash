@@ -363,6 +363,29 @@ Block ColumnFileBigReader::readNextBlock()
     }
 }
 
+Block ColumnFileBigReader::readWithFilter(const IColumn::Filter & filter)
+{
+    initStream();
+
+    if (pk_ver_only)
+    {
+        if (next_block_index_in_cache >= cached_pk_ver_columns.size())
+        {
+            return {};
+        }
+        auto & columns = cached_pk_ver_columns[next_block_index_in_cache];
+        size_t passed_count = countBytesInFilter(filter);
+        for (auto & col : columns)
+            col = col->filter(filter, passed_count);
+        next_block_index_in_cache += 1;
+        return header.cloneWithColumns(std::move(columns));
+    }
+    else
+    {
+        return file_stream->readWithFilter(filter);
+    }
+}
+
 size_t ColumnFileBigReader::skipNextBlock()
 {
     initStream();

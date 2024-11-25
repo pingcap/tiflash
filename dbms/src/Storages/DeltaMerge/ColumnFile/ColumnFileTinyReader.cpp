@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
+#include <Columns/ColumnsCommon.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -26,7 +28,8 @@ std::pair<ColumnPtr, ColumnPtr> ColumnFileTinyReader::getPKAndVersionColumns()
 {
     if (const size_t cached_columns = cols_data_cache.size(); cached_columns < 2)
     {
-        auto columns = readFromDisk(data_provider, {(*col_defs).begin() + cached_columns, (*col_defs).begin() + 2});
+        auto columns
+            = readFromDisk(data_provider, {(*col_defs).begin() + cached_columns, (*col_defs).begin() + 2}, nullptr);
         cols_data_cache.insert(cols_data_cache.end(), columns.begin(), columns.end());
     }
 
@@ -43,8 +46,10 @@ std::pair<size_t, size_t> ColumnFileTinyReader::readRows(
     const size_t read_columns = output_cols.size();
     if (cached_columns < read_columns)
     {
-        auto columns
-            = readFromDisk(data_provider, {(*col_defs).begin() + cached_columns, (*col_defs).begin() + read_columns});
+        auto columns = readFromDisk(
+            data_provider,
+            {(*col_defs).begin() + cached_columns, (*col_defs).begin() + read_columns},
+            nullptr);
         cols_data_cache.insert(cols_data_cache.end(), columns.begin(), columns.end());
     }
 
@@ -54,10 +59,13 @@ std::pair<size_t, size_t> ColumnFileTinyReader::readRows(
 
 Columns ColumnFileTinyReader::readFromDisk(
     const IColumnFileDataProviderPtr & data_provider,
-    const std::span<const ColumnDefine> & column_defines) const
+    const std::span<const ColumnDefine> & column_defines,
+    const IColumn::Filter * filter) const
 {
     const size_t num_columns_read = column_defines.size();
     Columns columns(num_columns_read); // allocate empty columns
+
+    const size_t passed_count = filter ? countBytesInFilter(filter->data(), tiny_file.rows) : tiny_file.rows;
 
     std::vector<size_t> fields;
     const auto & colid_to_offset = tiny_file.schema->getColIdToOffset();
@@ -72,7 +80,7 @@ Columns ColumnFileTinyReader::readFromDisk(
         else
         {
             // New column after ddl is not exist in this CFTiny, fill with default value
-            columns[index] = createColumnWithDefaultValue(cd, tiny_file.rows);
+            columns[index] = createColumnWithDefaultValue(cd, passed_count);
         }
     }
 
@@ -105,7 +113,7 @@ Columns ColumnFileTinyReader::readFromDisk(
         // Deserialize column by pack's schema
         const auto & type = tiny_file.getDataType(cd.id);
         auto col_data = type->createColumn();
-        deserializeColumn(*col_data, type, data_buf, tiny_file.rows);
+        deserializeColumn(*col_data, type, data_buf, tiny_file.rows, filter);
 
         columns[index] = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
     }
@@ -118,7 +126,18 @@ Block ColumnFileTinyReader::readNextBlock()
     if (read_done)
         return {};
 
-    auto columns = readFromDisk(data_provider, *col_defs);
+    auto columns = readFromDisk(data_provider, *col_defs, nullptr);
+
+    read_done = true;
+    return genBlock(*col_defs, columns);
+}
+
+Block ColumnFileTinyReader::readWithFilter(const IColumn::Filter & filter)
+{
+    if (read_done)
+        return {};
+
+    auto columns = readFromDisk(data_provider, *col_defs, &filter);
 
     read_done = true;
     return genBlock(*col_defs, columns);

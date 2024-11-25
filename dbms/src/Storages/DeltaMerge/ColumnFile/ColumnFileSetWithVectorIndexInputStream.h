@@ -92,25 +92,14 @@ public:
     String getName() const override { return "ColumnFileSetWithVectorIndex"; }
     Block getHeader() const override { return header; }
 
-    Block read() override
-    {
-        FilterPtr filter = nullptr;
-        return read(filter, false);
-    }
-
-    // When all rows in block are not filtered out,
-    // `res_filter` will be set to null.
-    // The caller needs to do handle this situation.
-    Block read(FilterPtr & res_filter, bool return_filter) override;
+    Block read() override;
 
     std::vector<VectorIndexViewer::SearchResult> load() override;
 
     void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
 private:
-    Block readImpl(FilterPtr & res_filter);
-
-    Block readOtherColumns();
+    Block readOtherColumns(const IColumn::Filter & filter);
 
     void toNextFile(size_t current_file_index, size_t current_file_rows);
 };

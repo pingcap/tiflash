@@ -67,15 +67,27 @@ Block ColumnFileSetInputStream::read(FilterPtr & res_filter, bool)
 
 Block ColumnFileSetInputStream::readWithFilter(const IColumn::Filter & filter)
 {
-    auto block = read();
-    if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
+    while (cur_column_file_reader != reader.column_file_readers.end())
     {
-        for (auto & col : block)
+        if (*cur_column_file_reader == nullptr)
         {
-            col.column = col.column->filter(filter, passed_count);
+            ++cur_column_file_reader;
+            continue;
+        }
+        auto block = (*cur_column_file_reader)->readWithFilter(filter);
+        if (block)
+        {
+            block.setStartOffset(read_rows);
+            read_rows += filter.size();
+            return block;
+        }
+        else
+        {
+            (*cur_column_file_reader).reset();
+            ++cur_column_file_reader;
         }
     }
-    return block;
+    return {};
 }
 
 } // namespace DB::DM

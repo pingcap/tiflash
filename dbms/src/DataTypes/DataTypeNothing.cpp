@@ -42,7 +42,8 @@ void DataTypeNothing::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
     size_t limit,
-    double /*avg_value_size_hint*/) const
+    double,
+    const IColumn::Filter *) const
 {
     typeid_cast<ColumnNothing &>(column).addSize(istr.tryIgnore(limit));
 }

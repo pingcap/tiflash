@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -120,7 +121,8 @@ static NO_INLINE void deserializeBinarySSE2(
     ColumnString::Chars_t & data,
     ColumnString::Offsets & offsets,
     ReadBuffer & istr,
-    size_t limit)
+    size_t limit,
+    const IColumn::Filter * filter)
 {
     size_t offset = data.size();
     for (size_t i = 0; i < limit; ++i)
@@ -130,6 +132,12 @@ static NO_INLINE void deserializeBinarySSE2(
 
         UInt64 size;
         readVarUInt(size, istr);
+
+        if (filter && !(*filter)[i])
+        {
+            istr.ignore(size);
+            continue;
+        }
 
         offset += size + 1;
         offsets.push_back(offset);
@@ -175,7 +183,8 @@ void DataTypeString::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
     size_t limit,
-    double avg_value_size_hint) const
+    double avg_value_size_hint,
+    const IColumn::Filter * filter) const
 {
     ColumnString & column_string = typeid_cast<ColumnString &>(column);
     ColumnString::Chars_t & data = column_string.getChars();
@@ -191,19 +200,20 @@ void DataTypeString::deserializeBinaryBulk(
         avg_chars_size = (avg_value_size_hint - sizeof(offsets[0])) * avg_value_size_hint_reserve_multiplier;
     }
 
-    size_t size_to_reserve = data.size() + static_cast<size_t>(std::ceil(limit * avg_chars_size));
+    const size_t passed = filter ? countBytesInFilter(filter->data(), limit) : limit;
+    size_t size_to_reserve = data.size() + static_cast<size_t>(std::ceil(passed * avg_chars_size));
     data.reserve(size_to_reserve);
 
-    offsets.reserve(offsets.size() + limit);
+    offsets.reserve(offsets.size() + passed);
 
     if (avg_chars_size >= 64)
-        deserializeBinarySSE2<4>(data, offsets, istr, limit);
+        deserializeBinarySSE2<4>(data, offsets, istr, limit, filter);
     else if (avg_chars_size >= 48)
-        deserializeBinarySSE2<3>(data, offsets, istr, limit);
+        deserializeBinarySSE2<3>(data, offsets, istr, limit, filter);
     else if (avg_chars_size >= 32)
-        deserializeBinarySSE2<2>(data, offsets, istr, limit);
+        deserializeBinarySSE2<2>(data, offsets, istr, limit, filter);
     else
-        deserializeBinarySSE2<1>(data, offsets, istr, limit);
+        deserializeBinarySSE2<1>(data, offsets, istr, limit, filter);
 }
 
 

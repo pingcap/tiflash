@@ -129,7 +129,8 @@ void DataTypeAggregateFunction::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
     size_t limit,
-    double /*avg_value_size_hint*/) const
+    double /*avg_value_size_hint*/,
+    const IColumn::Filter * filter) const
 {
     ColumnAggregateFunction & real_column = typeid_cast<ColumnAggregateFunction &>(column);
     ColumnAggregateFunction::Container & vec = real_column.getData();
@@ -145,6 +146,9 @@ void DataTypeAggregateFunction::deserializeBinaryBulk(
         if (istr.eof())
             break;
 
+        // Actually, there is no need to deserialize each row when filter is provided.
+        // But since we do not know the size of serialized state, we have to deserialize it.
+        // TODO: Optimize this.
         AggregateDataPtr place = arena.alloc(size_of_state);
 
         function->create(place);
@@ -159,7 +163,10 @@ void DataTypeAggregateFunction::deserializeBinaryBulk(
             throw;
         }
 
-        vec.push_back(place);
+        if (filter && !(*filter)[i])
+            function->destroy(place);
+        else
+            vec.push_back(place);
     }
 }
 

@@ -65,9 +65,12 @@ public:
 
     Columns readFromDisk(
         const IColumnFileDataProviderPtr & data_provider,
-        const std::span<const ColumnDefine> & column_defines) const;
+        const std::span<const ColumnDefine> & column_defines,
+        const IColumn::Filter * filter) const;
 
     Block readNextBlock() override;
+
+    Block readWithFilter(const IColumn::Filter & filter) override;
 
     size_t skipNextBlock() override;
 

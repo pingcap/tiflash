@@ -19,6 +19,8 @@
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include <limits>
+
 
 namespace DB::DM
 {
@@ -212,8 +214,8 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         max_read_buffer_size,
         file_provider,
         read_limiter,
-        rows_threshold_per_read,
-        read_one_pack_every_time,
+        std::numeric_limits<size_t>::max(), // not limit the rows
+        false, // read multiple packs at once
         tracing_id,
         enable_read_thread,
         scan_context,
