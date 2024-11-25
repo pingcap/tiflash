@@ -1242,7 +1242,7 @@ void WindowTransformAction::writeOutCurrentRow()
 
 Block WindowTransformAction::tryGetOutputBlock()
 {
-    // first try calculate the window function if there is input data
+    // first try calculate the result based on current data
     tryCalculate();
     // then return block if it is ready
     assert(first_not_ready_row.block >= first_block_number);
