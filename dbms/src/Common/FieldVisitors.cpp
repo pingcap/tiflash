@@ -26,6 +26,14 @@
 namespace DB
 {
 template <typename T>
+static inline String format(const DecimalField<T> & x)
+{
+    WriteBufferFromOwnString wb;
+    writeText(x.getValue(), x.getScale(), wb);
+    return wb.str();
+}
+
+template <typename T>
 static inline String formatQuoted(T x)
 {
     WriteBufferFromOwnString wb;
@@ -170,19 +178,27 @@ String FieldVisitorToString::operator()(const String & x) const
 }
 String FieldVisitorToString::operator()(const DecimalField<Decimal32> & x) const
 {
-    return formatQuoted(x);
+    if (isDecimalWithQuoted)
+        return formatQuoted(x);
+    return format(x);
 }
 String FieldVisitorToString::operator()(const DecimalField<Decimal64> & x) const
 {
-    return formatQuoted(x);
+    if (isDecimalWithQuoted)
+        return formatQuoted(x);
+    return format(x);
 }
 String FieldVisitorToString::operator()(const DecimalField<Decimal128> & x) const
 {
-    return formatQuoted(x);
+    if (isDecimalWithQuoted)
+        return formatQuoted(x);
+    return format(x);
 }
 String FieldVisitorToString::operator()(const DecimalField<Decimal256> & x) const
 {
-    return formatQuoted(x);
+    if (isDecimalWithQuoted)
+        return formatQuoted(x);
+    return format(x);
 }
 
 String FieldVisitorToString::operator()(const Array & x) const
