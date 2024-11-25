@@ -657,14 +657,7 @@ ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_
     const UInt8 * filt_end = filt_pos + size;
     const T * data_pos = data.data();
 
-    while (filt_pos < filt_end)
-    {
-        if (*filt_pos)
-            res_data.push_back(*data_pos);
-
-        ++filt_pos;
-        ++data_pos;
-    }
+    filterImpl(filt_pos, filt_end, data_pos, res_data);
 
     return res;
 }
