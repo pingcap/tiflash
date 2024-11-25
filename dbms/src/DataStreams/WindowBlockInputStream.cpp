@@ -1492,7 +1492,7 @@ void WindowTransformAction::advanceRowNumber(RowNumber & row_num) const
 RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num) const
 {
     assert(row_num.block >= first_block_number);
-    assert(!(row_num.block == 0 && row_num.row == 0));
+    assert(row_num.block != 0 || row_num.row != 0);
 
     RowNumber prev_row_num = row_num;
     if (row_num.row > 0)
