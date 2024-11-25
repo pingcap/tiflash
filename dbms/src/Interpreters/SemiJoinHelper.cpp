@@ -14,7 +14,9 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Core/Names.h>
 #include <Interpreters/JoinPartition.h>
+#include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SemiJoinHelper.h>
 
 namespace DB
@@ -141,47 +143,34 @@ bool SemiJoinResult<KIND, All>::checkExprResult(
     return false;
 }
 
-template <ASTTableJoin::Kind KIND, typename Mapped>
-SemiJoinHelper<KIND, Mapped>::SemiJoinHelper(
-    Block & block_,
-    size_t left_columns_,
-    const std::vector<size_t> & right_column_indices_to_added_,
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+SemiJoinHelper<KIND, STRICTNESS, Mapped>::SemiJoinHelper(
+    size_t input_rows_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_,
     CancellationHook is_cancelled_)
-    : block(block_)
-    , left_columns(left_columns_)
-    , right_column_indices_to_add(right_column_indices_to_added_)
+    : input_rows(input_rows_)
     , max_block_size(max_block_size_)
     , is_cancelled(is_cancelled_)
     , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == Semi || KIND == Anti || KIND == LeftOuterAnti || KIND == LeftOuterSemi);
-
-    right_columns = right_column_indices_to_add.size();
-    RUNTIME_CHECK(block.columns() == left_columns + right_columns);
-
-    if constexpr (KIND == LeftOuterAnti || KIND == LeftOuterSemi)
-    {
-        /// The last column is `match_helper`.
-        right_columns -= 1;
-    }
-
-    RUNTIME_CHECK(right_columns > 0);
-    RUNTIME_CHECK(non_equal_conditions.other_cond_expr != nullptr);
 }
 
-template <ASTTableJoin::Kind KIND, typename Mapped>
-void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+void SemiJoinHelper<KIND, STRICTNESS, Mapped>::doJoin()
 {
-    std::vector<size_t> offsets;
-    size_t block_columns = block.columns();
-    Block exec_block = block.cloneEmpty();
-
-    while (!res_list.empty())
+    if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
     {
-        if (is_cancelled())
-            return;
+        return;
+    }
+    assert(!probe_res_list.empty());
+    std::vector<size_t> offsets;
+    size_t block_columns = result_block.columns();
+    Block exec_block = result_block.cloneEmpty();
+
+    while (!probe_res_list.empty())
+    {
         MutableColumns columns(block_columns);
         for (size_t i = 0; i < block_columns; ++i)
         {
@@ -196,7 +185,7 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
         size_t current_offset = 0;
         offsets.clear();
 
-        for (auto & res : res_list)
+        for (auto & res : probe_res_list)
         {
             size_t prev_offset = current_offset;
             res->template fillRightColumns<Mapped>(
@@ -212,7 +201,7 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
             {
                 for (size_t i = 0; i < left_columns; ++i)
                     columns[i]->insertManyFrom(
-                        *block.getByPosition(i).column.get(),
+                        *result_block.getByPosition(i).column.get(),
                         res->getRowNum(),
                         current_offset - prev_offset);
             }
@@ -225,7 +214,7 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
         /// Move the columns to exec_block.
         /// Note that this can remove the new columns that are added in the last loop
         /// from equal and other condition expressions.
-        exec_block = block.cloneWithColumns(std::move(columns));
+        exec_block = result_block.cloneWithColumns(std::move(columns));
 
         non_equal_conditions.other_cond_expr->execute(exec_block);
 
@@ -268,7 +257,6 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
 #define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map)            \
     checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
         offsets,                                                                            \
-        res_list,                                                                           \
         other_eq_from_in_column_data,                                                       \
         other_eq_from_in_null_map,                                                          \
         other_column_data,                                                                  \
@@ -308,19 +296,85 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
     }
 }
 
-template <ASTTableJoin::Kind KIND, typename Mapped>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+template <typename Maps>
+void SemiJoinHelper<KIND, STRICTNESS, Mapped>::probeHashTable(
+    const JoinPartitions & join_partitions,
+    const Sizes & key_sizes,
+    const TiDB::TiDBCollators & collators,
+    const JoinBuildInfo & join_build_info,
+    const ProbeProcessInfo & probe_process_info,
+    const NameSet & probe_output_name_set,
+    const Block & right_sample_block)
+{
+    std::tie(probe_res, probe_res_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
+        join_partitions,
+        input_rows,
+        key_sizes,
+        collators,
+        join_build_info,
+        probe_process_info);
+
+    RUNTIME_ASSERT(
+        probe_res.size() == input_rows,
+        "SemiJoinResult size {} must be equal to block size {}",
+        probe_res.size(),
+        input_rows);
+    if (is_cancelled())
+        return;
+    for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
+    {
+        const auto & column = probe_process_info.block.getByPosition(i);
+        if (probe_output_name_set.contains(column.name))
+            result_block.insert(column);
+    }
+
+    left_columns = result_block.columns();
+    if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+    {
+        RUNTIME_CHECK_MSG(probe_res_list.empty(), "SemiJoinResult list must be empty for any semi join");
+    }
+    else
+    {
+        for (size_t i = 0; i < right_sample_block.columns(); ++i)
+        {
+            const auto & column = right_sample_block.getByPosition(i);
+            if (probe_output_name_set.contains(column.name))
+            {
+                RUNTIME_CHECK_MSG(
+                    !result_block.has(column.name),
+                    "block from probe side has a column with the same name: {} as a column in right_sample_block",
+                    column.name);
+                result_block.insert(column);
+                right_column_indices_to_add.push_back(i);
+            }
+        }
+        right_columns = right_column_indices_to_add.size();
+        RUNTIME_CHECK(result_block.columns() == left_columns + right_columns);
+
+        if constexpr (KIND == LeftOuterAnti || KIND == LeftOuterSemi)
+        {
+            /// The last column is `match_helper`.
+            right_columns -= 1;
+        }
+
+        RUNTIME_CHECK(right_columns > 0);
+    }
+    is_probe_hash_table_finished = true;
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
-void SemiJoinHelper<KIND, Mapped>::checkAllExprResult(
+void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(
     const std::vector<size_t> & offsets,
-    std::list<Result *> & res_list,
     const ColumnUInt8::Container * other_eq_column,
     ConstNullMapPtr other_eq_null_map,
     const ColumnUInt8::Container * other_column,
     ConstNullMapPtr other_null_map)
 {
     size_t prev_offset = 0;
-    auto it = res_list.begin();
-    for (size_t i = 0, size = offsets.size(); i < size && it != res_list.end(); ++i)
+    auto it = probe_res_list.begin();
+    for (size_t i = 0, size = offsets.size(); i < size && it != probe_res_list.end(); ++i)
     {
         if ((*it)->template checkExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>(
                 other_eq_column,
@@ -330,7 +384,7 @@ void SemiJoinHelper<KIND, Mapped>::checkAllExprResult(
                 prev_offset,
                 offsets[i]))
         {
-            it = res_list.erase(it);
+            it = probe_res_list.erase(it);
         }
         else
         {
@@ -341,13 +395,107 @@ void SemiJoinHelper<KIND, Mapped>::checkAllExprResult(
     }
 }
 
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+Block SemiJoinHelper<KIND, STRICTNESS, Mapped>::genJoinResult(const NameSet & output_column_names_set)
+{
+    std::unique_ptr<IColumn::Filter> filter;
+    if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
+        filter = std::make_unique<IColumn::Filter>(input_rows);
+
+    MutableColumnPtr left_semi_column_ptr = nullptr;
+    ColumnInt8::Container * left_semi_column_data = nullptr;
+    ColumnUInt8::Container * left_semi_null_map = nullptr;
+
+    if constexpr (KIND == ASTTableJoin::Kind::LeftOuterSemi || KIND == ASTTableJoin::Kind::LeftOuterAnti)
+    {
+        left_semi_column_ptr = result_block.getByPosition(result_block.columns() - 1).column->cloneEmpty();
+        auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
+        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_column_data->reserve(input_rows);
+        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        {
+            left_semi_null_map->resize_fill(input_rows, 0);
+        }
+        else
+        {
+            left_semi_null_map->reserve(input_rows);
+        }
+    }
+
+    size_t rows_for_semi_anti = 0;
+    for (size_t i = 0; i < input_rows; ++i)
+    {
+        auto result = probe_res[i].getResult();
+        if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
+        {
+            if (isTrueSemiJoinResult(result))
+            {
+                // If the result is true, this row should be kept.
+                (*filter)[i] = 1;
+                ++rows_for_semi_anti;
+            }
+            else
+            {
+                // If the result is null or false, this row should be filtered.
+                (*filter)[i] = 0;
+            }
+        }
+        else
+        {
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+            {
+                left_semi_column_data->push_back(result);
+            }
+            else
+            {
+                switch (result)
+                {
+                case SemiJoinResultType::FALSE_VALUE:
+                    left_semi_column_data->push_back(0);
+                    left_semi_null_map->push_back(0);
+                    break;
+                case SemiJoinResultType::TRUE_VALUE:
+                    left_semi_column_data->push_back(1);
+                    left_semi_null_map->push_back(0);
+                    break;
+                case SemiJoinResultType::NULL_VALUE:
+                    left_semi_column_data->push_back(0);
+                    left_semi_null_map->push_back(1);
+                    break;
+                }
+            }
+        }
+    }
+
+    if constexpr (KIND == ASTTableJoin::Kind::LeftOuterSemi || KIND == ASTTableJoin::Kind::LeftOuterAnti)
+    {
+        result_block.getByPosition(result_block.columns() - 1).column = std::move(left_semi_column_ptr);
+    }
+
+    if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
+    {
+        for (size_t i = 0; i < left_columns; ++i)
+        {
+            auto & column = result_block.getByPosition(i);
+            if (output_column_names_set.contains(column.name))
+                column.column = column.column->filter(*filter, rows_for_semi_anti);
+        }
+    }
+    return result_block;
+}
+
 #define M(KIND, STRICTNESS, MAPTYPE) template class SemiJoinResult<KIND, STRICTNESS>;
 APPLY_FOR_SEMI_JOIN(M)
 #undef M
 
-template class SemiJoinHelper<Semi, MapsAll::MappedType>;
-template class SemiJoinHelper<Anti, MapsAll::MappedType>;
-template class SemiJoinHelper<LeftOuterSemi, MapsAll::MappedType>;
-template class SemiJoinHelper<LeftOuterAnti, MapsAll::MappedType>;
+template class SemiJoinHelper<Semi, All, MapsAll::MappedType>;
+template class SemiJoinHelper<Anti, All, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterSemi, All, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterAnti, All, MapsAll::MappedType>;
+template class SemiJoinHelper<Semi, Any, MapsAll::MappedType>;
+template class SemiJoinHelper<Anti, Any, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterSemi, Any, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterAnti, Any, MapsAll::MappedType>;
 
 } // namespace DB
