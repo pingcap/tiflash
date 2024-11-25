@@ -494,8 +494,12 @@ template class SemiJoinHelper<Anti, All, MapsAll::MappedType>;
 template class SemiJoinHelper<LeftOuterSemi, All, MapsAll::MappedType>;
 template class SemiJoinHelper<LeftOuterAnti, All, MapsAll::MappedType>;
 template class SemiJoinHelper<Semi, Any, MapsAll::MappedType>;
+template class SemiJoinHelper<Semi, Any, MapsAny::MappedType>;
 template class SemiJoinHelper<Anti, Any, MapsAll::MappedType>;
+template class SemiJoinHelper<Anti, Any, MapsAny::MappedType>;
 template class SemiJoinHelper<LeftOuterSemi, Any, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterSemi, Any, MapsAny::MappedType>;
 template class SemiJoinHelper<LeftOuterAnti, Any, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterAnti, Any, MapsAny::MappedType>;
 
 } // namespace DB

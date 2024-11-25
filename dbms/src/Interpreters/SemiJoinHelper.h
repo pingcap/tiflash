@@ -74,7 +74,7 @@ public:
         ConstNullMapPtr,
         size_t,
         size_t)
-    {}
+    { return false; }
 
     bool getResult() const { return result; }
 
