@@ -18,9 +18,6 @@
 #include <Interpreters/CancellationHook.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
-#include "Core/Block.h"
-#include "Core/Names.h"
-
 namespace DB
 {
 
