@@ -414,7 +414,7 @@ TEST_F(LeadLag, crossBlock)
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<Int64>(/*value*/ {1, Limits<Int64>::max(), Limits<Int64>::min(), 4, 5, 6, 0, 8})});
     executeFunctionAndAssert(
-        toNullableVec<Int64>({{}, {}, 1,Limits<Int64>::max(), {}, {}, 5, 6}),
+        toNullableVec<Int64>({{}, {}, 1, Limits<Int64>::max(), {}, {}, 5, 6}),
         Lag2(value_col, lit(Field(static_cast<UInt64>(2)))),
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),

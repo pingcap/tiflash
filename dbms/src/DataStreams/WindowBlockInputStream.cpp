@@ -317,29 +317,29 @@ bool WindowBlockInputStream::returnIfCancelledOrKilled()
 Block WindowBlockInputStream::readImpl()
 {
     // first try to get result without reading from children
-    if (auto block = action.tryGetOutputBlock())
+    auto block = action.tryGetOutputBlock();
+    if (block || action.input_is_finished)
         return block;
 
-    const auto & stream = children.back();
-    // keep reading from children until one result block is generated
-    while (!action.input_is_finished)
+    // then if input is not finished, keep reading input until one result block is generated
+    if (!action.input_is_finished)
     {
-        if (returnIfCancelledOrKilled())
-            return {};
+        const auto & stream = children.back();
+        while (!action.input_is_finished)
+        {
+            if (returnIfCancelledOrKilled())
+                return {};
 
-        Block block = stream->read();
-        if (!block)
-            action.input_is_finished = true;
-        else
-            action.appendBlock(block);
-        if (auto block = action.tryGetOutputBlock())
-            return block;
+            Block block = stream->read();
+            if (!block)
+                action.input_is_finished = true;
+            else
+                action.appendBlock(block);
+            if (auto block = action.tryGetOutputBlock())
+                return block;
+        }
     }
-
-    if (returnIfCancelledOrKilled())
-        return {};
-    // input is finished, calculate the window functions result for the remaining data
-    return action.tryGetOutputBlock();
+    return {};
 }
 
 // Judge whether current_partition_row is end row of partition in current block
