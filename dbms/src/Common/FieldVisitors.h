@@ -181,7 +181,16 @@ typename std::decay_t<Visitor>::ResultType applyVisitor(Visitor && visitor, F1 &
 /** Prints Field as literal in SQL query */
 class FieldVisitorToString : public StaticVisitor<String>
 {
+private:
+    bool isDecimalWithQuoted;
+
 public:
+    FieldVisitorToString()
+        : isDecimalWithQuoted(true){};
+
+    FieldVisitorToString(bool val)
+        : isDecimalWithQuoted(val){};
+
     String operator()(const Null & x) const;
     String operator()(const UInt64 & x) const;
     String operator()(const Int64 & x) const;
