@@ -143,8 +143,8 @@ bool SemiJoinResult<KIND, All>::checkExprResult(
     return false;
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-SemiJoinHelper<KIND, STRICTNESS, Mapped>::SemiJoinHelper(
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+SemiJoinHelper<KIND, STRICTNESS, Maps>::SemiJoinHelper(
     size_t input_rows_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_,
@@ -157,8 +157,8 @@ SemiJoinHelper<KIND, STRICTNESS, Mapped>::SemiJoinHelper(
     static_assert(KIND == Semi || KIND == Anti || KIND == LeftOuterAnti || KIND == LeftOuterSemi);
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-void SemiJoinHelper<KIND, STRICTNESS, Mapped>::doJoin()
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
 {
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
     {
@@ -188,7 +188,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::doJoin()
         for (auto & res : probe_res_list)
         {
             size_t prev_offset = current_offset;
-            res->template fillRightColumns<Mapped>(
+            res->template fillRightColumns<typename Maps::MappedType>(
                 columns,
                 left_columns,
                 right_columns,
@@ -296,9 +296,8 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::doJoin()
     }
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-template <typename Maps>
-void SemiJoinHelper<KIND, STRICTNESS, Mapped>::probeHashTable(
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
     const JoinPartitions & join_partitions,
     const Sizes & key_sizes,
     const TiDB::TiDBCollators & collators,
@@ -363,9 +362,9 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::probeHashTable(
     is_probe_hash_table_finished = true;
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
-void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(
+void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
     const std::vector<size_t> & offsets,
     const ColumnUInt8::Container * other_eq_column,
     ConstNullMapPtr other_eq_null_map,
@@ -395,8 +394,8 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(
     }
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-Block SemiJoinHelper<KIND, STRICTNESS, Mapped>::genJoinResult(const NameSet & output_column_names_set)
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & output_column_names_set)
 {
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
@@ -489,17 +488,13 @@ Block SemiJoinHelper<KIND, STRICTNESS, Mapped>::genJoinResult(const NameSet & ou
 APPLY_FOR_SEMI_JOIN(M)
 #undef M
 
-template class SemiJoinHelper<Semi, All, MapsAll::MappedType>;
-template class SemiJoinHelper<Anti, All, MapsAll::MappedType>;
-template class SemiJoinHelper<LeftOuterSemi, All, MapsAll::MappedType>;
-template class SemiJoinHelper<LeftOuterAnti, All, MapsAll::MappedType>;
-template class SemiJoinHelper<Semi, Any, MapsAll::MappedType>;
-template class SemiJoinHelper<Semi, Any, MapsAny::MappedType>;
-template class SemiJoinHelper<Anti, Any, MapsAll::MappedType>;
-template class SemiJoinHelper<Anti, Any, MapsAny::MappedType>;
-template class SemiJoinHelper<LeftOuterSemi, Any, MapsAll::MappedType>;
-template class SemiJoinHelper<LeftOuterSemi, Any, MapsAny::MappedType>;
-template class SemiJoinHelper<LeftOuterAnti, Any, MapsAll::MappedType>;
-template class SemiJoinHelper<LeftOuterAnti, Any, MapsAny::MappedType>;
+template class SemiJoinHelper<Semi, All, MapsAll>;
+template class SemiJoinHelper<Anti, All, MapsAll>;
+template class SemiJoinHelper<LeftOuterSemi, All, MapsAll>;
+template class SemiJoinHelper<LeftOuterAnti, All, MapsAll>;
+template class SemiJoinHelper<Semi, Any, MapsAny>;
+template class SemiJoinHelper<Anti, Any, MapsAny>;
+template class SemiJoinHelper<LeftOuterSemi, Any, MapsAny>;
+template class SemiJoinHelper<LeftOuterAnti, Any, MapsAny>;
 
 } // namespace DB

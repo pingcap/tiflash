@@ -74,7 +74,9 @@ public:
         ConstNullMapPtr,
         size_t,
         size_t)
-    { return false; }
+    {
+        return false;
+    }
 
     bool getResult() const { return result; }
 
@@ -150,7 +152,7 @@ struct ProbeProcessInfo;
 class JoinPartition;
 using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 class SemiJoinHelper
 {
 public:
@@ -160,7 +162,6 @@ public:
         const JoinNonEqualConditions & non_equal_conditions,
         CancellationHook is_cancelled_);
 
-    template <typename Maps>
     void probeHashTable(
         const JoinPartitions & join_partitions,
         const Sizes & key_sizes,

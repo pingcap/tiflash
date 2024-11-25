@@ -1763,17 +1763,13 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
 {
     size_t rows = probe_process_info.block.rows();
 
-    SemiJoinHelper<KIND, ASTTableJoin::Strictness::All, typename Maps::MappedType> helper(
-        rows,
-        max_block_size,
-        non_equal_conditions,
-        is_cancelled);
+    SemiJoinHelper<KIND, STRICTNESS, Maps> helper(rows, max_block_size, non_equal_conditions, is_cancelled);
 
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
         : output_column_names_set_after_finalize;
 
-    helper.template probeHashTable<Maps>(
+    helper.probeHashTable(
         partitions,
         key_sizes,
         collators,
