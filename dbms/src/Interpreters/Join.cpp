@@ -33,7 +33,10 @@
 
 #include <exception>
 #include <magic_enum.hpp>
+#include <memory>
 
+#include "Common/Exception.h"
+#include "Interpreters/SemiJoinHelper.h"
 #include "Parsers/ASTTablesInSelectQuery.h"
 
 namespace DB
@@ -1707,26 +1710,8 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
 
 Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
 {
-    JoinBuildInfo join_build_info{
-        enable_fine_grained_shuffle,
-        fine_grained_shuffle_count,
-        isEnableSpill(),
-        hash_join_spill_context->isSpilled(),
-        build_concurrency,
-        restore_config.restore_round};
-
-    probe_process_info.prepareForHashProbe(
-        key_names_left,
-        non_equal_conditions.left_filter_column,
-        kind,
-        strictness,
-        join_build_info.needVirtualDispatchForProbeBlock(),
-        collators,
-        restore_config.restore_round);
-
     Block block{};
-#define CALL(KIND, STRICTNESS, MAP) \
-    block = joinBlockSemiImpl<KIND, STRICTNESS, MAP>(join_build_info, probe_process_info);
+#define CALL(KIND, STRICTNESS, MAP) block = joinBlockSemiImpl<KIND, STRICTNESS, MAP>(probe_process_info);
 
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
@@ -1752,24 +1737,58 @@ Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 
-    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
-    probe_process_info.all_rows_joined_finish = true;
-
     return removeUselessColumn(block);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const ProbeProcessInfo & probe_process_info) const
+Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
 {
     size_t rows = probe_process_info.block.rows();
+    JoinBuildInfo join_build_info{
+        enable_fine_grained_shuffle,
+        fine_grained_shuffle_count,
+        isEnableSpill(),
+        hash_join_spill_context->isSpilled(),
+        build_concurrency,
+        restore_config.restore_round};
+    if (probe_process_info.semi_family_helper != nullptr)
+    {
+        // current block still not done
+        RUNTIME_CHECK_MSG(
+            !probe_process_info.all_rows_joined_finish,
+            "semi_family_helper should be reset to nullptr after all rows are joined for current block");
+    }
+    else
+    {
+        // probe a new block
+        probe_process_info.prepareForHashProbe(
+            key_names_left,
+            non_equal_conditions.left_filter_column,
+            kind,
+            strictness,
+            join_build_info.needVirtualDispatchForProbeBlock(),
+            collators,
+            restore_config.restore_round);
+        auto helper_ptr = std::make_unique<SemiJoinHelper<KIND, STRICTNESS, Maps>>(
+            rows,
+            max_block_size,
+            non_equal_conditions,
+            is_cancelled);
 
-    SemiJoinHelper<KIND, STRICTNESS, Maps> helper(rows, max_block_size, non_equal_conditions, is_cancelled);
+        probe_process_info.semi_family_helper
+            = decltype(probe_process_info.semi_family_helper)(helper_ptr.release(), [](void * ptr) {
+                  delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr);
+              });
+    }
+
+    auto * helper
+        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_family_helper.get());
 
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
         : output_column_names_set_after_finalize;
 
-    helper.probeHashTable(
+    helper->probeHashTable(
         partitions,
         key_sizes,
         collators,
@@ -1778,17 +1797,21 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
         probe_output_name_set,
         right_sample_block);
 
-    while (!helper.isJoinDone())
+    while (!helper->isJoinDone())
     {
         if (is_cancelled())
             return {};
-        helper.doJoin();
+        helper->doJoin();
     }
 
     if (is_cancelled())
         return {};
 
-    return helper.genJoinResult(output_column_names_set_after_finalize);
+    auto ret = helper->genJoinResult(output_column_names_set_after_finalize);
+    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
+    probe_process_info.all_rows_joined_finish = true;
+    probe_process_info.semi_family_helper.reset();
+    return ret;
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const

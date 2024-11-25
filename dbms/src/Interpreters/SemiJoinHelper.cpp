@@ -19,6 +19,8 @@
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SemiJoinHelper.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 using enum ASTTableJoin::Strictness;
@@ -306,6 +308,8 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
     const NameSet & probe_output_name_set,
     const Block & right_sample_block)
 {
+    if (is_probe_hash_table_finished)
+        return;
     std::tie(probe_res, probe_res_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
         input_rows,
@@ -397,6 +401,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & output_column_names_set)
 {
+    RUNTIME_CHECK_MSG(probe_res_list.empty(), "SemiJoinResult list must be empty when generating join result");
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(input_rows);
@@ -481,7 +486,7 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
                 column.column = column.column->filter(*filter, rows_for_semi_anti);
         }
     }
-    return result_block;
+    return std::move(result_block);
 }
 
 #define M(KIND, STRICTNESS, MAPTYPE) template class SemiJoinResult<KIND, STRICTNESS>;

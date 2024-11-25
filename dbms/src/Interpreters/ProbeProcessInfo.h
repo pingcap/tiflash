@@ -18,6 +18,8 @@
 #include <Core/Block.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+#include <memory>
+
 namespace DB
 {
 enum class CrossProbeMode
@@ -119,6 +121,9 @@ struct ProbeProcessInfo
 
     /// for null-aware join
     std::unique_ptr<NullAwareJoinProbeProcessData> null_aware_join_data;
+
+    // for semi join
+    std::unique_ptr<void, std::function<void(void *)>> semi_family_helper = nullptr; /// type erasure
 
     ProbeProcessInfo(UInt64 max_block_size_, UInt64 cache_columns_threshold_)
         : partition_index(0)
