@@ -52,9 +52,6 @@ public:
     Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
 
-    void initialWorkspaces();
-    void initialPartitionAndOrderColumnIndices();
-
     Columns & inputAt(const RowNumber & x)
     {
         assert(x.block >= first_block_number);
@@ -165,6 +162,14 @@ private:
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
+    void initialWorkspaces();
+    void initialPartitionAndOrderColumnIndices();
+    void initialAggregateFunction(WindowFunctionWorkspace & workspace, const WindowFunctionDescription & window_function_description);
+
+    void updateAggregationState();
+
+    void reinitializeAggFuncBeforeNextPartition();
+
 public:
     LoggerPtr log;
 
@@ -243,6 +248,8 @@ public:
 
     // Auxiliary variable for range frame type when calculating frame_end
     RowNumber prev_frame_end;
+
+    std::unique_ptr<Arena> arena;
 
     //TODO: used as template parameters
     bool only_have_row_number = false;
