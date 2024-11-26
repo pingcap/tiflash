@@ -896,8 +896,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_column_cache_packs,                                                                                           \
       "The count of hit/miss column cache packs",                                                                                   \
       Counter,                                                                                                                      \
-      F(type_hit, {"type", "to_waiting"}),                                                                                          \
-      F(type_miss, {"type", "to_wait_for_notify"}))
+      F(type_hit, {"type", "hit"}),                                                                                                 \
+      F(type_miss, {"type", "miss"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
