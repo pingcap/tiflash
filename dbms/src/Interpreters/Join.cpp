@@ -1781,21 +1781,26 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
               });
     }
 
+    assert(probe_process_info.semi_family_helper != nullptr);
+
     auto * helper
         = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_family_helper.get());
 
-    const NameSet & probe_output_name_set = has_other_condition
-        ? output_columns_names_set_for_other_condition_after_finalize
-        : output_column_names_set_after_finalize;
+    if (!helper->isProbeHashTableDone())
+    {
+        const NameSet & probe_output_name_set = has_other_condition
+            ? output_columns_names_set_for_other_condition_after_finalize
+            : output_column_names_set_after_finalize;
 
-    helper->probeHashTable(
-        partitions,
-        key_sizes,
-        collators,
-        join_build_info,
-        probe_process_info,
-        probe_output_name_set,
-        right_sample_block);
+        helper->probeHashTable(
+            partitions,
+            key_sizes,
+            collators,
+            join_build_info,
+            probe_process_info,
+            probe_output_name_set,
+            right_sample_block);
+    }
 
     while (!helper->isJoinDone())
     {

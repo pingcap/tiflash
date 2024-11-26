@@ -169,7 +169,8 @@ public:
         const Block & right_sample_block);
     void doJoin();
 
-    bool isJoinDone() const { return is_probe_hash_table_finished && probe_res_list.empty(); }
+    bool isJoinDone() const { return is_probe_hash_table_done && probe_res_list.empty(); }
+    bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
 
     Block genJoinResult(const NameSet & output_column_names_set);
 
@@ -191,7 +192,7 @@ private:
     std::vector<size_t> right_column_indices_to_add;
     size_t max_block_size;
     CancellationHook is_cancelled;
-    bool is_probe_hash_table_finished = false;
+    bool is_probe_hash_table_done = false;
 
     const JoinNonEqualConditions & non_equal_conditions;
 };

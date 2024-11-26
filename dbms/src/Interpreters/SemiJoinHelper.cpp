@@ -308,7 +308,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
     const NameSet & probe_output_name_set,
     const Block & right_sample_block)
 {
-    if (is_probe_hash_table_finished)
+    if (is_probe_hash_table_done)
         return;
     std::tie(probe_res, probe_res_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
@@ -363,7 +363,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
 
         RUNTIME_CHECK(right_columns > 0);
     }
-    is_probe_hash_table_finished = true;
+    is_probe_hash_table_done = true;
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
