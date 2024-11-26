@@ -469,13 +469,13 @@ inline uint64_t hash_uint256(uint64_t seed, const DB::UInt256 & v)
 template <size_t n>
 struct HashWithMixSeedHelper
 {
-    inline size_t operator()(size_t) const;
+    static inline size_t operator()(size_t);
 };
 
 template <>
 struct HashWithMixSeedHelper<4>
 {
-    inline size_t operator()(size_t v) const
+    static inline size_t operator()(size_t v)
     {
         // from: https://github.com/aappleby/smhasher/blob/0ff96f7835817a27d0487325b6c16033e2992eb5/src/MurmurHash3.cpp#L102
         static constexpr uint64_t kmul = 0xcc9e2d51UL;
@@ -487,7 +487,7 @@ struct HashWithMixSeedHelper<4>
 template <>
 struct HashWithMixSeedHelper<8>
 {
-    inline size_t operator()(size_t v) const
+    static inline size_t operator()(size_t v)
     {
         // from: https://github.com/martinus/robin-hood-hashing/blob/b21730713f4b5296bec411917c46919f7b38b178/src/include/robin_hood.h#L735
         static constexpr uint64_t kmul = 0xde5fb9d2630458e9ULL;
@@ -500,44 +500,44 @@ struct HashWithMixSeedHelper<8>
 template <typename T>
 struct HashWithMixSeed
 {
-    inline size_t operator()(const T & v) const
+    static size_t operator()(const T & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>()(std::hash<T>()(v));
+        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(std::hash<T>()(v));
     }
 };
 
 template <>
 struct HashWithMixSeed<DB::Int128>
 {
-    inline size_t operator()(const DB::Int128 & v) const
+    static size_t operator()(const DB::Int128 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_int128(0, v));
+        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_int128(0, v));
     }
 };
 
 template <>
 struct HashWithMixSeed<DB::UInt128>
 {
-    inline size_t operator()(const DB::UInt128 & v) const
+    static inline size_t operator()(const DB::UInt128 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_uint128(0, v));
+        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_uint128(0, v));
     }
 };
 
 template <>
 struct HashWithMixSeed<DB::Int256>
 {
-    inline size_t operator()(const DB::Int256 & v) const
+    static inline size_t operator()(const DB::Int256 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_int256(0, v));
+        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_int256(0, v));
     }
 };
 
 template <>
 struct HashWithMixSeed<DB::UInt256>
-{
-    inline size_t operator()(const DB::UInt256 & v) const
+{ 
+    static inline size_t operator()(const DB::UInt256 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>()(hash_uint256(0, v));
+        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_uint256(0, v));
     }
 };

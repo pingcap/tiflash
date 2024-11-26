@@ -212,7 +212,6 @@ protected:
         typename cell_type::CellExt cell;
     };
 
-
 public:
     using key_type = Key;
     using mapped_type = typename Cell::mapped_type;
@@ -351,6 +350,8 @@ public:
     const_iterator cend() const { return end(); }
 
     iterator end() { return iterator(this, buf ? buf + NUM_CELLS : buf); }
+
+    inline void prefetch(size_t) {}
 
     /// The last parameter is unused but exists for compatibility with HashTable interface.
     void ALWAYS_INLINE emplace(const Key & x, LookupResult & it, bool & inserted, size_t /* hash */ = 0)

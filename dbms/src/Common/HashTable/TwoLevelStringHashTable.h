@@ -30,8 +30,20 @@ public:
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
 
+    template <typename HashKeyType>
+    size_t ALWAYS_INLINE hash(const HashKeyType & key) const
+    {
+        return SubMaps::Hash::operator()(key);
+    }
+
+    // Same reason as StringHashTable::prefetch.
+    void prefetch(size_t) const
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::prefetch instead");
+    }
+
     // TODO: currently hashing contains redundant computations when doing distributed or external aggregations
-    size_t hash(const Key & x) const
+    size_t hashStringRef(const Key & x) const
     {
         return const_cast<Self &>(*this).dispatch(*this, x, [&](const auto &, const auto &, size_t hash) {
             return hash;
@@ -44,7 +56,7 @@ public:
             impl.setResizeCallback(resize_callback);
     }
 
-    size_t operator()(const Key & x) const { return hash(x); }
+    size_t operator()(const Key & x) const { return hashStringRef(x); }
 
     /// NOTE Bad for hash tables with more than 2^32 cells.
     static size_t getBucketFromHash(size_t hash_value) { return (hash_value >> (32 - BITS_FOR_BUCKET)) & MAX_BUCKET; }
@@ -104,7 +116,6 @@ public:
 #endif
         dispatch(Self & self, KeyHolder && key_holder, Func && func)
     {
-        StringHashTableHash hash;
         const StringRef & x = keyHolderGetKey(key_holder);
         const size_t sz = x.size;
         if (sz == 0)
@@ -117,7 +128,7 @@ public:
         {
             // Strings with trailing zeros are not representable as fixed-size
             // string keys. Put them to the generic table.
-            auto res = hash(x);
+            auto res = SubMaps::Hash::operator()(x);
             auto buck = getBucketFromHash(res);
             return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder), res);
         }
@@ -154,7 +165,7 @@ public:
                 else
                     n[0] <<= s;
             }
-            auto res = hash(k8);
+            auto res = SubMaps::Hash::operator()(k8);
             auto buck = getBucketFromHash(res);
             keyHolderDiscardKey(key_holder);
             return func(self.impls[buck].m1, k8, res);
@@ -168,7 +179,7 @@ public:
                 n[1] >>= s;
             else
                 n[1] <<= s;
-            auto res = hash(k16);
+            auto res = SubMaps::Hash::operator()(k16);
             auto buck = getBucketFromHash(res);
             keyHolderDiscardKey(key_holder);
             return func(self.impls[buck].m2, k16, res);
@@ -182,14 +193,14 @@ public:
                 n[2] >>= s;
             else
                 n[2] <<= s;
-            auto res = hash(k24);
+            auto res = SubMaps::Hash::operator()(k24);
             auto buck = getBucketFromHash(res);
             keyHolderDiscardKey(key_holder);
             return func(self.impls[buck].m3, k24, res);
         }
         default:
         {
-            auto res = hash(x);
+            auto res = SubMaps::Hash::operator()(x);
             auto buck = getBucketFromHash(res);
             return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder), res);
         }
@@ -202,11 +213,26 @@ public:
         dispatch(*this, key_holder, typename Impl::EmplaceCallable{it, inserted});
     }
 
-    LookupResult ALWAYS_INLINE find(const Key x) { return dispatch(*this, x, typename Impl::FindCallable{}); }
+    template <typename KeyHolder>
+    void ALWAYS_INLINE emplace(KeyHolder &&, LookupResult &, bool &, size_t)
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::emplace instead");
+    }
 
-    ConstLookupResult ALWAYS_INLINE find(const Key x) const
+    LookupResult ALWAYS_INLINE find(const Key & x) { return dispatch(*this, x, typename Impl::FindCallable{}); }
+
+    ConstLookupResult ALWAYS_INLINE find(const Key & x) const
     {
         return dispatch(*this, x, typename Impl::FindCallable{});
+    }
+    LookupResult ALWAYS_INLINE find(const Key &, size_t)
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
+    }
+
+    ConstLookupResult ALWAYS_INLINE find(const Key &, size_t) const
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
     }
 
     void write(DB::WriteBuffer & wb) const
@@ -259,6 +285,13 @@ public:
         return true;
     }
 
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (const auto & impl : impls)
+            res = impl.getBufferSizeInCells();
+        return res;
+    }
     size_t getBufferSizeInBytes() const
     {
         size_t res = 0;

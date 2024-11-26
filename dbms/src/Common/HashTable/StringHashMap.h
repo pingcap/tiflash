@@ -90,29 +90,30 @@ struct StringHashMapCell<StringRef, TMapped>
 template <typename TMapped, typename Allocator>
 struct StringHashMapSubMaps
 {
+    using Hash = StringHashTableHash;
     using T0 = StringHashTableEmpty<StringHashMapCell<StringRef, TMapped>>;
     using T1 = HashMapTable<
         StringKey8,
         StringHashMapCell<StringKey8, TMapped>,
-        StringHashTableHash,
+        Hash,
         StringHashTableGrower<>,
         Allocator>;
     using T2 = HashMapTable<
         StringKey16,
         StringHashMapCell<StringKey16, TMapped>,
-        StringHashTableHash,
+        Hash,
         StringHashTableGrower<>,
         Allocator>;
     using T3 = HashMapTable<
         StringKey24,
         StringHashMapCell<StringKey24, TMapped>,
-        StringHashTableHash,
+        Hash,
         StringHashTableGrower<>,
         Allocator>;
     using Ts = HashMapTable<
         StringRef,
         StringHashMapCell<StringRef, TMapped>,
-        StringHashTableHash,
+        Hash,
         StringHashTableGrower<>,
         Allocator>;
 };

@@ -127,27 +127,53 @@ public:
     using FindResult = FindResultImpl<Mapped>;
     static constexpr bool has_mapped = !std::is_same<Mapped, VoidMapped>::value;
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
+    static constexpr size_t prefetch_step = 16;
 
-    template <typename Data>
+    template <bool enable_prefetch = false, typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
         Data & data,
         size_t row,
         Arena & pool,
-        std::vector<String> & sort_key_containers)
+        std::vector<String> & sort_key_containers,
+        const std::vector<size_t> & hashvals = {})
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
-        return emplaceImpl(key_holder, data);
+        if constexpr (enable_prefetch)
+        {
+            const auto idx = row + prefetch_step;
+            if (idx < hashvals.size())
+                data.prefetch(hashvals[idx]);
+
+            return emplaceImpl<enable_prefetch>(key_holder, data, hashvals[row]);
+        }
+        else
+        {
+            return emplaceImpl<enable_prefetch>(key_holder, data, 0);
+        }
     }
 
-    template <typename Data>
+    template <bool enable_prefetch = false, typename Data>
     ALWAYS_INLINE inline FindResult findKey(
         Data & data,
         size_t row,
         Arena & pool,
-        std::vector<String> & sort_key_containers)
+        std::vector<String> & sort_key_containers,
+        const std::vector<size_t> & hashvals = {})
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
-        return findKeyImpl(keyHolderGetKey(key_holder), data);
+        if constexpr (enable_prefetch)
+        {
+            const auto idx = row + prefetch_step;
+            if (idx < hashvals.size())
+                data.prefetch(hashvals[idx]);
+
+            return findKeyImpl<enable_prefetch>(keyHolderGetKey(key_holder), data, hashvals[row]);
+        }
+        else
+        {
+            return findKeyImpl<enable_prefetch>(keyHolderGetKey(key_holder), data, 0);
+        }
+
     }
 
     template <typename Data>
@@ -155,9 +181,9 @@ public:
         const Data & data,
         size_t row,
         Arena & pool,
-        std::vector<String> & sort_key_containers)
+        std::vector<String> & sort_key_containers) const
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        auto key_holder = static_cast<const Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return data.hash(keyHolderGetKey(key_holder));
     }
 
@@ -179,8 +205,8 @@ protected:
         }
     }
 
-    template <typename Data, typename KeyHolder>
-    ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data)
+    template <bool enable_prefetch, typename Data, typename KeyHolder>
+    ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
@@ -195,7 +221,11 @@ protected:
 
         typename Data::LookupResult it;
         bool inserted = false;
-        data.emplace(key_holder, it, inserted);
+
+        if constexpr (enable_prefetch)
+            data.emplace(key_holder, it, inserted, hashval);
+        else
+            data.emplace(key_holder, it, inserted);
 
         [[maybe_unused]] Mapped * cached = nullptr;
         if constexpr (has_mapped)
@@ -232,8 +262,8 @@ protected:
             return EmplaceResult(inserted);
     }
 
-    template <typename Data, typename Key>
-    ALWAYS_INLINE inline FindResult findKeyImpl(Key key, Data & data)
+    template <bool enable_prefetch, typename Data, typename Key>
+    ALWAYS_INLINE inline FindResult findKeyImpl(Key key, Data & data, size_t hashval)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
@@ -246,7 +276,11 @@ protected:
             }
         }
 
-        auto it = data.find(key);
+        typename Data::LookupResult it;
+        if constexpr (enable_prefetch)
+            it = data.find(key, hashval);
+        else
+            it = data.find(key);
 
         if constexpr (consecutive_keys_optimization)
         {

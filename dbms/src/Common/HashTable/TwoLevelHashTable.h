@@ -285,6 +285,12 @@ public:
         impls[buck].emplace(key_holder, it, inserted, hash_value);
     }
 
+    void ALWAYS_INLINE prefetch(size_t hashval) const
+    {
+        size_t buck = getBucketFromHash(hashval);
+        impls[buck].prefetch(hashval);
+    }
+
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
     {
         size_t buck = getBucketFromHash(hash_value);
@@ -352,6 +358,13 @@ public:
         return true;
     }
 
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (const auto & impl : impls)
+            res += impl.getBufferSizeInCells();
+        return res;
+    }
     size_t getBufferSizeInBytes() const
     {
         size_t res = 0;

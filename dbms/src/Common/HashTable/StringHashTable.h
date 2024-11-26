@@ -20,7 +20,6 @@
 #include <new>
 #include <variant>
 
-
 using StringKey8 = UInt64;
 using StringKey16 = DB::UInt128;
 struct StringKey24
@@ -48,45 +47,38 @@ inline StringRef ALWAYS_INLINE toStringRef(const StringKey24 & n)
     return {reinterpret_cast<const char *>(&n), 24ul - (__builtin_clzll(n.c) >> 3)};
 }
 
+inline size_t hash_string_key_24(uint64_t seed, const StringKey24 & v)
+{
+    hash_combine(seed, v.a);
+    hash_combine(seed, v.b);
+    hash_combine(seed, v.c);
+    return seed;
+}
+
+template <>
+struct HashWithMixSeed<StringKey24>
+{
+    static inline size_t operator()(const StringKey24 & v)
+    {
+        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_string_key_24(0, v));
+    }
+};
+
 struct StringHashTableHash
 {
-#if defined(__SSE4_2__)
-    size_t ALWAYS_INLINE operator()(StringKey8 key) const
+    static size_t ALWAYS_INLINE operator()(StringKey8 key)
     {
-        size_t res = -1ULL;
-        res = _mm_crc32_u64(res, key);
-        return res;
+        return HashWithMixSeed<StringKey8>::operator()(key);
     }
-    size_t ALWAYS_INLINE operator()(const StringKey16 & key) const
+    static size_t ALWAYS_INLINE operator()(const StringKey16 & key)
     {
-        size_t res = -1ULL;
-        res = _mm_crc32_u64(res, key.low);
-        res = _mm_crc32_u64(res, key.high);
-        return res;
+        return HashWithMixSeed<StringKey16>::operator()(key);
     }
-    size_t ALWAYS_INLINE operator()(const StringKey24 & key) const
+    static size_t ALWAYS_INLINE operator()(const StringKey24 & key)
     {
-        size_t res = -1ULL;
-        res = _mm_crc32_u64(res, key.a);
-        res = _mm_crc32_u64(res, key.b);
-        res = _mm_crc32_u64(res, key.c);
-        return res;
+        return HashWithMixSeed<StringKey24>::operator()(key);
     }
-#else
-    size_t ALWAYS_INLINE operator()(StringKey8 key) const
-    {
-        return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 8);
-    }
-    size_t ALWAYS_INLINE operator()(const StringKey16 & key) const
-    {
-        return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 16);
-    }
-    size_t ALWAYS_INLINE operator()(const StringKey24 & key) const
-    {
-        return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 24);
-    }
-#endif
-    size_t ALWAYS_INLINE operator()(StringRef key) const { return StringRefHash()(key); }
+    static size_t ALWAYS_INLINE operator()(const StringRef & key) { return StringRefHash()(key); }
 };
 
 template <typename Cell>
@@ -150,6 +142,8 @@ public:
         return hasZero() ? zeroValue() : nullptr;
     }
 
+    void ALWAYS_INLINE prefetch(size_t) {}
+
     void write(DB::WriteBuffer & wb) const { zeroValue()->write(wb); }
     void writeText(DB::WriteBuffer & wb) const { zeroValue()->writeText(wb); }
     void read(DB::ReadBuffer & rb) { zeroValue()->read(rb); }
@@ -157,6 +151,7 @@ public:
     size_t size() const { return hasZero() ? 1 : 0; }
     bool empty() const { return !hasZero(); }
     size_t getBufferSizeInBytes() const { return sizeof(Cell); }
+    size_t getBufferSizeInCells() const { return 1; }
     void setResizeCallback(const ResizeCallback &) {}
     size_t getCollisions() const { return 0; }
 };
@@ -364,6 +359,13 @@ public:
         this->dispatch(*this, key_holder, EmplaceCallable(it, inserted));
     }
 
+    // TODO del
+    template <typename KeyHolder>
+    void ALWAYS_INLINE emplace(KeyHolder &&, LookupResult &, bool &, size_t)
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::emplace instead");
+    }
+
     struct FindCallable
     {
         // find() doesn't need any key memory management, so we don't work with
@@ -380,11 +382,34 @@ public:
         }
     };
 
+    // We will not prefetch StringHashTable directly, instead caller should call specific submap's prefetch.
+    // Because StringHashTable doesn't know which submap to prefetch.
+    void prefetch(size_t) const
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::prefetch instead");
+    }
+
     LookupResult ALWAYS_INLINE find(const Key & x) { return dispatch(*this, x, FindCallable{}); }
 
     ConstLookupResult ALWAYS_INLINE find(const Key & x) const { return dispatch(*this, x, FindCallable{}); }
 
+    // TODO del
+    LookupResult ALWAYS_INLINE find(const Key &, size_t)
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
+    }
+    ConstLookupResult ALWAYS_INLINE find(const Key &, size_t) const
+    {
+        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
+    }
+
     bool ALWAYS_INLINE has(const Key & x, size_t = 0) const { return dispatch(*this, x, FindCallable{}) != nullptr; }
+
+    template <typename HashKeyType>
+    size_t ALWAYS_INLINE hash(const HashKeyType & key) const
+    {
+        return SubMaps::Hash::operator()(key);
+    }
 
     void write(DB::WriteBuffer & wb) const
     {
@@ -434,6 +459,11 @@ public:
 
     bool empty() const { return m0.empty() && m1.empty() && m2.empty() && m3.empty() && ms.empty(); }
 
+    size_t getBufferSizeInCells() const
+    {
+        return m0.getBufferSizeInCells() + m1.getBufferSizeInCells() + m2.getBufferSizeInCells()
+            + m3.getBufferSizeInCells() + ms.getBufferSizeInCells();
+    }
     size_t getBufferSizeInBytes() const
     {
         return m0.getBufferSizeInBytes() + m1.getBufferSizeInBytes() + m2.getBufferSizeInBytes()

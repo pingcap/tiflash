@@ -296,6 +296,7 @@ public:
     iterator ALWAYS_INLINE find(Key x) { return iteratorTo(findCell(x)); }
     const_iterator ALWAYS_INLINE find(Key x) const { return iteratorTo(findCell(x)); }
 
+    void ALWAYS_INLINE prefetch(size_t) {}
 
     void write(DB::WriteBuffer & wb) const
     {
