@@ -18,8 +18,6 @@
 #include <Core/Block.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
-#include <memory>
-
 namespace DB
 {
 enum class CrossProbeMode

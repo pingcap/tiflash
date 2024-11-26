@@ -33,12 +33,6 @@
 
 #include <exception>
 #include <magic_enum.hpp>
-#include <memory>
-
-#include "Common/Exception.h"
-#include "Core/Names.h"
-#include "Interpreters/SemiJoinHelper.h"
-#include "Parsers/ASTTablesInSelectQuery.h"
 
 namespace DB
 {

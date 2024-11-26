@@ -19,8 +19,6 @@
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SemiJoinHelper.h>
 
-#include "Common/Exception.h"
-
 namespace DB
 {
 using enum ASTTableJoin::Strictness;
