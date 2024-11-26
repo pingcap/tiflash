@@ -331,34 +331,33 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
     }
 
     left_columns = result_block.columns();
+    for (size_t i = 0; i < right_sample_block.columns(); ++i)
+    {
+        const auto & column = right_sample_block.getByPosition(i);
+        if (probe_output_name_set.contains(column.name))
+        {
+            RUNTIME_CHECK_MSG(
+                !result_block.has(column.name),
+                "block from probe side has a column with the same name: {} as a column in right_sample_block",
+                column.name);
+            result_block.insert(column);
+            right_column_indices_to_add.push_back(i);
+        }
+    }
+    right_columns = right_column_indices_to_add.size();
+    RUNTIME_CHECK(result_block.columns() == left_columns + right_columns);
+
+    if constexpr (KIND == LeftOuterAnti || KIND == LeftOuterSemi)
+    {
+        /// The last column is `match_helper`.
+        right_columns -= 1;
+    }
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
     {
         RUNTIME_CHECK_MSG(probe_res_list.empty(), "SemiJoinResult list must be empty for any semi join");
     }
     else
     {
-        for (size_t i = 0; i < right_sample_block.columns(); ++i)
-        {
-            const auto & column = right_sample_block.getByPosition(i);
-            if (probe_output_name_set.contains(column.name))
-            {
-                RUNTIME_CHECK_MSG(
-                    !result_block.has(column.name),
-                    "block from probe side has a column with the same name: {} as a column in right_sample_block",
-                    column.name);
-                result_block.insert(column);
-                right_column_indices_to_add.push_back(i);
-            }
-        }
-        right_columns = right_column_indices_to_add.size();
-        RUNTIME_CHECK(result_block.columns() == left_columns + right_columns);
-
-        if constexpr (KIND == LeftOuterAnti || KIND == LeftOuterSemi)
-        {
-            /// The last column is `match_helper`.
-            right_columns -= 1;
-        }
-
         RUNTIME_CHECK(right_columns > 0);
     }
     is_probe_hash_table_done = true;
