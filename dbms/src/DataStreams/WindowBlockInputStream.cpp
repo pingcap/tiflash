@@ -318,7 +318,7 @@ Block WindowBlockInputStream::readImpl()
 {
     // first try to get result without reading from children
     auto block = action.tryGetOutputBlock();
-    if (block || action.input_is_finished)
+    if (block)
         return block;
 
     // then if input is not finished, keep reading input until one result block is generated
