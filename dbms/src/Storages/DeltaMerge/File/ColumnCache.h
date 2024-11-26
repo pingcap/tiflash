@@ -27,6 +27,13 @@ using ColId = DB::ColumnID;
 using PackId = size_t;
 using PackRange = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
+
+enum class ColumnCacheType
+{
+    ExtraColumnCache,
+    DataSharingCache,
+};
+
 class ColumnCache : private boost::noncopyable
 {
 public:
@@ -37,7 +44,13 @@ public:
         Unknown
     };
 
-    ColumnCache() = default;
+    ColumnCache()
+        : type(ColumnCacheType::ExtraColumnCache)
+    {}
+
+    explicit ColumnCache(ColumnCacheType type_)
+        : type(type_)
+    {}
 
     using RangeWithStrategy = std::pair<PackRange, ColumnCache::Strategy>;
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
@@ -46,11 +59,6 @@ public:
         size_t start_pack_idx,
         size_t pack_count,
         const std::vector<size_t> & clean_read_pack_idx);
-    static RangeWithStrategys getReadStrategyImpl(
-        size_t start_pack_idx,
-        size_t pack_count,
-        ColId column_id,
-        std::function<bool(size_t, ColId)> is_hit);
 
     void tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 
@@ -62,6 +70,11 @@ public:
     void clear() { column_caches.clear(); }
 
 private:
+    static RangeWithStrategys getReadStrategyImpl(
+        size_t start_pack_idx,
+        size_t pack_count,
+        ColId column_id,
+        std::function<bool(size_t, ColId)> is_hit);
     bool isPackInCache(PackId pack_id, ColId column_id);
 
 private:
@@ -73,6 +86,7 @@ private:
         size_t rows_count;
     };
     std::unordered_map<PackId, ColumnCacheEntry> column_caches;
+    ColumnCacheType type;
 };
 
 using ColumnCachePtr = std::shared_ptr<ColumnCache>;

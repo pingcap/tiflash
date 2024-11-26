@@ -102,7 +102,7 @@ DMFileReader::DMFileReader(
     }
     if (max_sharing_column_bytes > 0)
     {
-        data_sharing_col_data_cache = std::make_unique<ColumnCache>();
+        data_sharing_col_data_cache = std::make_unique<ColumnCache>(ColumnCacheType::DataSharingCache);
     }
     initAllMatchBlockInfo();
 }

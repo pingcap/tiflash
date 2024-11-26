@@ -75,10 +75,20 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pa
         switch (strategy)
         {
         case Strategy::Memory:
-            GET_METRIC(tiflash_storage_column_cache_packs, type_hit).Increment(range.second - range.first);
+            if (type == ColumnCacheType::ExtraColumnCache)
+                GET_METRIC(tiflash_storage_column_cache_packs, type_extra_column_hit)
+                    .Increment(range.second - range.first);
+            else
+                GET_METRIC(tiflash_storage_column_cache_packs, type_data_sharing_hit)
+                    .Increment(range.second - range.first);
             break;
         case Strategy::Disk:
-            GET_METRIC(tiflash_storage_column_cache_packs, type_miss).Increment(range.second - range.first);
+            if (type == ColumnCacheType::ExtraColumnCache)
+                GET_METRIC(tiflash_storage_column_cache_packs, type_extra_column_miss)
+                    .Increment(range.second - range.first);
+            else
+                GET_METRIC(tiflash_storage_column_cache_packs, type_data_sharing_miss)
+                    .Increment(range.second - range.first);
             break;
         default:
             break;

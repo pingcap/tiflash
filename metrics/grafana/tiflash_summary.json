@@ -8224,12 +8224,21 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m]))/sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit|miss\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m]))/sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"data_sharing_hit|data_sharing_miss\"}[1m]))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "cache_hit_ratio",
+              "legendFormat": "data_sharing_cache_hit_ratio",
               "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m]))/sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"extra_column_hit|extra_column_miss\"}[1m]))",
+              "hide": true,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "extra_column_cache_hit_ratio",
+              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -8538,7 +8547,10 @@
               "id": "filterFieldsByName",
               "options": {
                 "include": {
-                  "names": ["Time", "mark cache effectiveness"]
+                  "names": [
+                    "Time",
+                    "mark cache effectiveness"
+                  ]
                 }
               }
             }
@@ -20006,7 +20018,17 @@
       "2h",
       "1d"
     ],
-    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+    "time_options": [
+      "5m",
+      "15m",
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d"
+    ]
   },
   "timezone": "",
   "title": "Test-Cluster-TiFlash-Summary",
