@@ -44,11 +44,7 @@ public:
         Unknown
     };
 
-    ColumnCache()
-        : type(ColumnCacheType::ExtraColumnCache)
-    {}
-
-    explicit ColumnCache(ColumnCacheType type_)
+    explicit ColumnCache(ColumnCacheType type_ = ColumnCacheType::ExtraColumnCache)
         : type(type_)
     {}
 
