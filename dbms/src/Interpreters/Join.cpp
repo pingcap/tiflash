@@ -36,6 +36,7 @@
 #include <memory>
 
 #include "Common/Exception.h"
+#include "Core/Names.h"
 #include "Interpreters/SemiJoinHelper.h"
 #include "Parsers/ASTTablesInSelectQuery.h"
 
@@ -1740,6 +1741,22 @@ Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
     return removeUselessColumn(block);
 }
 
+namespace
+{
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+Block genSemiJoinResult(
+    ProbeProcessInfo & probe_process_info,
+    SemiJoinHelper<KIND, STRICTNESS, Maps> * helper,
+    const NameSet & output_column_names_set)
+{
+    auto ret = helper->genJoinResult(output_column_names_set);
+    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
+    probe_process_info.all_rows_joined_finish = true;
+    probe_process_info.semi_join_family_helper.reset();
+    return ret;
+}
+} // namespace
+
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
 {
@@ -1751,7 +1768,7 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
         hash_join_spill_context->isSpilled(),
         build_concurrency,
         restore_config.restore_round};
-    if (probe_process_info.semi_family_helper != nullptr)
+    if (probe_process_info.semi_join_family_helper != nullptr)
     {
         // current block still not done
         RUNTIME_CHECK_MSG(
@@ -1775,16 +1792,16 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             non_equal_conditions,
             is_cancelled);
 
-        probe_process_info.semi_family_helper
-            = decltype(probe_process_info.semi_family_helper)(helper_ptr.release(), [](void * ptr) {
+        probe_process_info.semi_join_family_helper
+            = decltype(probe_process_info.semi_join_family_helper)(helper_ptr.release(), [](void * ptr) {
                   delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr);
               });
     }
 
-    assert(probe_process_info.semi_family_helper != nullptr);
+    assert(probe_process_info.semi_join_family_helper != nullptr);
 
     auto * helper
-        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_family_helper.get());
+        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
 
     if (!helper->isProbeHashTableDone())
     {
@@ -1812,11 +1829,10 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
     if (is_cancelled())
         return {};
 
-    auto ret = helper->genJoinResult(output_column_names_set_after_finalize);
-    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
-    probe_process_info.all_rows_joined_finish = true;
-    probe_process_info.semi_family_helper.reset();
-    return ret;
+    return genSemiJoinResult<KIND, STRICTNESS, Maps>(
+        probe_process_info,
+        helper,
+        output_column_names_set_after_finalize);
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
