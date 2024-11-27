@@ -34,6 +34,8 @@
 #include <exception>
 #include <magic_enum.hpp>
 
+#include "Interpreters/SemiJoinHelper.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -1780,16 +1782,10 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             join_build_info.needVirtualDispatchForProbeBlock(),
             collators,
             restore_config.restore_round);
-        auto helper_ptr = std::make_unique<SemiJoinHelper<KIND, STRICTNESS, Maps>>(
-            rows,
-            max_block_size,
-            non_equal_conditions,
-            is_cancelled);
 
-        probe_process_info.semi_join_family_helper
-            = decltype(probe_process_info.semi_join_family_helper)(helper_ptr.release(), [](void * ptr) {
-                  delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr);
-              });
+        probe_process_info.semi_join_family_helper = decltype(probe_process_info.semi_join_family_helper)(
+            new SemiJoinHelper<KIND, STRICTNESS, Maps>(rows, max_block_size, non_equal_conditions, is_cancelled),
+            [](void * ptr) { delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
     }
 
     assert(probe_process_info.semi_join_family_helper != nullptr);

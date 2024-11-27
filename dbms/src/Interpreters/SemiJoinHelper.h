@@ -56,24 +56,6 @@ public:
             result = !res;
         }
     }
-    inline size_t getRowNum() const { return 0; }
-    template <SemiJoinResultType RES>
-    void setResult()
-    {}
-    template <typename Mapped>
-    void fillRightColumns(MutableColumns &, size_t, size_t, const std::vector<size_t> &, size_t &, size_t)
-    {}
-    template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
-    bool checkExprResult(
-        const ColumnUInt8::Container *,
-        ConstNullMapPtr,
-        const ColumnUInt8::Container *,
-        ConstNullMapPtr,
-        size_t,
-        size_t)
-    {
-        return false;
-    }
 
     bool getResult() const { return result; }
 
