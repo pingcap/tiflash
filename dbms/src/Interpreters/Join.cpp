@@ -1788,8 +1788,6 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             [](void * ptr) { delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
     }
 
-    assert(probe_process_info.semi_join_family_helper != nullptr);
-
     auto * helper
         = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
 
