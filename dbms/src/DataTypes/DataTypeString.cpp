@@ -441,7 +441,7 @@ void deserializeBinaryBulkV2(IColumn & column, ReadBuffer & offsets_stream, Read
 void DataTypeString::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
 {
     callback(path);
-    if (version == 1)
+    if (serdes_fmt == SerdesFormat::SeparateSizeAndChars)
     {
         path.emplace_back(Substream::StringSizes);
         callback(path);
@@ -456,7 +456,7 @@ void DataTypeString::serializeBinaryBulkWithMultipleStreams(
     bool /*position_independent_encoding*/,
     SubstreamPath & path) const
 {
-    if (version == 1)
+    if (serdes_fmt == SerdesFormat::SeparateSizeAndChars)
     {
         auto [offsets_stream, chars_stream] = getStream<WriteBuffer, IDataType::OutputStreamGetter>(getter, path);
         serializeBinaryBulkV2(column, *offsets_stream, *chars_stream, offset, limit);
@@ -475,7 +475,7 @@ void DataTypeString::deserializeBinaryBulkWithMultipleStreams(
     bool /*position_independent_encoding*/,
     SubstreamPath & path) const
 {
-    if (version == 1)
+    if (serdes_fmt == SerdesFormat::SeparateSizeAndChars)
     {
         auto [offsets_stream, chars_stream] = getStream<ReadBuffer, IDataType::InputStreamGetter>(getter, path);
         deserializeBinaryBulkV2(column, *offsets_stream, *chars_stream, limit);

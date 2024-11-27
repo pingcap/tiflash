@@ -155,7 +155,7 @@ private:
         if (removeNullable(type)->getTypeId() != TypeIndex::String)
             return;
 
-        auto t = std::make_shared<DataTypeString>(0);
+        auto t = std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SizePrefix);
         type = type->isNullable() ? makeNullable(t) : t;
     }
 };
