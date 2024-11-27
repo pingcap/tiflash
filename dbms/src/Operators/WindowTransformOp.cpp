@@ -44,14 +44,12 @@ OperatorStatus WindowTransformOp::transformImpl(Block & block)
     if unlikely (!block)
     {
         action->input_is_finished = true;
-        action->tryCalculate();
         block = action->tryGetOutputBlock();
         return OperatorStatus::HAS_OUTPUT;
     }
     else
     {
         action->appendBlock(block);
-        action->tryCalculate();
         block = action->tryGetOutputBlock();
         return block ? OperatorStatus::HAS_OUTPUT : OperatorStatus::NEED_INPUT;
     }
