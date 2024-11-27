@@ -32,12 +32,10 @@ namespace
 //
 // Other window or aggregation functions always return nullable column and we need to
 // remove the not null flag for them.
-void setWindowFieldType(
-    const tipb::ExprType window_sig,
-    tipb::FieldType * window_field_type,
-    tipb::Expr * window_expr,
-    const int32_t collator_id)
+void setFieldTypeForWindowFunc(tipb::Expr * window_expr, const tipb::ExprType window_sig, const int32_t collator_id)
 {
+    window_expr->set_tp(window_sig);
+    auto * window_field_type = window_expr->mutable_field_type();
     switch (window_sig)
     {
     case tipb::ExprType::Lead:
@@ -84,6 +82,55 @@ void setWindowFieldType(
         window_field_type->set_flen(21);
         window_field_type->set_decimal(-1);
     }
+}
+
+void setFieldTypeForAggFunc(
+    const DB::ASTFunction * func,
+    tipb::Expr * expr,
+    const tipb::ExprType agg_sig,
+    int32_t collator_id)
+{
+    expr->set_tp(agg_sig);
+    if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
+    {
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(TiDB::TypeLongLong);
+        ft->set_flag(TiDB::ColumnFlagNotNull);
+    }
+    else if (agg_sig == tipb::ExprType::Min || agg_sig == tipb::ExprType::Max)
+    {
+        if (expr->children_size() != 1)
+            throw Exception(fmt::format("Agg function({}) only accept 1 argument", func->name));
+
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(expr->children(0).field_type().tp());
+        ft->set_decimal(expr->children(0).field_type().decimal());
+        ft->set_flag(expr->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
+        ft->set_collate(collator_id);
+    }
+    else
+    {
+        throw Exception("Window does not support this agg function");
+    }
+
+    expr->set_aggfuncmode(tipb::AggFunctionMode::FinalMode);
+}
+
+void setFieldType(const DB::ASTFunction * func, tipb::Expr * expr, int32_t collator_id)
+{
+    auto window_sig_it = tests::window_func_name_to_sig.find(func->name);
+    if (window_sig_it != tests::window_func_name_to_sig.end())
+    {
+        setFieldTypeForWindowFunc(expr, window_sig_it->second, collator_id);
+        return;
+    }
+
+    auto agg_sig_it = tests::agg_func_name_to_sig.find(func->name);
+    if (agg_sig_it == tests::agg_func_name_to_sig.end())
+        throw Exception("Unsupported agg function: " + func->name, ErrorCodes::LOGICAL_ERROR);
+
+    auto agg_sig = agg_sig_it->second;
+    setFieldTypeForAggFunc(func, expr, agg_sig, collator_id);
 }
 
 tipb::ExprType getWindowSig(const String & window_func_name)
@@ -155,7 +202,7 @@ bool WindowBinder::toTiPBExecutor(
 
         auto window_sig = getWindowSig(window_func->name);
         window_expr->set_tp(window_sig);
-        setWindowFieldType(window_sig, window_expr->mutable_field_type(), window_expr, collator_id);
+        setFieldType(window_func, window_expr, collator_id);
     }
 
     for (const auto & child : order_by_exprs)
@@ -181,6 +228,88 @@ bool WindowBinder::toTiPBExecutor(
     setWindowFrame(frame, window);
 
     return children[0]->toTiPBExecutor(window->mutable_child(), collator_id, mpp_info, context);
+}
+
+void setColumnInfoForAgg(
+    TiDB::ColumnInfo & ci,
+    const DB::ASTFunction * func,
+    const std::vector<TiDB::ColumnInfo> & children_ci)
+{
+    // TODO: Other agg func.
+    if (func->name == "count")
+    {
+        ci.tp = TiDB::TypeLongLong;
+        ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
+    }
+    else if (func->name == "max" || func->name == "min" || func->name == "sum")
+    {
+        ci = children_ci[0];
+        ci.flag &= ~TiDB::ColumnFlagNotNull;
+    }
+    else
+    {
+        throw Exception("Unsupported agg function: " + func->name, ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void setColumnInfoForWindowFunc(
+    TiDB::ColumnInfo & ci,
+    const DB::ASTFunction * func,
+    const std::vector<TiDB::ColumnInfo> & children_ci,
+    tipb::ExprType expr_type)
+{
+    // TODO: add more window functions
+    switch (expr_type)
+    {
+    case tipb::ExprType::RowNumber:
+    case tipb::ExprType::Rank:
+    case tipb::ExprType::DenseRank:
+    {
+        ci.tp = TiDB::TypeLongLong;
+        ci.flag = TiDB::ColumnFlagBinary;
+        break;
+    }
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
+    {
+        // TODO handling complex situations
+        // like lead(col, offset, NULL), lead(data_type1, offset, data_type2)
+        assert(!children_ci.empty() && children_ci.size() <= 3);
+        if (children_ci.size() < 3)
+        {
+            ci = children_ci[0];
+            ci.clearNotNullFlag();
+        }
+        else
+        {
+            assert(children_ci[0].tp == children_ci[2].tp);
+            ci = children_ci[0].hasNotNullFlag() ? children_ci[2] : children_ci[0];
+        }
+        break;
+    }
+    case tipb::ExprType::FirstValue:
+    case tipb::ExprType::LastValue:
+    {
+        ci = children_ci[0];
+        break;
+    }
+    default:
+        throw Exception(fmt::format("Unsupported window function {}", func->name), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+TiDB::ColumnInfo createColumnInfo(const DB::ASTFunction * func, const std::vector<TiDB::ColumnInfo> & children_ci)
+{
+    TiDB::ColumnInfo ci;
+    auto iter = tests::window_func_name_to_sig.find(func->name);
+    if (iter != tests::window_func_name_to_sig.end())
+    {
+        setColumnInfoForWindowFunc(ci, func, children_ci, iter->second);
+        return ci;
+    }
+
+    setColumnInfoForAgg(ci, func, children_ci);
+    return ci;
 }
 
 ExecutorBinderPtr compileWindow(
@@ -241,46 +370,7 @@ ExecutorBinderPtr compileWindow(
             {
                 children_ci.push_back(compileExpr(input->output_schema, arg));
             }
-            // TODO: add more window functions
-            TiDB::ColumnInfo ci;
-            switch (tests::window_func_name_to_sig[func->name])
-            {
-            case tipb::ExprType::RowNumber:
-            case tipb::ExprType::Rank:
-            case tipb::ExprType::DenseRank:
-            {
-                ci.tp = TiDB::TypeLongLong;
-                ci.flag = TiDB::ColumnFlagBinary;
-                break;
-            }
-            case tipb::ExprType::Lead:
-            case tipb::ExprType::Lag:
-            {
-                // TODO handling complex situations
-                // like lead(col, offset, NULL), lead(data_type1, offset, data_type2)
-                assert(!children_ci.empty() && children_ci.size() <= 3);
-                if (children_ci.size() < 3)
-                {
-                    ci = children_ci[0];
-                    ci.clearNotNullFlag();
-                }
-                else
-                {
-                    assert(children_ci[0].tp == children_ci[2].tp);
-                    ci = children_ci[0].hasNotNullFlag() ? children_ci[2] : children_ci[0];
-                }
-                break;
-            }
-            case tipb::ExprType::FirstValue:
-            case tipb::ExprType::LastValue:
-            {
-                ci = children_ci[0];
-                ci.clearNotNullFlag();
-                break;
-            }
-            default:
-                throw Exception(fmt::format("Unsupported window function {}", func->name), ErrorCodes::LOGICAL_ERROR);
-            }
+            TiDB::ColumnInfo ci = createColumnInfo(func, children_ci);
             output_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
         }
     }

@@ -26,10 +26,7 @@ class WindowAggFuncTest : public DB::tests::WindowTest
 public:
     const ASTPtr value_col = col(VALUE_COL_NAME);
 
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 };
 
 TEST_F(WindowAggFuncTest, windowAggSumTests)

@@ -307,7 +307,9 @@ void WindowTransformAction::initialWorkspaces()
     only_have_row_number = onlyHaveRowNumber();
 }
 
-void WindowTransformAction::initialAggregateFunction(WindowFunctionWorkspace & workspace, const WindowFunctionDescription & window_function_description)
+void WindowTransformAction::initialAggregateFunction(
+    WindowFunctionWorkspace & workspace,
+    const WindowFunctionDescription & window_function_description)
 {
     if (window_function_description.aggregate_function == nullptr)
         return;
@@ -317,9 +319,7 @@ void WindowTransformAction::initialAggregateFunction(WindowFunctionWorkspace & w
     if (!arena && aggregate_function->allocatesMemoryInArena())
         arena = std::make_unique<Arena>();
 
-    workspace.aggregate_function_state.reset(
-        aggregate_function->sizeOfData(),
-        aggregate_function->alignOfData());
+    workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
     aggregate_function->create(workspace.aggregate_function_state.data());
 }
 
@@ -1408,13 +1408,9 @@ void WindowTransformAction::updateAggregationState()
         // rows manually, instead of using advanceRowNumber().
         // For this purpose, the past-the-end block can be different than the
         // block of the past-the-end row (it's usually the next block).
-        const auto past_the_end_block = rows_to_add_end.row == 0
-            ? rows_to_add_end.block
-            : rows_to_add_end.block + 1;
+        const auto past_the_end_block = rows_to_add_end.row == 0 ? rows_to_add_end.block : rows_to_add_end.block + 1;
 
-        for (auto block_number = rows_to_add_start.block;
-             block_number < past_the_end_block;
-             ++block_number)
+        for (auto block_number = rows_to_add_start.block; block_number < past_the_end_block; ++block_number)
         {
             auto & block = blockAt(block_number);
 
@@ -1429,12 +1425,8 @@ void WindowTransformAction::updateAggregationState()
 
             // First and last blocks may be processed partially, and other blocks
             // are processed in full.
-            const auto first_row = block_number == rows_to_add_start.block
-                ? rows_to_add_start.row
-                : 0;
-            const auto past_the_end_row = block_number == rows_to_add_end.block
-                ? rows_to_add_end.row
-                : block.rows;
+            const auto first_row = block_number == rows_to_add_start.block ? rows_to_add_start.row : 0;
+            const auto past_the_end_row = block_number == rows_to_add_end.block ? rows_to_add_end.row : block.rows;
 
             // TODO Add an addBatch analog that can accept a starting offset.
             // For now, add the values one by one.

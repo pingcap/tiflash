@@ -164,7 +164,9 @@ private:
 
     void initialWorkspaces();
     void initialPartitionAndOrderColumnIndices();
-    void initialAggregateFunction(WindowFunctionWorkspace & workspace, const WindowFunctionDescription & window_function_description);
+    void initialAggregateFunction(
+        WindowFunctionWorkspace & workspace,
+        const WindowFunctionDescription & window_function_description);
 
     void updateAggregationState();
 
@@ -265,7 +267,7 @@ public:
         const WindowDescription & window_description_,
         const String & req_id);
 
-    Block getHeader() const override { return action.output_header; };
+    Block getHeader() const override { return action.output_header; }
 
     String getName() const override { return NAME; }
 
