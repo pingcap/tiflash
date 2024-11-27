@@ -1,0 +1,139 @@
+# Copyright 2024 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.agg;
+mysql> create table test.agg(p int not null, o int not null, v int not null);
+mysql> insert into test.agg (p, o, v) values (0, 0, 0), (1, 1, 1), (1, 2, 2), (1, 4, 4), (1, 8, 8), (2, 0, 0), (2, 3, 3), (2, 10, 10), (2, 13, 13), (2, 15, 15), (3, 1, 1), (3, 3, 3), (3, 5, 5), (3, 9, 9), (3, 15, 15), (3, 20, 20), (3, 31, 31);
+mysql> alter table agg set tiflash replica 1;
+
+func> wait_table test test.agg
+
+mysql> use test; set tidb_enforce_mpp=1;
+
+//TODO ast.AggFuncSum, ast.AggFuncCount, ast.AggFuncAvg, ast.AggFuncMax, ast.AggFuncMin ... 
+
+mysql> use test; set tidb_enforce_mpp=1; select *, sum(v) over (partition by p order by o rows between 1 preceding and 1 following) as a from test.agg;
++---+----+----+------+
+| p | o  | v  | a    |
++---+----+----+------+
+| 0 |  0 |  0 |    0 |
+| 1 |  1 |  1 |    3 |
+| 1 |  2 |  2 |    7 |
+| 1 |  4 |  4 |   14 |
+| 1 |  8 |  8 |   12 |
+| 2 |  0 |  0 |    3 |
+| 2 |  3 |  3 |   13 |
+| 2 | 10 | 10 |   26 |
+| 2 | 13 | 13 |   38 |
+| 2 | 15 | 15 |   28 |
+| 3 |  1 |  1 |    4 |
+| 3 |  3 |  3 |    9 |
+| 3 |  5 |  5 |   17 |
+| 3 |  9 |  9 |   29 |
+| 3 | 15 | 15 |   44 |
+| 3 | 20 | 20 |   66 |
+| 3 | 31 | 31 |   51 |
++---+----+----+------+
+
+mysql> use test; set tidb_enforce_mpp=1; select *, count(v) over (partition by p order by o rows between 1 preceding and 1 following) as a from test.agg;
++---+----+----+---+
+| p | o  | v  | a |
++---+----+----+---+
+| 0 |  0 |  0 | 1 |
+| 1 |  1 |  1 | 2 |
+| 1 |  2 |  2 | 3 |
+| 1 |  4 |  4 | 3 |
+| 1 |  8 |  8 | 2 |
+| 2 |  0 |  0 | 2 |
+| 2 |  3 |  3 | 3 |
+| 2 | 10 | 10 | 3 |
+| 2 | 13 | 13 | 3 |
+| 2 | 15 | 15 | 2 |
+| 3 |  1 |  1 | 2 |
+| 3 |  3 |  3 | 3 |
+| 3 |  5 |  5 | 3 |
+| 3 |  9 |  9 | 3 |
+| 3 | 15 | 15 | 3 |
+| 3 | 20 | 20 | 3 |
+| 3 | 31 | 31 | 2 |
++---+----+----+---+
+
+mysql> use test; set tidb_enforce_mpp=1; select *, avg(v) over (partition by p order by o rows between 1 preceding and 1 following) as a from test.agg;
++---+----+----+---------+
+| p | o  | v  | a       |
++---+----+----+---------+
+| 0 |  0 |  0 |  0.0000 |
+| 1 |  1 |  1 |  1.5000 |
+| 1 |  2 |  2 |  2.3333 |
+| 1 |  4 |  4 |  4.6666 |
+| 1 |  8 |  8 |  6.0000 |
+| 2 |  0 |  0 |  1.5000 |
+| 2 |  3 |  3 |  4.3333 |
+| 2 | 10 | 10 |  8.6666 |
+| 2 | 13 | 13 | 12.6666 |
+| 2 | 15 | 15 | 14.0000 |
+| 3 |  1 |  1 |  2.0000 |
+| 3 |  3 |  3 |  3.0000 |
+| 3 |  5 |  5 |  5.6666 |
+| 3 |  9 |  9 |  9.6666 |
+| 3 | 15 | 15 | 14.6666 |
+| 3 | 20 | 20 | 22.0000 |
+| 3 | 31 | 31 | 25.5000 |
++---+----+----+---------+
+
+mysql> use test; set tidb_enforce_mpp=1; select *, min(v) over (partition by p order by o rows between 1 preceding and 1 following) as a from test.agg;
++---+----+----+------+
+| p | o  | v  | a    |
++---+----+----+------+
+| 0 |  0 |  0 |    0 |
+| 1 |  1 |  1 |    1 |
+| 1 |  2 |  2 |    1 |
+| 1 |  4 |  4 |    2 |
+| 1 |  8 |  8 |    4 |
+| 2 |  0 |  0 |    0 |
+| 2 |  3 |  3 |    0 |
+| 2 | 10 | 10 |    3 |
+| 2 | 13 | 13 |   10 |
+| 2 | 15 | 15 |   13 |
+| 3 |  1 |  1 |    1 |
+| 3 |  3 |  3 |    1 |
+| 3 |  5 |  5 |    3 |
+| 3 |  9 |  9 |    5 |
+| 3 | 15 | 15 |    9 |
+| 3 | 20 | 20 |   15 |
+| 3 | 31 | 31 |   20 |
++---+----+----+------+
+
+mysql> use test; set tidb_enforce_mpp=1; select *, max(v) over (partition by p order by o rows between 1 preceding and 1 following) as a from test.agg;
++---+----+----+------+
+| p | o  | v  | a    |
++---+----+----+------+
+| 0 |  0 |  0 |    0 |
+| 1 |  1 |  1 |    2 |
+| 1 |  2 |  2 |    4 |
+| 1 |  4 |  4 |    8 |
+| 1 |  8 |  8 |    8 |
+| 2 |  0 |  0 |    3 |
+| 2 |  3 |  3 |   10 |
+| 2 | 10 | 10 |   13 |
+| 2 | 13 | 13 |   15 |
+| 2 | 15 | 15 |   15 |
+| 3 |  1 |  1 |    3 |
+| 3 |  3 |  3 |    5 |
+| 3 |  5 |  5 |    9 |
+| 3 |  9 |  9 |   15 |
+| 3 | 15 | 15 |   20 |
+| 3 | 20 | 20 |   31 |
+| 3 | 31 | 31 |   31 |
++---+----+----+------+
