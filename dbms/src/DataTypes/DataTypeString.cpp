@@ -353,20 +353,15 @@ PaddedPODArray<Offset> offsetToStrSize(
 void strSizeToOffset(const PaddedPODArray<Offset> & str_sizes, ColumnString::Offsets & chars_offsets)
 {
     assert(!str_sizes.empty());
+    assert(chars_offsets[-1] == 0);
     const auto initial_size = chars_offsets.size();
     chars_offsets.resize(initial_size + str_sizes.size());
-    size_t i = 0;
-    if (initial_size == 0)
-    {
-        chars_offsets[i] = str_sizes[0];
-        ++i;
-    }
-    assert(initial_size + i > 0);
+    auto chars_offsets_pos = chars_offsets.begin() + initial_size;
     // Cannot be vectorize by compiler because chars_offsets[i] depends on chars_offsets[i-1]
     // #pragma clang loop vectorize(enable)
-    for (; i < str_sizes.size(); ++i)
+    for (ssize_t i = 0; i < static_cast<ssize_t>(str_sizes.size()); ++i)
     {
-        chars_offsets[i + initial_size] = str_sizes[i] + chars_offsets[i + initial_size - 1];
+        chars_offsets_pos[i] = str_sizes[i] + chars_offsets_pos[i - 1];
     }
 }
 
