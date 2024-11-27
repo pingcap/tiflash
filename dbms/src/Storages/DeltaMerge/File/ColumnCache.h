@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/SharedMutexProtected.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Types.h>
 
@@ -34,6 +35,7 @@ enum class ColumnCacheType
     DataSharingCache,
 };
 
+// ColumnCache is a thread-safe cache for columns, the entry is one pack.
 class ColumnCache : private boost::noncopyable
 {
 public:
@@ -63,7 +65,10 @@ public:
 
     void delColumn(ColId column_id, size_t upper_pack_id);
 
-    void clear() { column_caches.clear(); }
+    void clear()
+    {
+        column_caches.withExclusive([](auto & column_caches) { column_caches.clear(); });
+    }
 
 private:
     static RangeWithStrategys getReadStrategyImpl(
@@ -81,8 +86,8 @@ private:
         size_t rows_offset;
         size_t rows_count;
     };
-    std::unordered_map<PackId, ColumnCacheEntry> column_caches;
-    ColumnCacheType type;
+    SharedMutexProtected<std::unordered_map<PackId, ColumnCacheEntry>> column_caches;
+    const ColumnCacheType type;
 };
 
 using ColumnCachePtr = std::shared_ptr<ColumnCache>;

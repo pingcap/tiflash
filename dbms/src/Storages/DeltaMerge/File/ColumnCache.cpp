@@ -115,82 +115,89 @@ void ColumnCache::tryPutColumn(
     size_t rows_offset,
     size_t rows_count)
 {
-    if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
-    {
-        auto & column_cache_entry = iter->second;
-        if (column_cache_entry.columns.find(column_id) != column_cache_entry.columns.end())
+    column_caches.withExclusive([&](auto & column_caches) {
+        if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
         {
-            return;
+            auto & column_cache_entry = iter->second;
+            if (column_cache_entry.columns.find(column_id) != column_cache_entry.columns.end())
+            {
+                return;
+            }
+            if (column_cache_entry.rows_offset != rows_offset || column_cache_entry.rows_count != rows_count)
+            {
+                return;
+            }
+
+            column_cache_entry.columns.emplace(column_id, column);
         }
-        if (column_cache_entry.rows_offset != rows_offset || column_cache_entry.rows_count != rows_count)
+        else
         {
-            return;
+            ColumnCache::ColumnCacheEntry column_cache_entry;
+            column_cache_entry.columns.emplace(column_id, column);
+            column_cache_entry.rows_offset = rows_offset;
+            column_cache_entry.rows_count = rows_count;
+
+            column_caches.emplace(pack_id, column_cache_entry);
         }
-
-        column_cache_entry.columns.emplace(column_id, column);
-    }
-    else
-    {
-        ColumnCache::ColumnCacheEntry column_cache_entry;
-        column_cache_entry.columns.emplace(column_id, column);
-        column_cache_entry.rows_offset = rows_offset;
-        column_cache_entry.rows_count = rows_count;
-
-        column_caches.emplace(pack_id, column_cache_entry);
-    }
+    });
 }
 
 ColumnCacheElement ColumnCache::getColumn(size_t pack_id, ColId column_id)
 {
-    if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
-    {
-        auto & column_cache_entry = iter->second;
-        auto & columns = column_cache_entry.columns;
-        if (auto column_iter = columns.find(column_id); column_iter != columns.end())
+    return column_caches.withShared([&](auto & column_caches) {
+        if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
         {
-            auto & column = column_iter->second;
-            return std::make_pair(
-                column,
-                std::make_pair(column_cache_entry.rows_offset, column_cache_entry.rows_count));
+            auto & column_cache_entry = iter->second;
+            auto & columns = column_cache_entry.columns;
+            if (auto column_iter = columns.find(column_id); column_iter != columns.end())
+            {
+                return std::make_pair(
+                    column_iter->second,
+                    std::make_pair(column_cache_entry.rows_offset, column_cache_entry.rows_count));
+            }
         }
-    }
-    throw Exception(
-        ErrorCodes::LOGICAL_ERROR,
-        "Cannot find column in cache for pack id: {}, column id: {}",
-        pack_id,
-        column_id);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Cannot find column in cache for pack id: {}, column id: {}",
+            pack_id,
+            column_id);
+    });
 }
 
 void ColumnCache::delColumn(ColId column_id, size_t upper_pack_id)
 {
-    for (auto iter = column_caches.begin(); iter != column_caches.end();)
-    {
-        auto & columns = iter->second.columns;
-        if (iter->first < upper_pack_id)
-            columns.erase(column_id);
+    column_caches.withExclusive([&](auto & column_caches) {
+        for (auto iter = column_caches.begin(); iter != column_caches.end();)
+        {
+            auto & columns = iter->second.columns;
+            if (iter->first < upper_pack_id)
+                columns.erase(column_id);
 
-        if (columns.empty())
-        {
-            iter = column_caches.erase(iter);
+            if (columns.empty())
+            {
+                iter = column_caches.erase(iter);
+            }
+            else
+            {
+                ++iter;
+            }
         }
-        else
-        {
-            ++iter;
-        }
-    }
+    });
 }
 
 bool ColumnCache::isPackInCache(PackId pack_id, ColId column_id)
 {
-    if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
-    {
-        auto & columns = iter->second.columns;
-        if (columns.find(column_id) != columns.end())
+    return column_caches.withShared([&](auto & column_caches) {
+        if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
         {
-            return true;
+            auto & columns = iter->second.columns;
+            if (columns.find(column_id) != columns.end())
+            {
+                return true;
+            }
         }
-    }
-    return false;
+        return false;
+    });
 }
 
 } // namespace DB::DM
