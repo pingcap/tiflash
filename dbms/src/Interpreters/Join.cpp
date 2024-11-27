@@ -1608,7 +1608,7 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
 
     if (!res_list.empty())
     {
-        NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType> helper(
+        NASemiJoinHelper<KIND, STRICTNESS, Maps> helper(
             block,
             left_columns,
             right_column_indices_to_add,
@@ -1803,6 +1803,8 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             probe_process_info,
             probe_output_name_set,
             right_sample_block);
+        if (is_cancelled())
+            return {};
     }
 
     while (!helper->isJoinDone())

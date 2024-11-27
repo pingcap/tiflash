@@ -21,6 +21,9 @@
 #include <Interpreters/SemiJoinHelper.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+#include "Columns/IColumn.h"
+#include "Interpreters/ProbeProcessInfo.h"
+
 namespace DB
 {
 struct RowsNotInsertToMap;
@@ -135,6 +138,8 @@ public:
 
     template <NASemiJoinStep STEP>
     void checkStepEnd();
+    size_t getNextRightBlockIndex() const { return next_right_block_index; }
+    size_t setNextRightBlockIndex(size_t index) { next_right_block_index = index; }
 
 private:
     size_t row_num;
@@ -142,6 +147,7 @@ private:
     NASemiJoinStep step;
     bool step_end;
     SemiJoinResultType result;
+    size_t next_right_block_index = 0;
 
     size_t pace;
     /// Position in null rows.
@@ -155,46 +161,56 @@ private:
     const void * map_it;
 };
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 class NASemiJoinHelper
 {
 public:
     using Result = NASemiJoinResult<KIND, STRICTNESS>;
 
     NASemiJoinHelper(
-        Block & block,
-        size_t left_columns,
-        const std::vector<size_t> & right_column_indices_to_add,
         const BlocksList & right_blocks,
         const std::vector<RowsNotInsertToMap *> & null_rows,
         size_t max_block_size,
         const JoinNonEqualConditions & non_equal_conditions,
         CancellationHook is_cancelled_);
 
-    void joinResult(std::list<Result *> & res_list);
+    void probeHashTable(
+        const JoinPartitions & join_partitions,
+        size_t rows,
+        const ColumnRawPtrs & key_columns,
+        const Sizes & key_sizes,
+        const TiDB::TiDBCollators & collators,
+        const NALeftSideInfo & left_size_info,
+        const NARightSideInfo & right_size_info,
+        const ProbeProcessInfo & probe_process_info,
+        const NameSet & probe_output_name_set,
+        const Block & right_sample_block);
+    void doJoin();
+    bool isJoinDone() const { return is_probe_hash_table_done && probe_res_list.empty(); }
+    bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
 
 private:
     template <NASemiJoinStep STEP>
-    void runStep(std::list<Result *> & res_list, std::list<Result *> & next_res_list);
-
-    void runStepAllBlocks(std::list<Result *> & res_list);
+    void runStep();
+    void runStepAllBlocks();
 
     template <NASemiJoinStep STEP>
-    void runAndCheckExprResult(
-        Block & exec_block,
-        const std::vector<size_t> & offsets,
-        std::list<Result *> & res_list,
-        std::list<Result *> & next_res_list);
+    void runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets);
 
 private:
-    Block & block;
-    size_t left_columns;
-    size_t right_columns;
-    const std::vector<size_t> & right_column_indices_to_add;
+    Block res_block;
+    size_t left_columns = 0;
+    size_t right_columns = 0;
+    std::vector<size_t> right_column_indices_to_add;
     const BlocksList & right_blocks;
     const std::vector<RowsNotInsertToMap *> & null_rows;
     size_t max_block_size;
     CancellationHook is_cancelled;
+    PaddedPODArray<Result> probe_res;
+    std::list<Result *> probe_res_list;
+    std::list<Result *> next_step_res_list;
+    bool is_probe_hash_table_done = false;
+    NASemiJoinStep next_step;
 
     const JoinNonEqualConditions & non_equal_conditions;
 };
