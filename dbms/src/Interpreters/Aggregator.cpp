@@ -741,6 +741,7 @@ template <
     bool collect_hit_rate,
     bool only_lookup,
     bool enable_prefetch,
+    bool zero_agg_func_size,
     typename Data,
     typename State,
     typename StringKeyType>
@@ -763,7 +764,8 @@ size_t Aggregator::emplaceOrFindStringKey(
         hashvals[i] = Hash::operator()(keyHolderGetKey(key_datas[0]));
     }
 
-    AggregateDataPtr agg_state = nullptr;
+    // alloc 0 bytes is useful when agg func size is zero.
+    AggregateDataPtr agg_state = aggregates_pool.alloc(0);
     for (size_t i = 0; i < key_infos.size(); ++i)
     {
         try
@@ -787,21 +789,31 @@ size_t Aggregator::emplaceOrFindStringKey(
                     = state.template emplaceStringKey<SubMapIndex, enable_prefetch>(data, i, key_datas, hashvals);
                 if (emplace_result.isInserted())
                 {
-                    emplace_result.setMapped(nullptr);
+                    if constexpr (zero_agg_func_size)
+                    {
+                        emplace_result.setMapped(agg_state);
+                    }
+                    else
+                    {
+                        emplace_result.setMapped(nullptr);
 
-                    agg_state = aggregates_pool.alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                    createAggregateStates(agg_state);
+                        agg_state
+                            = aggregates_pool.alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                        createAggregateStates(agg_state);
 
-                    emplace_result.setMapped(agg_state);
+                        emplace_result.setMapped(agg_state);
+                    }
                 }
                 else
                 {
-                    agg_state = emplace_result.getMapped();
+                    if constexpr (!zero_agg_func_size)
+                        agg_state = emplace_result.getMapped();
 
                     if constexpr (collect_hit_rate)
                         ++agg_process_info.hit_row_cnt;
                 }
-                places[i] = agg_state;
+                if constexpr (!zero_agg_func_size)
+                    places[i] = agg_state;
             }
         }
         catch (ResizeException &)
@@ -1130,30 +1142,41 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
 
     bool got_resize_exception = false;
     size_t emplaced_index = 0;
+    bool zero_agg_func_size = (params.aggregates_size == 0);
 
-#define M(INDEX, INFO, DATA, PLACES)                                                                    \
-    if unlikely (got_resize_exception)                                                                  \
-    {                                                                                                   \
-        emplaced_index = 0;                                                                             \
-    }                                                                                                   \
-    else if (!(INFO).empty())                                                                           \
-    {                                                                                                   \
-        emplaced_index = emplaceOrFindStringKey<INDEX, collect_hit_rate, only_lookup, enable_prefetch>( \
-            method.data,                                                                                \
-            state,                                                                                      \
-            (INFO),                                                                                     \
-            (DATA),                                                                                     \
-            *aggregates_pool,                                                                           \
-            (PLACES),                                                                                   \
-            agg_process_info);                                                                          \
-        if unlikely (emplaced_index != (INFO).size())                                                   \
-            got_resize_exception = true;                                                                \
-    }                                                                                                   \
-    setupExceptionRecoveryInfoForStringHashTable(                                                       \
-        agg_process_info,                                                                               \
-        emplaced_index,                                                                                 \
-        INFO,                                                                                           \
-        DATA,                                                                                           \
+#define M(INDEX, INFO, DATA, PLACES)                                                                               \
+    if unlikely (got_resize_exception)                                                                             \
+    {                                                                                                              \
+        emplaced_index = 0;                                                                                        \
+    }                                                                                                              \
+    else if (!(INFO).empty())                                                                                      \
+    {                                                                                                              \
+        if (zero_agg_func_size)                                                                                    \
+            emplaced_index = emplaceOrFindStringKey<INDEX, collect_hit_rate, only_lookup, enable_prefetch, true>(  \
+                method.data,                                                                                       \
+                state,                                                                                             \
+                (INFO),                                                                                            \
+                (DATA),                                                                                            \
+                *aggregates_pool,                                                                                  \
+                (PLACES),                                                                                          \
+                agg_process_info);                                                                                 \
+        else                                                                                                       \
+            emplaced_index = emplaceOrFindStringKey<INDEX, collect_hit_rate, only_lookup, enable_prefetch, false>( \
+                method.data,                                                                                       \
+                state,                                                                                             \
+                (INFO),                                                                                            \
+                (DATA),                                                                                            \
+                *aggregates_pool,                                                                                  \
+                (PLACES),                                                                                          \
+                agg_process_info);                                                                                 \
+        if unlikely (emplaced_index != (INFO).size())                                                              \
+            got_resize_exception = true;                                                                           \
+    }                                                                                                              \
+    setupExceptionRecoveryInfoForStringHashTable(                                                                  \
+        agg_process_info,                                                                                          \
+        emplaced_index,                                                                                            \
+        INFO,                                                                                                      \
+        DATA,                                                                                                      \
         std::integral_constant<size_t, INDEX>{});
 
     M(0, key0_infos, key0_datas, key0_places)
@@ -1162,6 +1185,9 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     M(3, key24_infos, key24_datas, key24_places)
     M(4, key_str_infos, key_str_datas, key_str_places)
 #undef M
+
+    if (zero_agg_func_size)
+        return;
 
     RUNTIME_CHECK(
         rows

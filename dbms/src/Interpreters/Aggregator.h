@@ -1499,6 +1499,7 @@ protected:
         bool collect_hit_rate,
         bool only_lookup,
         bool enable_prefetch,
+        bool zero_agg_func_size,
         typename Data,
         typename State,
         typename StringKeyType>

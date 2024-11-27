@@ -212,5 +212,10 @@ public:
 using ArenaPtr = std::shared_ptr<Arena>;
 using Arenas = std::vector<ArenaPtr>;
 
+size_t alignOf16(size_t l)
+{
+    return (l + 15) & ~15;
+}
+
 
 } // namespace DB
