@@ -19,6 +19,8 @@
 
 #include <iterator>
 
+#include "Core/Names.h"
+
 namespace DB
 {
 using enum ASTTableJoin::Strictness;
@@ -240,13 +242,15 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkStepEnd()
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 NASemiJoinHelper<KIND, STRICTNESS, Maps>::NASemiJoinHelper(
+    size_t input_rows_,
     const BlocksList & right_blocks_,
-    const std::vector<RowsNotInsertToMap *> & null_rows_,
+    std::vector<RowsNotInsertToMap *> && null_rows_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_,
     CancellationHook is_cancelled_)
-    : right_blocks(right_blocks_)
-    , null_rows(null_rows_)
+    : input_rows(input_rows_)
+    , right_blocks(right_blocks_)
+    , null_rows(std::move(null_rows_))
     , max_block_size(max_block_size_)
     , is_cancelled(is_cancelled_)
     , non_equal_conditions(non_equal_conditions_)
@@ -261,14 +265,93 @@ NASemiJoinHelper<KIND, STRICTNESS, Maps>::NASemiJoinHelper(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+Block NASemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & output_column_names_set)
+{
+    assert(probe_res_list.empty());
+
+    std::unique_ptr<IColumn::Filter> filter;
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        filter = std::make_unique<IColumn::Filter>(input_rows);
+
+    MutableColumnPtr left_semi_column_ptr = nullptr;
+    ColumnInt8::Container * left_semi_column_data = nullptr;
+    ColumnUInt8::Container * left_semi_null_map = nullptr;
+
+    if constexpr (
+        KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti)
+    {
+        left_semi_column_ptr = res_block.getByPosition(res_block.columns() - 1).column->cloneEmpty();
+        auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
+        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
+        left_semi_column_data->reserve(input_rows);
+        left_semi_null_map->reserve(input_rows);
+    }
+
+    size_t rows_for_anti = 0;
+    for (size_t i = 0; i < input_rows; ++i)
+    {
+        auto result = probe_res[i].getResult();
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        {
+            if (result == SemiJoinResultType::TRUE_VALUE)
+            {
+                // If the result is true, this row should be kept.
+                (*filter)[i] = 1;
+                ++rows_for_anti;
+            }
+            else
+            {
+                // If the result is null or false, this row should be filtered.
+                (*filter)[i] = 0;
+            }
+        }
+        else
+        {
+            switch (result)
+            {
+            case SemiJoinResultType::FALSE_VALUE:
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(0);
+                break;
+            case SemiJoinResultType::TRUE_VALUE:
+                left_semi_column_data->push_back(1);
+                left_semi_null_map->push_back(0);
+                break;
+            case SemiJoinResultType::NULL_VALUE:
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(1);
+                break;
+            }
+        }
+    }
+
+    if constexpr (
+        KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti)
+    {
+        res_block.getByPosition(res_block.columns() - 1).column = std::move(left_semi_column_ptr);
+    }
+
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+    {
+        for (size_t i = 0; i < left_columns; ++i)
+        {
+            auto & column = res_block.getByPosition(i);
+            if (output_column_names_set.contains(column.name))
+                column.column = column.column->filter(*filter, rows_for_anti);
+        }
+    }
+    return std::move(res_block);
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
     const JoinPartitions & join_partitions,
-    size_t rows,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const TiDB::TiDBCollators & collators,
-    const NALeftSideInfo & left_size_info,
-    const NARightSideInfo & right_size_info,
+    const NALeftSideInfo & left_side_info,
+    const NARightSideInfo & right_side_info,
     const ProbeProcessInfo & probe_process_info,
     const NameSet & probe_output_name_set,
     const Block & right_sample_block)
@@ -277,18 +360,18 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         return;
     std::tie(probe_res, probe_res_list) = JoinPartition::probeBlockNullAwareSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
-        rows,
+        input_rows,
         key_columns,
         key_sizes,
         collators,
-        left_size_info,
-        right_size_info);
+        left_side_info,
+        right_side_info);
 
     RUNTIME_ASSERT(
-        probe_res.size() == rows,
+        probe_res.size() == input_rows,
         "SemiJoinResult size {} must be equal to block size {}",
         probe_res.size(),
-        rows);
+        input_rows);
 
     if (is_cancelled())
         return;

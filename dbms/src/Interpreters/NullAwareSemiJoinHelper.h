@@ -21,7 +21,10 @@
 #include <Interpreters/SemiJoinHelper.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+#include <vector>
+
 #include "Columns/IColumn.h"
+#include "Core/Names.h"
 #include "Interpreters/ProbeProcessInfo.h"
 
 namespace DB
@@ -168,26 +171,28 @@ public:
     using Result = NASemiJoinResult<KIND, STRICTNESS>;
 
     NASemiJoinHelper(
+        size_t input_rows_,
         const BlocksList & right_blocks,
-        const std::vector<RowsNotInsertToMap *> & null_rows,
+        std::vector<RowsNotInsertToMap *> && null_rows,
         size_t max_block_size,
         const JoinNonEqualConditions & non_equal_conditions,
         CancellationHook is_cancelled_);
 
     void probeHashTable(
         const JoinPartitions & join_partitions,
-        size_t rows,
         const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes,
         const TiDB::TiDBCollators & collators,
-        const NALeftSideInfo & left_size_info,
-        const NARightSideInfo & right_size_info,
+        const NALeftSideInfo & left_side_info,
+        const NARightSideInfo & right_side_info,
         const ProbeProcessInfo & probe_process_info,
         const NameSet & probe_output_name_set,
         const Block & right_sample_block);
     void doJoin();
     bool isJoinDone() const { return is_probe_hash_table_done && probe_res_list.empty(); }
     bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
+    std::vector<RowsNotInsertToMap *> & getNullRows() { return null_rows; }
+    Block genJoinResult(const NameSet & output_column_names_set);
 
 private:
     template <NASemiJoinStep STEP>
@@ -202,8 +207,9 @@ private:
     size_t left_columns = 0;
     size_t right_columns = 0;
     std::vector<size_t> right_column_indices_to_add;
+    size_t input_rows;
     const BlocksList & right_blocks;
-    const std::vector<RowsNotInsertToMap *> & null_rows;
+    std::vector<RowsNotInsertToMap *> null_rows;
     size_t max_block_size;
     CancellationHook is_cancelled;
     PaddedPODArray<Result> probe_res;
