@@ -529,7 +529,6 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
               });
 
         auto column = data_type->createColumn();
-        column->reserve(read_rows);
         column->insertRangeFrom(*column_all_data, next_row_offset - read_rows, read_rows);
         return convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
     }
@@ -576,7 +575,6 @@ ColumnPtr DMFileReader::readFromDisk(const ColumnDefine & cd, size_t start_pack_
     auto & top_stream = iter->second;
     auto data_type = dmfile->getColumnStat(cd.id).type;
     auto mutable_col = data_type->createColumn();
-    mutable_col->reserve(read_rows);
     data_type->deserializeBinaryBulkWithMultipleStreams( //
         *mutable_col,
         [&](const IDataType::SubstreamPath & substream_path) {
