@@ -85,6 +85,9 @@ public:
     using value_type = typename Cell::value_type;
     using cell_type = Cell;
 
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = false;
+
     class Reader final : private Cell::State
     {
     public:

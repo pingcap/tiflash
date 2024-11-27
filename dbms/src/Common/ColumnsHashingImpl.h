@@ -16,6 +16,7 @@
 
 #include <Columns/IColumn.h>
 #include <Common/HashTable/HashTable.h>
+#include <Common/HashTable/StringHashTable.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
 #include <Common/assert_cast.h>
 #include <Functions/FunctionHelpers.h>
@@ -144,11 +145,11 @@ public:
             if (idx < hashvals.size())
                 data.prefetch(hashvals[idx]);
 
-            return emplaceImpl<enable_prefetch>(key_holder, data, hashvals[row]);
+            return emplaceImpl<true>(key_holder, data, hashvals[row]);
         }
         else
         {
-            return emplaceImpl<enable_prefetch>(key_holder, data, 0);
+            return emplaceImpl<false>(key_holder, data, 0);
         }
     }
 
@@ -167,13 +168,50 @@ public:
             if (idx < hashvals.size())
                 data.prefetch(hashvals[idx]);
 
-            return findKeyImpl<enable_prefetch>(keyHolderGetKey(key_holder), data, hashvals[row]);
+            return findKeyImpl<true>(keyHolderGetKey(key_holder), data, hashvals[row]);
         }
         else
         {
-            return findKeyImpl<enable_prefetch>(keyHolderGetKey(key_holder), data, 0);
+            return findKeyImpl<false>(keyHolderGetKey(key_holder), data, 0);
         }
 
+    }
+
+    template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
+    ALWAYS_INLINE inline EmplaceResult emplaceStringKey(
+            Data & data,
+            size_t idx,
+            const std::vector<StringKeyType> & datas,
+            const std::vector<size_t> & hashvals)
+    {
+        auto & submap = typename StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(data);
+        if constexpr (enable_prefetch)
+        {
+            const auto prefetch_idx = idx + prefetch_step;
+            if (prefetch_idx < hashvals.size())
+                submap.prefetch(hashvals[prefetch_idx]);
+        }
+
+        return emplaceImpl<true>(datas[idx], submap, hashvals[idx]);
+    }
+
+    // TODO Macro with emplaceStringKey
+    template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
+    ALWAYS_INLINE inline FindResult findStringKey(
+            Data & data,
+            size_t idx,
+            const std::vector<StringKeyType> & datas,
+            const std::vector<size_t> & hashvals)
+    {
+        auto & submap = typename StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(data);
+        if constexpr (enable_prefetch)
+        {
+            const auto prefetch_idx = idx + prefetch_step;
+            if (prefetch_idx < hashvals.size())
+                submap.prefetch(hashvals[prefetch_idx]);
+        }
+
+        return findKeyImpl<true>(datas[idx], submap, hashvals[idx]);
     }
 
     template <typename Data>
@@ -205,7 +243,7 @@ protected:
         }
     }
 
-    template <bool enable_prefetch, typename Data, typename KeyHolder>
+    template <bool use_hashval, typename Data, typename KeyHolder>
     ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval)
     {
         if constexpr (Cache::consecutive_keys_optimization)
@@ -222,7 +260,7 @@ protected:
         typename Data::LookupResult it;
         bool inserted = false;
 
-        if constexpr (enable_prefetch)
+        if constexpr (use_hashval)
             data.emplace(key_holder, it, inserted, hashval);
         else
             data.emplace(key_holder, it, inserted);
@@ -262,7 +300,7 @@ protected:
             return EmplaceResult(inserted);
     }
 
-    template <bool enable_prefetch, typename Data, typename Key>
+    template <bool use_hashval, typename Data, typename Key>
     ALWAYS_INLINE inline FindResult findKeyImpl(Key key, Data & data, size_t hashval)
     {
         if constexpr (Cache::consecutive_keys_optimization)
@@ -277,7 +315,7 @@ protected:
         }
 
         typename Data::LookupResult it;
-        if constexpr (enable_prefetch)
+        if constexpr (use_hashval)
             it = data.find(key, hashval);
         else
             it = data.find(key);

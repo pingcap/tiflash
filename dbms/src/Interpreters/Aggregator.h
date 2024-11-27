@@ -1461,6 +1461,13 @@ protected:
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
+    template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
+    void executeImplBatchStringHashMap(
+            Method & method,
+            typename Method::State & state,
+            Arena * aggregates_pool,
+            AggProcessInfo & agg_process_info) const;
+
     template <bool only_lookup, bool enable_prefetch, typename Method>
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
         Method & method,
@@ -1469,6 +1476,16 @@ protected:
         Arena & aggregates_pool,
         std::vector<std::string> & sort_key_containers,
         const std::vector<size_t> & hashvals) const;
+
+    template <size_t SubMapIndex, bool only_lookup, bool enable_prefetch, typename Method, typename StringKeyType>
+    bool emplaceOrFindStringKey(
+            typename Method::Data & data,
+            typename Method::State & state,
+            const std::vector<size_t> & key_infos,
+            const std::vector<StringKeyType> & key_datas,
+            Arena & aggregates_pool,
+            std::vector<AggregateDataPtr> & places,
+            AggProcessInfo & agg_process_info) const;
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena);

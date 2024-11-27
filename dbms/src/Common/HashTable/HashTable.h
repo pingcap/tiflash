@@ -402,6 +402,9 @@ public:
     using Grower = GrowerType;
     using Allocator = AllocatorType;
 
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = false;
+
 protected:
     friend class const_iterator;
     friend class iterator;

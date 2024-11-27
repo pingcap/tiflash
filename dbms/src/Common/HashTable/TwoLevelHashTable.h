@@ -60,6 +60,9 @@ public:
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
 
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = true;
+
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
     /// NOTE Bad for hash tables with more than 2^32 cells.

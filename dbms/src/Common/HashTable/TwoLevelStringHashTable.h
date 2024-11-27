@@ -30,6 +30,9 @@ public:
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
 
+    static constexpr bool is_string_hash_map = true;
+    static constexpr bool is_two_level = true;
+
     template <typename HashKeyType>
     size_t ALWAYS_INLINE hash(const HashKeyType & key) const
     {
@@ -299,5 +302,68 @@ public:
             res += impls[i].getBufferSizeInBytes();
 
         return res;
+    }
+};
+
+template <typename Data>
+struct StringHashTableSubMapSelector<0, true, Data>
+{
+    struct Hash
+    {
+        static ALWAYS_INLINE size_t operator()(const StringRef & ) { return 0; }
+    };
+
+    typename Data::T0 & getSubMap(size_t hashval, Data & data)
+    {
+        const auto bucket = Data::getBucketFromHash(hashval);
+        return data.impls[bucket].m0;
+    }
+};
+
+template <typename Data>
+struct StringHashTableSubMapSelector<1, true, Data>
+{
+    using Hash = StringHashTableHash::StringKey8Hasher;
+
+    typename Data::T1 & getSubMap(size_t hashval, Data & data)
+    {
+        const auto bucket = Data::getBucketFromHash(hashval);
+        return data.impls[bucket].m1;
+    }
+};
+
+template <typename Data>
+struct StringHashTableSubMapSelector<2, true, Data>
+{
+    using Hash = StringHashTableHash::StringKey16Hasher;
+
+    typename Data::T2 & getSubMap(size_t hashval, Data & data)
+    {
+        const auto bucket = Data::getBucketFromHash(hashval);
+        return data.impls[bucket].m2;
+    }
+};
+
+template <typename Data>
+struct StringHashTableSubMapSelector<3, true, Data>
+{
+    using Hash = StringHashTableHash::StringKey24Hasher;
+
+    typename Data::T3 & getSubMap(size_t hashval, Data & data)
+    {
+        const auto bucket = Data::getBucketFromHash(hashval);
+        return data.impls[bucket].m3;
+    }
+};
+
+template <typename Data>
+struct StringHashTableSubMapSelector<4, true, Data>
+{
+    using Hash = StringHashTableHash::StringRefHasher;
+
+    typename Data::Ts & getSubMap(size_t hashval, Data & data)
+    {
+        const auto bucket = Data::getBucketFromHash(hashval);
+        return data.impls[bucket].ms;
     }
 };
