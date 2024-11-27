@@ -546,19 +546,17 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
     // enable_column_cache && isCacheableColumn(cd)
 
     // try to get column from cache
-    MutableColumnPtr result_column = data_type->createColumn();
-    getColumnFromCache(
+    auto column = getColumnFromCache(
         column_cache,
         cd,
         start_pack_id,
         pack_count,
         read_rows,
-        result_column,
+        data_type,
         [&](const ColumnDefine & cd, size_t start_pack_id, size_t pack_count, size_t read_rows) {
             return readFromDiskOrSharingCache(cd, start_pack_id, pack_count, read_rows);
         });
     // add column to cache
-    ColumnPtr column = std::move(result_column);
     addColumnToCache(column_cache, cd.id, start_pack_id, pack_count, column);
     // Cast column's data from DataType in disk to what we need now
     return convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
@@ -615,14 +613,13 @@ ColumnPtr DMFileReader::readFromDiskOrSharingCache(
     if (enable_sharing_column)
     {
         auto data_type = dmfile->getColumnStat(cd.id).type;
-        auto mutable_col = data_type->createColumn();
-        getColumnFromCache(
+        column = getColumnFromCache(
             data_sharing_col_data_cache,
             cd,
             start_pack_id,
             pack_count,
             read_rows,
-            mutable_col,
+            data_type,
             [&](const ColumnDefine & cd, size_t start_pack_id, size_t, size_t read_rows) {
                 // If there are concurrent read requests, this data is likely to be shared.
                 // So the allocation and deallocation of this data may not be in the same MemoryTracker.
@@ -631,7 +628,6 @@ ColumnPtr DMFileReader::readFromDiskOrSharingCache(
                 MemoryTrackerSetter mem_tracker_guard(true, nullptr);
                 return readFromDisk(cd, start_pack_id, read_rows);
             });
-        column = std::move(mutable_col);
     }
     else
     {
@@ -667,13 +663,13 @@ void DMFileReader::addColumnToCache(
     }
 }
 
-void DMFileReader::getColumnFromCache(
+ColumnPtr DMFileReader::getColumnFromCache(
     ColumnCachePtr data_cache,
     const ColumnDefine & cd,
     size_t start_pack_id,
     size_t pack_count,
     size_t read_rows,
-    MutableColumnPtr & result_col,
+    const DataTypePtr & type_on_disk,
     // column_define, column_id, start_pack_id, pack_count, read_rows
     std::function<ColumnPtr(const ColumnDefine &, size_t, size_t, size_t)> on_cache_miss)
 {
@@ -682,7 +678,8 @@ void DMFileReader::getColumnFromCache(
     const auto col_id = cd.id;
     auto read_strategy = data_cache->getReadStrategy(start_pack_id, pack_count, cd.id);
     const auto & pack_stats = dmfile->getPackStats();
-    result_col->reserve(read_rows);
+    auto mutable_col = type_on_disk->createColumn();
+    mutable_col->reserve(read_rows);
     for (auto & [range, strategy] : read_strategy)
     {
         if (strategy == ColumnCache::Strategy::Memory)
@@ -690,7 +687,7 @@ void DMFileReader::getColumnFromCache(
             for (size_t cursor = range.first; cursor < range.second; ++cursor)
             {
                 auto cache_element = data_cache->getColumn(cursor, col_id);
-                result_col->insertRangeFrom(
+                mutable_col->insertRangeFrom(
                     *(cache_element.first),
                     cache_element.second.first,
                     cache_element.second.second);
@@ -704,13 +701,14 @@ void DMFileReader::getColumnFromCache(
                 rows_count += pack_stats[cursor].rows;
             }
             auto sub_col = on_cache_miss(cd, range.first, range.second - range.first, rows_count);
-            result_col->insertRangeFrom(*sub_col, 0, sub_col->size());
+            mutable_col->insertRangeFrom(*sub_col, 0, sub_col->size());
         }
         else
         {
             throw Exception("Unknown strategy", ErrorCodes::LOGICAL_ERROR);
         }
     }
+    return mutable_col;
 }
 
 void DMFileReader::addScannedRows(UInt64 rows)

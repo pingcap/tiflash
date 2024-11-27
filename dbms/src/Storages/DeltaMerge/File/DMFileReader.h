@@ -126,13 +126,13 @@ private:
         size_t start_pack_id,
         size_t pack_count,
         ColumnPtr & col);
-    void getColumnFromCache(
+    ColumnPtr getColumnFromCache(
         ColumnCachePtr data_cache,
         const ColumnDefine & cd,
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
-        MutableColumnPtr & result_col,
+        const DataTypePtr & type_on_disk,
         // column_define, column_id, start_pack_id, pack_count, read_rows
         std::function<ColumnPtr(const ColumnDefine &, size_t, size_t, size_t)> on_cache_miss);
 
