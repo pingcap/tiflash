@@ -2334,7 +2334,7 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnString)
 try
 {
     const String col_name_to_add = "string";
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("String");
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("StringV1");
 
     // write some rows before DDL
     size_t num_rows_write = 1;

@@ -89,7 +89,7 @@ ColumnDefinesPtr createColumnDefines(size_t column_number)
         primitive->emplace_back(ColumnDefine{
             static_cast<ColId>(3 + int_num + i),
             fmt::format("str_{}", i),
-            DB::DataTypeFactory::instance().get("String")});
+            DB::DataTypeFactory::instance().get("StringV1")});
     }
     return primitive;
 }
@@ -172,7 +172,7 @@ DB::Block createBlock(
     {
         ColumnWithTypeAndName str_col(
             nullptr,
-            DB::DataTypeFactory::instance().get("String"),
+            DB::DataTypeFactory::instance().get("StringV1"),
             fmt::format("str_{}", i),
             static_cast<ColId>(3 + int_num + i));
         IColumn::MutablePtr m_col = str_col.type->createColumn();

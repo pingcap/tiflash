@@ -34,7 +34,7 @@ try
            "UInt64",
            "Float32",
            "Float64",
-           "String",
+           "StringV1",
            "MyDateTime",
            "MyDate",
            "Decimal"};

@@ -53,7 +53,7 @@ try
         "Decimal(40,2)",
         "MyDate",
         "MyDateTime",
-        "String",
+        "StringV1",
         "FixedString(10)"};
     for (auto & type_name : all_types)
     {
@@ -80,7 +80,7 @@ try
     ArenaPtr pool = std::make_shared<Arena>();
     pool->alloc(1024 * 1024);
     /// case 1, agg function not allocate memory in arena
-    std::vector<String> types{"Int64", "String", "Nullable(Int64)", "Nullable(String)"};
+    std::vector<String> types{"Int64", "StringV1", "Nullable(Int64)", "Nullable(StringV1)"};
     std::vector<size_t> data_size{
         16,
         ColumnString::APPROX_STRING_SIZE * 2,
@@ -139,7 +139,7 @@ try
     String long_str(ColumnString::APPROX_STRING_SIZE * 5, 'a');
     String short_str(std::max(1, ColumnString::APPROX_STRING_SIZE / 10), 'a');
     std::vector<String> string_values{short_str, long_str};
-    std::vector<String> types{"String", "Nullable(String)"};
+    std::vector<String> types{"StringV1", "Nullable(StringV1)"};
     for (const auto & string_value : string_values)
     {
         for (const auto & type_string : types)

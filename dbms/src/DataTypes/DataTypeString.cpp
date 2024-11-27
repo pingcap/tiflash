@@ -292,9 +292,15 @@ bool DataTypeString::equals(const IDataType & rhs) const
 
 void registerDataTypeString(DataTypeFactory & factory)
 {
-    auto creator = static_cast<DataTypePtr (*)()>([] { return DataTypePtr(std::make_shared<DataTypeString>()); });
+    std::function<DataTypePtr()> legacy_creator = [] {
+        return std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SizePrefix);
+    };
+    factory.registerSimpleDataType(DataTypeString::LegacyName, legacy_creator);
 
-    factory.registerSimpleDataType("String", creator);
+    std::function<DataTypePtr()> creator = [] {
+        return std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SeparateSizeAndChars);
+    };
+    factory.registerSimpleDataType(DataTypeString::Name, creator);
 
     /// These synonims are added for compatibility.
 

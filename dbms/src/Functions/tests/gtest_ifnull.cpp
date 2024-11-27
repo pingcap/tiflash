@@ -470,7 +470,7 @@ try
     test_type("Float64", "Float64", "Float64");
 
     /// test type infer for string
-    test_type("String", "String", "String");
+    test_type("StringV1", "StringV1", "StringV1");
 
     /// test type infer for decimal
     test_type("Decimal(5,3)", "Decimal(5,3)", "Decimal(5,3)");

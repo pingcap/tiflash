@@ -940,8 +940,8 @@ TEST_F(SpillerTest, SpillAndRestoreStringEnumData)
 try
 {
     NamesAndTypes spiller_schema;
-    spiller_schema.emplace_back("col0", DataTypeFactory::instance().get("String"));
-    spiller_schema.emplace_back("col1", DataTypeFactory::instance().get("Nullable(String)"));
+    spiller_schema.emplace_back("col0", DataTypeFactory::instance().get("StringV1"));
+    spiller_schema.emplace_back("col1", DataTypeFactory::instance().get("Nullable(StringV1)"));
     spiller_schema.emplace_back("col2", DataTypeFactory::instance().get("Enum8('a' = 0,'b' = 1,'c' = 2)"));
     spiller_schema.emplace_back("col3", DataTypeFactory::instance().get("Nullable(Enum8('a' = 0,'b' = 1,'c' = 2))"));
     spiller_schema.emplace_back("col4", DataTypeFactory::instance().get("Enum16('a' = 0,'b' = 1,'c' = 2)"));

@@ -16,7 +16,6 @@
 
 #include <DataTypes/IDataType.h>
 
-
 namespace DB
 {
 class DataTypeString final : public IDataType
@@ -26,6 +25,8 @@ public:
     static constexpr bool is_parametric = false;
 
     const char * getFamilyName() const override { return "String"; }
+
+    String getName() const override { return serdes_fmt == SerdesFormat::SeparateSizeAndChars ? Name : LegacyName; }
 
     TypeIndex getTypeId() const override { return TypeIndex::String; }
 
@@ -89,7 +90,10 @@ public:
         SeparateSizeAndChars = 1, // seperate sizes and chars in serialization/deserialization.
     };
 
-    DataTypeString(SerdesFormat serdes_fmt_ = SerdesFormat::SeparateSizeAndChars)
+    inline static const String LegacyName{"String"}; // For compatibility of size-prefix format.
+    inline static const String Name{"StringV1"}; // The separate size and chars format.
+
+    explicit DataTypeString(SerdesFormat serdes_fmt_ = SerdesFormat::SeparateSizeAndChars)
         : serdes_fmt(serdes_fmt_)
     {}
 

@@ -73,10 +73,12 @@ try
         }
     }
 
-    column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString("String")}, 1, default_field, true);
+    auto legacy_str_type = typeFromString("String");
+    ASSERT_EQ(legacy_str_type->getName(), "String");
+    column_info = reverseGetColumnInfo(NameAndTypePair{name, legacy_str_type}, 1, default_field, true);
     ASSERT_EQ(column_info.tp, TiDB::TypeString);
     auto data_type = getDataTypeByColumnInfo(column_info);
-    ASSERT_EQ(data_type->getName(), "String");
+    ASSERT_EQ(data_type->getName(), "StringV1"); // Get new type by column info.
 
     // TODO: test decimal, datetime, enum
 }

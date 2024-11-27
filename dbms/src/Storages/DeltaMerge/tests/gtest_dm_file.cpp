@@ -1830,7 +1830,7 @@ try
 {
     auto cols = DMTestEnv::getDefaultColumns();
     // Prepare columns
-    ColumnDefine fixed_str_col(2, "str", typeFromString("String"));
+    ColumnDefine fixed_str_col(2, "str", typeFromString("StringV1"));
     cols->push_back(fixed_str_col);
 
     reload(cols);
@@ -2268,7 +2268,7 @@ try
     auto cols_after_ddl = std::make_shared<ColumnDefines>();
     *cols_after_ddl = cols_before_ddl;
     // A new string column
-    ColumnDefine new_s_col(100, "s", typeFromString("String"));
+    ColumnDefine new_s_col(100, "s", typeFromString("StringV1"));
     cols_after_ddl->emplace_back(new_s_col);
     // A new int64 column with default value 5
     ColumnDefine new_i_col_with_default(101, "i", typeFromString("Int64"));

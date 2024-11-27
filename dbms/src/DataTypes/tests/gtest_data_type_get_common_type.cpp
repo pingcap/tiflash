@@ -137,8 +137,8 @@ try
     ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(43,4) Int64"))->equals(*typeFromString("Decimal(43,4)")));
     ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(12,0) Int64"))->equals(*typeFromString("Decimal(19,0)")));
 
-    ASSERT_TRUE(
-        getLeastSupertype(typesFromString("String FixedString(32) FixedString(8)"))->equals(*typeFromString("String")));
+    ASSERT_TRUE(getLeastSupertype(typesFromString("String StringV1 FixedString(32) FixedString(8)"))
+                    ->equals(*typeFromString("StringV1")));
 
     ASSERT_TRUE(
         getLeastSupertype(typesFromString("Array(UInt8) Array(UInt8)"))->equals(*typeFromString("Array(UInt8)")));
@@ -260,7 +260,7 @@ try
     ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("DateTime"), typeFromString("DateTime")));
     ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("Date"), typeFromString("Date")));
     ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("Decimal(10, 4)"), typeFromString("Decimal(10, 4)")));
-    ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("String"), typeFromString("String")));
+    ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("StringV1"), typeFromString("StringV1")));
     ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("FixedString(16)"), typeFromString("FixedString(16)")));
 
     // signed -> unsigned is lossy
@@ -302,8 +302,8 @@ try
 
     // strings
     ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("FixedString(16)"), typeFromString("FixedString(100)")));
-    ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("String"), typeFromString("FixedString(1024)")));
-    ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("FixedString(16)"), typeFromString("String")));
+    ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("StringV1"), typeFromString("FixedString(1024)")));
+    ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("FixedString(16)"), typeFromString("StringV1")));
 
     // Decimal
     ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("Decimal(10, 4)"), typeFromString("Decimal(10, 2)")));

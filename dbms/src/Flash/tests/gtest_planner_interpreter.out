@@ -729,8 +729,8 @@ CreatingSets
        Expression: <projection>
         HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = false>
          Expression: <final projection>
-          Expand2: <expand2, expand_executor_id = expand_2: leveled projections: [[ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
-[ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 2_UInt64 UInt64 Const(UInt64)]]>
+          Expand2: <expand2, expand_executor_id = expand_2: leveled projections: [[ADD NULL_Nullable(StringV1) Nullable(StringV1) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
+[ADD NULL_Nullable(StringV1) Nullable(StringV1) Const(Nullable(String)),ADD 2_UInt64 UInt64 Const(UInt64)]]>
            Expression: <expr after aggregation>
             SharedQuery: <restore concurrency>
              ParallelAggregating, max_threads: 10, final: true

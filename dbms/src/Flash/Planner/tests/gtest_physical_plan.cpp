@@ -145,9 +145,9 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, selection_1> | is_tidb_operator: false, schema: <selection_1_s1, Nullable(String)>, <selection_1_s2, Nullable(String)>
- <Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, selection_1> | is_tidb_operator: false, schema: <selection_1_s1, Nullable(StringV1)>, <selection_1_s2, Nullable(StringV1)>
+ <Filter, selection_1> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  Filter
@@ -164,9 +164,9 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, limit_1> | is_tidb_operator: false, schema: <limit_1_s1, Nullable(String)>, <limit_1_s2, Nullable(String)>
- <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, limit_1> | is_tidb_operator: false, schema: <limit_1_s1, Nullable(StringV1)>, <limit_1_s2, Nullable(StringV1)>
+ <Limit, limit_1> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  Limit, limit = 1
@@ -183,9 +183,9 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, topn_1> | is_tidb_operator: false, schema: <topn_1_s1, Nullable(String)>, <topn_1_s2, Nullable(String)>
- <TopN, topn_1> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, topn_1> | is_tidb_operator: false, schema: <topn_1_s1, Nullable(StringV1)>, <topn_1_s2, Nullable(StringV1)>
+ <TopN, topn_1> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  MergeSorting, limit = 1
@@ -204,9 +204,9 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, aggregation_1> | is_tidb_operator: false, schema: <aggregation_1_max(s2)_collator_46 , Nullable(String)>, <aggregation_1_first_row(s1)_collator_46 , Nullable(String)>
- <Aggregation, aggregation_1> | is_tidb_operator: true, schema: <max(s2)_collator_46 , Nullable(String)>, <first_row(s1)_collator_46 , Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, aggregation_1> | is_tidb_operator: false, schema: <aggregation_1_max(s2)_collator_46 , Nullable(StringV1)>, <aggregation_1_first_row(s1)_collator_46 , Nullable(StringV1)>
+ <Aggregation, aggregation_1> | is_tidb_operator: true, schema: <max(s2)_collator_46 , Nullable(StringV1)>, <first_row(s1)_collator_46 , Nullable(StringV1)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  Expression: <expr after aggregation>
@@ -224,9 +224,9 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, project_1> | is_tidb_operator: false, schema: <project_1_tidbConcat(s1, s2)_collator_46 , Nullable(String)>
- <Projection, project_1> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, project_1> | is_tidb_operator: false, schema: <project_1_tidbConcat(s1, s2)_collator_46 , Nullable(StringV1)>
+ <Projection, project_1> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(StringV1)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  Expression: <projection>
@@ -244,9 +244,9 @@ Expression: <final projection>
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, project_1> | is_tidb_operator: false, schema: <project_1_tidbConcat(s1, s2)_collator_46 , Nullable(String)>, <project_1_tidbConcat(s1, s2)_collator_46 _1, Nullable(String)>, <project_1_CAST(and(notEquals(s3, 0_Int64)_collator_0 , notEquals(s4, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>, <project_1_CAST(not(notEquals(s3, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>
- <Projection, project_1> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>, <tidbConcat(s1, s2)_collator_46 , Nullable(String)>, <CAST(and(notEquals(s3, 0_Int64)_collator_0 , notEquals(s4, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>, <CAST(not(notEquals(s3, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 , Nullable(UInt64)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>, <s3, Nullable(Int64)>, <s4, Nullable(Int64)>)",
+<Projection, project_1> | is_tidb_operator: false, schema: <project_1_tidbConcat(s1, s2)_collator_46 , Nullable(StringV1)>, <project_1_tidbConcat(s1, s2)_collator_46 _1, Nullable(StringV1)>, <project_1_CAST(and(notEquals(s3, 0_Int64)_collator_0 , notEquals(s4, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_StringV1)_collator_0 , Nullable(UInt64)>, <project_1_CAST(not(notEquals(s3, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_StringV1)_collator_0 , Nullable(UInt64)>
+ <Projection, project_1> | is_tidb_operator: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(StringV1)>, <tidbConcat(s1, s2)_collator_46 , Nullable(StringV1)>, <CAST(and(notEquals(s3, 0_Int64)_collator_0 , notEquals(s4, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_StringV1)_collator_0 , Nullable(UInt64)>, <CAST(not(notEquals(s3, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_StringV1)_collator_0 , Nullable(UInt64)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>, <s3, Nullable(Int64)>, <s4, Nullable(Int64)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  Expression: <projection>
@@ -266,9 +266,9 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<MockExchangeSender, exchange_sender_1> | is_tidb_operator: true, schema: <exchange_sender_1_s1, Nullable(String)>, <exchange_sender_1_s2, Nullable(String)>
- <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <exchange_sender_1_s1, Nullable(String)>, <exchange_sender_1_s2, Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<MockExchangeSender, exchange_sender_1> | is_tidb_operator: true, schema: <exchange_sender_1_s1, Nullable(StringV1)>, <exchange_sender_1_s2, Nullable(StringV1)>
+ <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <exchange_sender_1_s1, Nullable(StringV1)>, <exchange_sender_1_s2, Nullable(StringV1)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 MockExchangeSender
  Expression: <final projection>
@@ -285,8 +285,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <exchange_receiver_0_s1, Nullable(String)>, <exchange_receiver_0_s2, Nullable(String)>
- <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <exchange_receiver_0_s1, Nullable(StringV1)>, <exchange_receiver_0_s2, Nullable(StringV1)>
+ <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  MockExchangeReceiver)",
@@ -319,7 +319,7 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_CAST(window_2_row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_CAST(window_2_row_number()_collator , Nullable(Int64)_StringV1)_collator_0 , Nullable(Int64)>
  <Window, window_2> | is_tidb_operator: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_row_number()_collator , Int64>
   <WindowSort, sort_1> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
    <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
@@ -338,7 +338,7 @@ Expression: <final projection>
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_CAST(window_2_row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+<Projection, window_2> | is_tidb_operator: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_CAST(window_2_row_number()_collator , Nullable(Int64)_StringV1)_collator_0 , Nullable(Int64)>
  <Window, window_2> | is_tidb_operator: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_row_number()_collator , Int64>
   <WindowSort, sort_1> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
    <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
@@ -363,8 +363,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, table_scan_0> | is_tidb_operator: false, schema: <table_scan_0_s1, Nullable(String)>, <table_scan_0_s2, Nullable(String)>
- <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, table_scan_0> | is_tidb_operator: false, schema: <table_scan_0_s1, Nullable(StringV1)>, <table_scan_0_s2, Nullable(StringV1)>
+ <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <s1, Nullable(StringV1)>, <s2, Nullable(StringV1)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
  MockTableScan)",
@@ -387,12 +387,12 @@ try
         execute(
             request,
             /*expected_physical_plan=*/R"(
-<Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(String)>, <Join_2_Join_2_l_join_c, Nullable(String)>, <Join_2_Join_2_r_s, Nullable(String)>, <Join_2_Join_2_r_join_c, Nullable(String)>
- <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
-  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+<Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(StringV1)>, <Join_2_Join_2_l_join_c, Nullable(StringV1)>, <Join_2_Join_2_r_s, Nullable(StringV1)>, <Join_2_Join_2_r_join_c, Nullable(StringV1)>
+ <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(StringV1)>, <Join_2_l_join_c, Nullable(StringV1)>, <Join_2_r_s, Nullable(StringV1)>, <Join_2_r_join_c, Nullable(StringV1)>
+  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(StringV1)>, <Join_2_l_join_c, Nullable(StringV1)>
+   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(StringV1)>, <join_c, Nullable(StringV1)>
+  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(StringV1)>, <Join_2_r_join_c, Nullable(StringV1)>
+   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(StringV1)>, <join_c, Nullable(StringV1)>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
@@ -411,12 +411,12 @@ CreatingSets
         execute(
             request,
             /*expected_physical_plan=*/R"(
-<Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(String)>, <Join_2_Join_2_l_join_c, Nullable(String)>, <Join_2_Join_2_r_s, Nullable(String)>, <Join_2_Join_2_r_join_c, Nullable(String)>
- <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
-  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+<Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(StringV1)>, <Join_2_Join_2_l_join_c, Nullable(StringV1)>, <Join_2_Join_2_r_s, Nullable(StringV1)>, <Join_2_Join_2_r_join_c, Nullable(StringV1)>
+ <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(StringV1)>, <Join_2_l_join_c, Nullable(StringV1)>, <Join_2_r_s, Nullable(StringV1)>, <Join_2_r_join_c, Nullable(StringV1)>
+  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(StringV1)>, <Join_2_l_join_c, Nullable(StringV1)>
+   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(StringV1)>, <join_c, Nullable(StringV1)>
+  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(StringV1)>, <Join_2_r_join_c, Nullable(StringV1)>
+   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(StringV1)>, <join_c, Nullable(StringV1)>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
@@ -435,12 +435,12 @@ CreatingSets
         execute(
             request,
             /*expected_physical_plan=*/R"(
-<Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(String)>, <Join_2_Join_2_l_join_c, Nullable(String)>, <Join_2_Join_2_r_s, Nullable(String)>, <Join_2_Join_2_r_join_c, Nullable(String)>
- <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
-  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+<Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(StringV1)>, <Join_2_Join_2_l_join_c, Nullable(StringV1)>, <Join_2_Join_2_r_s, Nullable(StringV1)>, <Join_2_Join_2_r_join_c, Nullable(StringV1)>
+ <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(StringV1)>, <Join_2_l_join_c, Nullable(StringV1)>, <Join_2_r_s, Nullable(StringV1)>, <Join_2_r_join_c, Nullable(StringV1)>
+  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(StringV1)>, <Join_2_l_join_c, Nullable(StringV1)>
+   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(StringV1)>, <join_c, Nullable(StringV1)>
+  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(StringV1)>, <Join_2_r_join_c, Nullable(StringV1)>
+   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(StringV1)>, <join_c, Nullable(StringV1)>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
@@ -468,7 +468,7 @@ CreatingSets
         execute(
             request,
             /*expected_physical_plan=*/R"(
-<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_a, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_b, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>
+<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_a, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_b, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>
  <Join, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
   <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
    <Join, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
@@ -522,7 +522,7 @@ CreatingSets
         execute(
             request,
             /*expected_physical_plan=*/R"(
-<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_b, Nullable(Int32)>
+<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_StringV1)_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_b, Nullable(Int32)>
  <Join, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_r_Join_5_r_b, Nullable(Int32)>
   <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
    <Join, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
