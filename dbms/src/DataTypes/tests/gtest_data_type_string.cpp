@@ -98,8 +98,8 @@ protected:
         str_v1.deserializeBinaryBulkWithMultipleStreams(col2, get_read_stream2, limit, 8, true, {});
     }
 
-    DataTypeString a{0};
-    DataTypeString b{1};
+    DataTypeString a{DataTypeString::SerdesFormat::SizePrefix};
+    DataTypeString b{DataTypeString::SerdesFormat::SeparateSizeAndChars};
     IDataType & str_v0 = a;
     IDataType & str_v1 = b;
 

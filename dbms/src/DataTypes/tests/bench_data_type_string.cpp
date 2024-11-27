@@ -28,6 +28,7 @@
 #include <benchmark/benchmark.h>
 
 #include <random>
+
 namespace DB::bench
 {
 
@@ -88,9 +89,9 @@ constexpr size_t str_count = 65535;
 template <typename... Args>
 void serialize(benchmark::State & state, Args &&... args)
 {
-    auto [version, str_size, method] = std::make_tuple(std::move(args)...);
+    auto [fmt, str_size, method] = std::make_tuple(std::move(args)...);
     auto str_col = createColumnString(str_size, str_count);
-    DataTypeString t(version);
+    DataTypeString t(fmt);
     IDataType & type = t;
     auto write_streams = initWriteStream(type, method);
     auto get_write_stream = [&](const IDataType::SubstreamPath & substream_path) -> WriteBuffer * {
@@ -117,9 +118,9 @@ void serialize(benchmark::State & state, Args &&... args)
 template <typename... Args>
 void deserialize(benchmark::State & state, Args &&... args)
 {
-    auto [version, str_size, method] = std::make_tuple(std::move(args)...);
+    auto [fmt, str_size, method] = std::make_tuple(std::move(args)...);
     auto str_col = createColumnString(str_size, str_count);
-    DataTypeString t(version);
+    DataTypeString t(fmt);
     IDataType & type = t;
     auto write_streams = initWriteStream(type, method);
     auto get_write_stream = [&](const IDataType::SubstreamPath & substream_path) -> WriteBuffer * {
@@ -156,123 +157,673 @@ void deserialize(benchmark::State & state, Args &&... args)
     }
 }
 
-BENCHMARK_CAPTURE(serialize, v0_size1_none, 0, 1, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size2_none, 0, 2, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size4_none, 0, 4, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size8_none, 0, 8, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size16_none, 0, 16, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size32_none, 0, 32, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size64_none, 0, 64, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size128_none, 0, 128, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size256_none, 0, 256, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size512_none, 0, 512, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v0_size1024_none, 0, 1024, CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size1_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size2_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    2,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size4_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    4,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size8_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    8,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size16_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    16,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size32_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    32,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size64_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    64,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size128_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    128,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size256_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    256,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size512_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    512,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size1024_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1024,
+    CompressionMethod::NONE);
 
-BENCHMARK_CAPTURE(serialize, v1_size1_none, 1, 1, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size2_none, 1, 2, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size4_none, 1, 4, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size8_none, 1, 8, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size16_none, 1, 16, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size32_none, 1, 32, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size64_none, 1, 64, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size128_none, 1, 128, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size256_none, 1, 256, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size512_none, 1, 512, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(serialize, v1_size1024_none, 1, 1024, CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size1_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size2_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    2,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size4_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    4,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size8_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    8,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size16_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    16,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size32_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    32,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size64_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    64,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size128_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    128,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size256_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    256,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size512_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    512,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size1024_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1024,
+    CompressionMethod::NONE);
 
-BENCHMARK_CAPTURE(deserialize, v0_size1_none, 0, 1, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size2_none, 0, 2, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size4_none, 0, 4, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size8_none, 0, 8, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size16_none, 0, 16, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size32_none, 0, 32, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size64_none, 0, 64, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size128_none, 0, 128, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size256_none, 0, 256, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size512_none, 0, 512, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v0_size1024_none, 0, 1024, CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size1_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size2_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    2,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size4_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    4,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size8_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    8,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size16_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    16,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size32_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    32,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size64_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    64,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size128_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    128,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size256_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    256,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size512_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    512,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size1024_none,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1024,
+    CompressionMethod::NONE);
 
-BENCHMARK_CAPTURE(deserialize, v1_size1_none, 1, 1, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size2_none, 1, 2, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size4_none, 1, 4, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size8_none, 1, 8, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size16_none, 1, 16, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size32_none, 1, 32, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size64_none, 1, 64, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size128_none, 1, 128, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size256_none, 1, 256, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size512_none, 1, 512, CompressionMethod::NONE);
-BENCHMARK_CAPTURE(deserialize, v1_size1024_none, 1, 1024, CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size1_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size2_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    2,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size4_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    4,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size8_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    8,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size16_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    16,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size32_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    32,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size64_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    64,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size128_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    128,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size256_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    256,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size512_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    512,
+    CompressionMethod::NONE);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size1024_none,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1024,
+    CompressionMethod::NONE);
 
-BENCHMARK_CAPTURE(serialize, v0_size1_lz4, 0, 1, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size2_lz4, 0, 2, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size4_lz4, 0, 4, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size8_lz4, 0, 8, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size16_lz4, 0, 16, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size32_lz4, 0, 32, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size64_lz4, 0, 64, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size128_lz4, 0, 128, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size256_lz4, 0, 256, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size512_lz4, 0, 512, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v0_size1024_lz4, 0, 1024, CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size1_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size2_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    2,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size4_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    4,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size8_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    8,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size16_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    16,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size32_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    32,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size64_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    64,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size128_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    128,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size256_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    256,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size512_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    512,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    size - prefix_size1024_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1024,
+    CompressionMethod::LZ4);
 
-BENCHMARK_CAPTURE(serialize, v1_size1_lz4, 1, 1, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size2_lz4, 1, 2, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size4_lz4, 1, 4, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size8_lz4, 1, 8, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size16_lz4, 1, 16, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size32_lz4, 1, 32, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size64_lz4, 1, 64, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size128_lz4, 1, 128, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size256_lz4, 1, 256, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size512_lz4, 1, 512, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(serialize, v1_size1024_lz4, 1, 1024, CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size1_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size2_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    2,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size4_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    4,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size8_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    8,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size16_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    16,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size32_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    32,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size64_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    64,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size128_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    128,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size256_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    256,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size512_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    512,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size1024_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1024,
+    CompressionMethod::LZ4);
 
-BENCHMARK_CAPTURE(deserialize, v0_size1_lz4, 0, 1, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size2_lz4, 0, 2, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size4_lz4, 0, 4, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size8_lz4, 0, 8, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size16_lz4, 0, 16, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size32_lz4, 0, 32, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size64_lz4, 0, 64, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size128_lz4, 0, 128, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size256_lz4, 0, 256, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size512_lz4, 0, 512, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v0_size1024_lz4, 0, 1024, CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size1_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size2_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    2,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size4_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    4,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size8_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    8,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size16_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    16,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size32_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    32,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size64_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    64,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size128_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    128,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size256_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    256,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size512_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    512,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    size - prefix_size1024_lz4,
+    DataTypeString::SerdesFormat::SizePrefix,
+    1024,
+    CompressionMethod::LZ4);
 
-BENCHMARK_CAPTURE(deserialize, v1_size1_lz4, 1, 1, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size2_lz4, 1, 2, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size4_lz4, 1, 4, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size8_lz4, 1, 8, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size16_lz4, 1, 16, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size32_lz4, 1, 32, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size64_lz4, 1, 64, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size128_lz4, 1, 128, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size256_lz4, 1, 256, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size512_lz4, 1, 512, CompressionMethod::LZ4);
-BENCHMARK_CAPTURE(deserialize, v1_size1024_lz4, 1, 1024, CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size1_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size2_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    2,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size4_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    4,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size8_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    8,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size16_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    16,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size32_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    32,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size64_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    64,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size128_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    128,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size256_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    256,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size512_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    512,
+    CompressionMethod::LZ4);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size1024_lz4,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1024,
+    CompressionMethod::LZ4);
 
-BENCHMARK_CAPTURE(serialize, v1_size1_lw, 1, 1, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size2_lw, 1, 2, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size4_lw, 1, 4, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size8_lw, 1, 8, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size16_lw, 1, 16, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size32_lw, 1, 32, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size64_lw, 1, 64, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size128_lw, 1, 128, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size256_lw, 1, 256, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size512_lw, 1, 512, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(serialize, v1_size1024_lw, 1, 1024, CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size1_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size2_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    2,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size4_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    4,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size8_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    8,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size16_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    16,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size32_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    32,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size64_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    64,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size128_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    128,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size256_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    256,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size512_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    512,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    serialize,
+    seperate_size1024_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1024,
+    CompressionMethod::Lightweight);
 
-BENCHMARK_CAPTURE(deserialize, v1_size1_lw, 1, 1, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size2_lw, 1, 2, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size4_lw, 1, 4, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size8_lw, 1, 8, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size16_lw, 1, 16, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size32_lw, 1, 32, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size64_lw, 1, 64, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size128_lw, 1, 128, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size256_lw, 1, 256, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size512_lw, 1, 512, CompressionMethod::Lightweight);
-BENCHMARK_CAPTURE(deserialize, v1_size1024_lw, 1, 1024, CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size1_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size2_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    2,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size4_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    4,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size8_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    8,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size16_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    16,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size32_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    32,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size64_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    64,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size128_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    128,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size256_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    256,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size512_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    512,
+    CompressionMethod::Lightweight);
+BENCHMARK_CAPTURE(
+    deserialize,
+    seperate_size1024_lw,
+    DataTypeString::SerdesFormat::SeparateSizeAndChars,
+    1024,
+    CompressionMethod::Lightweight);
 } // namespace DB::bench
