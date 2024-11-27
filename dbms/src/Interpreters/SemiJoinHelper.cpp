@@ -493,13 +493,7 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
 APPLY_FOR_SEMI_JOIN(M)
 #undef M
 
-template class SemiJoinHelper<Semi, All, MapsAll>;
-template class SemiJoinHelper<Anti, All, MapsAll>;
-template class SemiJoinHelper<LeftOuterSemi, All, MapsAll>;
-template class SemiJoinHelper<LeftOuterAnti, All, MapsAll>;
-template class SemiJoinHelper<Semi, Any, MapsAny>;
-template class SemiJoinHelper<Anti, Any, MapsAny>;
-template class SemiJoinHelper<LeftOuterSemi, Any, MapsAny>;
-template class SemiJoinHelper<LeftOuterAnti, Any, MapsAny>;
-
+#define M(KIND, STRICTNESS, MAPTYPE) template class SemiJoinHelper<KIND, STRICTNESS, MAPTYPE>;
+APPLY_FOR_SEMI_JOIN(M)
+#undef M
 } // namespace DB
