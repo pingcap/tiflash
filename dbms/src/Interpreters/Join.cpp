@@ -34,8 +34,6 @@
 #include <exception>
 #include <magic_enum.hpp>
 
-#include "Interpreters/SemiJoinHelper.h"
-
 namespace DB
 {
 namespace FailPoints
