@@ -182,18 +182,18 @@ public:
         {
             // We have to copy the keys to our arena.
             assert(arena != nullptr);
-            cur_set.emplace(ArenaKeyHolder{rhs_elem.getValue(), *arena}, it, inserted);
+            cur_set.emplace(ArenaKeyHolder{rhs_elem.getValue(), arena}, it, inserted);
         }
     }
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
+        auto & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
         IColumn & data_to = arr_to.getData();
 
         auto & set = this->data(place).value;
-        offsets_to.push_back((offsets_to.size() == 0 ? 0 : offsets_to.back()) + set.size());
+        offsets_to.push_back((offsets_to.empty() ? 0 : offsets_to.back()) + set.size());
 
         for (auto & elem : set)
             deserializeAndInsert<is_plain_column>(elem.getValue(), data_to);

@@ -135,7 +135,7 @@ struct HashMethodString
         {
             if (likely(collator))
                 key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-            return ArenaKeyHolder{key, *pool};
+            return ArenaKeyHolder{key, pool};
         }
         else
         {
@@ -172,7 +172,7 @@ struct HashMethodStringBin
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
         key = BinCollatorSortKey<padding>(key.data, key.size);
-        return ArenaKeyHolder{key, *pool};
+        return ArenaKeyHolder{key, pool};
     }
 
 protected:
@@ -425,7 +425,7 @@ struct HashMethodFixedString
 
         if constexpr (place_string_to_arena)
         {
-            return ArenaKeyHolder{key, *pool};
+            return ArenaKeyHolder{key, pool};
         }
         else
         {

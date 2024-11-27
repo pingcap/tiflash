@@ -310,10 +310,10 @@ struct StringHashTableSubMapSelector<0, true, Data>
 {
     struct Hash
     {
-        static ALWAYS_INLINE size_t operator()(const StringRef & ) { return 0; }
+        static ALWAYS_INLINE size_t operator()(const StringRef &) { return 0; }
     };
 
-    typename Data::T0 & getSubMap(size_t hashval, Data & data)
+    static typename Data::Impl::T0 & getSubMap(size_t hashval, Data & data)
     {
         const auto bucket = Data::getBucketFromHash(hashval);
         return data.impls[bucket].m0;
@@ -325,7 +325,7 @@ struct StringHashTableSubMapSelector<1, true, Data>
 {
     using Hash = StringHashTableHash::StringKey8Hasher;
 
-    typename Data::T1 & getSubMap(size_t hashval, Data & data)
+    static typename Data::Impl::T1 & getSubMap(size_t hashval, Data & data)
     {
         const auto bucket = Data::getBucketFromHash(hashval);
         return data.impls[bucket].m1;
@@ -337,7 +337,7 @@ struct StringHashTableSubMapSelector<2, true, Data>
 {
     using Hash = StringHashTableHash::StringKey16Hasher;
 
-    typename Data::T2 & getSubMap(size_t hashval, Data & data)
+    static typename Data::Impl::T2 & getSubMap(size_t hashval, Data & data)
     {
         const auto bucket = Data::getBucketFromHash(hashval);
         return data.impls[bucket].m2;
@@ -349,7 +349,7 @@ struct StringHashTableSubMapSelector<3, true, Data>
 {
     using Hash = StringHashTableHash::StringKey24Hasher;
 
-    typename Data::T3 & getSubMap(size_t hashval, Data & data)
+    static typename Data::Impl::T3 & getSubMap(size_t hashval, Data & data)
     {
         const auto bucket = Data::getBucketFromHash(hashval);
         return data.impls[bucket].m3;
@@ -361,7 +361,7 @@ struct StringHashTableSubMapSelector<4, true, Data>
 {
     using Hash = StringHashTableHash::StringRefHasher;
 
-    typename Data::Ts & getSubMap(size_t hashval, Data & data)
+    static typename Data::Impl::Ts & getSubMap(size_t hashval, Data & data)
     {
         const auto bucket = Data::getBucketFromHash(hashval);
         return data.impls[bucket].ms;

@@ -666,14 +666,37 @@ void NO_INLINE Aggregator::executeImpl(
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
     if (method.data.getBufferSizeInCells() < 8192)
-        executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+    {
+        if constexpr (Method::Data::is_string_hash_map)
+            executeImplBatchStringHashMap<collect_hit_rate, only_lookup, false>(
+                method,
+                state,
+                aggregates_pool,
+                agg_process_info);
+        else
+            executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+    }
     else
-        executeImplBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
+    {
+        if constexpr (Method::Data::is_string_hash_map)
+            executeImplBatchStringHashMap<collect_hit_rate, only_lookup, true>(
+                method,
+                state,
+                aggregates_pool,
+                agg_process_info);
+        else
+            executeImplBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
+    }
 }
 
 template <typename Data, typename State>
-std::vector<size_t> getHashVals(size_t start_row, size_t end_row, const Data & data, const State & state,
-        std::vector<String> & sort_key_containers, Arena * pool)
+std::vector<size_t> getHashVals(
+    size_t start_row,
+    size_t end_row,
+    const Data & data,
+    const State & state,
+    std::vector<String> & sort_key_containers,
+    Arena * pool)
 {
     std::vector<size_t> hashvals(state.total_rows, 0);
     for (size_t i = start_row; i < end_row; ++i)
@@ -695,9 +718,15 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     try
     {
         if constexpr (only_lookup)
-            return state.template findKey<enable_prefetch>(method.data, index, aggregates_pool, sort_key_containers, hashvals);
+            return state
+                .template findKey<enable_prefetch>(method.data, index, aggregates_pool, sort_key_containers, hashvals);
         else
-            return state.template emplaceKey<enable_prefetch>(method.data, index, aggregates_pool, sort_key_containers, hashvals);
+            return state.template emplaceKey<enable_prefetch>(
+                method.data,
+                index,
+                aggregates_pool,
+                sort_key_containers,
+                hashvals);
     }
     catch (ResizeException &)
     {
@@ -707,19 +736,27 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
 
 // StringKeyType can be StringRef/StringKey8/StringKey16/StringKey24/ArenaKeyHolder.
 // return true when resize exception happens.
-template <size_t SubMapIndex, bool only_lookup, bool enable_prefetch, typename Method, typename StringKeyType>
-bool Aggregator::emplaceOrFindStringKey(
-        typename Method::Data & data,
-        typename Method::State & state,
-        const std::vector<size_t> & key_infos,
-        const std::vector<StringKeyType> & key_datas,
-        Arena & aggregates_pool,
-        std::vector<AggregateDataPtr> & places,
-        AggProcessInfo & agg_process_info) const
+template <
+    size_t SubMapIndex,
+    bool collect_hit_rate,
+    bool only_lookup,
+    bool enable_prefetch,
+    typename Data,
+    typename State,
+    typename StringKeyType>
+size_t Aggregator::emplaceOrFindStringKey(
+    Data & data,
+    State & state,
+    const std::vector<size_t> & key_infos,
+    std::vector<StringKeyType> & key_datas, // TODO const
+    Arena & aggregates_pool,
+    std::vector<AggregateDataPtr> & places,
+    AggProcessInfo & agg_process_info) const
 {
+    static_assert(!(collect_hit_rate && only_lookup));
     RUNTIME_CHECK(key_infos.size() == key_datas.size());
 
-    using Hash = typename StringHashTableSubMapSelector<SubMapIndex, Method::Data::is_two_level, std::decay_t<typename Method::Data>>::Hash;
+    using Hash = typename StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::Hash;
     std::vector<size_t> hashvals(key_infos.size(), 0);
     for (size_t i = 0; i < key_infos.size(); ++i)
     {
@@ -733,7 +770,8 @@ bool Aggregator::emplaceOrFindStringKey(
         {
             if constexpr (only_lookup)
             {
-                auto find_result = state.template findStringKey<SubMapIndex, enable_prefetch>(data, i, key_datas, hashvals);
+                auto find_result
+                    = state.template findStringKey<SubMapIndex, enable_prefetch>(data, i, key_datas, hashvals);
                 if (find_result.isFound())
                 {
                     agg_state = find_result.getMapped();
@@ -745,7 +783,8 @@ bool Aggregator::emplaceOrFindStringKey(
             }
             else
             {
-                auto emplace_result = state.template emplaceStringKey<SubMapIndex, enable_prefetch>(data, i, key_datas, hashvals);
+                auto emplace_result
+                    = state.template emplaceStringKey<SubMapIndex, enable_prefetch>(data, i, key_datas, hashvals);
                 if (emplace_result.isInserted())
                 {
                     emplace_result.setMapped(nullptr);
@@ -758,18 +797,19 @@ bool Aggregator::emplaceOrFindStringKey(
                 else
                 {
                     agg_state = emplace_result.getMapped();
+
+                    if constexpr (collect_hit_rate)
+                        ++agg_process_info.hit_row_cnt;
                 }
-                places.push_back(agg_state);
+                places[i] = agg_state;
             }
         }
         catch (ResizeException &)
         {
-            // agg_process_info.set
-            // TODO handle exception
-            return true;
+            return i;
         }
     }
-    return false;
+    return key_infos.size();
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
@@ -799,13 +839,12 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         if constexpr (enable_prefetch)
         {
             hashvals = getHashVals(
-                    agg_process_info.start_row,
-                    agg_process_info.end_row,
-                    method.data,
-                    state,
-                    sort_key_containers,
-                    aggregates_pool);
-
+                agg_process_info.start_row,
+                agg_process_info.end_row,
+                method.data,
+                state,
+                sort_key_containers,
+                aggregates_pool);
         }
 
         for (size_t i = 0; i < rows; ++i)
@@ -884,20 +923,25 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     if constexpr (enable_prefetch)
     {
         hashvals = getHashVals(
-                agg_process_info.start_row,
-                agg_process_info.end_row,
-                method.data,
-                state,
-                sort_key_containers,
-                aggregates_pool);
+            agg_process_info.start_row,
+            agg_process_info.end_row,
+            method.data,
+            state,
+            sort_key_containers,
+            aggregates_pool);
     }
 
     for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        auto emplace_result_holder
-            = emplaceOrFindKey<only_lookup, enable_prefetch>(method, state, i, *aggregates_pool, sort_key_containers, hashvals);
+        auto emplace_result_holder = emplaceOrFindKey<only_lookup, enable_prefetch>(
+            method,
+            state,
+            i,
+            *aggregates_pool,
+            sort_key_containers,
+            hashvals);
         if unlikely (!emplace_result_holder.has_value())
         {
             LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
@@ -961,129 +1005,174 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     }
 }
 
+#define M(SUBMAPINDEX)                                                              \
+    template <typename StringKeyType>                                               \
+    void setupExceptionRecoveryInfoForStringHashTable(                              \
+        Aggregator::AggProcessInfo & agg_process_info,                              \
+        size_t row,                                                                 \
+        const std::vector<size_t> & key_infos,                                      \
+        const std::vector<StringKeyType> & key_datas,                               \
+        std::integral_constant<size_t, (SUBMAPINDEX)>)                              \
+    {                                                                               \
+        agg_process_info.submap_m##SUBMAPINDEX##_infos                              \
+            = std::vector<size_t>(key_infos.begin() + row, key_infos.end());        \
+        agg_process_info.submap_m##SUBMAPINDEX##_datas                              \
+            = std::vector<StringKeyType>(key_datas.begin() + row, key_datas.end()); \
+    }
+
+M(0)
+M(1)
+M(2)
+M(3)
+M(4)
+
+#undef M
+
 // Emplace key into StringHashMap/TwoLevelStringHashMap is seperated from other situations,
 // because it's easy to implement prefetch submap directly.
-// TODO not support resize execption
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
-        Method & method,
-        typename Method::State & state,
-        Arena * aggregates_pool,
-        AggProcessInfo & agg_process_info) const
+    Method & method,
+    typename Method::State & state,
+    Arena * aggregates_pool,
+    AggProcessInfo & agg_process_info) const
 {
     // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
-    static_assert(Method::Data::isStringHashMap);
+    static_assert(Method::Data::is_string_hash_map);
+
+#define M(SUBMAPINDEX)                                        \
+    RUNTIME_CHECK(                                            \
+        agg_process_info.submap_m##SUBMAPINDEX##_infos.size() \
+        == agg_process_info.submap_m##SUBMAPINDEX##_datas.size());
+
+    M(0)
+    M(1)
+    M(2)
+    M(3)
+    M(4)
+#undef M
 
     std::vector<String> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
 
-    const size_t rows = agg_process_info.end_row = agg_process_info.start_row;
-    RUNTIME_CHECK_MSG(rows == state.total_rows, "executeImplBatchStringHashMap only handle resize exception for each Block instead of row");
-    const size_t reserve_size = rows / 4;
+#define M(INFO, DATA, KEYTYPE) \
+    std::vector<size_t>(INFO); \
+    std::vector<KEYTYPE>(DATA);
 
-    std::vector<size_t> key0_infos;
-    std::vector<StringRef> key0_datas;
-    key0_infos.reserve(reserve_size);
-    key0_datas.reserve(reserve_size);
+    M(key0_infos, key0_datas, StringRef)
+    M(key8_infos, key8_datas, StringKey8)
+    M(key16_infos, key16_datas, StringKey16)
+    M(key24_infos, key24_datas, StringKey24)
+    M(key_str_infos, key_str_datas, ArenaKeyHolder)
+#undef M
 
-    std::vector<size_t> key8_infos;
-    std::vector<StringKey8> key8_datas;
-    key8_infos.reserve(reserve_size);
-    key8_datas.reserve(reserve_size);
+    const size_t rows = agg_process_info.end_row - agg_process_info.start_row;
 
-    std::vector<size_t> key16_infos;
-    std::vector<StringKey16> key16_datas;
-    key16_infos.reserve(reserve_size);
-    key16_datas.reserve(reserve_size);
-
-    std::vector<size_t> key24_infos;
-    std::vector<StringKey24> key24_datas;
-    key24_infos.reserve(reserve_size);
-    key24_datas.reserve(reserve_size);
-
-    std::vector<size_t> key_str_infos;
-    std::vector<ArenaKeyHolder> key_str_datas;
-    key_str_infos.reserve(reserve_size);
-    key_str_datas.reserve(reserve_size);
-
-    auto dispatch_callback_key0 = [&key0_infos, &key0_datas](const StringRef & key, size_t row) {
-        key0_infos.push_back(row);
-        key0_datas.push_back(key);
-    };
-    auto dispatch_callback_key8 = [&key8_infos, &key8_datas](const StringKey8 & key, size_t row) {
-        key8_infos.push_back(row);
-        key8_datas.push_back(key);
-    };
-    auto dispatch_callback_key16 = [&key16_infos, &key16_datas](const StringKey16 & key, size_t row) {
-        key16_infos.push_back(row);
-        key16_datas.push_back(key);
-    };
-    auto dispatch_callback_key24 = [&key24_infos, &key24_datas](const StringKey24 & key, size_t row) {
-        key24_infos.push_back(row);
-        key24_datas.push_back(key);
-    };
-    // Argument type is ArenaKeyHolder instead of StringRef,
-    // because it will only be persisted when insert into HashTable.
-    auto dispatch_callback_key_str = [&key_str_infos, &key_str_datas](const ArenaKeyHolder & key, size_t row) {
-        key_str_infos.push_back(row);
-        key_str_datas.push_back(key);
-    };
-    for (size_t i = 0; i < rows; ++i)
+    if likely (agg_process_info.allBlockDataHandled())
     {
-        auto key_holder = state.getKeyHolder(i, aggregates_pool, sort_key_containers);
-        dispatchStringHashTable(key_holder,
+        // No resize exception happens, so this is a new Block.
+        RUNTIME_CHECK(agg_process_info.start_row == 0);
+        RUNTIME_CHECK_MSG(
+            rows == state.total_rows,
+            "executeImplBatchStringHashMap only handle resize exception for each Block instead of row");
+        const size_t reserve_size = rows / 4;
+
+#define M(INFO, DATA, SUBMAPINDEX, KEYTYPE)                                                     \
+    (INFO).reserve(reserve_size);                                                               \
+    (DATA).reserve(reserve_size);                                                               \
+    auto dispatch_callback_key##SUBMAPINDEX = [&INFO, &DATA](const KEYTYPE & key, size_t row) { \
+        (INFO).push_back(row);                                                                  \
+        (DATA).push_back(key);                                                                  \
+    };
+
+        M(key0_infos, key0_datas, 0, StringRef)
+        M(key8_infos, key8_datas, 8, StringKey8)
+        M(key16_infos, key16_datas, 16, StringKey16)
+        M(key24_infos, key24_datas, 24, StringKey24)
+        // Argument type is ArenaKeyHolder instead of StringRef,
+        // because it will only be persisted when insert into HashTable.
+        M(key_str_infos, key_str_datas, str, ArenaKeyHolder)
+#undef M
+
+        for (size_t i = 0; i < rows; ++i)
+        {
+            auto key_holder = state.getKeyHolder(i, aggregates_pool, sort_key_containers);
+            dispatchStringHashTable(
+                i,
+                key_holder,
                 dispatch_callback_key0,
                 dispatch_callback_key8,
                 dispatch_callback_key16,
                 dispatch_callback_key24,
-                dispatch_callback_key_str);
+                dispatch_callback_keystr);
+        }
     }
-
-    std::vector<AggregateDataPtr> key0_places;
-    key0_places.reserve(key0_infos.size());
-
-    std::vector<AggregateDataPtr> key8_places;
-    key8_places.reserve(key8_infos.size());
-
-    std::vector<AggregateDataPtr> key16_places;
-    key16_places.reserve(key16_infos.size());
-
-    std::vector<AggregateDataPtr> key24_places;
-    key24_places.reserve(key24_infos.size());
-
-    std::vector<AggregateDataPtr> key_str_places;
-    key_str_places.reserve(key_str_infos.size());
-
-    if (!key0_infos.empty())
+    else
     {
-        emplaceOrFindStringKey<0, false>(method.data, state, key0_infos, key0_datas, aggregates_pool, key0_places, agg_process_info);
+#define M(INFO, DATA, SUBMAPINDEX)                           \
+    (INFO) = agg_process_info.submap_m##SUBMAPINDEX##_infos; \
+    (DATA) = agg_process_info.submap_m##SUBMAPINDEX##_datas;
+
+        M(key0_infos, key0_datas, 0)
+        M(key8_infos, key8_datas, 1)
+        M(key16_infos, key16_datas, 2)
+        M(key24_infos, key24_datas, 3)
+        M(key_str_infos, key_str_datas, 4)
+#undef M
     }
 
-#define M(INDEX, INFO, DATA, PLACES) \
-    if (!(INFO).empty()) \
-    { \
-        if constexpr (enable_prefetch) \
-            emplaceOrFindStringKey<INDEX, true>(method.data, state, INFO, DATA, aggregates_pool, PLACES, agg_process_info); \
-        else \
-            emplaceOrFindStringKey<INDEX, true>(method.data, state, INFO, DATA, aggregates_pool, PLACES, agg_process_info); \
-    }
+    std::vector<AggregateDataPtr> key0_places(key0_infos.size(), nullptr);
+    std::vector<AggregateDataPtr> key8_places(key8_infos.size(), nullptr);
+    std::vector<AggregateDataPtr> key16_places(key16_infos.size(), nullptr);
+    std::vector<AggregateDataPtr> key24_places(key24_infos.size(), nullptr);
+    std::vector<AggregateDataPtr> key_str_places(key_str_infos.size(), nullptr);
 
+    bool got_resize_exception = false;
+    size_t emplaced_index = 0;
+
+#define M(INDEX, INFO, DATA, PLACES)                                                                    \
+    if unlikely (got_resize_exception)                                                                  \
+    {                                                                                                   \
+        emplaced_index = 0;                                                                             \
+    }                                                                                                   \
+    else if (!(INFO).empty())                                                                           \
+    {                                                                                                   \
+        emplaced_index = emplaceOrFindStringKey<INDEX, collect_hit_rate, only_lookup, enable_prefetch>( \
+            method.data,                                                                                \
+            state,                                                                                      \
+            (INFO),                                                                                     \
+            (DATA),                                                                                     \
+            *aggregates_pool,                                                                           \
+            (PLACES),                                                                                   \
+            agg_process_info);                                                                          \
+        if unlikely (emplaced_index != (INFO).size())                                                   \
+            got_resize_exception = true;                                                                \
+    }                                                                                                   \
+    setupExceptionRecoveryInfoForStringHashTable(                                                       \
+        agg_process_info,                                                                               \
+        emplaced_index,                                                                                 \
+        INFO,                                                                                           \
+        DATA,                                                                                           \
+        std::integral_constant<size_t, INDEX>{});
+
+    M(0, key0_infos, key0_datas, key0_places)
     M(1, key8_infos, key8_datas, key8_places)
     M(2, key16_infos, key16_datas, key16_places)
     M(3, key24_infos, key24_datas, key24_places)
     M(4, key_str_infos, key_str_datas, key_str_places)
 #undef M
 
-    RUNTIME_CHECK(rows == key0_places.size() + key8_places.size() + key16_places.size() + key24_places.size() + key_str_places.size());
+    RUNTIME_CHECK(
+        rows
+        == key0_places.size() + key8_places.size() + key16_places.size() + key24_places.size() + key_str_places.size());
 
     std::vector<AggregateDataPtr> places(rows, nullptr);
-
-#define M(INFO, PLACES) \
+#define M(INFO, PLACES)                        \
     for (size_t i = 0; i < (INFO).size(); ++i) \
-    { \
-        const auto row = (INFO)[i]; \
-        places[row] = (PLACES)[i]; \
+    {                                          \
+        const auto row = (INFO)[i];            \
+        places[row] = (PLACES)[i];             \
     }
 
     M(key0_infos, key0_places)
@@ -1092,7 +1181,6 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     M(key24_infos, key24_places)
     M(key_str_infos, key_str_places)
 #undef M
-
 
     for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
          ++inst)
@@ -1105,7 +1193,8 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
             inst->batch_arguments,
             aggregates_pool);
     }
-    agg_process_info.start_row = rows;
+    // For StringHashTable, start_row is meanless, instead submap_mx_infos/submap_mx_datas are used.
+    agg_process_info.start_row = got_resize_exception ? 0 : rows;
 }
 
 void NO_INLINE
@@ -1129,7 +1218,6 @@ Aggregator::executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo
     }
     agg_process_info.start_row += agg_size;
 }
-
 
 void Aggregator::prepareAggregateInstructions(
     Columns columns,

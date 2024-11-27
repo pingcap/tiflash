@@ -1319,11 +1319,28 @@ public:
         size_t hit_row_cnt = 0;
         std::vector<UInt64> not_found_rows;
 
+        // For StringHashTable resize exception.
+        std::vector<size_t> submap_m0_infos{};
+        std::vector<size_t> submap_m1_infos{};
+        std::vector<size_t> submap_m2_infos{};
+        std::vector<size_t> submap_m3_infos{};
+        std::vector<size_t> submap_m4_infos{};
+
+        std::vector<StringRef> submap_m0_datas{};
+        std::vector<StringKey8> submap_m1_datas{};
+        std::vector<StringKey16> submap_m2_datas{};
+        std::vector<StringKey24> submap_m3_datas{};
+        std::vector<ArenaKeyHolder> submap_m4_datas{};
+
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
             assert(start_row <= end_row);
-            return start_row == end_row || aggregator->isCancelled();
+            // submap_mx_infos.size() and submap_mx_datas.size() are always equal.
+            // So only need to check submap_m0_infos is enough.
+            return (start_row == end_row && !submap_m0_infos.empty() && !submap_m1_infos.empty()
+                    && !submap_m3_infos.empty() && !submap_m4_infos.empty())
+                || aggregator->isCancelled();
         }
         void resetBlock(const Block & block_)
         {
@@ -1463,10 +1480,10 @@ protected:
 
     template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
     void executeImplBatchStringHashMap(
-            Method & method,
-            typename Method::State & state,
-            Arena * aggregates_pool,
-            AggProcessInfo & agg_process_info) const;
+        Method & method,
+        typename Method::State & state,
+        Arena * aggregates_pool,
+        AggProcessInfo & agg_process_info) const;
 
     template <bool only_lookup, bool enable_prefetch, typename Method>
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
@@ -1477,15 +1494,22 @@ protected:
         std::vector<std::string> & sort_key_containers,
         const std::vector<size_t> & hashvals) const;
 
-    template <size_t SubMapIndex, bool only_lookup, bool enable_prefetch, typename Method, typename StringKeyType>
-    bool emplaceOrFindStringKey(
-            typename Method::Data & data,
-            typename Method::State & state,
-            const std::vector<size_t> & key_infos,
-            const std::vector<StringKeyType> & key_datas,
-            Arena & aggregates_pool,
-            std::vector<AggregateDataPtr> & places,
-            AggProcessInfo & agg_process_info) const;
+    template <
+        size_t SubMapIndex,
+        bool collect_hit_rate,
+        bool only_lookup,
+        bool enable_prefetch,
+        typename Data,
+        typename State,
+        typename StringKeyType>
+    size_t emplaceOrFindStringKey(
+        Data & data,
+        State & state,
+        const std::vector<size_t> & key_infos,
+        std::vector<StringKeyType> & key_datas,
+        Arena & aggregates_pool,
+        std::vector<AggregateDataPtr> & places,
+        AggProcessInfo & agg_process_info) const;
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena);

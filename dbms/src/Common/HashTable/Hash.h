@@ -130,8 +130,8 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
         return updated_value;
     }
     static_assert(
-        DB::IsDecimal<
-            T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        DB::IsDecimal<T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -244,8 +244,8 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
         return boost::multiprecision::hash_value(key);
     }
     static_assert(
-        is_boost_number_v<
-            T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -297,20 +297,26 @@ inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 template <typename T>
 struct HashCRC32;
 
-#define DEFINE_HASH(T)                                               \
-    template <>                                                      \
-    struct HashCRC32<T>                                              \
-    {                                                                \
-        static_assert(is_fit_register<T>);                           \
-        size_t operator()(T key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH(T)                     \
+    template <>                            \
+    struct HashCRC32<T>                    \
+    {                                      \
+        static_assert(is_fit_register<T>); \
+        size_t operator()(T key) const     \
+        {                                  \
+            return hashCRC32<T>(key);      \
+        }                                  \
     };
 
-#define DEFINE_HASH_WIDE(T)                                                  \
-    template <>                                                              \
-    struct HashCRC32<T>                                                      \
-    {                                                                        \
-        static_assert(!is_fit_register<T>);                                  \
-        size_t operator()(const T & key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH_WIDE(T)                    \
+    template <>                                \
+    struct HashCRC32<T>                        \
+    {                                          \
+        static_assert(!is_fit_register<T>);    \
+        size_t operator()(const T & key) const \
+        {                                      \
+            return hashCRC32<T>(key);          \
+        }                                      \
     };
 
 DEFINE_HASH(DB::UInt8)
@@ -535,7 +541,7 @@ struct HashWithMixSeed<DB::Int256>
 
 template <>
 struct HashWithMixSeed<DB::UInt256>
-{ 
+{
     static inline size_t operator()(const DB::UInt256 & v)
     {
         return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_uint256(0, v));

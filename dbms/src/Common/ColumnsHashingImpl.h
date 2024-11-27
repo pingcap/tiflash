@@ -16,8 +16,8 @@
 
 #include <Columns/IColumn.h>
 #include <Common/HashTable/HashTable.h>
-#include <Common/HashTable/StringHashTable.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
+#include <Common/HashTable/StringHashTable.h>
 #include <Common/assert_cast.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/AggregationCommon.h>
@@ -174,17 +174,19 @@ public:
         {
             return findKeyImpl<false>(keyHolderGetKey(key_holder), data, 0);
         }
-
     }
 
+    // TODO emplaceStringKey merge with emplaceKey?
     template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
     ALWAYS_INLINE inline EmplaceResult emplaceStringKey(
-            Data & data,
-            size_t idx,
-            const std::vector<StringKeyType> & datas,
-            const std::vector<size_t> & hashvals)
+        Data & data,
+        size_t idx,
+        std::vector<StringKeyType> & datas, // TODO const
+        const std::vector<size_t> & hashvals)
     {
-        auto & submap = typename StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(data);
+        auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
+            hashvals[idx],
+            data);
         if constexpr (enable_prefetch)
         {
             const auto prefetch_idx = idx + prefetch_step;
@@ -198,12 +200,14 @@ public:
     // TODO Macro with emplaceStringKey
     template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
     ALWAYS_INLINE inline FindResult findStringKey(
-            Data & data,
-            size_t idx,
-            const std::vector<StringKeyType> & datas,
-            const std::vector<size_t> & hashvals)
+        Data & data,
+        size_t idx,
+        std::vector<StringKeyType> & datas, // TODO const
+        const std::vector<size_t> & hashvals)
     {
-        auto & submap = typename StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(data);
+        auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
+            hashvals[idx],
+            data);
         if constexpr (enable_prefetch)
         {
             const auto prefetch_idx = idx + prefetch_step;
@@ -211,7 +215,7 @@ public:
                 submap.prefetch(hashvals[prefetch_idx]);
         }
 
-        return findKeyImpl<true>(datas[idx], submap, hashvals[idx]);
+        return findKeyImpl<true>(keyHolderGetKey(datas[idx]), submap, hashvals[idx]);
     }
 
     template <typename Data>
@@ -301,7 +305,7 @@ protected:
     }
 
     template <bool use_hashval, typename Data, typename Key>
-    ALWAYS_INLINE inline FindResult findKeyImpl(Key key, Data & data, size_t hashval)
+    ALWAYS_INLINE inline FindResult findKeyImpl(Key & key, Data & data, size_t hashval)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
