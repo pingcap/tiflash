@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <DataTypes/DataTypeString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -90,8 +89,6 @@ struct ColumnStat
         sizes_bytes = proto.sizes_bytes();
         sizes_mark_bytes = proto.sizes_mark_bytes();
 
-        checkOldStringSerializationFormat();
-
         if (proto.has_vector_index())
         {
             // For backward compatibility, loaded `vector_index` into `vector_indexes`
@@ -144,19 +141,6 @@ struct ColumnStat
         readIntBinary(nullmap_data_bytes, buf);
         readIntBinary(nullmap_mark_bytes, buf);
         readIntBinary(index_bytes, buf);
-    }
-
-private:
-    void checkOldStringSerializationFormat()
-    {
-        if (sizes_bytes != 0)
-            return;
-
-        if (removeNullable(type)->getTypeId() != TypeIndex::String)
-            return;
-
-        auto t = std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SizePrefix);
-        type = type->isNullable() ? makeNullable(t) : t;
     }
 };
 
