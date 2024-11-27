@@ -331,20 +331,21 @@ PaddedPODArray<Offset> offsetToStrSize(
     const size_t end)
 {
     assert(!chars_offsets.empty());
+    // The class PODArrayBase ensure chars_offsets[-1] is well defined as 0.
+    // For details, check the `pad_left` argument in PODArrayBase.
+    // In the for loop code below, when `begin` and `i` are 0:
+    // str_sizes[0] = chars_offsets[0] - chars_offsets[-1];
+    assert(chars_offsets[-1] == 0);
+
     PaddedPODArray<Offset> str_sizes(end - begin);
-    size_t i = 0;
-    if (begin == 0)
-    {
-        str_sizes[0] = chars_offsets[0];
-        ++i;
-    }
-    assert(begin + i > 0);
+    auto chars_offsets_pos = chars_offsets.begin() + begin;
+
     // clang-format off
     #pragma clang loop vectorize(enable)
     // clang-format on
-    for (; i < str_sizes.size(); ++i)
+    for (ssize_t i = 0; i < static_cast<ssize_t>(str_sizes.size()); ++i)
     {
-        str_sizes[i] = chars_offsets[begin + i] - chars_offsets[begin + i - 1];
+        str_sizes[i] = chars_offsets_pos[i] - chars_offsets_pos[i - 1];
     }
     return str_sizes;
 }
