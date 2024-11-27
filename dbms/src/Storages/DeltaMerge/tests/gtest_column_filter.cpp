@@ -37,7 +37,8 @@ public:
     {
         auto cds = DMTestEnv::getDefaultColumns(
             is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        cds->push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
+        cds->push_back(
+            ColumnDefine(100, str_col_name, DataTypeFactory::instance().get(DataTypeString::getDefaultName())));
         return toEmptyBlock(*cds);
     }
 
