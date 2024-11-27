@@ -517,29 +517,27 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
     if (!column_streams.contains(DMFile::getFileNameBase(cd.id)))
         return createColumnWithDefaultValue(cd, read_rows);
 
+    auto type_on_disk = dmfile->getColumnStat(cd.id).type;
     // try read PK column from ColumnCacheLongTerm
     if (column_cache_long_term && cd.id == pk_col_id && ColumnCacheLongTerm::isCacheableColumn(cd))
     {
         // ColumnCacheLongTerm only caches user assigned PrimaryKey column.
-        auto data_type = dmfile->getColumnStat(cd.id).type;
         auto column_all_data
             = column_cache_long_term->get(dmfile->parentPath(), dmfile->fileId(), cd.id, [&]() -> IColumn::Ptr {
                   // Always read all packs when filling cache
-                  return readFromDiskOrSharingCache(cd, 0, dmfile->getPacks(), dmfile->getRows());
+                  return readFromDiskOrSharingCache(cd, type_on_disk, 0, dmfile->getPacks(), dmfile->getRows());
               });
 
-        auto column = data_type->createColumn();
+        auto column = type_on_disk->createColumn();
         column->insertRangeFrom(*column_all_data, next_row_offset - read_rows, read_rows);
-        return convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+        return convertColumnByColumnDefineIfNeed(type_on_disk, std::move(column), cd);
     }
-
-    auto data_type = dmfile->getColumnStat(cd.id).type;
 
     // Not cached
     if (!enable_column_cache || !isCacheableColumn(cd))
     {
-        auto column = readFromDiskOrSharingCache(cd, start_pack_id, pack_count, read_rows);
-        return convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+        auto column = readFromDiskOrSharingCache(cd, type_on_disk, start_pack_id, pack_count, read_rows);
+        return convertColumnByColumnDefineIfNeed(type_on_disk, std::move(column), cd);
     }
 
     // enable_column_cache && isCacheableColumn(cd)
@@ -548,20 +546,28 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
     auto column = getColumnFromCache(
         column_cache,
         cd,
+        type_on_disk,
         start_pack_id,
         pack_count,
         read_rows,
-        data_type,
-        [&](const ColumnDefine & cd, size_t start_pack_id, size_t pack_count, size_t read_rows) {
-            return readFromDiskOrSharingCache(cd, start_pack_id, pack_count, read_rows);
+        [&](const ColumnDefine & cd,
+            const DataTypePtr & type_on_disk,
+            size_t start_pack_id,
+            size_t pack_count,
+            size_t read_rows) {
+            return readFromDiskOrSharingCache(cd, type_on_disk, start_pack_id, pack_count, read_rows);
         });
     // add column to cache
     addColumnToCache(column_cache, cd.id, start_pack_id, pack_count, column);
     // Cast column's data from DataType in disk to what we need now
-    return convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+    return convertColumnByColumnDefineIfNeed(type_on_disk, std::move(column), cd);
 }
 
-ColumnPtr DMFileReader::readFromDisk(const ColumnDefine & cd, size_t start_pack_id, size_t read_rows)
+ColumnPtr DMFileReader::readFromDisk(
+    const ColumnDefine & cd,
+    const DataTypePtr & type_on_disk,
+    size_t start_pack_id,
+    size_t read_rows)
 {
     const auto stream_name = DMFile::getFileNameBase(cd.id);
     auto iter = column_streams.find(stream_name);
@@ -573,9 +579,8 @@ ColumnPtr DMFileReader::readFromDisk(const ColumnDefine & cd, size_t start_pack_
         stream_name);
 #endif
     auto & top_stream = iter->second;
-    auto data_type = dmfile->getColumnStat(cd.id).type;
-    auto mutable_col = data_type->createColumn();
-    data_type->deserializeBinaryBulkWithMultipleStreams( //
+    auto mutable_col = type_on_disk->createColumn();
+    type_on_disk->deserializeBinaryBulkWithMultipleStreams( //
         *mutable_col,
         [&](const IDataType::SubstreamPath & substream_path) {
             const auto substream_name = DMFile::getFileNameBase(cd.id, substream_path);
@@ -595,6 +600,7 @@ ColumnPtr DMFileReader::readFromDisk(const ColumnDefine & cd, size_t start_pack_
 
 ColumnPtr DMFileReader::readFromDiskOrSharingCache(
     const ColumnDefine & cd,
+    const DataTypePtr & type_on_disk,
     size_t start_pack_id,
     size_t pack_count,
     size_t read_rows)
@@ -610,26 +616,29 @@ ColumnPtr DMFileReader::readFromDiskOrSharingCache(
     ColumnPtr column;
     if (enable_sharing_column)
     {
-        auto data_type = dmfile->getColumnStat(cd.id).type;
         column = getColumnFromCache(
             data_sharing_col_data_cache,
             cd,
+            type_on_disk,
             start_pack_id,
             pack_count,
             read_rows,
-            data_type,
-            [&](const ColumnDefine & cd, size_t start_pack_id, size_t, size_t read_rows) {
+            [&](const ColumnDefine & cd,
+                const DataTypePtr & type_on_disk,
+                size_t start_pack_id,
+                size_t /*pack_count*/,
+                size_t read_rows) {
                 // If there are concurrent read requests, this data is likely to be shared.
                 // So the allocation and deallocation of this data may not be in the same MemoryTracker.
                 // This can lead to inaccurate memory statistics of MemoryTracker.
                 // To solve this problem, we use a independent global memory tracker to trace the shared column data in the data_sharing_col_data_cache.
                 MemoryTrackerSetter mem_tracker_guard(true, nullptr);
-                return readFromDisk(cd, start_pack_id, read_rows);
+                return readFromDisk(cd, type_on_disk, start_pack_id, read_rows);
             });
     }
     else
     {
-        column = readFromDisk(cd, start_pack_id, read_rows);
+        column = readFromDisk(cd, type_on_disk, start_pack_id, read_rows);
     }
 
     // Set the column to DMFileReaderPool to share the column data.
@@ -643,7 +652,7 @@ ColumnPtr DMFileReader::readFromDiskOrSharingCache(
 }
 
 void DMFileReader::addColumnToCache(
-    ColumnCachePtr data_cache,
+    const ColumnCachePtr & data_cache,
     ColId col_id,
     size_t start_pack_id,
     size_t pack_count,
@@ -662,19 +671,19 @@ void DMFileReader::addColumnToCache(
 }
 
 ColumnPtr DMFileReader::getColumnFromCache(
-    ColumnCachePtr data_cache,
+    const ColumnCachePtr & data_cache,
     const ColumnDefine & cd,
+    const DataTypePtr & type_on_disk,
     size_t start_pack_id,
     size_t pack_count,
     size_t read_rows,
-    const DataTypePtr & type_on_disk,
-    // column_define, column_id, start_pack_id, pack_count, read_rows
-    std::function<ColumnPtr(const ColumnDefine &, size_t, size_t, size_t)> on_cache_miss)
+    // column_define, type_on_disk, start_pack_id, pack_count, read_rows
+    std::function<ColumnPtr(const ColumnDefine &, const DataTypePtr &, size_t, size_t, size_t)> on_cache_miss)
 {
     RUNTIME_CHECK(data_cache != nullptr);
 
     const auto col_id = cd.id;
-    auto read_strategy = data_cache->getReadStrategy(start_pack_id, pack_count, cd.id);
+    auto read_strategy = data_cache->getReadStrategy(start_pack_id, pack_count, col_id);
     const auto & pack_stats = dmfile->getPackStats();
     auto mutable_col = type_on_disk->createColumn();
     mutable_col->reserve(read_rows);
@@ -698,7 +707,7 @@ ColumnPtr DMFileReader::getColumnFromCache(
             {
                 rows_count += pack_stats[cursor].rows;
             }
-            auto sub_col = on_cache_miss(cd, range.first, range.second - range.first, rows_count);
+            auto sub_col = on_cache_miss(cd, type_on_disk, range.first, range.second - range.first, rows_count);
             mutable_col->insertRangeFrom(*sub_col, 0, sub_col->size());
         }
         else

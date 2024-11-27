@@ -107,9 +107,14 @@ private:
         size_t pack_count,
         size_t read_rows,
         const std::vector<size_t> & clean_read_packs);
-    ColumnPtr readFromDisk(const ColumnDefine & cd, size_t start_pack_id, size_t read_rows);
+    ColumnPtr readFromDisk(
+        const ColumnDefine & cd,
+        const DataTypePtr & type_on_disk,
+        size_t start_pack_id,
+        size_t read_rows);
     ColumnPtr readFromDiskOrSharingCache(
         const ColumnDefine & cd,
+        const DataTypePtr & type_on_disk,
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows);
@@ -121,20 +126,19 @@ private:
         const DMFileMeta::PackStats & pack_stats);
 
     void addColumnToCache(
-        ColumnCachePtr data_cache,
+        const ColumnCachePtr & data_cache,
         ColId col_id,
         size_t start_pack_id,
         size_t pack_count,
         ColumnPtr & col);
     ColumnPtr getColumnFromCache(
-        ColumnCachePtr data_cache,
+        const ColumnCachePtr & data_cache,
         const ColumnDefine & cd,
+        const DataTypePtr & type_on_disk,
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
-        const DataTypePtr & type_on_disk,
-        // column_define, column_id, start_pack_id, pack_count, read_rows
-        std::function<ColumnPtr(const ColumnDefine &, size_t, size_t, size_t)> on_cache_miss);
+        std::function<ColumnPtr(const ColumnDefine &, const DataTypePtr &, size_t, size_t, size_t)> on_cache_miss);
 
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
