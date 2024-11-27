@@ -631,14 +631,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
       F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
       F(type_push_block_bytes, {"type", "push_block_bytes"}),                                                                       \
-      F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
-      F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
-      F(type_add_cache_reach_count_limit, {"type", "add_cache_reach_count_limit"}),                                                 \
-      F(type_add_cache_total_bytes_limit, {"type", "add_cache_total_bytes_limit"}),                                                 \
-      F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \
-      F(type_get_cache_part, {"type", "get_cache_part"}),                                                                           \
-      F(type_get_cache_hit, {"type", "get_cache_hit"}),                                                                             \
-      F(type_get_cache_copy, {"type", "get_cache_copy"}))                                                                           \
+      F(type_add_cache_total_bytes_limit, {"type", "add_cache_total_bytes_limit"}))                                                 \
     M(tiflash_storage_read_thread_gauge,                                                                                            \
       "The gauge of storage read thread",                                                                                           \
       Gauge,                                                                                                                        \
@@ -899,7 +892,14 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_lz4_compressed_bytes, {"type", "lz4_compressed_bytes"}),                                                               \
       F(type_lz4_uncompressed_bytes, {"type", "lz4_uncompressed_bytes"}),                                                           \
       F(type_lightweight_compressed_bytes, {"type", "lightweight_compressed_bytes"}),                                               \
-      F(type_lightweight_uncompressed_bytes, {"type", "lightweight_uncompressed_bytes"}))
+      F(type_lightweight_uncompressed_bytes, {"type", "lightweight_uncompressed_bytes"}))                                           \
+    M(tiflash_storage_column_cache_packs,                                                                                           \
+      "The count of hit/miss column cache packs",                                                                                   \
+      Counter,                                                                                                                      \
+      F(type_data_sharing_hit, {"type", "data_sharing_hit"}),                                                                       \
+      F(type_data_sharing_miss, {"type", "data_sharing_miss"}),                                                                     \
+      F(type_extra_column_hit, {"type", "extra_column_hit"}),                                                                       \
+      F(type_extra_column_miss, {"type", "extra_column_miss"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
