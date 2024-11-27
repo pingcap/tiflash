@@ -228,13 +228,14 @@ private:
         NamesAndTypes & source_columns,
         NamesAndTypes & window_columns);
 
-    void buildCommonWindowFunc(
+    void buildWindowOrAggFuncImpl(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
         const String & window_func_name,
         WindowDescription & window_description,
         NamesAndTypes & source_columns,
-        NamesAndTypes & window_columns);
+        NamesAndTypes & window_columns,
+        bool is_agg);
 
     void fillArgumentDetail(
         const ExpressionActionsPtr & actions,

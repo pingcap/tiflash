@@ -133,15 +133,6 @@ void setFieldType(const DB::ASTFunction * func, tipb::Expr * expr, int32_t colla
     setFieldTypeForAggFunc(func, expr, agg_sig, collator_id);
 }
 
-tipb::ExprType getWindowSig(const String & window_func_name)
-{
-    auto window_sig_it = tests::window_func_name_to_sig.find(window_func_name);
-    if (window_sig_it == tests::window_func_name_to_sig.end())
-        throw Exception(fmt::format("Unsupported window function {}", window_func_name), ErrorCodes::LOGICAL_ERROR);
-
-    return window_sig_it->second;
-}
-
 void setWindowFrame(MockWindowFrame & frame, tipb::Window * window)
 {
     if (frame.type.has_value())
@@ -200,8 +191,6 @@ bool WindowBinder::toTiPBExecutor(
             astToPB(input_schema, arg, window_expr->add_children(), collator_id, context);
         }
 
-        auto window_sig = getWindowSig(window_func->name);
-        window_expr->set_tp(window_sig);
         setFieldType(window_func, window_expr, collator_id);
     }
 
