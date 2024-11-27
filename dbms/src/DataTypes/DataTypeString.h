@@ -83,18 +83,18 @@ public:
         bool position_independent_encoding,
         SubstreamPath & path) const override;
 
-    DataTypeString(Int32 version_ = 1)
-        : version(version_)
+    enum class SerdesFormat
     {
-        assert(version == 0 || version == 1);
-    }
-    Int32 getVersion() const { return version; }
+        SizePrefix = 0, // use size-prefix format in serialization/deserialization.
+        SeparateSizeAndChars = 1, // seperate sizes and chars in serialization/deserialization.
+    };
+
+    DataTypeString(SerdesFormat serdes_fmt_ = SerdesFormat::SeparateSizeAndChars)
+        : serdes_fmt(serdes_fmt_)
+    {}
 
 private:
-    // `version` == 0, use size-prefix format in serialization/deserialization.
-    // `version` == 1, seperate sizes and chars in serialization/deserialization.
-    // Default value is 1, 0 is use to read old data.
-    const Int32 version = 1;
+    const SerdesFormat serdes_fmt = SerdesFormat::SeparateSizeAndChars;
 };
 
 } // namespace DB
