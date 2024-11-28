@@ -37,7 +37,8 @@ class StorageLog
     friend class LogBlockOutputStream;
 
 public:
-    std::string getName() const override { return "Log"; }
+    static constexpr auto NAME = "Log";
+    std::string getName() const override { return NAME; }
     std::string getTableName() const override { return name; }
 
     BlockInputStreams read(
@@ -55,9 +56,9 @@ public:
 
     bool checkData() const override;
 
-    std::string full_path() const { return path + escapeForFileName(name) + '/'; }
+    std::string fullPath() const { return path + escapeForFileName(name) + '/'; }
 
-    String getDataPath() const override { return full_path(); }
+    String getDataPath() const override { return fullPath(); }
 
 protected:
     /** Attach the table with the appropriate name, along the appropriate path (with / at the end),

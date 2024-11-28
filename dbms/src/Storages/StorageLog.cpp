@@ -400,7 +400,7 @@ StorageLog::StorageLog(
     , file_checker(path + escapeForFileName(name) + '/' + "sizes.json")
 {
     if (path.empty())
-        throw Exception("Storage " + getName() + " requires data path", ErrorCodes::INCORRECT_FILE_NAME);
+        throw Exception(ErrorCodes::INCORRECT_FILE_NAME, "Storage {} requires data path", NAME);
 
     /// create files if they do not exist
     Poco::File(path + escapeForFileName(name) + '/').createDirectories();
