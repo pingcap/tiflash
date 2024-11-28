@@ -1319,7 +1319,8 @@ public:
         size_t hit_row_cnt = 0;
         std::vector<UInt64> not_found_rows;
 
-        // For StringHashTable resize exception.
+        // For StringHashTable, when resize exception happens, the process will be interrupted.
+        // So we need these infos to continue.
         std::vector<size_t> submap_m0_infos{};
         std::vector<size_t> submap_m1_infos{};
         std::vector<size_t> submap_m2_infos{};
@@ -1337,9 +1338,9 @@ public:
         {
             assert(start_row <= end_row);
             // submap_mx_infos.size() and submap_mx_datas.size() are always equal.
-            // So only need to check submap_m0_infos is enough.
-            return (start_row == end_row && !submap_m0_infos.empty() && !submap_m1_infos.empty()
-                    && !submap_m3_infos.empty() && !submap_m4_infos.empty())
+            // So only need to check submap_mx_infos is enough.
+            return (start_row == end_row && submap_m0_infos.empty() && submap_m1_infos.empty()
+                    && submap_m3_infos.empty() && submap_m4_infos.empty())
                 || aggregator->isCancelled();
         }
         void resetBlock(const Block & block_)

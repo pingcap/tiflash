@@ -139,8 +139,7 @@ public:
         return hasZero() ? zeroValue() : nullptr;
     }
 
-    void ALWAYS_INLINE prefetch(size_t) {}
-
+    ALWAYS_INLINE inline void prefetch() {}
     void write(DB::WriteBuffer & wb) const { zeroValue()->write(wb); }
     void writeText(DB::WriteBuffer & wb) const { zeroValue()->writeText(wb); }
     void read(DB::ReadBuffer & rb) { zeroValue()->read(rb); }
@@ -348,7 +347,6 @@ public:
 #endif
         dispatch(Self & self, KeyHolder && key_holder, Func && func)
     {
-        StringHashTableHash hash;
         const StringRef & x = keyHolderGetKey(key_holder);
         const size_t sz = x.size;
         if (sz == 0)
@@ -361,7 +359,7 @@ public:
         {
             // Strings with trailing zeros are not representable as fixed-size
             // string keys. Put them to the generic table.
-            return func(self.ms, std::forward<KeyHolder>(key_holder), hash(x));
+            return func(self.ms, std::forward<KeyHolder>(key_holder), StringHashTableHash::operator()(x));
         }
 
         const char * p = x.data;
@@ -397,7 +395,7 @@ public:
                     n[0] <<= s;
             }
             keyHolderDiscardKey(key_holder);
-            return func(self.m1, k8, hash(k8));
+            return func(self.m1, k8, StringHashTableHash::operator()(k8));
         }
         case 1: // 9..16 bytes
         {
@@ -409,7 +407,7 @@ public:
             else
                 n[1] <<= s;
             keyHolderDiscardKey(key_holder);
-            return func(self.m2, k16, hash(k16));
+            return func(self.m2, k16, StringHashTableHash::operator()(k16));
         }
         case 2: // 17..24 bytes
         {
@@ -421,11 +419,11 @@ public:
             else
                 n[2] <<= s;
             keyHolderDiscardKey(key_holder);
-            return func(self.m3, k24, hash(k24));
+            return func(self.m3, k24, StringHashTableHash::operator()(k24));
         }
         default: // >= 25 bytes
         {
-            return func(self.ms, std::forward<KeyHolder>(key_holder), hash(x));
+            return func(self.ms, std::forward<KeyHolder>(key_holder), StringHashTableHash::operator()(x));
         }
         }
     }
@@ -455,13 +453,6 @@ public:
         this->dispatch(*this, key_holder, EmplaceCallable(it, inserted));
     }
 
-    // TODO del
-    template <typename KeyHolder>
-    void ALWAYS_INLINE emplace(KeyHolder &&, LookupResult &, bool &, size_t)
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::emplace instead");
-    }
-
     struct FindCallable
     {
         // find() doesn't need any key memory management, so we don't work with
@@ -478,34 +469,11 @@ public:
         }
     };
 
-    // We will not prefetch StringHashTable directly, instead caller should call specific submap's prefetch.
-    // Because StringHashTable doesn't know which submap to prefetch.
-    void prefetch(size_t) const
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::prefetch instead");
-    }
-
     LookupResult ALWAYS_INLINE find(const Key & x) { return dispatch(*this, x, FindCallable{}); }
 
     ConstLookupResult ALWAYS_INLINE find(const Key & x) const { return dispatch(*this, x, FindCallable{}); }
 
-    // TODO del
-    LookupResult ALWAYS_INLINE find(const Key &, size_t)
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
-    }
-    ConstLookupResult ALWAYS_INLINE find(const Key &, size_t) const
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
-    }
-
     bool ALWAYS_INLINE has(const Key & x, size_t = 0) const { return dispatch(*this, x, FindCallable{}) != nullptr; }
-
-    template <typename HashKeyType>
-    size_t ALWAYS_INLINE hash(const HashKeyType & key) const
-    {
-        return SubMaps::Hash::operator()(key);
-    }
 
     void write(DB::WriteBuffer & wb) const
     {

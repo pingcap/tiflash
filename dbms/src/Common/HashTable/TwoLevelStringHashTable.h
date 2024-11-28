@@ -33,20 +33,8 @@ public:
     static constexpr bool is_string_hash_map = true;
     static constexpr bool is_two_level = true;
 
-    template <typename HashKeyType>
-    size_t ALWAYS_INLINE hash(const HashKeyType & key) const
-    {
-        return SubMaps::Hash::operator()(key);
-    }
-
-    // Same reason as StringHashTable::prefetch.
-    void prefetch(size_t) const
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::prefetch instead");
-    }
-
     // TODO: currently hashing contains redundant computations when doing distributed or external aggregations
-    size_t hashStringRef(const Key & x) const
+    size_t hash(const Key & x) const
     {
         return const_cast<Self &>(*this).dispatch(*this, x, [&](const auto &, const auto &, size_t hash) {
             return hash;
@@ -59,7 +47,7 @@ public:
             impl.setResizeCallback(resize_callback);
     }
 
-    size_t operator()(const Key & x) const { return hashStringRef(x); }
+    size_t operator()(const Key & x) const { return hash(x); }
 
     /// NOTE Bad for hash tables with more than 2^32 cells.
     static size_t getBucketFromHash(size_t hash_value) { return (hash_value >> (32 - BITS_FOR_BUCKET)) & MAX_BUCKET; }
@@ -216,26 +204,11 @@ public:
         dispatch(*this, key_holder, typename Impl::EmplaceCallable{it, inserted});
     }
 
-    template <typename KeyHolder>
-    void ALWAYS_INLINE emplace(KeyHolder &&, LookupResult &, bool &, size_t)
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::emplace instead");
-    }
-
     LookupResult ALWAYS_INLINE find(const Key & x) { return dispatch(*this, x, typename Impl::FindCallable{}); }
 
     ConstLookupResult ALWAYS_INLINE find(const Key & x) const
     {
         return dispatch(*this, x, typename Impl::FindCallable{});
-    }
-    LookupResult ALWAYS_INLINE find(const Key &, size_t)
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
-    }
-
-    ConstLookupResult ALWAYS_INLINE find(const Key &, size_t) const
-    {
-        RUNTIME_CHECK_MSG(false, "shouldn't reach here, you should use submap::find instead");
     }
 
     void write(DB::WriteBuffer & wb) const

@@ -130,6 +130,14 @@ public:
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
     static constexpr size_t prefetch_step = 16;
 
+    template <typename Map>
+    static ALWAYS_INLINE inline void prefetch(Map & map, size_t idx, const std::vector<size_t> & hashvals)
+    {
+        const auto prefetch_idx = idx + prefetch_step;
+        if likely (prefetch_idx < hashvals.size())
+            map.prefetch(hashvals[prefetch_idx]);
+    }
+
     template <bool enable_prefetch = false, typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
         Data & data,
@@ -141,10 +149,8 @@ public:
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         if constexpr (enable_prefetch)
         {
-            const auto idx = row + prefetch_step;
-            if (idx < hashvals.size())
-                data.prefetch(hashvals[idx]);
-
+            assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+            prefetch(data, row, hashvals);
             return emplaceImpl<true>(key_holder, data, hashvals[row]);
         }
         else
@@ -164,10 +170,8 @@ public:
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         if constexpr (enable_prefetch)
         {
-            const auto idx = row + prefetch_step;
-            if (idx < hashvals.size())
-                data.prefetch(hashvals[idx]);
-
+            assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+            prefetch(data, row, hashvals);
             return findKeyImpl<true>(keyHolderGetKey(key_holder), data, hashvals[row]);
         }
         else
@@ -176,7 +180,6 @@ public:
         }
     }
 
-    // TODO emplaceStringKey merge with emplaceKey?
     template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
     ALWAYS_INLINE inline EmplaceResult emplaceStringKey(
         Data & data,
@@ -184,20 +187,17 @@ public:
         std::vector<StringKeyType> & datas, // TODO const
         const std::vector<size_t> & hashvals)
     {
+        assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+
         auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
             hashvals[idx],
             data);
         if constexpr (enable_prefetch)
-        {
-            const auto prefetch_idx = idx + prefetch_step;
-            if (prefetch_idx < hashvals.size())
-                submap.prefetch(hashvals[prefetch_idx]);
-        }
+            prefetch(submap, idx, hashvals);
 
         return emplaceImpl<true>(datas[idx], submap, hashvals[idx]);
     }
 
-    // TODO Macro with emplaceStringKey
     template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
     ALWAYS_INLINE inline FindResult findStringKey(
         Data & data,
@@ -205,15 +205,13 @@ public:
         std::vector<StringKeyType> & datas, // TODO const
         const std::vector<size_t> & hashvals)
     {
+        assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+
         auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
             hashvals[idx],
             data);
         if constexpr (enable_prefetch)
-        {
-            const auto prefetch_idx = idx + prefetch_step;
-            if (prefetch_idx < hashvals.size())
-                submap.prefetch(hashvals[prefetch_idx]);
-        }
+            prefetch(submap, idx, hashvals);
 
         return findKeyImpl<true>(keyHolderGetKey(datas[idx]), submap, hashvals[idx]);
     }
