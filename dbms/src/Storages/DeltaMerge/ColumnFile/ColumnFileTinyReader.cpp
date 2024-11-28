@@ -94,7 +94,7 @@ Columns ColumnFileTinyReader::readFromDisk(
 
     for (size_t index = 0; index < num_columns_read; ++index)
     {
-        // the column is fill with default values.
+        // the column is filled with default values.
         if (columns[index] != nullptr)
             continue;
 
