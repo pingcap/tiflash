@@ -2761,6 +2761,148 @@ try
 }
 CATCH
 
+namespace
+{
+const ColumnDefine legacy_str_cd(2, "col2", DataTypeFactory::instance().get(DataTypeString::LegacyName));
+const ColumnDefine str_cd(2, "col2", DataTypeFactory::instance().get(DataTypeString::Name));
+
+Block createBlock(const ColumnDefine & cd, size_t begin, size_t end)
+{
+    auto block = DMTestEnv::prepareSimpleWriteBlock(begin, end, false);
+    auto col = cd.type->createColumn();
+    for (size_t i = begin; i < end; ++i)
+        col->insert(makeField(std::to_string(i)));
+    block.insert(ColumnWithTypeAndName{std::move(col), cd.type, cd.name, cd.id});
+    return block;
+}
+
+} // namespace
+
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringData_CFTiny)
+try
+{
+    // Write legacy string data to CFTiny.
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(legacy_str_cd);
+        dropDataOnDisk(getTemporaryPath());
+        store = reload(table_column_defines);
+        auto block = createBlock(legacy_str_cd, 0, 128);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        auto flush_res = store->flushCache(
+            *db_context,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())});
+        ASSERT_TRUE(flush_res);
+        ASSERT_EQ(store->segments.size(), 1);
+        auto seg = store->segments.begin()->second;
+        ASSERT_EQ(seg->delta->getMemTableSet()->getColumnFileCount(), 0);
+        ASSERT_EQ(seg->delta->getPersistedFileSet()->getColumnFileCount(), 1);
+        const auto * cf_tiny = seg->delta->getPersistedFileSet()->getFiles()[0]->tryToTinyFile();
+        ASSERT_NE(cf_tiny, nullptr);
+        const auto & schema = cf_tiny->getSchema()->getSchema();
+        auto col_type_name = schema.getByName(legacy_str_cd.name);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::LegacyName);
+    }
+
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(str_cd);
+        store = reload(table_column_defines);
+    }
+
+    {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            {str_cd},
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            "",
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+        auto block = in->read();
+        ASSERT_EQ(block.rows(), 128);
+
+        auto col_type_name = block.getByName(str_cd.name);
+        ASSERT_EQ(col_type_name.name, str_cd.name);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::Name);
+
+        for (size_t i = 0; i < block.rows(); i++)
+        {
+            auto s = col_type_name.column->getDataAt(i).toStringView();
+            ASSERT_EQ(s, std::to_string(i));
+        }
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringData_DMFile)
+try
+{
+    // Write legacy string data to DMFile.
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(legacy_str_cd);
+        dropDataOnDisk(getTemporaryPath());
+        store = reload(table_column_defines);
+        auto block = createBlock(legacy_str_cd, 0, 128);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+
+        ASSERT_TRUE(store->mergeDeltaAll(*db_context));
+
+        ASSERT_EQ(store->segments.size(), 1);
+        auto seg = store->segments.begin()->second;
+        const auto & dmfiles = seg->stable->getDMFiles();
+        ASSERT_EQ(dmfiles.size(), 1);
+        const auto & column_stats = dmfiles.front()->getColumnStats();
+        auto itr = column_stats.find(legacy_str_cd.id);
+        ASSERT_NE(itr, column_stats.end());
+        const auto & column_stat = itr->second;
+        ASSERT_EQ(column_stat.type->getName(), DataTypeString::LegacyName);
+    }
+
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(str_cd);
+        store = reload(table_column_defines);
+    }
+
+    {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            {str_cd},
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            "",
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+        auto block = in->read();
+        ASSERT_EQ(block.rows(), 128);
+
+        auto col_type_name = block.getByName(str_cd.name);
+        ASSERT_EQ(col_type_name.name, str_cd.name);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::Name);
+
+        for (size_t i = 0; i < block.rows(); i++)
+        {
+            auto s = col_type_name.column->getDataAt(i).toStringView();
+            ASSERT_EQ(s, std::to_string(i));
+        }
+    }
+}
+CATCH
+
 TEST_P(DeltaMergeStoreRWTest, SimpleWriteReadCommonHandle)
 try
 {
