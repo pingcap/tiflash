@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
-#include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -59,8 +58,8 @@ protected:
 
 namespace
 {
-static constexpr ColId DEFAULT_COL_ID = 0;
-static const String DEFAULT_COL_NAME = "2020-09-26";
+constexpr ColId DEFAULT_COL_ID = 0;
+const String DEFAULT_COL_NAME = "2020-09-26";
 
 Attr attr(String type)
 {
@@ -71,6 +70,28 @@ Attr pkAttr()
 {
     const ColumnDefine & col = getExtraHandleColumnDefine(true);
     return Attr{col.name, col.id, col.type};
+}
+
+using CSVTuple = std::vector<String>;
+using CSVTuples = std::vector<CSVTuple>;
+
+Block genBlock(const Block & header, const CSVTuples & tuples)
+{
+    Block block;
+    for (size_t i = 0; i < header.columns(); ++i)
+    {
+        const auto & cd = header.getByPosition(i);
+        ColumnWithTypeAndName col{{}, cd.type, cd.name, cd.column_id};
+        auto col_data = cd.type->createColumn();
+        for (const auto & tuple : tuples)
+        {
+            ReadBufferFromString buf(tuple.at(i));
+            cd.type->deserializeTextEscaped(*col_data, buf);
+        }
+        col.column = std::move(col_data);
+        block.insert(std::move(col));
+    }
+    return block;
 }
 
 // Check if the data in `block_tuples` match `filter`.
@@ -111,18 +132,20 @@ bool checkMatch(
     Block block = genBlock(header, block_tuples);
 
     // max page id is only updated at restart, so we need recreate page v3 before recreate table
-    DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
+    DeltaMergeStorePtr store = DeltaMergeStore::create(
         context,
         false,
         "test_database",
         name,
         NullspaceID,
         /*table_id*/ next_table_id++,
+        /*pk_col_id*/ 0,
         true,
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
         is_common_handle,
-        1);
+        1,
+        nullptr);
 
     store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);
@@ -224,24 +247,24 @@ Decimal64 getDecimal64(String s)
     return expected_default_value;
 }
 
-static constexpr Int64 Int64_Match_DATA = 100;
-static constexpr Int64 Int64_Greater_DATA = 10000;
-static constexpr Int64 Int64_Smaller_DATA = -1;
+constexpr Int64 Int64_Match_DATA = 100;
+constexpr Int64 Int64_Greater_DATA = 10000;
+constexpr Int64 Int64_Smaller_DATA = -1;
 
-static const String Date_Match_DATA = "2020-09-27";
-static const String Date_Greater_DATA = "2022-09-27";
-static const String Date_Smaller_DATA = "1997-09-27";
+const String Date_Match_DATA = "2020-09-27";
+const String Date_Greater_DATA = "2022-09-27";
+const String Date_Smaller_DATA = "1997-09-27";
 
-static const String DateTime_Match_DATA = "2020-01-01 05:00:01";
-static const String DateTime_Greater_DATA = "2022-01-01 05:00:01";
-static const String DateTime_Smaller_DATA = "1997-01-01 05:00:01";
+const String DateTime_Match_DATA = "2020-01-01 05:00:01";
+const String DateTime_Greater_DATA = "2022-01-01 05:00:01";
+const String DateTime_Smaller_DATA = "1997-01-01 05:00:01";
 
-static const String MyDateTime_Match_DATE = "2020-09-27";
-static const String MyDateTime_Greater_DATE = "2022-09-27";
-static const String MyDateTime_Smaller_DATE = "1997-09-27";
+const String MyDateTime_Match_DATE = "2020-09-27";
+const String MyDateTime_Greater_DATE = "2022-09-27";
+const String MyDateTime_Smaller_DATE = "1997-09-27";
 
-static const String Decimal_Match_DATA = "100.25566";
-static const String Decimal_UnMatch_DATA = "100.25500";
+const String Decimal_Match_DATA = "100.25566";
+const String Decimal_UnMatch_DATA = "100.25500";
 
 std::pair<String, CSVTuples> generateTypeValue(MinMaxTestDatatype data_type, bool has_null)
 {
@@ -2212,16 +2235,19 @@ try
         filters.Add()->CopyFrom(expr);
     }
 
-    const ColumnDefines columns_to_read
-        = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
-           ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
+    const ColumnDefines columns_to_read = {
+        ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
+        ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()},
+    };
     // Only need id of ColumnInfo
     TiDB::ColumnInfo a, b;
     a.id = 1;
     b.id = 2;
-    ColumnInfos column_infos = {a, b};
+    TiDB::ColumnInfos column_infos = {a, b};
+    const auto ann_query_info = tipb::ANNQueryInfo{};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
+        ann_query_info,
         pushed_down_filters, // Not care now
         column_infos,
         std::vector<int>{},
@@ -2429,7 +2455,7 @@ try
 }
 CATCH
 
-TEST_F(MinMaxIndexTest, CheckCmp_Equal)
+TEST_F(MinMaxIndexTest, CheckCmpEqual)
 try
 {
     struct ValuesAndResults
@@ -2492,7 +2518,7 @@ try
 }
 CATCH
 
-TEST_F(MinMaxIndexTest, CheckCmp_Greater)
+TEST_F(MinMaxIndexTest, CheckCmpGreater)
 try
 {
     struct ValuesAndResults
@@ -2570,7 +2596,7 @@ try
 }
 CATCH
 
-TEST_F(MinMaxIndexTest, CheckCmp_GreaterEqual)
+TEST_F(MinMaxIndexTest, CheckCmpGreaterEqual)
 try
 {
     struct ValuesAndResults
@@ -2662,4 +2688,82 @@ try
     }
 }
 CATCH
+
+TEST_F(MinMaxIndexTest, CheckCmpNullValue)
+try
+{
+    auto col_type = DataTypeFactory::instance().get("Int64");
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    auto rs_index = RSIndex(col_type, minmax_index);
+    RSCheckParam param;
+    param.indexes.emplace(DEFAULT_COL_ID, rs_index);
+
+    Field null_value;
+    ASSERT_TRUE(null_value.isNull());
+
+    auto check = [&](RSOperatorPtr rs, RSResult expected_res) {
+        auto results = rs->roughCheck(0, min_max_check_test_data.size(), param);
+        for (auto actual_res : results)
+            ASSERT_EQ(actual_res, expected_res) << fmt::format("actual: {}, expected: {}", actual_res, expected_res);
+    };
+
+    check(createGreater(attr("Int64"), null_value), RSResult::NoneNull);
+    check(createGreaterEqual(attr("Int64"), null_value), RSResult::NoneNull);
+    check(createLess(attr("Int64"), null_value), RSResult::AllNull);
+    check(createLessEqual(attr("Int64"), null_value), RSResult::AllNull);
+    check(createEqual(attr("Int64"), null_value), RSResult::NoneNull);
+    check(createNotEqual(attr("Int64"), null_value), RSResult::AllNull);
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, CheckInNullValue)
+try
+{
+    auto col_type = DataTypeFactory::instance().get("Nullable(Int64)");
+    auto minmax_index = createMinMaxIndex(*col_type, min_max_check_test_data);
+    auto rs_index = RSIndex(col_type, minmax_index);
+    RSCheckParam param;
+    param.indexes.emplace(DEFAULT_COL_ID, rs_index);
+
+    Field null_value;
+    ASSERT_TRUE(null_value.isNull());
+
+    {
+        auto rs = createIn(attr("Nullable(Int64)"), {null_value});
+        auto results = rs->roughCheck(0, min_max_check_test_data.size(), param);
+        auto excepted_results = {
+            RSResult::NoneNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::NoneNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::NoneNull,
+            RSResult::NoneNull,
+        };
+        ASSERT_TRUE(std::equal(results.cbegin(), results.cend(), excepted_results.begin()));
+    }
+
+    {
+        auto rs = createIn(attr("Nullable(Int64)"), {Field{static_cast<Int64>(1)}, null_value});
+        auto results = rs->roughCheck(0, min_max_check_test_data.size(), param);
+        auto excepted_results = {
+            RSResult::SomeNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull,
+            RSResult::NoneNull,
+            RSResult::SomeNull, // All the fields are null, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::SomeNull, // All the fields are deleted, the default value is null, meet the compatibility check
+            RSResult::All,
+            RSResult::AllNull,
+        };
+        ASSERT_TRUE(std::equal(results.cbegin(), results.cend(), excepted_results.begin()));
+    }
+}
+CATCH
+
 } // namespace DB::DM::tests

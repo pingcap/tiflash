@@ -18,10 +18,9 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const
 {
     if (result.size() >= col_count)
@@ -59,7 +58,8 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
 ColumnFileReaderPtr ColumnFileInMemory::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr &,
-    const ColumnDefinesPtr & col_defs) const
+    const ColumnDefinesPtr & col_defs,
+    ReadTag) const
 {
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
@@ -107,17 +107,11 @@ Block ColumnFileInMemory::readDataForFlush() const
     return cache_block.cloneWithColumns(std::move(columns));
 }
 
-
-ColumnPtr ColumnFileInMemoryReader::getPKColumn()
+std::pair<ColumnPtr, ColumnPtr> ColumnFileInMemoryReader::getPKAndVersionColumns()
 {
-    memory_file.fillColumns(*col_defs, 1, cols_data_cache);
-    return cols_data_cache[0];
-}
-
-ColumnPtr ColumnFileInMemoryReader::getVersionColumn()
-{
+    // fill the first 2 columns into `cols_data_cache`
     memory_file.fillColumns(*col_defs, 2, cols_data_cache);
-    return cols_data_cache[1];
+    return {cols_data_cache[0], cols_data_cache[1]};
 }
 
 std::pair<size_t, size_t> ColumnFileInMemoryReader::readRows(
@@ -155,11 +149,10 @@ size_t ColumnFileInMemoryReader::skipNextBlock()
     return memory_file.getRows();
 }
 
-ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag)
 {
     // Reuse the cache data.
     return std::make_shared<ColumnFileInMemoryReader>(memory_file, new_col_defs, cols_data_cache);
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

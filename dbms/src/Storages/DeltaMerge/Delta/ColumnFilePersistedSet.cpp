@@ -25,10 +25,9 @@
 
 #include <ext/scope_guard.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 inline UInt64 serializeColumnFilePersisteds(WriteBuffer & buf, const ColumnFilePersisteds & persisted_files)
 {
     serializeSavedColumnFiles(buf, persisted_files);
@@ -82,8 +81,8 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersisteds & new_c
         new_deletes,
         rows.load(),
         deletes.load(),
-        columnFilesToString(persisted_files),
-        columnFilesToString(new_column_files));
+        ColumnFile::filesToString(persisted_files),
+        ColumnFile::filesToString(new_column_files));
 }
 
 ColumnFilePersistedSet::ColumnFilePersistedSet( //
@@ -193,7 +192,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles &
             log,
             "{}, Delta Check head failed, unexpected size. head column files: {}, persisted column files: {}",
             info(),
-            columnFilesToString(previous_column_files),
+            ColumnFile::filesToString(previous_column_files),
             detailInfo());
         throw Exception("Check head failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
@@ -209,48 +208,6 @@ ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles &
     return tail;
 }
 
-size_t ColumnFilePersistedSet::getTotalCacheRows() const
-{
-    size_t cache_rows = 0;
-    for (const auto & file : persisted_files)
-    {
-        if (auto * tf = file->tryToTinyFile(); tf)
-        {
-            if (auto && c = tf->getCache(); c)
-                cache_rows += c->block.rows();
-        }
-    }
-    return cache_rows;
-}
-
-size_t ColumnFilePersistedSet::getTotalCacheBytes() const
-{
-    size_t cache_bytes = 0;
-    for (const auto & file : persisted_files)
-    {
-        if (auto * tf = file->tryToTinyFile(); tf)
-        {
-            if (auto && c = tf->getCache(); c)
-                cache_bytes += c->block.allocatedBytes();
-        }
-    }
-    return cache_bytes;
-}
-
-size_t ColumnFilePersistedSet::getValidCacheRows() const
-{
-    size_t cache_rows = 0;
-    for (const auto & file : persisted_files)
-    {
-        if (auto * tf = file->tryToTinyFile(); tf)
-        {
-            if (auto && c = tf->getCache(); c)
-                cache_rows += tf->getRows();
-        }
-    }
-    return cache_rows;
-}
-
 bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_version)
 {
     if (task_flush_version != flush_version)
@@ -264,20 +221,13 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 
 bool ColumnFilePersistedSet::appendPersistedColumnFiles(const ColumnFilePersisteds & column_files, WriteBatches & wbs)
 {
-    ColumnFilePersisteds new_persisted_files;
-    for (const auto & file : persisted_files)
-    {
-        new_persisted_files.push_back(file);
-    }
-    for (const auto & file : column_files)
-    {
-        new_persisted_files.push_back(file);
-    }
-    /// Save the new metadata of column files to disk.
+    ColumnFilePersisteds new_persisted_files{persisted_files};
+    new_persisted_files.insert(new_persisted_files.end(), column_files.begin(), column_files.end());
+    // Save the new metadata of column files to disk.
     serializeColumnFilePersisteds(wbs, metadata_id, new_persisted_files);
     wbs.writeMeta();
 
-    /// Commit updates in memory.
+    // Commit updates in memory.
     persisted_files.swap(new_persisted_files);
     updateColumnFileStats();
     LOG_DEBUG(
@@ -287,6 +237,20 @@ bool ColumnFilePersistedSet::appendPersistedColumnFiles(const ColumnFilePersiste
         column_files.size(),
         detailInfo());
 
+    return true;
+}
+
+bool ColumnFilePersistedSet::updatePersistedColumnFilesAfterAddingIndex(
+    const ColumnFilePersisteds & new_persisted_files,
+    WriteBatches & wbs)
+{
+    // Save the new metadata of column files to disk.
+    serializeColumnFilePersisteds(wbs, metadata_id, new_persisted_files);
+    wbs.writeMeta();
+
+    // Commit updates in memory.
+    persisted_files = std::move(new_persisted_files);
+    // After adding index, the stats of column files will not change.
     return true;
 }
 
@@ -396,25 +360,13 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
 
 ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFileDataProviderPtr & data_provider)
 {
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
-    snap->rows = rows;
-    snap->bytes = bytes;
-    snap->deletes = deletes;
-
     size_t total_rows = 0;
     size_t total_deletes = 0;
+    ColumnFiles column_files;
+    column_files.reserve(persisted_files.size());
     for (const auto & file : persisted_files)
     {
-        if (auto * t = file->tryToTinyFile(); (t && t->getCache()))
-        {
-            // Compact threads could update the value of ColumnTinyFile::cache,
-            // and since ColumnFile is not multi-threads safe, we should create a new column file object.
-            snap->column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
-        }
-        else
-        {
-            snap->column_files.push_back(file);
-        }
+        column_files.push_back(file);
         total_rows += file->getRows();
         total_deletes += file->getDeletes();
     }
@@ -431,7 +383,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFil
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 
-    return snap;
+    return std::make_shared<ColumnFileSetSnapshot>(data_provider, std::move(column_files), rows, bytes, deletes);
 }
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM

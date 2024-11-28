@@ -38,8 +38,6 @@ protected:
 
     OperatorStatus tryOutputImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
-
     OperatorStatus executeIOImpl() override;
 
     void transformHeaderImpl(Block & header_) override;

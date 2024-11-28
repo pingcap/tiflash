@@ -30,6 +30,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
@@ -46,6 +47,7 @@ extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
 using ColumnInfo = TiDB::ColumnInfo;
+using IndexInfo = TiDB::IndexInfo;
 using TableInfo = TiDB::TableInfo;
 using PartitionInfo = TiDB::PartitionInfo;
 using PartitionDefinition = TiDB::PartitionDefinition;
@@ -234,8 +236,7 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
 TiDB::TableInfoPtr MockTiDB::parseColumns(
     const String & tbl_name,
     const ColumnsDescription & columns,
-    const String & handle_pk_name,
-    String engine_type)
+    const String & handle_pk_name)
 {
     TableInfo table_info;
     table_info.name = tbl_name;
@@ -280,7 +281,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             index_info.id = 1;
             index_info.is_primary = true;
             index_info.idx_name = "PRIMARY";
-            index_info.tbl_name = tbl_name;
             index_info.is_unique = true;
             index_info.index_type = 1;
             index_info.idx_cols.resize(string_tokens.count());
@@ -296,20 +296,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             table_info.pk_is_handle = true;
     }
 
-    table_info.comment = "Mocked.";
-
-    // set storage engine type
-    std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) {
-        return std::tolower(c);
-    });
-    if (engine_type == "dt")
-        table_info.engine_type = TiDB::StorageEngine::DT;
-
-    if (table_info.engine_type != TiDB::StorageEngine::DT)
-    {
-        throw Exception("Unknown engine type : " + engine_type + ", must be 'dt'", ErrorCodes::BAD_ARGUMENTS);
-    }
-
     return std::make_shared<TiDB::TableInfo>(std::move(table_info));
 }
 
@@ -318,8 +304,7 @@ TableID MockTiDB::newTable(
     const String & table_name,
     const ColumnsDescription & columns,
     Timestamp tso,
-    const String & handle_pk_name,
-    const String & engine_type)
+    const String & handle_pk_name)
 {
     std::scoped_lock lock(tables_mutex);
 
@@ -334,7 +319,7 @@ TableID MockTiDB::newTable(
         throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
+    auto table_info = parseColumns(table_name, columns, handle_pk_name);
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
     return addTable(database_name, std::move(*table_info));
@@ -346,7 +331,6 @@ std::tuple<TableID, std::vector<TableID>> MockTiDB::newPartitionTable(
     const ColumnsDescription & columns,
     Timestamp tso,
     const String & handle_pk_name,
-    const String & engine_type,
     const Strings & part_names)
 {
     std::scoped_lock lock(tables_mutex);
@@ -364,7 +348,7 @@ std::tuple<TableID, std::vector<TableID>> MockTiDB::newPartitionTable(
 
     std::vector<TableID> physical_table_ids;
     physical_table_ids.reserve(part_names.size());
-    auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
+    auto table_info = parseColumns(table_name, columns, handle_pk_name);
     table_info->id = table_id_allocator++;
     table_info->is_partition_table = true;
     table_info->partition.enable = true;
@@ -385,8 +369,7 @@ std::tuple<TableID, std::vector<TableID>> MockTiDB::newPartitionTable(
 std::vector<TableID> MockTiDB::newTables(
     const String & database_name,
     const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
-    Timestamp tso,
-    const String & engine_type)
+    Timestamp tso)
 {
     std::scoped_lock lock(tables_mutex);
     std::vector<TableID> table_ids;
@@ -407,7 +390,7 @@ std::vector<TableID> MockTiDB::newTables(
             throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
         }
 
-        auto table_info = *parseColumns(table_name, columns, handle_pk_name, engine_type);
+        auto table_info = *parseColumns(table_name, columns, handle_pk_name);
         table_info.id = table_id_allocator++;
         table_info.update_timestamp = tso;
 
@@ -559,6 +542,88 @@ void MockTiDB::dropPartition(const String & database_name, const String & table_
 
     SchemaDiff diff;
     diff.type = SchemaActionType::DropTablePartition;
+    diff.schema_id = table->database_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
+IndexInfo reverseGetIndexInfo(
+    IndexID id,
+    const NameAndTypePair & column,
+    Int32 offset,
+    TiDB::VectorIndexDefinitionPtr vector_index)
+{
+    IndexInfo index_info;
+    index_info.id = id;
+    index_info.state = TiDB::StatePublic;
+    index_info.index_type = 5; // HNSW
+
+    std::vector<TiDB::IndexColumnInfo> idx_cols;
+    Poco::JSON::Object::Ptr idx_col_json = new Poco::JSON::Object();
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", column.name);
+    name_json->set("L", column.name);
+    idx_col_json->set("name", name_json);
+    idx_col_json->set("length", -1);
+    idx_col_json->set("offset", offset);
+    TiDB::IndexColumnInfo idx_col(idx_col_json);
+    index_info.idx_cols.push_back(idx_col);
+    index_info.vector_index = vector_index;
+
+    return index_info;
+}
+
+void MockTiDB::addVectorIndexToTable(
+    const String & database_name,
+    const String & table_name,
+    const IndexID index_id,
+    const NameAndTypePair & column_name,
+    Int32 offset,
+    TiDB::VectorIndexDefinitionPtr vector_index)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    String qualified_name = database_name + "." + table_name;
+    auto & indexes = table->table_info.index_infos;
+    if (std::find_if(indexes.begin(), indexes.end(), [&](const IndexInfo & index_) { return index_.id == index_id; })
+        != indexes.end())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Index {} already exists in TiDB table {}",
+            index_id,
+            qualified_name);
+    IndexInfo index_info = reverseGetIndexInfo(index_id, column_name, offset, vector_index);
+    indexes.push_back(index_info);
+
+    version++;
+
+    SchemaDiff diff;
+    diff.type = SchemaActionType::ActionAddVectorIndex;
+    diff.schema_id = table->database_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
+void MockTiDB::dropVectorIndexFromTable(const String & database_name, const String & table_name, IndexID index_id)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    String qualified_name = database_name + "." + table_name;
+
+    auto & indexes = table->table_info.index_infos;
+    auto it
+        = std::find_if(indexes.begin(), indexes.end(), [&](const IndexInfo & index_) { return index_.id == index_id; });
+    RUNTIME_CHECK_MSG(it != indexes.end(), "Index {} does not exist in TiDB table {}", index_id, qualified_name);
+    indexes.erase(it);
+
+    version++;
+
+    SchemaDiff diff;
+    diff.type = SchemaActionType::DropIndex;
     diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;

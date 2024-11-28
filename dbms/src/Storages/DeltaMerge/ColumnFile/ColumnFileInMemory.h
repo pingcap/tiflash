@@ -18,10 +18,9 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileInMemory;
 using ColumnFileInMemoryPtr = std::shared_ptr<ColumnFileInMemory>;
 
@@ -44,6 +43,8 @@ private:
     CachePtr cache;
 
 private:
+    // Ensure the columns[0~`col_count`] in the `result` are filled with the data of this
+    // ColumnFileInMemory. The column id and data type in `result` is defined by `col_defs`.
     void fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
 
     const DataTypePtr & getDataType(ColId column_id) const { return schema->getDataType(column_id); }
@@ -65,7 +66,7 @@ public:
     Type getType() const override { return Type::INMEMORY_FILE; }
 
     size_t getRows() const override { return rows; }
-    size_t getBytes() const override { return bytes; };
+    size_t getBytes() const override { return bytes; }
 
     CachePtr getCache() { return cache; }
 
@@ -77,7 +78,8 @@ public:
     ColumnFileReaderPtr getReader(
         const DMContext & context,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const override;
+        const ColumnDefinesPtr & col_defs,
+        ReadTag) const override;
 
     bool isAppendable() const override { return !disable_append; }
     void disableAppend() override { disable_append = true; }
@@ -90,12 +92,13 @@ public:
 
     String toString() const override
     {
-        String s = "{in_memory_file,rows:" + DB::toString(rows) //
-            + ",bytes:" + DB::toString(bytes) //
-            + ",disable_append:" + DB::toString(disable_append) //
-            + ",schema:" + (schema ? schema->toString() : "none") //
-            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
-        return s;
+        return fmt::format(
+            "{{in_memory_file,rows:{},bytes:{},disable_append:{},schema:{},cache_block:{}}}",
+            rows,
+            bytes,
+            disable_append,
+            (schema ? schema->toString() : "none"),
+            (cache ? cache->block.dumpJsonStructure() : "none"));
     }
 };
 
@@ -125,8 +128,7 @@ public:
     {}
 
     /// This is a ugly hack to fast return PK & Version column.
-    ColumnPtr getPKColumn();
-    ColumnPtr getVersionColumn();
+    std::pair<ColumnPtr, ColumnPtr> getPKAndVersionColumns();
 
     std::pair<size_t, size_t> readRows(
         MutableColumns & output_cols,
@@ -138,8 +140,7 @@ public:
 
     size_t skipNextBlock() override;
 
-    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
+    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag) override;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

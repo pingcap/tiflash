@@ -26,7 +26,7 @@ namespace DB::DM
 {
 PushDownFilterPtr PushDownFilter::build(
     const RSOperatorPtr & rs_operator,
-    const ColumnInfos & table_scan_column_info,
+    const TiDB::ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
     const Context & context,

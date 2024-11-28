@@ -57,6 +57,7 @@ RemotePb::RemotePhysicalTable Serializer::serializePhysicalTable(
     remote_table.set_snapshot_id(task_id.toMeta().SerializeAsString());
     remote_table.set_keyspace_id(snap->ks_physical_table_id.first);
     remote_table.set_table_id(snap->ks_physical_table_id.second);
+    remote_table.set_pk_col_id(snap->pk_col_id);
     for (const auto & [seg_id, seg_task] : snap->tasks)
     {
         auto remote_seg = Serializer::serializeSegment(
@@ -98,6 +99,7 @@ RemotePb::RemoteSegment Serializer::serializeSegment(
     {
         auto * remote_file = remote.add_stable_pages();
         remote_file->set_page_id(dt_file->pageId());
+        remote_file->set_meta_version(dt_file->metaVersion());
         auto * checkpoint_info = remote_file->mutable_checkpoint_info();
 #ifndef DBMS_PUBLIC_GTEST // Don't not check path in unittests.
         RUNTIME_CHECK(startsWith(dt_file->path(), "s3://"), dt_file->path());
@@ -135,19 +137,16 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
 
     auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
 
-    auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead, false);
-    delta_snap->mem_table_snap
-        = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
-    delta_snap->persisted_files_snap
+    auto mem_snap = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
+    auto persisted_snap
         = deserializeColumnFileSet(dm_context, proto.column_files_persisted(), data_store, segment_range);
-
-    // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
-    // because they are constructed using ColumnFileDataProviderNop.
-
-    auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
-    if (delta_index_cache)
-    {
-        delta_snap->shared_delta_index = delta_index_cache->getDeltaIndex({
+    auto delta_index = [&]() {
+        auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
+        if (!delta_index_cache)
+        {
+            return std::make_shared<DeltaIndex>();
+        }
+        return delta_index_cache->getDeltaIndex({
             .store_id = remote_store_id,
             .keyspace_id = keyspace_id,
             .table_id = table_id,
@@ -155,13 +154,19 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
             .segment_epoch = proto.segment_epoch(),
             .delta_index_epoch = proto.delta_index_epoch(),
         });
-    }
-    else
-    {
-        delta_snap->shared_delta_index = std::make_shared<DeltaIndex>();
-    }
-    // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
-    delta_snap->delta_index_epoch = proto.delta_index_epoch();
+    }();
+    // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
+    // because they are constructed using ColumnFileDataProviderNop.
+    auto delta_snap = std::make_shared<DeltaValueSnapshot>(
+        CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead,
+        false,
+        std::move(mem_snap),
+        std::move(persisted_snap),
+        // There is no DeltaValueSpace in the disagg arch read node
+        /*delta_vs*/ nullptr,
+        std::move(delta_index),
+        // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
+        proto.delta_index_epoch());
 
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
     DMFiles dmfiles;
@@ -170,7 +175,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
     {
         auto remote_key = stable_file.checkpoint_info().data_file_id();
         auto prepared = data_store->prepareDMFileByKey(remote_key);
-        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), stable_file.meta_version());
         RUNTIME_CHECK(dmfile != nullptr, remote_key);
         dmfiles.emplace_back(std::move(dmfile));
     }
@@ -228,42 +233,34 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
     const Remote::IDataStorePtr & data_store,
     const RowKeyRange & segment_range)
 {
-    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
-    auto ret = std::make_shared<ColumnFileSetSnapshot>(empty_data_provider);
-    ret->is_common_handle = segment_range.is_common_handle;
-    ret->rowkey_column_size = segment_range.rowkey_column_size;
-    ret->column_files.reserve(proto.size());
+    ColumnFiles column_files;
+    column_files.reserve(proto.size());
     for (const auto & remote_column_file : proto)
     {
         if (remote_column_file.has_tiny())
         {
-            ret->column_files.push_back(deserializeCFTiny(dm_context, remote_column_file.tiny()));
+            column_files.emplace_back(deserializeCFTiny(dm_context, remote_column_file.tiny()));
         }
         else if (remote_column_file.has_delete_range())
         {
-            ret->column_files.push_back(deserializeCFDeleteRange(remote_column_file.delete_range()));
+            column_files.emplace_back(deserializeCFDeleteRange(remote_column_file.delete_range()));
         }
         else if (remote_column_file.has_big())
         {
             const auto & big_file = remote_column_file.big();
-            ret->column_files.push_back(deserializeCFBig(big_file, data_store, segment_range));
+            column_files.emplace_back(deserializeCFBig(big_file, data_store, segment_range));
         }
         else if (remote_column_file.has_in_memory())
         {
-            ret->column_files.push_back(deserializeCFInMemory(remote_column_file.in_memory()));
+            column_files.emplace_back(deserializeCFInMemory(remote_column_file.in_memory()));
         }
         else
         {
             RUNTIME_CHECK_MSG(false, "Unexpected proto ColumnFile");
         }
     }
-    for (const auto & column_file : ret->column_files)
-    {
-        ret->rows += column_file->getRows();
-        ret->bytes += column_file->getBytes();
-        ret->deletes += column_file->getDeletes();
-    }
-    return ret;
+    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
+    return ColumnFileSetSnapshot::buildFromColumnFiles(empty_data_provider, std::move(column_files));
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMemory & cf_in_mem, bool need_mem_data)
@@ -356,6 +353,25 @@ RemotePb::ColumnFileRemote Serializer::serializeCFTiny(
     remote_tiny->set_rows(cf_tiny.rows);
     remote_tiny->set_bytes(cf_tiny.bytes);
 
+    if (!cf_tiny.index_infos)
+        return ret;
+
+    for (const auto & index_info : *cf_tiny.index_infos)
+    {
+        auto * index_pb = remote_tiny->add_indexes();
+        index_pb->set_index_page_id(index_info.index_page_id);
+        if (index_info.vector_index.has_value())
+        {
+            RemotePb::VectorIndexFileProps index_props;
+            index_props.set_index_kind(index_info.vector_index->index_kind());
+            index_props.set_distance_metric(index_info.vector_index->distance_metric());
+            index_props.set_dimensions(index_info.vector_index->dimensions());
+            index_props.set_index_id(index_info.vector_index->index_id());
+            index_props.set_index_bytes(index_info.vector_index->index_bytes());
+            index_pb->mutable_vector_index()->Swap(&index_props);
+        }
+    }
+
     // TODO: read the checkpoint info from data_provider and send it to the compute node
 
     return ret;
@@ -371,9 +387,32 @@ ColumnFileTinyPtr Serializer::deserializeCFTiny(const DMContext & dm_context, co
 
     // We do not try to reuse the CFSchema from `SharedBlockSchemas`, because the ColumnFile will be freed immediately after the request.
     auto schema = std::make_shared<ColumnFileSchema>(*block_schema);
-    auto cf = std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id(), dm_context);
-    cf->data_page_size = proto.page_size();
+    auto index_infos = std::make_shared<ColumnFileTiny::IndexInfos>();
+    index_infos->reserve(proto.indexes().size());
+    for (const auto & index_pb : proto.indexes())
+    {
+        if (index_pb.has_vector_index())
+        {
+            dtpb::VectorIndexFileProps index_props;
+            index_props.set_index_kind(index_pb.vector_index().index_kind());
+            index_props.set_distance_metric(index_pb.vector_index().distance_metric());
+            index_props.set_dimensions(index_pb.vector_index().dimensions());
+            index_props.set_index_id(index_pb.vector_index().index_id());
+            index_props.set_index_bytes(index_pb.vector_index().index_bytes());
+            index_infos->emplace_back(index_pb.index_page_id(), index_props);
+        }
+        else
+            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+    }
 
+    auto cf = std::make_shared<ColumnFileTiny>(
+        schema,
+        proto.rows(),
+        proto.bytes(),
+        proto.page_id(),
+        dm_context,
+        index_infos);
+    cf->data_page_size = proto.page_size();
     return cf;
 }
 
@@ -405,6 +444,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCFBig(const ColumnFileBig & cf_b
     auto * checkpoint_info = remote_big->mutable_checkpoint_info();
     checkpoint_info->set_data_file_id(cf_big.file->path());
     remote_big->set_page_id(cf_big.file->pageId());
+    remote_big->set_meta_version(cf_big.file->metaVersion());
     remote_big->set_valid_rows(cf_big.valid_rows);
     remote_big->set_valid_bytes(cf_big.valid_bytes);
     return ret;
@@ -418,7 +458,7 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
     RUNTIME_CHECK(proto.has_checkpoint_info());
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, key={}", proto.checkpoint_info().data_file_id());
     auto prepared = data_store->prepareDMFileByKey(proto.checkpoint_info().data_file_id());
-    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), proto.meta_version());
     auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(cf_big); // The constructor is private, so we cannot use make_shared.
 }

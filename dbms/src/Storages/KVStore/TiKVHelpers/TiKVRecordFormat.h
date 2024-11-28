@@ -26,16 +26,12 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <common/likely.h>
 
-#include <sstream>
-
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
-namespace RecordKVFormat
+namespace DB::RecordKVFormat
 {
 enum CFModifyFlag : UInt8
 {
@@ -87,6 +83,11 @@ inline TiKVKey encodeAsTiKVKey(const String & ori_str)
 }
 
 inline UInt64 encodeUInt64(const UInt64 x)
+{
+    return toBigEndian(x);
+}
+
+inline UInt32 encodeUInt32(const UInt32 x)
 {
     return toBigEndian(x);
 }
@@ -151,24 +152,7 @@ inline TiKVKey genKey(const TableID tableId, const HandleID handleId)
     return encodeAsTiKVKey(genRawKey(tableId, handleId));
 }
 
-inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> keys)
-{
-    std::string key(RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, 0);
-    memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
-    auto big_endian_table_id = encodeInt64(table_info.id);
-    memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
-    memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
-    WriteBufferFromOwnString ss;
-
-    for (size_t i = 0; i < keys.size(); i++)
-    {
-        DB::EncodeDatum(
-            keys[i],
-            table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(),
-            ss);
-    }
-    return encodeAsTiKVKey(key + ss.releaseStr());
-}
+TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> keys);
 
 inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
 {
@@ -185,7 +169,7 @@ inline std::tuple<DecodedTiKVKey, size_t> decodeTiKVKeyFull(const TiKVKey & key)
     {
         if (ptr + chunk_len > key.dataSize() + key.data())
             throw Exception("Unexpected eof", ErrorCodes::LOGICAL_ERROR);
-        auto marker = (UInt8) * (ptr + ENC_GROUP_SIZE);
+        auto marker = static_cast<UInt8>(*(ptr + ENC_GROUP_SIZE));
         UInt8 pad_size = (ENC_MARKER - marker);
         if (pad_size == 0)
         {
@@ -308,7 +292,7 @@ inline R readVarInt(const char *& data, size_t & len)
     static_assert(std::is_same_v<R, UInt64> || std::is_same_v<R, Int64>);
 
     R res = 0;
-    auto cur = data;
+    const auto * cur = data;
     if constexpr (std::is_same_v<R, UInt64>)
     {
         cur = TiKV::readVarUInt(res, data, len);
@@ -328,14 +312,14 @@ inline UInt64 readVarUInt(const char *& data, size_t & len)
 
 inline UInt8 readUInt8(const char *& data, size_t & len)
 {
-    UInt8 res = static_cast<UInt8>(*data);
+    auto res = static_cast<UInt8>(*data);
     data += sizeof(UInt8), len -= sizeof(UInt8);
     return res;
 }
 
 inline UInt64 readUInt64(const char *& data, size_t & len)
 {
-    UInt64 res = readBigEndian<UInt64>(data);
+    auto res = readBigEndian<UInt64>(data);
     data += sizeof(UInt64), len -= sizeof(UInt64);
     return res;
 }
@@ -374,7 +358,7 @@ struct InnerDecodedWriteCFValue
     std::shared_ptr<const TiKVValue> short_value;
 };
 
-typedef std::optional<InnerDecodedWriteCFValue> DecodedWriteCFValue;
+using DecodedWriteCFValue = std::optional<InnerDecodedWriteCFValue>;
 
 inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
 {
@@ -494,6 +478,5 @@ inline std::string DecodedTiKVKeyRangeToDebugString(const std::pair<DecodedTiKVK
         + ")";
 }
 
-} // namespace RecordKVFormat
 
-} // namespace DB
+} // namespace DB::RecordKVFormat

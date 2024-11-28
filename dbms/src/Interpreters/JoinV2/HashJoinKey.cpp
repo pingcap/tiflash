@@ -95,8 +95,9 @@ std::unique_ptr<void, std::function<void(void *)>> createHashJoinKeyGetter(
 
 void resetHashJoinKeyGetter(
     HashJoinKeyMethod method,
+    std::unique_ptr<void, std::function<void(void *)>> & key_getter,
     const ColumnRawPtrs & key_columns,
-    std::unique_ptr<void, std::function<void(void *)>> & key_getter)
+    const HashJoinRowLayout & row_layout)
 {
     switch (method)
     {
@@ -107,7 +108,8 @@ void resetHashJoinKeyGetter(
 #define M(METHOD)                                                                                     \
     case HashJoinKeyMethod::METHOD:                                                                   \
         using KeyGetter##METHOD = typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::Type; \
-        static_cast<KeyGetter##METHOD *>(key_getter.get())->reset(key_columns);                       \
+        static_cast<KeyGetter##METHOD *>(key_getter.get())                                            \
+            ->reset(key_columns, row_layout.raw_required_key_column_indexes.size());                  \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M

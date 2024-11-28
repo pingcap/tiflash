@@ -20,8 +20,7 @@
 #include <Core/SortDescription.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Collation/Collator.h>
-#include <TiDB/Decode/TypeMapping.h>
-#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
@@ -49,7 +48,7 @@ bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 void getColumnIDsFromExpr(
     const tipb::Expr & expr,
-    const std::vector<ColumnInfo> & input_col,
+    const std::vector<TiDB::ColumnInfo> & input_col,
     std::unordered_set<ColumnID> & col_id_set);
 NameAndTypePair getColumnNameAndTypeForColumnExpr(
     const tipb::Expr & expr,
@@ -61,6 +60,7 @@ tipb::Expr constructStringLiteralTiExpr(const String & value);
 tipb::Expr constructInt64LiteralTiExpr(Int64 value);
 tipb::Expr constructDateTimeLiteralTiExpr(UInt64 packed_value);
 tipb::Expr constructNULLLiteralTiExpr();
+tipb::Expr constructZeroVectorFloat32TiExpr();
 DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
 SortDescription getSortDescription(
     const std::vector<NameAndTypePair> & order_columns,

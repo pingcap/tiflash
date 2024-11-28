@@ -46,7 +46,7 @@ bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & righ
 {
     /// We only sampled some fields to compare equality in this test.
     /// It would be better to check all fields.
-    /// This can be done by using C++20's default comparsion feature when we switched to use C++20:
+    /// This can be done by using C++20's default comparison feature when we switched to use C++20:
     /// https://en.cppreference.com/w/cpp/language/default_comparisons
     return (left.concurrency == right.concurrency) && //
         (left.num_iterations == right.num_iterations) && //
@@ -147,7 +147,8 @@ struct MockWriter
         queue->push(tracked_packet);
     }
     static uint16_t getPartitionNum() { return 1; }
-    static bool isWritable() { throw Exception("Unsupport async write"); }
+    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
+    static void notifyNextPipelineWriter() {}
 
     std::vector<tipb::FieldType> result_field_types;
 
@@ -224,7 +225,7 @@ struct MockReceiverContext
         for (size_t i = 0; i < field_types.size(); ++i)
         {
             String name = "exchange_receiver_" + std::to_string(i);
-            ColumnInfo info = TiDB::fieldTypeToColumnInfo(field_types[i]);
+            TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(field_types[i]);
             schema.emplace_back(std::move(name), std::move(info));
         }
     }
@@ -306,7 +307,7 @@ public:
         DAGSchema schema;
         for (size_t i = 0; i < fields.size(); ++i)
         {
-            ColumnInfo info = TiDB::fieldTypeToColumnInfo(fields[i]);
+            TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(fields[i]);
             schema.emplace_back(String("col") + std::to_string(i), std::move(info));
         }
         return schema;

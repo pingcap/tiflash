@@ -331,13 +331,23 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver) NO_THREA
 }
 
 template <typename Trait>
-bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry)
-    NO_THREAD_SAFETY_ANALYSIS
+bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(
+    const PageVersion & ver,
+    const PageEntryV3 & entry,
+    bool ignore_delete) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
+        if (ignore_delete)
+        {
+            // find the first non-delete entry until it is the first entry or there is no such entry
+            while (last_iter != entries.end() && last_iter != entries.begin() && last_iter->second.isDelete())
+            {
+                --last_iter;
+            }
+        }
         RUNTIME_CHECK_MSG(
             last_iter != entries.end() && last_iter->second.isEntry(),
             "this={}, entries={}, ver={}, entry={}",
@@ -470,8 +480,9 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
 }
 
 template <typename Trait>
-std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVersion> VersionedPageEntries<
-    Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry) NO_THREAD_SAFETY_ANALYSIS
+std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVersion> //
+VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -1819,13 +1830,18 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
                     auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
                     assert(iter != mvcc_table_directory.end());
                     auto & version_list = iter->second;
-                    auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(
-                        sequence_to_resolve,
-                        /*ignore_delete=*/id_to_resolve != r.page_id,
-                        nullptr);
+                    // We need to ignore the "deletes" both when resolve page id and update local cache.
+                    // Check `PageDirectory::getByIDImpl` or the unit test
+                    // `UniPageStorageRemoteReadTest.WriteReadRefWithRestart` for details.
+                    const bool ignore_delete = id_to_resolve != r.page_id;
+                    auto [resolve_state, next_id_to_resolve, next_ver_to_resolve]
+                        = version_list->resolveToPageId(sequence_to_resolve, ignore_delete, nullptr);
                     if (resolve_state == ResolveResult::TO_NORMAL)
                     {
-                        if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                        if (!version_list->updateLocalCacheForRemotePage(
+                                PageVersion(sequence_to_resolve, 0),
+                                r.entry,
+                                ignore_delete))
                         {
                             // The entry is not valid for updating the version_list.
                             // Caller should notice these part of "ignored_entries" and release

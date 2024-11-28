@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Filter/Unsupported.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -44,15 +45,13 @@
 #include <memory>
 #include <random>
 
-namespace DB
-{
 
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
-} // namespace ErrorCodes
+} // namespace DB::ErrorCodes
 
-namespace FailPoints
+namespace DB::FailPoints
 {
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
@@ -62,34 +61,23 @@ extern const char segment_merge_after_ingest_packs[];
 extern const char force_set_segment_physical_split[];
 extern const char force_set_page_file_write_errno[];
 extern const char proactive_flush_force_set_type[];
-} // namespace FailPoints
+} // namespace DB::FailPoints
 
-namespace DM
+namespace DB::tests
 {
-namespace tests
+DM::PushDownFilterPtr generatePushDownFilter(
+    Context & ctx,
+    const String & table_info_json,
+    const String & query,
+    const std::optional<TimezoneInfo> & opt_tz = std::nullopt);
+} // namespace DB::tests
+
+namespace DB::DM::tests
 {
+
 String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 {
-    const auto mode = info.param;
-    switch (mode)
-    {
-    case TestMode::V1_BlockOnly:
-        return "V1_BlockOnly";
-    case TestMode::V2_BlockOnly:
-        return "V2_BlockOnly";
-    case TestMode::V2_FileOnly:
-        return "V2_FileOnly";
-    case TestMode::V2_Mix:
-        return "V2_Mix";
-    case TestMode::V3_BlockOnly:
-        return "V3_BlockOnly";
-    case TestMode::V3_FileOnly:
-        return "V3_FileOnly";
-    case TestMode::V3_Mix:
-        return "V3_Mix";
-    default:
-        return "Unknown";
-    }
+    return String{magic_enum::enum_name(info.param)};
 }
 
 
@@ -263,18 +251,20 @@ try
     {
         new_cols = DMTestEnv::getDefaultColumns();
         ColumnDefine handle_column_define = (*new_cols)[0];
-        new_store = std::make_shared<DeltaMergeStore>(
+        new_store = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
             "t_200",
             NullspaceID,
             200,
+            /*pk_col_id*/ 0,
             true,
             *new_cols,
             handle_column_define,
             false,
             1,
+            nullptr,
             DeltaMergeStore::Settings());
         auto block = DMTestEnv::prepareSimpleWriteBlock(0, 100, false);
         new_store->write(*db_context, db_context->getSettingsRef(), block);
@@ -448,9 +438,8 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -537,9 +526,8 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -798,9 +786,8 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -882,17 +869,16 @@ try
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -905,8 +891,8 @@ try
             store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -961,17 +947,16 @@ try
 
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
             store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
-        case TestMode::V2_FileOnly:
-        case TestMode::V3_FileOnly:
+        case TestMode::PageStorageV2_DiskOnly:
+        case TestMode::Current_DiskOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -982,8 +967,8 @@ try
             store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
-        case TestMode::V2_Mix:
-        case TestMode::V3_Mix:
+        case TestMode::PageStorageV2_MemoryAndDisk:
+        case TestMode::Current_MemoryAndDisk:
         {
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
@@ -1271,9 +1256,6 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, Ingest)
 try
 {
-    if (mode == TestMode::V1_BlockOnly)
-        return;
-
     const UInt64 tso1 = 4;
     const size_t num_rows_before_ingest = 128;
     // Write to store [0, 128)
@@ -1438,9 +1420,6 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, IngestWithFail)
 try
 {
-    if (mode == TestMode::V1_BlockOnly)
-        return;
-
     const UInt64 tso1 = 4;
     const size_t num_rows_before_ingest = 128;
     // Write to store [0, 128)
@@ -1559,10 +1538,6 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, IngestDupHandleVersion)
 try
 {
-    // Some old formats does not support ingest DMFiles.
-    if (mode == TestMode::V1_BlockOnly)
-        return;
-
     // Add a column for extra value.
     const String value_col_name = "value";
     const ColId value_col_id = 2;
@@ -1774,17 +1749,16 @@ try
 
             switch (mode)
             {
-            case TestMode::V1_BlockOnly:
-            case TestMode::V2_BlockOnly:
-            case TestMode::V3_BlockOnly:
+            case TestMode::PageStorageV2_MemoryOnly:
+            case TestMode::Current_MemoryOnly:
                 store->write(*db_context, settings, block);
                 break;
-            case TestMode::V2_FileOnly:
-            case TestMode::V3_FileOnly:
+            case TestMode::PageStorageV2_DiskOnly:
+            case TestMode::Current_DiskOnly:
                 write_as_file();
                 break;
-            case TestMode::V2_Mix:
-            case TestMode::V3_Mix:
+            case TestMode::PageStorageV2_MemoryAndDisk:
+            case TestMode::Current_MemoryAndDisk:
             {
                 if ((random() % 2) == 0)
                 {
@@ -3296,13 +3270,12 @@ INSTANTIATE_TEST_CASE_P(
     TestMode,
     DeltaMergeStoreRWTest,
     testing::Values(
-        TestMode::V1_BlockOnly,
-        TestMode::V2_BlockOnly,
-        TestMode::V2_FileOnly,
-        TestMode::V2_Mix,
-        TestMode::V3_BlockOnly,
-        TestMode::V3_FileOnly,
-        TestMode::V3_Mix),
+        TestMode::PageStorageV2_MemoryOnly,
+        TestMode::PageStorageV2_DiskOnly,
+        TestMode::PageStorageV2_MemoryAndDisk,
+        TestMode::Current_MemoryOnly,
+        TestMode::Current_DiskOnly,
+        TestMode::Current_MemoryAndDisk),
     testModeToString);
 
 
@@ -3332,18 +3305,20 @@ public:
     void setupDMStore()
     {
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
-        store = std::make_shared<DeltaMergeStore>(
+        store = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
             DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
             NullspaceID,
             101,
+            /*pk_col_id*/ 0,
             true,
             *cols,
             (*cols)[0],
             pk_type == DMTestEnv::PkType::CommonHandle,
             1,
+            nullptr,
             DeltaMergeStore::Settings());
         dm_context = store->newDMContext(
             *db_context,
@@ -3714,9 +3689,8 @@ try
     auto write_block = [&](Block block) {
         switch (mode)
         {
-        case TestMode::V1_BlockOnly:
-        case TestMode::V2_BlockOnly:
-        case TestMode::V3_BlockOnly:
+        case TestMode::PageStorageV2_MemoryOnly:
+        case TestMode::Current_MemoryOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -3770,7 +3744,7 @@ try
             real_columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -3963,6 +3937,248 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+TEST_F(DeltaMergeStoreTest, RSResult)
+try
+{
+    auto log = Logger::get(GET_GTEST_FULL_NAME);
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    ColumnDefine cd_time(1, "col_time", std::make_shared<DataTypeInt64>());
+    table_column_defines->push_back(cd_time);
+
+    store = reload(table_column_defines);
+
+    auto create_data = [&](Int64 start, Int64 limit) {
+        std::vector<Int64> v(limit, 0);
+        std::iota(v.begin(), v.end(), start); // start ... start + limit - 1
+        return v;
+    };
+
+    auto create_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
+        auto time_data = create_data(0, end - beg);
+        auto col_time = createColumn<Int64>(time_data, cd_time.name, cd_time.id);
+        block.insert(col_time);
+        block.checkNumberOfRows();
+        return block;
+    };
+
+    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            filter,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            "",
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+
+        Int64 rows = 0;
+        in->readPrefix();
+        while (true)
+        {
+            auto b = in->read();
+            if (!b)
+                break;
+            rows += b.rows();
+            ASSERT_EQ(b.getRSResult(), expected_res) << fmt::format("{} vs {}", b.getRSResult(), expected_res);
+            const auto * v = toColumnVectorDataPtr<Int64>(b.getByName("col_time").column);
+            ASSERT_NE(v, nullptr);
+            ASSERT_EQ(v->size(), expected_data.size());
+            ASSERT_TRUE(std::equal(v->begin(), v->end(), expected_data.begin()))
+                << fmt::format("{} vs {}", *v, expected_data);
+        }
+        in->readSuffix();
+        ASSERT_EQ(rows, expected_data.size());
+    };
+
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_time","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":11}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    auto create_filter = [&](Int64 value) {
+        auto filter = generatePushDownFilter(
+            *db_context,
+            table_info_json,
+            fmt::format("select * from default.t_111 where col_time >= {}", value));
+        RUNTIME_CHECK(filter->extra_cast != nullptr);
+        RUNTIME_CHECK(filter->rs_operator != nullptr);
+        const auto * rs_unsupported = typeid_cast<const Unsupported *>(filter->rs_operator.get());
+        RUNTIME_CHECK(rs_unsupported == nullptr, filter->rs_operator->toDebugString());
+        RUNTIME_CHECK(filter->before_where != nullptr);
+        LOG_DEBUG(
+            log,
+            "value={} extra_cast={} rs_operator={} before_where={}",
+            value,
+            filter->extra_cast->dumpActions(),
+            filter->rs_operator->toDebugString(),
+            filter->before_where->dumpActions());
+        return filter;
+    };
+
+    DB::registerFunctions();
+
+    constexpr Int64 num_rows = 128;
+    auto filter_all = create_filter(0);
+    auto filter_all_data = create_data(0, num_rows);
+    auto filter_some = create_filter(64);
+    auto filter_some_data = create_data(64, num_rows - 64);
+    auto filter_none = create_filter(128);
+    auto filter_none_data = std::vector<Int64>{};
+
+    // Disable delta merge to ensure read data from delta
+    FailPointHelper::enableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+
+    auto block = create_block(0, num_rows, 1);
+    store->write(*db_context, db_context->getSettingsRef(), block);
+
+    LOG_DEBUG(log, "Check delta");
+    // Delta always return Some
+    check(filter_all, RSResult::Some, filter_all_data);
+    check(filter_some, RSResult::Some, filter_some_data);
+    check(filter_none, RSResult::Some, filter_none_data);
+
+    LOG_DEBUG(log, "Check stable");
+    FailPointHelper::disableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+    store->mergeDeltaAll(*db_context);
+    check(filter_all, RSResult::All, filter_all_data);
+    check(filter_some, RSResult::Some, filter_some_data);
+    check(filter_none, RSResult::Some, filter_none_data);
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, LMAllWithMultiVersionRecords)
+try
+{
+    auto log = Logger::get(GET_GTEST_FULL_NAME);
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    ColumnDefine cd_time(1, "col_time", std::make_shared<DataTypeInt64>());
+    ColumnDefine cd_int(2, "col_int", std::make_shared<DataTypeInt64>());
+    table_column_defines->push_back(cd_time);
+    table_column_defines->push_back(cd_int);
+
+    store = reload(table_column_defines);
+
+    auto create_data = [&](Int64 start, Int64 limit) {
+        std::vector<Int64> v(limit, 0);
+        std::iota(v.begin(), v.end(), start); // start ... start + limit - 1
+        return v;
+    };
+
+    auto create_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
+        auto data = create_data(0, end - beg);
+        block.insert(createColumn<Int64>(data, cd_time.name, cd_time.id));
+        block.insert(createColumn<Int64>(data, cd_int.name, cd_int.id));
+        block.checkNumberOfRows();
+        return block;
+    };
+
+    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            filter,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            "",
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+
+        Int64 rows = 0;
+        in->readPrefix();
+        while (true)
+        {
+            auto b = in->read();
+            if (!b)
+                break;
+            rows += b.rows();
+            ASSERT_EQ(b.getRSResult(), expected_res) << fmt::format("{} vs {}", b.getRSResult(), expected_res);
+            const auto * v = toColumnVectorDataPtr<Int64>(b.getByName("col_time").column);
+            ASSERT_NE(v, nullptr);
+            ASSERT_EQ(v->size(), expected_data.size());
+            ASSERT_TRUE(std::equal(v->begin(), v->end(), expected_data.begin()))
+                << fmt::format("{} vs {}", *v, expected_data);
+        }
+        in->readSuffix();
+        ASSERT_EQ(rows, expected_data.size());
+    };
+
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_time","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":11}},
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_int","O":"col_int"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":8}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    auto create_filter = [&](Int64 value) {
+        auto filter = generatePushDownFilter(
+            *db_context,
+            table_info_json,
+            fmt::format("select * from default.t_111 where col_time >= {}", value));
+        RUNTIME_CHECK(filter->extra_cast != nullptr);
+        RUNTIME_CHECK(filter->rs_operator != nullptr);
+        const auto * rs_unsupported = typeid_cast<const Unsupported *>(filter->rs_operator.get());
+        RUNTIME_CHECK(rs_unsupported == nullptr, filter->rs_operator->toDebugString());
+        RUNTIME_CHECK(filter->before_where != nullptr);
+        LOG_DEBUG(
+            log,
+            "value={} extra_cast={} rs_operator={} before_where={}",
+            value,
+            filter->extra_cast->dumpActions(),
+            filter->rs_operator->toDebugString(),
+            filter->before_where->dumpActions());
+        return filter;
+    };
+
+    DB::registerFunctions();
+
+    constexpr Int64 num_rows = 128;
+    auto filter_all = create_filter(0);
+    auto filter_all_data = create_data(0, num_rows);
+
+    // Write multi-version records.
+    {
+        auto block = create_block(0, num_rows, 1);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+    {
+        auto block = create_block(0, num_rows, 2);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+    store->mergeDeltaAll(*db_context);
+
+    // Ensure multi-version records.
+    ASSERT_EQ(store->id_to_segment.size(), 1);
+    auto seg = store->id_to_segment.begin()->second;
+    seg->stable->calculateStableProperty(
+        *store->newDMContext(*db_context, db_context->getSettingsRef()),
+        RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
+        store->isCommonHandle());
+    const auto & property = seg->stable->getStableProperty();
+    ASSERT_EQ(property.num_versions, num_rows * 2);
+    ASSERT_EQ(property.num_puts, num_rows);
+
+    check(filter_all, RSResult::All, filter_all_data);
+}
+CATCH
+
+} // namespace DB::DM::tests

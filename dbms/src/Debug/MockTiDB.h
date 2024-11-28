@@ -84,8 +84,7 @@ public:
         const String & table_name,
         const ColumnsDescription & columns,
         Timestamp tso,
-        const String & handle_pk_name,
-        const String & engine_type);
+        const String & handle_pk_name);
 
     // Mock to create a partition table with given partition names
     // Return <logical_table_id, [physical_table_id0, physical_table_id1, ...]>
@@ -95,22 +94,19 @@ public:
         const ColumnsDescription & columns,
         Timestamp tso,
         const String & handle_pk_name,
-        const String & engine_type,
         const Strings & part_names);
 
     std::vector<TableID> newTables(
         const String & database_name,
         const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
-        Timestamp tso,
-        const String & engine_type);
+        Timestamp tso);
 
     TableID addTable(const String & database_name, TiDB::TableInfo && table_info);
 
     static TiDB::TableInfoPtr parseColumns(
         const String & tbl_name,
         const ColumnsDescription & columns,
-        const String & handle_pk_name,
-        String engine_type);
+        const String & handle_pk_name);
 
     DatabaseID newDataBase(const String & database_name);
 
@@ -128,6 +124,16 @@ public:
     void dropTableById(Context & context, const TableID & table_id, bool drop_regions);
 
     void dropDB(Context & context, const String & database_name, bool drop_regions);
+
+    void addVectorIndexToTable(
+        const String & database_name,
+        const String & table_name,
+        IndexID index_id,
+        const NameAndTypePair & column_name,
+        Int32 offset,
+        TiDB::VectorIndexDefinitionPtr vector_index);
+
+    void dropVectorIndexFromTable(const String & database_name, const String & table_name, IndexID index_id);
 
     void addColumnToTable(
         const String & database_name,

@@ -25,6 +25,7 @@
 #include <magic_enum.hpp>
 #include <shared_mutex>
 
+
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
 #endif
@@ -77,7 +78,6 @@ template CompressionCodecPtr CompressionCodecFactory::getStaticCodec<Compression
 template CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecRunLength>(
     const CompressionSetting & setting);
 
-
 template <>
 CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>(const CompressionSetting & setting)
 {
@@ -94,7 +94,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4>
     if (lz4_map.size() >= MAX_LZ4_MAP_SIZE)
         lz4_map.clear();
     auto [it, inserted] = lz4_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4>(setting.level));
-    assert(inserted);
+    UNUSED(inserted);
     return it->second;
 }
 
@@ -114,7 +114,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecLZ4H
     if (lz4hc_map.size() >= MAX_LZ4HC_MAP_SIZE)
         lz4hc_map.clear();
     auto [it, inserted] = lz4hc_map.emplace(setting.level, std::make_shared<CompressionCodecLZ4HC>(setting.level));
-    assert(inserted);
+    UNUSED(inserted);
     return it->second;
 }
 
@@ -134,7 +134,7 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecZSTD
     if (zstd_map.size() >= MAX_ZSTD_MAP_SIZE)
         zstd_map.clear();
     auto [it, inserted] = zstd_map.emplace(setting.level, std::make_shared<CompressionCodecZSTD>(setting.level));
-    assert(inserted);
+    UNUSED(inserted);
     return it->second;
 }
 
@@ -153,7 +153,6 @@ CompressionCodecPtr CompressionCodecFactory::getStaticCodec<CompressionCodecDefl
     return qpl;
 }
 #endif
-
 
 template <bool IS_COMPRESS>
 CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & setting)
@@ -182,7 +181,13 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
         if (!isInteger(setting.data_type))
         {
             if (setting.method_byte == CompressionMethodByte::Lightweight)
+            {
+                // Use LZ4 codec for non-integral types
+                // TODO: maybe we can use zstd?
+                auto method = CompressionMethod::LZ4;
+                CompressionSetting setting(method, CompressionSetting::getDefaultLevel(method));
                 return getStaticCodec<CompressionCodecLZ4>(setting);
+            }
             else
                 return nullptr;
         }
@@ -192,7 +197,7 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
     switch (setting.method_byte)
     {
     case CompressionMethodByte::Lightweight:
-        return std::make_unique<CompressionCodecLightweight>(setting.data_type);
+        return std::make_unique<CompressionCodecLightweight>(setting.data_type, setting.level);
     case CompressionMethodByte::DeltaFOR:
         return getStaticCodec<CompressionCodecDeltaFOR>(setting);
     case CompressionMethodByte::RunLength:

@@ -36,9 +36,13 @@
 
 #include <mutex>
 
-
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_checkpoint_dump_throw_datafile[];
+}
+
 UniversalPageStoragePtr UniversalPageStorage::create(
     const String & name,
     PSDiskDelegatorPtr delegator,
@@ -495,7 +499,7 @@ bool UniversalPageStorage::canSkipCheckpoint() const
     return snap->sequence == last_checkpoint_sequence;
 }
 
-PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
+std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalCheckpoint(
     const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);
@@ -504,7 +508,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
     if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
-        return {.has_new_data = false};
+        return PS::V3::CPDataDumpStats{.has_new_data = false};
 
     // As a checkpoint, we write both entries (in manifest) and its data.
     // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
@@ -536,29 +540,56 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
         .data_file_id_pattern = options.data_file_id_pattern,
         .manifest_file_path = manifest_file_path,
         .manifest_file_id = manifest_file_id,
-        .data_source = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store, file_provider),
+        .data_source
+        = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store, file_provider, /*prefetch_size=*/5 * 1024 * 1024),
         .must_locked_files = options.must_locked_files,
         .sequence = sequence,
         .max_data_file_size = options.max_data_file_size,
         .max_edit_records_per_part = options.max_edit_records_per_part,
     });
-
-    writer->writePrefix({
-        .writer = options.writer_info,
-        .sequence = snap->sequence,
-        .last_sequence = last_checkpoint_sequence,
-    });
-    PS::V3::CPFilesWriter::CompactOptions compact_opts = [&]() {
-        if (options.full_compact)
-            return PS::V3::CPFilesWriter::CompactOptions(true);
-        if (options.compact_getter == nullptr)
-            return PS::V3::CPFilesWriter::CompactOptions(false);
-        return PS::V3::CPFilesWriter::CompactOptions(options.compact_getter());
+    std::vector<String> data_file_paths;
+    const auto checkpoint_dump_stats = [&]() -> std::optional<PS::V3::CPDataDumpStats> {
+        try
+        {
+            writer->writePrefix({
+                .writer = options.writer_info,
+                .sequence = snap->sequence,
+                .last_sequence = last_checkpoint_sequence,
+            });
+            const PS::V3::CPFilesWriter::CompactOptions compact_opts = [&]() {
+                if (options.full_compact)
+                    return PS::V3::CPFilesWriter::CompactOptions(true);
+                if (options.compact_getter == nullptr)
+                    return PS::V3::CPFilesWriter::CompactOptions(false);
+                return PS::V3::CPFilesWriter::CompactOptions(options.compact_getter());
+            }();
+            // get the remote file ids that need to be compacted
+            const auto checkpoint_dump_stats_inner
+                = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, compact_opts, options.only_upload_manifest);
+            data_file_paths = writer->writeSuffix();
+            fiu_do_on(FailPoints::force_checkpoint_dump_throw_datafile, {
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "fake checkpoint write exception");
+            });
+            return checkpoint_dump_stats_inner;
+        }
+        catch (...)
+        {
+            // Could be #9406, which is a soft error.
+            tryLogCurrentException(
+                __PRETTY_FUNCTION__,
+                fmt::format(
+                    "Error dumping incremental snapshot sequence={} manifest_file_path={} data_file_path_pattern={}",
+                    sequence,
+                    manifest_file_path,
+                    options.data_file_path_pattern));
+            writer->abort();
+            return std::nullopt;
+        }
     }();
-    // get the remote file ids that need to be compacted
-    const auto checkpoint_dump_stats
-        = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, compact_opts, options.only_upload_manifest);
-    auto data_file_paths = writer->writeSuffix();
+
+    if (!checkpoint_dump_stats.has_value())
+        return std::nullopt;
+
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
@@ -580,7 +611,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).
     //   This can be avoided, as its content is useless.
-    if (checkpoint_dump_stats.has_new_data)
+    if (checkpoint_dump_stats->has_new_data)
     {
         // Copy back the checkpoint info to the current PageStorage.
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
@@ -607,8 +638,8 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
         copy_checkpoint_info_seconds,
         sw.elapsedSeconds(),
         sequence,
-        checkpoint_dump_stats);
-    SetMetrics(checkpoint_dump_stats);
+        *checkpoint_dump_stats);
+    SetMetrics(*checkpoint_dump_stats);
     return checkpoint_dump_stats;
 }
 

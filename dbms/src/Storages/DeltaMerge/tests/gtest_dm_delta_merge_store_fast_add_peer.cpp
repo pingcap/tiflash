@@ -31,6 +31,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -42,14 +43,13 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 
-namespace DB
-{
-namespace FailPoints
+
+namespace DB::FailPoints
 {
 extern const char force_use_dmfile_format_v3[];
 extern const char force_stop_background_checkpoint_upload[];
-} // namespace FailPoints
-namespace DM
+} // namespace DB::FailPoints
+namespace DB::DM
 {
 extern DMFilePtr writeIntoNewDMFile(
     DMContext & dm_context,
@@ -57,20 +57,24 @@ extern DMFilePtr writeIntoNewDMFile(
     const BlockInputStreamPtr & input_stream,
     UInt64 file_id,
     const String & parent_path);
-namespace tests
+} // namespace DB::DM
+namespace DB::DM::tests
 {
 // Simple test suit for DeltaMergeStoreTestFastAddPeer.
 class DeltaMergeStoreTestFastAddPeer
     : public DB::base::TiFlashStorageTestBasic
-    , public testing::WithParamInterface<KeyspaceID>
+    , public testing::WithParamInterface<std::tuple<KeyspaceID, StorageFormatVersion, StorageFormatVersion>>
 {
 public:
     DeltaMergeStoreTestFastAddPeer()
-        : keyspace_id(GetParam())
+        : keyspace_id(std::get<0>(GetParam()))
+        , write_format_version(std::get<1>(GetParam()))
+        , restore_format_version(std::get<2>(GetParam()))
     {}
 
     void SetUp() override
     {
+        setStorageFormat(write_format_version);
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
         FailPointHelper::enableFailPoint(FailPoints::force_stop_background_checkpoint_upload);
         DB::tests::TiFlashTestEnv::enableS3Config();
@@ -90,7 +94,7 @@ public:
         {
             already_initialize_data_store = true;
         }
-        if (global_context.getWriteNodePageStorage() == nullptr)
+        if (global_context.tryGetWriteNodePageStorage() == nullptr)
         {
             already_initialize_write_ps = false;
             orig_mode = global_context.getPageStorageRunMode();
@@ -122,6 +126,7 @@ public:
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
         DB::tests::TiFlashTestEnv::disableS3Config();
+        setStorageFormat(current_format_version);
     }
 
     void resetStoreId(UInt64 store_id)
@@ -157,18 +162,20 @@ public:
 
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+        DeltaMergeStorePtr s = DeltaMergeStore::create(
             *db_context,
             false,
             "test",
             fmt::format("t_{}", table_id),
             keyspace_id,
             table_id,
+            /*pk_col_id*/ 0,
             true,
             *cols,
             handle_column_define,
             is_common_handle,
             rowkey_column_size,
+            nullptr,
             DeltaMergeStore::Settings());
         return s;
     }
@@ -237,6 +244,7 @@ protected:
         // clear data
         store->clearData();
         auto table_column_defines = DMTestEnv::getDefaultColumns();
+        LOG_INFO(DB::Logger::get(), "reload to clear data");
         store = reload(table_column_defines);
         store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1));
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
@@ -267,6 +275,9 @@ protected:
     DeltaMergeStorePtr store;
     UInt64 current_store_id = 100;
     KeyspaceID keyspace_id;
+    StorageFormatVersion write_format_version;
+    StorageFormatVersion restore_format_version;
+    StorageFormatVersion current_format_version = STORAGE_FORMAT_CURRENT;
     TableID table_id = 800;
     UInt64 upload_sequence = 1000;
     bool already_initialize_data_store = false;
@@ -348,9 +359,16 @@ try
 
     dumpCheckpoint(write_store_id);
 
+    /// The test will then create a new UniPS based on the persist files of the currrent UniPS.
+    /// In some cases, a "FullGC" could happen concurrently with the creation of the creation of the delta merge instance,
+    /// in the `reload` method. The panic will happen if DMStore tries to recover some segments, and failed to read them from UniPS.
+
+    LOG_INFO(DB::Logger::get(), "clear data to prepare for FAP");
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
+
+    setStorageFormat(restore_format_version);
 
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(write_store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
@@ -362,11 +380,13 @@ try
     {
         auto table_column_defines = DMTestEnv::getDefaultColumns();
 
+        LOG_INFO(DB::Logger::get(), "reload to apple fap snapshot");
         store = reload(table_column_defines);
     }
 
     auto segments = store->buildSegmentsFromCheckpointInfo(
         *db_context,
+        GeneralCancelHandle::genNotCanceled(),
         db_context->getSettingsRef(),
         RowKeyRange::newAll(false, 1),
         checkpoint_info);
@@ -418,6 +438,7 @@ try
         RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
         num_rows_write / 2 + 2 * num_rows_write);
 
+    LOG_INFO(DB::Logger::get(), "reload to check consistency");
     reload();
 
     verifyRows(
@@ -481,9 +502,12 @@ try
     UInt64 write_store_id = current_store_id + 1;
     dumpCheckpoint(write_store_id);
 
+    LOG_INFO(DB::Logger::get(), "clear data to prepare for FAP");
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
+
+    setStorageFormat(restore_format_version);
 
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(write_store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
@@ -495,6 +519,7 @@ try
     {
         auto segments = store->buildSegmentsFromCheckpointInfo(
             *db_context,
+            GeneralCancelHandle::genNotCanceled(),
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)),
             checkpoint_info);
@@ -519,6 +544,7 @@ try
     {
         auto segments = store->buildSegmentsFromCheckpointInfo(
             *db_context,
+            GeneralCancelHandle::genNotCanceled(),
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(num_rows_write / 2, num_rows_write)),
             checkpoint_info);
@@ -542,7 +568,16 @@ try
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(Type, DeltaMergeStoreTestFastAddPeer, testing::Values(NullspaceID, 300));
-} // namespace tests
-} // namespace DM
-} // namespace DB
+INSTANTIATE_TEST_CASE_P(
+    Type,
+    DeltaMergeStoreTestFastAddPeer,
+    testing::Values(
+        std::make_tuple(NullspaceID, STORAGE_FORMAT_V5, STORAGE_FORMAT_V5), // V5 -> V5
+        std::make_tuple(NullspaceID, STORAGE_FORMAT_V5, STORAGE_FORMAT_V7), // V5 -> V7
+        std::make_tuple(NullspaceID, STORAGE_FORMAT_V7, STORAGE_FORMAT_V7), // V7 -> V7
+        std::make_tuple(300, STORAGE_FORMAT_V5, STORAGE_FORMAT_V5), // V5 -> V5
+        std::make_tuple(300, STORAGE_FORMAT_V5, STORAGE_FORMAT_V7), // V5 -> V7
+        std::make_tuple(300, STORAGE_FORMAT_V7, STORAGE_FORMAT_V7) // V7 -> V7
+        ));
+
+} // namespace DB::DM::tests

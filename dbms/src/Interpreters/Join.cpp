@@ -23,6 +23,7 @@
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
 #include <Interpreters/Join.h>
@@ -132,6 +133,8 @@ Join::Join(
     : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
+    , wait_build_finished_future(std::make_shared<OneTimeNotifyFuture>())
+    , wait_probe_finished_future(std::make_shared<OneTimeNotifyFuture>())
     , kind(kind_)
     , join_req_id(req_id)
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
@@ -218,6 +221,8 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
     error_message = error_message_.empty() ? "Join meet error" : error_message_;
     build_cv.notify_all();
     probe_cv.notify_all();
+    // wait_build/probe_finished_future does not need to call finish here
+    // because it is called in PipelineExecutorContext.
 }
 
 size_t Join::getTotalRowCount() const
@@ -1347,6 +1352,11 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
 
 Block Join::removeUselessColumn(Block & block) const
 {
+    // cancelled
+    if (!block)
+        return block;
+
+    // remove useless columns and adjust the order of columns
     Block projected_block;
     for (const auto & name_and_type : output_columns_after_finalize)
     {
@@ -1377,6 +1387,8 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         restore_config.restore_round);
     while (true)
     {
+        if (is_cancelled())
+            return {};
         auto block = doJoinBlockHash(probe_process_info, join_build_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1481,6 +1493,8 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 
     while (true)
     {
+        if (is_cancelled())
+            return {};
         Block block = doJoinBlockCross(probe_process_info);
         assert(block);
         block = removeUselessColumn(block);
@@ -1562,6 +1576,9 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
 
     RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
+    if (is_cancelled())
+        return {};
+
     Block block{};
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
@@ -1598,12 +1615,16 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
             blocks,
             null_rows,
             max_block_size,
-            non_equal_conditions);
+            non_equal_conditions,
+            is_cancelled);
 
         helper.joinResult(res_list);
 
         RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
+
+    if (is_cancelled())
+        return {};
 
     /// Now all results are known.
 
@@ -1684,26 +1705,8 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
 
 Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
 {
-    JoinBuildInfo join_build_info{
-        enable_fine_grained_shuffle,
-        fine_grained_shuffle_count,
-        isEnableSpill(),
-        hash_join_spill_context->isSpilled(),
-        build_concurrency,
-        restore_config.restore_round};
-
-    probe_process_info.prepareForHashProbe(
-        key_names_left,
-        non_equal_conditions.left_filter_column,
-        kind,
-        strictness,
-        join_build_info.needVirtualDispatchForProbeBlock(),
-        collators,
-        restore_config.restore_round);
-
     Block block{};
-#define CALL(KIND, STRICTNESS, MAP) \
-    block = joinBlockSemiImpl<KIND, STRICTNESS, MAP>(join_build_info, probe_process_info);
+#define CALL(KIND, STRICTNESS, MAP) block = joinBlockSemiImpl<KIND, STRICTNESS, MAP>(probe_process_info);
 
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
@@ -1729,156 +1732,93 @@ Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 
-    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
-    probe_process_info.all_rows_joined_finish = true;
-
     return removeUselessColumn(block);
 }
 
+namespace
+{
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const ProbeProcessInfo & probe_process_info) const
+Block genSemiJoinResult(
+    ProbeProcessInfo & probe_process_info,
+    SemiJoinHelper<KIND, STRICTNESS, Maps> * helper,
+    const NameSet & output_column_names_set)
+{
+    auto ret = helper->genJoinResult(output_column_names_set);
+    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
+    probe_process_info.all_rows_joined_finish = true;
+    probe_process_info.semi_join_family_helper.reset();
+    return ret;
+}
+} // namespace
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
 {
     size_t rows = probe_process_info.block.rows();
-
-    auto [res, res_list] = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
-        partitions,
-        rows,
-        key_sizes,
-        collators,
-        join_build_info,
-        probe_process_info);
-
-    RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
-
-    const NameSet & probe_output_name_set = has_other_condition
-        ? output_columns_names_set_for_other_condition_after_finalize
-        : output_column_names_set_after_finalize;
-    Block block{};
-    for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
+    JoinBuildInfo join_build_info{
+        enable_fine_grained_shuffle,
+        fine_grained_shuffle_count,
+        isEnableSpill(),
+        hash_join_spill_context->isSpilled(),
+        build_concurrency,
+        restore_config.restore_round};
+    if (probe_process_info.semi_join_family_helper != nullptr)
     {
-        const auto & column = probe_process_info.block.getByPosition(i);
-        if (probe_output_name_set.contains(column.name))
-            block.insert(column);
+        // current block still not done
+        RUNTIME_CHECK_MSG(
+            !probe_process_info.all_rows_joined_finish,
+            "semi_family_helper should be reset to nullptr after all rows are joined for current block");
+    }
+    else
+    {
+        // probe a new block
+        probe_process_info.prepareForHashProbe(
+            key_names_left,
+            non_equal_conditions.left_filter_column,
+            kind,
+            strictness,
+            join_build_info.needVirtualDispatchForProbeBlock(),
+            collators,
+            restore_config.restore_round);
+
+        probe_process_info.semi_join_family_helper = decltype(probe_process_info.semi_join_family_helper)(
+            new SemiJoinHelper<KIND, STRICTNESS, Maps>(rows, max_block_size, non_equal_conditions, is_cancelled),
+            [](void * ptr) { delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
     }
 
-    size_t left_columns = block.columns();
-    /// Add new columns to the block.
-    std::vector<size_t> right_column_indices_to_add;
+    auto * helper
+        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
 
-    for (size_t i = 0; i < right_sample_block.columns(); ++i)
+    if (!helper->isProbeHashTableDone())
     {
-        const auto & column = right_sample_block.getByPosition(i);
-        if (probe_output_name_set.contains(column.name))
-        {
-            RUNTIME_CHECK_MSG(
-                !block.has(column.name),
-                "block from probe side has a column with the same name: {} as a column in right_sample_block",
-                column.name);
-            block.insert(column);
-            right_column_indices_to_add.push_back(i);
-        }
+        const NameSet & probe_output_name_set = has_other_condition
+            ? output_columns_names_set_for_other_condition_after_finalize
+            : output_column_names_set_after_finalize;
+
+        helper->probeHashTable(
+            partitions,
+            key_sizes,
+            collators,
+            join_build_info,
+            probe_process_info,
+            probe_output_name_set,
+            right_sample_block);
     }
 
-    if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+    while (!helper->isJoinDone())
     {
-        if (!res_list.empty())
-        {
-            SemiJoinHelper<KIND, typename Maps::MappedType>
-                helper(block, left_columns, right_column_indices_to_add, max_block_size, non_equal_conditions);
-
-            helper.joinResult(res_list);
-
-            RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty after calculating join result");
-        }
+        if (is_cancelled())
+            return {};
+        helper->doJoin();
     }
 
-    /// Now all results are known.
+    if (is_cancelled())
+        return {};
 
-    std::unique_ptr<IColumn::Filter> filter;
-    if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(rows);
-
-    MutableColumnPtr left_semi_column_ptr = nullptr;
-    ColumnInt8::Container * left_semi_column_data = nullptr;
-    ColumnUInt8::Container * left_semi_null_map = nullptr;
-
-    if constexpr (KIND == ASTTableJoin::Kind::LeftOuterSemi || KIND == ASTTableJoin::Kind::LeftOuterAnti)
-    {
-        left_semi_column_ptr = block.getByPosition(block.columns() - 1).column->cloneEmpty();
-        auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
-        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
-        left_semi_column_data->reserve(rows);
-        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
-        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-        {
-            left_semi_null_map->resize_fill(rows, 0);
-        }
-        else
-        {
-            left_semi_null_map->reserve(rows);
-        }
-    }
-
-    size_t rows_for_semi_anti = 0;
-    for (size_t i = 0; i < rows; ++i)
-    {
-        auto result = res[i].getResult();
-        if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
-        {
-            if (isTrueSemiJoinResult(result))
-            {
-                // If the result is true, this row should be kept.
-                (*filter)[i] = 1;
-                ++rows_for_semi_anti;
-            }
-            else
-            {
-                // If the result is null or false, this row should be filtered.
-                (*filter)[i] = 0;
-            }
-        }
-        else
-        {
-            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-            {
-                left_semi_column_data->push_back(result);
-            }
-            else
-            {
-                switch (result)
-                {
-                case SemiJoinResultType::FALSE_VALUE:
-                    left_semi_column_data->push_back(0);
-                    left_semi_null_map->push_back(0);
-                    break;
-                case SemiJoinResultType::TRUE_VALUE:
-                    left_semi_column_data->push_back(1);
-                    left_semi_null_map->push_back(0);
-                    break;
-                case SemiJoinResultType::NULL_VALUE:
-                    left_semi_column_data->push_back(0);
-                    left_semi_null_map->push_back(1);
-                    break;
-                }
-            }
-        }
-    }
-
-    if constexpr (KIND == ASTTableJoin::Kind::LeftOuterSemi || KIND == ASTTableJoin::Kind::LeftOuterAnti)
-    {
-        block.getByPosition(block.columns() - 1).column = std::move(left_semi_column_ptr);
-    }
-
-    if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
-    {
-        for (size_t i = 0; i < left_columns; ++i)
-        {
-            auto & column = block.getByPosition(i);
-            if (output_column_names_set_after_finalize.contains(column.name))
-                column.column = column.column->filter(*filter, rows_for_semi_anti);
-        }
-    }
-    return block;
+    return genSemiJoinResult<KIND, STRICTNESS, Maps>(
+        probe_process_info,
+        helper,
+        output_column_names_set_after_finalize);
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
@@ -1925,8 +1865,9 @@ void Join::finalizeBuild()
             hash_join_spill_context->getBuildSpiller()->finishSpill();
         assert(active_build_threads == 0);
         build_finished = true;
-        build_cv.notify_all();
     }
+    build_cv.notify_all();
+    wait_build_finished_future->finish();
     LOG_INFO(log, "build finalize with {} entries from {} rows.", getTotalRowCount(), getTotalBuildInputRows());
 }
 
@@ -2103,12 +2044,15 @@ bool Join::finishOneProbe(size_t stream_index)
 
 void Join::finalizeProbe()
 {
-    std::unique_lock lock(build_probe_mutex);
-    if (hash_join_spill_context->getProbeSpiller())
-        hash_join_spill_context->getProbeSpiller()->finishSpill();
-    assert(active_probe_threads == 0);
-    probe_finished = true;
+    {
+        std::unique_lock lock(build_probe_mutex);
+        if (hash_join_spill_context->getProbeSpiller())
+            hash_join_spill_context->getProbeSpiller()->finishSpill();
+        assert(active_probe_threads == 0);
+        probe_finished = true;
+    }
     probe_cv.notify_all();
+    wait_probe_finished_future->finish();
 }
 
 void Join::waitUntilAllProbeFinished() const
@@ -2119,14 +2063,24 @@ void Join::waitUntilAllProbeFinished() const
         throw Exception(error_message);
 }
 
-bool Join::quickCheckProbeFinished() const
+bool Join::isProbeFinishedForPipeline() const
 {
-    return probe_finished;
+    if (!probe_finished)
+    {
+        setNotifyFuture(wait_probe_finished_future.get());
+        return false;
+    }
+    return true;
 }
 
-bool Join::quickCheckBuildFinished() const
+bool Join::isBuildFinishedForPipeline() const
 {
-    return build_finished;
+    if (!build_finished)
+    {
+        setNotifyFuture(wait_build_finished_future.get());
+        return false;
+    }
+    return true;
 }
 
 void Join::finishOneNonJoin(size_t partition_index)
@@ -2147,22 +2101,15 @@ void Join::finishOneNonJoin(size_t partition_index)
     }
 }
 
-Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
+Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
     assert(!probe_process_info.all_rows_joined_finish);
     assert(finalized);
-    if unlikely (dry_run)
+    if unlikely (!build_finished)
     {
-        assert(probe_process_info.block.rows() == 0);
-    }
-    else
-    {
-        if unlikely (!build_finished)
-        {
-            /// build is not finished yet, the query must be cancelled, so just return {}
-            LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
-            return {};
-        }
+        /// build is not finished yet, the query must be cancelled, so just return {}
+        LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
+        return {};
     }
     std::shared_lock lock(rwlock);
 
@@ -2178,6 +2125,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     else
         block = joinBlockHash(probe_process_info);
 
+    // if cancelled, just return empty block
+    if (!block)
+        return block;
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == Cross_LeftOuterAnti)
     {
@@ -2450,6 +2400,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
+            restore_join->setCancellationHook(is_cancelled);
             BlockInputStreams restore_scan_hash_map_streams;
             restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
             if (needScanHashMapAfterProbe(kind))
@@ -2526,6 +2477,8 @@ void Join::wakeUpAllWaitingThreads()
     probe_cv.notify_all();
     build_cv.notify_all();
     cancelRuntimeFilter("Join has been cancelled.");
+    // wait_build/probe_finished_future does not need to call finish here
+    // because it is called in PipelineExecutorContext.
 }
 
 void Join::finalize(const Names & parent_require)
@@ -2552,6 +2505,10 @@ void Join::finalize(const Names & parent_require)
             output_column_names_set_after_finalize.insert(name_and_type.name);
         }
     }
+    RUNTIME_CHECK_MSG(
+        output_column_names_set_after_finalize.size() == output_columns_after_finalize.size(),
+        "Logical error, the output of join contains duplicated columns");
+
     output_block_after_finalize = Block(output_columns_after_finalize);
     Names updated_require;
     if (match_helper_name.empty())

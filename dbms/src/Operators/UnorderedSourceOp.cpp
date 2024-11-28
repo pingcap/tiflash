@@ -45,7 +45,7 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
     {
         if (!task_pool->tryPopBlock(block))
         {
-            setNotifyFuture(task_pool);
+            setNotifyFuture(task_pool.get());
             return OperatorStatus::WAIT_FOR_NOTIFY;
         }
 

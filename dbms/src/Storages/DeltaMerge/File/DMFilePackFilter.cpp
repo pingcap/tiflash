@@ -13,8 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+
+#include <magic_enum.hpp>
 
 namespace DB::DM
 {
@@ -31,6 +35,33 @@ void DMFilePackFilter::init(ReadTag read_tag)
         std::vector<RSOperatorPtr> handle_filters;
         for (auto & rowkey_range : rowkey_ranges)
             handle_filters.emplace_back(toFilter(rowkey_range));
+#ifndef NDEBUG
+        // sanity check under debug mode to ensure the rowkey_range is correct common-handle or int64-handle
+        if (!rowkey_ranges.empty())
+        {
+            bool is_common_handle = rowkey_ranges.begin()->is_common_handle;
+            auto handle_col_type = dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type;
+            if (is_common_handle)
+                RUNTIME_CHECK_MSG(
+                    handle_col_type->getTypeId() == TypeIndex::String,
+                    "handle_col_type_id={}",
+                    magic_enum::enum_name(handle_col_type->getTypeId()));
+            else
+                RUNTIME_CHECK_MSG(
+                    handle_col_type->getTypeId() == TypeIndex::Int64,
+                    "handle_col_type_id={}",
+                    magic_enum::enum_name(handle_col_type->getTypeId()));
+            for (size_t i = 1; i < rowkey_ranges.size(); ++i)
+            {
+                RUNTIME_CHECK_MSG(
+                    is_common_handle == rowkey_ranges[i].is_common_handle,
+                    "i={} is_common_handle={} ith.is_common_handle={}",
+                    i,
+                    is_common_handle,
+                    rowkey_ranges[i].is_common_handle);
+            }
+        }
+#endif
         for (size_t i = 0; i < pack_count; ++i)
         {
             handle_res[i] = RSResult::None;
@@ -82,6 +113,15 @@ void DMFilePackFilter::init(ReadTag read_tag)
             pack_res.begin(),
             [](RSResult a, RSResult b) { return a && b; });
     }
+    else
+    {
+        // ColumnFileBig in DeltaValueSpace never pass a filter to DMFilePackFilter.
+        // Assume its filter always return Some.
+        std::transform(pack_res.cbegin(), pack_res.cend(), pack_res.begin(), [](RSResult a) {
+            return a && RSResult::Some;
+        });
+    }
+
     auto [none_count, some_count, all_count, all_null_count] = countPackRes();
     auto after_filter = some_count + all_count + all_null_count;
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
@@ -188,8 +228,9 @@ void DMFilePackFilter::loadIndex(
             if (info == dmfile_meta->merged_sub_file_infos.end())
             {
                 throw Exception(
-                    fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)),
-                    ErrorCodes::LOGICAL_ERROR);
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Unknown index file {}",
+                    dmfile->colIndexPath(file_name_base));
             }
 
             auto file_path = dmfile->meta->mergedPath(info->second.number);
@@ -212,7 +253,7 @@ void DMFilePackFilter::loadIndex(
 
             auto buf = ChecksumReadBufferBuilder::build(
                 std::move(raw_data),
-                dmfile->colDataPath(file_name_base),
+                dmfile->colIndexPath(file_name_base), // just for debug
                 dmfile->getConfiguration()->getChecksumFrameLength(),
                 dmfile->getConfiguration()->getChecksumAlgorithm(),
                 dmfile->getConfiguration()->getChecksumFrameLength());

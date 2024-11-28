@@ -94,6 +94,59 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
+    {
+        for (const auto & column : columns)
+            column->countSerializeByteSize(byte_size);
+    }
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override
+    {
+        for (const auto & column : columns)
+            column->countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    }
+
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
+    {
+        for (const auto & column : columns)
+            column->serializeToPos(pos, start, length, has_null);
+    }
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override
+    {
+        for (const auto & column : columns)
+            column->serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+    }
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().deserializeAndInsertFromPosForColumnArray(
+                pos,
+                array_offsets,
+                use_nt_align_buffer);
+    }
+
+    void flushNTAlignBuffer() override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().flushNTAlignBuffer();
+    }
+
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;

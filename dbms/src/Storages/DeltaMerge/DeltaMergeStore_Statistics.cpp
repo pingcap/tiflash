@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -192,6 +193,105 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
     return stats;
 }
 
+std::optional<LocalIndexesStats> DeltaMergeStore::genLocalIndexStatsByTableInfo(const TiDB::TableInfo & table_info)
+{
+    auto local_index_infos = DM::initLocalIndexInfos(table_info, Logger::get());
+    if (!local_index_infos)
+        return std::nullopt;
+
+    DM::LocalIndexesStats stats;
+    for (const auto & index_info : *local_index_infos)
+    {
+        DM::LocalIndexStats index_stats;
+        index_stats.column_id = index_info.column_id;
+        index_stats.index_id = index_info.index_id;
+        index_stats.index_kind = "HNSW";
+        stats.emplace_back(std::move(index_stats));
+    }
+    return stats;
+}
+
+LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
+{
+    auto local_index_infos_snap = getLocalIndexInfosSnapshot();
+    if (!local_index_infos_snap)
+        return {};
+
+    std::shared_lock lock(read_write_mutex);
+
+    LocalIndexesStats stats;
+    for (const auto & index_info : *local_index_infos_snap)
+    {
+        LocalIndexStats index_stats;
+        index_stats.column_id = index_info.column_id;
+        index_stats.index_id = index_info.index_id;
+        index_stats.index_kind = tipb::VectorIndexKind_Name(index_info.index_definition->kind);
+
+        for (const auto & [handle, segment] : segments)
+        {
+            UNUSED(handle);
+
+            // Delta
+            const auto & delta = segment->getDelta();
+            if (const auto lock = delta->getLock(); lock)
+            {
+                index_stats.rows_delta_not_indexed += delta->getRows();
+                const auto & persisted = delta->getPersistedFileSet();
+                for (const auto & file : persisted->getFiles())
+                {
+                    if (const auto * tiny_file = file->tryToTinyFile();
+                        tiny_file && tiny_file->hasIndex(index_stats.index_id))
+                    {
+                        index_stats.rows_delta_indexed += tiny_file->getRows();
+                        index_stats.rows_delta_not_indexed -= tiny_file->getRows();
+                    }
+                }
+            }
+
+            // Stable
+            {
+                const auto & stable = segment->getStable();
+                bool is_stable_indexed = true;
+                for (const auto & dmfile : stable->getDMFiles())
+                {
+                    const auto [state, bytes] = dmfile->getLocalIndexState(index_info.column_id, index_info.index_id);
+                    UNUSED(bytes);
+                    switch (state)
+                    {
+                    case DMFileMeta::LocalIndexState::NoNeed:
+                        // Regard as indexed, because column does not need any index
+                    case DMFileMeta::LocalIndexState::IndexBuilt:
+                        break;
+                    case DMFileMeta::LocalIndexState::IndexPending:
+                        is_stable_indexed = false;
+                        break;
+                    }
+                }
+
+                if (is_stable_indexed)
+                {
+                    index_stats.rows_stable_indexed += stable->getRows();
+                }
+                else
+                {
+                    index_stats.rows_stable_not_indexed += stable->getRows();
+                }
+
+                const auto index_build_error = segment->getIndexBuildError();
+                // Set error_message to the first error_message we meet among all segments
+                if (auto err_iter = index_build_error.find(index_info.index_id);
+                    err_iter != index_build_error.end() && index_stats.error_message.empty())
+                {
+                    index_stats.error_message = err_iter->second;
+                }
+            }
+        }
+
+        stats.emplace_back(index_stats);
+    }
+
+    return stats;
+}
 
 } // namespace DM
 } // namespace DB

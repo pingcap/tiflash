@@ -38,13 +38,11 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     static_assert(sizeof(HashValueType) <= sizeof(decltype(wd.hashes)::value_type));
 
     KeyGetterType & key_getter = *static_cast<KeyGetterType *>(wd.key_getter.get());
-    key_getter.reset(key_columns);
+    key_getter.reset(key_columns, row_layout.raw_required_key_column_indexes.size());
 
     wd.row_sizes.clear();
     wd.row_sizes.resize_fill(rows, row_layout.other_column_fixed_size);
     wd.hashes.resize(rows);
-    wd.row_ptrs.clear();
-    wd.row_ptrs.resize_fill(rows, nullptr);
     /// The last partition is used to hold rows with null join key.
     constexpr size_t part_count = JOIN_BUILD_PARTITION_COUNT + 1;
     wd.partition_row_sizes.clear();
@@ -85,30 +83,26 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         }
         wd.row_sizes[i] += ptr_and_key_size;
 
+        static_assert(CPU_CACHE_LINE_SIZE % ROW_ALIGN == 0);
         size_t remain_size = CPU_CACHE_LINE_SIZE - wd.partition_row_sizes[part_num] % CPU_CACHE_LINE_SIZE;
         size_t align_remain_size = remain_size / ROW_ALIGN * ROW_ALIGN;
-        if (align_remain_size >= ptr_and_key_size)
+        if (ptr_and_key_size % CPU_CACHE_LINE_SIZE <= align_remain_size)
         {
-            if (remain_size > align_remain_size)
+            if likely (wd.last_partition_index[part_num] != -1)
             {
-                if likely (wd.last_partition_index[part_num] != -1)
-                {
-                    wd.row_sizes[wd.last_partition_index[part_num]] += remain_size - align_remain_size;
-                    wd.partition_row_sizes[part_num] += remain_size - align_remain_size;
-                    wd.padding_size += remain_size - align_remain_size;
-                }
+                size_t diff = remain_size - align_remain_size;
+                wd.row_sizes[wd.last_partition_index[part_num]] += diff;
+                wd.partition_row_sizes[part_num] += diff;
+                wd.padding_size += diff;
             }
         }
         else
         {
-            if (remain_size != 0)
+            if likely (wd.last_partition_index[part_num] != -1)
             {
-                if likely (wd.last_partition_index[part_num] != -1)
-                {
-                    wd.row_sizes[wd.last_partition_index[part_num]] += remain_size;
-                    wd.partition_row_sizes[part_num] += remain_size;
-                    wd.padding_size += remain_size;
-                }
+                wd.row_sizes[wd.last_partition_index[part_num]] += remain_size;
+                wd.partition_row_sizes[part_num] += remain_size;
+                wd.padding_size += remain_size;
             }
         }
 
@@ -143,84 +137,60 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     check_row_ptrs.resize(rows);
 #endif
 
-    for (size_t i = 0; i < rows; ++i)
+    constexpr size_t step = 64;
+    wd.row_ptrs.reserve(step);
+    for (size_t i = 0; i < rows; i += step)
     {
-        if (has_null_map && (*null_map)[i])
+        wd.row_ptrs.clear();
+
+        size_t start = i;
+        size_t end = i + step > rows ? rows : i + step;
+        for (size_t j = start; j < end; ++j)
         {
-            if constexpr (need_record_null_rows)
+            if (has_null_map && (*null_map)[j])
             {
-                // FIXME: row size does not correct
-                wd.row_ptrs[i]
-                    = partition_column_row[part_count - 1].data.data() + wd.partition_row_sizes[part_count - 1];
-                assert((reinterpret_cast<uintptr_t>(wd.row_ptrs[i]) & (ROW_ALIGN - 1)) == 0);
+                if constexpr (need_record_null_rows)
+                {
+                    //TODO
+                }
+                else
+                {
+                    wd.row_ptrs.push_back(nullptr);
+                }
+                continue;
+            }
+            size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[j]);
+            wd.row_ptrs.push_back(partition_column_row[part_num].data.data() + wd.partition_row_sizes[part_num]);
+            auto & ptr = wd.row_ptrs.back();
+            assert((reinterpret_cast<uintptr_t>(ptr) & (ROW_ALIGN - 1)) == 0);
 
-                wd.partition_row_sizes[part_count - 1] += wd.row_sizes[i];
-                partition_column_row[part_count - 1].offsets.push_back(wd.partition_row_sizes[part_count - 1]);
+            wd.partition_row_sizes[part_num] += wd.row_sizes[j];
+            partition_column_row[part_num].offsets.push_back(wd.partition_row_sizes[part_num]);
 
-                /// Append to null rows list
-                unalignedStore<RowPtr>(wd.row_ptrs[i], wd.null_rows_list_head);
-                wd.null_rows_list_head = wd.row_ptrs[i];
+            unalignedStore<RowPtr>(ptr, nullptr);
+            ptr += sizeof(RowPtr);
 
-                wd.row_ptrs[i] += sizeof(RowPtr);
+            if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+            {
+                unalignedStore<HashValueType>(ptr, static_cast<HashValueType>(wd.hashes[j]));
+                ptr += sizeof(HashValueType);
             }
             else
             {
-                wd.row_ptrs[i] = nullptr;
+                partition_column_row[part_num].hashes.push_back(wd.hashes[j]);
             }
-            continue;
+            const auto & key = key_getter.getJoinKeyWithBufferHint(j);
+            key_getter.serializeJoinKey(key, ptr);
+            ptr += key_getter.getJoinKeySize(key);
         }
-
-        size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[i]);
-        wd.row_ptrs[i] = partition_column_row[part_num].data.data() + wd.partition_row_sizes[part_num];
-        assert((reinterpret_cast<uintptr_t>(wd.row_ptrs[i]) & (ROW_ALIGN - 1)) == 0);
-
-#ifndef NDEBUG
-        check_row_ptrs[i] = wd.row_ptrs[i];
-#endif
-
-        wd.partition_row_sizes[part_num] += wd.row_sizes[i];
-        partition_column_row[part_num].offsets.push_back(wd.partition_row_sizes[part_num]);
-
-        unalignedStore<RowPtr>(wd.row_ptrs[i], nullptr);
-        wd.row_ptrs[i] += sizeof(RowPtr);
-
-        if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+        for (const auto & [index, _] : row_layout.other_required_column_indexes)
         {
-            unalignedStore<HashValueType>(wd.row_ptrs[i], static_cast<HashValueType>(wd.hashes[i]));
-            wd.row_ptrs[i] += sizeof(HashValueType);
-        }
-        else
-        {
-            partition_column_row[part_num].hashes.push_back(wd.hashes[i]);
-        }
-        const auto & key = key_getter.getJoinKeyWithBufferHint(i);
-        key_getter.serializeJoinKey(key, wd.row_ptrs[i]);
-        wd.row_ptrs[i] += key_getter.getJoinKeySize(key);
-    }
-
-    if (!row_layout.other_required_column_indexes.empty())
-    {
-        constexpr size_t step = 64;
-        for (size_t i = 0; i < rows; i += step)
-        {
-            size_t start = i;
-            size_t end = i + step > rows ? rows : i + step;
-            for (const auto & [index, _] : row_layout.other_required_column_indexes)
-            {
-                if constexpr (has_null_map && !need_record_null_rows)
-                    block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, true);
-                else
-                    block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end, false);
-            }
+            if constexpr (has_null_map && !need_record_null_rows)
+                block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end - start, true);
+            else
+                block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end - start, false);
         }
     }
-
-#ifndef NDEBUG
-    for (size_t i = 0; i < rows; ++i)
-    {
-        assert(wd.row_ptrs[i] <= check_row_ptrs[i] + wd.row_sizes[i]);
-    }
-#endif
 
     for (size_t i = 0; i < part_count; ++i)
     {

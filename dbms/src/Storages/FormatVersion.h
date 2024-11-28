@@ -29,6 +29,7 @@ using Version = UInt32;
 
 inline static constexpr Version V1 = 1;
 inline static constexpr Version V2 = 2; // Support clustered index
+inline static constexpr Version V3 = 3; // Meta using protobuf
 
 } // namespace SegmentFormat
 
@@ -57,6 +58,7 @@ using Version = UInt64;
 inline static constexpr Version V1 = 1;
 inline static constexpr Version V2 = 2; // Support clustered index
 inline static constexpr Version V3 = 3; // Support DeltaPackFile
+inline static constexpr Version V4 = 4; // Meta using protobuf
 } // namespace DeltaFormat
 
 namespace PageFormat
@@ -140,6 +142,15 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersio
     .identifier = 6,
 };
 
+inline static const StorageFormatVersion STORAGE_FORMAT_V7 = StorageFormatVersion{
+    .segment = SegmentFormat::V3, // diff
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2,
+    .delta = DeltaFormat::V4, // diff
+    .page = PageFormat::V3,
+    .identifier = 7,
+};
+
 // STORAGE_FORMAT_V100 is used for S3 only
 inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVersion{
     .segment = SegmentFormat::V2,
@@ -160,7 +171,17 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V101 = StorageFormatVers
     .identifier = 101,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
+// STORAGE_FORMAT_V102 is used for S3 only
+inline static const StorageFormatVersion STORAGE_FORMAT_V102 = StorageFormatVersion{
+    .segment = SegmentFormat::V3, // diff
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2,
+    .delta = DeltaFormat::V4, // diff
+    .page = PageFormat::V4,
+    .identifier = 102,
+};
+
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V7;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {
@@ -178,10 +199,14 @@ inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
         return STORAGE_FORMAT_V5;
     case 6:
         return STORAGE_FORMAT_V6;
+    case 7:
+        return STORAGE_FORMAT_V7;
     case 100:
         return STORAGE_FORMAT_V100;
     case 101:
         return STORAGE_FORMAT_V101;
+    case 102:
+        return STORAGE_FORMAT_V102;
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal setting value: {}", setting);
     }

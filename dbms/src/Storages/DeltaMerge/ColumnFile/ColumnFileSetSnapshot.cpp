@@ -18,7 +18,7 @@
 
 namespace DB::DM
 {
-RowKeyRange ColumnFileSetSnapshot::getSquashDeleteRange() const
+RowKeyRange ColumnFileSetSnapshot::getSquashDeleteRange(bool is_common_handle, size_t rowkey_column_size) const
 {
     RowKeyRange squashed_delete_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
     for (const auto & column_file : column_files)

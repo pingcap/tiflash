@@ -16,8 +16,10 @@
 
 #include <Common/FieldVisitors.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 
 namespace DB
 {
@@ -27,9 +29,6 @@ struct DAGQueryInfo;
 namespace DB::DM
 {
 
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
-using RSOperators = std::vector<RSOperatorPtr>;
 using Fields = std::vector<Field>;
 
 inline static const RSOperatorPtr EMPTY_RS_OPERATOR{};
@@ -56,7 +55,7 @@ public:
 
     static RSOperatorPtr build(
         const std::unique_ptr<DAGQueryInfo> & dag_query,
-        const ColumnInfos & scan_column_infos,
+        const TiDB::ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines,
         bool enable_rs_filter,
         const LoggerPtr & tracing_logger);
@@ -164,5 +163,11 @@ RSOperatorPtr createLike(const Attr & attr, const Field & value);
 RSOperatorPtr createIsNull(const Attr & attr);
 //
 RSOperatorPtr createUnsupported(const String & reason);
+
+// Wrap with a ANNQueryInfo
+RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoPtr & ann_query_info);
+
+// Get ANNQueryInfo from RSOperator
+ANNQueryInfoPtr getANNQueryInfo(const RSOperatorPtr & op);
 
 } // namespace DB::DM

@@ -38,6 +38,8 @@ struct ExchangeReceiverImpl
     static constexpr auto type = "ExchangeReceiver";
 
     static bool isMatch(const tipb::Executor * executor) { return executor->has_exchange_receiver(); }
+
+    static bool isSourceExecutor() { return true; }
 };
 
 using ExchangeReceiverStatisticsBase = ExecutorStatistics<ExchangeReceiverImpl>;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
+#include <Poco/File.h>
 #include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -95,6 +97,24 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     //    and collect the lock files from applied entries.
     auto & records = edits.getMutRecords();
     write_down_stats.num_records = records.size();
+    LOG_DEBUG(
+        log,
+        "Prepare to dump {} records, sequence={}, manifest_file_id={}",
+        write_down_stats.num_records,
+        sequence,
+        manifest_file_id);
+
+    // TODO: Optimize the read performance by grouping the read of
+    //  - the same S3DataFile in remote store (S3)
+    //  - the same blob_file in local blob_store
+    // Espcially grouping the reading on the same S3DataFile. Because we can ONLY read
+    // sequentially through the S3 response.
+    //
+    // Now as a workaround, we utilize the assumption that for remote pages, "the page
+    // data with nearly page_id is more likely to be stored in the same S3DataFile".
+    // By enlarging and the ReadBuffer size and reusing the ReadBuffer in "DataSource"
+    // to make it more likely to hint the buffer.
+
     for (auto & rec_edit : records)
     {
         StorageType id_storage_type = StorageType::Unknown;
@@ -180,10 +200,15 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 
         // 2. For entry edits without the checkpoint info, or it is stored on an existing data file that needs compact,
         // write the entry data to the data file, and assign a new checkpoint info.
+        Stopwatch sw;
         try
         {
             auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
-            RUNTIME_CHECK_MSG(page.isValid(), "failed to read page, record={}", rec_edit);
+            RUNTIME_CHECK_MSG(
+                page.isValid(),
+                "failed to read page, record={} elapsed={:.3f}s",
+                rec_edit,
+                sw.elapsedSeconds());
             auto data_location
                 = data_writer->write(rec_edit.page_id, rec_edit.version, page.data.begin(), page.data.size());
             // the page data size uploaded in this checkpoint
@@ -207,7 +232,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         }
         catch (...)
         {
-            LOG_ERROR(log, "failed to read page, record={}", rec_edit);
+            LOG_ERROR(log, "failed to read and write page, record={} elapsed={:.3f}s", rec_edit, sw.elapsedSeconds());
             tryLogCurrentException(__PRETTY_FUNCTION__);
             throw;
         }
@@ -255,6 +280,7 @@ void CPFilesWriter::newDataWriter()
         fmt::runtime(data_file_path_pattern),
         fmt::arg("seq", sequence),
         fmt::arg("index", data_file_index)));
+
     data_writer = CPDataFileWriter::create({
         .file_path = data_file_paths.back(),
         .file_id = fmt::format(
@@ -266,6 +292,21 @@ void CPFilesWriter::newDataWriter()
     data_prefix.set_sub_file_index(data_file_index);
     data_writer->writePrefix(data_prefix);
     ++data_file_index;
+}
+
+void CPFilesWriter::abort()
+{
+    for (const auto & s : data_file_paths)
+    {
+        if (Poco::File f(s); f.exists())
+        {
+            f.remove();
+        }
+    }
+    if likely (manifest_writer != nullptr)
+    {
+        manifest_writer->abort();
+    }
 }
 
 } // namespace DB::PS::V3

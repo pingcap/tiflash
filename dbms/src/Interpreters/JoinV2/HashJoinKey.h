@@ -22,6 +22,8 @@
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <common/mem_utils_opt.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -63,10 +65,14 @@ public:
     using KeyType = T;
     explicit HashJoinKeyOneNumber(const TiDB::TiDBCollators &) {}
 
-    void reset(const ColumnRawPtrs & key_columns)
+    void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
         RUNTIME_ASSERT(key_columns.size() == 1);
         vec = reinterpret_cast<const T *>(key_columns[0]->getRawData().data);
+        if (raw_required_key_size == 0)
+            required_key_offset = sizeof(T);
+        else
+            required_key_offset = 0;
     }
 
     static constexpr bool isJoinKeyTypeReference() { return false; }
@@ -76,9 +82,9 @@ public:
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, UInt8 * pos) { memcpy(pos, &t, sizeof(T)); }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { memcpy(pos, &t, sizeof(T)); }
 
-    ALWAYS_INLINE T deserializeJoinKey(const UInt8 * pos)
+    ALWAYS_INLINE T deserializeJoinKey(const char * pos)
     {
         T t;
         memcpy(&t, pos, sizeof(T));
@@ -89,8 +95,11 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
 
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const T &) { return required_key_offset; }
+
 private:
     const T * vec = nullptr;
+    size_t required_key_offset;
 };
 
 template <typename T>
@@ -100,7 +109,7 @@ public:
     using KeyType = T;
     explicit HashJoinKeysFixed(const TiDB::TiDBCollators &) {}
 
-    void reset(const ColumnRawPtrs & key_columns)
+    void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
         size_t sz = key_columns.size();
         vec.resize(sz);
@@ -114,6 +123,11 @@ public:
         }
 
         RUNTIME_ASSERT(fixed_size_sum <= sizeof(T));
+
+        RUNTIME_CHECK(raw_required_key_size <= sz);
+        required_key_offset = sizeof(T);
+        for (size_t i = 0; i < raw_required_key_size; ++i)
+            required_key_offset -= fixed_size[sz - 1 - i];
     }
 
     static constexpr bool isJoinKeyTypeReference() { return false; }
@@ -126,7 +140,7 @@ public:
             char data[sizeof(T)] = {};
         };
         size_t sz = vec.size();
-        size_t offset = 0;
+        size_t offset = sizeof(T) - fixed_size_sum;
         for (size_t i = 0; i < sz; ++i)
         {
             memcpy(&data[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
@@ -137,27 +151,14 @@ public:
 
     ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return fixed_size_sum; }
+    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, UInt8 * pos)
-    {
-        union
-        {
-            T key;
-            char data[sizeof(T)] = {};
-        };
-        key = t;
-        memcpy(pos, data, fixed_size_sum);
-    }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { memcpy(pos, &t, sizeof(T)); }
 
-    ALWAYS_INLINE T deserializeJoinKey(const UInt8 * pos)
+    ALWAYS_INLINE T deserializeJoinKey(const char * pos)
     {
-        union
-        {
-            T key;
-            char data[sizeof(T)] = {};
-        };
-        memcpy(data, pos, fixed_size_sum);
+        T key;
+        memcpy(&key, pos, sizeof(T));
         return key;
     }
 
@@ -165,10 +166,13 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
 
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const T &) { return required_key_offset; }
+
 private:
     std::vector<const char *> vec;
     std::vector<size_t> fixed_size;
     size_t fixed_size_sum;
+    size_t required_key_offset;
 };
 
 class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeysFixedOther
@@ -177,7 +181,7 @@ public:
     using KeyType = StringRef;
     explicit HashJoinKeysFixedOther(const TiDB::TiDBCollators &) {}
 
-    void reset(const ColumnRawPtrs & key_columns)
+    void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
         size_t sz = key_columns.size();
         vec.resize(sz);
@@ -190,6 +194,11 @@ public:
             fixed_size_sum += fixed_size[i];
         }
         key_buffer.resize(fixed_size_sum);
+
+        RUNTIME_CHECK(raw_required_key_size <= sz);
+        required_key_offset = fixed_size_sum;
+        for (size_t i = 0; i < raw_required_key_size; ++i)
+            required_key_offset -= fixed_size[sz - 1 - i];
     }
 
     static constexpr bool isJoinKeyTypeReference() { return true; }
@@ -208,18 +217,20 @@ public:
 
     ALWAYS_INLINE KeyType getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE size_t getJoinKeySize(KeyType) { return fixed_size_sum; }
+    ALWAYS_INLINE size_t getJoinKeySize(const KeyType &) { return fixed_size_sum; }
 
-    ALWAYS_INLINE void serializeJoinKey(KeyType s, UInt8 * pos) { memcpy(pos, s.data, fixed_size_sum); }
+    ALWAYS_INLINE void serializeJoinKey(const KeyType & s, char * pos) { memcpy(pos, s.data, fixed_size_sum); }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos) { return StringRef(pos, fixed_size_sum); }
+    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos) { return StringRef(pos, fixed_size_sum); }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
 
-    ALWAYS_INLINE bool joinKeyIsEqual(KeyType key1, KeyType key2)
+    ALWAYS_INLINE bool joinKeyIsEqual(const KeyType & key1, const KeyType & key2)
     {
         return mem_utils::IsStrEqualWithSameSize(key1.data, key2.data, fixed_size_sum);
     }
+
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const KeyType &) { return required_key_offset; }
 
 private:
     std::vector<const char *> vec;
@@ -227,6 +238,7 @@ private:
     size_t fixed_size_sum = 0;
 
     String key_buffer;
+    size_t required_key_offset;
 };
 
 template <bool padding>
@@ -236,7 +248,11 @@ public:
     using KeyType = StringRef;
     explicit HashJoinKeyStringBin(const TiDB::TiDBCollators &) {}
 
-    void reset(const ColumnRawPtrs & key_columns) { column_string = assert_cast<const ColumnString *>(key_columns[0]); }
+    void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
+    {
+        column_string = assert_cast<const ColumnString *>(key_columns[0]);
+        required_key_size = raw_required_key_size;
+    }
 
     static constexpr bool isJoinKeyTypeReference() { return true; }
 
@@ -249,19 +265,19 @@ public:
 
     ALWAYS_INLINE StringRef getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(UInt32) + s.size; }
 
-    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, UInt8 * pos)
+    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
-        memcpy(pos, &s.size, sizeof(size_t));
-        inline_memcpy(pos + sizeof(size_t), s.data, s.size);
+        std::memcpy(pos, &s.size, sizeof(UInt32));
+        inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
     }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos)
+    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos)
     {
         StringRef s;
-        memcpy(&s.size, pos, sizeof(size_t));
-        s.data = reinterpret_cast<const char *>(pos + sizeof(size_t));
+        std::memcpy(&s.size, pos, sizeof(UInt32));
+        s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
         return s;
     }
 
@@ -269,8 +285,11 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return required_key_size == 0 ? key.size : 0; }
+
 private:
     const ColumnString * column_string = nullptr;
+    size_t required_key_size;
 };
 
 class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeyString
@@ -283,10 +302,11 @@ public:
         collator = collators[0];
     }
 
-    void reset(const ColumnRawPtrs & key_columns)
+    void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
         column_string = assert_cast<const ColumnString *>(key_columns[0]);
         buffer_initialized = false;
+        required_key_size = raw_required_key_size;
     }
 
     static constexpr bool isJoinKeyTypeReference() { return true; }
@@ -318,25 +338,27 @@ public:
         return keys_buffer->getDataAt(row);
     }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(UInt32) + s.size; }
 
-    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, UInt8 * pos)
+    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
-        memcpy(pos, &s.size, sizeof(size_t));
-        inline_memcpy(pos + sizeof(size_t), s.data, s.size);
+        memcpy(pos, &s.size, sizeof(UInt32));
+        inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
     }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos)
+    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos)
     {
         StringRef s;
-        memcpy(&s.size, pos, sizeof(size_t));
-        s.data = reinterpret_cast<const char *>(pos + sizeof(size_t));
+        memcpy(&s.size, pos, sizeof(UInt32));
+        s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
         return s;
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
+
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return required_key_size == 0 ? key.size : 0; }
 
 private:
     const ColumnString * column_string = nullptr;
@@ -346,6 +368,7 @@ private:
     ColumnString::MutablePtr keys_buffer = ColumnString::create();
 
     bool buffer_initialized = false;
+    size_t required_key_size;
 };
 
 class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeySerialized
@@ -354,7 +377,7 @@ public:
     using KeyType = StringRef;
     explicit HashJoinKeySerialized(const TiDB::TiDBCollators & collators_) { collators = collators_; }
 
-    void reset(const ColumnRawPtrs & key_columns_)
+    void reset(const ColumnRawPtrs & key_columns_, size_t /* raw_required_key_size */)
     {
         key_columns = key_columns_;
         keys_size = key_columns.size();
@@ -398,25 +421,27 @@ public:
         return keys_buffer->getDataAt(row);
     }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(size_t) + s.size; }
+    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(UInt32) + s.size; }
 
-    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, UInt8 * pos)
+    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
-        memcpy(pos, &s.size, sizeof(size_t));
-        inline_memcpy(pos + sizeof(size_t), s.data, s.size);
+        memcpy(pos, &s.size, sizeof(UInt32));
+        inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
     }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const UInt8 * pos)
+    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos)
     {
         StringRef s;
-        memcpy(&s.size, pos, sizeof(size_t));
-        s.data = reinterpret_cast<const char *>(pos + sizeof(size_t));
+        memcpy(&s.size, pos, sizeof(UInt32));
+        s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
         return s;
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
+
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return key.size; }
 
 private:
     ColumnRawPtrs key_columns;
@@ -558,7 +583,8 @@ std::unique_ptr<void, std::function<void(void *)>> createHashJoinKeyGetter(
 
 void resetHashJoinKeyGetter(
     HashJoinKeyMethod method,
+    std::unique_ptr<void, std::function<void(void *)>> & key_getter,
     const ColumnRawPtrs & key_columns,
-    std::unique_ptr<void, std::function<void(void *)>> & key_getter);
+    const HashJoinRowLayout & row_layout);
 
 } // namespace DB

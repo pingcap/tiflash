@@ -86,7 +86,9 @@ protected:
             placed_rows,
             placed_deletes,
             first_snap->delta->getSharedDeltaIndex()->getRNCacheKey());
-        first_snap->delta->shared_delta_index = broken_delta_index;
+
+        // hack to change the "immutable" delta-index on delta-snapshot for testing
+        (*const_cast<DeltaIndexPtr *>(&first_snap->delta->getSharedDeltaIndex())) = broken_delta_index;
 
         auto task = std::make_shared<DM::SegmentReadTask>(
             first,
@@ -205,7 +207,8 @@ public:
             /*store_id*/ 1,
             /*store_address*/ "127.0.0.1",
             store->keyspace_id,
-            store->physical_table_id);
+            store->physical_table_id,
+            /*pk_col_id*/ 0);
     }
 
     void initReadNodePageCacheIfUninitialized()
@@ -716,7 +719,8 @@ try
             /*store_id*/ 1,
             /*store_address*/ "127.0.0.1",
             store->keyspace_id,
-            store->physical_table_id);
+            store->physical_table_id,
+            /*pk_col_id*/ 0);
 
         auto seg_id = seg_task->segment->segmentId();
 
@@ -856,7 +860,8 @@ try
         /*store_id*/ 1,
         /*store_address*/ "127.0.0.1",
         store->keyspace_id,
-        store->physical_table_id);
+        store->physical_table_id,
+        /*pk_col_id*/ 0);
     const auto & cfs = seg_task->read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
     ASSERT_EQ(cfs.size(), 1);
     const auto & cf = cfs.front();

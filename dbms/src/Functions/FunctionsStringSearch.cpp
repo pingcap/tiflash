@@ -32,7 +32,6 @@
 #include <re2/stringpiece.h>
 
 #include <memory>
-#include <mutex>
 
 #if USE_RE2_ST
 #include <re2_st/re2.h>
@@ -47,316 +46,6 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 }
-
-/** Implementation details for functions of 'position' family depending on ASCII/UTF8 and case sensitiveness.
-  */
-struct PositionCaseSensitiveASCII
-{
-    /// For searching single substring inside big-enough contiguous chunk of data. Coluld have slightly expensive initialization.
-    using SearcherInBigHaystack = VolnitskyImpl<true, true>;
-
-    /// For searching single substring, that is different each time. This object is created for each row of data. It must have cheap initialization.
-    using SearcherInSmallHaystack = LibCASCIICaseSensitiveStringSearcher;
-
-    static SearcherInBigHaystack createSearcherInBigHaystack(
-        const char * needle_data,
-        size_t needle_size,
-        size_t haystack_size_hint)
-    {
-        return SearcherInBigHaystack(needle_data, needle_size, haystack_size_hint);
-    }
-
-    static SearcherInSmallHaystack createSearcherInSmallHaystack(const char * needle_data, size_t needle_size)
-    {
-        return SearcherInSmallHaystack(needle_data, needle_size);
-    }
-
-    /// Number of code points between 'begin' and 'end' (this has different behaviour for ASCII and UTF-8).
-    static size_t countChars(const char * begin, const char * end) { return end - begin; }
-
-    /// Convert string to lowercase. Only for case-insensitive search.
-    /// Implementation is permitted to be inefficient because it is called for single string.
-    static void toLowerIfNeed(std::string &) {}
-};
-
-struct PositionCaseInsensitiveASCII
-{
-    /// `Volnitsky` is not used here, because one person has measured that this is better. It will be good if you question it.
-    using SearcherInBigHaystack = ASCIICaseInsensitiveStringSearcher;
-    using SearcherInSmallHaystack = LibCASCIICaseInsensitiveStringSearcher;
-
-    static SearcherInBigHaystack createSearcherInBigHaystack(
-        const char * needle_data,
-        size_t needle_size,
-        size_t /*haystack_size_hint*/)
-    {
-        return SearcherInBigHaystack(needle_data, needle_size);
-    }
-
-    static SearcherInSmallHaystack createSearcherInSmallHaystack(const char * needle_data, size_t needle_size)
-    {
-        return SearcherInSmallHaystack(needle_data, needle_size);
-    }
-
-    static size_t countChars(const char * begin, const char * end) { return end - begin; }
-
-    static void toLowerIfNeed(std::string & s) { std::transform(std::begin(s), std::end(s), std::begin(s), tolower); }
-};
-
-struct PositionCaseSensitiveUTF8
-{
-    using SearcherInBigHaystack = VolnitskyImpl<true, false>;
-    using SearcherInSmallHaystack = LibCASCIICaseSensitiveStringSearcher;
-
-    static SearcherInBigHaystack createSearcherInBigHaystack(
-        const char * needle_data,
-        size_t needle_size,
-        size_t haystack_size_hint)
-    {
-        return SearcherInBigHaystack(needle_data, needle_size, haystack_size_hint);
-    }
-
-    static SearcherInSmallHaystack createSearcherInSmallHaystack(const char * needle_data, size_t needle_size)
-    {
-        return SearcherInSmallHaystack(needle_data, needle_size);
-    }
-
-    static size_t countChars(const char * begin, const char * end)
-    {
-        size_t res = 0;
-        for (const char * it = begin; it != end; ++it)
-            if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
-                ++res;
-        return res;
-    }
-
-    static void toLowerIfNeed(std::string &) {}
-};
-
-struct PositionCaseInsensitiveUTF8
-{
-    using SearcherInBigHaystack = VolnitskyImpl<false, false>;
-    using SearcherInSmallHaystack = UTF8CaseInsensitiveStringSearcher; /// TODO Very suboptimal.
-
-    static SearcherInBigHaystack createSearcherInBigHaystack(
-        const char * needle_data,
-        size_t needle_size,
-        size_t haystack_size_hint)
-    {
-        return SearcherInBigHaystack(needle_data, needle_size, haystack_size_hint);
-    }
-
-    static SearcherInSmallHaystack createSearcherInSmallHaystack(const char * needle_data, size_t needle_size)
-    {
-        return SearcherInSmallHaystack(needle_data, needle_size);
-    }
-
-    static size_t countChars(const char * begin, const char * end)
-    {
-        size_t res = 0;
-        for (const char * it = begin; it != end; ++it)
-            if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
-                ++res;
-        return res;
-    }
-
-    static void toLowerIfNeed(std::string & s) { Poco::UTF8::toLowerInPlace(s); }
-};
-
-template <typename Impl>
-struct PositionImpl
-{
-    using ResultType = UInt64;
-    /// need customized escape char when do the string search
-    static const bool need_customized_escape_char = false;
-    /// support match type when do the string search, used in regexp
-    static const bool support_match_type = false;
-
-    /// Find one substring in many strings.
-    static void vectorConstant(
-        const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        const std::string & needle,
-        const UInt8 escape_char,
-        const std::string & match_type,
-        const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt64> & res)
-    {
-        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
-            throw Exception(
-                "PositionImpl don't support customized escape char/match_type argument/tidb collator",
-                ErrorCodes::NOT_IMPLEMENTED);
-        const UInt8 * begin = &data[0];
-        const UInt8 * pos = begin;
-        const UInt8 * end = pos + data.size();
-
-        /// Current index in the array of strings.
-        size_t i = 0;
-
-        typename Impl::SearcherInBigHaystack searcher
-            = Impl::createSearcherInBigHaystack(needle.data(), needle.size(), end - pos);
-
-        /// We will search for the next occurrence in all strings at once.
-        while (pos < end && end != (pos = searcher.search(pos, end - pos)))
-        {
-            /// Determine which index it refers to.
-            while (begin + offsets[i] <= pos)
-            {
-                res[i] = 0;
-                ++i;
-            }
-
-            /// We check that the entry does not pass through the boundaries of strings.
-            if (pos + needle.size() < begin + offsets[i])
-            {
-                size_t prev_offset = i != 0 ? offsets[i - 1] : 0;
-                res[i] = 1
-                    + Impl::countChars(
-                             reinterpret_cast<const char *>(begin + prev_offset),
-                             reinterpret_cast<const char *>(pos));
-            }
-            else
-                res[i] = 0;
-
-            pos = begin + offsets[i];
-            ++i;
-        }
-
-        memset(&res[i], 0, (res.size() - i) * sizeof(res[0]));
-    }
-
-    /// Search for substring in string.
-    static void constantConstant(
-        std::string data,
-        std::string needle,
-        const UInt8 escape_char,
-        const std::string & match_type,
-        const TiDB::TiDBCollatorPtr & collator,
-        UInt64 & res)
-    {
-        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
-            throw Exception(
-                "PositionImpl don't support customized escape char/match_type argument/tidb collator",
-                ErrorCodes::NOT_IMPLEMENTED);
-        Impl::toLowerIfNeed(data);
-        Impl::toLowerIfNeed(needle);
-
-        res = data.find(needle);
-        if (res == std::string::npos)
-            res = 0;
-        else
-            res = 1 + Impl::countChars(data.data(), data.data() + res);
-    }
-
-    /// Search each time for a different single substring inside each time different string.
-    static void vectorVector(
-        const ColumnString::Chars_t & haystack_data,
-        const ColumnString::Offsets & haystack_offsets,
-        const ColumnString::Chars_t & needle_data,
-        const ColumnString::Offsets & needle_offsets,
-        const UInt8 escape_char,
-        const std::string & match_type,
-        const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt64> & res)
-    {
-        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
-            throw Exception(
-                "PositionImpl don't support customized escape char/match_type argument/tidb collator",
-                ErrorCodes::NOT_IMPLEMENTED);
-        ColumnString::Offset prev_haystack_offset = 0;
-        ColumnString::Offset prev_needle_offset = 0;
-
-        size_t size = haystack_offsets.size();
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
-            size_t haystack_size = haystack_offsets[i] - prev_haystack_offset - 1;
-
-            if (0 == needle_size)
-            {
-                /// An empty string is always at the very beginning of `haystack`.
-                res[i] = 1;
-            }
-            else
-            {
-                /// It is assumed that the StringSearcher is not very difficult to initialize.
-                typename Impl::SearcherInSmallHaystack searcher = Impl::createSearcherInSmallHaystack(
-                    reinterpret_cast<const char *>(&needle_data[prev_needle_offset]),
-                    needle_offsets[i] - prev_needle_offset - 1); /// zero byte at the end
-
-                /// searcher returns a pointer to the found substring or to the end of `haystack`.
-                size_t pos
-                    = searcher.search(&haystack_data[prev_haystack_offset], &haystack_data[haystack_offsets[i] - 1])
-                    - &haystack_data[prev_haystack_offset];
-
-                if (pos != haystack_size)
-                {
-                    res[i] = 1
-                        + Impl::countChars(
-                                 reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset]),
-                                 reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset + pos]));
-                }
-                else
-                    res[i] = 0;
-            }
-
-            prev_haystack_offset = haystack_offsets[i];
-            prev_needle_offset = needle_offsets[i];
-        }
-    }
-
-    /// Find many substrings in one line.
-    static void constantVector(
-        const String & haystack,
-        const ColumnString::Chars_t & needle_data,
-        const ColumnString::Offsets & needle_offsets,
-        const UInt8 escape_char,
-        const std::string & match_type,
-        const TiDB::TiDBCollatorPtr & collator,
-        PaddedPODArray<UInt64> & res)
-    {
-        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
-            throw Exception(
-                "PositionImpl don't support customized escape char/match_type argument/tidb collator",
-                ErrorCodes::NOT_IMPLEMENTED);
-        // NOTE You could use haystack indexing. But this is a rare case.
-
-        ColumnString::Offset prev_needle_offset = 0;
-
-        size_t size = needle_offsets.size();
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
-
-            if (0 == needle_size)
-            {
-                res[i] = 1;
-            }
-            else
-            {
-                typename Impl::SearcherInSmallHaystack searcher = Impl::createSearcherInSmallHaystack(
-                    reinterpret_cast<const char *>(&needle_data[prev_needle_offset]),
-                    needle_offsets[i] - prev_needle_offset - 1);
-
-                size_t pos = searcher.search(
-                                 reinterpret_cast<const UInt8 *>(haystack.data()),
-                                 reinterpret_cast<const UInt8 *>(haystack.data()) + haystack.size())
-                    - reinterpret_cast<const UInt8 *>(haystack.data());
-
-                if (pos != haystack.size())
-                {
-                    res[i] = 1 + Impl::countChars(haystack.data(), haystack.data() + pos);
-                }
-                else
-                    res[i] = 0;
-            }
-
-            prev_needle_offset = needle_offsets[i];
-        }
-    }
-};
 
 /// Is the LIKE expression reduced to finding a substring in a string?
 bool likePatternIsStrstr(const String & pattern, String & res)
@@ -816,10 +505,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & offsets,
         const std::string & needle,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -904,10 +589,6 @@ struct ReplaceStringImpl
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -978,10 +659,6 @@ struct ReplaceStringImpl
         const std::string & needle,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1070,10 +747,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & needle_offsets,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1146,10 +819,6 @@ struct ReplaceStringImpl
         size_t n,
         const std::string & needle,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1244,10 +913,6 @@ struct ReplaceStringImpl
         const ColumnString::Chars_t & needle_chars,
         const ColumnString::Offsets & needle_offsets,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1319,10 +984,6 @@ struct ReplaceStringImpl
         const std::string & needle,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1421,10 +1082,6 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & needle_offsets,
         const ColumnString::Chars_t & replacement_chars,
         const ColumnString::Offsets & replacement_offsets,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1498,10 +1155,6 @@ struct ReplaceStringImpl
         const std::string & data,
         const std::string & needle,
         const std::string & replacement,
-        const Int64 & /* pos */,
-        const Int64 & /* occ */,
-        const std::string & /* match_type */,
-        TiDB::TiDBCollatorPtr /* collator */,
         std::string & res_data)
     {
         if (needle.empty())
@@ -1535,22 +1188,6 @@ struct NameLike
 {
     static constexpr auto name = "like";
 };
-struct NamePosition
-{
-    static constexpr auto name = "position";
-};
-struct NamePositionUTF8
-{
-    static constexpr auto name = "positionUTF8";
-};
-struct NamePositionCaseInsensitive
-{
-    static constexpr auto name = "positionCaseInsensitive";
-};
-struct NamePositionCaseInsensitiveUTF8
-{
-    static constexpr auto name = "positionCaseInsensitiveUTF8";
-};
 struct NameMatch
 {
     static constexpr auto name = "match";
@@ -1576,13 +1213,6 @@ struct NameReplaceAll
     static constexpr auto name = "replaceAll";
 };
 
-// using FunctionPosition = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveASCII>, NamePosition>;
-using FunctionPositionUTF8 = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveUTF8>, NamePositionUTF8>;
-using FunctionPositionCaseInsensitive
-    = FunctionsStringSearch<PositionImpl<PositionCaseInsensitiveASCII>, NamePositionCaseInsensitive>;
-using FunctionPositionCaseInsensitiveUTF8
-    = FunctionsStringSearch<PositionImpl<PositionCaseInsensitiveUTF8>, NamePositionCaseInsensitiveUTF8>;
-
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
 using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args>;
@@ -1596,10 +1226,6 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionReplaceOne>();
     factory.registerFunction<FunctionReplaceAll>();
-    // factory.registerFunction<FunctionPosition>();
-    factory.registerFunction<FunctionPositionUTF8>();
-    factory.registerFunction<FunctionPositionCaseInsensitive>();
-    factory.registerFunction<FunctionPositionCaseInsensitiveUTF8>();
     factory.registerFunction<FunctionMatch>();
     factory.registerFunction<FunctionLike>();
     factory.registerFunction<FunctionLike3Args>();

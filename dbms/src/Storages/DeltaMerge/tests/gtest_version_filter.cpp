@@ -62,7 +62,7 @@ private:
     bool is_common_handle;
 };
 
-template <int MODE>
+template <DMVersionFilterMode MODE>
 BlockInputStreamPtr getVersionFilterInputStream(
     const BlocksList & blocks,
     const ColumnDefines & columns,
@@ -80,7 +80,7 @@ BlockInputStreamPtr getVersionFilterInputStream(
         is_common_handle);
 }
 
-template <int MODE, bool is_block_sorted>
+template <DMVersionFilterMode MODE, bool is_block_sorted>
 BlockInputStreamPtr getVersionFilterInputStreamWithRowKeyFilterStream(
     const BlocksList & blocks,
     const ColumnDefines & columns,
@@ -154,23 +154,23 @@ TEST(VersionFilterTest, MVCC)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 40, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 40, false);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 30, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 30, false);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 20, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 20, false);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"world"})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 10, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 10, false);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"hello"})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 9, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 9, false);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
 }
@@ -297,7 +297,7 @@ TEST(VersionFilterTest, RangesMVCC)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, false>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, false>(
             blocks,
             columns,
             40,
@@ -306,7 +306,7 @@ TEST(VersionFilterTest, RangesMVCC)
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, true>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, true>(
             blocks,
             columns,
             40,
@@ -315,7 +315,7 @@ TEST(VersionFilterTest, RangesMVCC)
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, false>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, false>(
             blocks,
             columns,
             30,
@@ -324,7 +324,7 @@ TEST(VersionFilterTest, RangesMVCC)
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, true>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, true>(
             blocks,
             columns,
             30,
@@ -333,7 +333,7 @@ TEST(VersionFilterTest, RangesMVCC)
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, false>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, false>(
             blocks,
             columns,
             20,
@@ -345,7 +345,7 @@ TEST(VersionFilterTest, RangesMVCC)
             createColumns({createColumn<String>({"world", "world"})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, true>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, true>(
             blocks,
             columns,
             20,
@@ -357,7 +357,7 @@ TEST(VersionFilterTest, RangesMVCC)
             createColumns({createColumn<String>({"world", "world"})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, false>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, false>(
             blocks,
             columns,
             10,
@@ -369,7 +369,7 @@ TEST(VersionFilterTest, RangesMVCC)
             createColumns({createColumn<String>({"hello", "hello"})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, true>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, true>(
             blocks,
             columns,
             10,
@@ -381,7 +381,7 @@ TEST(VersionFilterTest, RangesMVCC)
             createColumns({createColumn<String>({"hello", "hello"})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, false>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, false>(
             blocks,
             columns,
             9,
@@ -390,7 +390,7 @@ TEST(VersionFilterTest, RangesMVCC)
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
     {
-        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, true>(
+        auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, true>(
             blocks,
             columns,
             9,
@@ -405,7 +405,7 @@ TEST(VersionFilterTest, RangesMVCC)
         blocks.clear();
         blocks.push_back(std::move(block));
         {
-            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, false>(
+            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, false>(
                 blocks,
                 columns,
                 40,
@@ -414,7 +414,7 @@ TEST(VersionFilterTest, RangesMVCC)
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
         }
         {
-            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, true>(
+            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, true>(
                 blocks,
                 columns,
                 40,
@@ -423,7 +423,7 @@ TEST(VersionFilterTest, RangesMVCC)
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
         }
         {
-            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, false>(
+            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, false>(
                 blocks,
                 columns,
                 9,
@@ -432,7 +432,7 @@ TEST(VersionFilterTest, RangesMVCC)
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
         }
         {
-            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DM_VERSION_FILTER_MODE_MVCC, true>(
+            auto in = getVersionFilterInputStreamWithRowKeyFilterStream<DMVersionFilterMode::MVCC, true>(
                 blocks,
                 columns,
                 9,
@@ -490,23 +490,23 @@ TEST(VersionFilterTest, MVCCCommonHandle)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 40, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 40, true);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 30, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 30, true);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 20, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 20, true);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"world"})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 10, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 10, true);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"hello"})}));
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 9, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::MVCC>(blocks, columns, 9, true);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
 }
@@ -601,9 +601,9 @@ TEST(VersionFilterTest, Compact)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 40, false);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
@@ -622,9 +622,9 @@ TEST(VersionFilterTest, Compact)
         in->readSuffix();
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 30, false);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
@@ -643,9 +643,9 @@ TEST(VersionFilterTest, Compact)
         in->readSuffix();
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 20, false);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
@@ -664,9 +664,9 @@ TEST(VersionFilterTest, Compact)
         in->readSuffix();
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, false);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 10, false);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
@@ -776,9 +776,9 @@ TEST(VersionFilterTest, CompactCommonHandle)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 40, true);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
@@ -797,9 +797,9 @@ TEST(VersionFilterTest, CompactCommonHandle)
         in->readSuffix();
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 30, true);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
@@ -818,9 +818,9 @@ TEST(VersionFilterTest, CompactCommonHandle)
         in->readSuffix();
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 20, true);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();
@@ -839,9 +839,9 @@ TEST(VersionFilterTest, CompactCommonHandle)
         in->readSuffix();
     }
     {
-        auto in = getVersionFilterInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, true);
+        auto in = getVersionFilterInputStream<DMVersionFilterMode::COMPACT>(blocks, columns, 10, true);
         const auto * mvcc_stream
-            = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+            = typeid_cast<const DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT> *>(in.get());
         ASSERT_NE(mvcc_stream, nullptr);
         UInt64 gc_hint_version = std::numeric_limits<UInt64>::max();
         in->readPrefix();

@@ -380,7 +380,7 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
         throw Exception(fmt::format("MPPTunnel {} can not be connected because MPPTask is cancelled", tunnel_id));
 }
 
-bool MPPTunnel::isWritable() const
+WaitResult MPPTunnel::waitForWritable() const
 {
     std::unique_lock lk(mu);
     switch (status)
@@ -396,12 +396,17 @@ bool MPPTunnel::isWritable() const
             if (unlikely(timeout_stopwatch->elapsed() > timeout_nanoseconds))
                 throw Exception(fmt::format("{} is timeout", tunnel_id));
         }
-        return false;
+        return WaitResult::WaitForPolling;
     }
     case TunnelStatus::Connected:
     case TunnelStatus::WaitingForSenderFinish:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-        return tunnel_sender->isWritable();
+        if (!tunnel_sender->isWritable())
+        {
+            setNotifyFuture(tunnel_sender.get());
+            return WaitResult::WaitForNotify;
+        }
+        return WaitResult::Ready;
     case TunnelStatus::Finished:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         throw Exception(fmt::format(

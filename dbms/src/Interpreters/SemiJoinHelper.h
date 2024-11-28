@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/CancellationHook.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
@@ -126,36 +127,54 @@ private:
     const void * map_it;
 };
 
-template <ASTTableJoin::Kind KIND, typename Mapped>
+struct ProbeProcessInfo;
+class JoinPartition;
+using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 class SemiJoinHelper
 {
 public:
-    using Result = SemiJoinResult<KIND, ASTTableJoin::Strictness::All>;
-
     SemiJoinHelper(
-        Block & block,
-        size_t left_columns,
-        const std::vector<size_t> & right_column_indices_to_add,
+        size_t input_rows,
         size_t max_block_size,
-        const JoinNonEqualConditions & non_equal_conditions);
+        const JoinNonEqualConditions & non_equal_conditions,
+        CancellationHook is_cancelled_);
 
-    void joinResult(std::list<Result *> & res_list);
+    void probeHashTable(
+        const JoinPartitions & join_partitions,
+        const Sizes & key_sizes,
+        const TiDB::TiDBCollators & collators,
+        const JoinBuildInfo & join_build_info,
+        const ProbeProcessInfo & probe_process_info,
+        const NameSet & probe_output_name_set,
+        const Block & right_sample_block);
+    void doJoin();
+
+    bool isJoinDone() const { return is_probe_hash_table_done && probe_res_list.empty(); }
+    bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
+
+    Block genJoinResult(const NameSet & output_column_names_set);
 
 private:
     template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
     void checkAllExprResult(
         const std::vector<size_t> & offsets,
-        std::list<Result *> & res_list,
         const ColumnUInt8::Container * other_eq_column,
         ConstNullMapPtr other_eq_null_map,
         const ColumnUInt8::Container * other_column,
         ConstNullMapPtr other_null_map);
 
-    Block & block;
-    size_t left_columns;
-    size_t right_columns;
+    PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>> probe_res;
+    std::list<SemiJoinResult<KIND, STRICTNESS> *> probe_res_list;
+    Block result_block;
+    size_t left_columns = 0;
+    size_t right_columns = 0;
+    size_t input_rows;
     std::vector<size_t> right_column_indices_to_add;
     size_t max_block_size;
+    CancellationHook is_cancelled;
+    bool is_probe_hash_table_done = false;
 
     const JoinNonEqualConditions & non_equal_conditions;
 };

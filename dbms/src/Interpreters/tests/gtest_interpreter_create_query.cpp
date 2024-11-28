@@ -22,9 +22,7 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 class InterperCreateQueryTiFlashTest : public ::testing::Test
 {
@@ -34,7 +32,7 @@ public:
     static void TearDownTestCase() {}
 
     InterperCreateQueryTiFlashTest()
-        : log(&Poco::Logger::get("InterperCreateQuery"))
+        : log(Logger::get("InterperCreateQuery"))
         , context(TiFlashTestEnv::getGlobalContext())
     {}
 
@@ -108,7 +106,6 @@ public:
 
         TiDB::DBInfo db_info(db_info_json, NullspaceID);
         TiDB::TableInfo table_info(table_info_json, NullspaceID);
-        table_info.engine_type = ::TiDB::StorageEngine::DT;
 
         ParserCreateQuery parser;
         ASTPtr ast
@@ -137,7 +134,7 @@ public:
 
 
 protected:
-    Poco::Logger * log;
+    LoggerPtr log;
     Context & context;
 };
 
@@ -166,5 +163,5 @@ try
     }
 }
 CATCH
-} // namespace tests
-} // namespace DB
+
+} // namespace DB::tests

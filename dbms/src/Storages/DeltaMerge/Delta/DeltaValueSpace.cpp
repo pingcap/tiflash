@@ -28,10 +28,9 @@
 
 #include <ext/scope_guard.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 // ================================================
 // Public methods
 // ================================================
@@ -108,16 +107,6 @@ std::string DeltaValueSpace::serializeMeta() const
     return wb.releaseStr();
 }
 
-template <class ColumnFileT>
-struct CloneColumnFilesHelper
-{
-    static std::vector<ColumnFileT> clone(
-        DMContext & dm_context,
-        const std::vector<ColumnFileT> & src,
-        const RowKeyRange & target_range,
-        WriteBatches & wbs);
-};
-
 template <class ColumnFilePtrT>
 std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
     DMContext & dm_context,
@@ -158,6 +147,21 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
             // Use a newly created page_id to reference the data page_id of current column file.
             PageIdU64 new_data_page_id = dm_context.storage_pool->newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
+            if (auto index_infos = t->getIndexInfos(); index_infos)
+            {
+                auto new_index_infos = std::make_shared<ColumnFileTiny::IndexInfos>();
+                new_index_infos->reserve(index_infos->size());
+                // Use a newly created page_id to reference the index page_id of current column file.
+                for (auto & index_info : *index_infos)
+                {
+                    auto new_index_page_id = dm_context.storage_pool->newLogPageId();
+                    wbs.log.putRefPage(new_index_page_id, index_info.index_page_id);
+                    new_index_infos->emplace_back(new_index_page_id, index_info.vector_index);
+                }
+                auto new_column_file = t->cloneWith(new_data_page_id, new_index_infos);
+                cloned.push_back(new_column_file);
+                continue;
+            }
             auto new_column_file = t->cloneWith(new_data_page_id);
             cloned.push_back(new_column_file);
         }
@@ -182,8 +186,8 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
                 /* page_id= */ new_page_id,
                 file_parent_path,
                 DMFileMeta::ReadMode::all(),
+                old_dmfile->metaVersion(),
                 dm_context.keyspace_id);
-
             auto new_column_file = f->cloneWith(dm_context, new_file, target_range);
             cloned.push_back(new_column_file);
         }
@@ -262,19 +266,19 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneAllColumnFile
 size_t DeltaValueSpace::getTotalCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getRows() + persisted_file_set->getTotalCacheRows();
+    return mem_table_set->getRows();
 }
 
 size_t DeltaValueSpace::getTotalCacheBytes() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getBytes() + persisted_file_set->getTotalCacheBytes();
+    return mem_table_set->getBytes();
 }
 
 size_t DeltaValueSpace::getValidCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getRows() + persisted_file_set->getValidCacheRows();
+    return mem_table_set->getRows();
 }
 
 void DeltaValueSpace::recordRemoveColumnFilesPages(WriteBatches & wbs) const
@@ -503,5 +507,5 @@ bool DeltaValueSpace::compact(DMContext & context)
 
     return true;
 }
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM

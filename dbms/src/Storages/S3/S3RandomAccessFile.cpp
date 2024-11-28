@@ -33,10 +33,17 @@ namespace ProfileEvents
 extern const Event S3GetObject;
 extern const Event S3ReadBytes;
 extern const Event S3GetObjectRetry;
+extern const Event S3IORead;
+extern const Event S3IOSeek;
 } // namespace ProfileEvents
 
 namespace DB::S3
 {
+String S3RandomAccessFile::summary() const
+{
+    return fmt::format("remote_fname={} cur_offset={} cur_retry={}", remote_fname, cur_offset, cur_retry);
+}
+
 S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_)
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
@@ -50,6 +57,11 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
 std::string S3RandomAccessFile::getFileName() const
 {
     return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
+}
+
+std::string S3RandomAccessFile::getInitialFileName() const
+{
+    return remote_fname;
 }
 
 bool isRetryableError(int e)
@@ -77,6 +89,7 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
 {
     Stopwatch sw;
+    ProfileEvents::increment(ProfileEvents::S3IORead, 1);
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
     size_t gcount = istr.gcount();
@@ -146,6 +159,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
         return cur_offset;
     }
     Stopwatch sw;
+    ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
     if (!istr.ignore(offset_ - cur_offset))
     {
@@ -168,7 +182,6 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     cur_offset = offset_;
     return cur_offset;
 }
-
 String S3RandomAccessFile::readRangeOfObject()
 {
     return fmt::format("bytes={}-", cur_offset);
@@ -192,7 +205,15 @@ bool S3RandomAccessFile::initialize()
         auto outcome = client_ptr->GetObject(req);
         if (!outcome.IsSuccess())
         {
-            LOG_ERROR(log, "S3 GetObject failed: {}, cur_retry={}", S3::S3ErrorMessage(outcome.GetError()), cur_retry);
+            auto el = sw.elapsedSeconds();
+            LOG_ERROR(
+                log,
+                "S3 GetObject failed: {}, cur_retry={}, key={}, elapsed{}={:.3f}s",
+                S3::S3ErrorMessage(outcome.GetError()),
+                cur_retry,
+                req.GetKey(),
+                el > 60.0 ? "(long)" : "",
+                el);
             continue;
         }
 
@@ -208,7 +229,14 @@ bool S3RandomAccessFile::initialize()
     }
     if (cur_retry >= max_retry && !request_succ)
     {
-        LOG_INFO(log, "S3 GetObject timeout: {}, max_retry={}", remote_fname, max_retry);
+        auto el = sw.elapsedSeconds();
+        LOG_INFO(
+            log,
+            "S3 GetObject timeout: max_retry={}, key={}, elapsed{}={:.3f}s",
+            max_retry,
+            req.GetKey(),
+            el > 60.0 ? "(long)" : "",
+            el);
     }
     return request_succ;
 }

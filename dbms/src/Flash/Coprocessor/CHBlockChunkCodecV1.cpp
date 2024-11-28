@@ -20,6 +20,9 @@
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
+#include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -133,7 +136,7 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
                 [&](const IDataType::SubstreamPath &) { return &istr; },
                 sz,
                 0,
-                {},
+                /*position_independent_encoding=*/true,
                 {});
         }
     }

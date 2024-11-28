@@ -63,7 +63,8 @@ public:
 
     String appendWhere(
         ExpressionActionsChain & chain,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        bool null_as_false = false);
 
     GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
 
@@ -144,10 +145,12 @@ public:
 
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        bool null_as_false = false);
 
     std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        bool null_as_false = false);
 
     void buildAggFuncs(
         const tipb::Aggregation & aggregation,
@@ -188,7 +191,7 @@ public:
     std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<UInt8> & may_need_add_cast_column,
-        const ColumnInfos & table_scan_columns);
+        const TiDB::ColumnInfos & table_scan_columns);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

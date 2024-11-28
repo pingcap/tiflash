@@ -22,10 +22,9 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
     if (!column_files.empty())
@@ -136,21 +135,21 @@ std::pair</* New */ ColumnFiles, /* Flushed */ ColumnFiles> MemTableSet::diffCol
     // Remaining Snapshot CFs must be not flushed, remains in the memtable and is the prefix of the memtable.
     RUNTIME_CHECK(
         flushed_n <= column_files_in_snapshot.size(),
-        columnFilesToString(column_files_in_snapshot),
-        columnFilesToString(column_files));
+        ColumnFile::filesToString(column_files_in_snapshot),
+        ColumnFile::filesToString(column_files));
     size_t unflushed_n = column_files_in_snapshot.size() - flushed_n;
     RUNTIME_CHECK( // Those unflushed CFs must be still in memtable.
         column_files.size() >= unflushed_n,
-        columnFilesToString(column_files_in_snapshot),
-        columnFilesToString(column_files));
+        ColumnFile::filesToString(column_files_in_snapshot),
+        ColumnFile::filesToString(column_files));
     for (size_t i = 0; i < unflushed_n; ++i)
     {
         RUNTIME_CHECK( // Verify prefix
             column_files_in_snapshot[flushed_n + i]->getId() == column_files[i]->getId()
                 && column_files_in_snapshot[flushed_n + i]->getType() == column_files[i]->getType()
                 && column_files_in_snapshot[flushed_n + i]->getRows() == column_files[i]->getRows(),
-            columnFilesToString(column_files_in_snapshot),
-            columnFilesToString(column_files));
+            ColumnFile::filesToString(column_files_in_snapshot),
+            ColumnFile::filesToString(column_files));
     }
     return {
         /* new */ std::vector<ColumnFilePtr>( //
@@ -243,14 +242,10 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
     if (disable_sharing && !column_files.empty() && column_files.back()->isAppendable())
         column_files.back()->disableAppend();
 
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
-    snap->rows = rows;
-    snap->bytes = bytes;
-    snap->deletes = deletes;
-    snap->column_files.reserve(column_files.size());
-
     size_t total_rows = 0;
     size_t total_deletes = 0;
+    ColumnFiles column_files_snap;
+    column_files_snap.reserve(column_files.size());
     for (const auto & file : column_files)
     {
         // ColumnFile is not a thread-safe object, but only ColumnFileInMemory may be appendable after its creation.
@@ -260,11 +255,11 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
             // Compact threads could update the value of ColumnFileInMemory,
             // and since ColumnFile is not multi-threads safe, we should create a new column file object.
             // TODO: When `disable_sharing == true`, may be we can safely use the same ptr without the clone.
-            snap->column_files.push_back(m->clone());
+            column_files_snap.emplace_back(m->clone());
         }
         else
         {
-            snap->column_files.push_back(file);
+            column_files_snap.emplace_back(file);
         }
         total_rows += file->getRows();
         total_deletes += file->getDeletes();
@@ -279,7 +274,7 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
         total_deletes,
         deletes.load());
 
-    return snap;
+    return std::make_shared<ColumnFileSetSnapshot>(data_provider, std::move(column_files_snap), rows, bytes, deletes);
 }
 
 ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
@@ -322,7 +317,7 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
             flush_task->getFlushDeletes(),
             rows.load(),
             deletes.load(),
-            columnFilesToString(column_files));
+            ColumnFile::filesToString(column_files));
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -362,5 +357,4 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
 }
 
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

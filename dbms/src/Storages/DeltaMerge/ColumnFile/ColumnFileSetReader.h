@@ -14,17 +14,18 @@
 
 #pragma once
 
+#include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileSetReader
 {
     friend class ColumnFileSetInputStream;
+    friend class ColumnFileSetWithVectorIndexInputStream;
 
 private:
     const DMContext & context;
@@ -40,8 +41,6 @@ private:
     std::vector<size_t> column_file_rows_end;
 
     std::vector<ColumnFileReaderPtr> column_file_readers;
-
-    LACBytesCollector lac_bytes_collector;
 
 private:
     explicit ColumnFileSetReader(const DMContext & context_);
@@ -86,89 +85,4 @@ public:
         size_t placed_rows);
 };
 
-class ColumnFileSetInputStream : public SkippableBlockInputStream
-{
-private:
-    ColumnFileSetReader reader;
-    ColumnFiles & column_files;
-    size_t column_files_count;
-
-    ColumnFileReaderPtr cur_column_file_reader = {};
-    size_t next_file_index = 0;
-
-public:
-    ColumnFileSetInputStream(
-        const DMContext & context_,
-        const ColumnFileSetSnapshotPtr & delta_snap_,
-        const ColumnDefinesPtr & col_defs_,
-        const RowKeyRange & segment_range_,
-        ReadTag read_tag_)
-        : reader(context_, delta_snap_, col_defs_, segment_range_, read_tag_)
-        , column_files(reader.snapshot->getColumnFiles())
-        , column_files_count(column_files.size())
-    {}
-
-    String getName() const override { return "ColumnFileSet"; }
-    Block getHeader() const override { return toEmptyBlock(*(reader.col_defs)); }
-
-    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
-
-    size_t skipNextBlock() override
-    {
-        while (cur_column_file_reader || next_file_index < column_files_count)
-        {
-            if (!cur_column_file_reader)
-            {
-                if (column_files[next_file_index]->isDeleteRange())
-                {
-                    ++next_file_index;
-                    continue;
-                }
-                else
-                {
-                    cur_column_file_reader = reader.column_file_readers[next_file_index];
-                    ++next_file_index;
-                }
-            }
-            size_t skipped_rows = cur_column_file_reader->skipNextBlock();
-            if (skipped_rows > 0)
-                return skipped_rows;
-            else
-                cur_column_file_reader = {};
-        }
-        return 0;
-    }
-
-    Block read() override
-    {
-        while (cur_column_file_reader || next_file_index < column_files_count)
-        {
-            if (!cur_column_file_reader)
-            {
-                if (column_files[next_file_index]->isDeleteRange())
-                {
-                    ++next_file_index;
-                    continue;
-                }
-                else
-                {
-                    cur_column_file_reader = reader.column_file_readers[next_file_index];
-                    ++next_file_index;
-                }
-            }
-            Block block = cur_column_file_reader->readNextBlock();
-            if (block)
-                return block;
-            else
-                cur_column_file_reader = {};
-        }
-        return {};
-    }
-
-    Block readWithFilter(const IColumn::Filter &) override
-    {
-        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
-    }
-};
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

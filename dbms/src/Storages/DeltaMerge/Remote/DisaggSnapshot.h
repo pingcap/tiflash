@@ -16,7 +16,6 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
@@ -96,7 +95,7 @@ class DisaggPhysicalTableReadSnapshot
     friend struct Serializer;
 
 public:
-    DisaggPhysicalTableReadSnapshot(KeyspaceTableID ks_table_id_, SegmentReadTasks && tasks_);
+    DisaggPhysicalTableReadSnapshot(KeyspaceTableID ks_table_id_, ColumnID pk_col_id_, SegmentReadTasks && tasks_);
 
     SegmentReadTaskPtr popTask(UInt64 segment_id);
 
@@ -116,6 +115,8 @@ public:
     // TODO: these members are the same in the logical table level,
     //       maybe we can reuse them to reduce memory consumption.
     DM::ColumnDefinesPtr column_defines;
+
+    ColumnID pk_col_id = 0;
 
 private:
     mutable std::shared_mutex mtx;

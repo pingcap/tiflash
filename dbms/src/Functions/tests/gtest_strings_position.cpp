@@ -14,14 +14,15 @@
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/Exception.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
-#include <string>
 #include <vector>
 
 #pragma GCC diagnostic push
@@ -38,218 +39,540 @@ class StringPosition : public DB::tests::FunctionTest
 {
 };
 
-// test string and string
-TEST_F(StringPosition, strAndStrTest)
+TEST_F(StringPosition, position)
 {
-    const auto context = TiFlashTestEnv::getContext();
-
-    auto & factory = FunctionFactory::instance();
-
-    // case insensitive
-    std::vector<String> c0_var_strs{"ell", "LL", "3", "ElL", "ye", "aaaa", "world", "", "", "biu"};
-    std::vector<String> c1_var_strs{"hello", "HELLO", "23333", "HeLlO", "hey", "a", "WoRlD", "", "ping", ""};
-
-    // var-var
-    std::vector<Int64> result0{2, 3, 2, 0, 0, 0, 0, 1, 1, 0};
-
-    std::vector<String> c0_strs;
-    std::vector<String> c1_strs;
-    std::vector<Int64> results;
-    for (int i = 0; i < 4; i++)
+    const auto * collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
     {
-        MutableColumnPtr csp0;
-        MutableColumnPtr csp1;
+        // const const
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(0, 0),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(0, ""), createConstColumn<String>(0, "")},
+                collator));
 
-        // var-var
-        c0_strs = c0_var_strs;
-        c1_strs = c1_var_strs;
-        results = result0;
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(3, 1),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(3, ""), createConstColumn<String>(3, "123")},
+                collator));
 
-        csp0 = ColumnString::create();
-        csp1 = ColumnString::create();
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, 7),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(1, ".*"), createConstColumn<String>(1, "123啊.*f啊")},
+                collator));
 
-        for (size_t j = 0; j < c0_strs.size(); j++)
-        {
-            csp0->insert(Field(c0_strs[j].c_str(), c0_strs[j].size()));
-            csp1->insert(Field(c1_strs[j].c_str(), c1_strs[j].size()));
-        }
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, 7),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(1, "aBc"), createConstColumn<String>(1, "1啊23aBc啊")},
+                collator));
 
-        Block test_block;
-        ColumnWithTypeAndName ctn0
-            = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
-        ColumnWithTypeAndName ctn1
-            = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
-        ColumnsWithTypeAndName ctns{ctn0, ctn1};
-        test_block.insert(ctn0);
-        test_block.insert(ctn1);
-        // for result from position
-        test_block.insert({});
-        ColumnNumbers cns{0, 1};
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(2, 0),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(2, "aBc"), createConstColumn<String>(2, "1啊23abc啊")},
+                collator));
 
-        // test position
-        auto bp = factory.tryGet("position", *context);
-        ASSERT_TRUE(bp != nullptr);
-        ASSERT_FALSE(bp->isVariadic());
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(10, 0),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(10, "人"), createConstColumn<String>(10, "3啊*f啊")},
+                collator));
 
-        bp->build(ctns)->execute(test_block, cns, 2);
-        const IColumn * res = test_block.getByPosition(2).column.get();
-        const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(6, 0),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(6, "123"), createConstColumn<String>(6, "")},
+                collator));
 
-        Field res_field;
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(6, 1),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(6, ""), createConstColumn<String>(6, "")},
+                collator));
 
-        for (size_t t = 0; t < results.size(); t++)
-        {
-            res_string->get(t, res_field);
-            Int64 res_val = res_field.get<Int64>();
-            EXPECT_EQ(results[t], res_val);
-        }
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(2, 3),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(2, "123 "), createConstColumn<String>(2, "ce123 fe")},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(2, 0),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(2, "123 "), createConstColumn<String>(2, "ce123fe ")},
+                collator));
+    }
+
+    {
+        // const vector
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({}),
+            executeFunction("position", {createConstColumn<String>(0, ""), createColumn<String>({})}, collator));
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({1, 1}),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(2, ""), createColumn<String>({"", "12A哇"})},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({0, 7, 0}),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(3, "a啊B.*"),
+                 createColumn<String>({"", "2aF啊a啊B.*fe# ", "2aF啊A啊b.*fe "})},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({0, 0, 7}),
+            executeFunction(
+                "position",
+                {createConstColumn<String>(3, "123 "), createColumn<String>({"", "2aF啊123.*fe# ", "2aF啊123 .*fe "})},
+                collator));
+    }
+
+    {
+        // vector const
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({}),
+            executeFunction("position", {createColumn<String>({}), createConstColumn<String>(0, "")}, collator));
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({1, 5, 0, 0, 19}),
+            executeFunction(
+                "position",
+                {createColumn<String>({"", "A啊q", "g4GFE4g", "a啊q", ".*"}),
+                 createConstColumn<String>(5, "f$*eA啊q飞F#f。.*&")},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({1, 0, 0, 0}),
+            executeFunction(
+                "position",
+                {createColumn<String>({"", "A啊q", "a啊q", ".*"}), createConstColumn<String>(4, "")},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({1, 7, 0, 0}),
+            executeFunction(
+                "position",
+                {createColumn<String>({"", "A啊q ", "a啊q ", ".*"}), createConstColumn<String>(4, "cew爬A啊q 3   ")},
+                collator));
+    }
+
+    {
+        // vector vector
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({}),
+            executeFunction("position", {createColumn<String>({}), createColumn<String>({})}, collator));
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>({1, 1, 0, 8, 0, 1, 0, 7}),
+            executeFunction(
+                "position",
+                {createColumn<String>({"", "", "123", "G$啊3", "G$啊w3", "啊3法4fd", "aBc ", "aBc "}),
+                 createColumn<String>(
+                     {"", "123", "", "da嗯w$G$啊3gf4", "w好g$啊w33", "啊3法4fd", "啊3aBc法4fd ", "few人aBc "})},
+                collator));
     }
 }
 
-// test string and string in utf8
-TEST_F(StringPosition, utf8StrAndStrTest)
+TEST_F(StringPosition, positionUTF8)
 {
-    const auto context = TiFlashTestEnv::getContext();
+    std::vector<TiDB::TiDBCollatorPtr> cs_and_no_collators{
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN),
+        nullptr};
 
-    auto & factory = FunctionFactory::instance();
+    std::vector<TiDB::TiDBCollatorPtr> ci_collators{
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI)};
 
-    // case insensitive
-    std::vector<String> c0_var_strs{"好", "平凯", "aa哈", "？！", "呵呵呵", "233", "嗯？？"};
-    std::vector<String> c1_var_strs{"ni好", "平凯星辰", "啊啊aaa哈哈", "？？！！", "呵呵呵", "哈哈2333", "嗯？"};
-
-    // var-var
-    std::vector<Int64> result0{3, 1, 4, 2, 1, 3, 0};
-
-    std::vector<String> c0_strs;
-    std::vector<String> c1_strs;
-    std::vector<Int64> results;
-    for (int i = 0; i < 4; i++)
+    // const const
     {
-        MutableColumnPtr csp0;
-        MutableColumnPtr csp1;
-
-        // var-var
-        c0_strs = c0_var_strs;
-        c1_strs = c1_var_strs;
-        results = result0;
-
-        csp0 = ColumnString::create();
-        csp1 = ColumnString::create();
-
-
-        for (size_t i = 0; i < c0_strs.size(); i++)
+        // case sensitive and no collator
         {
-            csp0->insert(Field(c0_strs[i].c_str(), c0_strs[i].size()));
-            csp1->insert(Field(c1_strs[i].c_str(), c1_strs[i].size()));
+            for (const auto * collator : cs_and_no_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(0, 0),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(0, ""), createConstColumn<String>(0, "")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(3, 1),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(3, ""), createConstColumn<String>(3, "123")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(1, 5),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(1, ".*"), createConstColumn<String>(1, "123啊.*f啊")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(1, 5),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(1, "aBc"), createConstColumn<String>(1, "1啊23aBc啊")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(2, 0),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, "aBc"), createConstColumn<String>(2, "1啊23abc啊")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(10, 0),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(10, "人"), createConstColumn<String>(10, "3啊*f啊")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(6, 0),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(6, "123"), createConstColumn<String>(6, "")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(6, 1),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(6, ""), createConstColumn<String>(6, "")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(2, 3),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, "123 "), createConstColumn<String>(2, "ce123 fe")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(2, 0),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, "123 "), createConstColumn<String>(2, "ce123fe ")},
+                        collator));
+            }
         }
 
-        Block test_block;
-        ColumnWithTypeAndName ctn0
-            = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
-        ColumnWithTypeAndName ctn1
-            = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
-        ColumnsWithTypeAndName ctns{ctn0, ctn1};
-        test_block.insert(ctn0);
-        test_block.insert(ctn1);
-        // for result from position
-        test_block.insert({});
-        ColumnNumbers cns{0, 1};
-
-        // test position
-        auto bp = factory.tryGet("position", *context);
-        ASSERT_TRUE(bp != nullptr);
-        ASSERT_FALSE(bp->isVariadic());
-
-        bp->build(ctns)->execute(test_block, cns, 2);
-        const IColumn * res = test_block.getByPosition(2).column.get();
-        const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
-
-        Field res_field;
-
-        for (size_t t = 0; t < results.size(); t++)
+        // case insensitive
         {
-            res_string->get(t, res_field);
-            Int64 res_val = res_field.get<Int64>();
-            EXPECT_EQ(results[t], res_val);
+            for (const auto * collator : ci_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(1, 5),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(1, "aBc"), createConstColumn<String>(1, "1啊23aBc啊")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(2, 5),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, "aBc"), createConstColumn<String>(2, "1啊23abc啊")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(2, 3),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, "abc "), createConstColumn<String>(2, "ceaBc fe")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Int64>(2, 0),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, "abc "), createConstColumn<String>(2, "ceaBcfe ")},
+                        collator));
+            }
         }
     }
-}
 
-// test NULL
-TEST_F(StringPosition, nullTest)
-{
-    const auto context = TiFlashTestEnv::getContext();
-
-    auto & factory = FunctionFactory::instance();
-
-    std::vector<String> c0_strs{"aa", "c", "香锅", "cap", "f"};
-    std::vector<String> c1_strs{"a", "cc", "麻辣v香锅", "pingcap", "f"};
-    std::vector<Int64> results{0, 0, 4, 5, 0};
-
-    std::vector<int> c0_null_map{0, 1, 0, 0, 1};
-    std::vector<int> c1_null_map{1, 0, 0, 0, 1};
-    std::vector<int> c2_null_map{1, 1, 0, 0, 1}; // for result
-
-    auto input_str_col0 = ColumnString::create();
-    auto input_str_col1 = ColumnString::create();
-    for (size_t i = 0; i < c0_strs.size(); i++)
+    // const vector
     {
-        Field field0(c0_strs[i].c_str(), c0_strs[i].size());
-        Field field1(c1_strs[i].c_str(), c1_strs[i].size());
-        input_str_col0->insert(field0);
-        input_str_col1->insert(field1);
-    }
-
-    auto input_null_map0 = ColumnUInt8::create(c0_strs.size(), 0);
-    auto input_null_map1 = ColumnUInt8::create(c1_strs.size(), 0);
-    ColumnUInt8::Container & input_vec_null_map0 = input_null_map0->getData();
-    ColumnUInt8::Container & input_vec_null_map1 = input_null_map1->getData();
-    for (size_t i = 0; i < c0_null_map.size(); i++)
-    {
-        input_vec_null_map0[i] = c0_null_map[i];
-        input_vec_null_map1[i] = c1_null_map[i];
-    }
-
-    DataTypePtr string_type = std::make_shared<DataTypeString>();
-    DataTypePtr nullable_string_type = makeNullable(string_type);
-
-    auto input_null_col0 = ColumnNullable::create(std::move(input_str_col0), std::move(input_null_map0));
-    auto input_null_col1 = ColumnNullable::create(std::move(input_str_col1), std::move(input_null_map1));
-    auto col0 = ColumnWithTypeAndName(std::move(input_null_col0), nullable_string_type, "position");
-    auto col1 = ColumnWithTypeAndName(std::move(input_null_col1), nullable_string_type, "position");
-    ColumnsWithTypeAndName ctns{col0, col1};
-
-    Block test_block;
-    test_block.insert(col0);
-    test_block.insert(col1);
-    ColumnNumbers cns{0, 1};
-
-    auto bp = factory.tryGet("position", *context);
-    ASSERT_TRUE(bp != nullptr);
-    ASSERT_FALSE(bp->isVariadic());
-    auto func = bp->build(ctns);
-    test_block.insert({nullptr, func->getReturnType(), "res"});
-    func->execute(test_block, cns, 2);
-    auto res_col = test_block.getByPosition(2).column;
-
-    ColumnPtr result_null_map_column = static_cast<const ColumnNullable &>(*res_col).getNullMapColumnPtr();
-    MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
-    NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
-    const IColumn * res = test_block.getByPosition(2).column.get();
-    const ColumnNullable * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
-    const IColumn & res_string = res_nullable_string->getNestedColumn();
-
-    Field res_field;
-
-    for (size_t i = 0; i < c2_null_map.size(); i++)
-    {
-        EXPECT_EQ(result_null_map[i], c2_null_map[i]);
-        if (c2_null_map[i] == 0)
+        // case sensitive and no collator
         {
-            res_string.get(i, res_field);
-            Int64 res_val = res_field.get<Int64>();
-            EXPECT_EQ(results[i], res_val);
+            for (const auto * collator : cs_and_no_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(0, ""), createColumn<String>({})},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 1}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, ""), createColumn<String>({"", "12A哇"})},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({0, 5, 0}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(3, "a啊B.*"),
+                         createColumn<String>({"", "2aF啊a啊B.*fe# ", "2aF啊A啊b.*fe "})},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({0, 0, 5}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(3, "123 "),
+                         createColumn<String>({"", "2aF啊123.*fe# ", "2aF啊123 .*fe "})},
+                        collator));
+            }
         }
+
+        // case insensitive
+        {
+            for (const auto * collator : ci_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(0, ""), createColumn<String>({})},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 1}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(2, ""), createColumn<String>({"", "12A哇"})},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({0, 5, 5}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(3, "a啊B.*"),
+                         createColumn<String>({"", "2.F啊a啊B.*fe#", "2a.啊A啊b.*fe"})},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({0, 0, 5}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createConstColumn<String>(3, "abc "),
+                         createColumn<String>({"", "2aF啊aBc.*fe# ", "2aF啊abC .*fe "})},
+                        collator));
+            }
+        }
+    }
+
+    // vector const
+    {
+        // case sensitive
+        {
+            for (const auto * collator : cs_and_no_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({}), createConstColumn<String>(0, "")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 5, 0, 0, 13}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "A啊q", "g4GFE4g", "a啊q", ".*"}),
+                         createConstColumn<String>(5, "f$*eA啊q飞F#f。.*&")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 0, 0, 0}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "A啊q", "a啊q", ".*"}), createConstColumn<String>(4, "")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 5, 0, 0}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "A啊q ", "a啊q ", ".*"}),
+                         createConstColumn<String>(4, "cew爬A啊q 3   ")},
+                        collator));
+            }
+        }
+
+        // case insensitive
+        {
+            for (const auto * collator : ci_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({}), createConstColumn<String>(0, "")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 5, 0, 5, 13}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "A啊q", "g4GFE4g", "a啊Q", ".*"}),
+                         createConstColumn<String>(5, "f$*eA啊q飞F#f。.*&")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 0, 0, 0}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "A啊q", "a啊q", ".*"}), createConstColumn<String>(4, "")},
+                        collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 5, 5, 0}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "A啊q ", "a啊q ", ".*"}),
+                         createConstColumn<String>(4, "cew爬A啊q 3   ")},
+                        collator));
+            }
+        }
+    }
+
+    // vector vector
+    {
+        // case sensitive
+        {
+            for (const auto * collator : cs_and_no_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({}),
+                    executeFunction("positionUTF8", {createColumn<String>({}), createColumn<String>({})}, collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 1, 0, 6, 0, 1, 0, 5}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "", "123", "G$啊3", "G$啊w3", "啊3法4fd", "aBc ", "aBc "}),
+                         createColumn<String>(
+                             {"", "123", "", "da嗯w$G$啊3gf4", "w好g$啊w33", "啊3法4fd", "啊3aBc法4fd ", "few人aBc "})},
+                        collator));
+            }
+        }
+
+        // case insensitive
+        {
+            for (const auto * collator : ci_collators)
+            {
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({}),
+                    executeFunction("positionUTF8", {createColumn<String>({}), createColumn<String>({})}, collator));
+
+                ASSERT_COLUMN_EQ(
+                    createColumn<Int64>({1, 1, 0, 6, 3, 1, 0, 5}),
+                    executeFunction(
+                        "positionUTF8",
+                        {createColumn<String>({"", "", "123", "G$啊3", "G$啊w3", "啊3法4fD", "aBc ", "aBc "}),
+                         createColumn<String>(
+                             {"", "123", "", "da嗯w$G$啊3gf4", "w好g$啊w33", "啊3法4fd", "啊3aBC法4fd ", "few人ABc "})},
+                        collator));
+            }
+        }
+    }
+
+    // nullable const
+    {
+        const auto * collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({}, std::vector<Int32>{}),
+            executeFunction(
+                "positionUTF8",
+                {createNullableColumn<String>({}, std::vector<Int32>{}), createConstColumn<String>(0, "")},
+                collator));
+
+        std::vector<Int32> null_map{0, 1, 0, 0, 0, 1};
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({1, 0, 0, 0, 0, 0}, null_map),
+            executeFunction(
+                "positionUTF8",
+                {createNullableColumn<String>({"", "", "ad", "aB啊c", ".*", ""}, null_map),
+                 createConstColumn<String>(6, "")},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({1, 0, 5, 0, 0, 0}, null_map),
+            executeFunction(
+                "positionUTF8",
+                {createNullableColumn<String>({"", "", "A啊q", "g4GFE4g", "a啊q", ""}, null_map),
+                 createConstColumn<String>(6, "f$*eA啊q飞F#f。.*&")},
+                collator));
+    }
+
+    // nullable vector
+    {
+        const auto * collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({}, std::vector<Int32>{}),
+            executeFunction(
+                "positionUTF8",
+                {createNullableColumn<String>({}, std::vector<Int32>{}), createColumn<String>({})},
+                collator));
+
+        std::vector<Int32> null_map{0, 1, 0, 0, 0, 1, 0};
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({1, 0, 1, 0, 0, 0, 3}, null_map),
+            executeFunction(
+                "positionUTF8",
+                {createNullableColumn<String>({"", "", "ad", "aB啊c", ".*", "", "c"}, null_map),
+                 createColumn<String>({"", "", "ad", "ab啊c", "123", "", "ACc"})},
+                collator));
+    }
+
+    // nullable nullable
+    {
+        const auto * collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({}, std::vector<Int32>{}),
+            executeFunction(
+                "positionUTF8",
+                {createNullableColumn<String>({}, std::vector<Int32>{}),
+                 createNullableColumn<String>({}, std::vector<Int32>{})},
+                collator));
+
+        std::vector<Int32> col0_null_map{0, 0, 0, 1, 0, 0, 1, 0};
+        std::vector<Int32> col1_null_map{1, 0, 0, 0, 1, 0, 1, 0};
+        std::vector<Int32> res_null_map{1, 0, 0, 1, 1, 0, 1, 0};
+        ASSERT_COLUMN_EQ(
+            createNullableColumn<Int64>({0, 0, 1, 0, 0, 1, 0, 3}, res_null_map),
+            executeFunction(
+                "positionUTF8",
+                {createNullableColumn<String>({"", "aB啊c", "ad", "", "", "", "", "c"}, col0_null_map),
+                 createNullableColumn<String>({"", "ab啊c", "ad", "", "", "", "", "ACc"}, col1_null_map)},
+                collator));
     }
 }
 

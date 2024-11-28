@@ -21,8 +21,13 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <TiDB/Decode/Datum.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
+#include <TiDB/Schema/TiDBTypes.h>
 
 #include <unordered_map>
 
@@ -129,6 +134,9 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastJsonAsDuration, "cast"},
     {tipb::ScalarFuncSig::CastJsonAsJson, "cast_json_as_json"},
 
+    {tipb::ScalarFuncSig::CastVectorFloat32AsString, "cast_vector_float32_as_string"},
+    {tipb::ScalarFuncSig::CastVectorFloat32AsVectorFloat32, "cast_vector_float32_as_vector_float32"},
+
     {tipb::ScalarFuncSig::CoalesceInt, "coalesce"},
     {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
     {tipb::ScalarFuncSig::CoalesceString, "coalesce"},
@@ -143,7 +151,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LTDecimal, "less"},
     {tipb::ScalarFuncSig::LTTime, "less"},
     {tipb::ScalarFuncSig::LTDuration, "less"},
-    {tipb::ScalarFuncSig::LTJson, "less"},
+    //{tipb::ScalarFuncSig::LTJson, "less"},
+    {tipb::ScalarFuncSig::LTVectorFloat32, "less"},
 
     {tipb::ScalarFuncSig::LEInt, "lessOrEquals"},
     {tipb::ScalarFuncSig::LEReal, "lessOrEquals"},
@@ -151,7 +160,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LEDecimal, "lessOrEquals"},
     {tipb::ScalarFuncSig::LETime, "lessOrEquals"},
     {tipb::ScalarFuncSig::LEDuration, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LEJson, "lessOrEquals"},
+    //{tipb::ScalarFuncSig::LEJson, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEVectorFloat32, "lessOrEquals"},
 
     {tipb::ScalarFuncSig::GTInt, "greater"},
     {tipb::ScalarFuncSig::GTReal, "greater"},
@@ -159,7 +169,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GTDecimal, "greater"},
     {tipb::ScalarFuncSig::GTTime, "greater"},
     {tipb::ScalarFuncSig::GTDuration, "greater"},
-    {tipb::ScalarFuncSig::GTJson, "greater"},
+    //{tipb::ScalarFuncSig::GTJson, "greater"},
+    {tipb::ScalarFuncSig::GTVectorFloat32, "greater"},
 
     {tipb::ScalarFuncSig::GreatestInt, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestReal, "tidbGreatest"},
@@ -182,7 +193,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GEDecimal, "greaterOrEquals"},
     {tipb::ScalarFuncSig::GETime, "greaterOrEquals"},
     {tipb::ScalarFuncSig::GEDuration, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GEJson, "greaterOrEquals"},
+    //{tipb::ScalarFuncSig::GEJson, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEVectorFloat32, "greaterOrEquals"},
 
     {tipb::ScalarFuncSig::EQInt, "equals"},
     {tipb::ScalarFuncSig::EQReal, "equals"},
@@ -190,7 +202,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::EQDecimal, "equals"},
     {tipb::ScalarFuncSig::EQTime, "equals"},
     {tipb::ScalarFuncSig::EQDuration, "equals"},
-    {tipb::ScalarFuncSig::EQJson, "equals"},
+    //{tipb::ScalarFuncSig::EQJson, "equals"},
+    {tipb::ScalarFuncSig::EQVectorFloat32, "equals"},
 
     {tipb::ScalarFuncSig::NEInt, "notEquals"},
     {tipb::ScalarFuncSig::NEReal, "notEquals"},
@@ -198,7 +211,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::NEDecimal, "notEquals"},
     {tipb::ScalarFuncSig::NETime, "notEquals"},
     {tipb::ScalarFuncSig::NEDuration, "notEquals"},
-    {tipb::ScalarFuncSig::NEJson, "notEquals"},
+    //{tipb::ScalarFuncSig::NEJson, "notEquals"},
+    {tipb::ScalarFuncSig::NEVectorFloat32, "notEquals"},
 
     //{tipb::ScalarFuncSig::NullEQInt, "cast"},
     //{tipb::ScalarFuncSig::NullEQReal, "cast"},
@@ -315,7 +329,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::StringIsNull, "isNull"},
     {tipb::ScalarFuncSig::TimeIsNull, "isNull"},
     {tipb::ScalarFuncSig::IntIsNull, "isNull"},
-    {tipb::ScalarFuncSig::JsonIsNull, "isNull"},
+    //{tipb::ScalarFuncSig::JsonIsNull, "isNull"},
+    {tipb::ScalarFuncSig::VectorFloat32IsNull, "isNull"},
 
     {tipb::ScalarFuncSig::BitAndSig, "bitAnd"},
     {tipb::ScalarFuncSig::BitOrSig, "bitOr"},
@@ -356,7 +371,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::InDecimal, "tidbIn"},
     {tipb::ScalarFuncSig::InTime, "tidbIn"},
     {tipb::ScalarFuncSig::InDuration, "tidbIn"},
-    {tipb::ScalarFuncSig::InJson, "tidbIn"},
+    //{tipb::ScalarFuncSig::InJson, "tidbIn"},
 
     {tipb::ScalarFuncSig::IfNullInt, "ifNull"},
     {tipb::ScalarFuncSig::IfNullReal, "ifNull"},
@@ -642,7 +657,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
-    {tipb::ScalarFuncSig::Locate2ArgsUTF8, "position"},
+    {tipb::ScalarFuncSig::Locate2ArgsUTF8, "positionUTF8"},
     //{tipb::ScalarFuncSig::Locate3ArgsUTF8, "cast"},
     {tipb::ScalarFuncSig::Locate2Args, "position"},
     //{tipb::ScalarFuncSig::Locate3Args, "cast"},
@@ -686,6 +701,14 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 
     {tipb::ScalarFuncSig::GroupingSig, "grouping"},
+
+    {tipb::ScalarFuncSig::VecAsTextSig, "vecAsText"},
+    {tipb::ScalarFuncSig::VecDimsSig, "vecDims"},
+    {tipb::ScalarFuncSig::VecL1DistanceSig, "vecL1Distance"},
+    {tipb::ScalarFuncSig::VecL2DistanceSig, "vecL2Distance"},
+    {tipb::ScalarFuncSig::VecNegativeInnerProductSig, "vecNegativeInnerProduct"},
+    {tipb::ScalarFuncSig::VecCosineDistanceSig, "vecCosineDistance"},
+    {tipb::ScalarFuncSig::VecL2NormSig, "vecL2Norm"},
 });
 
 template <typename GetColumnsFunc, typename GetDataTypeFunc>
@@ -948,6 +971,24 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
         return ret;
     }
+    case tipb::ExprType::TiDBVectorFloat32:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException(
+                "MySQL Duration literal without field_type" + expr.DebugString(),
+                Errors::Coprocessor::BadRequest);
+        auto t = decodeDAGVectorFloat32(expr.val());
+        auto arr = t.safeGet<Array>();
+        String ret = "[";
+        for (size_t i = 0; i < arr.size(); ++i)
+        {
+            if (i > 0)
+                ret += ",";
+            ret += std::to_string(arr[i].safeGet<NearestFieldType<Float32>::Type>());
+        }
+        ret += "]";
+        return ret;
+    }
     case tipb::ExprType::ColumnRef:
         return getColumnNameForColumnExpr(expr, input_col);
     case tipb::ExprType::Count:
@@ -1085,6 +1126,7 @@ bool isLiteralExpr(const tipb::Expr & expr)
     case tipb::ExprType::MysqlTime:
     case tipb::ExprType::MysqlJson:
     case tipb::ExprType::ValueList:
+    case tipb::ExprType::TiDBVectorFloat32:
         return true;
     default:
         return false;
@@ -1134,6 +1176,14 @@ Field decodeLiteral(const tipb::Expr & expr)
         auto t = decodeDAGInt64(expr.val());
         return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
     }
+    case tipb::ExprType::TiDBVectorFloat32:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException(
+                "MySQL Duration literal without field_type" + expr.DebugString(),
+                Errors::Coprocessor::BadRequest);
+        return decodeDAGVectorFloat32(expr.val());
+    }
     case tipb::ExprType::MysqlBit:
     case tipb::ExprType::MysqlEnum:
     case tipb::ExprType::MysqlHex:
@@ -1162,7 +1212,7 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
-ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col)
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<TiDB::ColumnInfo> & input_col)
 {
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
@@ -1178,7 +1228,7 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<Col
 
 void getColumnIDsFromExpr(
     const tipb::Expr & expr,
-    const std::vector<ColumnInfo> & input_col,
+    const std::vector<TiDB::ColumnInfo> & input_col,
     std::unordered_set<ColumnID> & col_id_set)
 {
     if (expr.children_size() == 0)
@@ -1324,6 +1374,7 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
     case TiDB::TypeBit:
     case TiDB::TypeEnum:
     case TiDB::TypeJSON:
+    case TiDB::TypeTiDBVectorFloat32:
         return VAR_SIZE;
     default:
         throw TiFlashException(
@@ -1375,6 +1426,20 @@ tipb::Expr constructNULLLiteralTiExpr()
     expr.set_tp(tipb::ExprType::Null);
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeNull);
+    return expr;
+}
+
+tipb::Expr constructZeroVectorFloat32TiExpr()
+{
+    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::TiDBVectorFloat32);
+    WriteBufferFromOwnString ss;
+    writeIntBinary(static_cast<UInt32>(0), ss);
+    expr.set_val(ss.releaseStr());
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeTiDBVectorFloat32);
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
     return expr;
 }
 

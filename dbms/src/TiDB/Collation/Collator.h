@@ -14,16 +14,16 @@
 
 #pragma once
 
+#include <Common/Exception.h>
+#include <Common/UTF8Helpers.h>
 #include <TiDB/Collation/CollatorCompare.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/StringRef.h>
 
 #include <memory>
-#include <unordered_map>
 
 namespace TiDB
 {
-using TiDBCollatorPtr = class ITiDBCollator const *;
-using TiDBCollators = std::vector<TiDBCollatorPtr>;
 
 class ITiDBCollator
 {
@@ -96,6 +96,10 @@ public:
         return compare(s1, length1, s2, length2);
     }
 
+    // Convert raw string to collate string and return the length of each character
+    virtual StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
+        = 0;
+    virtual StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const = 0;
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
@@ -145,5 +149,29 @@ extern std::vector<std::string> dummy_sort_key_contaners;
 extern std::string dummy_sort_key_contaner;
 
 ITiDBCollator::CollatorType GetTiDBCollatorType(const void * collator);
+
+inline void fillLensForBinCollator(const char * start, const char * end, std::vector<size_t> * lens)
+{
+    lens->resize(0);
+    const char * it = start;
+    while (it != end)
+    {
+        UInt8 len = DB::UTF8::seqLength(static_cast<UInt8>(*it));
+        lens->push_back(len);
+
+        if likely (end - it >= len)
+            it += len;
+        else
+            throw DB::Exception("Encounter invalid character");
+    }
+}
+
+template <bool need_len>
+StringRef convertForBinCollator(const char * start, size_t len, std::vector<size_t> * lens)
+{
+    if constexpr (need_len)
+        TiDB::fillLensForBinCollator(start, start + len, lens);
+    return DB::BinCollatorSortKey<false>(start, len);
+}
 
 } // namespace TiDB

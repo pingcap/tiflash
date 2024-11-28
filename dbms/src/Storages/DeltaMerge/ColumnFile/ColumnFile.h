@@ -24,10 +24,9 @@
 #include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 
 class ColumnFile;
@@ -63,9 +62,9 @@ protected:
         : id(++MAX_COLUMN_FILE_ID)
     {}
 
+public:
     virtual ~ColumnFile() = default;
 
-public:
     enum Type : UInt32
     {
         DELETE_RANGE = 1,
@@ -94,8 +93,8 @@ public:
     UInt64 getId() const { return id; }
 
     virtual size_t getRows() const { return 0; }
-    virtual size_t getBytes() const { return 0; };
-    virtual size_t getDeletes() const { return 0; };
+    virtual size_t getBytes() const { return 0; }
+    virtual size_t getDeletes() const { return 0; }
 
     virtual Type getType() const = 0;
 
@@ -104,11 +103,11 @@ public:
     /// Is a ColumnFileTiny or not.
     bool isTinyFile() const { return getType() == Type::TINY_FILE; }
     /// Is a ColumnFileDeleteRange or not.
-    bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
+    bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; }
     /// Is a ColumnFileBig or not.
-    bool isBigFile() const { return getType() == Type::BIG_FILE; };
+    bool isBigFile() const { return getType() == Type::BIG_FILE; }
     /// Is a ColumnFilePersisted or not
-    bool isPersisted() const { return getType() != Type::INMEMORY_FILE; };
+    bool isPersisted() const { return getType() != Type::INMEMORY_FILE; }
 
     /**
      * Whether this column file SEEMS TO BE flushed from another.
@@ -130,7 +129,8 @@ public:
     virtual ColumnFileReaderPtr getReader(
         const DMContext & context,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const
+        const ColumnDefinesPtr & col_defs,
+        ReadTag read_tag) const
         = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
@@ -148,6 +148,10 @@ public:
     }
 
     virtual String toString() const = 0;
+
+    /// Debugging string
+    template <typename T>
+    static String filesToString(const T & column_files);
 };
 
 
@@ -162,37 +166,28 @@ public:
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.
     /// Returns <actual_offset, actual_limit>
     virtual std::pair<size_t, size_t> readRows(
-        MutableColumns & /*output_cols*/,
-        size_t /*rows_offset*/,
-        size_t /*rows_limit*/,
-        const RowKeyRange * /*range*/)
-    {
-        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
-    }
+        MutableColumns & output_cols,
+        size_t rows_offset,
+        size_t rows_limit,
+        const RowKeyRange * range)
+        = 0;
 
     /// This method is only used to read raw data.
-    virtual Block readNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
+    virtual Block readNextBlock() = 0;
 
     /// This method used to skip next block.
-    virtual size_t skipNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
+    virtual size_t skipNextBlock() = 0;
 
     /// Create a new reader from current reader with different columns to read.
-    virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;
+    virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs, ReadTag read_tag) = 0;
 
-    virtual void setReadTag(ReadTag /*read_tag*/) {}
+    static std::pair<size_t, size_t> copyColumnsData(
+        const Columns & from,
+        const ColumnPtr & pk_col,
+        MutableColumns & to,
+        size_t rows_offset,
+        size_t rows_limit,
+        const RowKeyRange * range);
 };
 
-std::pair<size_t, size_t> copyColumnsData(
-    const Columns & from,
-    const ColumnPtr & pk_col,
-    MutableColumns & to,
-    size_t rows_offset,
-    size_t rows_limit,
-    const RowKeyRange * range);
-
-
-/// Debugging string
-template <typename T>
-String columnFilesToString(const T & column_files);
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

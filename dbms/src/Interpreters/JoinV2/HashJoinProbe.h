@@ -55,7 +55,8 @@ struct JoinProbeContext
         const Names & key_names,
         const String & filter_column,
         const NameSet & probe_output_name_set,
-        const TiDB::TiDBCollators & collators);
+        const TiDB::TiDBCollators & collators,
+        const HashJoinRowLayout & row_layout);
 };
 
 struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
@@ -77,8 +78,6 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t collision = 0;
 
     ColumnUInt8::MutablePtr filter_column = ColumnUInt8::create();
-
-    ColumnsAlignBufferAVX2 align_buffer;
 };
 
 void joinProbeBlock(

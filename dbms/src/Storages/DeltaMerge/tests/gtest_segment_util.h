@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <common/defines.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
@@ -31,7 +33,8 @@ std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges);
 struct SegDataUnit
 {
     String type;
-    std::pair<Int64, Int64> range;
+    std::pair<Int64, Int64> range; // Data range
+    std::optional<size_t> pack_size; // For DMFile
 };
 
 // "type:[a, b)" => SegDataUnit

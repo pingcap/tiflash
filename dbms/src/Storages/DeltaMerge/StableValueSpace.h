@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
@@ -29,9 +30,6 @@ namespace DM
 {
 
 struct WriteBatches;
-
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
@@ -203,14 +201,14 @@ public:
          * Rows from packs that are not included in the segment range will be also counted in.
          * Note: Out-of-range rows may be produced by logical split.
          */
-        size_t getDMFilesRows() const { return stable->getDMFilesRows(); };
+        size_t getDMFilesRows() const { return stable->getDMFilesRows(); }
 
         /**
          * Return the total size of the data of the underlying DTFiles.
          * Rows from packs that are not included in the segment range will be also counted in.
          * Note: Out-of-range rows may be produced by logical split.
          */
-        size_t getDMFilesBytes() const { return stable->getDMFilesBytes(); };
+        size_t getDMFilesBytes() const { return stable->getDMFilesBytes(); }
 
         ColumnCachePtrs & getColumnCaches() { return column_caches; }
 
@@ -234,7 +232,8 @@ public:
             bool is_fast_scan = false,
             bool enable_del_clean_read = false,
             const std::vector<IdSetPtr> & read_packs = {},
-            bool need_row_id = false);
+            bool need_row_id = false,
+            BitmapFilterPtr bitmap_filter = nullptr);
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 

@@ -21,10 +21,12 @@
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
+#include <common/memcpy.h>
 
 #include <cmath>
 #include <cstring>
 #include <ext/bit_cast.h>
+#include <ext/scope_guard.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -52,115 +54,278 @@ StringRef ColumnVector<T>::serializeValueIntoArena(
     String &) const
 {
     auto * pos = arena.allocContinue(sizeof(T), begin);
-    memcpy(pos, &data[n], sizeof(T));
+    tiflash_compiler_builtin_memcpy(pos, &data[n], sizeof(T));
     return StringRef(pos, sizeof(T));
 }
 
 template <typename T>
+void ColumnVector<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(T);
+}
+
+template <typename T>
+void ColumnVector<T>::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(
+        byte_size.size() == array_offsets.size(),
+        "size of byte_size({}) != size of array_offsets({})",
+        byte_size.size(),
+        array_offsets.size());
+
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
+}
+
+template <typename T>
+void ColumnVector<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, length);
+    else
+        serializeToPosImpl<false>(pos, start, length);
+}
+
+template <typename T>
+template <bool has_null>
+void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
+        pos[i] += sizeof(T);
+    }
+}
+
+template <typename T>
+void ColumnVector<T>::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
+    else
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
+}
+
+template <typename T>
+template <bool has_null>
+void ColumnVector<T>::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(
+        start + length <= array_offsets.size(),
+        "start({}) + length({}) > size of array_offsets({})",
+        start,
+        length,
+        array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        array_offsets.empty() || array_offsets.back() == size(),
+        "The last array offset({}) doesn't match size of column({})",
+        array_offsets.back(),
+        size());
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        if (len <= 4)
+        {
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    pos[i] + j * sizeof(T),
+                    &data[array_offsets[start + i - 1] + j],
+                    sizeof(T));
+        }
+        else
+        {
+            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+        }
+        pos[i] += len * sizeof(T);
+    }
+}
+
+template <typename T>
 void ColumnVector<T>::deserializeAndInsertFromPos(
-    PaddedPODArray<UInt8 *> & pos,
-    ColumnsAlignBufferAVX2 & align_buffer [[maybe_unused]])
+    PaddedPODArray<char *> & pos,
+    bool use_nt_align_buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
     size_t size = pos.size();
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    data.resize(prev_size + size, AlignBufferAVX2::buffer_size);
-#else
-    data.resize(prev_size + size);
-#endif
-
-    size_t i = 0;
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    if constexpr (AlignBufferAVX2::buffer_size % sizeof(T) == 0)
+    if (use_nt_align_buffer)
     {
-        size_t buffer_index = align_buffer.nextIndex();
-        AlignBufferAVX2 & buffer = align_buffer.getAlignBuffer(buffer_index);
-        UInt8 & buffer_size = align_buffer.getSize(buffer_index);
-        bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % AlignBufferAVX2::buffer_size == 0;
-        if likely (is_aligned)
+        if constexpr (FULL_VECTOR_SIZE_AVX2 % sizeof(T) == 0)
         {
-            if (buffer_size != 0)
+            bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
+            if likely (is_aligned)
             {
-                size_t count = std::min(size, i + (AlignBufferAVX2::buffer_size - buffer_size) / sizeof(T));
-                for (; i < count; ++i)
+                if unlikely (align_buffer_ptr == nullptr)
+                    align_buffer_ptr = std::make_unique<ColumnNTAlignBufferAVX2>();
+
+                NTAlignBufferAVX2 & buffer = align_buffer_ptr->getBuffer();
+                UInt8 buffer_size = align_buffer_ptr->getSize();
+                SCOPE_EXIT({ align_buffer_ptr->setSize(buffer_size); });
+
+                constexpr size_t avx2_width = FULL_VECTOR_SIZE_AVX2 / sizeof(T);
+                size_t i = 0;
+                if (buffer_size != 0)
                 {
-                    std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                    size_t count = std::min(size, (FULL_VECTOR_SIZE_AVX2 - buffer_size) / sizeof(T));
+                    for (; i < count; ++i)
+                    {
+                        tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
+                        buffer_size += sizeof(T);
+                        pos[i] += sizeof(T);
+                    }
+
+                    if (buffer_size < FULL_VECTOR_SIZE_AVX2)
+                        return;
+
+                    assert(buffer_size == FULL_VECTOR_SIZE_AVX2);
+                    data.resize(prev_size + avx2_width, FULL_VECTOR_SIZE_AVX2);
+
+                    nonTemporalStore64B(&data[prev_size], buffer);
+                    prev_size += FULL_VECTOR_SIZE_AVX2 / sizeof(T);
+                    buffer_size = 0;
+                }
+
+                NTAlignBufferAVX2 tmp_buffer;
+                UInt8 tmp_buffer_size = 0;
+
+                data.resize(prev_size + (size - i) / avx2_width * avx2_width, FULL_VECTOR_SIZE_AVX2);
+                for (; i + avx2_width <= size; i += avx2_width)
+                {
+                    /// Loop unrolling
+                    for (size_t j = 0; j < avx2_width; ++j)
+                    {
+                        tiflash_compiler_builtin_memcpy(
+                            &tmp_buffer.data[tmp_buffer_size + j * sizeof(T)],
+                            pos[i + j],
+                            sizeof(T));
+                        pos[i + j] += sizeof(T);
+                    }
+                    tmp_buffer_size += avx2_width * sizeof(T);
+
+                    nonTemporalStore64B(&data[prev_size], tmp_buffer);
+                    prev_size += FULL_VECTOR_SIZE_AVX2 / sizeof(T);
+                    tmp_buffer_size = 0;
+                }
+
+                for (; i < size; ++i)
+                {
+                    tiflash_compiler_builtin_memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
                     buffer_size += sizeof(T);
                     pos[i] += sizeof(T);
                 }
 
-                if (buffer_size < AlignBufferAVX2::buffer_size)
-                {
-                    if unlikely (align_buffer.needFlush())
-                    {
-                        std::memcpy(&data[prev_size], buffer.data, buffer_size);
-                        buffer_size = 0;
-                    }
-                    return;
-                }
-
-                assert(buffer_size == AlignBufferAVX2::buffer_size);
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[0]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), buffer.v[1]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                buffer_size = 0;
+                _mm_sfence();
+                return;
             }
-
-            union alignas(64)
-            {
-                char vec_data[AlignBufferAVX2::buffer_size]{};
-                __m256i v[2];
-            };
-            size_t vec_size = 0;
-            constexpr size_t simd_width = AlignBufferAVX2::buffer_size / sizeof(T);
-            for (; i + simd_width <= size; i += simd_width)
-            {
-                for (size_t j = 0; j < simd_width; ++j)
-                {
-                    std::memcpy(&vec_data[vec_size], pos[i + j], sizeof(T));
-                    vec_size += sizeof(T);
-                    pos[i + j] += sizeof(T);
-                }
-
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[0]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                _mm256_stream_si256(reinterpret_cast<__m256i *>(&data[prev_size]), v[1]);
-                prev_size += AlignBufferAVX2::vector_size / sizeof(T);
-                vec_size = 0;
-            }
-
-            for (; i < size; ++i)
-            {
-                std::memcpy(&buffer.data[buffer_size], pos[i], sizeof(T));
-                buffer_size += sizeof(T);
-                pos[i] += sizeof(T);
-            }
-
-            if unlikely (align_buffer.needFlush())
-            {
-                std::memcpy(&data[prev_size], buffer.data, buffer_size);
-                buffer_size = 0;
-            }
-
-            return;
-        }
-
-        if unlikely (buffer_size != 0)
-        {
-            std::memcpy(&data[prev_size], buffer.data, buffer_size);
-            buffer_size = 0;
         }
     }
+
+    RUNTIME_CHECK_MSG(
+        align_buffer_ptr == nullptr,
+        "align_buffer_ptr is not nullptr but use_nt_align_buffer({}) is false or data is unaligned",
+        use_nt_align_buffer);
 #endif
 
-    for (; i < size; ++i)
+    data.resize(prev_size + size);
+    for (size_t i = 0; i < size; ++i)
     {
-        std::memcpy(&data[prev_size], pos[i], sizeof(T));
-        ++prev_size;
+        tiflash_compiler_builtin_memcpy(&data[prev_size + i], pos[i], sizeof(T));
         pos[i] += sizeof(T);
     }
+}
+
+template <typename T>
+void ColumnVector<T>::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets,
+    bool use_nt_align_buffer [[maybe_unused]])
+{
+    if unlikely (pos.empty())
+        return;
+    RUNTIME_CHECK_MSG(
+        pos.size() <= array_offsets.size(),
+        "size of pos({}) > size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
+    size_t start_point = array_offsets.size() - pos.size();
+    RUNTIME_CHECK_MSG(
+        array_offsets[start_point - 1] == size(),
+        "array_offset[start_point({}) - 1]({}) doesn't match size of column({})",
+        start_point,
+        array_offsets[start_point - 1],
+        size());
+
+    data.resize(array_offsets.back());
+
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        if (len <= 4)
+        {
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    &data[array_offsets[start_point + i - 1] + j],
+                    pos[i] + j * sizeof(T),
+                    sizeof(T));
+        }
+        else
+        {
+            inline_memcpy(&data[array_offsets[start_point + i - 1]], pos[i], len * sizeof(T));
+        }
+        pos[i] += len * sizeof(T);
+    }
+}
+
+template <typename T>
+void ColumnVector<T>::flushNTAlignBuffer()
+{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    if (align_buffer_ptr)
+    {
+        NTAlignBufferAVX2 & buffer = align_buffer_ptr->getBuffer();
+        UInt8 buffer_size = align_buffer_ptr->getSize();
+        if (buffer_size > 0)
+        {
+            size_t prev_size = data.size();
+            data.resize(prev_size + buffer_size / sizeof(T));
+            inline_memcpy(&data[prev_size], buffer.data, buffer_size);
+        }
+        align_buffer_ptr.reset();
+    }
+#endif
 }
 
 template <typename T>

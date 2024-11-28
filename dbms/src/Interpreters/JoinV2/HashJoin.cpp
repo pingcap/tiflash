@@ -185,42 +185,27 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
 
     auto key_columns = getKeyColumns(key_names_right, right_sample_block);
     RUNTIME_ASSERT(key_columns.size() == keys_size);
-    /// Move all raw join key column to the front of the join key.
-    Names new_key_names_left, new_key_names_right;
-    BoolVec raw_required_key_flag(keys_size);
-    std::unordered_set<size_t> raw_required_key_index_set;
 
     bool is_all_key_fixed = true;
+    bool has_decimal_256 = false;
     for (size_t i = 0; i < keys_size; ++i)
     {
-        bool is_raw_required = false;
+        if (typeid_cast<const ColumnDecimal<Decimal256> *>(key_columns[i].column_ptr))
+        {
+            has_decimal_256 = true;
+            continue;
+        }
+        // TODO: consider Decimal256
         if (key_columns[i].column_ptr->valuesHaveFixedSize())
-        {
             row_layout.key_column_fixed_size += key_columns[i].column_ptr->sizeOfValueIfFixed();
-            if (right_sample_block_pruned.has(key_names_right[i]))
-                is_raw_required = true;
-        }
         else
-        {
             is_all_key_fixed = false;
-            if (canAsColumnString(key_columns[i].column_ptr)
-                && getStringCollatorKind(collators) == StringCollatorKind::StringBinary
-                && right_sample_block_pruned.has(key_names_right[i]))
-            {
-                is_raw_required = true;
-            }
-        }
-        if (is_raw_required)
-        {
-            new_key_names_left.emplace_back(key_names_left[i]);
-            new_key_names_right.emplace_back(key_names_right[i]);
-            raw_required_key_flag[i] = true;
-            size_t index = right_sample_block_pruned.getPositionByName(key_names_right[i]);
-            raw_required_key_index_set.insert(index);
-            row_layout.raw_required_key_column_indexes.push_back({index, key_columns[i].is_nullable});
-        }
     }
-    if (is_all_key_fixed)
+    if (has_decimal_256)
+    {
+        method = HashJoinKeyMethod::KeySerialized;
+    }
+    else if (is_all_key_fixed)
     {
         method = findFixedSizeJoinKeyMethod(keys_size, row_layout.key_column_fixed_size);
     }
@@ -244,18 +229,54 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
         method = HashJoinKeyMethod::KeySerialized;
     }
 
-    row_layout.key_all_raw_required = row_layout.raw_required_key_column_indexes.size() == keys_size;
-
-    for (size_t i = 0; i < keys_size; ++i)
+    std::unordered_set<size_t> raw_required_key_index_set;
+    if (method != HashJoinKeyMethod::KeySerialized)
     {
-        if (!raw_required_key_flag[i])
+        /// Move all raw join key column to the end of the join key.
+        Names new_key_names_left, new_key_names_right;
+        BoolVec raw_required_key_flag(keys_size);
+        for (size_t i = 0; i < keys_size; ++i)
         {
-            new_key_names_left.emplace_back(key_names_left[i]);
-            new_key_names_right.emplace_back(key_names_right[i]);
+            bool is_raw_required = false;
+            if (key_columns[i].column_ptr->valuesHaveFixedSize())
+            {
+                if (right_sample_block_pruned.has(key_names_right[i]))
+                    is_raw_required = true;
+            }
+            else
+            {
+                if (canAsColumnString(key_columns[i].column_ptr)
+                    && getStringCollatorKind(collators) == StringCollatorKind::StringBinary
+                    && right_sample_block_pruned.has(key_names_right[i]))
+                {
+                    is_raw_required = true;
+                }
+            }
+            if (is_raw_required)
+            {
+                raw_required_key_flag[i] = true;
+                size_t index = right_sample_block_pruned.getPositionByName(key_names_right[i]);
+                raw_required_key_index_set.insert(index);
+                row_layout.raw_required_key_column_indexes.push_back({index, key_columns[i].is_nullable});
+            }
+            else
+            {
+                new_key_names_left.emplace_back(key_names_left[i]);
+                new_key_names_right.emplace_back(key_names_right[i]);
+            }
         }
+
+        for (size_t i = 0; i < keys_size; ++i)
+        {
+            if (raw_required_key_flag[i])
+            {
+                new_key_names_left.emplace_back(key_names_left[i]);
+                new_key_names_right.emplace_back(key_names_right[i]);
+            }
+        }
+        key_names_left.swap(new_key_names_left);
+        key_names_right.swap(new_key_names_right);
     }
-    key_names_left.swap(new_key_names_left);
-    key_names_right.swap(new_key_names_right);
 
     size_t columns = right_sample_block_pruned.columns();
     for (size_t i = 0; i < columns; ++i)
@@ -525,7 +546,8 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
         key_names_left,
         non_equal_conditions.left_filter_column,
         probe_output_name_set,
-        collators);
+        collators,
+        row_layout);
 
     std::vector<Block> result_blocks;
     size_t result_rows = 0;

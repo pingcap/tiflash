@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/KVStore/Types.h>
 #include <tipb/executor.pb.h>
@@ -31,9 +32,6 @@ struct DAGQueryInfo;
 namespace DM
 {
 
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
-
 class FilterParser
 {
 public:
@@ -41,7 +39,7 @@ public:
     using AttrCreatorByColumnID = std::function<Attr(const DB::ColumnID)>;
     static RSOperatorPtr parseDAGQuery(
         const DAGQueryInfo & dag_info,
-        const ColumnInfos & scan_column_infos,
+        const TiDB::ColumnInfos & scan_column_infos,
         AttrCreatorByColumnID && creator,
         const LoggerPtr & log);
 
@@ -55,7 +53,7 @@ public:
 
     static std::optional<Attr> createAttr(
         const tipb::Expr & expr,
-        const ColumnInfos & scan_column_infos,
+        const TiDB::ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines);
 
     static bool isRSFilterSupportType(Int32 field_type);

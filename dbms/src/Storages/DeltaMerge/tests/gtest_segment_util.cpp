@@ -54,8 +54,23 @@ SegDataUnit parseSegDataUnit(String & s)
     boost::algorithm::trim(s);
     std::vector<String> values;
     boost::split(values, s, boost::is_any_of(":"));
-    RUNTIME_CHECK(values.size() == 2, s);
-    return SegDataUnit{boost::algorithm::trim_copy(values[0]), parseRange<Int64>(values[1])};
+    if (values.size() == 2)
+    {
+        return SegDataUnit{
+            .type = boost::algorithm::trim_copy(values[0]),
+            .range = parseRange<Int64>(values[1]),
+        };
+    }
+    else if (values.size() == 3)
+    {
+        RUNTIME_CHECK(values[0] == "d_big" || values[0] == "s", s);
+        return SegDataUnit{
+            .type = boost::algorithm::trim_copy(values[0]),
+            .range = parseRange<Int64>(values[1]),
+            .pack_size = std::stoul(values[2]),
+        };
+    }
+    RUNTIME_CHECK_MSG(false, "parseSegDataUnit failed: {}", s);
 }
 
 void check(const std::vector<SegDataUnit> & seg_data_units)

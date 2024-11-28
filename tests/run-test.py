@@ -15,27 +15,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import os
 import re
 import sys
 import time
 import datetime
-
-if sys.version_info.major == 2:
-    # print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
-    from urllib2 import HTTPError
-    from urllib2 import Request as UrlRequest
-    from urllib2 import urlopen
-else:
-    from urllib.request import Request as UrlRequest
-    from urllib.error import HTTPError
-    from urllib.request import urlopen
+from urllib.request import Request as UrlRequest
+from urllib.error import HTTPError
+from urllib.request import urlopen
 
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
 CMD_PREFIX_TIDB = 'mysql> '
+CMD_PREFIX_TIDB_BINALY_AS_HEX = 'mysql_bin_as_hex> '
 CMD_PREFIX_FUNC = 'func> '
 RETURN_PREFIX = '#RETURN'
 SLEEP_PREFIX = 'SLEEP '
@@ -70,11 +62,12 @@ class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd, unescape = True):
-        if unescape:
-            cmd = self.dbc + ' "' + to_unescaped_str(cmd) + '" 2>&1'
+    def exe(self, cmd, unescape=True, binary_as_hex=False):
+        cmd = to_unescaped_str(cmd) if unescape else cmd
+        if binary_as_hex:
+            cmd = f'{self.dbc} "{cmd}" --binary-as-hex=true 2>&1'
         else:
-            cmd = self.dbc + ' "' + cmd + '" 2>&1'
+            cmd = f'{self.dbc} "{cmd}" 2>&1'
         return exec_func(cmd)
 
 
@@ -82,36 +75,29 @@ class ShellFuncExecutor:
     def __init__(self, dbc):
         self.dbc = dbc
 
-    def exe(self, cmd, unescape = False):
-        return exec_func(cmd + ' "' + self.dbc + '" 2>&1')
+    def exe(self, cmd, unescape=False):
+        return exec_func(f'{cmd} "{self.dbc}" 2>&1')
 
 
 class CurlTiDBExecutor:
     def __init__(self):
-        self.tidb_status_addr = '{}:{}'.format(
-            os.getenv('tidb_server', "127.0.0.1"),
-            os.getenv('tidb_status_port', 10080)
-        )
+        self.tidb_status_addr = f'{os.getenv("tidb_server", "127.0.0.1")}:{os.getenv("tidb_status_port", 10080)}'
 
     def exe(self, context):
         context = [e for e in context.split(' ') if e]
-        # put uri data
-        # post uri data
-        # delete uri
-        # get uri
-
         method = context[0].upper()
-        uri = "http://{}/{}".format(self.tidb_status_addr, context[1])
-        # print('uri is {} {} {}'.format(method, uri, context[2:]))
+        uri = f'http://{self.tidb_status_addr}/{context[1]}'
         request = UrlRequest(uri)
         request.get_method = lambda: method
-        if request.get_method() == 'POST' or request.get_method() == 'PUT':
-            request.data = context[2]
+        if method in ['POST', 'PUT']:
+            request.data = context[2].encode()
         try:
             response = urlopen(request).read().strip()
-            return [response] if request.get_method() == 'GET' and response else None, None
+            if response:
+                response = response.decode('utf-8')
+            return [response] if method == 'GET' and response else None, None
         except HTTPError as e:
-            return ['Error: {}. Uri: {}'.format(e, uri)], e
+            return [f'Error: {e}. Uri: {uri}'], e
 
 
 def parse_line(line):
@@ -161,9 +147,7 @@ def match_ph_word(line):
     while not is_break_char(line[i]):
         i += 1
         found = True
-    if not found:
-        return 0
-    return i
+    return i if found else 0
 
 
 # TODO: Support more place holders, eg: {#NUMBER}
@@ -173,19 +157,17 @@ def compare_line(line, template):
     l = template.find(LINE_PH)
     if l >= 0:
         return True
-    else:
-        while True:
-            i = template.find(WORD_PH)
-            if i < 0:
-                return line == template
-            else:
-                if line[:i] != template[:i]:
-                    return False
-                j = match_ph_word(line[i:])
-                if j == 0:
-                    return False
-                template = template[i + len(WORD_PH):]
-                line = line[i + j:]
+    while True:
+        i = template.find(WORD_PH)
+        if i < 0:
+            return line == template
+        if line[:i] != template[:i]:
+            return False
+        j = match_ph_word(line[i:])
+        if j == 0:
+            return False
+        template = template[i + len(WORD_PH):]
+        line = line[i + j:]
 
 
 class MySQLCompare:
@@ -278,24 +260,27 @@ class Matcher:
     def on_line(self, line, line_number):
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
-        elif line.startswith(CMD_PREFIX_TIDB):
+        elif line.startswith(CMD_PREFIX_TIDB) or line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX):
             unescape_flag = True
             if line.endswith(NO_UNESCAPE_SUFFIX):
                 unescape_flag = False
                 line = line[:-len(NO_UNESCAPE_SUFFIX)]
-            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+            if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
             self.is_mysql = True
-            self.query = line[len(CMD_PREFIX_TIDB):]
+            if line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX):
+                self.query = line[len(CMD_PREFIX_TIDB_BINALY_AS_HEX):]
+            else:
+                self.query = line[len(CMD_PREFIX_TIDB):]
             # for mysql commands ignore errors since they may be part of the test logic.
-            self.outputs, _ = self.executor_tidb.exe(self.query, unescape_flag)
+            self.outputs, _ = self.executor_tidb.exe(self.query, unescape_flag, line.startswith(CMD_PREFIX_TIDB_BINALY_AS_HEX))
             self.outputs = [x.strip() for x in self.outputs if len(x.strip()) != 0]
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
-            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+            if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -307,7 +292,7 @@ class Matcher:
                 return False
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
-            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+            if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -321,7 +306,7 @@ class Matcher:
                 self.outputs = [x for x in self.outputs if x.find(ignored_output) < 0]
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
-            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+            if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -388,7 +373,7 @@ def run():
     global verbose
     if len(sys.argv) == 6:
         verbose = (sys.argv[5] == 'true')
-    if verbose: print('parsing file: `{}`'.format(path))
+    if verbose: print(f'parsing file: `{path}`')
     matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client),
                                               ShellFuncExecutor(mysql_client),
                                               CurlTiDBExecutor(),
@@ -403,15 +388,15 @@ def run():
                 print(' ' * 4 + it)
 
     if not matched:
-        print('  File:', path)
-        print('  Error line:', matcher.query_line_number)
-        print('  Error:', matcher.query)
+        print(f'  File: {path}')
+        print(f'  Error line: {matcher.query_line_number}')
+        print(f'  Error: {matcher.query}')
         print('  Result:')
         display(matcher.outputs)
         print('  Expected:')
         display(matcher.matches)
         sys.exit(1)
-    if len(todos) != 0:
+    if todos:
         print('  TODO:')
         for it in todos:
             print(' ' * 4 + it)

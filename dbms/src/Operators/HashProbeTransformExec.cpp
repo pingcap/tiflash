@@ -82,8 +82,10 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
                 req_id,
                 restore_info->join,
                 restore_info->stream_index));
+            exec_context.addOneTimeFuture(restore_info->join->wait_build_finished_future);
+            exec_context.addOneTimeFuture(restore_info->join->wait_probe_finished_future);
             TaskScheduler::instance->submit(
-                std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build()));
+                std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build(false)));
 
             return restore_probe_exec;
         }
@@ -129,7 +131,7 @@ bool HashProbeTransformExec::prepareProbeRestoredBlock()
     case MPMCQueueResult::OK:
         return true;
     case MPMCQueueResult::EMPTY:
-        setNotifyFuture(probe_source_holder);
+        setNotifyFuture(probe_source_holder.get());
         return false;
     case MPMCQueueResult::FINISHED:
     case MPMCQueueResult::CANCELLED:

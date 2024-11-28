@@ -40,7 +40,7 @@
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
-#include <TiDB/Schema/TiDB.h>
+
 namespace DB
 {
 class Context;
@@ -356,6 +356,8 @@ public:
     UInt64 getConnectionID() const { return connection_id; }
     const String & getConnectionAlias() const { return connection_alias; }
 
+    MPPReceiverSetPtr getMPPReceiverSet() const { return mpp_receiver_set; }
+
 public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -363,6 +365,7 @@ public:
     String dummy_query_string;
     ASTPtr dummy_ast;
     Int64 compile_time_ns = 0;
+    Int64 minTSO_wait_time_ns = 0;
     size_t final_concurrency = 1;
     size_t initialize_concurrency = 1;
     bool has_read_wait_index = false;
@@ -448,6 +451,7 @@ private:
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
 
+    // `mpp_receiver_set` is always set by `MPPTask` and is used later.
     MPPReceiverSetPtr mpp_receiver_set;
     std::vector<CoprocessorReaderPtr> coprocessor_readers;
     /// vector of SubqueriesForSets(such as join build subquery).

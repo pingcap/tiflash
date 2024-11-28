@@ -17,10 +17,10 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
-namespace DB
+
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileDeleteRange;
 using ColumnFileDeleteRangePtr = std::shared_ptr<ColumnFileDeleteRange>;
 
@@ -41,8 +41,11 @@ public:
     {}
     ColumnFileDeleteRange(const ColumnFileDeleteRange &) = default;
 
-    ColumnFileReaderPtr getReader(const DMContext &, const IColumnFileDataProviderPtr &, const ColumnDefinesPtr &)
-        const override;
+    ColumnFileReaderPtr getReader(
+        const DMContext &,
+        const IColumnFileDataProviderPtr &,
+        const ColumnDefinesPtr &,
+        ReadTag) const override;
 
     const auto & getDeleteRange() { return delete_range; }
 
@@ -54,11 +57,13 @@ public:
     }
 
     Type getType() const override { return Type::DELETE_RANGE; }
-    size_t getDeletes() const override { return 1; };
+    size_t getDeletes() const override { return 1; }
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
+    void serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool save_schema) const override;
 
     static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf);
+    static ColumnFilePersistedPtr deserializeMetadata(const dtpb::ColumnFileDeleteRange & dr_pb);
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {
@@ -71,10 +76,4 @@ public:
     String toString() const override { return "{delete_range:" + delete_range.toString() + "}"; }
 };
 
-class ColumnFileEmptyReader : public ColumnFileReader
-{
-public:
-    ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr &) override;
-};
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

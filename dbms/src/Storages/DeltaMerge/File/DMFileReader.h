@@ -17,23 +17,28 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
+#include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
 #include <Storages/DeltaMerge/File/ColumnStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/ReadMode.h>
-#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/DMFileReaderPool.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/MarkCache.h>
 
 namespace DB::DM
 {
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
+
+class DMFileWithVectorIndexBlockInputStream;
 
 
 class DMFileReader
 {
+    friend class DMFileWithVectorIndexBlockInputStream;
+    friend class DMFileReaderPoolSharding;
+
 public:
     static bool isCacheableColumn(const ColumnDefine & cd);
 
@@ -89,28 +94,27 @@ public:
         // For DMFileReader, always use the readable path.
         return getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFileStatus::READABLE);
     }
-    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 
     friend class MarkLoader;
     friend class ColumnReadStream;
     friend class tests::DMFileMetaV2Test;
 
 private:
-    size_t getReadRows();
+    std::pair<size_t, RSResult> getReadRows();
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
         const std::vector<size_t> & clean_read_packs);
-    void readFromDisk(
-        const ColumnDefine & column_define,
-        MutableColumnPtr & column,
+    ColumnPtr readFromDisk(
+        const ColumnDefine & cd,
+        const DataTypePtr & type_on_disk,
         size_t start_pack_id,
         size_t read_rows);
-    void readFromDiskOrSharingCache(
-        const ColumnDefine & column_define,
-        ColumnPtr & column,
+    ColumnPtr readFromDiskOrSharingCache(
+        const ColumnDefine & cd,
+        const DataTypePtr & type_on_disk,
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows);
@@ -120,10 +124,27 @@ private:
         size_t rows_count,
         std::pair<size_t, size_t> range,
         const DMFileMeta::PackStats & pack_stats);
-    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
+
+    void addColumnToCache(
+        const ColumnCachePtr & data_cache,
+        ColId col_id,
+        size_t start_pack_id,
+        size_t pack_count,
+        ColumnPtr & col);
+    ColumnPtr getColumnFromCache(
+        const ColumnCachePtr & data_cache,
+        const ColumnDefine & cd,
+        const DataTypePtr & type_on_disk,
+        size_t start_pack_id,
+        size_t pack_count,
+        size_t read_rows,
+        std::function<ColumnPtr(const ColumnDefine &, const DataTypePtr &, size_t, size_t, size_t)> on_cache_miss);
 
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
+
+    void initAllMatchBlockInfo();
+    size_t getReadPackLimit(size_t start_pack_id);
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;
@@ -168,7 +189,24 @@ private:
     LoggerPtr log;
 
     // DataSharing
-    std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
+    ColumnCachePtr data_sharing_col_data_cache;
+
+    // <start_pack, pack_count>
+    // Each pair object indicates several continuous packs with RSResult::All and will be read as a Block.
+    // It is sorted by start_pack.
+    std::queue<std::pair<size_t, size_t>> all_match_block_infos;
+    std::unordered_map<ColId, bool> last_read_from_cache{};
+
+public:
+    void setColumnCacheLongTerm(ColumnCacheLongTermPtr column_cache_long_term_, ColumnID pk_col_id_)
+    {
+        column_cache_long_term = column_cache_long_term_;
+        pk_col_id = pk_col_id_;
+    }
+
+private:
+    ColumnCacheLongTermPtr column_cache_long_term = nullptr;
+    ColumnID pk_col_id = 0;
 };
 
 } // namespace DB::DM

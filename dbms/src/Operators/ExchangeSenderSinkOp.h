@@ -26,9 +26,9 @@ public:
     ExchangeSenderSinkOp(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        std::unique_ptr<DAGResponseWriter> && writer)
+        std::unique_ptr<DAGResponseWriter> && writer_)
         : SinkOp(exec_context_, req_id)
-        , writer(std::move(writer))
+        , writer(std::move(writer_))
     {}
 
     String getName() const override { return "ExchangeSenderSinkOp"; }
@@ -44,6 +44,9 @@ protected:
     OperatorStatus prepareImpl() override;
 
     OperatorStatus awaitImpl() override;
+
+private:
+    OperatorStatus waitForWriter() const;
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;

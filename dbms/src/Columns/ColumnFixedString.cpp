@@ -20,6 +20,7 @@
 #include <Common/memcpySmall.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
+#include <common/memcpy.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -107,7 +108,7 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
 
     size_t old_size = chars.size();
     chars.resize(old_size + n);
-    memcpy(chars.data() + old_size, pos, length);
+    inline_memcpy(chars.data() + old_size, pos, length);
     memset(chars.data() + old_size + length, 0, n - length);
 }
 
@@ -119,7 +120,7 @@ StringRef ColumnFixedString::serializeValueIntoArena(
     String &) const
 {
     auto * pos = arena.allocContinue(n, begin);
-    memcpy(pos, &chars[n * index], n);
+    inline_memcpy(pos, &chars[n * index], n);
     return StringRef(pos, n);
 }
 
@@ -127,8 +128,150 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
 {
     size_t old_size = chars.size();
     chars.resize(old_size + n);
-    memcpy(&chars[old_size], pos, n);
+    inline_memcpy(&chars[old_size], pos, n);
     return pos + n;
+}
+
+void ColumnFixedString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
+
+    size_t size = byte_size.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += n;
+}
+
+void ColumnFixedString::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(
+        byte_size.size() == array_offsets.size(),
+        "size of byte_size({}) != size of array_offsets({})",
+        byte_size.size(),
+        array_offsets.size());
+
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+        byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
+}
+
+void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true>(pos, start, length);
+    else
+        serializeToPosImpl<false>(pos, start, length);
+}
+
+template <bool has_null>
+void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        inline_memcpy(pos[i], &chars[n * (start + i)], n);
+        pos[i] += n;
+    }
+}
+
+void ColumnFixedString::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
+    else
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
+}
+
+template <bool has_null>
+void ColumnFixedString::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(
+        start + length <= array_offsets.size(),
+        "start({}) + length({}) > size of array_offsets({})",
+        start,
+        length,
+        array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        array_offsets.empty() || array_offsets.back() == size(),
+        "The last array offset({}) doesn't match size of column({})",
+        array_offsets.back(),
+        size());
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        inline_memcpy(pos[i], &chars[n * array_offsets[start + i - 1]], n * len);
+        pos[i] += n * len;
+    }
+}
+
+/// TODO: optimize by using align_buffer
+void ColumnFixedString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool /* use_nt_align_buffer */)
+{
+    size_t size = pos.size();
+    size_t old_char_size = chars.size();
+    chars.resize(old_char_size + n * size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        inline_memcpy(&chars[old_char_size], pos[i], n);
+        old_char_size += n;
+        pos[i] += n;
+    }
+}
+
+void ColumnFixedString::deserializeAndInsertFromPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets,
+    bool /* use_nt_align_buffer */)
+{
+    if unlikely (pos.empty())
+        return;
+    RUNTIME_CHECK_MSG(
+        pos.size() <= array_offsets.size(),
+        "size of pos({}) > size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
+    size_t start_point = array_offsets.size() - pos.size();
+    RUNTIME_CHECK_MSG(
+        array_offsets[start_point - 1] == size(),
+        "array_offset[start_point({}) - 1]({}) doesn't match size of column({})",
+        start_point,
+        array_offsets[start_point - 1],
+        size());
+
+    chars.resize(array_offsets.back() * n);
+
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        inline_memcpy(&chars[n * array_offsets[start_point + i - 1]], pos[i], n * len);
+        pos[i] += n * len;
+    }
 }
 
 void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const

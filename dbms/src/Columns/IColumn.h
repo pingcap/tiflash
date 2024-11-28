@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/COWPtr.h>
-#include <Common/ColumnsAlignBuffer.h>
+#include <Common/ColumnNTAlignBuffer.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
@@ -175,6 +175,11 @@ public:
         throw Exception("Method decodeTiDBRowV2Datum is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    virtual void insertFromDatumData(const char *, size_t)
+    {
+        throw Exception("Method insertFromDatumData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Like getData, but has special behavior for columns that contain variable-length strings.
     /// In this special case inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
     virtual void insertDataWithTerminatingZero(const char * pos, size_t length) { insertData(pos, length); }
@@ -230,28 +235,69 @@ public:
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
 
-    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const
-    {
-        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
+    /// Count the serialize byte size and added to the byte_size.
+    /// The byte_size.size() must be equal to the column size.
+    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
+    /// Count the serialize byte size and added to the byte_size called by ColumnArray.
+    /// array_offsets is the offsets of ColumnArray.
+    /// The byte_size.size() must be equal to the array_offsets.size().
+    virtual void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const Offsets & /* array_offsets */) const
+        = 0;
 
+    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
+    /// serialized data.
+    /// Note:
+    /// 1. The pos.size() must be greater than or equal to length.
+    /// 2. If has_null is true, then the pos[i] could be nullptr, which means the i-th element does not need to be serialized.
     virtual void serializeToPos(
-        PaddedPODArray<UInt8 *> & /* pos */,
+        PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
-        size_t /* end */,
+        size_t /* length */,
         bool /* has_null */) const
-    {
-        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
+        = 0;
+    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
+    /// serialized data.
+    /// Only called by ColumnArray.
+    virtual void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const Offsets & /* array_offsets */) const
+        = 0;
 
-    virtual void deserializeAndInsertFromPos(
-        PaddedPODArray<UInt8 *> & /* pos */,
-        ColumnsAlignBufferAVX2 & /* align_buffer */)
-    {
-        throw Exception(
-            "Method deserializeAndInsertFromPos is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
+    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Note:
+    /// 1. The pos pointer must not be nullptr.
+    /// 2. The memory of pos must be accessible to overflow 15 bytes(i.e. PaddedPODArray) for speeding up memcpy.(e.g. for ColumnString)
+    /// 3. If use_nt_align_buffer is true and AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes).
+    /// 4. If non-temporal store is used, the data will be copied to a align_buffer firstly and then flush to column data if full. After the
+    ///    last call, flushNTAlignBuffer must be called to flush the remaining unaligned data from align_buffer into column data. During the
+    ///    process, any function that may change the alignment of column data should not be called otherwise a exception will be thrown.
+    /// Example:
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->reserveAlign(xxx, FULL_VECTOR_SIZE_AVX2);
+    ///     while (xxx)
+    ///     {
+    ///         for (auto & column_ptr : mutable_columns)
+    ///             column_ptr->deserializeAndInsertFromPos(pos, align_buffer, true);
+    ///     }
+    ///     for (auto & column_ptr : mutable_columns)
+    ///         column_ptr->flushNTAlignBuffer();
+    virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
+    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Only called by ColumnArray.
+    /// array_offsets is the offsets of ColumnArray.
+    /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
+    virtual void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const Offsets & /* array_offsets */,
+        bool /* use_nt_align_buffer */)
+        = 0;
+
+    virtual void flushNTAlignBuffer() = 0;
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
@@ -446,7 +492,7 @@ public:
     MutablePtr cloneFullColumn() const
     {
         MutablePtr res = clone();
-        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->clone(); });
+        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->cloneFullColumn(); });
         return res;
     }
 

@@ -25,7 +25,9 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <common/logger_useful.h>
+#include <tipb/executor.pb.h>
 
 #include <regex>
 
@@ -53,27 +55,29 @@ protected:
     ContextPtr ctx = DB::tests::TiFlashTestEnv::getContext();
     TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
     DM::PushDownFilterPtr generatePushDownFilter(
-        String table_info_json,
+        const String & table_info_json,
         const String & query,
         TimezoneInfo & timezone_info);
 };
 
-
-DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
-    const String table_info_json,
+DM::PushDownFilterPtr generatePushDownFilter(
+    Context & ctx,
+    const String & table_info_json,
     const String & query,
-    TimezoneInfo & timezone_info)
+    const std::optional<TimezoneInfo> & opt_tz = std::nullopt)
 {
+    auto timezone_info = opt_tz ? *opt_tz : ctx.getTimezoneInfo();
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
-        *ctx,
+        ctx,
         query,
         [&](const String &, const String &) { return table_info; },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
+    auto log = Logger::get();
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
-    ctx->setDAGContext(&dag_context);
+    ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     // Push down all filters
@@ -88,22 +92,24 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
         return true;
     });
 
-    std::unique_ptr<DAGQueryInfo> dag_query;
+    // these variables need to live long enough as it is kept as reference in `dag_query`
+    const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto runtime_filter_ids = std::vector<int>();
+
     DM::ColumnDefines columns_to_read;
     columns_to_read.reserve(table_info.columns.size());
+    for (const auto & column : table_info.columns)
     {
-        for (const auto & column : table_info.columns)
-        {
-            columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
-        }
-        dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
-            pushed_down_filters,
-            table_info.columns,
-            std::vector<int>(), // don't care runtime filter
-            0,
-            timezone_info);
+        columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
     }
+    std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
+        conditions,
+        ann_query_info,
+        pushed_down_filters,
+        table_info.columns,
+        runtime_filter_ids, // don't care runtime filter
+        0,
+        timezone_info);
 
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
@@ -119,8 +125,16 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     auto rs_operator
         = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
     auto push_down_filter
-        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
+        = DM::PushDownFilter::build(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, ctx, log);
     return push_down_filter;
+}
+
+DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
+    const String & table_info_json,
+    const String & query,
+    TimezoneInfo & timezone_info)
+{
+    return ::DB::tests::generatePushDownFilter(*ctx, table_info_json, query, timezone_info);
 }
 
 // Test cases for col and literal
@@ -705,7 +719,7 @@ try
     String datetime = "1970-01-01 00:00:01.000000";
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
-    tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
+    ASSERT_TRUE(tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer));
     const auto & time_zone_utc = DateLUT::instance("UTC");
     UInt64 converted_time = origin_time_stamp;
     std::cout << "origin_time_stamp: " << origin_time_stamp << std::endl;

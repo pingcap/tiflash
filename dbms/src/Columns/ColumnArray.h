@@ -81,6 +81,46 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const IColumn::Offsets & /* array_offsets */) const override
+    {
+        throw Exception(
+            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
+    template <bool has_null>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const IColumn::Offsets & /* array_offsets */) const override
+    {
+        throw Exception(
+            "Method serializeToPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const IColumn::Offsets & /* array_offsets */,
+        bool /* use_nt_align_buffer */) override
+    {
+        throw Exception(
+            "Method deserializeAndInsertFromPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void flushNTAlignBuffer() override;
+
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;
@@ -103,11 +143,7 @@ public:
     }
 
     void insertDefault() override;
-    void insertManyDefaults(size_t length) override
-    {
-        for (size_t i = 0; i < length; ++i)
-            insertDefault();
-    }
+    void insertManyDefaults(size_t length) override;
     void popBack(size_t n) override;
     /// TODO: If result_size_hint < 0, makes reserve() using size of filtered column, not source column to avoid some OOM issues.
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
@@ -130,12 +166,12 @@ public:
     IColumn & getData() { return data->assumeMutableRef(); }
     const IColumn & getData() const { return *data; }
 
-    IColumn & getOffsetsColumn() { return offsets->assumeMutableRef(); }
-    const IColumn & getOffsetsColumn() const { return *offsets; }
+    ColumnOffsets & getOffsetsColumn() { return static_cast<ColumnOffsets &>(offsets->assumeMutableRef()); }
+    const ColumnOffsets & getOffsetsColumn() const { return static_cast<const ColumnOffsets &>(*offsets); }
 
-    Offsets & ALWAYS_INLINE getOffsets() { return static_cast<ColumnOffsets &>(offsets->assumeMutableRef()).getData(); }
+    Offsets & ALWAYS_INLINE getOffsets() { return getOffsetsColumn().getData(); }
 
-    const Offsets & ALWAYS_INLINE getOffsets() const { return static_cast<const ColumnOffsets &>(*offsets).getData(); }
+    const Offsets & ALWAYS_INLINE getOffsets() const { return getOffsetsColumn().getData(); }
 
     const ColumnPtr & getDataPtr() const { return data; }
     ColumnPtr & getDataPtr() { return data; }
@@ -168,16 +204,22 @@ public:
         callback(data);
     }
 
+    bool canBeInsideNullable() const override { return true; }
+
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
+        override;
+
+    void insertFromDatumData(const char * data, size_t length) override;
+
+    std::pair<UInt32, StringRef> getElementRef(size_t element_idx) const;
+
+    size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return (getOffsets()[i] - getOffsets()[i - 1]); }
+
 private:
     ColumnPtr data;
     ColumnPtr offsets;
 
     size_t ALWAYS_INLINE offsetAt(size_t i) const { return i == 0 ? 0 : getOffsets()[i - 1]; }
-    size_t ALWAYS_INLINE sizeAt(size_t i) const
-    {
-        return i == 0 ? getOffsets()[0] : (getOffsets()[i] - getOffsets()[i - 1]);
-    }
-
 
     /// Multiply values if the nested column is ColumnVector<T>.
     template <typename T>

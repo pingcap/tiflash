@@ -15,16 +15,18 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/DMContext.h>
 
-namespace DB
+
+namespace DB::DM
 {
-namespace DM
-{
+
 ColumnFileReaderPtr ColumnFileDeleteRange::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr &,
-    const ColumnDefinesPtr &) const
+    const ColumnDefinesPtr &,
+    ReadTag) const
 {
-    return std::make_shared<ColumnFileEmptyReader>();
+    // ColumnFileDeleteRange is not readable.
+    return nullptr;
 }
 
 void ColumnFileDeleteRange::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -32,14 +34,21 @@ void ColumnFileDeleteRange::serializeMetadata(WriteBuffer & buf, bool /*save_sch
     delete_range.serialize(buf);
 }
 
+void ColumnFileDeleteRange::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool /*save_schema*/) const
+{
+    auto * delete_range_pb = cf_pb->mutable_delete_range();
+    auto range = delete_range.serialize();
+    delete_range_pb->mutable_range()->Swap(&range);
+}
+
 ColumnFilePersistedPtr ColumnFileDeleteRange::deserializeMetadata(ReadBuffer & buf)
 {
     return std::make_shared<ColumnFileDeleteRange>(RowKeyRange::deserialize(buf));
 }
 
-ColumnFileReaderPtr ColumnFileEmptyReader::createNewReader(const ColumnDefinesPtr &)
+ColumnFilePersistedPtr ColumnFileDeleteRange::deserializeMetadata(const dtpb::ColumnFileDeleteRange & dr_pb)
 {
-    return std::make_shared<ColumnFileEmptyReader>();
+    return std::make_shared<ColumnFileDeleteRange>(RowKeyRange::deserialize(dr_pb.range()));
 }
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM

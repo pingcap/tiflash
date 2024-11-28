@@ -148,43 +148,35 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
-    {
-        if unlikely (byte_size.size() != data.size())
-            byte_size.resize(data.size());
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override;
 
-        size_t size = byte_size.size();
-        for (size_t i = 0; i < size; ++i)
-            byte_size[i] += sizeof(T);
-    }
-
-    void serializeToPos(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end, bool has_null) const override
-    {
-        if (has_null)
-            serializeToPosImpl<true>(pos, start, end);
-        else
-            serializeToPosImpl<false>(pos, start, end);
-    }
-
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
     template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<UInt8 *> & pos, size_t start, size_t end) const
-    {
-        if unlikely (pos.size() != data.size())
-            pos.resize(data.size());
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
-        for (size_t i = start; i < end; ++i)
-        {
-            if constexpr (has_null)
-            {
-                if (pos[i] == nullptr)
-                    continue;
-            }
-            std::memcpy(pos[i], &data[i], sizeof(T));
-            pos[i] += sizeof(T);
-        }
-    }
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override;
+    template <bool has_null>
+    void serializeToPosForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets) const;
 
-    void deserializeAndInsertFromPos(PaddedPODArray<UInt8 *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override;
+
+    void flushNTAlignBuffer() override;
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
@@ -271,6 +263,7 @@ public:
 protected:
     Container data;
     UInt32 scale;
+    std::unique_ptr<ColumnNTAlignBufferAVX2> align_buffer_ptr;
 
     template <typename U>
     void permutation(bool reverse, size_t limit, PaddedPODArray<U> & res) const

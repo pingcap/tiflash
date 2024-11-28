@@ -938,7 +938,8 @@ String DAGExpressionAnalyzer::applyFunction(
 
 String DAGExpressionAnalyzer::buildFilterColumn(
     const ExpressionActionsPtr & actions,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    bool null_as_false)
 {
     String filter_column_name;
     if (conditions.size() == 1)
@@ -962,19 +963,24 @@ String DAGExpressionAnalyzer::buildFilterColumn(
         for (const auto & condition : conditions)
             arg_names.push_back(getActions(condition, actions, true));
         // connect all the conditions by logical and
-        filter_column_name = applyFunction("and", arg_names, actions, nullptr);
+        // two_value_and treats null as false inside the `two_value_and` function, so the output column
+        // will always be UInt8 type, which can save the merge step in FilterDescription
+        // it should only be used when the output is only used as a filter column
+        String fun_name = null_as_false ? "two_value_and" : "and";
+        filter_column_name = applyFunction(fun_name, arg_names, actions, nullptr);
     }
     return filter_column_name;
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownFilter(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    bool null_as_false)
 {
     assert(!conditions.empty());
 
     ExpressionActionsChain chain;
     initChain(chain);
-    String filter_column_name = appendWhere(chain, conditions);
+    String filter_column_name = appendWhere(chain, conditions, null_as_false);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
@@ -993,11 +999,12 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnal
 
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    bool null_as_false)
 {
     auto & last_step = initAndGetLastStep(chain);
 
-    String filter_column_name = buildFilterColumn(last_step.actions, conditions);
+    String filter_column_name = buildFilterColumn(last_step.actions, conditions, null_as_false);
 
     last_step.required_output.push_back(filter_column_name);
     return filter_column_name;
@@ -1047,6 +1054,12 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
     if (org_type->isDateOrDateTime())
     {
         tipb::Expr const_expr = constructDateTimeLiteralTiExpr(0);
+        auto const_expr_name = getActions(const_expr, actions);
+        return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
+    }
+    else if (checkDataTypeArray<DataTypeFloat32>(org_type.get()))
+    {
+        tipb::Expr const_expr = constructZeroVectorFloat32TiExpr();
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
@@ -1145,7 +1158,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
     const std::vector<UInt8> & may_need_add_cast_column,
-    const ColumnInfos & table_scan_columns)
+    const TiDB::ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
     std::vector<String> casted_columns;

@@ -19,7 +19,6 @@
 #include <Common/setThreadName.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
-#include <Parsers/ASTInsertQuery.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>

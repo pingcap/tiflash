@@ -54,6 +54,11 @@ public:
         throw Exception("DataStoreMock::setTaggingsForKeys unsupported");
     }
 
+    void putDMFileLocalFiles(const String &, const std::vector<String> &, const S3::DMFileOID &) override
+    {
+        throw Exception("DataStoreMock::putDMFileLocalFiles unsupported");
+    }
+
 private:
     FileProviderPtr file_provider;
 };
@@ -68,7 +73,7 @@ public:
 
     ~MockPreparedDMFileToken() override = default;
 
-    DMFilePtr restore(DMFileMeta::ReadMode read_mode) override;
+    DMFilePtr restore(DMFileMeta::ReadMode read_mode, UInt64 meta_version) override;
 
 private:
     String path;

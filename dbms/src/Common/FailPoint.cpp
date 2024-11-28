@@ -70,7 +70,11 @@ namespace DB
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
     M(exception_new_dynamic_thread)                               \
-    M(force_wait_index_timeout)
+    M(force_wait_index_timeout)                                   \
+    M(force_local_index_task_memory_limit_exceeded)               \
+    M(exception_build_local_index_for_file)                       \
+    M(force_not_support_vector_index)                             \
+    M(sync_schema_request_failure)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -106,6 +110,7 @@ namespace DB
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
     M(cop_send_failure)                                      \
+    M(file_cache_fg_download_fail)                           \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \
@@ -115,7 +120,8 @@ namespace DB
     M(delta_tree_create_node_fail)                           \
     M(disable_flush_cache)                                   \
     M(force_agg_two_level_hash_table_before_merge)           \
-    M(force_thread_0_no_agg_spill)
+    M(force_thread_0_no_agg_spill)                           \
+    M(force_checkpoint_dump_throw_datafile)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)    \
     M(pause_with_alter_locks_acquired)            \
@@ -141,6 +147,7 @@ namespace DB
     M(pause_before_prehandle_subtask)     \
     M(pause_when_persist_region)          \
     M(pause_before_wn_establish_task)     \
+    M(pause_when_building_fap_segments)   \
     M(pause_passive_flush_before_persist_region)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                       \

@@ -24,11 +24,10 @@ struct NotifyFuture
     virtual ~NotifyFuture() = default;
     virtual void registerTask(TaskPtr && task) = 0;
 };
-using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
 
-extern thread_local NotifyFuturePtr current_notify_future;
+extern thread_local NotifyFuture * current_notify_future;
 
-void setNotifyFuture(NotifyFuturePtr new_future);
+void setNotifyFuture(NotifyFuture * new_future);
 void clearNotifyFuture();
 void registerTaskToFuture(TaskPtr && task);
 
