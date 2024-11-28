@@ -148,7 +148,7 @@ SemiJoinHelper<KIND, STRICTNESS, Maps>::SemiJoinHelper(
     size_t input_rows_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_)
-    : input_rows(input_rows_)
+    : probe_rows(input_rows_)
     , max_block_size(max_block_size_)
     , non_equal_conditions(non_equal_conditions_)
 {
@@ -311,17 +311,17 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         return;
     std::tie(join_result, undetermined_result_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
-        input_rows,
+        probe_rows,
         key_sizes,
         collators,
         join_build_info,
         probe_process_info);
 
     RUNTIME_ASSERT(
-        join_result.size() == input_rows,
+        join_result.size() == probe_rows,
         "SemiJoinResult size {} must be equal to block size {}",
         join_result.size(),
-        input_rows);
+        probe_rows);
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
         const auto & column = probe_process_info.block.getByPosition(i);
@@ -402,7 +402,7 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
         "SemiJoinResult list must be empty when generating join result");
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(input_rows);
+        filter = std::make_unique<IColumn::Filter>(probe_rows);
 
     MutableColumnPtr left_semi_column_ptr = nullptr;
     ColumnInt8::Container * left_semi_column_data = nullptr;
@@ -413,20 +413,20 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
         left_semi_column_ptr = result_block.getByPosition(result_block.columns() - 1).column->cloneEmpty();
         auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
         left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
-        left_semi_column_data->reserve(input_rows);
+        left_semi_column_data->reserve(probe_rows);
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
-            left_semi_null_map->resize_fill(input_rows, 0);
+            left_semi_null_map->resize_fill(probe_rows, 0);
         }
         else
         {
-            left_semi_null_map->reserve(input_rows);
+            left_semi_null_map->reserve(probe_rows);
         }
     }
 
     size_t rows_for_semi_anti = 0;
-    for (size_t i = 0; i < input_rows; ++i)
+    for (size_t i = 0; i < probe_rows; ++i)
     {
         auto result = join_result[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)

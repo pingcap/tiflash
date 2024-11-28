@@ -16,11 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
-
-#include <iterator>
-
-#include "Core/Names.h"
-#include "Functions/FunctionBinaryArithmetic.h"
+#include <Interpreters/ProbeProcessInfo.h>
 
 namespace DB
 {
@@ -248,7 +244,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Maps>::NASemiJoinHelper(
     std::vector<RowsNotInsertToMap *> && null_rows_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_)
-    : input_rows(input_rows_)
+    : probe_rows(input_rows_)
     , right_blocks(right_blocks_)
     , null_rows(std::move(null_rows_))
     , max_block_size(max_block_size_)
@@ -270,7 +266,7 @@ Block NASemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & ou
 
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
-        filter = std::make_unique<IColumn::Filter>(input_rows);
+        filter = std::make_unique<IColumn::Filter>(probe_rows);
 
     MutableColumnPtr left_semi_column_ptr = nullptr;
     ColumnInt8::Container * left_semi_column_data = nullptr;
@@ -283,12 +279,12 @@ Block NASemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & ou
         auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
         left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
-        left_semi_column_data->reserve(input_rows);
-        left_semi_null_map->reserve(input_rows);
+        left_semi_column_data->reserve(probe_rows);
+        left_semi_null_map->reserve(probe_rows);
     }
 
     size_t rows_for_anti = 0;
-    for (size_t i = 0; i < input_rows; ++i)
+    for (size_t i = 0; i < probe_rows; ++i)
     {
         auto result = join_result[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
@@ -359,7 +355,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         return;
     std::tie(join_result, undetermined_result_list) = JoinPartition::probeBlockNullAwareSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
-        input_rows,
+        probe_rows,
         key_columns,
         key_sizes,
         collators,
@@ -367,10 +363,10 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         right_side_info);
 
     RUNTIME_ASSERT(
-        join_result.size() == input_rows,
+        join_result.size() == probe_rows,
         "SemiJoinResult size {} must be equal to block size {}",
         join_result.size(),
-        input_rows);
+        probe_rows);
 
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {

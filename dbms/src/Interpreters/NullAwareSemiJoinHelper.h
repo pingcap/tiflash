@@ -21,12 +21,6 @@
 #include <Interpreters/SemiJoinHelper.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
-#include <vector>
-
-#include "Columns/IColumn.h"
-#include "Core/Names.h"
-#include "Interpreters/ProbeProcessInfo.h"
-
 namespace DB
 {
 struct RowsNotInsertToMap;
@@ -206,7 +200,7 @@ private:
     size_t left_columns = 0;
     size_t right_columns = 0;
     std::vector<size_t> right_column_indices_to_add;
-    size_t input_rows;
+    size_t probe_rows;
     const BlocksList & right_blocks;
     std::vector<RowsNotInsertToMap *> null_rows;
     size_t max_block_size;

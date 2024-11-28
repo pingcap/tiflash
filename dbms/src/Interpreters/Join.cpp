@@ -34,8 +34,6 @@
 #include <exception>
 #include <magic_enum.hpp>
 
-#include "Core/Block.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -1518,26 +1516,13 @@ void Join::checkTypes(const Block & block) const
 
 namespace
 {
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+template <typename JoinHelper>
 Block genSemiJoinResult(
     ProbeProcessInfo & probe_process_info,
-    SemiJoinHelper<KIND, STRICTNESS, Maps> * helper,
+    JoinHelper * helper,
     const NameSet & output_column_names_set)
 {
     auto ret = helper->genJoinResult(output_column_names_set);
-    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
-    probe_process_info.all_rows_joined_finish = true;
-    probe_process_info.semi_join_family_helper.reset();
-    return ret;
-}
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block genNASemiJoinResult(
-    ProbeProcessInfo & probe_process_info,
-    NASemiJoinHelper<KIND, STRICTNESS, Maps> * helper,
-    const NameSet & output_column_names_set)
-{
-    auto ret = helper->genJoinResult(output_column_names_set);
-    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
     probe_process_info.all_rows_joined_finish = true;
     probe_process_info.semi_join_family_helper.reset();
     return ret;
@@ -1546,8 +1531,6 @@ Block genNASemiJoinResult(
 
 Block Join::joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const
 {
-    //probe_process_info.prepareForNullAware(key_names_left, non_equal_conditions.left_filter_column);
-
     Block block{};
 #define CALL(KIND, STRICTNESS, MAP) block = joinBlockNullAwareSemiImpl<KIND, STRICTNESS, MAP>(probe_process_info);
 
@@ -1571,10 +1554,6 @@ Block Join::joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const
 #undef CALL
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
-
-    /// Null-aware semi join never expand the left block, just handle the whole block at one time is enough
-    probe_process_info.all_rows_joined_finish = true;
-
     return removeUselessColumn(block);
 }
 
@@ -1645,10 +1624,7 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
         return {};
 
     /// Now all results are known.
-    return genNASemiJoinResult<KIND, STRICTNESS, Maps>(
-        probe_process_info,
-        helper,
-        output_column_names_set_after_finalize);
+    return genSemiJoinResult(probe_process_info, helper, output_column_names_set_after_finalize);
 }
 
 Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
@@ -1749,10 +1725,7 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
     if (is_cancelled())
         return {};
 
-    return genSemiJoinResult<KIND, STRICTNESS, Maps>(
-        probe_process_info,
-        helper,
-        output_column_names_set_after_finalize);
+    return genSemiJoinResult(probe_process_info, helper, output_column_names_set_after_finalize);
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
