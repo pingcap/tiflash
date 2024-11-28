@@ -98,7 +98,7 @@ public:
             bytes,
             disable_append,
             (schema ? schema->toString() : "none"),
-            (cache ? cache->block.dumpStructure() : "none"));
+            (cache ? cache->block.dumpJsonStructure() : "none"));
     }
 };
 
