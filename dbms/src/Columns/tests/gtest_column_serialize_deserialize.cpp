@@ -62,13 +62,11 @@ public:
     {
         doTestSerializeAndDeserialize(column_ptr, false);
         doTestSerializeAndDeserialize2(column_ptr, false);
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
         doTestSerializeAndDeserialize(column_ptr, true);
         doTestSerializeAndDeserialize2(column_ptr, true);
-#endif
     }
 
-    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool is_aligned [[maybe_unused]])
+    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool use_nt_align_buffer [[maybe_unused]])
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
@@ -89,12 +87,9 @@ public:
             pos[i] -= byte_size[i];
 
         auto new_col_ptr = column_ptr->cloneEmpty();
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        if (is_aligned)
+        if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-#endif
-        ColumnsAlignBufferAVX2 align_buffer;
-        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -109,8 +104,7 @@ public:
             pos[i - byte_size.size() / 2] -= byte_size[i];
         pos.resize(pos.size() - 1);
 
-        align_buffer.resetIndex(false);
-        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -123,8 +117,9 @@ public:
         for (size_t i = 0; i < byte_size.size(); ++i)
             pos[i] -= byte_size[i];
 
-        align_buffer.resetIndex(true);
-        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        if (use_nt_align_buffer)
+            new_col_ptr->flushNTAlignBuffer();
 
         auto result_col_ptr = column_ptr->cloneFullColumn();
         result_col_ptr->popBack(1);
@@ -134,7 +129,7 @@ public:
         ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
 
-    static void doTestSerializeAndDeserialize2(const ColumnPtr & column_ptr, bool is_aligned [[maybe_unused]])
+    static void doTestSerializeAndDeserialize2(const ColumnPtr & column_ptr, bool use_nt_align_buffer [[maybe_unused]])
     {
         if (column_ptr->size() < 2)
             return;
@@ -159,12 +154,9 @@ public:
         pos.resize(pos.size() - 1);
 
         auto new_col_ptr = column_ptr->cloneEmpty();
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        if (is_aligned)
+        if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-#endif
-        ColumnsAlignBufferAVX2 align_buffer;
-        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -177,8 +169,7 @@ public:
         for (size_t i = byte_size.size() / 2 - 1; i < byte_size.size(); ++i)
             pos[i - byte_size.size() / 2 + 1] -= byte_size[i];
 
-        align_buffer.resetIndex(false);
-        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -191,8 +182,9 @@ public:
         for (size_t i = 0; i < byte_size.size(); ++i)
             pos[i] -= byte_size[i];
 
-        align_buffer.resetIndex(true);
-        new_col_ptr->deserializeAndInsertFromPos(pos, align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        if (use_nt_align_buffer)
+            new_col_ptr->flushNTAlignBuffer();
 
         auto result_col_ptr = column_ptr->cloneFullColumn();
         for (size_t i = 0; i < column_ptr->size(); ++i)

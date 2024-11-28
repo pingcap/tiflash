@@ -17,6 +17,8 @@
 #include <common/defines.h>
 #include <string.h>
 
+#include <cassert>
+
 /** memcpy function could work suboptimal if all the following conditions are met:
   * 1. Size of memory region is relatively small (approximately, under 50 bytes).
   * 2. Size of memory region is not known at compile-time.
@@ -63,8 +65,34 @@ __attribute__((always_inline)) inline void memcpySmallAllowReadWriteOverflow15(
     const void * __restrict src,
     size_t n)
 {
-    ::detail::memcpySmallAllowReadWriteOverflow15Impl(
-        reinterpret_cast<char *>(dst),
-        reinterpret_cast<const char *>(src),
-        n);
+    ::detail::memcpySmallAllowReadWriteOverflow15Impl(static_cast<char *>(dst), static_cast<const char *>(src), n);
+}
+
+/** Works under assumptions:
+  * 1. copy maximum 64 Byte.
+  * 2. may read up to 15 excessive bytes after end of 'src' region.
+  * 3. may write any garbage into up to 15 bytes after end of 'dst' region.
+  */
+__attribute__((always_inline)) inline void memcpyMax64BAllowReadWriteOverflow15(
+    void * __restrict dst,
+    const void * __restrict src,
+    size_t n)
+{
+    assert(n <= 64);
+    auto * d = static_cast<char *>(dst);
+    const auto * s = static_cast<const char *>(src);
+    switch ((n + 15) / 16)
+    {
+    case 4:
+        tiflash_compiler_builtin_memcpy(d + 48, s + 48, 16);
+        [[fallthrough]];
+    case 3:
+        tiflash_compiler_builtin_memcpy(d + 32, s + 32, 16);
+        [[fallthrough]];
+    case 2:
+        tiflash_compiler_builtin_memcpy(d + 16, s + 16, 16);
+        [[fallthrough]];
+    case 1:
+        tiflash_compiler_builtin_memcpy(d, s, 16);
+    }
 }
