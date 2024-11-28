@@ -88,9 +88,9 @@ public:
             {
                 throw Exception(
                     ErrorCodes::LOGICAL_ERROR,
-                    "schema not match! [cur_block={}] [next_block={}]",
-                    cur_block.dumpStructure(),
-                    next_block.dumpStructure());
+                    "schema not match! cur_block={} next_block={}",
+                    cur_block.dumpJsonStructure(),
+                    next_block.dumpJsonStructure());
             }
 #endif
 

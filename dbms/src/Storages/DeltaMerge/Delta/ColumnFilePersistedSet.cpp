@@ -208,48 +208,6 @@ ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles &
     return tail;
 }
 
-size_t ColumnFilePersistedSet::getTotalCacheRows() const
-{
-    size_t cache_rows = 0;
-    for (const auto & file : persisted_files)
-    {
-        if (auto * tf = file->tryToTinyFile(); tf)
-        {
-            if (auto && c = tf->getCache(); c)
-                cache_rows += c->block.rows();
-        }
-    }
-    return cache_rows;
-}
-
-size_t ColumnFilePersistedSet::getTotalCacheBytes() const
-{
-    size_t cache_bytes = 0;
-    for (const auto & file : persisted_files)
-    {
-        if (auto * tf = file->tryToTinyFile(); tf)
-        {
-            if (auto && c = tf->getCache(); c)
-                cache_bytes += c->block.allocatedBytes();
-        }
-    }
-    return cache_bytes;
-}
-
-size_t ColumnFilePersistedSet::getValidCacheRows() const
-{
-    size_t cache_rows = 0;
-    for (const auto & file : persisted_files)
-    {
-        if (auto * tf = file->tryToTinyFile(); tf)
-        {
-            if (auto && c = tf->getCache(); c)
-                cache_rows += tf->getRows();
-        }
-    }
-    return cache_rows;
-}
-
 bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_version)
 {
     if (task_flush_version != flush_version)
@@ -408,16 +366,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFil
     column_files.reserve(persisted_files.size());
     for (const auto & file : persisted_files)
     {
-        if (auto * t = file->tryToTinyFile(); (t && t->getCache()))
-        {
-            // Compact threads could update the value of ColumnTinyFile::cache,
-            // and since ColumnFile is not multi-threads safe, we should create a new column file object.
-            column_files.push_back(std::make_shared<ColumnFileTiny>(*t));
-        }
-        else
-        {
-            column_files.push_back(file);
-        }
+        column_files.push_back(file);
         total_rows += file->getRows();
         total_deletes += file->getDeletes();
     }
