@@ -78,14 +78,6 @@ public:
         bool is_trivial_move = false;
         if (task.to_compact.size() == 1)
         {
-            // Maybe this column file is small, but it cannot be merged with other column files, so also remove it's cache if possible.
-            for (auto & f : task.to_compact)
-            {
-                if (auto * t_file = f->tryToTinyFile(); t_file)
-                {
-                    t_file->clearCache();
-                }
-            }
             is_trivial_move = true;
         }
 

@@ -144,10 +144,6 @@ public:
     size_t getDeletes() const { return deletes.load(); }
     /// Thread safe part end
 
-    size_t getTotalCacheRows() const;
-    size_t getTotalCacheBytes() const;
-    size_t getValidCacheRows() const;
-
     size_t getCurrentFlushVersion() const { return flush_version; }
 
     /// Check whether the task_flush_version is valid,

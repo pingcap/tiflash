@@ -18,10 +18,9 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const
 {
     if (result.size() >= col_count)
@@ -108,17 +107,10 @@ Block ColumnFileInMemory::readDataForFlush() const
     return cache_block.cloneWithColumns(std::move(columns));
 }
 
-
-ColumnPtr ColumnFileInMemoryReader::getPKColumn()
-{
-    memory_file.fillColumns(*col_defs, 1, cols_data_cache);
-    return cols_data_cache[0];
-}
-
-ColumnPtr ColumnFileInMemoryReader::getVersionColumn()
+std::pair<ColumnPtr, ColumnPtr> ColumnFileInMemoryReader::getPKAndVersionColumns()
 {
     memory_file.fillColumns(*col_defs, 2, cols_data_cache);
-    return cols_data_cache[1];
+    return {cols_data_cache[0], cols_data_cache[1]};
 }
 
 std::pair<size_t, size_t> ColumnFileInMemoryReader::readRows(
@@ -162,5 +154,4 @@ ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefine
     return std::make_shared<ColumnFileInMemoryReader>(memory_file, new_col_defs, cols_data_cache);
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

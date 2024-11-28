@@ -18,10 +18,9 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class ColumnFileInMemory;
 using ColumnFileInMemoryPtr = std::shared_ptr<ColumnFileInMemory>;
 
@@ -126,8 +125,7 @@ public:
     {}
 
     /// This is a ugly hack to fast return PK & Version column.
-    ColumnPtr getPKColumn();
-    ColumnPtr getVersionColumn();
+    std::pair<ColumnPtr, ColumnPtr> getPKAndVersionColumns();
 
     std::pair<size_t, size_t> readRows(
         MutableColumns & output_cols,
@@ -142,5 +140,4 @@ public:
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag) override;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
