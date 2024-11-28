@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/SharedMutexProtected.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Types.h>
 
@@ -27,9 +28,15 @@ using ColId = DB::ColumnID;
 using PackId = size_t;
 using PackRange = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
-class ColumnCache
-    : public std::enable_shared_from_this<ColumnCache>
-    , private boost::noncopyable
+
+enum class ColumnCacheType
+{
+    ExtraColumnCache,
+    DataSharingCache,
+};
+
+// ColumnCache is a thread-safe cache for columns, the entry is one pack.
+class ColumnCache : private boost::noncopyable
 {
 public:
     enum class Strategy
@@ -39,12 +46,14 @@ public:
         Unknown
     };
 
-    ColumnCache() = default;
+    explicit ColumnCache(ColumnCacheType type_ = ColumnCacheType::ExtraColumnCache)
+        : type(type_)
+    {}
 
     using RangeWithStrategy = std::pair<PackRange, ColumnCache::Strategy>;
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
     RangeWithStrategys getReadStrategy(size_t start_pack_idx, size_t pack_count, ColId column_id);
-    static RangeWithStrategys getReadStrategy(
+    static RangeWithStrategys getCleanReadStrategy(
         size_t start_pack_idx,
         size_t pack_count,
         const std::vector<size_t> & clean_read_pack_idx);
@@ -54,9 +63,19 @@ public:
     using ColumnCacheElement = std::pair<ColumnPtr, std::pair<size_t, size_t>>;
     ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
 
-    void clear() { column_caches.clear(); }
+    void delColumn(ColId column_id, size_t upper_pack_id);
+
+    void clear()
+    {
+        column_caches.withExclusive([](auto & column_caches) { column_caches.clear(); });
+    }
 
 private:
+    static RangeWithStrategys getReadStrategyImpl(
+        size_t start_pack_idx,
+        size_t pack_count,
+        ColId column_id,
+        std::function<bool(size_t, ColId)> is_hit);
     bool isPackInCache(PackId pack_id, ColId column_id);
 
 private:
@@ -67,7 +86,8 @@ private:
         size_t rows_offset;
         size_t rows_count;
     };
-    std::unordered_map<PackId, ColumnCacheEntry> column_caches;
+    SharedMutexProtected<std::unordered_map<PackId, ColumnCacheEntry>> column_caches;
+    const ColumnCacheType type;
 };
 
 using ColumnCachePtr = std::shared_ptr<ColumnCache>;
