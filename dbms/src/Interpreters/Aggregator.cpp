@@ -1090,13 +1090,14 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
             "executeImplBatchStringHashMap only handle resize exception for each Block instead of row");
         const size_t reserve_size = rows / 4;
 
-#define M(INFO, DATA, SUBMAPINDEX, KEYTYPE)                                                     \
-    (INFO).reserve(reserve_size);                                                               \
-    (DATA).reserve(reserve_size);                                                               \
-    auto dispatch_callback_key##SUBMAPINDEX = [&INFO, &DATA](const KEYTYPE & key, size_t row) { \
-        (INFO).push_back(row);                                                                  \
-        (DATA).push_back(key);                                                                  \
-    };
+#define M(INFO, DATA, SUBMAPINDEX, KEYTYPE)                                                          \
+    (INFO).reserve(reserve_size);                                                                    \
+    (DATA).reserve(reserve_size);                                                                    \
+    auto dispatch_callback_key##SUBMAPINDEX                                                          \
+        = [&INFO, &DATA](const KEYTYPE & key, size_t row) { /* NOLINT(bugprone-macro-parentheses) */ \
+                                                            (INFO).push_back(row);                   \
+                                                            (DATA).push_back(key);                   \
+          };
 
         M(key0_infos, key0_datas, 0, StringRef)
         M(key8_infos, key8_datas, 8, StringKey8)

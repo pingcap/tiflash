@@ -139,7 +139,7 @@ public:
         return hasZero() ? zeroValue() : nullptr;
     }
 
-    ALWAYS_INLINE inline void prefetch() {}
+    ALWAYS_INLINE inline void prefetch(size_t) {}
     void write(DB::WriteBuffer & wb) const { zeroValue()->write(wb); }
     void writeText(DB::WriteBuffer & wb) const { zeroValue()->writeText(wb); }
     void read(DB::ReadBuffer & rb) { zeroValue()->read(rb); }
