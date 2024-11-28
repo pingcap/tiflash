@@ -20,6 +20,7 @@
 #include <iterator>
 
 #include "Core/Names.h"
+#include "Functions/FunctionBinaryArithmetic.h"
 
 namespace DB
 {
@@ -255,17 +256,17 @@ NASemiJoinHelper<KIND, STRICTNESS, Maps>::NASemiJoinHelper(
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti || KIND == NullAware_LeftOuterSemi);
     static_assert(STRICTNESS == Any || STRICTNESS == All);
-    // init current_step
+    // init current_check_step
     if constexpr (STRICTNESS == All)
-        next_step = NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS;
+        current_check_step = NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS;
     else
-        next_step = NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS;
+        current_check_step = NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS;
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 Block NASemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & output_column_names_set)
 {
-    assert(probe_res_list.empty());
+    assert(undetermined_result_list.empty());
 
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
@@ -289,7 +290,7 @@ Block NASemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & ou
     size_t rows_for_anti = 0;
     for (size_t i = 0; i < input_rows; ++i)
     {
-        auto result = probe_res[i].getResult();
+        auto result = join_result[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         {
             if (result == SemiJoinResultType::TRUE_VALUE)
@@ -356,7 +357,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
 {
     if (is_probe_hash_table_done)
         return;
-    std::tie(probe_res, probe_res_list) = JoinPartition::probeBlockNullAwareSemi<KIND, STRICTNESS, Maps>(
+    std::tie(join_result, undetermined_result_list) = JoinPartition::probeBlockNullAwareSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
         input_rows,
         key_columns,
@@ -366,9 +367,9 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         right_side_info);
 
     RUNTIME_ASSERT(
-        probe_res.size() == input_rows,
+        join_result.size() == input_rows,
         "SemiJoinResult size {} must be equal to block size {}",
-        probe_res.size(),
+        join_result.size(),
         input_rows);
 
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
@@ -410,46 +411,51 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
 {
-    switch (next_step)
+    switch (current_check_step)
     {
     case NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS:
         // constructor of NASemiJoinHelper already set the init value of next_step to NOT_NULL_KEY_CHECK_NULL_ROWS
-        // if STRICTNESS is All, we add this check only to avoid static_assert fail
+        // if STRICTNESS is Any, we add this check only to avoid static_assert fail
         if constexpr (STRICTNESS == All)
         {
             runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>();
-            if (probe_res_list.empty())
+            if (undetermined_result_list.empty())
             {
                 // go to next step
-                probe_res_list.swap(next_step_res_list);
-                next_step_res_list.clear();
-                next_step = NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS;
+                undetermined_result_list.swap(next_step_undetermined_result_list);
+                next_step_undetermined_result_list.clear();
+                current_check_step = NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS;
             }
         }
-        return;
+        else
+        {
+            // should not reach here
+            throw Exception("should not reach here");
+        }
+        break;
     case NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS:
         runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>();
-        if (probe_res_list.empty())
+        if (undetermined_result_list.empty())
         {
             // go to next step
-            probe_res_list.swap(next_step_res_list);
-            next_step_res_list.clear();
-            next_step = NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS;
+            undetermined_result_list.swap(next_step_undetermined_result_list);
+            next_step_undetermined_result_list.clear();
+            current_check_step = NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS;
         }
-        return;
+        break;
     case NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS:
         runStep<NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS>();
-        if (probe_res_list.empty())
+        if (undetermined_result_list.empty())
         {
             // go to next step
-            probe_res_list.swap(next_step_res_list);
-            next_step_res_list.clear();
-            next_step = NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS;
+            undetermined_result_list.swap(next_step_undetermined_result_list);
+            next_step_undetermined_result_list.clear();
+            current_check_step = NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS;
         }
-        return;
+        break;
     case NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS:
         runStepAllBlocks();
-        return;
+        break;
     default:
         throw Exception("should not reach here");
     }
@@ -463,18 +469,18 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
         STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
         || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
-    auto it = probe_res_list.begin();
-    while (it != probe_res_list.end())
+    auto it = undetermined_result_list.begin();
+    while (it != undetermined_result_list.end())
     {
         if ((*it)->getStep() != STEP)
         {
-            next_step_res_list.emplace_back(*it);
-            it = probe_res_list.erase(it);
+            next_step_undetermined_result_list.emplace_back(*it);
+            it = undetermined_result_list.erase(it);
             continue;
         }
         ++it;
     }
-    if (probe_res_list.empty())
+    if (undetermined_result_list.empty())
         return;
 
     std::vector<size_t> offsets;
@@ -495,7 +501,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
     size_t current_offset = 0;
     offsets.clear();
 
-    for (auto & res : probe_res_list)
+    for (auto & res : undetermined_result_list)
     {
         size_t prev_offset = current_offset;
         res->template fillRightColumns<typename Maps::MappedType, STEP>(
@@ -533,22 +539,33 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStepAllBlocks()
 {
-    if (probe_res_list.empty())
+    if unlikely (undetermined_result_list.empty())
         return;
-    if unlikely (probe_res_list.front()->getStep() == NASemiJoinStep::DONE)
+    if unlikely (undetermined_result_list.front()->getStep() == NASemiJoinStep::DONE)
     {
-        while (probe_res_list.front()->getStep() == NASemiJoinStep::DONE)
+        while (undetermined_result_list.front()->getStep() == NASemiJoinStep::DONE)
         {
-            probe_res_list.pop_front();
-            if (probe_res_list.empty())
+            undetermined_result_list.pop_front();
+            if (undetermined_result_list.empty())
                 return;
         }
     }
-    std::vector<size_t> offsets(1);
-    NASemiJoinHelper::Result * res = *probe_res_list.begin();
+    NASemiJoinHelper::Result * res = *undetermined_result_list.begin();
     auto next_right_block_index = res->getNextRightBlockIndex();
     assert(next_right_block_index < right_blocks.size());
     assert(res->getStep() != NASemiJoinStep::DONE);
+
+    auto all_right_blocks_checked = [&]() {
+        // all right blocks are checked, set result to false and remove it from undetermined_result_list
+        res->setNextRightBlockIndex(right_blocks.size());
+        if (res->getStep() != NASemiJoinStep::DONE)
+        {
+            /// After iterating to the end of right blocks, the result is false.
+            /// E.g. (1,null) in () or (1,null,2) in ((2,null,2),(1,null,3),(null,1,4)).
+            res->template setResult<SemiJoinResultType::FALSE_VALUE>();
+            undetermined_result_list.pop_front();
+        }
+    };
 
     auto right_block_it = right_blocks.begin();
     std::advance(right_block_it, next_right_block_index);
@@ -560,16 +577,14 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStepAllBlocks()
             ++right_block_it;
             if (right_block_it == right_blocks.end())
             {
-                // all right blocks are checked, set result to false and remove it from res_list
-                res->setNextRightBlockIndex(right_blocks.size());
-                res->template setResult<SemiJoinResultType::FALSE_VALUE>();
-                probe_res_list.pop_front();
+                all_right_blocks_checked();
                 return;
             }
         }
     }
 
-    auto right_block = *right_block_it;
+    std::vector<size_t> offsets(1);
+    const auto & right_block = *right_block_it;
     size_t num = right_block.rows();
 
     offsets[0] = num;
@@ -594,18 +609,15 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStepAllBlocks()
     ++right_block_it;
     if (right_block_it == right_blocks.end())
     {
-        // all right blocks are checked, set result to false and remove it from res_list
-        res->setNextRightBlockIndex(right_blocks.size());
-        if (res->getStep() != NASemiJoinStep::DONE)
-        {
-            /// After iterating to the end of right blocks, the result is false.
-            /// E.g. (1,null) in () or (1,null,2) in ((2,null,2),(1,null,3),(null,1,4)).
-            res->template setResult<SemiJoinResultType::FALSE_VALUE>();
-            probe_res_list.pop_front();
-        }
+        all_right_blocks_checked();
+    }
+    else
+    {
+        // right blocks is not checked to the end, update next_right_block_index
+        res->setNextRightBlockIndex(std::distance(right_blocks.begin(), right_block_it));
     }
     // Should always be empty, just for sanity check.
-    RUNTIME_CHECK_MSG(next_step_res_list.empty(), "next_res_list should be empty");
+    RUNTIME_CHECK_MSG(next_step_undetermined_result_list.empty(), "next_res_list should be empty");
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
@@ -660,19 +672,19 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runAndCheckExprResult(
     if constexpr (STRICTNESS == Any)
     {
         size_t prev_offset = 0;
-        auto it = probe_res_list.begin();
-        for (size_t i = 0, size = offsets.size(); i < size && it != probe_res_list.end(); ++i)
+        auto it = undetermined_result_list.begin();
+        for (size_t i = 0, size = offsets.size(); i < size && it != undetermined_result_list.end(); ++i)
         {
             (*it)->template checkExprResult<STEP>(eq_null_map, prev_offset, offsets[i]);
 
             if ((*it)->getStep() == NASemiJoinStep::DONE)
-                it = probe_res_list.erase(it);
+                it = undetermined_result_list.erase(it);
             else if ((*it)->getStep() == STEP)
                 ++it;
             else
             {
-                next_step_res_list.emplace_back(*it);
-                it = probe_res_list.erase(it);
+                next_step_undetermined_result_list.emplace_back(*it);
+                it = undetermined_result_list.erase(it);
             }
 
             prev_offset = offsets[i];
@@ -685,8 +697,8 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runAndCheckExprResult(
         auto [other_column_data, other_null_map] = getDataAndNullMapVectorFromFilterColumn(other_column);
 
         size_t prev_offset = 0;
-        auto it = probe_res_list.begin();
-        for (size_t i = 0, size = offsets.size(); i < size && it != probe_res_list.end(); ++i)
+        auto it = undetermined_result_list.begin();
+        for (size_t i = 0, size = offsets.size(); i < size && it != undetermined_result_list.end(); ++i)
         {
             (*it)->template checkExprResult<STEP>(
                 eq_null_map,
@@ -696,13 +708,13 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runAndCheckExprResult(
                 offsets[i]);
 
             if ((*it)->getStep() == NASemiJoinStep::DONE)
-                it = probe_res_list.erase(it);
+                it = undetermined_result_list.erase(it);
             else if ((*it)->getStep() == STEP)
                 ++it;
             else
             {
-                next_step_res_list.emplace_back(*it);
-                it = probe_res_list.erase(it);
+                next_step_undetermined_result_list.emplace_back(*it);
+                it = undetermined_result_list.erase(it);
             }
 
             prev_offset = offsets[i];

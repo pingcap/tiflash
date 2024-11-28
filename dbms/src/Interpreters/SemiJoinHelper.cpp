@@ -164,12 +164,12 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
     }
     else
     {
-        assert(!probe_res_list.empty());
+        assert(!undetermined_result_list.empty());
         std::vector<size_t> offsets;
         size_t block_columns = result_block.columns();
         Block exec_block = result_block.cloneEmpty();
 
-        while (!probe_res_list.empty())
+        while (!undetermined_result_list.empty())
         {
             MutableColumns columns(block_columns);
             for (size_t i = 0; i < block_columns; ++i)
@@ -185,7 +185,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
             size_t current_offset = 0;
             offsets.clear();
 
-            for (auto & res : probe_res_list)
+            for (auto & res : undetermined_result_list)
             {
                 size_t prev_offset = current_offset;
                 res->template fillRightColumns<typename Maps::MappedType>(
@@ -309,7 +309,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
 {
     if (is_probe_hash_table_done)
         return;
-    std::tie(probe_res, probe_res_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
+    std::tie(join_result, undetermined_result_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
         input_rows,
         key_sizes,
@@ -318,9 +318,9 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         probe_process_info);
 
     RUNTIME_ASSERT(
-        probe_res.size() == input_rows,
+        join_result.size() == input_rows,
         "SemiJoinResult size {} must be equal to block size {}",
-        probe_res.size(),
+        join_result.size(),
         input_rows);
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
@@ -353,7 +353,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
     }
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
     {
-        RUNTIME_CHECK_MSG(probe_res_list.empty(), "SemiJoinResult list must be empty for any semi join");
+        RUNTIME_CHECK_MSG(undetermined_result_list.empty(), "SemiJoinResult list must be empty for any semi join");
     }
     else
     {
@@ -372,8 +372,8 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
     ConstNullMapPtr other_null_map)
 {
     size_t prev_offset = 0;
-    auto it = probe_res_list.begin();
-    for (size_t i = 0, size = offsets.size(); i < size && it != probe_res_list.end(); ++i)
+    auto it = undetermined_result_list.begin();
+    for (size_t i = 0, size = offsets.size(); i < size && it != undetermined_result_list.end(); ++i)
     {
         if ((*it)->template checkExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>(
                 other_eq_column,
@@ -383,7 +383,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
                 prev_offset,
                 offsets[i]))
         {
-            it = probe_res_list.erase(it);
+            it = undetermined_result_list.erase(it);
         }
         else
         {
@@ -397,7 +397,9 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & output_column_names_set)
 {
-    RUNTIME_CHECK_MSG(probe_res_list.empty(), "SemiJoinResult list must be empty when generating join result");
+    RUNTIME_CHECK_MSG(
+        undetermined_result_list.empty(),
+        "SemiJoinResult list must be empty when generating join result");
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(input_rows);
@@ -426,7 +428,7 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
     size_t rows_for_semi_anti = 0;
     for (size_t i = 0; i < input_rows; ++i)
     {
-        auto result = probe_res[i].getResult();
+        auto result = join_result[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
         {
             if (isTrueSemiJoinResult(result))

@@ -147,7 +147,7 @@ public:
         const Block & right_sample_block);
     void doJoin();
 
-    bool isJoinDone() const { return is_probe_hash_table_done && probe_res_list.empty(); }
+    bool isJoinDone() const { return is_probe_hash_table_done && undetermined_result_list.empty(); }
     bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
 
     Block genJoinResult(const NameSet & output_column_names_set);
@@ -161,8 +161,8 @@ private:
         const ColumnUInt8::Container * other_column,
         ConstNullMapPtr other_null_map);
 
-    PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>> probe_res;
-    std::list<SemiJoinResult<KIND, STRICTNESS> *> probe_res_list;
+    PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>> join_result;
+    std::list<SemiJoinResult<KIND, STRICTNESS> *> undetermined_result_list;
     Block result_block;
     size_t left_columns = 0;
     size_t right_columns = 0;

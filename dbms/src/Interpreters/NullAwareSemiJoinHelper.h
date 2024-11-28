@@ -188,7 +188,7 @@ public:
         const NameSet & probe_output_name_set,
         const Block & right_sample_block);
     void doJoin();
-    bool isJoinDone() const { return is_probe_hash_table_done && probe_res_list.empty(); }
+    bool isJoinDone() const { return is_probe_hash_table_done && undetermined_result_list.empty(); }
     bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
     std::vector<RowsNotInsertToMap *> & getNullRows() { return null_rows; }
     Block genJoinResult(const NameSet & output_column_names_set);
@@ -210,11 +210,11 @@ private:
     const BlocksList & right_blocks;
     std::vector<RowsNotInsertToMap *> null_rows;
     size_t max_block_size;
-    PaddedPODArray<Result> probe_res;
-    std::list<Result *> probe_res_list;
-    std::list<Result *> next_step_res_list;
+    PaddedPODArray<Result> join_result;
+    std::list<Result *> undetermined_result_list;
+    std::list<Result *> next_step_undetermined_result_list;
     bool is_probe_hash_table_done = false;
-    NASemiJoinStep next_step;
+    NASemiJoinStep current_check_step;
 
     const JoinNonEqualConditions & non_equal_conditions;
 };
