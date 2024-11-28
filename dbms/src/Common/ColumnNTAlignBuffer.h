@@ -54,11 +54,11 @@ private:
     NTAlignBufferAVX2 buffer;
 };
 
-static void nonTemporalStore64B(void * dst, NTAlignBufferAVX2 & buffer)
+ALWAYS_INLINE inline void nonTemporalStore64B(void * dst, NTAlignBufferAVX2 & buffer)
 {
     assert(reinterpret_cast<std::uintptr_t>(dst) % VECTOR_SIZE_AVX2 == 0);
     _mm256_stream_si256(reinterpret_cast<__m256i *>(dst), buffer.v[0]);
-    _mm256_stream_si256(reinterpret_cast<__m256i *>(dst + VECTOR_SIZE_AVX2), buffer.v[1]);
+    _mm256_stream_si256(reinterpret_cast<__m256i *>(static_cast<char *>(dst) + VECTOR_SIZE_AVX2), buffer.v[1]);
 }
 
 #else
