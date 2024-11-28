@@ -640,9 +640,8 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, boo
             /// Add 15 bytes padding in order to use memcpyMax64BAllowReadWriteOverflow15
             struct PaddedAlignBuffer
             {
-                PaddedAlignBuffer() {}
                 NTAlignBufferAVX2 buffer;
-                char padding[15];
+                char padding[15]{};
             } padded_align_buf;
 
             NTAlignBufferAVX2 & char_buffer = padded_align_buf.buffer;
