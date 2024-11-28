@@ -52,7 +52,7 @@ struct HashMethodOneNumber
     const size_t total_rows;
 
     /// If the keys of a fixed length then key_sizes contains their lengths, empty otherwise.
-    HashMethodOneNumber(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &, Arena *)
+    HashMethodOneNumber(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
         : total_rows(key_columns[0]->size())
     {
         vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
@@ -107,8 +107,7 @@ struct HashMethodString
     HashMethodString(
         const ColumnRawPtrs & key_columns,
         const Sizes & /*key_sizes*/,
-        const TiDB::TiDBCollators & collators,
-        Arena *)
+        const TiDB::TiDBCollators & collators)
         : total_rows(key_columns[0]->size())
     {
         const IColumn & column = *key_columns[0];
@@ -159,7 +158,7 @@ struct HashMethodStringBin
     const UInt8 * chars;
     const size_t total_rows;
 
-    HashMethodStringBin(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &, Arena *)
+    HashMethodStringBin(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
         : total_rows(key_columns[0]->size())
     {
         const IColumn & column = *key_columns[0];
@@ -345,43 +344,6 @@ struct KeyDescStringBinPadding : KeyDescStringBin
     }
 };
 
-void serializeColumnToBuffer(Arena * pool,
-        const ColumnRawPtrs & key_columns,
-        PaddedPODArray<char *> & pos,
-        PaddedPODArray<size_t> & sizes)
-{
-    RUNTIME_CHECK(!key_columns.empty());
-    RUNTIME_CHECK(pos.empty() && sizes.empty());
-
-    const auto rows = key_columns[0]->size();
-    pos.resize(rows, nullptr);
-    sizes.resize(rows, 0);
-
-    for (const auto * col_ptr : key_columns)
-        col_ptr->countSerializeByteSize(sizes);
-
-    std::vector<size_t> aligned_sizes;
-    aligned_sizes.reserve(sizes.size());
-
-    size_t total_byte_size = 0;
-    for (auto size : sizes)
-    {
-        auto aligned = alignOf16(size);
-        total_byte_size += aligned;
-        aligned_sizes.push_back(aligned);
-    }
-
-    auto * buffer = pool->alloc(total_byte_size);
-    for (size_t i = 0; i < aligned_sizes.size(); ++i)
-    {
-        pos[i] = buffer;
-        buffer += aligned_sizes[i];
-    }
-
-    for (const auto * col_ptr : key_columns)
-        col_ptr->serializeToPos(pos, 0, rows, col_ptr->isColumnNullable());
-}
-
 /// For the case when there are 2 keys.
 template <typename Key1Desc, typename Key2Desc, typename Value, typename Mapped>
 struct HashMethodFastPathTwoKeysSerialized
@@ -394,16 +356,12 @@ struct HashMethodFastPathTwoKeysSerialized
     Key1Desc key_1_desc;
     Key2Desc key_2_desc;
     const size_t total_rows;
-    PaddedPODArray<char *> pos;
-    PaddedPODArray<size_t> sizes;
 
-    HashMethodFastPathTwoKeysSerialized(const ColumnRawPtrs & key_columns, const Sizes &, const TiDB::TiDBCollators &, Arena * pool)
+    HashMethodFastPathTwoKeysSerialized(const ColumnRawPtrs & key_columns, const Sizes &, const TiDB::TiDBCollators &)
         : key_1_desc(key_columns[0])
         , key_2_desc(key_columns[1])
         , total_rows(key_columns[0]->size())
-    {
-        serializeColumnToBuffer(pool, key_columns, pos, sizes);
-    }
+    {}
 
     ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, Arena * pool, std::vector<String> &) const
     {
@@ -442,8 +400,7 @@ struct HashMethodFixedString
     HashMethodFixedString(
         const ColumnRawPtrs & key_columns,
         const Sizes & /*key_sizes*/,
-        const TiDB::TiDBCollators & collators,
-        Arena *)
+        const TiDB::TiDBCollators & collators)
         : total_rows(key_columns[0]->size())
     {
         const IColumn & column = *key_columns[0];
@@ -520,7 +477,7 @@ struct HashMethodKeysFixed
         return true;
     }
 
-    HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const TiDB::TiDBCollators &, Arena *)
+    HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const TiDB::TiDBCollators &)
         : Base(key_columns)
         , key_sizes(std::move(key_sizes_))
         , keys_size(key_columns.size())
@@ -655,28 +612,25 @@ struct HashMethodSerialized
     size_t keys_size;
     TiDB::TiDBCollators collators;
     const size_t total_rows;
-    PaddedPODArray<char *> pos;
-    PaddedPODArray<size_t> sizes;
 
     HashMethodSerialized(
         const ColumnRawPtrs & key_columns_,
         const Sizes & /*key_sizes*/,
-        const TiDB::TiDBCollators & collators_,
-        Arena * pool)
+        const TiDB::TiDBCollators & collators_)
         : key_columns(key_columns_)
         , keys_size(key_columns_.size())
         , collators(collators_)
         , total_rows(key_columns_[0]->size())
-    {
-        serializeColumnToBuffer(pool, key_columns_, pos, sizes);
-    }
+    {}
 
-    ALWAYS_INLINE inline StringRef getKeyHolder(
-            size_t row,
-            Arena *,
-            std::vector<String> &) const
+    ALWAYS_INLINE inline SerializedKeyHolder getKeyHolder(
+        size_t row,
+        Arena * pool,
+        std::vector<String> & sort_key_containers) const
     {
-        return StringRef(pos[row], sizes[row]);
+        return SerializedKeyHolder{
+            serializeKeysToPoolContiguous(row, keys_size, key_columns, collators, sort_key_containers, *pool),
+            *pool};
     }
 
 protected:
@@ -696,7 +650,7 @@ struct HashMethodHashed
     TiDB::TiDBCollators collators;
     const size_t total_rows;
 
-    HashMethodHashed(ColumnRawPtrs key_columns_, const Sizes &, const TiDB::TiDBCollators & collators_, Arena *)
+    HashMethodHashed(ColumnRawPtrs key_columns_, const Sizes &, const TiDB::TiDBCollators & collators_)
         : key_columns(std::move(key_columns_))
         , collators(collators_)
         , total_rows(key_columns[0]->size())
