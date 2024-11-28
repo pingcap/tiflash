@@ -147,11 +147,9 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 SemiJoinHelper<KIND, STRICTNESS, Maps>::SemiJoinHelper(
     size_t input_rows_,
     size_t max_block_size_,
-    const JoinNonEqualConditions & non_equal_conditions_,
-    CancellationHook is_cancelled_)
+    const JoinNonEqualConditions & non_equal_conditions_)
     : input_rows(input_rows_)
     , max_block_size(max_block_size_)
-    , is_cancelled(is_cancelled_)
     , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == Semi || KIND == Anti || KIND == LeftOuterAnti || KIND == LeftOuterSemi);
@@ -324,8 +322,6 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         "SemiJoinResult size {} must be equal to block size {}",
         probe_res.size(),
         input_rows);
-    if (is_cancelled())
-        return;
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
         const auto & column = probe_process_info.block.getByPosition(i);

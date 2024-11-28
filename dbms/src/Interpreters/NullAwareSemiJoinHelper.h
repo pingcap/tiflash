@@ -142,7 +142,7 @@ public:
     template <NASemiJoinStep STEP>
     void checkStepEnd();
     size_t getNextRightBlockIndex() const { return next_right_block_index; }
-    size_t setNextRightBlockIndex(size_t index) { next_right_block_index = index; }
+    void setNextRightBlockIndex(size_t index) { next_right_block_index = index; }
 
 private:
     size_t row_num;
@@ -175,8 +175,7 @@ public:
         const BlocksList & right_blocks,
         std::vector<RowsNotInsertToMap *> && null_rows,
         size_t max_block_size,
-        const JoinNonEqualConditions & non_equal_conditions,
-        CancellationHook is_cancelled_);
+        const JoinNonEqualConditions & non_equal_conditions);
 
     void probeHashTable(
         const JoinPartitions & join_partitions,
@@ -211,7 +210,6 @@ private:
     const BlocksList & right_blocks;
     std::vector<RowsNotInsertToMap *> null_rows;
     size_t max_block_size;
-    CancellationHook is_cancelled;
     PaddedPODArray<Result> probe_res;
     std::list<Result *> probe_res_list;
     std::list<Result *> next_step_res_list;

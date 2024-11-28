@@ -1602,8 +1602,7 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
                 blocks,
                 std::move(null_rows),
                 max_block_size,
-                non_equal_conditions,
-                is_cancelled),
+                non_equal_conditions),
             [](void * ptr) { delete reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
     }
 
@@ -1631,7 +1630,6 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
             probe_process_info,
             output_columns_names_set_for_other_condition_after_finalize,
             right_sample_block);
-
         if (is_cancelled())
             return {};
     }
@@ -1716,7 +1714,7 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             restore_config.restore_round);
 
         probe_process_info.semi_join_family_helper = decltype(probe_process_info.semi_join_family_helper)(
-            new SemiJoinHelper<KIND, STRICTNESS, Maps>(rows, max_block_size, non_equal_conditions, is_cancelled),
+            new SemiJoinHelper<KIND, STRICTNESS, Maps>(rows, max_block_size, non_equal_conditions),
             [](void * ptr) { delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
     }
 

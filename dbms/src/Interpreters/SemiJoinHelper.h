@@ -135,11 +135,7 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 class SemiJoinHelper
 {
 public:
-    SemiJoinHelper(
-        size_t input_rows,
-        size_t max_block_size,
-        const JoinNonEqualConditions & non_equal_conditions,
-        CancellationHook is_cancelled_);
+    SemiJoinHelper(size_t input_rows, size_t max_block_size, const JoinNonEqualConditions & non_equal_conditions);
 
     void probeHashTable(
         const JoinPartitions & join_partitions,
@@ -173,7 +169,6 @@ private:
     size_t input_rows;
     std::vector<size_t> right_column_indices_to_add;
     size_t max_block_size;
-    CancellationHook is_cancelled;
     bool is_probe_hash_table_done = false;
 
     const JoinNonEqualConditions & non_equal_conditions;

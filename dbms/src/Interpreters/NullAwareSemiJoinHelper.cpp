@@ -246,13 +246,11 @@ NASemiJoinHelper<KIND, STRICTNESS, Maps>::NASemiJoinHelper(
     const BlocksList & right_blocks_,
     std::vector<RowsNotInsertToMap *> && null_rows_,
     size_t max_block_size_,
-    const JoinNonEqualConditions & non_equal_conditions_,
-    CancellationHook is_cancelled_)
+    const JoinNonEqualConditions & non_equal_conditions_)
     : input_rows(input_rows_)
     , right_blocks(right_blocks_)
     , null_rows(std::move(null_rows_))
     , max_block_size(max_block_size_)
-    , is_cancelled(is_cancelled_)
     , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti || KIND == NullAware_LeftOuterSemi);
@@ -373,8 +371,6 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         probe_res.size(),
         input_rows);
 
-    if (is_cancelled())
-        return;
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
         const auto & column = probe_process_info.block.getByPosition(i);
