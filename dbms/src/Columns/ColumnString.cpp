@@ -632,24 +632,24 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, boo
             if unlikely (align_buffer_ptrs == nullptr)
                 align_buffer_ptrs = std::make_unique<ColumnNTAlignBufferAVX2[]>(2);
 
-            AlignBufferAVX2 & saved_char_buffer = align_buffer_ptrs[0].getBuffer();
+            NTAlignBufferAVX2 & saved_char_buffer = align_buffer_ptrs[0].getBuffer();
             UInt8 char_buffer_size = align_buffer_ptrs[0].getSize();
-            AlignBufferAVX2 & offset_buffer = align_buffer_ptrs[1].getBuffer();
+            NTAlignBufferAVX2 & offset_buffer = align_buffer_ptrs[1].getBuffer();
             UInt8 offset_buffer_size = align_buffer_ptrs[1].getSize();
 
             /// Add 15 bytes padding in order to use memcpyMax64BAllowReadWriteOverflow15
-            struct TmpCharBuffer
+            struct PaddedAlignBuffer
             {
-                TmpCharBuffer() {}
-                AlignBufferAVX2 buffer;
+                PaddedAlignBuffer() {}
+                NTAlignBufferAVX2 buffer;
                 char padding[15];
-            } tmp_char_buf;
+            } padded_align_buf;
 
-            AlignBufferAVX2 & char_buffer = tmp_char_buf.buffer;
+            NTAlignBufferAVX2 & char_buffer = padded_align_buf.buffer;
 
-            tiflash_compiler_builtin_memcpy(&char_buffer, &saved_char_buffer, sizeof(AlignBufferAVX2));
+            tiflash_compiler_builtin_memcpy(&char_buffer, &saved_char_buffer, sizeof(NTAlignBufferAVX2));
             SCOPE_EXIT({
-                tiflash_compiler_builtin_memcpy(&saved_char_buffer, &char_buffer, sizeof(AlignBufferAVX2));
+                tiflash_compiler_builtin_memcpy(&saved_char_buffer, &char_buffer, sizeof(NTAlignBufferAVX2));
                 align_buffer_ptrs[0].setSize(char_buffer_size);
                 align_buffer_ptrs[1].setSize(offset_buffer_size);
             });
@@ -704,7 +704,7 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, boo
     }
 
     RUNTIME_CHECK_MSG(
-        align_buffer_ptr == nullptr,
+        align_buffer_ptrs == nullptr,
         "align_buffer_ptr is not nullptr but use_nt_align_buffer({}) is false or data is unaligned",
         use_nt_align_buffer);
 #endif
@@ -770,14 +770,16 @@ void ColumnString::flushNTAlignBuffer()
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (align_buffer_ptrs)
     {
-        AlignBufferAVX2 & char_buffer = align_buffer_ptrs[0].getBuffer();
+        size_t prev_size = offsets.size();
+        size_t char_size = chars.size();
+        NTAlignBufferAVX2 & char_buffer = align_buffer_ptrs[0].getBuffer();
         UInt8 char_buffer_size = align_buffer_ptrs[0].getSize();
         if (char_buffer_size != 0)
         {
             chars.resize(char_size + char_buffer_size);
             inline_memcpy(&chars[char_size], char_buffer.data, char_buffer_size);
         }
-        AlignBufferAVX2 & offset_buffer = align_buffer_ptrs[1].getBuffer();
+        NTAlignBufferAVX2 & offset_buffer = align_buffer_ptrs[1].getBuffer();
         UInt8 offset_buffer_size = align_buffer_ptrs[1].getSize();
         if (offset_buffer_size != 0)
         {

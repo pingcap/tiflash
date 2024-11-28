@@ -265,7 +265,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                 if (align_buffer_ptr == nullptr)
                     align_buffer_ptr = std::make_unique<ColumnNTAlignBufferAVX2>();
 
-                AlignBufferAVX2 & buffer = align_buffer_ptr->getBuffer();
+                NTAlignBufferAVX2 & buffer = align_buffer_ptr->getBuffer();
                 UInt8 buffer_size = align_buffer_ptr->getSize();
                 SCOPE_EXIT({ align_buffer_ptr->setSize(buffer_size); });
 
@@ -292,7 +292,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
                     buffer_size = 0;
                 }
 
-                AlignBufferAVX2 tmp_buffer;
+                NTAlignBufferAVX2 tmp_buffer;
                 UInt8 tmp_buffer_size = 0;
 
                 data.resize(prev_size + (size - i) / avx2_width * avx2_width, FULL_VECTOR_SIZE_AVX2);
@@ -390,7 +390,7 @@ void ColumnDecimal<T>::flushNTAlignBuffer()
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (align_buffer_ptr)
     {
-        AlignBufferAVX2 & buffer = align_buffer->getBuffer();
+        NTAlignBufferAVX2 & buffer = align_buffer_ptr->getBuffer();
         UInt8 buffer_size = align_buffer_ptr->getSize();
         if (buffer_size > 0)
         {
