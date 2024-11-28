@@ -339,23 +339,6 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_concurrency = probe_concurrency_;
     active_probe_worker = probe_concurrency;
     probe_workers_data.resize(probe_concurrency);
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    size_t columns = right_sample_block_pruned.columns();
-    size_t buffer_count = 0;
-    for (size_t i = 0; i < columns; ++i)
-    {
-        auto & c = right_sample_block_pruned.getByPosition(i);
-        const auto * column_ptr = c.column.get();
-        if (c.column->isColumnNullable())
-        {
-            ++buffer_count;
-            column_ptr = &static_cast<const ColumnNullable &>(*c.column).getNestedColumn();
-        }
-        buffer_count += canAsColumnString(column_ptr) ? 2 : 1;
-    }
-    for (size_t i = 0; i < probe_concurrency; ++i)
-        probe_workers_data[i].align_buffer.resize(buffer_count);
-#endif
 }
 
 void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
@@ -599,11 +582,8 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
             src_column.name);
 
         added_columns.push_back(src_column.column->cloneEmpty());
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        added_columns.back()->reserveAlign(rows, AlignBufferAVX2::buffer_size);
-#else
-        added_columns.back()->reserve(rows);
-#endif
+        if (src_column.type && src_column.type->haveMaximumSizeOfValue())
+            added_columns.back()->reserveAlign(rows, FULL_VECTOR_SIZE_AVX2);
     }
 
     auto & wd = probe_workers_data[stream_index];
