@@ -35,6 +35,8 @@ union alignas(FULL_VECTOR_SIZE_AVX2) NTAlignBufferAVX2
     __m256i v[2];
 };
 
+/// Each time the buffer is full, the data will be flushed.
+/// The maximum size is 63 so last byte can be used for saving size.
 class ColumnNTAlignBufferAVX2
 {
 public:
