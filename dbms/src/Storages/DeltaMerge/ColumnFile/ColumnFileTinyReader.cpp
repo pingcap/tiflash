@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
+#include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -122,6 +123,19 @@ Block ColumnFileTinyReader::readNextBlock()
 
     read_done = true;
     return genBlock(*col_defs, columns);
+}
+
+Block ColumnFileTinyReader::readWithFilter(const IColumn::Filter & filter)
+{
+    auto block = readNextBlock();
+    if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
+    {
+        for (auto & col : block)
+        {
+            col.column = col.column->filter(filter, passed_count);
+        }
+    }
+    return block;
 }
 
 size_t ColumnFileTinyReader::skipNextBlock()

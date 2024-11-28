@@ -178,6 +178,9 @@ public:
     /// This method used to skip next block.
     virtual size_t skipNextBlock() = 0;
 
+    /// This method is used to read raw data, but only return the rows that pass the filter.
+    virtual Block readWithFilter(const IColumn::Filter & filter) = 0;
+
     /// Create a new reader from current reader with different columns to read.
     virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs, ReadTag read_tag) = 0;
 

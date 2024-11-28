@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -139,6 +140,18 @@ Block ColumnFileInMemoryReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
+Block ColumnFileInMemoryReader::readWithFilter(const IColumn::Filter & filter)
+{
+    auto block = readNextBlock();
+    if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
+    {
+        for (auto & col : block)
+        {
+            col.column = col.column->filter(filter, passed_count);
+        }
+    }
+    return block;
+}
 
 size_t ColumnFileInMemoryReader::skipNextBlock()
 {
