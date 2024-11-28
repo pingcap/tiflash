@@ -109,6 +109,7 @@ Block ColumnFileInMemory::readDataForFlush() const
 
 std::pair<ColumnPtr, ColumnPtr> ColumnFileInMemoryReader::getPKAndVersionColumns()
 {
+    // fill the first 2 columns into `cols_data_cache`
     memory_file.fillColumns(*col_defs, 2, cols_data_cache);
     return {cols_data_cache[0], cols_data_cache[1]};
 }

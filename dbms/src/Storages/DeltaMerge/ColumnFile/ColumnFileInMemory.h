@@ -43,6 +43,8 @@ private:
     CachePtr cache;
 
 private:
+    // Ensure the columns[0~`col_count`] in the `result` are filled with the data of this
+    // ColumnFileInMemory. The column id and data type in `result` is defined by `col_defs`.
     void fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
 
     const DataTypePtr & getDataType(ColId column_id) const { return schema->getDataType(column_id); }
@@ -90,12 +92,13 @@ public:
 
     String toString() const override
     {
-        String s = "{in_memory_file,rows:" + DB::toString(rows) //
-            + ",bytes:" + DB::toString(bytes) //
-            + ",disable_append:" + DB::toString(disable_append) //
-            + ",schema:" + (schema ? schema->toString() : "none") //
-            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
-        return s;
+        return fmt::format(
+            "{{in_memory_file,rows:{},bytes:{},disable_append:{},schema:{},cache_block:{}}}",
+            rows,
+            bytes,
+            disable_append,
+            (schema ? schema->toString() : "none"),
+            (cache ? cache->block.dumpStructure() : "none"));
     }
 };
 
