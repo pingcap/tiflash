@@ -189,8 +189,7 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
         size * 2,
         0,
         true,
-        {},
-        nullptr);
+        {});
     size_t bytes_read = buf.count() - buf_pos;
     if (unlikely(bytes_read != bytes_limit))
     {

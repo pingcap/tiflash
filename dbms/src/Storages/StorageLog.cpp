@@ -263,7 +263,7 @@ void LogBlockInputStream::readData(
     };
 
     /// TODO Use avg_value_size_hint.
-    type.deserializeBinaryBulkWithMultipleStreams(column, stream_getter, max_rows_to_read, 0, true, {}, nullptr);
+    type.deserializeBinaryBulkWithMultipleStreams(column, stream_getter, max_rows_to_read, 0, true, {});
 }
 
 

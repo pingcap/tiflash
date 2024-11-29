@@ -137,8 +137,7 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
                 sz,
                 0,
                 /*position_independent_encoding=*/true,
-                {},
-                nullptr);
+                {});
         }
     }
 

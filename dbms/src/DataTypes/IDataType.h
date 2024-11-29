@@ -176,7 +176,7 @@ public:
         double avg_value_size_hint,
         bool position_independent_encoding,
         SubstreamPath && path,
-        const IColumn::Filter * filter) const
+        const IColumn::Filter * filter = nullptr) const
     {
         deserializeBinaryBulkWithMultipleStreams(
             column,
