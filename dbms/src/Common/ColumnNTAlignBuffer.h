@@ -35,8 +35,6 @@ union alignas(FULL_VECTOR_SIZE_AVX2) NTAlignBufferAVX2
     __m256i v[2];
 };
 
-/// Each time the buffer is full, the data will be flushed.
-/// The maximum size is 63 so last byte can be used for saving size.
 class ColumnNTAlignBufferAVX2
 {
 public:
@@ -45,10 +43,16 @@ public:
 
     NTAlignBufferAVX2 & getBuffer() { return buffer; }
 
+    /// Each time the buffer is full, the data will be flushed.
+    /// The maximum size is 63 so last byte can be used for saving size.
     inline UInt8 getSize() { return static_cast<UInt8>(buffer.data[FULL_VECTOR_SIZE_AVX2 - 1]); }
     inline void setSize(UInt8 size)
     {
-        RUNTIME_ASSERT(size < FULL_VECTOR_SIZE_AVX2);
+        RUNTIME_CHECK_MSG(
+            size < FULL_VECTOR_SIZE_AVX2,
+            "size {} >= FULL_VECTOR_SIZE_AVX2{}",
+            size,
+            FULL_VECTOR_SIZE_AVX2);
         buffer.data[FULL_VECTOR_SIZE_AVX2 - 1] = size;
     }
 
