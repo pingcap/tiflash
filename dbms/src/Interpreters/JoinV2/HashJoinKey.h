@@ -309,7 +309,7 @@ public:
     {
         column_string = assert_cast<const ColumnString *>(key_columns[0]);
         buffer_initialized = false;
-        required_key_size = raw_required_key_size;
+        RUNTIME_CHECK(raw_required_key_size == 0);
     }
 
     static constexpr bool isJoinKeyTypeReference() { return true; }
@@ -361,10 +361,7 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key)
-    {
-        return required_key_size == 0 ? getJoinKeySize(key) : 0;
-    }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return getJoinKeySize(key); }
 
 private:
     const ColumnString * column_string = nullptr;
@@ -374,7 +371,6 @@ private:
     ColumnString::MutablePtr keys_buffer = ColumnString::create();
 
     bool buffer_initialized = false;
-    size_t required_key_size;
 };
 
 class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeySerialized
@@ -383,7 +379,7 @@ public:
     using KeyType = StringRef;
     explicit HashJoinKeySerialized(const TiDB::TiDBCollators & collators_) { collators = collators_; }
 
-    void reset(const ColumnRawPtrs & key_columns_, size_t /* raw_required_key_size */)
+    void reset(const ColumnRawPtrs & key_columns_, size_t raw_required_key_size)
     {
         key_columns = key_columns_;
         keys_size = key_columns.size();
@@ -394,6 +390,8 @@ public:
         buffer_initialized = false;
         pool.rollback(last_key_size);
         last_key_size = 0;
+
+        RUNTIME_CHECK(raw_required_key_size == 0);
     }
 
     static constexpr bool isJoinKeyTypeReference() { return true; }
