@@ -90,7 +90,7 @@ public:
         SeparateSizeAndChars = 1, // New format, corresponding to `NameV1`
     };
 
-    inline static constexpr auto DefaultSerdesFormat = SerdesFormat::SeparateSizeAndChars;
+    inline static constexpr auto DefaultSerdesFormat = SerdesFormat::SizePrefix;
 
     inline static const String LegacyName{"String"}; // For compatibility of size-prefix format.
     inline static const String NameV1{"StringV1"}; // The separate size and chars format.
