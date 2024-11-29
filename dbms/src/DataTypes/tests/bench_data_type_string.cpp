@@ -159,67 +159,67 @@ void deserialize(benchmark::State & state, Args &&... args)
 
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size1_none,
+    size_prefix_size1_none,
     DataTypeString::SerdesFormat::SizePrefix,
     1,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size2_none,
+    size_prefix_size2_none,
     DataTypeString::SerdesFormat::SizePrefix,
     2,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size4_none,
+    size_prefix_size4_none,
     DataTypeString::SerdesFormat::SizePrefix,
     4,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size8_none,
+    size_prefix_size8_none,
     DataTypeString::SerdesFormat::SizePrefix,
     8,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size16_none,
+    size_prefix_size16_none,
     DataTypeString::SerdesFormat::SizePrefix,
     16,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size32_none,
+    size_prefix_size32_none,
     DataTypeString::SerdesFormat::SizePrefix,
     32,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size64_none,
+    size_prefix_size64_none,
     DataTypeString::SerdesFormat::SizePrefix,
     64,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size128_none,
+    size_prefix_size128_none,
     DataTypeString::SerdesFormat::SizePrefix,
     128,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size256_none,
+    size_prefix_size256_none,
     DataTypeString::SerdesFormat::SizePrefix,
     256,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size512_none,
+    size_prefix_size512_none,
     DataTypeString::SerdesFormat::SizePrefix,
     512,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size1024_none,
+    size_prefix_size1024_none,
     DataTypeString::SerdesFormat::SizePrefix,
     1024,
     CompressionMethod::NONE);
@@ -293,67 +293,67 @@ BENCHMARK_CAPTURE(
 
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size1_none,
+    size_prefix_size1_none,
     DataTypeString::SerdesFormat::SizePrefix,
     1,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size2_none,
+    size_prefix_size2_none,
     DataTypeString::SerdesFormat::SizePrefix,
     2,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size4_none,
+    size_prefix_size4_none,
     DataTypeString::SerdesFormat::SizePrefix,
     4,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size8_none,
+    size_prefix_size8_none,
     DataTypeString::SerdesFormat::SizePrefix,
     8,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size16_none,
+    size_prefix_size16_none,
     DataTypeString::SerdesFormat::SizePrefix,
     16,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size32_none,
+    size_prefix_size32_none,
     DataTypeString::SerdesFormat::SizePrefix,
     32,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size64_none,
+    size_prefix_size64_none,
     DataTypeString::SerdesFormat::SizePrefix,
     64,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size128_none,
+    size_prefix_size128_none,
     DataTypeString::SerdesFormat::SizePrefix,
     128,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size256_none,
+    size_prefix_size256_none,
     DataTypeString::SerdesFormat::SizePrefix,
     256,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size512_none,
+    size_prefix_size512_none,
     DataTypeString::SerdesFormat::SizePrefix,
     512,
     CompressionMethod::NONE);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size1024_none,
+    size_prefix_size1024_none,
     DataTypeString::SerdesFormat::SizePrefix,
     1024,
     CompressionMethod::NONE);
@@ -427,67 +427,67 @@ BENCHMARK_CAPTURE(
 
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size1_lz4,
+    size_prefix_size1_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     1,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size2_lz4,
+    size_prefix_size2_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     2,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size4_lz4,
+    size_prefix_size4_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     4,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size8_lz4,
+    size_prefix_size8_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     8,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size16_lz4,
+    size_prefix_size16_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     16,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size32_lz4,
+    size_prefix_size32_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     32,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size64_lz4,
+    size_prefix_size64_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     64,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size128_lz4,
+    size_prefix_size128_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     128,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size256_lz4,
+    size_prefix_size256_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     256,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size512_lz4,
+    size_prefix_size512_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     512,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     serialize,
-    size - prefix_size1024_lz4,
+    size_prefix_size1024_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     1024,
     CompressionMethod::LZ4);
@@ -561,67 +561,67 @@ BENCHMARK_CAPTURE(
 
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size1_lz4,
+    size_prefix_size1_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     1,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size2_lz4,
+    size_prefix_size2_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     2,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size4_lz4,
+    size_prefix_size4_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     4,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size8_lz4,
+    size_prefix_size8_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     8,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size16_lz4,
+    size_prefix_size16_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     16,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size32_lz4,
+    size_prefix_size32_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     32,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size64_lz4,
+    size_prefix_size64_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     64,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size128_lz4,
+    size_prefix_size128_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     128,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size256_lz4,
+    size_prefix_size256_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     256,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size512_lz4,
+    size_prefix_size512_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     512,
     CompressionMethod::LZ4);
 BENCHMARK_CAPTURE(
     deserialize,
-    size - prefix_size1024_lz4,
+    size_prefix_size1024_lz4,
     DataTypeString::SerdesFormat::SizePrefix,
     1024,
     CompressionMethod::LZ4);
