@@ -224,7 +224,7 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     double /*avg_value_size_hint*/,
     bool position_independent_encoding,
     SubstreamPath & path,
-    IColumn::Filter * filter) const
+    const IColumn::Filter * filter) const
 {
     ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
 

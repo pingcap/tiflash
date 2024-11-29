@@ -235,7 +235,7 @@ void DataTypeNumberBase<T>::deserializeBinaryBulk(
     ReadBuffer & istr,
     size_t limit,
     double /*avg_value_size_hint*/,
-    IColumn::Filter * filter) const
+    const IColumn::Filter * filter) const
 {
     auto & x = typeid_cast<ColumnVector<T> &>(column).getData();
     size_t current_size = x.size();
@@ -264,13 +264,13 @@ void DataTypeNumberBase<T>::deserializeBinaryBulk(
         else if (break_point && !prev)
         {
             istr.ignore(field_size * count);
-            prev = (*filter)[i];
             count = 1;
         }
         else
         {
             ++count;
         }
+        prev = (*filter)[i];
     }
     if (prev)
     {

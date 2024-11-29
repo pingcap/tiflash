@@ -81,7 +81,7 @@ void DataTypeDecimal<T>::deserializeBinaryBulk(
     ReadBuffer & istr,
     size_t limit,
     double /*avg_value_size_hint*/,
-    IColumn::Filter * filter) const
+    const IColumn::Filter * filter) const
 {
     auto & x = typeid_cast<ColumnType &>(column).getData();
     size_t current_size = x.size();
@@ -109,13 +109,13 @@ void DataTypeDecimal<T>::deserializeBinaryBulk(
         else if (break_point && !prev)
         {
             istr.ignore(sizeof(FieldType) * count);
-            prev = (*filter)[i];
             count = 1;
         }
         else
         {
             ++count;
         }
+        prev = (*filter)[i];
     }
     if (prev)
     {

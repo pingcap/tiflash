@@ -130,7 +130,7 @@ void DataTypeAggregateFunction::deserializeBinaryBulk(
     ReadBuffer & istr,
     size_t limit,
     double /*avg_value_size_hint*/,
-    IColumn::Filter * filter) const
+    const IColumn::Filter * filter) const
 {
     ColumnAggregateFunction & real_column = typeid_cast<ColumnAggregateFunction &>(column);
     ColumnAggregateFunction::Container & vec = real_column.getData();

@@ -38,7 +38,7 @@ public:
     void serializeBinary(const IColumn &, size_t, WriteBuffer &) const override { throwNoSerialization(); }
     void deserializeBinary(IColumn &, ReadBuffer &) const override { throwNoSerialization(); }
     void serializeBinaryBulk(const IColumn &, WriteBuffer &, size_t, size_t) const override { throwNoSerialization(); }
-    void deserializeBinaryBulk(IColumn &, ReadBuffer &, size_t, double, IColumn::Filter *) const override
+    void deserializeBinaryBulk(IColumn &, ReadBuffer &, size_t, double, const IColumn::Filter *) const override
     {
         throwNoSerialization();
     }

@@ -163,7 +163,7 @@ public:
         double avg_value_size_hint,
         bool /*position_independent_encoding*/,
         SubstreamPath & path,
-        IColumn::Filter * filter) const
+        const IColumn::Filter * filter) const
     {
         if (ReadBuffer * stream = getter(path))
             deserializeBinaryBulk(column, *stream, limit, avg_value_size_hint, filter);
@@ -176,7 +176,7 @@ public:
         double avg_value_size_hint,
         bool position_independent_encoding,
         SubstreamPath && path,
-        IColumn::Filter * filter) const
+        const IColumn::Filter * filter) const
     {
         deserializeBinaryBulkWithMultipleStreams(
             column,
@@ -196,7 +196,7 @@ public:
         ReadBuffer & istr,
         size_t limit,
         double avg_value_size_hint,
-        IColumn::Filter * filter) const;
+        const IColumn::Filter * filter) const;
 
     /** Serialization/deserialization of individual values.
       *

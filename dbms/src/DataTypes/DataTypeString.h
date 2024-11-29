@@ -40,7 +40,7 @@ public:
         ReadBuffer & istr,
         size_t limit,
         double avg_value_size_hint,
-        IColumn::Filter * filter) const override;
+        const IColumn::Filter * filter) const override;
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
 

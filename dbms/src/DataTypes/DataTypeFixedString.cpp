@@ -107,7 +107,7 @@ void DataTypeFixedString::deserializeBinaryBulk(
     ReadBuffer & istr,
     size_t limit,
     double /*avg_value_size_hint*/,
-    IColumn::Filter * filter) const
+    const IColumn::Filter * filter) const
 {
     auto & data = typeid_cast<ColumnFixedString &>(column).getChars();
     size_t current_size = data.size();
@@ -139,13 +139,13 @@ void DataTypeFixedString::deserializeBinaryBulk(
         else if (break_point && !prev)
         {
             istr.ignore(n * count);
-            prev = (*filter)[i];
             count = 1;
         }
         else
         {
             ++count;
         }
+        prev = (*filter)[i];
     }
     if (prev)
     {

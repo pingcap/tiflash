@@ -43,7 +43,7 @@ void DataTypeNothing::deserializeBinaryBulk(
     ReadBuffer & istr,
     size_t limit,
     double,
-    IColumn::Filter *) const
+    const IColumn::Filter *) const
 {
     typeid_cast<ColumnNothing &>(column).addSize(istr.tryIgnore(limit));
 }

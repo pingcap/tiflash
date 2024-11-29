@@ -301,7 +301,7 @@ void DataTypeTuple::deserializeBinaryBulkWithMultipleStreams(
     double avg_value_size_hint,
     bool position_independent_encoding,
     SubstreamPath & path,
-    IColumn::Filter * filter) const
+    const IColumn::Filter * filter) const
 {
     path.emplace_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))

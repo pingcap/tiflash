@@ -122,7 +122,7 @@ static NO_INLINE void deserializeBinarySSE2(
     ColumnString::Offsets & offsets,
     ReadBuffer & istr,
     size_t limit,
-    IColumn::Filter * filter)
+    const IColumn::Filter * filter)
 {
     size_t offset = data.size();
     for (size_t i = 0; i < limit; ++i)
@@ -184,7 +184,7 @@ void DataTypeString::deserializeBinaryBulk(
     ReadBuffer & istr,
     size_t limit,
     double avg_value_size_hint,
-    IColumn::Filter * filter) const
+    const IColumn::Filter * filter) const
 {
     ColumnString & column_string = typeid_cast<ColumnString &>(column);
     ColumnString::Chars_t & data = column_string.getChars();
