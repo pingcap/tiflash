@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/COWPtr.h>
-#include <Common/ColumnsAlignBuffer.h>
+#include <Common/ColumnNTAlignBuffer.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
@@ -272,46 +272,33 @@ public:
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// Note:
     /// 1. The pos pointer must not be nullptr.
-    /// 2. The memory of pos must be accessible to overflow 15 bytes(i.e. PaddedPODArray) for speeding up memcpy.(e.g. ColumnString)
-    /// 3. If AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes)
-    /// by using reserveAlign or reserveAlignWithTotalMemoryHint.
-    /// 4. If non-temporal store is used, the unaligned data will be copied to align_buffer. align_buffer must be passed to
-    /// this function each time to ensure correctness. The unaligned data from align_buffer will be copied to column data
-    /// when ColumnsAlignBufferAVX2.needFlush() is true(by calling ColumnsAlignBufferAVX2.resetIndex(true)).
+    /// 2. The memory of pos must be accessible to overflow 15 bytes(i.e. PaddedPODArray) for speeding up memcpy.(e.g. for ColumnString)
+    /// 3. If use_nt_align_buffer is true and AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes).
+    /// 4. If non-temporal store is used, the data will be copied to a align_buffer firstly and then flush to column data if full. After the
+    ///    last call, flushNTAlignBuffer must be called to flush the remaining unaligned data from align_buffer into column data. During the
+    ///    process, any function that may change the alignment of column data should not be called otherwise a exception will be thrown.
     /// Example:
-    /// #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->reserveAlign(xxx, FULL_VECTOR_SIZE_AVX2);
-    /// #endif
-    ///     ColumnAlignBufferAVX2 align_buffer;
-    ///     /// Resize align_buffer if you want.
-    ///     /// Note that different column type needs different size of align_buffer.
-    ///     /// E.g. 1 for ColumnVector/ColumnDecimal, 2 for ColumnString/ColumnNullable(ColumnVector), 3 for ColumnNullable(ColumnString).
-    ///     align_buffer.resize(x);
+    ///     while (xxx)
+    ///     {
+    ///         for (auto & column_ptr : mutable_columns)
+    ///             column_ptr->deserializeAndInsertFromPos(pos, align_buffer, true);
+    ///     }
     ///     for (auto & column_ptr : mutable_columns)
-    ///         column_ptr->deserializeAndInsertFromPos(pos1, align_buffer);
-    ///     align_buffer.resetIndex(false);
-    ///     for (auto & column_ptr : mutable_columns)
-    ///         column_ptr->deserializeAndInsertFromPos(pos2, align_buffer);
-    ///     /// Last call to resetIndex must be true to copy the unaligned data from align_buffer to column data.
-    ///     align_buffer.resetIndex(true);
-    ///     for (auto & column_ptr : mutable_columns)
-    ///         column_ptr->deserializeAndInsertFromPos(pos3, align_buffer);
-    /// During the process, any function that may change the alignment of column data should not be called otherwise
-    /// the exception will be thrown.
-    virtual void deserializeAndInsertFromPos(
-        PaddedPODArray<char *> & /* pos */,
-        ColumnsAlignBufferAVX2 & /* align_buffer */)
-        = 0;
+    ///         column_ptr->flushNTAlignBuffer();
+    virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
-    /// TODO: Optimize by adding align_buffer like deserializeAndInsertFromPos.
     virtual void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
-        const Offsets & /* array_offsets */)
+        const Offsets & /* array_offsets */,
+        bool /* use_nt_align_buffer */)
         = 0;
+
+    virtual void flushNTAlignBuffer() = 0;
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
