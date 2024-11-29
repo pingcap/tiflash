@@ -187,7 +187,9 @@ public:
         std::vector<StringKeyType> & datas, // TODO const
         const std::vector<size_t> & hashvals)
     {
-        assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+        // For spill, hashvals.size() will be le to total_rows.
+        // Because only remaining rows that didn't insert into HashMap will be handled here.
+        assert(hashvals.size() <= static_cast<Derived &>(*this).total_rows);
 
         auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
             hashvals[idx],
@@ -205,7 +207,7 @@ public:
         std::vector<StringKeyType> & datas, // TODO const
         const std::vector<size_t> & hashvals)
     {
-        assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+        assert(hashvals.size() <= static_cast<Derived &>(*this).total_rows);
 
         auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
             hashvals[idx],

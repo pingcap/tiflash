@@ -760,9 +760,7 @@ size_t Aggregator::emplaceOrFindStringKey(
     using Hash = typename StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::Hash;
     std::vector<size_t> hashvals(key_infos.size(), 0);
     for (size_t i = 0; i < key_infos.size(); ++i)
-    {
-        hashvals[i] = Hash::operator()(keyHolderGetKey(key_datas[0]));
-    }
+        hashvals[i] = Hash::operator()(keyHolderGetKey(key_datas[i]));
 
     // alloc 0 bytes is useful when agg func size is zero.
     AggregateDataPtr agg_state = aggregates_pool.alloc(0);
@@ -1080,14 +1078,12 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
 #undef M
 
     const size_t rows = agg_process_info.end_row - agg_process_info.start_row;
+    // If no resize exception happens, so this is a new Block.
+    // If resize exception happens, start_row also set as zero.
+    RUNTIME_CHECK(agg_process_info.start_row == 0);
 
-    if likely (agg_process_info.allBlockDataHandled())
+    if likely (agg_process_info.stringHashTableRecoveryInfoEmpty())
     {
-        // No resize exception happens, so this is a new Block.
-        RUNTIME_CHECK(agg_process_info.start_row == 0);
-        RUNTIME_CHECK_MSG(
-            rows == state.total_rows,
-            "executeImplBatchStringHashMap only handle resize exception for each Block instead of row");
         const size_t reserve_size = rows / 4;
 
 #define M(INFO, DATA, SUBMAPINDEX, KEYTYPE)                                                          \
@@ -1146,11 +1142,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     bool zero_agg_func_size = (params.aggregates_size == 0);
 
 #define M(INDEX, INFO, DATA, PLACES)                                                                               \
-    if unlikely (got_resize_exception)                                                                             \
-    {                                                                                                              \
-        emplaced_index = 0;                                                                                        \
-    }                                                                                                              \
-    else if (!(INFO).empty())                                                                                      \
+    if (!(INFO).empty())                                                                                      \
     {                                                                                                              \
         if (zero_agg_func_size)                                                                                    \
             emplaced_index = emplaceOrFindStringKey<INDEX, collect_hit_rate, only_lookup, enable_prefetch, true>(  \
@@ -1173,11 +1165,15 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
         if unlikely (emplaced_index != (INFO).size())                                                              \
             got_resize_exception = true;                                                                           \
     }                                                                                                              \
+    else \
+    { \
+        emplaced_index = 0; \
+    } \
     setupExceptionRecoveryInfoForStringHashTable(                                                                  \
         agg_process_info,                                                                                          \
         emplaced_index,                                                                                            \
-        INFO,                                                                                                      \
-        DATA,                                                                                                      \
+        (INFO),                                                                                                      \
+        (DATA),                                                                                                      \
         std::integral_constant<size_t, INDEX>{});
 
     M(0, key0_infos, key0_datas, key0_places)
@@ -1221,7 +1217,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
             aggregates_pool);
     }
     // For StringHashTable, start_row is meanless, instead submap_mx_infos/submap_mx_datas are used.
-    agg_process_info.start_row = got_resize_exception ? 0 : rows;
+    agg_process_info.start_row = got_resize_exception ? 0 : agg_process_info.end_row;
 }
 
 void NO_INLINE

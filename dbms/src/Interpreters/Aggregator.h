@@ -1339,9 +1339,12 @@ public:
             assert(start_row <= end_row);
             // submap_mx_infos.size() and submap_mx_datas.size() are always equal.
             // So only need to check submap_mx_infos is enough.
-            return (start_row == end_row && submap_m0_infos.empty() && submap_m1_infos.empty()
-                    && submap_m3_infos.empty() && submap_m4_infos.empty())
-                || aggregator->isCancelled();
+            return (start_row == end_row && stringHashTableRecoveryInfoEmpty()) || aggregator->isCancelled();
+        }
+        bool stringHashTableRecoveryInfoEmpty() const
+        {
+            return submap_m0_infos.empty() && submap_m1_infos.empty() &&
+                submap_m3_infos.empty() && submap_m4_infos.empty();
         }
         void resetBlock(const Block & block_)
         {
