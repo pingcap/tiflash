@@ -66,7 +66,7 @@ public:
         doTestSerializeAndDeserialize2(column_ptr, true);
     }
 
-    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool use_nt_align_buffer [[maybe_unused]])
+    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool use_nt_align_buffer)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
@@ -129,7 +129,7 @@ public:
         ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
 
-    static void doTestSerializeAndDeserialize2(const ColumnPtr & column_ptr, bool use_nt_align_buffer [[maybe_unused]])
+    static void doTestSerializeAndDeserialize2(const ColumnPtr & column_ptr, bool use_nt_align_buffer)
     {
         if (column_ptr->size() < 2)
             return;

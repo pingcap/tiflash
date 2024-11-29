@@ -704,7 +704,7 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, boo
 
     RUNTIME_CHECK_MSG(
         align_buffer_ptrs == nullptr,
-        "align_buffer_ptr is not nullptr but use_nt_align_buffer({}) is false or data is unaligned",
+        "align_buffer_ptrs is not nullptr but use_nt_align_buffer({}) is false or data is unaligned",
         use_nt_align_buffer);
 #endif
 
