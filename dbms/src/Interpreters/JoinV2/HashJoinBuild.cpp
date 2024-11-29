@@ -132,11 +132,6 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         }
     }
 
-#ifndef NDEBUG
-    RowPtrs check_row_ptrs;
-    check_row_ptrs.resize(rows);
-#endif
-
     constexpr size_t step = 64;
     wd.row_ptrs.reserve(step);
     for (size_t i = 0; i < rows; i += step)

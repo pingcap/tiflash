@@ -285,7 +285,10 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return required_key_size == 0 ? key.size : 0; }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key)
+    {
+        return required_key_size == 0 ? getJoinKeySize(key) : 0;
+    }
 
 private:
     const ColumnString * column_string = nullptr;
@@ -358,7 +361,10 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return required_key_size == 0 ? key.size : 0; }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key)
+    {
+        return required_key_size == 0 ? getJoinKeySize(key) : 0;
+    }
 
 private:
     const ColumnString * column_string = nullptr;
@@ -441,7 +447,7 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return key.size; }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return getJoinKeySize(key); }
 
 private:
     ColumnRawPtrs key_columns;
