@@ -414,5 +414,5 @@ public:
     const Offsets & getOffsets() const { return offsets; }
 };
 
-constexpr size_t x = sizeof(ColumnString);
+
 } // namespace DB
