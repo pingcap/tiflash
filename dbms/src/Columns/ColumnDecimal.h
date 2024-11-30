@@ -105,8 +105,7 @@ public:
 
     bool isNumeric() const override { return false; }
     bool canBeInsideNullable() const override { return true; }
-    bool isFixedAndContiguous() const override { return !is_Decimal256; }
-    bool valuesHaveFixedSize() const override { return !is_Decimal256; }
+    bool isFixedAndContiguous() const override { return true; }
     size_t sizeOfValueIfFixed() const override { return sizeof(T); }
 
     size_t size() const override { return data.size(); }
