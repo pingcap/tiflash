@@ -197,6 +197,8 @@ private:
 
 private:
     Block res_block;
+    // used to reuse column when evaluating other conditions
+    Block exec_block;
     size_t left_columns = 0;
     size_t right_columns = 0;
     std::vector<size_t> right_column_indices_to_add;

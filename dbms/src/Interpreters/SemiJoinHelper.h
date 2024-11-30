@@ -164,6 +164,8 @@ private:
     PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>> join_result;
     std::list<SemiJoinResult<KIND, STRICTNESS> *> undetermined_result_list;
     Block result_block;
+    // used to reuse column when evaluating other conditions
+    Block exec_block;
     size_t left_columns = 0;
     size_t right_columns = 0;
     size_t probe_rows;

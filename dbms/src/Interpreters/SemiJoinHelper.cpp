@@ -167,92 +167,96 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
         assert(!undetermined_result_list.empty());
         std::vector<size_t> offsets;
         size_t block_columns = result_block.columns();
-        Block exec_block = result_block.cloneEmpty();
-
-        while (!undetermined_result_list.empty())
+        if (!exec_block)
+            exec_block = result_block.cloneEmpty();
+        else
         {
-            MutableColumns columns(block_columns);
-            for (size_t i = 0; i < block_columns; ++i)
+            while (exec_block.columns() > block_columns)
+                exec_block.erase(exec_block.columns() - 1);
+        }
+
+        MutableColumns columns(block_columns);
+        for (size_t i = 0; i < block_columns; ++i)
+        {
+            /// Reuse the column to avoid memory allocation.
+            /// Correctness depends on the fact that equal and other condition expressions do not
+            /// removed any column, namely, the columns will not out of order.
+            /// TODO: Maybe we can reuse the memory of new columns added by expressions?
+            columns[i] = exec_block.safeGetByPosition(i).column->assumeMutable();
+            columns[i]->popBack(columns[i]->size());
+        }
+
+        size_t current_offset = 0;
+        offsets.clear();
+
+        for (auto & res : undetermined_result_list)
+        {
+            size_t prev_offset = current_offset;
+            res->template fillRightColumns<typename Maps::MappedType>(
+                columns,
+                left_columns,
+                right_columns,
+                right_column_indices_to_add,
+                current_offset,
+                max_block_size - current_offset);
+
+            /// Note that current_offset - prev_offset may be zero.
+            if (current_offset > prev_offset)
             {
-                /// Reuse the column to avoid memory allocation.
-                /// Correctness depends on the fact that equal and other condition expressions do not
-                /// removed any column, namely, the columns will not out of order.
-                /// TODO: Maybe we can reuse the memory of new columns added by expressions?
-                columns[i] = exec_block.safeGetByPosition(i).column->assumeMutable();
-                columns[i]->popBack(columns[i]->size());
+                for (size_t i = 0; i < left_columns; ++i)
+                    columns[i]->insertManyFrom(
+                        *result_block.getByPosition(i).column.get(),
+                        res->getRowNum(),
+                        current_offset - prev_offset);
             }
 
-            size_t current_offset = 0;
-            offsets.clear();
+            offsets.emplace_back(current_offset);
+            if (current_offset >= max_block_size)
+                break;
+        }
 
-            for (auto & res : undetermined_result_list)
-            {
-                size_t prev_offset = current_offset;
-                res->template fillRightColumns<typename Maps::MappedType>(
-                    columns,
-                    left_columns,
-                    right_columns,
-                    right_column_indices_to_add,
-                    current_offset,
-                    max_block_size - current_offset);
+        /// Move the columns to exec_block.
+        /// Note that this can remove the new columns that are added in the last loop
+        /// from equal and other condition expressions.
+        exec_block = result_block.cloneWithColumns(std::move(columns));
 
-                /// Note that current_offset - prev_offset may be zero.
-                if (current_offset > prev_offset)
+        non_equal_conditions.other_cond_expr->execute(exec_block);
+
+        const ColumnUInt8::Container *other_eq_from_in_column_data = nullptr, *other_column_data = nullptr;
+        ConstNullMapPtr other_eq_from_in_null_map = nullptr, other_null_map = nullptr;
+        ColumnPtr other_eq_from_in_column, other_column;
+
+        bool has_other_eq_cond_from_in = !non_equal_conditions.other_eq_cond_from_in_name.empty();
+        if (has_other_eq_cond_from_in)
+        {
+            other_eq_from_in_column = exec_block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
+            auto is_nullable_col = [&]() {
+                if (other_eq_from_in_column->isColumnNullable())
+                    return true;
+                if (other_eq_from_in_column->isColumnConst())
                 {
-                    for (size_t i = 0; i < left_columns; ++i)
-                        columns[i]->insertManyFrom(
-                            *result_block.getByPosition(i).column.get(),
-                            res->getRowNum(),
-                            current_offset - prev_offset);
+                    const auto & const_col = typeid_cast<const ColumnConst &>(*other_eq_from_in_column);
+                    return const_col.getDataColumn().isColumnNullable();
                 }
+                return false;
+            };
+            // nullable, const(nullable)
+            RUNTIME_CHECK_MSG(
+                is_nullable_col(),
+                "The equal condition from in column should be nullable, otherwise it should be used as join key");
 
-                offsets.emplace_back(current_offset);
-                if (current_offset >= max_block_size)
-                    break;
-            }
+            std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map)
+                = getDataAndNullMapVectorFromFilterColumn(other_eq_from_in_column);
+        }
 
-            /// Move the columns to exec_block.
-            /// Note that this can remove the new columns that are added in the last loop
-            /// from equal and other condition expressions.
-            exec_block = result_block.cloneWithColumns(std::move(columns));
-
-            non_equal_conditions.other_cond_expr->execute(exec_block);
-
-            const ColumnUInt8::Container *other_eq_from_in_column_data = nullptr, *other_column_data = nullptr;
-            ConstNullMapPtr other_eq_from_in_null_map = nullptr, other_null_map = nullptr;
-            ColumnPtr other_eq_from_in_column, other_column;
-
-            bool has_other_eq_cond_from_in = !non_equal_conditions.other_eq_cond_from_in_name.empty();
-            if (has_other_eq_cond_from_in)
-            {
-                other_eq_from_in_column = exec_block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
-                auto is_nullable_col = [&]() {
-                    if (other_eq_from_in_column->isColumnNullable())
-                        return true;
-                    if (other_eq_from_in_column->isColumnConst())
-                    {
-                        const auto & const_col = typeid_cast<const ColumnConst &>(*other_eq_from_in_column);
-                        return const_col.getDataColumn().isColumnNullable();
-                    }
-                    return false;
-                };
-                // nullable, const(nullable)
-                RUNTIME_CHECK_MSG(
-                    is_nullable_col(),
-                    "The equal condition from in column should be nullable, otherwise it should be used as join key");
-
-                std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map)
-                    = getDataAndNullMapVectorFromFilterColumn(other_eq_from_in_column);
-            }
-
-            bool has_other_cond = !non_equal_conditions.other_cond_name.empty();
-            bool has_other_cond_null_map = false;
-            if (has_other_cond)
-            {
-                other_column = exec_block.getByName(non_equal_conditions.other_cond_name).column;
-                std::tie(other_column_data, other_null_map) = getDataAndNullMapVectorFromFilterColumn(other_column);
-                has_other_cond_null_map = other_null_map != nullptr;
-            }
+        bool has_other_cond = !non_equal_conditions.other_cond_name.empty();
+        bool has_other_cond_null_map = false;
+        if (has_other_cond)
+        {
+            other_column = exec_block.getByName(non_equal_conditions.other_cond_name).column;
+            std::tie(other_column_data, other_null_map) = getDataAndNullMapVectorFromFilterColumn(other_column);
+            has_other_cond_null_map = other_null_map != nullptr;
+        }
 
 #define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map)            \
     checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
@@ -262,38 +266,37 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
         other_column_data,                                                                  \
         other_null_map);
 
-            if (has_other_eq_cond_from_in)
+        if (has_other_eq_cond_from_in)
+        {
+            if (has_other_cond)
             {
-                if (has_other_cond)
+                if (has_other_cond_null_map)
                 {
-                    if (has_other_cond_null_map)
-                    {
-                        CALL(true, true, true);
-                    }
-                    else
-                    {
-                        CALL(true, true, false);
-                    }
+                    CALL(true, true, true);
                 }
                 else
                 {
-                    CALL(true, false, false);
+                    CALL(true, true, false);
                 }
             }
             else
             {
-                RUNTIME_CHECK(has_other_cond);
-                if (has_other_cond_null_map)
-                {
-                    CALL(false, true, true);
-                }
-                else
-                {
-                    CALL(false, true, false);
-                }
+                CALL(true, false, false);
             }
-#undef CALL
         }
+        else
+        {
+            RUNTIME_CHECK(has_other_cond);
+            if (has_other_cond_null_map)
+            {
+                CALL(false, true, true);
+            }
+            else
+            {
+                CALL(false, true, false);
+            }
+        }
+#undef CALL
     }
 }
 
