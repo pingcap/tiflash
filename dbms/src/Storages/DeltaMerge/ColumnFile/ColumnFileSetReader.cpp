@@ -290,8 +290,7 @@ bool ColumnFileSetReader::shouldPlace(
         if (column_file->isInMemoryFile())
         {
             auto & dpb_reader = typeid_cast<ColumnFileInMemoryReader &>(*column_file_reader);
-            auto pk_column = dpb_reader.getPKColumn();
-            auto version_column = dpb_reader.getVersionColumn();
+            auto [pk_column, version_column] = dpb_reader.getPKAndVersionColumns();
 
             auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
             const auto & version_col_data = toColumnVectorData<UInt64>(version_column);
@@ -305,8 +304,7 @@ bool ColumnFileSetReader::shouldPlace(
         else if (column_file->isTinyFile())
         {
             auto & dpb_reader = typeid_cast<ColumnFileTinyReader &>(*column_file_reader);
-            auto pk_column = dpb_reader.getPKColumn();
-            auto version_column = dpb_reader.getVersionColumn();
+            auto [pk_column, version_column] = dpb_reader.getPKAndVersionColumns();
 
             auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
             const auto & version_col_data = toColumnVectorData<UInt64>(version_column);

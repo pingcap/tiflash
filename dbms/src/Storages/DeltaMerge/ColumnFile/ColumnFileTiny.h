@@ -76,28 +76,7 @@ private:
     /// The global file_provider
     const FileProviderPtr file_provider;
 
-    /// The members below are not serialized.
-
-    /// The cache data in memory.
-    /// Currently this field is unused.
-    CachePtr cache;
-
 private:
-    /// Read a block of columns in `column_defines` from cache / disk,
-    /// if `pack->schema` is not match with `column_defines`, take good care of ddl cast
-    Columns readFromCache(const ColumnDefines & column_defines, size_t col_start, size_t col_end) const;
-    Columns readFromDisk(
-        const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefines & column_defines,
-        size_t col_start,
-        size_t col_end) const;
-
-    void fillColumns(
-        const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefines & col_defs,
-        size_t col_count,
-        Columns & result) const;
-
     const DataTypePtr & getDataType(ColId column_id) const { return schema->getDataType(column_id); }
 
 public:
@@ -107,8 +86,7 @@ public:
         UInt64 bytes_,
         PageIdU64 data_page_id_,
         const DMContext & dm_context,
-        const IndexInfosPtr & index_infos_ = nullptr,
-        const CachePtr & cache_ = nullptr);
+        const IndexInfosPtr & index_infos_ = nullptr);
 
     Type getType() const override { return Type::TINY_FILE; }
 
@@ -126,9 +104,6 @@ public:
             return info.vector_index->index_id() == index_id;
         });
     }
-
-    auto getCache() const { return cache; }
-    void clearCache() { cache = {}; }
 
     ColumnFileSchemaPtr getSchema() const { return schema; }
 
@@ -177,8 +152,7 @@ public:
         const Block & block,
         size_t offset,
         size_t limit,
-        WriteBatches & wbs,
-        const CachePtr & cache = nullptr);
+        WriteBatches & wbs);
 
     static PageIdU64 writeColumnFileData(
         const DMContext & context,
@@ -239,12 +213,12 @@ public:
 
     String toString() const override
     {
-        String s = "{tiny_file,rows:" + DB::toString(rows) //
-            + ",bytes:" + DB::toString(bytes) //
-            + ",data_page_id:" + DB::toString(data_page_id) //
-            + ",schema:" + (schema ? schema->toString() : "none") //
-            + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
-        return s;
+        return fmt::format(
+            "{{tiny_file,rows:{},bytes:{},data_page_id:{},schema:{}}}",
+            rows,
+            bytes,
+            data_page_id,
+            (schema ? schema->toString() : "none"));
     }
 };
 

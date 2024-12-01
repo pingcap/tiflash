@@ -91,9 +91,13 @@ public:
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
-    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
-        override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override;
+
+    void flushNTAlignBuffer() override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 

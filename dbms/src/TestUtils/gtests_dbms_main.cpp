@@ -18,7 +18,7 @@
 #include <Interpreters/Context.h>
 #include <Poco/Environment.h>
 #include <Server/StorageConfigParser.h>
-#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/DMFileReaderPool.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/S3/S3Common.h>
