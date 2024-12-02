@@ -29,31 +29,49 @@ public:
 
         /// disable spill
         context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+
+        for (auto enable_pipeline : {false, true})
+        {
+            if (enable_pipeline)
+            {
+                for (auto enable_join_v2 : {false, true})
+                {
+                    if (enable_join_v2)
+                    {
+                        for (UInt64 prefetch_threshold : {0, 100000000})
+                            configs.emplace_back(enable_pipeline, enable_join_v2, prefetch_threshold);
+                    }
+                    else
+                        configs.emplace_back(enable_pipeline, enable_join_v2, 0);
+                }
+            }
+            else
+                configs.emplace_back(enable_pipeline, false, 0);
+        }
     }
+
+    struct JoinTestConfig
+    {
+        JoinTestConfig(bool enable_pipeline_, bool enable_join_v2_, UInt64 prefetch_threshold_)
+            : enable_pipeline(enable_pipeline_)
+            , enable_join_v2(enable_join_v2_)
+            , prefetch_threshold(prefetch_threshold_)
+        {}
+        bool enable_pipeline;
+        bool enable_join_v2;
+        UInt64 prefetch_threshold;
+    };
+    std::vector<JoinTestConfig> configs;
 };
 
 #define WRAP_FOR_JOIN_TEST_BEGIN                                                    \
-    for (auto enable_pipeline : {false, true})                                      \
+    for (auto cfg : configs)                                                        \
     {                                                                               \
-        enablePipeline(enable_pipeline);                                            \
-        if (enable_pipeline)                                                        \
-        {                                                                           \
-            for (auto enable_join_v2 : {"false", "true"})                           \
-            {                                                                       \
-                context.context->setSetting("enable_hash_join_v2", enable_join_v2); \
-                if (enable_join_v2)                                                 \
-                {                                                                   \
-                    for (UInt64 prefetch_threshold : {0, 100000000})                \
-                    {                                                               \
-                        context.context->setSetting("join_v2_probe_enable_prefetch_threshold", prefetch_threshold);
+        enablePipeline(cfg.enable_pipeline);                                        \
+        context.context->getSettingsRef().enable_hash_join_v2 = cfg.enable_join_v2; \
+        context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.prefetch_threshold;
 
-
-#define WRAP_FOR_JOIN_TEST_END \
-    }                          \
-    }                          \
-    }                          \
-    }                          \
-    }
+#define WRAP_FOR_JOIN_TEST_END }
 
 TEST_F(JoinExecutorTestRunner, SimpleJoin)
 try
@@ -2580,13 +2598,17 @@ try
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        auto blocks = getExecuteStreamsReturnBlocks(request);
-        ASSERT_EQ(expect_v2[i].size(), blocks.size());
-        for (size_t j = 0; j < blocks.size(); ++j)
+        for (UInt64 prefetch_threshold : {0, 100000000})
         {
-            ASSERT_EQ(expect_v2[i][j], blocks[j].rows());
+            context.context->setSetting("join_v2_probe_enable_prefetch_threshold", prefetch_threshold);
+            auto blocks = getExecuteStreamsReturnBlocks(request);
+            ASSERT_EQ(expect_v2[i].size(), blocks.size());
+            for (size_t j = 0; j < blocks.size(); ++j)
+            {
+                ASSERT_EQ(expect_v2[i][j], blocks[j].rows());
+            }
+            ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
         }
-        ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
     }
 }
 CATCH
@@ -2629,6 +2651,8 @@ try
             {10},
         },
     };
+
+    context.context->setSetting("enable_hash_join_v2", "false");
     for (size_t index = 0; index < join_types.size(); index++)
     {
         auto request = context.scan("split_test", "t1")
@@ -2646,15 +2670,70 @@ try
         for (size_t i = 0; i < block_sizes.size(); ++i)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-            WRAP_FOR_JOIN_TEST_BEGIN
-            auto blocks = getExecuteStreamsReturnBlocks(request);
-            if (expect[i].size() != blocks.size())
-                ASSERT_EQ(expect[i].size(), blocks.size());
-            for (size_t j = 0; j < blocks.size(); ++j)
+            for (auto enable_pipeline : {false, true})
             {
-                ASSERT_EQ(expect[i][j], blocks[j].rows());
+                enablePipeline(enable_pipeline);
+                auto blocks = getExecuteStreamsReturnBlocks(request);
+                ASSERT_EQ(expect[i].size(), blocks.size());
+                for (size_t j = 0; j < blocks.size(); ++j)
+                {
+                    ASSERT_EQ(expect[i][j], blocks[j].rows());
+                }
             }
-            WRAP_FOR_JOIN_TEST_END
+        }
+    }
+
+    context.context->setSetting("enable_hash_join_v2", "true");
+    enablePipeline(true);
+    std::vector<std::vector<std::vector<size_t>>> expects2{
+        {
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {2, 2, 2, 2, 2},
+            {7, 3},
+            {10},
+            {10},
+            {10},
+            {10},
+            {10},
+        },
+        {
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {2, 2, 2, 2, 2},
+            {7, 3},
+            {10},
+            {10},
+            {10},
+            {10},
+            {10},
+        },
+    };
+    for (size_t index = 0; index < join_types.size(); index++)
+    {
+        auto request = context.scan("split_test", "t1")
+                           .join(
+                               context.scan("split_test", "t2"),
+                               *(join_types.begin() + index),
+                               {col("a")},
+                               {},
+                               {},
+                               {gt(col("b"), col("c"))},
+                               {})
+                           .build(context);
+        auto & expect = expects2[index];
+
+        for (size_t i = 0; i < block_sizes.size(); ++i)
+        {
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+            for (UInt64 prefetch_threshold : {0, 100000000})
+            {
+                context.context->setSetting("join_v2_probe_enable_prefetch_threshold", prefetch_threshold);
+                auto blocks = getExecuteStreamsReturnBlocks(request);
+                ASSERT_EQ(expect[i].size(), blocks.size());
+                for (size_t j = 0; j < blocks.size(); ++j)
+                {
+                    ASSERT_EQ(expect[i][j], blocks[j].rows());
+                }
+            }
         }
     }
 }

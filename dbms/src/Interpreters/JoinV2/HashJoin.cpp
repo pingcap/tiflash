@@ -534,8 +534,6 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
 
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
-    /// min_result_block_size is used to avoid generating too many small block, use 50% of the block size as the default value
-    size_t min_result_block_size = std::max(1, (std::min(context.rows, settings.max_block_size) + 1) / 2);
     while (true)
     {
         Block block = doJoinBlock(context, stream_index);
@@ -545,13 +543,13 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
         result_blocks.push_back(std::move(block));
         /// exit the while loop if
         /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
-        /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
+        /// 2. the block may be expanded after join and result_rows exceeds the max_block_size
         if (context.isCurrentProbeFinished())
         {
             probe_workers_data[stream_index].probe_handle_rows += context.rows;
             break;
         }
-        if (may_probe_side_expanded_after_join && result_rows >= min_result_block_size)
+        if (may_probe_side_expanded_after_join && result_rows >= settings.max_block_size)
             break;
     }
     assert(!result_blocks.empty());
