@@ -182,7 +182,11 @@ public:
         const NameSet & probe_output_name_set,
         const Block & right_sample_block);
     void doJoin();
-    bool isJoinDone() const { return is_probe_hash_table_done && undetermined_result_list.empty(); }
+    bool isJoinDone() const
+    {
+        return is_probe_hash_table_done && undetermined_result_list.empty()
+            && next_step_undetermined_result_list.empty();
+    }
     bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
     std::vector<RowsNotInsertToMap *> & getNullRows() { return null_rows; }
     Block genJoinResult(const NameSet & output_column_names_set);
@@ -190,6 +194,8 @@ public:
 private:
     template <NASemiJoinStep STEP>
     void runStep();
+    template <NASemiJoinStep STEP>
+    void prepareForRunStep();
     void runStepAllBlocks();
 
     template <NASemiJoinStep STEP>

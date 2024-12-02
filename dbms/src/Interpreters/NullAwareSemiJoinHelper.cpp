@@ -402,6 +402,19 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         right_columns -= 1;
     }
 
+    if (!undetermined_result_list.empty())
+    {
+        // prepare for run step
+        if constexpr (STRICTNESS == All)
+        {
+            prepareForRunStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>();
+        }
+        else
+        {
+            prepareForRunStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>();
+        }
+    }
+
     RUNTIME_CHECK(right_columns > 0);
     is_probe_hash_table_done = true;
 }
@@ -423,6 +436,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
                 undetermined_result_list.swap(next_step_undetermined_result_list);
                 next_step_undetermined_result_list.clear();
                 current_check_step = NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS;
+                prepareForRunStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>();
             }
         }
         else
@@ -439,6 +453,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
             undetermined_result_list.swap(next_step_undetermined_result_list);
             next_step_undetermined_result_list.clear();
             current_check_step = NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS;
+            prepareForRunStep<NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS>();
         }
         break;
     case NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS:
@@ -449,6 +464,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
             undetermined_result_list.swap(next_step_undetermined_result_list);
             next_step_undetermined_result_list.clear();
             current_check_step = NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS;
+            prepareForRunStep<NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS>();
         }
         break;
     case NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS:
@@ -461,23 +477,36 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 template <NASemiJoinStep STEP>
-void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
+void NASemiJoinHelper<KIND, STRICTNESS, Maps>::prepareForRunStep()
 {
     static_assert(
         STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
-        || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
+        || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS);
 
     auto it = undetermined_result_list.begin();
     while (it != undetermined_result_list.end())
     {
         if ((*it)->getStep() != STEP)
         {
-            next_step_undetermined_result_list.emplace_back(*it);
+            if likely ((*it)->getStep() != NASemiJoinStep::DONE)
+            {
+                next_step_undetermined_result_list.emplace_back(*it);
+            }
             it = undetermined_result_list.erase(it);
             continue;
         }
         ++it;
     }
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+template <NASemiJoinStep STEP>
+void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
+{
+    static_assert(
+        STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
+        || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
+
     if (undetermined_result_list.empty())
         return;
 
@@ -538,17 +567,8 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStepAllBlocks()
 {
-    if unlikely (undetermined_result_list.empty())
+    if (undetermined_result_list.empty())
         return;
-    if unlikely (undetermined_result_list.front()->getStep() == NASemiJoinStep::DONE)
-    {
-        while (undetermined_result_list.front()->getStep() == NASemiJoinStep::DONE)
-        {
-            undetermined_result_list.pop_front();
-            if (undetermined_result_list.empty())
-                return;
-        }
-    }
     NASemiJoinHelper::Result * res = *undetermined_result_list.begin();
     auto next_right_block_index = res->getNextRightBlockIndex();
     assert(next_right_block_index < right_blocks.size());
