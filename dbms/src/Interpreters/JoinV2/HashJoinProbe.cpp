@@ -374,7 +374,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
             {
                 ++current_offset;
                 insertRowToBatch(key_getter, ptr + key_offset, key2);
-                if unlikely (current_offset >= context.rows)
+                if unlikely (current_offset >= settings.max_block_size)
                     break;
             }
 
@@ -440,7 +440,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
                 ++current_offset;
                 selective_offsets.push_back(state->index);
                 insertRowToBatch(key_getter, ptr + key_offset, key2);
-                if unlikely (current_offset >= context.rows)
+                if unlikely (current_offset >= settings.max_block_size)
                 {
                     if (!next_ptr)
                     {

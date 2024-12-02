@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/JoinV2/HashJoinBuild.h>
+
 #include "Interpreters/JoinV2/HashJoinKey.h"
 
 namespace DB
@@ -34,7 +35,12 @@ public:
 
     static size_t pointerTableCapacity(size_t count) { return std::max(roundUpToPowerOfTwoOrZero(count * 2), 1 << 10); }
 
-    void init(HashJoinKeyMethod method, size_t row_count_hint, size_t hash_value_bytes, size_t probe_prefetch_threshold, bool enable_tagged_pointer_);
+    void init(
+        HashJoinKeyMethod method,
+        size_t row_count_hint,
+        size_t hash_value_bytes,
+        size_t probe_prefetch_threshold,
+        bool enable_tagged_pointer_);
 
     template <typename HashValueType>
     bool build(

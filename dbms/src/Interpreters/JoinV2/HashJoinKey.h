@@ -82,7 +82,10 @@ public:
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { tiflash_compiler_builtin_memcpy(pos, &t, sizeof(T)); }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos)
+    {
+        tiflash_compiler_builtin_memcpy(pos, &t, sizeof(T));
+    }
 
     ALWAYS_INLINE T deserializeJoinKey(const char * pos)
     {
@@ -156,14 +159,14 @@ public:
                 break;
             case 8:
                 tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 8);
-                break;    
-            case 16: 
+                break;
+            case 16:
                 tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 16);
-                break;    
-            case 32: 
+                break;
+            case 32:
                 tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 32);
                 break;
-            default: 
+            default:
                 inline_memcpy(&data[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
             }
             offset += fixed_size[i];
@@ -175,7 +178,10 @@ public:
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { tiflash_compiler_builtin_memcpy(pos, &t, sizeof(T)); }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos)
+    {
+        tiflash_compiler_builtin_memcpy(pos, &t, sizeof(T));
+    }
 
     ALWAYS_INLINE T deserializeJoinKey(const char * pos)
     {
@@ -244,14 +250,14 @@ public:
                 break;
             case 8:
                 tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 8);
-                break;    
-            case 16: 
+                break;
+            case 16:
                 tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 16);
-                break;    
-            case 32: 
+                break;
+            case 32:
                 tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 32);
                 break;
-            default: 
+            default:
                 inline_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
             }
             offset += fixed_size[i];
