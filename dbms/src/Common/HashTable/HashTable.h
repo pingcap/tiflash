@@ -856,14 +856,8 @@ public:
 
     void ALWAYS_INLINE prefetch(size_t hashval) const
     {
-        (void)hashval;
-#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
-        size_t place_value = grower.place(hashval);
-        __mm_prefetch((const char *)(&buf[place_value]), _MM_HINT_NTA);
-#elif defined(__GNUC__)
-        size_t place_value = grower.place(hashval);
+        const size_t place_value = grower.place(hashval);
         __builtin_prefetch(static_cast<const void *>(&buf[place_value]));
-#endif
     }
 
 protected:
