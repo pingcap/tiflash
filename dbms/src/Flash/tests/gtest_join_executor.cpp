@@ -1906,7 +1906,6 @@ try
               .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
               .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
               .build(context);
-    WRAP_FOR_JOIN_TEST_BEGIN
     {
         executeAndAssertColumnsEqual(
             request,
@@ -1938,7 +1937,6 @@ try
              toNullableVec<String>({"banana", "banana", "banana", {}}),
              toNullableVec<String>({"apple", "apple", "apple", {}})});
     }
-    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
