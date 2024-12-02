@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Arena.h>
 #include <Common/Exception.h>
 #include <Common/UTF8Helpers.h>
 #include <TiDB/Collation/CollatorCompare.h>
@@ -101,6 +102,7 @@ public:
         = 0;
     virtual StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const = 0;
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
+    virtual StringRef sortKey(const char * s, size_t length, DB::Arena &) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
     CollatorType getCollatorType() const { return collator_type; }
@@ -134,6 +136,14 @@ public:
             return DB::BinCollatorSortKey<true>(s, length);
         }
         return sortKey(s, length, container);
+    }
+    ALWAYS_INLINE inline StringRef sortKeyFastPath(const char * s, size_t length, DB::Arena & pool) const
+    {
+        if (likely(isPaddingBinary()))
+        {
+            return DB::BinCollatorSortKey<true>(s, length);
+        }
+        return sortKey(s, length, pool);
     }
 
 protected:

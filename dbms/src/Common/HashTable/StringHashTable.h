@@ -16,7 +16,9 @@
 
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashTable.h>
+#include <Common/Logger.h>
 #include <IO/Endian.h>
+#include <common/logger_useful.h>
 
 #include <new>
 #include <variant>

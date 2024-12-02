@@ -231,8 +231,7 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::
-        HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*use_cache=*/false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -528,7 +527,7 @@ struct AggregationMethodFixedStringNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -1326,12 +1325,12 @@ public:
         std::vector<size_t> submap_m2_infos{};
         std::vector<size_t> submap_m3_infos{};
         std::vector<size_t> submap_m4_infos{};
-
         std::vector<StringRef> submap_m0_datas{};
         std::vector<StringKey8> submap_m1_datas{};
         std::vector<StringKey16> submap_m2_datas{};
         std::vector<StringKey24> submap_m3_datas{};
         std::vector<ArenaKeyHolder> submap_m4_datas{};
+        std::unique_ptr<Arena> sort_key_pool;
 
         void prepareForAgg();
         bool allBlockDataHandled() const
@@ -1343,8 +1342,8 @@ public:
         }
         bool stringHashTableRecoveryInfoEmpty() const
         {
-            return submap_m0_infos.empty() && submap_m1_infos.empty() &&
-                submap_m3_infos.empty() && submap_m4_infos.empty();
+            return submap_m0_infos.empty() && submap_m1_infos.empty() && submap_m3_infos.empty()
+                && submap_m4_infos.empty();
         }
         void resetBlock(const Block & block_)
         {
@@ -1358,6 +1357,8 @@ public:
             hit_row_cnt = 0;
             not_found_rows.clear();
             not_found_rows.reserve(block_.rows() / 2);
+
+            sort_key_pool.reset();
         }
     };
 

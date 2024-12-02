@@ -755,7 +755,7 @@ size_t Aggregator::emplaceOrFindStringKey(
     AggProcessInfo & agg_process_info) const
 {
     static_assert(!(collect_hit_rate && only_lookup));
-    RUNTIME_CHECK(key_infos.size() == key_datas.size());
+    assert(key_infos.size() == key_datas.size());
 
     using Hash = typename StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::Hash;
     std::vector<size_t> hashvals(key_infos.size(), 0);
@@ -1017,7 +1017,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
 #define M(SUBMAPINDEX)                                                              \
     template <typename StringKeyType>                                               \
-    void setupExceptionRecoveryInfoForStringHashTable(                              \
+    ALWAYS_INLINE inline void setupExceptionRecoveryInfoForStringHashTable(         \
         Aggregator::AggProcessInfo & agg_process_info,                              \
         size_t row,                                                                 \
         const std::vector<size_t> & key_infos,                                      \
@@ -1038,8 +1038,10 @@ M(4)
 
 #undef M
 
-// Emplace key into StringHashMap/TwoLevelStringHashMap is seperated from other situations,
-// because it's easy to implement prefetch submap directly.
+// In this function, we will prefetch/empalce each specifix submap directly instead of accessing StringHashMap interface,
+// which is good for performance.
+// NOTE: this function is column-wise, which means sort key buffer cannot be reused.
+// This buffer will not be release until this block is processed done.
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     Method & method,
@@ -1063,8 +1065,9 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     M(4)
 #undef M
 
+    const size_t rows = agg_process_info.end_row - agg_process_info.start_row;
+    auto sort_key_pool = std::make_unique<Arena>();
     std::vector<String> sort_key_containers;
-    sort_key_containers.resize(params.keys_size, "");
 
 #define M(INFO, DATA, KEYTYPE) \
     std::vector<size_t>(INFO); \
@@ -1077,13 +1080,15 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     M(key_str_infos, key_str_datas, ArenaKeyHolder)
 #undef M
 
-    const size_t rows = agg_process_info.end_row - agg_process_info.start_row;
     // If no resize exception happens, so this is a new Block.
     // If resize exception happens, start_row also set as zero.
     RUNTIME_CHECK(agg_process_info.start_row == 0);
 
     if likely (agg_process_info.stringHashTableRecoveryInfoEmpty())
     {
+        // sort_key_pool should already been reset by AggProcessInfo::restBlock()
+        RUNTIME_CHECK(!agg_process_info.sort_key_pool);
+
         const size_t reserve_size = rows / 4;
 
 #define M(INFO, DATA, SUBMAPINDEX, KEYTYPE)                                                          \
@@ -1106,7 +1111,9 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
 
         for (size_t i = 0; i < rows; ++i)
         {
-            auto key_holder = state.getKeyHolder(i, aggregates_pool, sort_key_containers);
+            // Use Arena for collation sort key, because we are doing agg in column-wise way.
+            // So a big arena is needed to store decoded key, and we can avoid resize std::string by using Arena.
+            auto key_holder = state.getKeyHolder(i, aggregates_pool, sort_key_pool.get());
             dispatchStringHashTable(
                 i,
                 key_holder,
@@ -1142,7 +1149,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     bool zero_agg_func_size = (params.aggregates_size == 0);
 
 #define M(INDEX, INFO, DATA, PLACES)                                                                               \
-    if (!(INFO).empty())                                                                                      \
+    if (!got_resize_exception && !(INFO).empty())                                                                  \
     {                                                                                                              \
         if (zero_agg_func_size)                                                                                    \
             emplaced_index = emplaceOrFindStringKey<INDEX, collect_hit_rate, only_lookup, enable_prefetch, true>(  \
@@ -1165,15 +1172,15 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
         if unlikely (emplaced_index != (INFO).size())                                                              \
             got_resize_exception = true;                                                                           \
     }                                                                                                              \
-    else \
-    { \
-        emplaced_index = 0; \
-    } \
+    else                                                                                                           \
+    {                                                                                                              \
+        emplaced_index = 0;                                                                                        \
+    }                                                                                                              \
     setupExceptionRecoveryInfoForStringHashTable(                                                                  \
         agg_process_info,                                                                                          \
         emplaced_index,                                                                                            \
-        (INFO),                                                                                                      \
-        (DATA),                                                                                                      \
+        (INFO),                                                                                                    \
+        (DATA),                                                                                                    \
         std::integral_constant<size_t, INDEX>{});
 
     M(0, key0_infos, key0_datas, key0_places)
@@ -1185,10 +1192,6 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
 
     if (zero_agg_func_size)
         return;
-
-    RUNTIME_CHECK(
-        rows
-        == key0_places.size() + key8_places.size() + key16_places.size() + key24_places.size() + key_str_places.size());
 
     std::vector<AggregateDataPtr> places(rows, nullptr);
 #define M(INFO, PLACES)                        \
@@ -1218,6 +1221,12 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     }
     // For StringHashTable, start_row is meanless, instead submap_mx_infos/submap_mx_datas are used.
     agg_process_info.start_row = got_resize_exception ? 0 : agg_process_info.end_row;
+
+    if unlikely (got_resize_exception)
+    {
+        RUNTIME_CHECK(!agg_process_info.stringHashTableRecoveryInfoEmpty());
+        agg_process_info.sort_key_pool = std::move(sort_key_pool);
+    }
 }
 
 void NO_INLINE

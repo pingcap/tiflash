@@ -91,12 +91,11 @@ struct HashMethodOneNumber
 
 
 /// For the case when there is one string key.
-template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true>
+template <typename Value, typename Mapped, bool use_cache = true>
 struct HashMethodString
-    : public columns_hashing_impl::
-          HashMethodBase<HashMethodString<Value, Mapped, place_string_to_arena, use_cache>, Value, Mapped, use_cache>
+    : public columns_hashing_impl::HashMethodBase<HashMethodString<Value, Mapped, use_cache>, Value, Mapped, use_cache>
 {
-    using Self = HashMethodString<Value, Mapped, place_string_to_arena, use_cache>;
+    using Self = HashMethodString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 
     const IColumn::Offset * offsets;
@@ -115,36 +114,40 @@ struct HashMethodString
         offsets = column_string.getOffsets().data();
         chars = column_string.getChars().data();
         if (!collators.empty())
-        {
-            if constexpr (!place_string_to_arena)
-                throw Exception("String with collator must be placed on arena.", ErrorCodes::LOGICAL_ERROR);
             collator = collators[0];
-        }
     }
 
-    ALWAYS_INLINE inline auto getKeyHolder(
+    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(
         ssize_t row,
         [[maybe_unused]] Arena * pool,
-        std::vector<String> & sort_key_containers) const
+        [[maybe_unused]] std::vector<String> & sort_key_containers) const
     {
-        auto last_offset = row == 0 ? 0 : offsets[row - 1];
-        // Remove last zero byte.
-        StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
+        auto key = getKey(row);
+        if (likely(collator))
+            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
 
-        if constexpr (place_string_to_arena)
-        {
-            if (likely(collator))
-                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-            return ArenaKeyHolder{key, pool};
-        }
-        else
-        {
-            return key;
-        }
+        return ArenaKeyHolder{key, pool};
+    }
+
+    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(ssize_t row, Arena * pool, Arena * sort_key_pool) const
+    {
+        auto key = getKey(row);
+        if (likely(collator))
+            key = collator->sortKey(key.data, key.size, *sort_key_pool);
+
+        return ArenaKeyHolder{key, pool};
     }
 
 protected:
     friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+
+private:
+    ALWAYS_INLINE inline StringRef getKey(size_t row) const
+    {
+        auto last_offset = row == 0 ? 0 : offsets[row - 1];
+        // Remove last zero byte.
+        return StringRef(chars + last_offset, offsets[row] - last_offset - 1);
+    }
 };
 
 template <typename Value, typename Mapped, bool padding>
@@ -168,6 +171,11 @@ struct HashMethodStringBin
     }
 
     ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, Arena * pool, std::vector<String> &) const
+    {
+        return getKeyHolder(row, pool, nullptr);
+    }
+
+    ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, Arena * pool, Arena *) const
     {
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
@@ -381,15 +389,12 @@ protected:
 
 
 /// For the case when there is one fixed-length string key.
-template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true>
+template <typename Value, typename Mapped, bool use_cache = true>
 struct HashMethodFixedString
-    : public columns_hashing_impl::HashMethodBase<
-          HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache>,
-          Value,
-          Mapped,
-          use_cache>
+    : public columns_hashing_impl::
+          HashMethodBase<HashMethodFixedString<Value, Mapped, use_cache>, Value, Mapped, use_cache>
 {
-    using Self = HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache>;
+    using Self = HashMethodFixedString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 
     size_t n;
@@ -411,26 +416,25 @@ struct HashMethodFixedString
             collator = collators[0];
     }
 
-    ALWAYS_INLINE inline auto getKeyHolder(
+    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(
         size_t row,
-        [[maybe_unused]] Arena * pool,
+        Arena * pool,
         std::vector<String> & sort_key_containers) const
     {
         StringRef key(&(*chars)[row * n], n);
-
         if (collator)
-        {
             key = collator->sortKeyFastPath(key.data, key.size, sort_key_containers[0]);
-        }
 
-        if constexpr (place_string_to_arena)
-        {
-            return ArenaKeyHolder{key, pool};
-        }
-        else
-        {
-            return key;
-        }
+        return ArenaKeyHolder{key, pool};
+    }
+
+    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(size_t row, Arena * pool, Arena * sort_key_pool) const
+    {
+        StringRef key(&(*chars)[row * n], n);
+        if (collator)
+            key = collator->sortKeyFastPath(key.data, key.size, *sort_key_pool);
+
+        return ArenaKeyHolder{key, pool};
     }
 
 protected:

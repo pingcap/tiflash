@@ -412,7 +412,7 @@ struct KeyGetterForTypeImpl<JoinMapMethod::key64, Value, Mapped>
 template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<JoinMapMethod::key_string, Value, Mapped>
 {
-    using Type = ColumnsHashing::HashMethodString<Value, Mapped, true, false>;
+    using Type = ColumnsHashing::HashMethodString<Value, Mapped, false>;
 };
 template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<JoinMapMethod::key_strbinpadding, Value, Mapped>
@@ -427,7 +427,7 @@ struct KeyGetterForTypeImpl<JoinMapMethod::key_strbin, Value, Mapped>
 template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<JoinMapMethod::key_fixed_string, Value, Mapped>
 {
-    using Type = ColumnsHashing::HashMethodFixedString<Value, Mapped, true, false>;
+    using Type = ColumnsHashing::HashMethodFixedString<Value, Mapped, false>;
 };
 template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<JoinMapMethod::keys128, Value, Mapped>
@@ -652,18 +652,18 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         insert_indexes.emplace_back(insert_index);
     }
 
-#define INSERT_TO_MAP(join_partition, segment_index)          \
-    auto & current_map = (join_partition)->getHashMap<Map>(); \
-    for (auto & s_i : (segment_index))                        \
-    {                                                         \
-        Inserter<STRICTNESS, Map, KeyGetter>::insert(         \
-            current_map,                                      \
-            key_getter,                                       \
-            stored_block,                                     \
-            s_i,                                              \
-            pool,                                             \
-            sort_key_containers,                              \
-            probe_cache_column_threshold);                    \
+#define INSERT_TO_MAP(join_partition, segment_index)            \
+    auto & current_map = (join_partition) -> getHashMap<Map>(); \
+    for (auto & s_i : (segment_index))                          \
+    {                                                           \
+        Inserter<STRICTNESS, Map, KeyGetter>::insert(           \
+            current_map,                                        \
+            key_getter,                                         \
+            stored_block,                                       \
+            s_i,                                                \
+            pool,                                               \
+            sort_key_containers,                                \
+            probe_cache_column_threshold);                      \
     }
 
 #define INSERT_TO_NOT_INSERTED_MAP                                                                      \
