@@ -14,22 +14,37 @@
 
 #include <Common/Stopwatch.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
+#include "Interpreters/JoinV2/HashJoinKey.h"
 
 namespace DB
 {
 
 void HashJoinPointerTable::init(
+    HashJoinKeyMethod method,
     size_t row_count,
     size_t hash_value_bytes,
     size_t probe_prefetch_threshold,
     bool enable_tagged_pointer_)
 {
     hash_value_bits = hash_value_bytes * 8;
-    pointer_table_size = pointerTableCapacity(row_count);
-    /// Pointer table size cannot exceed the number that the hash value's byte number can express.
-    pointer_table_size = std::min(pointer_table_size, 1ULL << hash_value_bits);
-    /// It also cannot exceed 2^32 to avoid memory allocation error.
-    pointer_table_size = std::min(pointer_table_size, 1ULL << 32);
+    if (method == HashJoinKeyMethod::OneKey8)
+    {
+        assert(hash_value_bits == 8);
+        pointer_table_size = 1 << 8;
+    }
+    else if (method == HashJoinKeyMethod::OneKey16)
+    {
+        assert(hash_value_bits == 16);
+        pointer_table_size = 1 << 16;
+    }
+    else
+    {
+        pointer_table_size = pointerTableCapacity(row_count);
+        /// Pointer table size cannot exceed the number that the hash value's byte number can express.
+        pointer_table_size = std::min(pointer_table_size, 1ULL << hash_value_bits);
+        /// It also cannot exceed 2^32 to avoid memory allocation error.
+        pointer_table_size = std::min(pointer_table_size, 1ULL << 32);
+    }
 
     RUNTIME_ASSERT(isPowerOfTwo(pointer_table_size));
     pointer_table_size_degree = log2(pointer_table_size);

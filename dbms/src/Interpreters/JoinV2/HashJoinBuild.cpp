@@ -132,7 +132,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         }
     }
 
-    constexpr size_t step = 64;
+    constexpr size_t step = 256;
     wd.row_ptrs.reserve(step);
     for (size_t i = 0; i < rows; i += step)
     {

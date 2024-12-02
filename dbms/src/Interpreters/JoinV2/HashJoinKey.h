@@ -82,12 +82,12 @@ public:
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { memcpy(pos, &t, sizeof(T)); }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { tiflash_compiler_builtin_memcpy(pos, &t, sizeof(T)); }
 
     ALWAYS_INLINE T deserializeJoinKey(const char * pos)
     {
         T t;
-        memcpy(&t, pos, sizeof(T));
+        tiflash_compiler_builtin_memcpy(&t, pos, sizeof(T));
         return t;
     }
 
@@ -137,13 +137,35 @@ public:
         union
         {
             T key;
-            char data[sizeof(T)] = {};
+            char data[sizeof(T)]{};
         };
         size_t sz = vec.size();
         size_t offset = sizeof(T) - fixed_size_sum;
         for (size_t i = 0; i < sz; ++i)
         {
-            memcpy(&data[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
+            switch (fixed_size[i])
+            {
+            case 1:
+                tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 1);
+                break;
+            case 2:
+                tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 2);
+                break;
+            case 4:
+                tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 4);
+                break;
+            case 8:
+                tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 8);
+                break;    
+            case 16: 
+                tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 16);
+                break;    
+            case 32: 
+                tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 32);
+                break;
+            default: 
+                inline_memcpy(&data[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
+            }
             offset += fixed_size[i];
         }
         return key;
@@ -153,12 +175,12 @@ public:
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { memcpy(pos, &t, sizeof(T)); }
+    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) { tiflash_compiler_builtin_memcpy(pos, &t, sizeof(T)); }
 
     ALWAYS_INLINE T deserializeJoinKey(const char * pos)
     {
         T key;
-        memcpy(&key, pos, sizeof(T));
+        tiflash_compiler_builtin_memcpy(&key, pos, sizeof(T));
         return key;
     }
 
@@ -209,7 +231,29 @@ public:
         size_t offset = 0;
         for (size_t i = 0; i < sz; ++i)
         {
-            memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
+            switch (fixed_size[i])
+            {
+            case 1:
+                tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 1);
+                break;
+            case 2:
+                tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 2);
+                break;
+            case 4:
+                tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 4);
+                break;
+            case 8:
+                tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 8);
+                break;    
+            case 16: 
+                tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 16);
+                break;    
+            case 32: 
+                tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 32);
+                break;
+            default: 
+                inline_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
+            }
             offset += fixed_size[i];
         }
         return StringRef(key_buffer.data(), fixed_size_sum);
@@ -219,7 +263,7 @@ public:
 
     ALWAYS_INLINE size_t getJoinKeySize(const KeyType &) { return fixed_size_sum; }
 
-    ALWAYS_INLINE void serializeJoinKey(const KeyType & s, char * pos) { memcpy(pos, s.data, fixed_size_sum); }
+    ALWAYS_INLINE void serializeJoinKey(const KeyType & s, char * pos) { inline_memcpy(pos, s.data, fixed_size_sum); }
 
     ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos) { return StringRef(pos, fixed_size_sum); }
 
@@ -269,14 +313,14 @@ public:
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
-        std::memcpy(pos, &s.size, sizeof(UInt32));
+        tiflash_compiler_builtin_memcpy(pos, &s.size, sizeof(UInt32));
         inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
     }
 
     ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos)
     {
         StringRef s;
-        std::memcpy(&s.size, pos, sizeof(UInt32));
+        tiflash_compiler_builtin_memcpy(&s.size, pos, sizeof(UInt32));
         s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
         return s;
     }
@@ -345,14 +389,14 @@ public:
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
-        memcpy(pos, &s.size, sizeof(UInt32));
+        tiflash_compiler_builtin_memcpy(pos, &s.size, sizeof(UInt32));
         inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
     }
 
     ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos)
     {
         StringRef s;
-        memcpy(&s.size, pos, sizeof(UInt32));
+        tiflash_compiler_builtin_memcpy(&s.size, pos, sizeof(UInt32));
         s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
         return s;
     }
@@ -429,14 +473,14 @@ public:
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
-        memcpy(pos, &s.size, sizeof(UInt32));
+        tiflash_compiler_builtin_memcpy(pos, &s.size, sizeof(UInt32));
         inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
     }
 
     ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos)
     {
         StringRef s;
-        memcpy(&s.size, pos, sizeof(UInt32));
+        tiflash_compiler_builtin_memcpy(&s.size, pos, sizeof(UInt32));
         s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
         return s;
     }
