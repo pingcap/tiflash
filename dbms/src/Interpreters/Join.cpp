@@ -34,8 +34,6 @@
 #include <exception>
 #include <magic_enum.hpp>
 
-#include "Interpreters/CancellationHook.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -1519,20 +1517,13 @@ void Join::checkTypes(const Block & block) const
 namespace
 {
 template <typename Helper>
-Block genResult(ProbeProcessInfo & probe_process_info, Helper * helper, const NameSet & output_column_names_set)
-{
-    auto ret = helper->genJoinResult(output_column_names_set);
-    probe_process_info.all_rows_joined_finish = true;
-    probe_process_info.semi_join_family_helper.reset();
-    return ret;
-}
-template <typename Helper>
 Block doNASemiJoinOrSemiJoin(
     ProbeProcessInfo & probe_process_info,
     Helper * helper,
     const NameSet & output_column_names_set,
     const CancellationHook & is_cancelled)
 {
+    assert(helper->isProbeHashTableDone());
     while (!helper->isJoinDone())
     {
         if (is_cancelled())
@@ -1544,7 +1535,10 @@ Block doNASemiJoinOrSemiJoin(
         return {};
 
     /// Now all results are known.
-    return genResult(probe_process_info, helper, output_column_names_set);
+    auto ret = helper->genJoinResult(output_column_names_set);
+    probe_process_info.all_rows_joined_finish = true;
+    probe_process_info.semi_join_family_helper.reset();
+    return ret;
 }
 } // namespace
 
@@ -1594,21 +1588,12 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
         std::vector<RowsNotInsertToMap *> null_rows(partitions.size(), nullptr);
         for (size_t i = 0; i < partitions.size(); ++i)
             null_rows[i] = partitions[i]->getRowsNotInsertedToMap();
-        probe_process_info.semi_join_family_helper = decltype(probe_process_info.semi_join_family_helper)(
-            new NASemiJoinHelper<KIND, STRICTNESS, Maps>(
-                rows,
-                blocks,
-                std::move(null_rows),
-                max_block_size,
-                non_equal_conditions),
-            [](void * ptr) { delete reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
-    }
-
-    auto * helper = reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(
-        probe_process_info.semi_join_family_helper.get());
-
-    if (!helper->isProbeHashTableDone())
-    {
+        auto na_semi_join_helper = std::make_unique<NASemiJoinHelper<KIND, STRICTNESS, Maps>>(
+            rows,
+            blocks,
+            std::move(null_rows),
+            max_block_size,
+            non_equal_conditions);
         NALeftSideInfo left_side_info(
             probe_process_info.null_map,
             probe_process_info.null_aware_join_data->filter_map,
@@ -1617,8 +1602,8 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
             right_has_all_key_null_row.load(std::memory_order_relaxed),
             right_table_is_empty.load(std::memory_order_relaxed),
             null_key_check_all_blocks_directly,
-            helper->getNullRows());
-        helper->probeHashTable(
+            na_semi_join_helper->getNullRows());
+        na_semi_join_helper->probeHashTable(
             partitions,
             probe_process_info.null_aware_join_data->key_columns,
             key_sizes,
@@ -1630,7 +1615,15 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
             right_sample_block);
         if (is_cancelled())
             return {};
+
+        probe_process_info.semi_join_family_helper
+            = decltype(probe_process_info.semi_join_family_helper)(na_semi_join_helper.release(), [](void * ptr) {
+                  delete reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr);
+              });
     }
+
+    auto * helper = reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(
+        probe_process_info.semi_join_family_helper.get());
 
     return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
 }
@@ -1697,21 +1690,12 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             collators,
             restore_config.restore_round);
 
-        probe_process_info.semi_join_family_helper = decltype(probe_process_info.semi_join_family_helper)(
-            new SemiJoinHelper<KIND, STRICTNESS, Maps>(rows, max_block_size, non_equal_conditions),
-            [](void * ptr) { delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
-    }
-
-    auto * helper
-        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
-
-    if (!helper->isProbeHashTableDone())
-    {
+        auto semi_join_helper
+            = std::make_unique<SemiJoinHelper<KIND, STRICTNESS, Maps>>(rows, max_block_size, non_equal_conditions);
         const NameSet & probe_output_name_set = has_other_condition
             ? output_columns_names_set_for_other_condition_after_finalize
             : output_column_names_set_after_finalize;
-
-        helper->probeHashTable(
+        semi_join_helper->probeHashTable(
             partitions,
             key_sizes,
             collators,
@@ -1719,9 +1703,18 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             probe_process_info,
             probe_output_name_set,
             right_sample_block);
+
         if (is_cancelled())
             return {};
+
+        probe_process_info.semi_join_family_helper
+            = decltype(probe_process_info.semi_join_family_helper)(semi_join_helper.release(), [](void * ptr) {
+                  delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr);
+              });
     }
+
+    auto * helper
+        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
 
     return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
 }
