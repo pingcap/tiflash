@@ -87,8 +87,9 @@ inline UInt8 prefixToCopy(UInt64 mask)
     static constexpr UInt64 all_match = 0xFFFFFFFFFFFFFFFFULL;
     if (mask == all_match)
         return 64;
-    /// Row with index 0 correspond to the least significant bit.
-    /// So the length of the prefix to copy is 64 - #(leading zeroes).
+    /// std::countl_zero count from the most significant bit of mask, corresponding to the tail of the original filter.
+    /// If only the tail of the original filter is zero, we can copy the prefix directly.
+    /// The length of tail zero if `leading_zeros`, so the length of the prefix to copy is 64 - #(leading zeroes).
     const UInt64 leading_zeroes = std::countl_zero(mask);
     if (mask == ((all_match << leading_zeroes) >> leading_zeroes))
         return 64 - leading_zeroes;
