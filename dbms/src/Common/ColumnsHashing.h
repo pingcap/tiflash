@@ -85,8 +85,6 @@ struct HashMethodOneNumber
     }
 
     const FieldType * getKeyData() const { return vec; }
-
-    size_t getTotalRows() const { return total_rows; }
 };
 
 
