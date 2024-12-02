@@ -485,12 +485,6 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
     size_t block_columns = res_block.columns();
     if (!exec_block)
         exec_block = res_block.cloneEmpty();
-    else
-    {
-        // remove the columns that are added in the last loop from equal and other condition expressions
-        while (exec_block.columns() > block_columns)
-            exec_block.erase(exec_block.columns() - 1);
-    }
 
     MutableColumns columns(block_columns);
     for (size_t i = 0; i < block_columns; ++i)

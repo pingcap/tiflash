@@ -169,11 +169,6 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
         size_t block_columns = result_block.columns();
         if (!exec_block)
             exec_block = result_block.cloneEmpty();
-        else
-        {
-            while (exec_block.columns() > block_columns)
-                exec_block.erase(exec_block.columns() - 1);
-        }
 
         MutableColumns columns(block_columns);
         for (size_t i = 0; i < block_columns; ++i)
