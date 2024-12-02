@@ -43,6 +43,7 @@ extern const char random_aggregate_create_state_failpoint[];
 extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
 extern const char random_fail_in_resize_callback[];
+extern const char force_agg_prefetch[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
@@ -665,7 +666,13 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-    if (method.data.getBufferSizeInCells() < 8192)
+#ifndef NDEBUG
+    bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
+    fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
+#else
+    const bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
+#endif
+    if (disable_prefetch)
     {
         if constexpr (Method::Data::is_string_hash_map)
             executeImplBatchStringHashMap<collect_hit_rate, only_lookup, false>(

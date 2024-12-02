@@ -39,6 +39,7 @@ extern const char exception_before_mpp_root_task_run[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_query_run[];
+extern const char force_agg_prefetch[];
 } // namespace FailPoints
 
 namespace tests
@@ -1369,6 +1370,7 @@ try
         FailPoints::exception_during_mpp_non_root_task_run,
         FailPoints::exception_during_mpp_root_task_run,
         FailPoints::exception_during_query_run,
+        FailPoints::force_agg_prefetch,
     };
     size_t query_index = 0;
     for (const auto & failpoint : failpoint_names)
@@ -1843,6 +1845,7 @@ try
         auto_pass_through_test_data.nullable_high_ndv_tbl_name,
         auto_pass_through_test_data.nullable_medium_ndv_tbl_name,
     };
+    FailPointHelper::enableFailPoint(FailPoints::force_agg_prefetch);
     for (const auto & tbl_name : workloads)
     {
         const String db_name = auto_pass_through_test_data.db_name;
@@ -1868,6 +1871,7 @@ try
             res_no_pass_through);
         WRAP_FOR_SERVER_TEST_END
     }
+    FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
 }
 CATCH
 
