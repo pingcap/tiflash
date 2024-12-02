@@ -281,7 +281,7 @@ public:
     TableNameMeta getTableMeta() const
     {
         std::shared_lock lock(mtx_table_meta);
-        return TableNameMeta{table_meta->db_name, table_meta->table_name};
+        return TableNameMeta{table_meta.db_name, table_meta.table_name};
     }
     String getIdent() const { return fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id); }
 
