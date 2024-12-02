@@ -531,6 +531,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
 
     for (auto & res : undetermined_result_list)
     {
+        assert(res->getStep() == STEP);
         size_t prev_offset = current_offset;
         res->template fillRightColumns<typename Maps::MappedType, STEP>(
             columns,
@@ -572,7 +573,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStepAllBlocks()
     NASemiJoinHelper::Result * res = *undetermined_result_list.begin();
     auto next_right_block_index = res->getNextRightBlockIndex();
     assert(next_right_block_index < right_blocks.size());
-    assert(res->getStep() != NASemiJoinStep::DONE);
+    assert(res->getStep() == NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS);
 
     auto all_right_blocks_checked = [&]() {
         // all right blocks are checked, set result to false and remove it from undetermined_result_list
@@ -625,15 +626,18 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStepAllBlocks()
         // res is already been removed from res_list inside runAndCheckExprResult
         res->setNextRightBlockIndex(right_blocks.size());
     }
-    ++right_block_it;
-    if (right_block_it == right_blocks.end())
-    {
-        all_right_blocks_checked();
-    }
     else
     {
-        // right blocks is not checked to the end, update next_right_block_index
-        res->setNextRightBlockIndex(std::distance(right_blocks.begin(), right_block_it));
+        ++right_block_it;
+        if (right_block_it == right_blocks.end())
+        {
+            all_right_blocks_checked();
+        }
+        else
+        {
+            // right blocks is not checked to the end, update next_right_block_index
+            res->setNextRightBlockIndex(std::distance(right_blocks.begin(), right_block_it));
+        }
     }
     // Should always be empty, just for sanity check.
     RUNTIME_CHECK_MSG(next_step_undetermined_result_list.empty(), "next_res_list should be empty");
