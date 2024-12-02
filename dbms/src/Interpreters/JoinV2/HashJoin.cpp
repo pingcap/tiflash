@@ -195,7 +195,6 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
             has_decimal_256 = true;
             continue;
         }
-        // TODO: consider Decimal256
         if (key_columns[i].column_ptr->valuesHaveFixedSize())
             row_layout.key_column_fixed_size += key_columns[i].column_ptr->sizeOfValueIfFixed();
         else
@@ -455,6 +454,7 @@ void HashJoin::workAfterBuildFinish()
 
     Stopwatch watch;
     pointer_table.init(
+        method,
         all_build_row_count,
         getHashValueByteSize(method),
         settings.probe_enable_prefetch_threshold,
