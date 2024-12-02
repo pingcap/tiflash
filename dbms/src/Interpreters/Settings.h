@@ -331,10 +331,10 @@ struct Settings
     M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")                                                                                                                                            \
     M(SettingUInt64, auto_spill_check_min_interval_ms, 10, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")                                                       \
     M(SettingUInt64, join_probe_cache_columns_threshold, 1000, "The threshold that a join key will cache its output columns during probe stage, 0 means never cache")                                                                   \
-    M(SettingBool, enable_hash_join_v2, true, "Enable hash join v2")                                                                                                                                                                    \
+    M(SettingBool, enable_hash_join_v2, false, "Enable hash join v2")                                                                                                                                                                    \
     M(SettingUInt64, join_v2_probe_enable_prefetch_threshold, 1024 * 1024, "hash join v2 minimum row number of join build table to use prefetch during join probe phase")                                                                            \
     M(SettingUInt64, join_v2_probe_prefetch_step, 16, "hash join v2 probe prefetch length")                                                                                                                                                \
-    M(SettingUInt64, join_v2_probe_insert_batch_size, 64, "hash join v2 probe insert batch size")                                                                                                                                          \
+    M(SettingUInt64, join_v2_probe_insert_batch_size, 128, "hash join v2 probe insert batch size")                                                                                                                                          \
     M(SettingBool, join_v2_enable_tagged_pointer, true, "hash join v2 enable tagged pointer")
 
 
