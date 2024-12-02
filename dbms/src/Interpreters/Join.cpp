@@ -34,6 +34,8 @@
 #include <exception>
 #include <magic_enum.hpp>
 
+#include "Interpreters/CancellationHook.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -1516,16 +1518,33 @@ void Join::checkTypes(const Block & block) const
 
 namespace
 {
-template <typename JoinHelper>
-Block genSemiJoinResult(
-    ProbeProcessInfo & probe_process_info,
-    JoinHelper * helper,
-    const NameSet & output_column_names_set)
+template <typename Helper>
+Block genResult(ProbeProcessInfo & probe_process_info, Helper * helper, const NameSet & output_column_names_set)
 {
     auto ret = helper->genJoinResult(output_column_names_set);
     probe_process_info.all_rows_joined_finish = true;
     probe_process_info.semi_join_family_helper.reset();
     return ret;
+}
+template <typename Helper>
+Block doNASemiJoinOrSemiJoin(
+    ProbeProcessInfo & probe_process_info,
+    Helper * helper,
+    const NameSet & output_column_names_set,
+    const CancellationHook & is_cancelled)
+{
+    while (!helper->isJoinDone())
+    {
+        if (is_cancelled())
+            return {};
+        helper->doJoin();
+    }
+
+    if (is_cancelled())
+        return {};
+
+    /// Now all results are known.
+    return genResult(probe_process_info, helper, output_column_names_set);
 }
 } // namespace
 
@@ -1613,18 +1632,7 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
             return {};
     }
 
-    while (!helper->isJoinDone())
-    {
-        if (is_cancelled())
-            return {};
-        helper->doJoin();
-    }
-
-    if (is_cancelled())
-        return {};
-
-    /// Now all results are known.
-    return genSemiJoinResult(probe_process_info, helper, output_column_names_set_after_finalize);
+    return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
 }
 
 Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
@@ -1715,17 +1723,7 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             return {};
     }
 
-    while (!helper->isJoinDone())
-    {
-        if (is_cancelled())
-            return {};
-        helper->doJoin();
-    }
-
-    if (is_cancelled())
-        return {};
-
-    return genSemiJoinResult(probe_process_info, helper, output_column_names_set_after_finalize);
+    return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
