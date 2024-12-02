@@ -37,6 +37,7 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 
 class Arena;
 class ColumnGathererStream;
+
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
 {
