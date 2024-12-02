@@ -280,8 +280,8 @@ public:
 
     TableNameMeta getTableMeta() const
     {
-        auto meta = table_meta.lockShared();
-        return TableNameMeta{meta->db_name, meta->table_name};
+        std::shared_lock lock(mtx_table_meta);
+        return TableNameMeta{table_meta->db_name, table_meta->table_name};
     }
     String getIdent() const { return fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id); }
 
@@ -781,7 +781,8 @@ public:
     Settings settings;
     StoragePoolPtr storage_pool;
 
-    SharedMutexProtected<TableNameMeta> table_meta;
+    mutable std::shared_mutex mtx_table_meta;
+    TableNameMeta table_meta;
 
     const KeyspaceID keyspace_id;
     const TableID physical_table_id;

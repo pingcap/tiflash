@@ -58,6 +58,7 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+#include <mutex>
 
 namespace ProfileEvents
 {
@@ -229,9 +230,9 @@ DeltaMergeStore::DeltaMergeStore(
     , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
     {
-        auto meta = table_meta.lockExclusive();
-        meta->db_name = db_name_;
-        meta->table_name = table_name_;
+        std::unique_lock lock(mtx_table_meta);
+        table_meta->db_name = db_name_;
+        table_meta->table_name = table_name_;
     }
 
     replica_exist.store(has_replica);
@@ -327,9 +328,9 @@ void DeltaMergeStore::rename(String /*new_path*/, String new_database_name, Stri
 {
     path_pool->rename(new_database_name, new_table_name);
 
-    auto meta = table_meta.lockExclusive();
-    meta->table_name.swap(new_table_name);
-    meta->db_name.swap(new_database_name);
+    std::unique_lock lock(mtx_table_meta);
+    table_meta->table_name.swap(new_table_name);
+    table_meta->db_name.swap(new_database_name);
 }
 
 void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
