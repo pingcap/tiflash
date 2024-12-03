@@ -103,13 +103,14 @@ void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const Offsets &
 
 void ColumnFixedString::insertData(const char * pos, size_t length)
 {
-    if (length > n)
+    if unlikely (length > n)
         throw Exception("Too large string for FixedString column", ErrorCodes::TOO_LARGE_STRING_SIZE);
 
     size_t old_size = chars.size();
     chars.resize(old_size + n);
     inline_memcpy(chars.data() + old_size, pos, length);
-    memset(chars.data() + old_size + length, 0, n - length);
+    if unlikely (n > length)
+        memset(chars.data() + old_size + length, 0, n - length);
 }
 
 StringRef ColumnFixedString::serializeValueIntoArena(

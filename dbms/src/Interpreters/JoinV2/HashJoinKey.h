@@ -16,13 +16,12 @@
 
 #include <Columns/ColumnString.h>
 #include <Columns/IColumn.h>
+#include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/assert_cast.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <common/mem_utils_opt.h>
-
-#include "Common/Exception.h"
 
 namespace DB
 {
@@ -75,10 +74,8 @@ public:
             required_key_offset = 0;
     }
 
-    static constexpr bool isJoinKeyTypeReference() { return false; }
-
     ALWAYS_INLINE T getJoinKey(size_t row) { return unalignedLoad<T>(vec + row); }
-    ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return unalignedLoad<T>(vec + row); }
+    ALWAYS_INLINE T getJoinKeyWithBuffer(size_t row) { return unalignedLoad<T>(vec + row); }
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
@@ -133,8 +130,6 @@ public:
             required_key_offset -= fixed_size[sz - 1 - i];
     }
 
-    static constexpr bool isJoinKeyTypeReference() { return false; }
-
     ALWAYS_INLINE T getJoinKey(size_t row)
     {
         union
@@ -174,7 +169,7 @@ public:
         return key;
     }
 
-    ALWAYS_INLINE T getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
+    ALWAYS_INLINE T getJoinKeyWithBuffer(size_t row) { return getJoinKey(row); }
 
     ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
 
@@ -211,6 +206,7 @@ public:
 
     void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
+        rows = key_columns[0]->size();
         size_t sz = key_columns.size();
         vec.resize(sz);
         fixed_size.resize(sz);
@@ -227,9 +223,9 @@ public:
         required_key_offset = fixed_size_sum;
         for (size_t i = 0; i < raw_required_key_size; ++i)
             required_key_offset -= fixed_size[sz - 1 - i];
-    }
 
-    static constexpr bool isJoinKeyTypeReference() { return true; }
+        buffer_initialized = false;
+    }
 
     ALWAYS_INLINE KeyType getJoinKey(size_t row)
     {
@@ -265,7 +261,25 @@ public:
         return StringRef(key_buffer.data(), fixed_size_sum);
     }
 
-    ALWAYS_INLINE KeyType getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
+    ALWAYS_INLINE KeyType getJoinKeyWithBuffer(size_t row)
+    {
+        if unlikely (!buffer_initialized)
+        {
+            keys_buffer.resize(rows * fixed_size_sum);
+            size_t offset = 0;
+            size_t sz = vec.size();
+            for (size_t i = 0; i < rows; ++i)
+            {
+                for (size_t j = 0; j < sz; ++j)
+                {
+                    inline_memcpy(&keys_buffer[offset], vec[j] + fixed_size[j] * i, fixed_size[j]);
+                    offset += fixed_size[j];
+                }
+            }
+        }
+        assert(row < rows);
+        return StringRef(&keys_buffer[row * fixed_size_sum], fixed_size_sum);
+    }
 
     ALWAYS_INLINE size_t getJoinKeySize(const KeyType &) { return fixed_size_sum; }
 
@@ -283,12 +297,17 @@ public:
     ALWAYS_INLINE size_t getRequiredKeyOffset(const KeyType &) { return required_key_offset; }
 
 private:
+    size_t rows;
     std::vector<const char *> vec;
     std::vector<size_t> fixed_size;
     size_t fixed_size_sum = 0;
 
     String key_buffer;
+    std::vector<char> keys_buffer;
+
     size_t required_key_offset;
+
+    bool buffer_initialized = false;
 };
 
 template <bool padding>
@@ -304,8 +323,6 @@ public:
         required_key_size = raw_required_key_size;
     }
 
-    static constexpr bool isJoinKeyTypeReference() { return true; }
-
     ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
         StringRef key = column_string->getDataAt(row);
@@ -313,7 +330,7 @@ public:
         return key;
     }
 
-    ALWAYS_INLINE StringRef getJoinKeyWithBufferHint(size_t row) { return getJoinKey(row); }
+    ALWAYS_INLINE StringRef getJoinKeyWithBuffer(size_t row) { return getJoinKey(row); }
 
     ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(UInt32) + s.size; }
 
@@ -362,8 +379,6 @@ public:
         RUNTIME_CHECK(raw_required_key_size == 0);
     }
 
-    static constexpr bool isJoinKeyTypeReference() { return true; }
-
     ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
         StringRef key = column_string->getDataAt(row);
@@ -371,15 +386,15 @@ public:
         return key;
     }
 
-    ALWAYS_INLINE StringRef getJoinKeyWithBufferHint(size_t row)
+    ALWAYS_INLINE StringRef getJoinKeyWithBuffer(size_t row)
     {
         if unlikely (!buffer_initialized)
         {
-            size_t sz = column_string->size();
+            size_t rows = column_string->size();
             size_t byte_size = column_string->byteSize();
-            keys_buffer->reserveWithTotalMemoryHint(sz, byte_size);
+            keys_buffer->reserveWithTotalMemoryHint(rows, byte_size);
             keys_buffer->popBack(keys_buffer->size());
-            for (size_t i = 0; i < sz; ++i)
+            for (size_t i = 0; i < rows; ++i)
             {
                 StringRef key = column_string->getDataAt(i);
                 key = collator->sortKey(key.data, key.size, key_buffer);
@@ -444,8 +459,6 @@ public:
         RUNTIME_CHECK(raw_required_key_size == 0);
     }
 
-    static constexpr bool isJoinKeyTypeReference() { return true; }
-
     ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
         pool.rollback(last_key_size);
@@ -456,13 +469,13 @@ public:
     }
 
     //TODO: use a more effient way instead of calling `serializeKeysToPoolContiguous` for each row.
-    ALWAYS_INLINE StringRef getJoinKeyWithBufferHint(size_t row)
+    ALWAYS_INLINE StringRef getJoinKeyWithBuffer(size_t row)
     {
         if unlikely (!buffer_initialized)
         {
-            size_t sz = key_columns[0]->size();
+            size_t rows = key_columns[0]->size();
             keys_buffer->popBack(keys_buffer->size());
-            for (size_t i = 0; i < sz; ++i)
+            for (size_t i = 0; i < rows; ++i)
             {
                 StringRef key
                     = serializeKeysToPoolContiguous(i, keys_size, key_columns, collators, sort_key_containers, pool);

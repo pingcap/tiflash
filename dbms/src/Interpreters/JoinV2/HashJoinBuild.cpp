@@ -72,7 +72,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             }
             continue;
         }
-        const auto & key = key_getter.getJoinKeyWithBufferHint(i);
+        const auto & key = key_getter.getJoinKeyWithBuffer(i);
         wd.hashes[i] = static_cast<HashValueType>(Hash()(key));
         size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[i]);
 
@@ -174,7 +174,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             {
                 partition_column_row[part_num].hashes.push_back(wd.hashes[j]);
             }
-            const auto & key = key_getter.getJoinKeyWithBufferHint(j);
+            const auto & key = key_getter.getJoinKeyWithBuffer(j);
             key_getter.serializeJoinKey(key, ptr);
             ptr += key_getter.getJoinKeySize(key);
         }

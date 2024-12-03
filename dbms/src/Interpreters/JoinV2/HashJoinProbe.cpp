@@ -114,32 +114,8 @@ enum class ProbePrefetchStage : UInt8
     FindNext,
 };
 
-template <typename KeyGetter, bool KeyTypeReference = KeyGetter::Type::isJoinKeyTypeReference()>
-struct ProbePrefetchState;
-
 template <typename KeyGetter>
-struct ProbePrefetchState<KeyGetter, true>
-{
-    using KeyGetterType = typename KeyGetter::Type;
-    using KeyType = typename KeyGetterType::KeyType;
-    using HashValueType = typename KeyGetter::HashValueType;
-
-    ProbePrefetchStage stage = ProbePrefetchStage::None;
-    bool is_matched = false;
-    UInt16 hash_tag = 0;
-    HashValueType hash = 0;
-    size_t index = 0;
-    union
-    {
-        RowPtr ptr = nullptr;
-        std::atomic<RowPtr> * pointer_ptr;
-    };
-
-    ALWAYS_INLINE KeyType getJoinKey(KeyGetterType & key_getter) { return key_getter.getJoinKeyWithBufferHint(index); }
-};
-
-template <typename KeyGetter>
-struct ProbePrefetchState<KeyGetter, false>
+struct ProbePrefetchState
 {
     using KeyGetterType = typename KeyGetter::Type;
     using KeyType = typename KeyGetterType::KeyType;
@@ -156,8 +132,6 @@ struct ProbePrefetchState<KeyGetter, false>
         std::atomic<RowPtr> * pointer_ptr;
     };
     KeyType key{};
-
-    ALWAYS_INLINE KeyType getJoinKey(KeyGetterType &) { return key; }
 };
 
 
@@ -431,9 +405,8 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
                 PREFETCH_READ(next_ptr);
             }
 
-            const auto & key = state->getJoinKey(key_getter);
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
-            bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, state->hash, ptr);
+            bool key_is_equal = joinKeyIsEqual(key_getter, state->key, key2, state->hash, ptr);
             collision += !key_is_equal;
             if (key_is_equal)
             {
@@ -505,14 +478,13 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
             continue;
         }
 
-        const auto & key = key_getter.getJoinKeyWithBufferHint(idx);
+        const auto & key = key_getter.getJoinKeyWithBuffer(idx);
         size_t hash = static_cast<HashValueType>(Hash()(key));
         size_t bucket = pointer_table.getBucketNum(hash);
         state->pointer_ptr = pointer_table.getPointerTable() + bucket;
         PREFETCH_READ(state->pointer_ptr);
 
-        if constexpr (!KeyGetterType::isJoinKeyTypeReference())
-            state->key = key;
+        state->key = key;
         if constexpr (tagged_pointer)
             state->hash_tag = hash & ROW_PTR_TAG_MASK;
         if constexpr (KeyGetterType::joinKeyCompareHashFirst())
