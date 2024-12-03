@@ -128,8 +128,8 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     skip_rows = 0;
     const auto & pack_stats = dmfile->getPackStats();
     const auto end_pack_id = read_block_infos.empty() ? pack_stats.size() : std::get<0>(read_block_infos.front());
-    for (size_t i = next_pack_id; i < end_pack_id; ++i)
-        skip_rows += pack_stats[i].rows;
+    for (; next_pack_id < end_pack_id; ++next_pack_id)
+        skip_rows += pack_stats[next_pack_id].rows;
     addSkippedRows(skip_rows);
 
     return !read_block_infos.empty();
