@@ -1514,10 +1514,36 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, right_sample_block_only_keys);
 }
 
+namespace
+{
+template <typename Helper>
+Block doNASemiJoinOrSemiJoin(
+    ProbeProcessInfo & probe_process_info,
+    Helper * helper,
+    const NameSet & output_column_names_set,
+    const CancellationHook & is_cancelled)
+{
+    assert(helper->isProbeHashTableDone());
+    while (!helper->isJoinDone())
+    {
+        if (is_cancelled())
+            return {};
+        helper->doJoin();
+    }
+
+    if (is_cancelled())
+        return {};
+
+    /// Now all results are known.
+    auto ret = helper->genJoinResult(output_column_names_set);
+    probe_process_info.all_rows_joined_finish = true;
+    probe_process_info.semi_join_family_helper.reset();
+    return ret;
+}
+} // namespace
+
 Block Join::joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const
 {
-    probe_process_info.prepareForNullAware(key_names_left, non_equal_conditions.left_filter_column);
-
     Block block{};
 #define CALL(KIND, STRICTNESS, MAP) block = joinBlockNullAwareSemiImpl<KIND, STRICTNESS, MAP>(probe_process_info);
 
@@ -1541,166 +1567,65 @@ Block Join::joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const
 #undef CALL
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
-
-    /// Null-aware semi join never expand the left block, just handle the whole block at one time is enough
-    probe_process_info.all_rows_joined_finish = true;
-
     return removeUselessColumn(block);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_info) const
+Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) const
 {
     size_t rows = probe_process_info.block.rows();
-    std::vector<RowsNotInsertToMap *> null_rows(partitions.size(), nullptr);
-    for (size_t i = 0; i < partitions.size(); ++i)
-        null_rows[i] = partitions[i]->getRowsNotInsertedToMap();
-
-    NALeftSideInfo left_side_info(
-        probe_process_info.null_map,
-        probe_process_info.null_aware_join_data->filter_map,
-        probe_process_info.null_aware_join_data->all_key_null_map);
-    NARightSideInfo right_side_info(
-        right_has_all_key_null_row.load(std::memory_order_relaxed),
-        right_table_is_empty.load(std::memory_order_relaxed),
-        null_key_check_all_blocks_directly,
-        null_rows);
-    auto [res, res_list] = JoinPartition::probeBlockNullAwareSemi<KIND, STRICTNESS, Maps>(
-        partitions,
-        rows,
-        probe_process_info.null_aware_join_data->key_columns,
-        key_sizes,
-        collators,
-        left_side_info,
-        right_side_info);
-
-    RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
-
-    if (is_cancelled())
-        return {};
-
-    Block block{};
-    for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
+    if (probe_process_info.semi_join_family_helper != nullptr)
     {
-        const auto & column = probe_process_info.block.getByPosition(i);
-        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
-            block.insert(column);
+        // current block still not done
+        RUNTIME_CHECK_MSG(
+            !probe_process_info.all_rows_joined_finish,
+            "semi_family_helper should be reset to nullptr after all rows are joined for current block");
     }
-
-    size_t left_columns = block.columns();
-
-    /// Add new columns to the block.
-    std::vector<size_t> right_column_indices_to_add;
-
-    for (size_t i = 0; i < right_sample_block.columns(); ++i)
+    else
     {
-        const auto & column = right_sample_block.getByPosition(i);
-        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
-        {
-            RUNTIME_CHECK_MSG(
-                !block.has(column.name),
-                "block from probe side has a column with the same name: {} as a column in right_sample_block",
-                column.name);
-            block.insert(column);
-            right_column_indices_to_add.push_back(i);
-        }
-    }
-
-    if (!res_list.empty())
-    {
-        NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType> helper(
-            block,
-            left_columns,
-            right_column_indices_to_add,
+        // probe a new block
+        probe_process_info.prepareForNullAware(key_names_left, non_equal_conditions.left_filter_column);
+        std::vector<RowsNotInsertToMap *> null_rows(partitions.size(), nullptr);
+        for (size_t i = 0; i < partitions.size(); ++i)
+            null_rows[i] = partitions[i]->getRowsNotInsertedToMap();
+        auto na_semi_join_helper = std::make_unique<NASemiJoinHelper<KIND, STRICTNESS, Maps>>(
+            rows,
             blocks,
-            null_rows,
+            std::move(null_rows),
             max_block_size,
-            non_equal_conditions,
-            is_cancelled);
+            non_equal_conditions);
+        NALeftSideInfo left_side_info(
+            probe_process_info.null_map,
+            probe_process_info.null_aware_join_data->filter_map,
+            probe_process_info.null_aware_join_data->all_key_null_map);
+        NARightSideInfo right_side_info(
+            right_has_all_key_null_row.load(std::memory_order_relaxed),
+            right_table_is_empty.load(std::memory_order_relaxed),
+            null_key_check_all_blocks_directly,
+            na_semi_join_helper->getNullRows());
+        na_semi_join_helper->probeHashTable(
+            partitions,
+            probe_process_info.null_aware_join_data->key_columns,
+            key_sizes,
+            collators,
+            left_side_info,
+            right_side_info,
+            probe_process_info,
+            output_columns_names_set_for_other_condition_after_finalize,
+            right_sample_block);
+        if (is_cancelled())
+            return {};
 
-        helper.joinResult(res_list);
-
-        RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
+        probe_process_info.semi_join_family_helper
+            = decltype(probe_process_info.semi_join_family_helper)(na_semi_join_helper.release(), [](void * ptr) {
+                  delete reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr);
+              });
     }
 
-    if (is_cancelled())
-        return {};
+    auto * helper = reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(
+        probe_process_info.semi_join_family_helper.get());
 
-    /// Now all results are known.
-
-    std::unique_ptr<IColumn::Filter> filter;
-    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
-        filter = std::make_unique<IColumn::Filter>(rows);
-
-    MutableColumnPtr left_semi_column_ptr = nullptr;
-    ColumnInt8::Container * left_semi_column_data = nullptr;
-    ColumnUInt8::Container * left_semi_null_map = nullptr;
-
-    if constexpr (
-        KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti)
-    {
-        left_semi_column_ptr = block.getByPosition(block.columns() - 1).column->cloneEmpty();
-        auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
-        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
-        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
-        left_semi_column_data->reserve(rows);
-        left_semi_null_map->reserve(rows);
-    }
-
-    size_t rows_for_anti = 0;
-    for (size_t i = 0; i < rows; ++i)
-    {
-        auto result = res[i].getResult();
-        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
-        {
-            if (result == SemiJoinResultType::TRUE_VALUE)
-            {
-                // If the result is true, this row should be kept.
-                (*filter)[i] = 1;
-                ++rows_for_anti;
-            }
-            else
-            {
-                // If the result is null or false, this row should be filtered.
-                (*filter)[i] = 0;
-            }
-        }
-        else
-        {
-            switch (result)
-            {
-            case SemiJoinResultType::FALSE_VALUE:
-                left_semi_column_data->push_back(0);
-                left_semi_null_map->push_back(0);
-                break;
-            case SemiJoinResultType::TRUE_VALUE:
-                left_semi_column_data->push_back(1);
-                left_semi_null_map->push_back(0);
-                break;
-            case SemiJoinResultType::NULL_VALUE:
-                left_semi_column_data->push_back(0);
-                left_semi_null_map->push_back(1);
-                break;
-            }
-        }
-    }
-
-    if constexpr (
-        KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti)
-    {
-        block.getByPosition(block.columns() - 1).column = std::move(left_semi_column_ptr);
-    }
-
-    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
-    {
-        for (size_t i = 0; i < left_columns; ++i)
-        {
-            auto & column = block.getByPosition(i);
-            if (output_column_names_set_after_finalize.contains(column.name))
-                column.column = column.column->filter(*filter, rows_for_anti);
-        }
-    }
-    return block;
+    return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
 }
 
 Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
@@ -1735,22 +1660,6 @@ Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
     return removeUselessColumn(block);
 }
 
-namespace
-{
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block genSemiJoinResult(
-    ProbeProcessInfo & probe_process_info,
-    SemiJoinHelper<KIND, STRICTNESS, Maps> * helper,
-    const NameSet & output_column_names_set)
-{
-    auto ret = helper->genJoinResult(output_column_names_set);
-    /// (left outer) (anti) semi join never expand the left block, just handle the whole block at one time is enough
-    probe_process_info.all_rows_joined_finish = true;
-    probe_process_info.semi_join_family_helper.reset();
-    return ret;
-}
-} // namespace
-
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
 {
@@ -1781,21 +1690,12 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             collators,
             restore_config.restore_round);
 
-        probe_process_info.semi_join_family_helper = decltype(probe_process_info.semi_join_family_helper)(
-            new SemiJoinHelper<KIND, STRICTNESS, Maps>(rows, max_block_size, non_equal_conditions, is_cancelled),
-            [](void * ptr) { delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr); });
-    }
-
-    auto * helper
-        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
-
-    if (!helper->isProbeHashTableDone())
-    {
+        auto semi_join_helper
+            = std::make_unique<SemiJoinHelper<KIND, STRICTNESS, Maps>>(rows, max_block_size, non_equal_conditions);
         const NameSet & probe_output_name_set = has_other_condition
             ? output_columns_names_set_for_other_condition_after_finalize
             : output_column_names_set_after_finalize;
-
-        helper->probeHashTable(
+        semi_join_helper->probeHashTable(
             partitions,
             key_sizes,
             collators,
@@ -1803,22 +1703,20 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
             probe_process_info,
             probe_output_name_set,
             right_sample_block);
-    }
 
-    while (!helper->isJoinDone())
-    {
         if (is_cancelled())
             return {};
-        helper->doJoin();
+
+        probe_process_info.semi_join_family_helper
+            = decltype(probe_process_info.semi_join_family_helper)(semi_join_helper.release(), [](void * ptr) {
+                  delete reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(ptr);
+              });
     }
 
-    if (is_cancelled())
-        return {};
+    auto * helper
+        = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
 
-    return genSemiJoinResult<KIND, STRICTNESS, Maps>(
-        probe_process_info,
-        helper,
-        output_column_names_set_after_finalize);
+    return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const

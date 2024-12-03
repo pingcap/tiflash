@@ -147,11 +147,9 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 SemiJoinHelper<KIND, STRICTNESS, Maps>::SemiJoinHelper(
     size_t input_rows_,
     size_t max_block_size_,
-    const JoinNonEqualConditions & non_equal_conditions_,
-    CancellationHook is_cancelled_)
-    : input_rows(input_rows_)
+    const JoinNonEqualConditions & non_equal_conditions_)
+    : probe_rows(input_rows_)
     , max_block_size(max_block_size_)
-    , is_cancelled(is_cancelled_)
     , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == Semi || KIND == Anti || KIND == LeftOuterAnti || KIND == LeftOuterSemi);
@@ -166,95 +164,94 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
     }
     else
     {
-        assert(!probe_res_list.empty());
+        assert(!undetermined_result_list.empty());
         std::vector<size_t> offsets;
         size_t block_columns = result_block.columns();
-        Block exec_block = result_block.cloneEmpty();
+        if (!exec_block)
+            exec_block = result_block.cloneEmpty();
 
-        while (!probe_res_list.empty())
+        MutableColumns columns(block_columns);
+        for (size_t i = 0; i < block_columns; ++i)
         {
-            MutableColumns columns(block_columns);
-            for (size_t i = 0; i < block_columns; ++i)
+            /// Reuse the column to avoid memory allocation.
+            /// Correctness depends on the fact that equal and other condition expressions do not
+            /// removed any column, namely, the columns will not out of order.
+            /// TODO: Maybe we can reuse the memory of new columns added by expressions?
+            columns[i] = exec_block.safeGetByPosition(i).column->assumeMutable();
+            columns[i]->popBack(columns[i]->size());
+        }
+
+        size_t current_offset = 0;
+        offsets.clear();
+
+        for (auto & res : undetermined_result_list)
+        {
+            size_t prev_offset = current_offset;
+            res->template fillRightColumns<typename Maps::MappedType>(
+                columns,
+                left_columns,
+                right_columns,
+                right_column_indices_to_add,
+                current_offset,
+                max_block_size - current_offset);
+
+            /// Note that current_offset - prev_offset may be zero.
+            if (current_offset > prev_offset)
             {
-                /// Reuse the column to avoid memory allocation.
-                /// Correctness depends on the fact that equal and other condition expressions do not
-                /// removed any column, namely, the columns will not out of order.
-                /// TODO: Maybe we can reuse the memory of new columns added by expressions?
-                columns[i] = exec_block.safeGetByPosition(i).column->assumeMutable();
-                columns[i]->popBack(columns[i]->size());
+                for (size_t i = 0; i < left_columns; ++i)
+                    columns[i]->insertManyFrom(
+                        *result_block.getByPosition(i).column.get(),
+                        res->getRowNum(),
+                        current_offset - prev_offset);
             }
 
-            size_t current_offset = 0;
-            offsets.clear();
+            offsets.emplace_back(current_offset);
+            if (current_offset >= max_block_size)
+                break;
+        }
 
-            for (auto & res : probe_res_list)
-            {
-                size_t prev_offset = current_offset;
-                res->template fillRightColumns<typename Maps::MappedType>(
-                    columns,
-                    left_columns,
-                    right_columns,
-                    right_column_indices_to_add,
-                    current_offset,
-                    max_block_size - current_offset);
+        /// Move the columns to exec_block.
+        /// Note that this can remove the new columns that are added in the last loop
+        /// from equal and other condition expressions.
+        exec_block = result_block.cloneWithColumns(std::move(columns));
 
-                /// Note that current_offset - prev_offset may be zero.
-                if (current_offset > prev_offset)
+        non_equal_conditions.other_cond_expr->execute(exec_block);
+
+        const ColumnUInt8::Container *other_eq_from_in_column_data = nullptr, *other_column_data = nullptr;
+        ConstNullMapPtr other_eq_from_in_null_map = nullptr, other_null_map = nullptr;
+        ColumnPtr other_eq_from_in_column, other_column;
+
+        bool has_other_eq_cond_from_in = !non_equal_conditions.other_eq_cond_from_in_name.empty();
+        if (has_other_eq_cond_from_in)
+        {
+            other_eq_from_in_column = exec_block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
+            auto is_nullable_col = [&]() {
+                if (other_eq_from_in_column->isColumnNullable())
+                    return true;
+                if (other_eq_from_in_column->isColumnConst())
                 {
-                    for (size_t i = 0; i < left_columns; ++i)
-                        columns[i]->insertManyFrom(
-                            *result_block.getByPosition(i).column.get(),
-                            res->getRowNum(),
-                            current_offset - prev_offset);
+                    const auto & const_col = typeid_cast<const ColumnConst &>(*other_eq_from_in_column);
+                    return const_col.getDataColumn().isColumnNullable();
                 }
+                return false;
+            };
+            // nullable, const(nullable)
+            RUNTIME_CHECK_MSG(
+                is_nullable_col(),
+                "The equal condition from in column should be nullable, otherwise it should be used as join key");
 
-                offsets.emplace_back(current_offset);
-                if (current_offset >= max_block_size)
-                    break;
-            }
+            std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map)
+                = getDataAndNullMapVectorFromFilterColumn(other_eq_from_in_column);
+        }
 
-            /// Move the columns to exec_block.
-            /// Note that this can remove the new columns that are added in the last loop
-            /// from equal and other condition expressions.
-            exec_block = result_block.cloneWithColumns(std::move(columns));
-
-            non_equal_conditions.other_cond_expr->execute(exec_block);
-
-            const ColumnUInt8::Container *other_eq_from_in_column_data = nullptr, *other_column_data = nullptr;
-            ConstNullMapPtr other_eq_from_in_null_map = nullptr, other_null_map = nullptr;
-            ColumnPtr other_eq_from_in_column, other_column;
-
-            bool has_other_eq_cond_from_in = !non_equal_conditions.other_eq_cond_from_in_name.empty();
-            if (has_other_eq_cond_from_in)
-            {
-                other_eq_from_in_column = exec_block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
-                auto is_nullable_col = [&]() {
-                    if (other_eq_from_in_column->isColumnNullable())
-                        return true;
-                    if (other_eq_from_in_column->isColumnConst())
-                    {
-                        const auto & const_col = typeid_cast<const ColumnConst &>(*other_eq_from_in_column);
-                        return const_col.getDataColumn().isColumnNullable();
-                    }
-                    return false;
-                };
-                // nullable, const(nullable)
-                RUNTIME_CHECK_MSG(
-                    is_nullable_col(),
-                    "The equal condition from in column should be nullable, otherwise it should be used as join key");
-
-                std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map)
-                    = getDataAndNullMapVectorFromFilterColumn(other_eq_from_in_column);
-            }
-
-            bool has_other_cond = !non_equal_conditions.other_cond_name.empty();
-            bool has_other_cond_null_map = false;
-            if (has_other_cond)
-            {
-                other_column = exec_block.getByName(non_equal_conditions.other_cond_name).column;
-                std::tie(other_column_data, other_null_map) = getDataAndNullMapVectorFromFilterColumn(other_column);
-                has_other_cond_null_map = other_null_map != nullptr;
-            }
+        bool has_other_cond = !non_equal_conditions.other_cond_name.empty();
+        bool has_other_cond_null_map = false;
+        if (has_other_cond)
+        {
+            other_column = exec_block.getByName(non_equal_conditions.other_cond_name).column;
+            std::tie(other_column_data, other_null_map) = getDataAndNullMapVectorFromFilterColumn(other_column);
+            has_other_cond_null_map = other_null_map != nullptr;
+        }
 
 #define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map)            \
     checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
@@ -264,38 +261,37 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
         other_column_data,                                                                  \
         other_null_map);
 
-            if (has_other_eq_cond_from_in)
+        if (has_other_eq_cond_from_in)
+        {
+            if (has_other_cond)
             {
-                if (has_other_cond)
+                if (has_other_cond_null_map)
                 {
-                    if (has_other_cond_null_map)
-                    {
-                        CALL(true, true, true);
-                    }
-                    else
-                    {
-                        CALL(true, true, false);
-                    }
+                    CALL(true, true, true);
                 }
                 else
                 {
-                    CALL(true, false, false);
+                    CALL(true, true, false);
                 }
             }
             else
             {
-                RUNTIME_CHECK(has_other_cond);
-                if (has_other_cond_null_map)
-                {
-                    CALL(false, true, true);
-                }
-                else
-                {
-                    CALL(false, true, false);
-                }
+                CALL(true, false, false);
             }
-#undef CALL
         }
+        else
+        {
+            RUNTIME_CHECK(has_other_cond);
+            if (has_other_cond_null_map)
+            {
+                CALL(false, true, true);
+            }
+            else
+            {
+                CALL(false, true, false);
+            }
+        }
+#undef CALL
     }
 }
 
@@ -311,21 +307,19 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
 {
     if (is_probe_hash_table_done)
         return;
-    std::tie(probe_res, probe_res_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
+    std::tie(join_result, undetermined_result_list) = JoinPartition::probeBlockSemi<KIND, STRICTNESS, Maps>(
         join_partitions,
-        input_rows,
+        probe_rows,
         key_sizes,
         collators,
         join_build_info,
         probe_process_info);
 
     RUNTIME_ASSERT(
-        probe_res.size() == input_rows,
+        join_result.size() == probe_rows,
         "SemiJoinResult size {} must be equal to block size {}",
-        probe_res.size(),
-        input_rows);
-    if (is_cancelled())
-        return;
+        join_result.size(),
+        probe_rows);
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
         const auto & column = probe_process_info.block.getByPosition(i);
@@ -357,7 +351,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
     }
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
     {
-        RUNTIME_CHECK_MSG(probe_res_list.empty(), "SemiJoinResult list must be empty for any semi join");
+        RUNTIME_CHECK_MSG(undetermined_result_list.empty(), "SemiJoinResult list must be empty for any semi join");
     }
     else
     {
@@ -376,8 +370,8 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
     ConstNullMapPtr other_null_map)
 {
     size_t prev_offset = 0;
-    auto it = probe_res_list.begin();
-    for (size_t i = 0, size = offsets.size(); i < size && it != probe_res_list.end(); ++i)
+    auto it = undetermined_result_list.begin();
+    for (size_t i = 0, size = offsets.size(); i < size && it != undetermined_result_list.end(); ++i)
     {
         if ((*it)->template checkExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>(
                 other_eq_column,
@@ -387,7 +381,7 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
                 prev_offset,
                 offsets[i]))
         {
-            it = probe_res_list.erase(it);
+            it = undetermined_result_list.erase(it);
         }
         else
         {
@@ -401,10 +395,12 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::checkAllExprResult(
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & output_column_names_set)
 {
-    RUNTIME_CHECK_MSG(probe_res_list.empty(), "SemiJoinResult list must be empty when generating join result");
+    RUNTIME_CHECK_MSG(
+        undetermined_result_list.empty(),
+        "SemiJoinResult list must be empty when generating join result");
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(input_rows);
+        filter = std::make_unique<IColumn::Filter>(probe_rows);
 
     MutableColumnPtr left_semi_column_ptr = nullptr;
     ColumnInt8::Container * left_semi_column_data = nullptr;
@@ -415,22 +411,22 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
         left_semi_column_ptr = result_block.getByPosition(result_block.columns() - 1).column->cloneEmpty();
         auto * left_semi_column = typeid_cast<ColumnNullable *>(left_semi_column_ptr.get());
         left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
-        left_semi_column_data->reserve(input_rows);
+        left_semi_column_data->reserve(probe_rows);
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
-            left_semi_null_map->resize_fill(input_rows, 0);
+            left_semi_null_map->resize_fill(probe_rows, 0);
         }
         else
         {
-            left_semi_null_map->reserve(input_rows);
+            left_semi_null_map->reserve(probe_rows);
         }
     }
 
     size_t rows_for_semi_anti = 0;
-    for (size_t i = 0; i < input_rows; ++i)
+    for (size_t i = 0; i < probe_rows; ++i)
     {
-        auto result = probe_res[i].getResult();
+        auto result = join_result[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
         {
             if (isTrueSemiJoinResult(result))
