@@ -1020,7 +1020,8 @@ public:
     }
 
     /// Copy the cell from another hash table. It is assumed that the cell is not zero, and also that there was no such key in the table yet.
-    void ALWAYS_INLINE insertUniqueNonZero(const Cell * cell, size_t hash_value)
+    template <typename InsertCellType>
+    void ALWAYS_INLINE insertUniqueNonZero(const InsertCellType * cell, size_t hash_value)
     {
         size_t place_value = findEmptyCell(grower.place(hash_value));
 
