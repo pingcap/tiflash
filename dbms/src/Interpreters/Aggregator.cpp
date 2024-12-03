@@ -674,13 +674,13 @@ void NO_INLINE Aggregator::executeImpl(
 #endif
     if (disable_prefetch)
     {
-        if constexpr (Method::Data::is_string_hash_map)
-            executeImplBatchStringHashMap<collect_hit_rate, only_lookup, false>(
-                method,
-                state,
-                aggregates_pool,
-                agg_process_info);
-        else
+        // if constexpr (Method::Data::is_string_hash_map)
+        //     executeImplBatchStringHashMap<collect_hit_rate, only_lookup, false>(
+        //         method,
+        //         state,
+        //         aggregates_pool,
+        //         agg_process_info);
+        // else
             executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
     else
