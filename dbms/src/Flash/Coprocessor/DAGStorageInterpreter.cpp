@@ -265,23 +265,12 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
     });
 }
 
-String genErrMsgForLocalRead(
-    const ManageableStoragePtr & storage,
-    const KeyspaceID keyspace_id,
-    const TableID & table_id,
-    const TableID & logical_table_id)
+String genErrMsgForLocalRead(const KeyspaceID keyspace_id, const TableID & table_id, const TableID & logical_table_id)
 {
     return table_id == logical_table_id
-        ? fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, keyspace_id={} table_id={})",
-            storage->getDatabaseName(),
-            storage->getTableName(),
-            keyspace_id,
-            table_id)
+        ? fmt::format("(while creating read sources from storage, keyspace_id={} table_id={})", keyspace_id, table_id)
         : fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, keyspace_id={} table_id={} logical_table_id={})",
-            storage->getDatabaseName(),
-            storage->getTableName(),
+            "(while creating read sources from storage, keyspace_id={} table_id={} logical_table_id={})",
             keyspace_id,
             table_id,
             logical_table_id);
@@ -1081,14 +1070,14 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+                e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+            e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
             throw;
         }
     }
@@ -1164,14 +1153,14 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+                e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
+            e.addMessage(genErrMsgForLocalRead(keyspace_id, table_id, logical_table_id));
             throw;
         }
     }

@@ -58,6 +58,7 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+#include <mutex>
 
 namespace ProfileEvents
 {
@@ -218,8 +219,6 @@ DeltaMergeStore::DeltaMergeStore(
     , path_pool(std::make_shared<StoragePathPool>(
           global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
-    , db_name(db_name_)
-    , table_name(table_name_)
     , keyspace_id(keyspace_id_)
     , physical_table_id(physical_table_id_)
     , is_common_handle(is_common_handle_)
@@ -230,6 +229,12 @@ DeltaMergeStore::DeltaMergeStore(
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
     , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
+    {
+        std::unique_lock lock(mtx_table_meta);
+        table_meta.db_name = db_name_;
+        table_meta.table_name = table_name_;
+    }
+
     replica_exist.store(has_replica);
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceID ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
@@ -323,9 +328,9 @@ void DeltaMergeStore::rename(String /*new_path*/, String new_database_name, Stri
 {
     path_pool->rename(new_database_name, new_table_name);
 
-    // TODO: replacing these two variables is not atomic, but could be good enough?
-    table_name.swap(new_table_name);
-    db_name.swap(new_database_name);
+    std::unique_lock lock(mtx_table_meta);
+    table_meta.table_name.swap(new_table_name);
+    table_meta.db_name.swap(new_database_name);
 }
 
 void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
