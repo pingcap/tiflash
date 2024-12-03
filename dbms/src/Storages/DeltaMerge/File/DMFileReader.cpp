@@ -161,7 +161,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
     const auto [start_pack_id, pack_count, rs_result, read_rows] = read_block_infos.front();
     read_block_infos.pop_front();
-    // do not update next_pack_id here
+    // do not update next_pack_id here, it will be updated in read().
     // next_pack_id = start_pack_id + pack_count;
     const size_t start_row_offset = pack_id_to_offset[start_pack_id];
     RUNTIME_CHECK(read_rows == filter.size(), read_rows, filter.size());
@@ -742,6 +742,7 @@ size_t DMFileReader::updateReadBlockInfos(const IColumn::Filter & filter, size_t
 {
     const auto & pack_stats = dmfile->getPackStats();
     std::vector<std::tuple<size_t, size_t, RSResult, size_t>> new_read_block_infos;
+    new_read_block_infos.reserve(pack_end - pack_start);
     size_t start_pack_id = pack_start;
     const size_t start_row_offset = pack_id_to_offset[pack_start];
     size_t read_rows = 0;
@@ -750,11 +751,8 @@ size_t DMFileReader::updateReadBlockInfos(const IColumn::Filter & filter, size_t
         if (countBytesInFilter(filter, pack_id_to_offset[pack_id] - start_row_offset, pack_stats[pack_id].rows) == 0)
         {
             if (read_rows > 0)
-                new_read_block_infos.emplace_back(
-                    start_pack_id,
-                    pack_id - start_pack_id,
-                    RSResult::All, // not used, set to All
-                    read_rows);
+                // rs_result is not important here, we can use RSResult::All
+                new_read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, RSResult::All, read_rows);
             start_pack_id = pack_id + 1;
             read_rows = 0;
         }
