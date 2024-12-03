@@ -32,7 +32,6 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
-#include <ctime>
 #include <exception>
 #include <magic_enum.hpp>
 
@@ -1536,12 +1535,12 @@ Block doNASemiJoinOrSemiJoin(
         // because pipeline model is enabled by default, current_task_timer should be not null in most senarios
         if likely (current_task_timer != nullptr)
         {
-            auto elapsed = current_task_timer->updateCurrentExecTime();
+            auto elapsed = current_task_timer->updateExecutingTime();
             auto time_exceed = elapsed >= 6 * YIELD_MAX_TIME_SPENT_NS;
             fiu_do_on(FailPoints::force_semi_join_time_exceed, { time_exceed = true; });
             if unlikely (time_exceed)
             {
-                // task execution time exceeds 10 times of the maximum time spent, yield the thread by returning an empty result block
+                // task execution time exceeds the maximum time, yield the thread by returning an empty result block
                 return empty_result_block;
             }
         }

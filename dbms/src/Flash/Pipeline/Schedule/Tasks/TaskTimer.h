@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 struct TaskTimer
 {
     TaskProfileInfo & profile_info;
-    UInt64 current_exec_time = 0;
-    UInt64 updateCurrentExecTime()
+    UInt64 executing_time = 0;
+    UInt64 updateExecutingTime()
     {
-        current_exec_time += profile_info.elapsedFromPrev();
-        return current_exec_time;
+        executing_time += profile_info.elapsedFromPrev();
+        return executing_time;
     }
 };
 

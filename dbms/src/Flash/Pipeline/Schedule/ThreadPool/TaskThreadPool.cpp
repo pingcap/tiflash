@@ -103,13 +103,13 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     while (true)
     {
         status_after_exec = Impl::exec(task);
-        auto total_time_spent = timer.updateCurrentExecTime();
+        auto total_time_spent = timer.updateExecutingTime();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
         if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
-    task_queue->updateStatistics(task, status_before_exec, timer.current_exec_time);
-    metrics.addExecuteTime(task, timer.current_exec_time);
+    task_queue->updateStatistics(task, status_before_exec, timer.executing_time);
+    metrics.addExecuteTime(task, timer.executing_time);
     metrics.decExecutingTask();
     switch (status_after_exec)
     {
