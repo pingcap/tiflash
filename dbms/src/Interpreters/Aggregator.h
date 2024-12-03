@@ -1499,6 +1499,14 @@ protected:
         std::vector<std::string> & sort_key_containers,
         const std::vector<size_t> & hashvals) const;
 
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
+        Method & method,
+        typename Method::State & state,
+        size_t index,
+        Arena & aggregates_pool,
+        std::vector<std::string> & sort_key_containers) const;
+
     template <
         size_t SubMapIndex,
         bool collect_hit_rate,

@@ -741,6 +741,27 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     }
 }
 
+template <bool only_lookup, typename Method>
+std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
+    Method & method,
+    typename Method::State & state,
+    size_t index,
+    Arena & aggregates_pool,
+    std::vector<std::string> & sort_key_containers) const
+{
+    try
+    {
+        if constexpr (only_lookup)
+            return state.findKey(method.data, index, aggregates_pool, sort_key_containers);
+        else
+            return state.emplaceKey(method.data, index, aggregates_pool, sort_key_containers);
+    }
+    catch (ResizeException &)
+    {
+        return {};
+    }
+}
+
 // This is only used by executeImplBatchStringHashMap.
 // It will choose specifix submap of StringHashMap then do emplace/find.
 // StringKeyType can be StringRef/StringKey8/StringKey16/StringKey24/ArenaKeyHolder.
@@ -937,9 +958,9 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Generic case.
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
     std::optional<size_t> processed_rows;
-    std::vector<size_t> hashvals;
     if constexpr (enable_prefetch)
     {
+        std::vector<size_t> hashvals;
         hashvals = getHashVals(
             agg_process_info.start_row,
             agg_process_info.end_row,
@@ -947,63 +968,122 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
             state,
             sort_key_containers,
             aggregates_pool);
-    }
 
-    for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
+        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
+        {
+            AggregateDataPtr aggregate_data = nullptr;
+
+            auto emplace_result_holder = emplaceOrFindKey<only_lookup, enable_prefetch>(
+                method,
+                state,
+                i,
+                *aggregates_pool,
+                sort_key_containers,
+                hashvals);
+            if unlikely (!emplace_result_holder.has_value())
+            {
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                break;
+            }
+
+            auto & emplace_result = emplace_result_holder.value();
+
+            if constexpr (only_lookup)
+            {
+                if (emplace_result.isFound())
+                {
+                    aggregate_data = emplace_result.getMapped();
+                }
+                else
+                {
+                    agg_process_info.not_found_rows.push_back(i);
+                }
+            }
+            else
+            {
+                /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+                if (emplace_result.isInserted())
+                {
+                    /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                    emplace_result.setMapped(nullptr);
+
+                    aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                    createAggregateStates(aggregate_data);
+
+                    emplace_result.setMapped(aggregate_data);
+                }
+                else
+                {
+                    aggregate_data = emplace_result.getMapped();
+
+                    if constexpr (collect_hit_rate)
+                        ++agg_process_info.hit_row_cnt;
+                }
+            }
+
+            places[i - agg_process_info.start_row] = aggregate_data;
+            processed_rows = i;
+        }
+    }
+    else
     {
-        AggregateDataPtr aggregate_data = nullptr;
-
-        auto emplace_result_holder = emplaceOrFindKey<only_lookup, enable_prefetch>(
-            method,
-            state,
-            i,
-            *aggregates_pool,
-            sort_key_containers,
-            hashvals);
-        if unlikely (!emplace_result_holder.has_value())
+        LOG_DEBUG(log, "gjt debug original path");
+        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
         {
-            LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
-            break;
-        }
+            AggregateDataPtr aggregate_data = nullptr;
 
-        auto & emplace_result = emplace_result_holder.value();
-
-        if constexpr (only_lookup)
-        {
-            if (emplace_result.isFound())
+            auto emplace_result_holder = emplaceOrFindKey<only_lookup>(
+                method,
+                state,
+                i,
+                *aggregates_pool,
+                sort_key_containers);
+            if unlikely (!emplace_result_holder.has_value())
             {
-                aggregate_data = emplace_result.getMapped();
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                break;
+            }
+
+            auto & emplace_result = emplace_result_holder.value();
+
+            if constexpr (only_lookup)
+            {
+                if (emplace_result.isFound())
+                {
+                    aggregate_data = emplace_result.getMapped();
+                }
+                else
+                {
+                    agg_process_info.not_found_rows.push_back(i);
+                }
             }
             else
             {
-                agg_process_info.not_found_rows.push_back(i);
+                /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+                if (emplace_result.isInserted())
+                {
+                    /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                    emplace_result.setMapped(nullptr);
+
+                    aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                    createAggregateStates(aggregate_data);
+
+                    emplace_result.setMapped(aggregate_data);
+                }
+                else
+                {
+                    aggregate_data = emplace_result.getMapped();
+
+                    if constexpr (collect_hit_rate)
+                        ++agg_process_info.hit_row_cnt;
+                }
             }
+
+            places[i - agg_process_info.start_row] = aggregate_data;
+            processed_rows = i;
         }
-        else
-        {
-            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-            if (emplace_result.isInserted())
-            {
-                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-                emplace_result.setMapped(nullptr);
-
-                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                createAggregateStates(aggregate_data);
-
-                emplace_result.setMapped(aggregate_data);
-            }
-            else
-            {
-                aggregate_data = emplace_result.getMapped();
-
-                if constexpr (collect_hit_rate)
-                    ++agg_process_info.hit_row_cnt;
-            }
-        }
-
-        places[i - agg_process_info.start_row] = aggregate_data;
-        processed_rows = i;
     }
+
 
     if (processed_rows)
     {
