@@ -467,8 +467,7 @@ public:
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(
-            fmt::format("(while writing to table `{}`.`{}`)", store->getDatabaseName(), store->getTableName()));
+        e.addMessage(fmt::format("(while writing to table `{}`)", store->getIdent()));
         throw;
     }
 
@@ -1622,12 +1621,12 @@ String StorageDeltaMerge::getTableName() const
 {
     if (storeInited())
     {
-        return _store->getTableName();
+        return _store->getTableMeta().table_name;
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getTableName();
+        return _store->getTableMeta().table_name;
     }
     return table_column_info->table_name;
 }
@@ -1636,12 +1635,12 @@ String StorageDeltaMerge::getDatabaseName() const
 {
     if (storeInited())
     {
-        return _store->getDatabaseName();
+        return _store->getTableMeta().db_name;
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getDatabaseName();
+        return _store->getTableMeta().db_name;
     }
     return table_column_info->db_name;
 }
