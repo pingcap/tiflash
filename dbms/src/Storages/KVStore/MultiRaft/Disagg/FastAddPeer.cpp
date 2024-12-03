@@ -243,7 +243,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
-        GET_METRIC(tiflash_fap_task_result, type_failed_no_suitable).Increment();
+        GET_METRIC(tiflash_fap_task_result, type_failed_no_candidate).Increment();
         return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     }
     LOG_DEBUG(log, "Begin to select checkpoint for region_id={}", region_id);
@@ -721,6 +721,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             // We need to schedule the task.
             auto current_time = FAPAsyncTasks::getCurrentMillis();
             GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Increment();
+            GET_METRIC(tiflash_fap_task_result, type_total).Increment();
             auto job_func = [server, region_id, new_peer_id, fap_ctx, current_time]() {
                 std::string origin_name = getThreadName();
                 SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
@@ -774,7 +775,6 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 new_peer_id,
                 region_id,
                 elapsed);
-            GET_METRIC(tiflash_fap_task_result, type_total).Increment();
             GET_METRIC(tiflash_fap_task_duration_seconds, type_phase1_total).Observe(elapsed / 1000.0);
             return result;
         }
