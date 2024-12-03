@@ -741,8 +741,9 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     }
 }
 
+// This is only used by executeImplBatchStringHashMap.
+// It will choose specifix submap of StringHashMap then do emplace/find.
 // StringKeyType can be StringRef/StringKey8/StringKey16/StringKey24/ArenaKeyHolder.
-// return true when resize exception happens.
 template <
     size_t SubMapIndex,
     bool collect_hit_rate,
@@ -756,7 +757,7 @@ size_t Aggregator::emplaceOrFindStringKey(
     Data & data,
     State & state,
     const std::vector<size_t> & key_infos,
-    std::vector<StringKeyType> & key_datas, // TODO const
+    std::vector<StringKeyType> & key_datas,
     Arena & aggregates_pool,
     std::vector<AggregateDataPtr> & places,
     AggProcessInfo & agg_process_info) const
@@ -1045,8 +1046,8 @@ M(4)
 
 #undef M
 
-// In this function, we will prefetch/empalce each specifix submap directly instead of accessing StringHashMap interface,
-// which is good for performance.
+// prefetch/empalce each specifix submap directly instead of accessing StringHashMap interface,
+// which is better for performance.
 // NOTE: this function is column-wise, which means sort key buffer cannot be reused.
 // This buffer will not be release until this block is processed done.
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
@@ -1088,7 +1089,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
 #undef M
 
     // If no resize exception happens, so this is a new Block.
-    // If resize exception happens, start_row also set as zero.
+    // If resize exception happens, start_row has already been set to zero at the end of this function.
     RUNTIME_CHECK(agg_process_info.start_row == 0);
 
     if likely (agg_process_info.stringHashTableRecoveryInfoEmpty())
@@ -1226,13 +1227,17 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
             inst->batch_arguments,
             aggregates_pool);
     }
-    // For StringHashTable, start_row is meanless, instead submap_mx_infos/submap_mx_datas are used.
-    agg_process_info.start_row = got_resize_exception ? 0 : agg_process_info.end_row;
-
     if unlikely (got_resize_exception)
     {
         RUNTIME_CHECK(!agg_process_info.stringHashTableRecoveryInfoEmpty());
         agg_process_info.sort_key_pool = std::move(sort_key_pool);
+        // For StringHashTable, start_row is meanless, instead submap_mx_infos/submap_mx_datas are used.
+        // So set it to zero when got_resize_exception.
+        agg_process_info.start_row = 0;
+    }
+    else
+    {
+        agg_process_info.start_row = agg_process_info.end_row;
     }
 }
 

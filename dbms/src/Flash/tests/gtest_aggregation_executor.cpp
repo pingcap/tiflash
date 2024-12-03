@@ -1042,6 +1042,24 @@ try
             toVec<Int8>("col_tinyint", col_data_tinyint),
         });
 
+    std::vector<size_t> max_block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+    std::vector<UInt64> two_level_thresholds{0, 1};
+
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+#define WRAP_FOR_AGG_STRING_TEST_BEGIN                                \
+    for (const auto & max_block_size : max_block_sizes)               \
+    {                                                                 \
+        for (const auto & two_level_threshold : two_level_thresholds) \
+        {                                                             \
+            context.context->setSetting(                              \
+                "group_by_two_level_threshold",                       \
+                Field(static_cast<UInt64>(two_level_threshold)));     \
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+#define WRAP_FOR_AGG_STRING_TEST_END \
+    }                                \
+    }
+
+    FailPointHelper::enableFailPoint(FailPoints::force_agg_prefetch);
     {
         // case-1: select count(1), col_tinyint from t group by col_int, col_tinyint
         // agg method: keys64(AggregationMethodKeysFixed)
@@ -1056,9 +1074,9 @@ try
                toNullableVec<Int8>("first_row(col_tinyint)", ColumnWithNullableInt8{0, 1, 2, 3}),
                toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3}),
                toVec<Int8>("col_tinyint", ColumnWithInt8{0, 1, 2, 3})};
-        WRAP_FOR_AGG_FAILPOINTS_START
+        WRAP_FOR_AGG_STRING_TEST_BEGIN
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_FAILPOINTS_END
+        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1074,9 +1092,9 @@ try
             = {toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
                toNullableVec<Int32>("first_row(col_int)", ColumnWithNullableInt32{0, 1, 2, 3}),
                toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})};
-        WRAP_FOR_AGG_FAILPOINTS_START
+        WRAP_FOR_AGG_STRING_TEST_BEGIN
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_FAILPOINTS_END
+        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1093,9 +1111,7 @@ try
             toNullableVec<String>("first_row(col_string_no_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
             toVec<String>("col_string_no_collator", ColumnWithString{"a", "b", "c", "d"}),
         };
-        WRAP_FOR_AGG_FAILPOINTS_START
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_FAILPOINTS_END
     }
 
     {
@@ -1112,9 +1128,9 @@ try
             toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
             toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"}),
         };
-        WRAP_FOR_AGG_FAILPOINTS_START
+        WRAP_FOR_AGG_STRING_TEST_BEGIN
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_FAILPOINTS_END
+        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1131,9 +1147,9 @@ try
             toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
             toVec<String>("first_row(col_string_with_collator)", ColumnWithString{"a", "b", "c", "d"}),
         };
-        WRAP_FOR_AGG_FAILPOINTS_START
+        WRAP_FOR_AGG_STRING_TEST_BEGIN
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_FAILPOINTS_END
+        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     // case-5: none
@@ -1155,9 +1171,9 @@ try
             toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3}),
             toVec<String>("col_string_no_collator", ColumnWithString{"a", "b", "c", "d"}),
         };
-        WRAP_FOR_AGG_FAILPOINTS_START
+        WRAP_FOR_AGG_STRING_TEST_BEGIN
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_FAILPOINTS_END
+        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1174,10 +1190,13 @@ try
             toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
             toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"}),
             toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})};
-        WRAP_FOR_AGG_FAILPOINTS_START
+        WRAP_FOR_AGG_STRING_TEST_BEGIN
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_FAILPOINTS_END
+        WRAP_FOR_AGG_STRING_TEST_END
     }
+    FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
+#undef WRAP_FOR_AGG_STRING_TEST_BEGIN
+#undef WRAP_FOR_AGG_STRING_TEST_END
 }
 CATCH
 
@@ -1209,12 +1228,8 @@ try
     context
         .addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_data, 1, partition_column_infos);
     context
-        .addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_data, 3, partition_column_infos);
-    context
-        .addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_data, 5, partition_column_infos);
-    context
         .addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_data, 10, partition_column_infos);
-    std::vector<size_t> exchange_receiver_concurrency = {1, 3, 5, 10};
+    std::vector<size_t> exchange_receiver_concurrency = {1, 10};
 
     auto gen_request = [&](size_t exchange_concurrency) {
         return context

@@ -265,7 +265,7 @@ public:
     {
         size_t res = 0;
         for (const auto & impl : impls)
-            res = impl.getBufferSizeInCells();
+            res += impl.getBufferSizeInCells();
         return res;
     }
     size_t getBufferSizeInBytes() const

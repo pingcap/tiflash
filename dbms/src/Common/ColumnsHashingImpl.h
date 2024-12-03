@@ -184,7 +184,7 @@ public:
     ALWAYS_INLINE inline EmplaceResult emplaceStringKey(
         Data & data,
         size_t idx,
-        std::vector<StringKeyType> & datas, // TODO const
+        std::vector<StringKeyType> & datas,
         const std::vector<size_t> & hashvals)
     {
         // For spill, hashvals.size() will be le to total_rows.
@@ -204,7 +204,7 @@ public:
     ALWAYS_INLINE inline FindResult findStringKey(
         Data & data,
         size_t idx,
-        std::vector<StringKeyType> & datas, // TODO const
+        std::vector<StringKeyType> & datas,
         const std::vector<size_t> & hashvals)
     {
         assert(hashvals.size() <= static_cast<Derived &>(*this).total_rows);
