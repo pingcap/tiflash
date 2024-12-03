@@ -296,7 +296,7 @@ struct StringHashTableSubMapSelector<0, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<1, true, Data>
 {
-    using Hash = StringHashTableHash::StringKey8Hasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::T1 & getSubMap(size_t hashval, Data & data)
     {
@@ -308,7 +308,7 @@ struct StringHashTableSubMapSelector<1, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<2, true, Data>
 {
-    using Hash = StringHashTableHash::StringKey16Hasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::T2 & getSubMap(size_t hashval, Data & data)
     {
@@ -320,7 +320,7 @@ struct StringHashTableSubMapSelector<2, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<3, true, Data>
 {
-    using Hash = StringHashTableHash::StringKey24Hasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::T3 & getSubMap(size_t hashval, Data & data)
     {
@@ -332,7 +332,7 @@ struct StringHashTableSubMapSelector<3, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<4, true, Data>
 {
-    using Hash = StringHashTableHash::StringRefHasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::Ts & getSubMap(size_t hashval, Data & data)
     {

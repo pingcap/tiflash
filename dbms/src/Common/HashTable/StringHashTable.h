@@ -67,17 +67,57 @@ struct HashWithMixSeed<StringKey24>
     }
 };
 
+// struct StringHashTableHash
+// {
+//     using StringKey8Hasher = HashWithMixSeed<StringKey8>;
+//     using StringKey16Hasher = HashWithMixSeed<StringKey16>;
+//     using StringKey24Hasher = HashWithMixSeed<StringKey24>;
+//     using StringRefHasher = StringRefHash;
+// 
+//     static size_t ALWAYS_INLINE operator()(StringKey8 key) { return StringKey8Hasher::operator()(key); }
+//     static size_t ALWAYS_INLINE operator()(const StringKey16 & key) { return StringKey16Hasher::operator()(key); }
+//     static size_t ALWAYS_INLINE operator()(const StringKey24 & key) { return StringKey24Hasher::operator()(key); }
+//     static size_t ALWAYS_INLINE operator()(const StringRef & key) { return StringRefHasher::operator()(key); }
+// };
 struct StringHashTableHash
 {
-    using StringKey8Hasher = HashWithMixSeed<StringKey8>;
-    using StringKey16Hasher = HashWithMixSeed<StringKey16>;
-    using StringKey24Hasher = HashWithMixSeed<StringKey24>;
-    using StringRefHasher = StringRefHash;
-
-    static size_t ALWAYS_INLINE operator()(StringKey8 key) { return StringKey8Hasher::operator()(key); }
-    static size_t ALWAYS_INLINE operator()(const StringKey16 & key) { return StringKey16Hasher::operator()(key); }
-    static size_t ALWAYS_INLINE operator()(const StringKey24 & key) { return StringKey24Hasher::operator()(key); }
-    static size_t ALWAYS_INLINE operator()(const StringRef & key) { return StringRefHasher::operator()(key); }
+#if defined(__SSE4_2__)
+    static size_t ALWAYS_INLINE operator()(StringKey8 key)
+    {
+        size_t res = -1ULL;
+        res = _mm_crc32_u64(res, key);
+        return res;
+    }
+    static size_t ALWAYS_INLINE operator()(const StringKey16 & key)
+    {
+        size_t res = -1ULL;
+        res = _mm_crc32_u64(res, key.low);
+        res = _mm_crc32_u64(res, key.high);
+        return res;
+    }
+    static size_t ALWAYS_INLINE operator()(const StringKey24 & key)
+    {
+        size_t res = -1ULL;
+        res = _mm_crc32_u64(res, key.a);
+        res = _mm_crc32_u64(res, key.b);
+        res = _mm_crc32_u64(res, key.c);
+        return res;
+    }
+#else
+    static size_t ALWAYS_INLINE operator()(StringKey8 key)
+    {
+        return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 8);
+    }
+    static size_t ALWAYS_INLINE operator()(const StringKey16 & key)
+    {
+        return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 16);
+    }
+    static size_t ALWAYS_INLINE operator()(const StringKey24 & key)
+    {
+        return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 24);
+    }
+#endif
+    static size_t ALWAYS_INLINE operator()(StringRef key){ return StringRefHash()(key); }
 };
 
 template <typename Cell>
@@ -572,7 +612,7 @@ struct StringHashTableSubMapSelector<0, false, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<1, false, Data>
 {
-    using Hash = StringHashTableHash::StringKey8Hasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::T1 & getSubMap(size_t, Data & data) { return data.m1; }
 };
@@ -580,7 +620,7 @@ struct StringHashTableSubMapSelector<1, false, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<2, false, Data>
 {
-    using Hash = StringHashTableHash::StringKey16Hasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::T2 & getSubMap(size_t, Data & data) { return data.m2; }
 };
@@ -588,7 +628,7 @@ struct StringHashTableSubMapSelector<2, false, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<3, false, Data>
 {
-    using Hash = StringHashTableHash::StringKey24Hasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::T3 & getSubMap(size_t, Data & data) { return data.m3; }
 };
@@ -596,7 +636,7 @@ struct StringHashTableSubMapSelector<3, false, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<4, false, Data>
 {
-    using Hash = StringHashTableHash::StringRefHasher;
+    using Hash = StringHashTableHash;
 
     static typename Data::Ts & getSubMap(size_t, Data & data) { return data.ms; }
 };
