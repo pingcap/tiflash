@@ -24,6 +24,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
 #include <Interpreters/Join.h>
@@ -31,6 +32,7 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
+#include <ctime>
 #include <exception>
 #include <magic_enum.hpp>
 
@@ -41,6 +43,7 @@ namespace FailPoints
 extern const char random_join_prob_failpoint[];
 extern const char exception_mpp_hash_build[];
 extern const char exception_mpp_hash_probe[];
+extern const char force_semi_join_time_exceed[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -1521,6 +1524,7 @@ Block doNASemiJoinOrSemiJoin(
     ProbeProcessInfo & probe_process_info,
     Helper * helper,
     const NameSet & output_column_names_set,
+    const Block & empty_result_block,
     const CancellationHook & is_cancelled)
 {
     assert(helper->isProbeHashTableDone());
@@ -1529,6 +1533,18 @@ Block doNASemiJoinOrSemiJoin(
         if (is_cancelled())
             return {};
         helper->doJoin();
+        // because pipeline model is enabled by default, current_task_timer should be not null in most senarios
+        if likely (current_task_timer != nullptr)
+        {
+            auto elapsed = current_task_timer->updateCurrentExecTime();
+            auto time_exceed = elapsed >= 6 * YIELD_MAX_TIME_SPENT_NS;
+            fiu_do_on(FailPoints::force_semi_join_time_exceed, { time_exceed = true; });
+            if unlikely (time_exceed)
+            {
+                // task execution time exceeds 10 times of the maximum time spent, yield the thread by returning an empty result block
+                return empty_result_block;
+            }
+        }
     }
 
     if (is_cancelled())
@@ -1625,7 +1641,12 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
     auto * helper = reinterpret_cast<NASemiJoinHelper<KIND, STRICTNESS, Maps> *>(
         probe_process_info.semi_join_family_helper.get());
 
-    return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
+    return doNASemiJoinOrSemiJoin(
+        probe_process_info,
+        helper,
+        output_column_names_set_after_finalize,
+        getOutputBlock(),
+        is_cancelled);
 }
 
 Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
@@ -1716,7 +1737,12 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
     auto * helper
         = reinterpret_cast<SemiJoinHelper<KIND, STRICTNESS, Maps> *>(probe_process_info.semi_join_family_helper.get());
 
-    return doNASemiJoinOrSemiJoin(probe_process_info, helper, output_column_names_set_after_finalize, is_cancelled);
+    return doNASemiJoinOrSemiJoin(
+        probe_process_info,
+        helper,
+        output_column_names_set_after_finalize,
+        getOutputBlock(),
+        is_cancelled);
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const

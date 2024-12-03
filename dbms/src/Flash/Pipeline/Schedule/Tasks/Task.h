@@ -18,6 +18,7 @@
 #include <Common/MemoryTracker.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <memory.h>
 
 namespace DB
@@ -74,6 +75,18 @@ public:
     // `TaskHelper::FINALIZE_TASK` can help this.
     void finalize();
 
+    ALWAYS_INLINE void beforeExec(TaskTimer * timer)
+    {
+        assert(nullptr == current_task_timer);
+        current_task_timer = timer;
+        startTraceMemory();
+    }
+    ALWAYS_INLINE static void afterExec()
+    {
+        current_task_timer = nullptr;
+        CurrentMemoryTracker::submitLocalDeltaMemory();
+        current_memory_tracker = nullptr;
+    }
     ALWAYS_INLINE void startTraceMemory()
     {
         assert(nullptr == current_memory_tracker);

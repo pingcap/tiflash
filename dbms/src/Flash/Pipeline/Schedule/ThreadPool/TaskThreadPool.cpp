@@ -19,6 +19,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 #include <common/likely.h>
@@ -91,47 +92,47 @@ template <typename Impl>
 void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
-    task->startTraceMemory();
+    TaskTimer timer{task->profile_info};
+    task->beforeExec(&timer);
 
     metrics.incExecutingTask();
     metrics.elapsedPendingTime(task);
 
     auto status_before_exec = task->getStatus();
     auto status_after_exec = status_before_exec;
-    UInt64 total_time_spent = 0;
     while (true)
     {
         status_after_exec = Impl::exec(task);
-        total_time_spent += task->profile_info.elapsedFromPrev();
+        auto total_time_spent = timer.updateCurrentExecTime();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
         if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
-    task_queue->updateStatistics(task, status_before_exec, total_time_spent);
-    metrics.addExecuteTime(task, total_time_spent);
+    task_queue->updateStatistics(task, status_before_exec, timer.current_exec_time);
+    metrics.addExecuteTime(task, timer.current_exec_time);
     metrics.decExecutingTask();
     switch (status_after_exec)
     {
     case ExecTaskStatus::RUNNING:
-        task->endTraceMemory();
+        task->afterExec();
         scheduler.submitToCPUTaskThreadPool(std::move(task));
         break;
     case ExecTaskStatus::IO_IN:
     case ExecTaskStatus::IO_OUT:
-        task->endTraceMemory();
+        task->afterExec();
         scheduler.submitToIOTaskThreadPool(std::move(task));
         break;
     case ExecTaskStatus::WAITING:
-        task->endTraceMemory();
+        task->afterExec();
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case ExecTaskStatus::WAIT_FOR_NOTIFY:
-        task->endTraceMemory();
+        task->afterExec();
         registerTaskToFuture(std::move(task));
         break;
     case FINISH_STATUS:
         task->finalize();
-        task->endTraceMemory();
+        task->afterExec();
         task.reset();
         break;
     default:
