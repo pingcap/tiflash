@@ -43,8 +43,7 @@ public:
         const TiDB::TiDBCollators & collators_,
         const JoinNonEqualConditions & non_equal_conditions_,
         const Settings & settings,
-        const String & match_helper_name_,
-        const String & flag_mapped_entry_helper_name_);
+        const String & match_helper_name_);
 
     void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
 
@@ -101,9 +100,6 @@ private:
 
     // only use for left outer semi joins.
     const String match_helper_name;
-    // only use for right semi, right anti joins with other conditions,
-    // used to name the column that records matched map entry before other conditions filter
-    const String flag_mapped_entry_helper_name;
 
     const LoggerPtr log;
 

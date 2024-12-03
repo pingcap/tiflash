@@ -115,22 +115,6 @@ PhysicalPlanNodePtr PhysicalJoinV2::build(
 
     auto join_req_id = fmt::format("{}_{}", log->identifier(), executor_id);
 
-    String flag_mapped_entry_helper_name = tiflash_join.genFlagMappedEntryHelperName(
-        left_input_header,
-        right_input_header,
-        join_non_equal_conditions.other_cond_expr != nullptr);
-
-    assert(build_key_names.size() == original_build_key_names.size());
-    std::unordered_map<String, String> build_key_names_map;
-    for (size_t i = 0; i < original_build_key_names.size(); ++i)
-    {
-        build_key_names_map[original_build_key_names[i]] = build_key_names[i];
-    }
-    auto runtime_filter_list
-        = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
-    LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
-    context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
-
     HashJoinPtr join_ptr = std::make_shared<HashJoin>(
         probe_key_names,
         build_key_names,
@@ -140,8 +124,7 @@ PhysicalPlanNodePtr PhysicalJoinV2::build(
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         context.getSettingsRef(),
-        match_helper_name,
-        flag_mapped_entry_helper_name);
+        match_helper_name);
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 

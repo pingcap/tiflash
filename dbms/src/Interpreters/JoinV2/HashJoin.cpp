@@ -154,8 +154,7 @@ HashJoin::HashJoin(
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     const Settings & settings_,
-    const String & match_helper_name_,
-    const String & flag_mapped_entry_helper_name_)
+    const String & match_helper_name_)
     : kind(kind_)
     , join_req_id(req_id)
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
@@ -165,7 +164,6 @@ HashJoin::HashJoin(
     , non_equal_conditions(non_equal_conditions_)
     , settings(settings_)
     , match_helper_name(match_helper_name_)
-    , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
     , log(Logger::get(join_req_id))
     , has_other_condition(non_equal_conditions.other_cond_expr != nullptr)
     , output_columns(output_columns_)
@@ -409,7 +407,7 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
 bool HashJoin::finishOneBuild(size_t stream_index)
 {
     auto & wd = build_workers_data[stream_index];
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "{} insert block to row containers cost {}ms, row count {}, padding size {}({:.2f}% of all size {})",
         stream_index,
@@ -429,7 +427,7 @@ bool HashJoin::finishOneBuild(size_t stream_index)
 bool HashJoin::finishOneProbe(size_t stream_index)
 {
     auto & wd = probe_workers_data[stream_index];
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "{} probe handle {} rows, cost {}ms(hash_table {}ms + replicate {}ms + other condition {}ms), collision {}",
         stream_index,
@@ -460,7 +458,7 @@ void HashJoin::workAfterBuildFinish()
         settings.probe_enable_prefetch_threshold,
         enable_tagged_pointer);
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "allocate pointer table cost {}ms, rows {}, pointer table size {}, added column num {}, enable prefetch {}, "
         "enable tagged pointer {}",
