@@ -65,14 +65,24 @@ public:
         Segment::SplitMode split_mode = Segment::SplitMode::Auto,
         bool check_rows = true);
     void mergeSegment(const std::vector<PageIdU64> & segments, bool check_rows = true);
-    void mergeSegmentDelta(PageIdU64 segment_id, bool check_rows = true);
+    void mergeSegmentDelta(
+        PageIdU64 segment_id,
+        bool check_rows = true,
+        std::optional<size_t> pack_size = std::nullopt);
     void flushSegmentCache(PageIdU64 segment_id);
+    void compactSegmentDelta(PageIdU64 segment_id);
 
     /**
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
      * written randomly in the segment range.
      */
-    void writeSegment(PageIdU64 segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void writeToCache(PageIdU64 segment_id, UInt64 write_rows, Int64 start_at, bool shuffle, std::optional<UInt64> ts);
+    void writeSegment(
+        PageIdU64 segment_id,
+        UInt64 write_rows = 100,
+        std::optional<Int64> start_at = std::nullopt,
+        bool shuffle = false,
+        std::optional<UInt64> ts = std::nullopt);
     void ingestDTFileIntoDelta(
         PageIdU64 segment_id,
         UInt64 write_rows = 100,
@@ -113,12 +123,18 @@ public:
      */
     bool ensureSegmentDeltaLocalIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos);
 
-    Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
+    Block prepareWriteBlock(
+        Int64 start_key,
+        Int64 end_key,
+        bool is_deleted = false,
+        bool including_right_boundary = false,
+        std::optional<UInt64> ts = std::nullopt);
     Block prepareWriteBlockInSegmentRange(
         PageIdU64 segment_id,
         UInt64 total_write_rows,
         std::optional<Int64> write_start_key = std::nullopt,
-        bool is_deleted = false);
+        bool is_deleted = false,
+        std::optional<UInt64> ts = std::nullopt);
 
     size_t getSegmentRowNumWithoutMVCC(PageIdU64 segment_id);
     size_t getSegmentRowNum(PageIdU64 segment_id);
@@ -138,9 +154,18 @@ public:
     std::vector<Block> readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges);
     ColumnPtr getSegmentRowId(PageIdU64 segment_id, const RowKeyRanges & ranges);
     ColumnPtr getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges);
-    void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);
+    void writeSegmentWithDeleteRange(
+        PageIdU64 segment_id,
+        Int64 begin,
+        Int64 end,
+        bool is_common_handle,
+        bool including_right_boundary);
     RowKeyValue buildRowKeyValue(Int64 key);
-    static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+    static RowKeyRange buildRowKeyRange(
+        Int64 begin,
+        Int64 end,
+        bool is_common_handle,
+        bool including_right_boundary = false);
 
     size_t getPageNumAfterGC(StorageType type, NamespaceID ns_id) const;
 
@@ -161,7 +186,12 @@ protected:
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
-    virtual Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted);
+    virtual Block prepareWriteBlockImpl(
+        Int64 start_key,
+        Int64 end_key,
+        bool is_deleted,
+        bool including_right_boundary,
+        std::optional<UInt64> ts);
 
     virtual void prepareColumns(const ColumnDefinesPtr &) {}
 
