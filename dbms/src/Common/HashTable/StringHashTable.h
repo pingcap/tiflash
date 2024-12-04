@@ -50,35 +50,6 @@ inline StringRef ALWAYS_INLINE toStringRef(const StringKey24 & n)
     return {reinterpret_cast<const char *>(&n), 24ul - (__builtin_clzll(n.c) >> 3)};
 }
 
-inline size_t hash_string_key_24(uint64_t seed, const StringKey24 & v)
-{
-    hash_combine(seed, v.a);
-    hash_combine(seed, v.b);
-    hash_combine(seed, v.c);
-    return seed;
-}
-
-template <>
-struct HashWithMixSeed<StringKey24>
-{
-    static inline size_t operator()(const StringKey24 & v)
-    {
-        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_string_key_24(0, v));
-    }
-};
-
-// struct StringHashTableHash
-// {
-//     using StringKey8Hasher = HashWithMixSeed<StringKey8>;
-//     using StringKey16Hasher = HashWithMixSeed<StringKey16>;
-//     using StringKey24Hasher = HashWithMixSeed<StringKey24>;
-//     using StringRefHasher = StringRefHash;
-// 
-//     static size_t ALWAYS_INLINE operator()(StringKey8 key) { return StringKey8Hasher::operator()(key); }
-//     static size_t ALWAYS_INLINE operator()(const StringKey16 & key) { return StringKey16Hasher::operator()(key); }
-//     static size_t ALWAYS_INLINE operator()(const StringKey24 & key) { return StringKey24Hasher::operator()(key); }
-//     static size_t ALWAYS_INLINE operator()(const StringRef & key) { return StringRefHasher::operator()(key); }
-// };
 struct StringHashTableHash
 {
 #if defined(__SSE4_2__)
@@ -117,7 +88,7 @@ struct StringHashTableHash
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 24);
     }
 #endif
-    static size_t ALWAYS_INLINE operator()(StringRef key){ return StringRefHash()(key); }
+    static size_t ALWAYS_INLINE operator()(StringRef key) { return StringRefHash()(key); }
 };
 
 template <typename Cell>

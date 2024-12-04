@@ -138,6 +138,7 @@ public:
             map.prefetch(hashvals[prefetch_idx]);
     }
 
+    // Emplace key without hashval, and this method doesn't support prefetch.
     template <typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
         Data & data,
@@ -160,6 +161,7 @@ public:
         return findKeyImpl(keyHolderGetKey(key_holder), data);
     }
 
+    // Emplace key using hashval, you can enable prefetch or not.
     template <bool enable_prefetch = false, typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
         Data & data,
@@ -318,6 +320,7 @@ protected:
     else                                                          \
         return EmplaceResult(inserted);
 
+    // This method is performance critical, so there are two emplaceImpl to make sure caller can use the one they need.
     template <typename Data, typename KeyHolder>
     ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval)
     {
