@@ -150,4 +150,11 @@ void recordFilteredRows(
 
 std::pair<const ColumnUInt8::Container *, ConstNullMapPtr> getDataAndNullMapVectorFromFilterColumn(
     ColumnPtr & filter_column);
+
+void mergeNullAndFilterResult(
+    Block & block,
+    ColumnVector<UInt8>::Container & filter_column,
+    const String & filter_column_name,
+    bool null_as_true);
+
 } // namespace DB

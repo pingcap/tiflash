@@ -144,11 +144,11 @@ public:
     /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertManyFrom(ConstColumnXXX, ...)
     virtual void insertManyFrom(const IColumn & src, size_t position, size_t length) = 0;
 
-    /// Appends disjunctive elements from other column with the same type.
-    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertDisjunctFrom(ConstColumnXXX, ...)
+    /// Appends selective elements from other column with the same type.
+    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertSelectiveFrom(ConstColumnXXX, ...)
     using Offset = UInt64;
     using Offsets = PaddedPODArray<Offset>;
-    virtual void insertDisjunctFrom(const IColumn & src, const Offsets & position_vec) = 0;
+    virtual void insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets) = 0;
 
     /// Appends one field multiple times. Can be optimized in inherited classes.
     virtual void insertMany(const Field & field, size_t length)

@@ -88,17 +88,17 @@ void ColumnFixedString::insertManyFrom(const IColumn & src_, size_t position, si
         memcpySmallAllowReadWriteOverflow15(&chars[i], src_char_ptr, n);
 }
 
-void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec)
+void ColumnFixedString::insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets)
 {
     const auto & src = static_cast<const ColumnFixedString &>(src_);
     if (n != src.getN())
         throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
     size_t old_size = chars.size();
-    size_t new_size = old_size + position_vec.size() * n;
+    size_t new_size = old_size + selective_offsets.size() * n;
     chars.resize(new_size);
     const auto & src_chars = src.chars;
     for (size_t i = old_size, j = 0; i < new_size; i += n, ++j)
-        memcpySmallAllowReadWriteOverflow15(&chars[i], &src_chars[position_vec[j] * n], n);
+        memcpySmallAllowReadWriteOverflow15(&chars[i], &src_chars[selective_offsets[j] * n], n);
 }
 
 void ColumnFixedString::insertData(const char * pos, size_t length)

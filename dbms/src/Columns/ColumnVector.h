@@ -219,14 +219,14 @@ public:
         data.resize_fill(data.size() + length, value);
     }
 
-    void insertDisjunctFrom(const IColumn & src, const IColumn::Offsets & position_vec) override
+    void insertSelectiveFrom(const IColumn & src, const IColumn::Offsets & selective_offsets) override
     {
         const auto & src_container = static_cast<const Self &>(src).getData();
         size_t old_size = data.size();
-        size_t to_add_size = position_vec.size();
+        size_t to_add_size = selective_offsets.size();
         data.resize(old_size + to_add_size);
         for (size_t i = 0; i < to_add_size; ++i)
-            data[i + old_size] = src_container[position_vec[i]];
+            data[i + old_size] = src_container[selective_offsets[i]];
     }
 
     void insertMany(const Field & field, size_t length) override

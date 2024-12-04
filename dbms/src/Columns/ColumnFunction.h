@@ -99,7 +99,7 @@ public:
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertDisjunctFrom(const IColumn &, const Offsets &) override
+    void insertSelectiveFrom(const IColumn &, const Offsets &) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

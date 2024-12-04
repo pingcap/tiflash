@@ -80,7 +80,10 @@ public:
 
     void insertManyFrom(const IColumn &, size_t, size_t length) override { s += length; }
 
-    void insertDisjunctFrom(const IColumn &, const Offsets & position_vec) override { s += position_vec.size(); }
+    void insertSelectiveFrom(const IColumn &, const Offsets & selective_offsets) override
+    {
+        s += selective_offsets.size();
+    }
 
     void insertMany(const Field &, size_t length) override { s += length; }
 

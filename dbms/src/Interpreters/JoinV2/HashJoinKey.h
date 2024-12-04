@@ -533,7 +533,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKey8>
 {
     using Type = HashJoinKeyOneNumber<UInt8>;
     using Hash = TrivialHash;
-    using HashValueType = UInt8;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt8>);
 };
 
 template <>
@@ -541,7 +542,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKey16>
 {
     using Type = HashJoinKeyOneNumber<UInt16>;
     using Hash = TrivialHash;
-    using HashValueType = UInt16;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt16>);
 };
 
 template <>
@@ -549,7 +551,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKey32>
 {
     using Type = HashJoinKeyOneNumber<UInt32>;
     using Hash = HashCRC32<UInt32>;
-    using HashValueType = UInt32;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt32>);
 };
 
 template <>
@@ -557,7 +560,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKey64>
 {
     using Type = HashJoinKeyOneNumber<UInt64>;
     using Hash = HashCRC32<UInt64>;
-    using HashValueType = UInt32;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt32>);
 };
 
 template <>
@@ -565,7 +569,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKey128>
 {
     using Type = HashJoinKeyOneNumber<UInt128>;
     using Hash = HashCRC32<UInt128>;
-    using HashValueType = UInt32;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt32>);
 };
 
 template <>
@@ -573,7 +578,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixed32>
 {
     using Type = HashJoinKeysFixed<UInt32>;
     using Hash = HashCRC32<UInt32>;
-    using HashValueType = UInt32;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt32>);
 };
 
 template <>
@@ -581,7 +587,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixed64>
 {
     using Type = HashJoinKeysFixed<UInt64>;
     using Hash = HashCRC32<UInt64>;
-    using HashValueType = UInt32;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt32>);
 };
 
 template <>
@@ -589,7 +596,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixed128>
 {
     using Type = HashJoinKeysFixed<UInt128>;
     using Hash = HashCRC32<UInt128>;
-    using HashValueType = UInt32;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt32>);
 };
 
 template <>
@@ -597,7 +605,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixed256>
 {
     using Type = HashJoinKeysFixed<UInt256>;
     using Hash = HashCRC32<UInt256>;
-    using HashValueType = UInt32;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, UInt32>);
 };
 
 template <>
@@ -605,7 +614,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixedOther>
 {
     using Type = HashJoinKeysFixedOther;
     using Hash = StringRefHash;
-    using HashValueType = size_t;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, size_t>);
 };
 
 template <>
@@ -613,7 +623,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKeyStringBin>
 {
     using Type = HashJoinKeyStringBin<false>;
     using Hash = StringRefHash;
-    using HashValueType = size_t;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, size_t>);
 };
 
 template <>
@@ -621,7 +632,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKeyStringBinPadding>
 {
     using Type = HashJoinKeyStringBin<true>;
     using Hash = StringRefHash;
-    using HashValueType = size_t;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, size_t>);
 };
 
 template <>
@@ -629,7 +641,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKeyString>
 {
     using Type = HashJoinKeyString;
     using Hash = StringRefHash;
-    using HashValueType = size_t;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, size_t>);
 };
 
 template <>
@@ -637,7 +650,8 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeySerialized>
 {
     using Type = HashJoinKeySerialized;
     using Hash = StringRefHash;
-    using HashValueType = size_t;
+    using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
+    static_assert(std::is_same_v<HashValueType, size_t>);
 };
 
 size_t getHashValueByteSize(HashJoinKeyMethod method);

@@ -89,60 +89,6 @@ StringCollatorKind getStringCollatorKind(const TiDB::TiDBCollators & collators)
     }
 }
 
-void mergeNullAndFilterResult(
-    Block & block,
-    ColumnVector<UInt8>::Container & filter_column,
-    const String & filter_column_name,
-    bool null_as_true)
-{
-    if (filter_column_name.empty())
-        return;
-    ColumnPtr current_filter_column = block.getByName(filter_column_name).column;
-    auto [filter_vec, nullmap_vec] = getDataAndNullMapVectorFromFilterColumn(current_filter_column);
-    if (nullmap_vec != nullptr)
-    {
-        if (filter_column.empty())
-        {
-            filter_column.insert(nullmap_vec->begin(), nullmap_vec->end());
-            if (null_as_true)
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = filter_column[i] || (*filter_vec)[i];
-            }
-            else
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = !filter_column[i] && (*filter_vec)[i];
-            }
-        }
-        else
-        {
-            if (null_as_true)
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = filter_column[i] && ((*nullmap_vec)[i] || (*filter_vec)[i]);
-            }
-            else
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = filter_column[i] && !(*nullmap_vec)[i] && (*filter_vec)[i];
-            }
-        }
-    }
-    else
-    {
-        if (filter_column.empty())
-        {
-            filter_column.insert(filter_vec->begin(), filter_vec->end());
-        }
-        else
-        {
-            for (size_t i = 0; i < filter_vec->size(); ++i)
-                filter_column[i] = filter_column[i] && (*filter_vec)[i];
-        }
-    }
-}
-
 } // namespace
 
 HashJoin::HashJoin(
@@ -251,16 +197,18 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
             }
             if (is_raw_required)
             {
-                raw_required_key_flag[i] = true;
                 size_t index = right_sample_block_pruned.getPositionByName(key_names_right[i]);
-                raw_required_key_index_set.insert(index);
-                row_layout.raw_required_key_column_indexes.push_back({index, key_columns[i].is_nullable});
+                /// If this index has already existed in set, do not move it to the end of the join key.
+                if (!raw_required_key_index_set.contains(index))
+                {
+                    raw_required_key_flag[i] = true;
+                    raw_required_key_index_set.insert(index);
+                    row_layout.raw_required_key_column_indexes.push_back({index, key_columns[i].is_nullable});
+                    continue;
+                }
             }
-            else
-            {
-                new_key_names_left.emplace_back(key_names_left[i]);
-                new_key_names_right.emplace_back(key_names_right[i]);
-            }
+            new_key_names_left.emplace_back(key_names_left[i]);
+            new_key_names_right.emplace_back(key_names_right[i]);
         }
 
         for (size_t i = 0; i < keys_size; ++i)
@@ -568,7 +516,6 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
     added_columns.reserve(num_columns_to_add);
 
     RUNTIME_ASSERT(rows >= context.start_row_idx);
-    size_t start = context.start_row_idx;
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & src_column = right_sample_block_pruned.getByPosition(i);
@@ -595,23 +542,11 @@ Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
 
     if likely (rows > 0)
     {
-        if (pointer_table.enableProbePrefetch())
+        for (size_t i = 0; i < existing_columns; ++i)
         {
-            for (size_t i = 0; i < existing_columns; ++i)
-            {
-                auto mutable_column = block.safeGetByPosition(i).column->cloneEmpty();
-                mutable_column->insertDisjunctFrom(*block.safeGetByPosition(i).column.get(), wd.selective_offsets);
-                block.safeGetByPosition(i).column = std::move(mutable_column);
-            }
-        }
-        else
-        {
-            size_t end = context.current_probe_row_ptr == nullptr ? context.start_row_idx : context.start_row_idx + 1;
-            for (size_t i = 0; i < existing_columns; ++i)
-            {
-                block.safeGetByPosition(i).column
-                    = block.safeGetByPosition(i).column->replicateRange(start, end, wd.offsets_to_replicate);
-            }
+            auto mutable_column = block.safeGetByPosition(i).column->cloneEmpty();
+            mutable_column->insertSelectiveFrom(*block.safeGetByPosition(i).column.get(), wd.selective_offsets);
+            block.safeGetByPosition(i).column = std::move(mutable_column);
         }
     }
     wd.replicate_time += watch.elapsedFromLastTime();

@@ -86,7 +86,7 @@ public:
 
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
 
-    void insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec) override;
+    void insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets) override;
 
     void insertData(const char * pos, size_t length) override;
 

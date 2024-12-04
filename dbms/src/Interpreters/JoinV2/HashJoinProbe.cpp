@@ -167,19 +167,15 @@ public:
         wd.insert_batch.clear();
         wd.insert_batch.reserve(settings.probe_insert_batch_size);
 
-        if (pointer_table.enableProbePrefetch())
+        wd.selective_offsets.clear();
+        wd.selective_offsets.reserve(context.rows);
+
+        if (pointer_table.enableProbePrefetch() && !wd.prefetch_states)
         {
-            wd.selective_offsets.clear();
-            wd.selective_offsets.reserve(context.rows);
-            if (!wd.prefetch_states)
-            {
-                wd.prefetch_states = decltype(wd.prefetch_states)(
-                    static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
-                    [](void * ptr) { delete static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
-            }
+            wd.prefetch_states = decltype(wd.prefetch_states)(
+                static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
+                [](void * ptr) { delete static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
         }
-        else
-            wd.offsets_to_replicate.resize(context.rows);
     }
 
     void joinProbeBlockImpl();
@@ -301,7 +297,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
 {
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     size_t current_offset = 0;
-    auto & offsets_to_replicate = wd.offsets_to_replicate;
+    auto & selective_offsets = wd.selective_offsets;
     size_t idx = context.start_row_idx;
     RowPtr ptr = context.current_probe_row_ptr;
     size_t collision = 0;
@@ -313,10 +309,8 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
     for (; idx < context.rows; ++idx)
     {
         if (has_null_map && (*context.null_map)[idx])
-        {
-            offsets_to_replicate[idx] = current_offset;
             continue;
-        }
+
         const auto & key = key_getter.getJoinKey(idx);
         auto hash = static_cast<HashValueType>(Hash()(key));
         UInt16 hash_tag = hash & ROW_PTR_TAG_MASK;
@@ -324,16 +318,13 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
         {
             ptr = pointer_table.getHeadPointer(hash);
             if (ptr == nullptr)
-            {
-                offsets_to_replicate[idx] = current_offset;
                 continue;
-            }
+
             if constexpr (tagged_pointer)
             {
                 if (!containOtherTag(ptr, hash_tag))
                 {
                     ptr = nullptr;
-                    offsets_to_replicate[idx] = current_offset;
                     continue;
                 }
                 ptr = removeRowPtrTag(ptr);
@@ -347,6 +338,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
             if (key_is_equal)
             {
                 ++current_offset;
+                selective_offsets.push_back(idx);
                 insertRowToBatch(key_getter, ptr + key_offset, key2);
                 if unlikely (current_offset >= settings.max_block_size)
                     break;
@@ -356,7 +348,6 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
             if (ptr == nullptr)
                 break;
         }
-        offsets_to_replicate[idx] = current_offset;
         if unlikely (ptr != nullptr)
         {
             ptr = HashJoinRowLayout::getNextRowPtr(ptr);

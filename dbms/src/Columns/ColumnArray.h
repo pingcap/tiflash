@@ -136,9 +136,9 @@ public:
             insertFrom(src_, n);
     }
 
-    void insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec) override
+    void insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets) override
     {
-        for (auto position : position_vec)
+        for (auto position : selective_offsets)
             insertFrom(src_, position);
     }
 

@@ -758,59 +758,6 @@ void Join::cancelRuntimeFilter(const String & reason)
 
 namespace
 {
-void mergeNullAndFilterResult(
-    Block & block,
-    ColumnVector<UInt8>::Container & filter_column,
-    const String & filter_column_name,
-    bool null_as_true)
-{
-    if (filter_column_name.empty())
-        return;
-    ColumnPtr current_filter_column = block.getByName(filter_column_name).column;
-    auto [filter_vec, nullmap_vec] = getDataAndNullMapVectorFromFilterColumn(current_filter_column);
-    if (nullmap_vec != nullptr)
-    {
-        if (filter_column.empty())
-        {
-            filter_column.insert(nullmap_vec->begin(), nullmap_vec->end());
-            if (null_as_true)
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = filter_column[i] || (*filter_vec)[i];
-            }
-            else
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = !filter_column[i] && (*filter_vec)[i];
-            }
-        }
-        else
-        {
-            if (null_as_true)
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = filter_column[i] && ((*nullmap_vec)[i] || (*filter_vec)[i]);
-            }
-            else
-            {
-                for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = filter_column[i] && !(*nullmap_vec)[i] && (*filter_vec)[i];
-            }
-        }
-    }
-    else
-    {
-        if (filter_column.empty())
-        {
-            filter_column.insert(filter_vec->begin(), filter_vec->end());
-        }
-        else
-        {
-            for (size_t i = 0; i < filter_vec->size(); ++i)
-                filter_column[i] = filter_column[i] && (*filter_vec)[i];
-        }
-    }
-}
 void applyNullToNotMatchedRows(Block & block, const Block & right_columns, const ColumnUInt8 & filter_column)
 {
     for (size_t i = 0; i < block.columns(); ++i)

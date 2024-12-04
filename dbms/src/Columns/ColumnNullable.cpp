@@ -370,17 +370,17 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertDisjunctFrom(const IColumn & src, const Offsets & position_vec)
+void ColumnNullable::insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
-    getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);
+    getNestedColumn().insertSelectiveFrom(src_concrete.getNestedColumn(), selective_offsets);
     auto & map = getNullMapData();
     const auto & src_map = src_concrete.getNullMapData();
     size_t old_size = map.size();
-    size_t to_add_size = position_vec.size();
+    size_t to_add_size = selective_offsets.size();
     map.resize(old_size + to_add_size);
     for (size_t i = 0; i < to_add_size; ++i)
-        map[i + old_size] = src_map[position_vec[i]];
+        map[i + old_size] = src_map[selective_offsets[i]];
 }
 
 void ColumnNullable::popBack(size_t n)

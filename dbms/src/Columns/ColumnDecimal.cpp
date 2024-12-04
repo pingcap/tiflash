@@ -628,14 +628,14 @@ void ColumnDecimal<T>::insertManyFrom(const IColumn & src, size_t position, size
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertDisjunctFrom(const IColumn & src, const IColumn::Offsets & position_vec)
+void ColumnDecimal<T>::insertSelectiveFrom(const IColumn & src, const IColumn::Offsets & selective_offsets)
 {
     const auto & src_data = static_cast<const ColumnDecimal &>(src).data;
     size_t old_size = data.size();
-    size_t to_add_size = position_vec.size();
+    size_t to_add_size = selective_offsets.size();
     data.resize(old_size + to_add_size);
     for (size_t i = 0; i < to_add_size; ++i)
-        data[i + old_size] = src_data[position_vec[i]];
+        data[i + old_size] = src_data[selective_offsets[i]];
 }
 
 #pragma GCC diagnostic pop

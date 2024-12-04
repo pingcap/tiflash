@@ -342,7 +342,7 @@ DEFINE_HASH_WIDE(DB::Int512)
 struct TrivialHash
 {
     template <typename T, std::enable_if_t<is_fit_register<T>, int> = 0>
-    size_t operator()(T key) const
+    T operator()(T key) const
     {
         return key;
     }
@@ -354,7 +354,7 @@ struct TrivialHash
     size_t operator()(const UInt256 & key) const { return key.a; }
 
     template <typename T, std::enable_if_t<is_boost_number_v<T>, int> = 0>
-    size_t operator()(const T & key) const
+    T operator()(const T & key) const
     {
         return key;
     }

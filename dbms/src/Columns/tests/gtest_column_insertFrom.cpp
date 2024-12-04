@@ -71,22 +71,22 @@ public:
             }
         }
 
-        /// Test insertDisjunctFrom
+        /// Test insertSelectiveFrom
         {
             for (size_t i = 0; i < 2; ++i)
             {
                 cols[i] = column_ptr->cloneEmpty();
             }
-            IColumn::Offsets position_vec;
-            position_vec.push_back(0);
-            position_vec.push_back(2);
-            position_vec.push_back(4);
-            for (size_t position : position_vec)
+            IColumn::Offsets selective_offsets;
+            selective_offsets.push_back(0);
+            selective_offsets.push_back(2);
+            selective_offsets.push_back(4);
+            for (size_t position : selective_offsets)
                 cols[0]->insertFrom(*column_ptr, position);
-            for (size_t position : position_vec)
+            for (size_t position : selective_offsets)
                 cols[0]->insertFrom(*column_ptr, position);
-            cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
-            cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
+            cols[1]->insertSelectiveFrom(*column_ptr, selective_offsets);
+            cols[1]->insertSelectiveFrom(*column_ptr, selective_offsets);
             {
                 ColumnWithTypeAndName ref(std::move(cols[0]), col_with_type_and_name.type, "");
                 ColumnWithTypeAndName result(std::move(cols[1]), col_with_type_and_name.type, "");

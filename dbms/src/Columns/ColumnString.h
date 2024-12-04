@@ -168,11 +168,11 @@ public:
             insertFromImpl(src, position);
     }
 
-    void insertDisjunctFrom(const IColumn & src_, const Offsets & position_vec) override
+    void insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets) override
     {
         const auto & src = static_cast<const ColumnString &>(src_);
-        offsets.reserve(offsets.size() + position_vec.size());
-        for (auto position : position_vec)
+        offsets.reserve(offsets.size() + selective_offsets.size());
+        for (auto position : selective_offsets)
             insertFromImpl(src, position);
     }
 

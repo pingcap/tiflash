@@ -65,7 +65,6 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     std::unique_ptr<void, std::function<void(void *)>> prefetch_states;
 
     IColumn::Offsets selective_offsets;
-    IColumn::Offsets offsets_to_replicate;
 
     RowPtrs insert_batch;
     RowPtrs insert_batch_other;
