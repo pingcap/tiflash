@@ -16,7 +16,7 @@
 
 #include <Common/HashTable/StringHashTable.h>
 
-template <typename SubMaps, typename ImplTable = StringHashTable<SubMaps>, size_t BITS_FOR_BUCKET = 8>
+template <typename TSubMaps, typename ImplTable = StringHashTable<TSubMaps>, size_t BITS_FOR_BUCKET = 8>
 class TwoLevelStringHashTable : private boost::noncopyable
 {
 protected:
@@ -26,6 +26,7 @@ protected:
 public:
     using Key = StringRef;
     using Impl = ImplTable;
+    using SubMaps = TSubMaps;
 
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
@@ -119,7 +120,7 @@ public:
         {
             // Strings with trailing zeros are not representable as fixed-size
             // string keys. Put them to the generic table.
-            auto res = SubMaps::Hash::operator()(x);
+            auto res = SubMaps::Ts::Hash::operator()(x);
             auto buck = getBucketFromHash(res);
             return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder), res);
         }
@@ -156,7 +157,7 @@ public:
                 else
                     n[0] <<= s;
             }
-            auto res = SubMaps::Hash::operator()(k8);
+            auto res = SubMaps::T1::Hash::operator()(k8);
             auto buck = getBucketFromHash(res);
             keyHolderDiscardKey(key_holder);
             return func(self.impls[buck].m1, k8, res);
@@ -170,7 +171,7 @@ public:
                 n[1] >>= s;
             else
                 n[1] <<= s;
-            auto res = SubMaps::Hash::operator()(k16);
+            auto res = SubMaps::T2::Hash::operator()(k16);
             auto buck = getBucketFromHash(res);
             keyHolderDiscardKey(key_holder);
             return func(self.impls[buck].m2, k16, res);
@@ -184,14 +185,14 @@ public:
                 n[2] >>= s;
             else
                 n[2] <<= s;
-            auto res = SubMaps::Hash::operator()(k24);
+            auto res = SubMaps::T3::Hash::operator()(k24);
             auto buck = getBucketFromHash(res);
             keyHolderDiscardKey(key_holder);
             return func(self.impls[buck].m3, k24, res);
         }
         default:
         {
-            auto res = SubMaps::Hash::operator()(x);
+            auto res = SubMaps::Ts::Hash::operator()(x);
             auto buck = getBucketFromHash(res);
             return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder), res);
         }
@@ -281,10 +282,7 @@ public:
 template <typename Data>
 struct StringHashTableSubMapSelector<0, true, Data>
 {
-    struct Hash
-    {
-        static ALWAYS_INLINE size_t operator()(const StringRef &) { return 0; }
-    };
+    using Hash = typename Data::SubMaps::T0::Hash;
 
     static typename Data::Impl::T0 & getSubMap(size_t hashval, Data & data)
     {
@@ -296,7 +294,7 @@ struct StringHashTableSubMapSelector<0, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<1, true, Data>
 {
-    using Hash = StringHashTableHash;
+    using Hash = typename Data::SubMaps::T1::Hash;
 
     static typename Data::Impl::T1 & getSubMap(size_t hashval, Data & data)
     {
@@ -308,7 +306,7 @@ struct StringHashTableSubMapSelector<1, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<2, true, Data>
 {
-    using Hash = StringHashTableHash;
+    using Hash = typename Data::SubMaps::T2::Hash;
 
     static typename Data::Impl::T2 & getSubMap(size_t hashval, Data & data)
     {
@@ -320,7 +318,7 @@ struct StringHashTableSubMapSelector<2, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<3, true, Data>
 {
-    using Hash = StringHashTableHash;
+    using Hash = typename Data::SubMaps::T3::Hash;
 
     static typename Data::Impl::T3 & getSubMap(size_t hashval, Data & data)
     {
@@ -332,7 +330,7 @@ struct StringHashTableSubMapSelector<3, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<4, true, Data>
 {
-    using Hash = StringHashTableHash;
+    using Hash = typename Data::SubMaps::Ts::Hash;
 
     static typename Data::Impl::Ts & getSubMap(size_t hashval, Data & data)
     {

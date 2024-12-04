@@ -1116,7 +1116,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     std::vector<size_t>(INFO); \
     std::vector<KEYTYPE>(DATA);
 
-    M(key0_infos, key0_datas, StringRef)
+    M(key0_infos, key0_datas, StringKey0)
     M(key8_infos, key8_datas, StringKey8)
     M(key16_infos, key16_datas, StringKey16)
     M(key24_infos, key24_datas, StringKey24)
@@ -1143,7 +1143,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
                                                             (DATA).push_back(key);                   \
           };
 
-        M(key0_infos, key0_datas, 0, StringRef)
+        M(key0_infos, key0_datas, 0, StringKey0)
         M(key8_infos, key8_datas, 8, StringKey8)
         M(key16_infos, key16_datas, 16, StringKey16)
         M(key24_infos, key24_datas, 24, StringKey24)

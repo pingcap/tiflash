@@ -80,7 +80,7 @@ using AggregatedDataWithUInt16Key = FixedImplicitZeroHashMap<UInt16, AggregateDa
 using AggregatedDataWithUInt32Key = HashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64Key = HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
 
-using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr>;
+using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr, StringHashTableHashSelector<false>>;
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
@@ -93,7 +93,7 @@ using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDat
 
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 
-using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr>;
+using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr, StringHashTableHashSelector<false>>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
@@ -1325,7 +1325,7 @@ public:
         std::vector<size_t> submap_m2_infos{};
         std::vector<size_t> submap_m3_infos{};
         std::vector<size_t> submap_m4_infos{};
-        std::vector<StringRef> submap_m0_datas{};
+        std::vector<StringKey0> submap_m0_datas{};
         std::vector<StringKey8> submap_m1_datas{};
         std::vector<StringKey16> submap_m2_datas{};
         std::vector<StringKey24> submap_m3_datas{};
