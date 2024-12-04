@@ -32,6 +32,7 @@ add_headers_and_sources(delta_merge ./Remote)
 add_headers_and_sources(delta_merge ./Remote/DataStore)
 add_headers_and_sources(delta_merge ./Decode)
 add_headers_and_sources(delta_merge ./StoragePool)
+add_headers_and_sources(delta_merge ./VersionChain)
 
 add_library(delta_merge ${delta_merge_headers} ${delta_merge_sources})
 target_link_libraries(delta_merge PRIVATE dbms page)

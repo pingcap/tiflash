@@ -414,6 +414,18 @@ public:
     ColumnFileSetSnapshotPtr getMemTableSetSnapshot() const { return mem_table_snap; }
     ColumnFileSetSnapshotPtr getPersistedFileSetSnapshot() const { return persisted_files_snap; }
 
+    ColumnFiles getColumnFiles() const
+    {
+        auto cfs = persisted_files_snap->getColumnFiles();
+        const auto & memory_cfs = mem_table_snap->getColumnFiles();
+        cfs.insert(cfs.end(), memory_cfs.begin(), memory_cfs.end());
+        return cfs;
+    }
+    const auto & getDataProvider() const
+    {
+        RUNTIME_CHECK(persisted_files_snap->getDataProvider() == mem_table_snap->getDataProvider());
+        return persisted_files_snap->getDataProvider();
+    }
     size_t getColumnFileCount() const
     {
         return mem_table_snap->getColumnFileCount() + persisted_files_snap->getColumnFileCount();
