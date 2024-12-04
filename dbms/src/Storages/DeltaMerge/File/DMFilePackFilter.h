@@ -115,6 +115,17 @@ public:
         return {rows, bytes};
     }
 
+    static std::pair<DataTypePtr, MinMaxIndexPtr> loadIndex(
+        const DMFile & dmfile,
+        const FileProviderPtr & file_provider,
+        const MinMaxIndexCachePtr & index_cache,
+        bool set_cache_if_miss,
+        ColId col_id,
+        const ReadLimiterPtr & read_limiter,
+        const ScanContextPtr & scan_context);
+
+    static DMFilePackFilter create(size_t pack_count, RSResult res) { return DMFilePackFilter(pack_count, res); }
+
 private:
     DMFilePackFilter(
         const DMFilePtr & dmfile_,
@@ -142,6 +153,11 @@ private:
     {
         init(read_tag);
     }
+
+    DMFilePackFilter(size_t pack_count, RSResult res)
+        : handle_res(pack_count, res)
+        , pack_res(pack_count, res)
+    {}
 
     void init(ReadTag read_tag);
 
