@@ -16,6 +16,8 @@
 #include <IO/WriteHelpers.h>
 #include <inttypes.h>
 
+#include <charconv>
+
 
 namespace DB
 {
@@ -82,5 +84,171 @@ void writePointerHex(const void * ptr, WriteBuffer & buf)
     writeHexUIntLowercase(reinterpret_cast<uintptr_t>(ptr), hex_str);
     buf.write(hex_str, 2 * sizeof(ptr));
 }
+
+template <typename T>
+void writeFloatTextNoExp(T x, WriteBuffer & buf)
+{
+    static_assert(
+        std::is_same_v<T, double> || std::is_same_v<T, float>,
+        "Argument for writeFloatText must be float or double");
+
+    using Converter = DoubleConverter<false>;
+
+    Converter::BufferType buffer;
+    double_conversion::StringBuilder builder{buffer, sizeof(buffer)};
+
+    bool result = false;
+    if constexpr (std::is_same_v<T, double>)
+        result = Converter::instance().ToShortest(x, &builder);
+    else
+        result = Converter::instance().ToShortestSingle(x, &builder);
+
+    if (!result)
+        throw Exception("Cannot print floating point number", ErrorCodes::CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER);
+
+    constexpr std::string_view nan = "NaN";
+    constexpr std::string_view neg_inf = "-Inf";
+    constexpr std::string_view inf = "+Inf";
+
+    std::string_view sv{buffer, static_cast<size_t>(builder.position())};
+    if (sv == "nan")
+    {
+        buf.write(nan.data(), nan.size());
+        return;
+    }
+    else if (sv == "-inf")
+    {
+        buf.write(neg_inf.data(), neg_inf.size());
+        return;
+    }
+    else if (sv == "inf")
+    {
+        buf.write(inf.data(), inf.size());
+        return;
+    }
+
+    constexpr auto c_neg = '-';
+    constexpr auto c_zero = '0';
+    constexpr auto c_dot = '.';
+    constexpr auto c_exp = 'e';
+
+    bool neg = buffer[0] == c_neg;
+    int bg = 0, ed = builder.position();
+    if (neg)
+    {
+        bg++;
+    }
+
+    // return zero
+    if (ed - bg == 1 && sv[bg] == c_zero)
+    {
+        buf.write(sv.data(), sv.size());
+        return;
+    }
+
+    Int64 exp_pos = sv.find(c_exp);
+    if (exp_pos < 0)
+    {
+        buf.write(sv.data(), sv.size());
+        return;
+    }
+
+    Int64 exp10 = 0;
+    if (exp_pos >= 0)
+    {
+        auto exp_sv = sv.substr(exp_pos + 1);
+        std::from_chars(exp_sv.begin(), exp_sv.end(), exp10);
+        ed = exp_pos;
+    }
+    auto int_bg = bg, int_ed = ed, float_bg = ed, float_ed = ed;
+
+    if (const auto begin = sv.data() + bg, end = sv.data() + ed, dot_pos = std::find(begin, end, c_dot); dot_pos != end)
+    {
+        int_ed = dot_pos - sv.data();
+        float_bg = int_ed + 1;
+    }
+
+
+    if (int_ed - int_bg > 1)
+    {
+        exp10 += int_ed - (int_bg + 1);
+    }
+    else if (sv[int_bg] == c_zero)
+    {
+        int_bg += 1;
+
+        auto new_float_bg = float_bg;
+        for (auto i = float_bg; i != float_ed; ++i)
+        {
+            exp10 -= 1;
+            if (sv[i] != c_zero)
+            {
+                new_float_bg = i;
+                break;
+            }
+        }
+
+        float_bg = new_float_bg;
+    }
+
+    const auto put_char = [&buf](char c) {
+        buf.write(c);
+    };
+    const auto put_zero = [&]() {
+        put_char(c_zero);
+    };
+    const auto put_dot = [&]() {
+        put_char(c_dot);
+    };
+    const auto put_slice = [&buf](std::string_view s) {
+        buf.write(s.data(), s.size());
+    };
+
+    if (neg)
+    {
+        put_char(c_neg);
+    }
+
+    if (exp10 < 0)
+    {
+        exp10 = -exp10;
+        put_zero();
+        put_dot();
+        exp10 -= 1;
+        while (exp10 != 0)
+        {
+            put_zero();
+            exp10 -= 1;
+        }
+        put_slice({sv.data() + int_bg, sv.data() + int_ed});
+        put_slice({sv.data() + float_bg, sv.data() + float_ed});
+    }
+    else
+    {
+        put_slice({sv.data() + int_bg, sv.data() + int_ed});
+
+        if (exp10 < (float_ed - float_bg))
+        {
+            put_slice({sv.data() + float_bg, sv.data() + float_bg + exp10});
+
+            put_dot();
+            float_bg += exp10;
+            put_slice({sv.data() + float_bg, sv.data() + float_ed});
+        }
+        else
+        {
+            put_slice({sv.data() + float_bg, sv.data() + float_ed});
+            exp10 -= (float_ed - float_bg);
+            while (exp10 != 0)
+            {
+                put_zero();
+                exp10 -= 1;
+            }
+        }
+    }
+}
+
+template void writeFloatTextNoExp<Float64>(Float64 x, WriteBuffer & buf);
+template void writeFloatTextNoExp<Float32>(Float32 x, WriteBuffer & buf);
 
 } // namespace DB
