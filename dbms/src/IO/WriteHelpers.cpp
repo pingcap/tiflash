@@ -160,42 +160,47 @@ void writeFloatTextNoExp(T x, WriteBuffer & buf)
         std::from_chars(exp_sv.begin(), exp_sv.end(), exp10);
         ed = exp_pos;
     }
+
+    // format: +.++e? or +e?
     auto int_bg = bg, int_ed = ed, float_bg = ed, float_ed = ed;
 
     if (const auto begin = sv.data() + bg, end = sv.data() + ed, dot_pos = std::find(begin, end, c_dot); dot_pos != end)
     {
         int_ed = dot_pos - sv.data();
         float_bg = int_ed + 1;
+
+        assert(int_ed - int_bg == 1);
+        assert(float_ed - float_bg > 0);
     }
-
-
-    if (int_ed - int_bg > 1)
+    else
     {
-        exp10 += int_ed - (int_bg + 1);
+        assert(int_ed - int_bg == 1);
+        assert(float_ed - float_bg == 0);
     }
-    else if (sv[int_bg] == c_zero)
-    {
-        int_bg += 1;
 
-        auto new_float_bg = float_bg;
-        for (auto i = float_bg; i != float_ed; ++i)
-        {
-            exp10 -= 1;
-            if (sv[i] != c_zero)
-            {
-                new_float_bg = i;
-                break;
-            }
-        }
-
-        float_bg = new_float_bg;
-    }
+    assert(sv[int_bg] != c_zero);
 
     const auto put_char = [&buf](char c) {
         buf.write(c);
     };
     const auto put_zero = [&]() {
         put_char(c_zero);
+    };
+    const auto put_n_zero = [&](Int64 n) {
+        constexpr int size = 32;
+        const static auto data = ({
+            std::array<char, size> b{};
+            b.fill('0');
+            b;
+        });
+        for (; n >= size; n -= size)
+        {
+            buf.write(data.data(), size);
+        }
+        for (; n; n--)
+        {
+            put_zero();
+        }
     };
     const auto put_dot = [&]() {
         put_char(c_dot);
@@ -215,11 +220,7 @@ void writeFloatTextNoExp(T x, WriteBuffer & buf)
         put_zero();
         put_dot();
         exp10 -= 1;
-        while (exp10 != 0)
-        {
-            put_zero();
-            exp10 -= 1;
-        }
+        put_n_zero(exp10);
         put_slice({sv.data() + int_bg, sv.data() + int_ed});
         put_slice({sv.data() + float_bg, sv.data() + float_ed});
     }
@@ -239,11 +240,7 @@ void writeFloatTextNoExp(T x, WriteBuffer & buf)
         {
             put_slice({sv.data() + float_bg, sv.data() + float_ed});
             exp10 -= (float_ed - float_bg);
-            while (exp10 != 0)
-            {
-                put_zero();
-                exp10 -= 1;
-            }
+            put_n_zero(exp10);
         }
     }
 }
