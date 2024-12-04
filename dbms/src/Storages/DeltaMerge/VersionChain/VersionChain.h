@@ -1,0 +1,161 @@
+// Copyright 2025 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/VersionChain/Common.h>
+#include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
+#include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
+
+namespace DB::DM
+{
+
+struct DMContext;
+struct SegmentSnapshot;
+class ColumnFile;
+using ColumnFilePtr = std::shared_ptr<ColumnFile>;
+using ColumnFiles = std::vector<ColumnFilePtr>;
+class ColumnFileBig;
+class ColumnFileDeleteRange;
+
+namespace tests
+{
+class SegmentBitmapFilterTest_NewHandleIndex_Test;
+class SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+} // namespace tests
+
+template <ExtraHandleType HandleType>
+class VersionChain
+{
+private:
+    using HandleRefType = typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
+
+public:
+    VersionChain()
+        : base_versions(std::make_shared<std::vector<RowID>>())
+    {}
+
+    [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
+        const DMContext & dm_context,
+        const SegmentSnapshot & snapshot);
+
+    void reset()
+    {
+        std::lock_guard lock(mtx);
+        replayed_rows_and_deletes = 0;
+        base_versions = std::make_shared<std::vector<RowID>>();
+        new_handle_to_row_ids = NewHandleIndex<HandleType>{};
+        dmfile_or_delete_range_list = std::vector<DMFileOrDeleteRange>{};
+    }
+
+#ifdef DBMS_PUBLIC_GTEST
+    [[nodiscard]] auto getReplayedRows() const { return base_versions->size(); }
+    [[nodiscard]] auto deepCopy() const { return VersionChain(*this); }
+#endif
+
+private:
+    VersionChain(const VersionChain & other)
+        : replayed_rows_and_deletes(other.replayed_rows_and_deletes)
+        , base_versions(std::make_shared<std::vector<RowID>>(*(other.base_versions)))
+        , new_handle_to_row_ids(other.new_handle_to_row_ids)
+        , dmfile_or_delete_range_list(other.dmfile_or_delete_range_list)
+    {}
+    VersionChain & operator=(const VersionChain &) = delete;
+    VersionChain(VersionChain &&) = delete;
+    VersionChain & operator=(VersionChain &&) = delete;
+
+    [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshotImpl(
+        const DMContext & dm_context,
+        const SegmentSnapshot & snapshot);
+
+    [[nodiscard]] UInt32 replayBlock(
+        const DMContext & dm_context,
+        const IColumnFileDataProviderPtr & data_provider,
+        const ColumnFile & cf,
+        const UInt32 offset,
+        const UInt32 stable_rows,
+        const bool calculate_read_packs,
+        std::optional<DeltaValueReader> & delta_reader);
+
+    [[nodiscard]] UInt32 replayColumnFileBig(
+        const DMContext & dm_context,
+        const ColumnFileBig & cf_big,
+        const UInt32 stable_rows,
+        const StableValueSpace::Snapshot & stable,
+        const std::span<const ColumnFilePtr> preceding_cfs,
+        std::optional<DeltaValueReader> & delta_reader);
+
+    [[nodiscard]] UInt32 replayDeleteRange(
+        const ColumnFileDeleteRange & cf_delete_range,
+        std::optional<DeltaValueReader> & delta_reader,
+        const UInt32 stable_rows);
+
+    [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
+        const DMContext & dm_context,
+        HandleRefType h);
+
+    template <typename Iter>
+    void calculateReadPacks(Iter begin, Iter end);
+
+    void cleanHandleColumn();
+
+    template <typename Iter>
+    void replayHandles(
+        const DMContext & dm_context,
+        Iter begin,
+        Iter end,
+        const UInt32 stable_rows,
+        std::optional<DeltaValueReader> & delta_reader);
+
+    std::optional<DeltaValueReader> createDeltaValueReaderIfCommonHandle(
+        const DMContext & dm_context,
+        const DeltaSnapshotPtr & delta_snap);
+
+    friend class tests::SegmentBitmapFilterTest_NewHandleIndex_Test;
+    friend class tests::SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+
+    std::mutex mtx;
+    UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
+    // After replaySnapshot, base_versions->size() == delta.getRows().
+    // The records in delta correspond one-to-one with base_versions.
+    // Base version means the oldest version that has not been garbage collected yet.
+    // (*base_versions)[n] is the row id of the oldest version of the n-th record in delta.
+    // And different versions of the same record has the same base version except the base version itself.
+    // The base version of the base version is NotExistRowID.
+    // Therefore, base version of a record acts as a pivot, like the primary key in trancation.
+    std::shared_ptr<std::vector<RowID>> base_versions;
+    NewHandleIndex<HandleType> new_handle_to_row_ids;
+    using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
+    std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
+};
+
+using GenericVersionChain = std::variant<VersionChain<Int64>, VersionChain<String>>;
+
+inline GenericVersionChain createVersionChain(bool is_common_handle)
+{
+    if (is_common_handle)
+        return GenericVersionChain{std::in_place_type<VersionChain<String>>};
+    else
+        return GenericVersionChain{std::in_place_type<VersionChain<Int64>>};
+}
+
+enum class VersionChainMode : Int64
+{
+    Disabled = 0,
+    Enabled = 1,
+    EnabledForTest = 2,
+};
+} // namespace DB::DM
