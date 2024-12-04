@@ -174,7 +174,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
         auto state = istr.rdstate();
         LOG_ERROR(
             log,
-            "Cannot ignore from istream, state=0x{:02X}, errno={}, errmsg={}, cost={}ns",
+            "Cannot ignore from istream, state=0x{:02X}, errno={} errmsg={} cost={}ns",
             state,
             errno,
             strerror(errno),
