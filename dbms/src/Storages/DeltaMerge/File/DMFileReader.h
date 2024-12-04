@@ -87,7 +87,7 @@ public:
     /// Read specified rows.
     Block readWithFilter(const IColumn::Filter & filter);
 
-    Block read();
+    Block read(const IColumn::Filter * filter = nullptr);
     std::string path() const
     {
         // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
@@ -110,14 +110,21 @@ private:
         const ColumnDefine & cd,
         const DataTypePtr & type_on_disk,
         size_t start_pack_id,
-        size_t read_rows);
+        size_t read_rows,
+        const IColumn::Filter * filter);
     ColumnPtr readFromDiskOrSharingCache(
         const ColumnDefine & cd,
         const DataTypePtr & type_on_disk,
         size_t start_pack_id,
         size_t pack_count,
-        size_t read_rows);
-    ColumnPtr readColumn(const ColumnDefine & cd, size_t start_pack_id, size_t pack_count, size_t read_rows);
+        size_t read_rows,
+        const IColumn::Filter * filter);
+    ColumnPtr readColumn(
+        const ColumnDefine & cd,
+        size_t start_pack_id,
+        size_t pack_count,
+        size_t read_rows,
+        const IColumn::Filter * filter);
     ColumnPtr cleanRead(
         const ColumnDefine & cd,
         size_t rows_count,

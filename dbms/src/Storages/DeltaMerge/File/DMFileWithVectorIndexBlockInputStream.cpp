@@ -15,6 +15,8 @@
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include <algorithm>
+
 
 namespace DB::DM
 {
@@ -69,37 +71,15 @@ Block DMFileWithVectorIndexBlockInputStream::read()
 {
     internalLoad();
 
-    const auto & pack_stats = dmfile->getPackStats();
-    size_t all_packs = pack_stats.size();
-    const auto & pack_res = reader.pack_filter.getPackResConst();
-
-    RUNTIME_CHECK(pack_res.size() == all_packs);
-
-    // Skip as many packs as possible according to Pack Filter
-    while (index_reader_next_pack_id < all_packs)
-    {
-        if (pack_res[index_reader_next_pack_id].isUse())
-            break;
-        index_reader_next_row_id += pack_stats[index_reader_next_pack_id].rows;
-        ++index_reader_next_pack_id;
-    }
-
-    // Finished
-    if (index_reader_next_pack_id >= all_packs)
+    if (reader.read_block_infos.empty())
         return {};
 
-    auto block_start_row_id = index_reader_next_row_id;
-    while (index_reader_next_pack_id < all_packs)
-    {
-        if (!pack_res[index_reader_next_pack_id].isUse())
-            break;
-        index_reader_next_row_id += pack_stats[index_reader_next_pack_id].rows;
-        ++index_reader_next_pack_id;
-    }
+    const auto [start_pack_id, pack_count, rs_result, read_rows] = reader.read_block_infos.front();
+    const auto start_row_offset = reader.pack_id_to_offset[start_pack_id];
 
     auto vec_column = vec_cd.type->createColumn();
-    auto begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), block_start_row_id);
-    auto end = std::lower_bound(begin, sorted_results.cend(), index_reader_next_row_id);
+    auto begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), start_row_offset);
+    auto end = std::lower_bound(begin, sorted_results.cend(), start_row_offset + read_rows);
     const std::span block_selected_rows{begin, end};
     if (block_selected_rows.empty())
         return {};
@@ -108,30 +88,38 @@ Block DMFileWithVectorIndexBlockInputStream::read()
     vec_index_reader->read(vec_column, block_selected_rows);
 
     Block block;
-    block.setStartOffset(block_start_row_id);
 
     // read other columns if needed
     if (!reader.read_columns.empty())
     {
-        // FIXME(filtering):
-        // After vector search support filtering, RSResult will limit the rows to read (DMFileReader::getReadPackLimit).
-        // But in current implementation, we will try read all continous used packs at once.
-        // This may cause filter->size() bigger than expected. We need to fix this if we support filtering.
-
-        // FIXME: read too many packs at once causes performance regression.
         Stopwatch w;
 
         filter.clear();
-        filter.resize_fill(index_reader_next_row_id - block_start_row_id, 0);
+        filter.resize_fill(read_rows, 0);
         for (const auto rowid : block_selected_rows)
-            filter[rowid - block_start_row_id] = 1;
+            filter[rowid - start_row_offset] = 1;
 
-        block = reader.readWithFilter(filter);
+        // Since we have updated read_block_infos according to the sorted_results,
+        // we can call read() directly rather than readWithFilter().
+        block = reader.read(&filter);
+        for (auto & col : block)
+        {
+            if (col.column->size() != block_selected_rows.size())
+                col.column = col.column->filter(filter, block_selected_rows.size());
+        }
         duration_read_from_other_columns_seconds += w.elapsedSeconds();
+    }
+    else
+    {
+        // Since we do not call read() here, we need to pop the read_block_infos manually.
+        reader.read_block_infos.pop_front();
     }
 
     auto index = header.getPositionByName(vec_cd.name);
     block.insert(index, ColumnWithTypeAndName{std::move(vec_column), vec_cd.type, vec_cd.name, vec_cd.id});
+
+    block.setStartOffset(start_row_offset);
+    block.setRSResult(rs_result);
     return block;
 }
 
@@ -154,46 +142,76 @@ void DMFileWithVectorIndexBlockInputStream::internalLoad()
     for (const auto & row : search_results)
         sorted_results.push_back(row.key);
 
-    updateRSResult();
+    updateReadBlockInfos();
 }
 
-void DMFileWithVectorIndexBlockInputStream::updateRSResult()
+void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
 {
     // Vector index is very likely to filter out some packs. For example,
     // if we query for Top 1, then only 1 pack will be remained. So we
-    // update the pack filter used by the DMFileReader to avoid reading
-    // unnecessary data for other columns.
+    // update the reader's read_block_infos to avoid reading unnecessary data for other columns.
+
+    // The following logic is nearly the same with DMFileReader::initReadBlockInfos.
+
+    reader.read_block_infos.clear();
     const auto & pack_stats = dmfile->getPackStats();
-    auto & pack_res = reader.pack_filter.getPackRes();
+    const auto & pack_res = reader.pack_filter.getPackResConst();
 
-    auto results_it = sorted_results.begin();
-    UInt32 pack_start = 0;
-    for (size_t pack_id = 0; pack_id < dmfile->getPacks(); ++pack_id)
+    for (const auto res : pack_res)
+        valid_packs_before_search += res.isUse();
+
+    size_t start_pack_id = 0;
+    size_t read_rows = 0;
+    auto last_pack_res = RSResult::All;
+    auto sorted_results_it = sorted_results.cbegin();
+    size_t pack_id = 0;
+    for (; pack_id < pack_stats.size(); ++pack_id)
     {
-        if (pack_res[pack_id].isUse())
-            ++valid_packs_before_search;
+        if (sorted_results_it == sorted_results.cend())
+            break;
+        auto begin = std::lower_bound(sorted_results_it, sorted_results.cend(), reader.pack_id_to_offset[pack_id]);
+        auto end = std::lower_bound(
+            begin,
+            sorted_results.cend(),
+            reader.pack_id_to_offset[pack_id] + pack_stats[pack_id].rows);
+        bool is_use = begin != end;
+        bool reach_limit = read_rows >= reader.rows_threshold_per_read;
+        bool break_all_match = !pack_res[pack_id].allMatch() && read_rows >= reader.rows_threshold_per_read / 2;
 
-        bool pack_has_result = false;
-        UInt32 pack_end = pack_start + pack_stats[pack_id].rows;
-        while (results_it != sorted_results.end() && *results_it >= pack_start && *results_it < pack_end)
+        if (!is_use)
         {
-            pack_has_result = true;
-            ++results_it;
+            if (read_rows > 0)
+            {
+                reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+                valid_packs_after_search += (pack_id - start_pack_id);
+            }
+            start_pack_id = pack_id + 1;
+            read_rows = 0;
+            last_pack_res = RSResult::All;
+        }
+        else if (reach_limit || break_all_match)
+        {
+            if (read_rows > 0)
+                reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+            start_pack_id = pack_id;
+            read_rows = pack_stats[pack_id].rows;
+            last_pack_res = pack_res[pack_id];
+        }
+        else
+        {
+            last_pack_res = last_pack_res && pack_res[pack_id];
+            read_rows += pack_stats[pack_id].rows;
         }
 
-        if (!pack_has_result)
-            pack_res[pack_id] = RSResult::None;
-
-        if (pack_res[pack_id].isUse())
-            ++valid_packs_after_search;
-
-        pack_start = pack_end;
+        sorted_results_it = end;
+    }
+    if (read_rows > 0)
+    {
+        reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+        valid_packs_after_search += (pack_id - start_pack_id);
     }
 
-    RUNTIME_CHECK_MSG(
-        results_it == sorted_results.end(),
-        "All packs has been visited but not all results are consumed");
-
+    RUNTIME_CHECK_MSG(sorted_results_it == sorted_results.cend(), "All results are not consumed");
     loaded = true;
 }
 
@@ -203,7 +221,7 @@ void DMFileWithVectorIndexBlockInputStream::setSelectedRows(const std::span<cons
     sorted_results.reserve(selected_rows.size());
     std::copy(selected_rows.begin(), selected_rows.end(), std::back_inserter(sorted_results));
 
-    updateRSResult();
+    updateReadBlockInfos();
 }
 
 } // namespace DB::DM

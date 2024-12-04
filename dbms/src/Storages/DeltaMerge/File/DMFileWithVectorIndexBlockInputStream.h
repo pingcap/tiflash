@@ -101,14 +101,11 @@ public:
     void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
 private:
-    size_t index_reader_next_pack_id = 0;
-    size_t index_reader_next_row_id = 0;
-
     // Load vector index and update sorted_results.
     void internalLoad();
 
-    // Update the RSResult according to the sorted_results.
-    void updateRSResult();
+    // Update the read_block_infos according to the sorted_results.
+    void updateReadBlockInfos();
 
 private:
     const LoggerPtr log;

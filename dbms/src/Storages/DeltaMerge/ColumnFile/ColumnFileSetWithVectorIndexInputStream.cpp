@@ -109,10 +109,10 @@ Block ColumnFileSetWithVectorIndexInputStream::read()
             continue;
         }
         auto current_file_index = std::distance(reader.column_file_readers.begin(), cur_column_file_reader);
-        const auto file_rows = column_files[current_file_index]->getRows();
         // If file has index, we can read the column by vector index.
         if (tiny_readers[current_file_index] != nullptr)
         {
+            const auto file_rows = column_files[current_file_index]->getRows();
             auto selected_row_begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), read_rows);
             auto selected_row_end = std::lower_bound(selected_row_begin, sorted_results.cend(), read_rows + file_rows);
             size_t selected_rows = std::distance(selected_row_begin, selected_row_end);
@@ -150,13 +150,17 @@ Block ColumnFileSetWithVectorIndexInputStream::read()
             toNextFile(current_file_index, file_rows);
             return block;
         }
-        // If file does not have index, read all valid rows in the file.
-        filter = valid_rows.createRawSubView(read_rows, file_rows);
-        auto block = (*cur_column_file_reader)->readWithFilter(filter);
+        // If file does not have index, reader by cur_column_file_reader.
+        // Call readNextBlock rather than readWithFilter since we do not know the rows of next block (especially for ColumnFileBig).
+        auto block = (*cur_column_file_reader)->readNextBlock();
         if (block)
         {
             block.setStartOffset(read_rows);
-            read_rows += file_rows;
+            size_t rows = block.rows();
+            filter = valid_rows.createRawSubView(read_rows, rows);
+            for (auto & col : block)
+                col.column = col.column->filter(filter, rows);
+            read_rows += rows;
             return block;
         }
         else
