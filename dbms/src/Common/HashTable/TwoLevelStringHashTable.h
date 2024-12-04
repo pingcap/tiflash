@@ -65,40 +65,32 @@ public:
     TwoLevelStringHashTable() = default;
 
     template <typename Source>
-    explicit TwoLevelStringHashTable(Source & src)
+    explicit TwoLevelStringHashTable(const Source & src)
     {
         if (src.m0.hasZero())
             impls[0].m0.setHasZero(*src.m0.zeroValue());
 
         for (auto & v : src.m1)
         {
-            // size_t hash_value = v.getHash(src.m1);
-            const size_t hash_value = ImplTable::T1::Hash::operator()(v.getKey());
-            v.setHash(hash_value);
+            size_t hash_value = v.getHash(src.m1);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m1.insertUniqueNonZero(&v, hash_value);
         }
         for (auto & v : src.m2)
         {
-            // size_t hash_value = v.getHash(src.m2);
-            const size_t hash_value = ImplTable::T2::Hash::operator()(v.getKey());
-            v.setHash(hash_value);
+            size_t hash_value = v.getHash(src.m2);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m2.insertUniqueNonZero(&v, hash_value);
         }
         for (auto & v : src.m3)
         {
-            // size_t hash_value = v.getHash(src.m3);
-            const size_t hash_value = ImplTable::T3::Hash::operator()(v.getKey());
-            v.setHash(hash_value);
+            size_t hash_value = v.getHash(src.m3);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m3.insertUniqueNonZero(&v, hash_value);
         }
         for (auto & v : src.ms)
         {
-            // size_t hash_value = v.getHash(src.ms);
-            const size_t hash_value = ImplTable::Ts::Hash::operator()(v.getKey());
-            v.setHash(hash_value);
+            size_t hash_value = v.getHash(src.ms);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].ms.insertUniqueNonZero(&v, hash_value);
         }
@@ -304,8 +296,7 @@ struct StringHashTableSubMapSelector<0, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<1, true, Data>
 {
-    // using Hash = StringHashTableHash;
-    using Hash = HashWithMixSeed<StringKey8>;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::T1 & getSubMap(size_t hashval, Data & data)
     {
@@ -317,8 +308,7 @@ struct StringHashTableSubMapSelector<1, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<2, true, Data>
 {
-    // using Hash = StringHashTableHash;
-    using Hash = HashWithMixSeed<StringKey16>;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::T2 & getSubMap(size_t hashval, Data & data)
     {
@@ -330,8 +320,7 @@ struct StringHashTableSubMapSelector<2, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<3, true, Data>
 {
-    // using Hash = StringHashTableHash;
-    using Hash = HashWithMixSeed<StringKey24>;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::T3 & getSubMap(size_t hashval, Data & data)
     {
@@ -343,8 +332,7 @@ struct StringHashTableSubMapSelector<3, true, Data>
 template <typename Data>
 struct StringHashTableSubMapSelector<4, true, Data>
 {
-    // using Hash = StringHashTableHash;
-    using Hash = StringRefHash;
+    using Hash = StringHashTableHash;
 
     static typename Data::Impl::Ts & getSubMap(size_t hashval, Data & data)
     {
