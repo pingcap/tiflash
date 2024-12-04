@@ -66,35 +66,34 @@ public:
     TwoLevelStringHashTable() = default;
 
     template <typename Source>
-    explicit TwoLevelStringHashTable(const Source & src)
+    explicit TwoLevelStringHashTable(Source & src)
     {
         if (src.m0.hasZero())
             impls[0].m0.setHasZero(*src.m0.zeroValue());
 
-        for (auto & v : src.m1)
-        {
-            size_t hash_value = v.getHash(src.m1);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m1.insertUniqueNonZero(&v, hash_value);
+#define M(SUBMAP) \
+        for (auto & v : src.m##SUBMAP) \
+        { \
+            if constexpr (std::is_same_v<typename Source::SubMaps::T##SUBMAP::Hash, typename SubMaps::T##SUBMAP::Hash>) \
+            { \
+                const size_t hash_value = v.getHash(src.m##SUBMAP); \
+                size_t buck = getBucketFromHash(hash_value); \
+                impls[buck].m##SUBMAP.insertUniqueNonZero(&v, hash_value); \
+            }\
+            else \
+            { \
+                const size_t hash_value = SubMaps::T##SUBMAP::Hash::operator()(v.getKey(v.getValue())); \
+                v.setHash(hash_value); \
+                size_t buck = getBucketFromHash(hash_value); \
+                impls[buck].m##SUBMAP.insertUniqueNonZero(&v, hash_value); \
+            }\
         }
-        for (auto & v : src.m2)
-        {
-            size_t hash_value = v.getHash(src.m2);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m2.insertUniqueNonZero(&v, hash_value);
-        }
-        for (auto & v : src.m3)
-        {
-            size_t hash_value = v.getHash(src.m3);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m3.insertUniqueNonZero(&v, hash_value);
-        }
-        for (auto & v : src.ms)
-        {
-            size_t hash_value = v.getHash(src.ms);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].ms.insertUniqueNonZero(&v, hash_value);
-        }
+
+        M(1)
+        M(2)
+        M(3)
+        M(s)
+#undef M
     }
 
     // This function is mostly the same as StringHashTable::dispatch, but with

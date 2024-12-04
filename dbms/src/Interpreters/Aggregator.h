@@ -93,7 +93,7 @@ using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDat
 
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 
-using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr, StringHashTableHashSelector<false>>;
+using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr, StringHashTableHashSelector<true>>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
@@ -125,7 +125,7 @@ struct AggregationMethodOneNumber
     AggregationMethodOneNumber() = default;
 
     template <typename Other>
-    explicit AggregationMethodOneNumber(const Other & other)
+    explicit AggregationMethodOneNumber(Other & other)
         : data(other.data)
     {}
 
@@ -179,7 +179,7 @@ struct AggregationMethodString
     AggregationMethodString() = default;
 
     template <typename Other>
-    explicit AggregationMethodString(const Other & other)
+    explicit AggregationMethodString(Other & other)
         : data(other.data)
     {}
 
@@ -227,7 +227,7 @@ struct AggregationMethodStringNoCache
     AggregationMethodStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodStringNoCache(const Other & other)
+    explicit AggregationMethodStringNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -275,7 +275,7 @@ struct AggregationMethodOneKeyStringNoCache
     AggregationMethodOneKeyStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodOneKeyStringNoCache(const Other & other)
+    explicit AggregationMethodOneKeyStringNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -325,7 +325,7 @@ struct AggregationMethodMultiStringNoCache
     AggregationMethodMultiStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodMultiStringNoCache(const Other & other)
+    explicit AggregationMethodMultiStringNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -355,7 +355,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
     AggregationMethodFastPathTwoKeysNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodFastPathTwoKeysNoCache(const Other & other)
+    explicit AggregationMethodFastPathTwoKeysNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -475,7 +475,7 @@ struct AggregationMethodFixedString
     AggregationMethodFixedString() = default;
 
     template <typename Other>
-    explicit AggregationMethodFixedString(const Other & other)
+    explicit AggregationMethodFixedString(Other & other)
         : data(other.data)
     {}
 
@@ -523,7 +523,7 @@ struct AggregationMethodFixedStringNoCache
     AggregationMethodFixedStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodFixedStringNoCache(const Other & other)
+    explicit AggregationMethodFixedStringNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -572,7 +572,7 @@ struct AggregationMethodKeysFixed
     AggregationMethodKeysFixed() = default;
 
     template <typename Other>
-    explicit AggregationMethodKeysFixed(const Other & other)
+    explicit AggregationMethodKeysFixed(Other & other)
         : data(other.data)
     {}
 
@@ -679,7 +679,7 @@ struct AggregationMethodSerialized
     AggregationMethodSerialized() = default;
 
     template <typename Other>
-    explicit AggregationMethodSerialized(const Other & other)
+    explicit AggregationMethodSerialized(Other & other)
         : data(other.data)
     {}
 

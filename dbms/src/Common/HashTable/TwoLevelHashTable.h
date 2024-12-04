@@ -115,9 +115,9 @@ public:
 
     /// Copy the data from another (normal) hash table. It should have the same hash function.
     template <typename Source>
-    explicit TwoLevelHashTable(const Source & src)
+    explicit TwoLevelHashTable(Source & src)
     {
-        typename Source::const_iterator it = src.begin();
+        typename Source::iterator it = src.begin();
 
         /// It is assumed that the zero key (stored separately) is first in iteration order.
         if (it != src.end() && it.getPtr()->isZero(src))
@@ -128,10 +128,21 @@ public:
 
         for (; it != src.end(); ++it)
         {
-            const Cell * cell = it.getPtr();
-            size_t hash_value = cell->getHash(src);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].insertUniqueNonZero(cell, hash_value);
+            if constexpr (std::is_same_v<typename Source::Hash, Hash>)
+            {
+                const Cell * cell = it.getPtr();
+                size_t hash_value = cell->getHash(src);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].insertUniqueNonZero(cell, hash_value);
+            }
+            else
+            {
+                auto * cell = it.getPtr();
+                size_t hash_value = Hash::operator()(cell->getKey());
+                cell->setHash(hash_value);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].insertUniqueNonZero(cell, hash_value);
+            }
         }
     }
 
