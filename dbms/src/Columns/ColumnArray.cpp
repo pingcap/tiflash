@@ -271,7 +271,7 @@ void ColumnArray::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start,
     getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }
 
-void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & /* align_buffer */)
+void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
     auto & offsets = getOffsets();
     size_t prev_size = offsets.size();
@@ -286,7 +286,12 @@ void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, Colu
         pos[i] += sizeof(UInt32);
     }
 
-    getData().deserializeAndInsertFromPosForColumnArray(pos, offsets);
+    getData().deserializeAndInsertFromPosForColumnArray(pos, offsets, use_nt_align_buffer);
+}
+
+void ColumnArray::flushNTAlignBuffer()
+{
+    getData().flushNTAlignBuffer();
 }
 
 void ColumnArray::updateHashWithValue(

@@ -14,7 +14,10 @@
 
 #pragma once
 
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+
+#include <span>
 
 namespace DB::DM
 {
@@ -26,6 +29,7 @@ private:
     const IColumnFileDataProviderPtr data_provider;
     const ColumnDefinesPtr col_defs;
 
+    // PK & Version column cache.
     Columns cols_data_cache;
     bool read_done = false;
 
@@ -51,14 +55,17 @@ public:
     {}
 
     /// This is a ugly hack to fast return PK & Version column.
-    ColumnPtr getPKColumn();
-    ColumnPtr getVersionColumn();
+    std::pair<ColumnPtr, ColumnPtr> getPKAndVersionColumns();
 
     std::pair<size_t, size_t> readRows(
         MutableColumns & output_cols,
         size_t rows_offset,
         size_t rows_limit,
         const RowKeyRange * range) override;
+
+    Columns readFromDisk(
+        const IColumnFileDataProviderPtr & data_provider,
+        const std::span<const ColumnDefine> & column_defines) const;
 
     Block readNextBlock() override;
 

@@ -124,16 +124,27 @@ public:
             column->serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
     }
 
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
     {
         for (auto & column : columns)
-            column->assumeMutableRef().deserializeAndInsertFromPos(pos, align_buffer);
+            column->assumeMutableRef().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     }
-    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
-        override
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override
     {
         for (auto & column : columns)
-            column->assumeMutableRef().deserializeAndInsertFromPosForColumnArray(pos, array_offsets);
+            column->assumeMutableRef().deserializeAndInsertFromPosForColumnArray(
+                pos,
+                array_offsets,
+                use_nt_align_buffer);
+    }
+
+    void flushNTAlignBuffer() override
+    {
+        for (auto & column : columns)
+            column->assumeMutableRef().flushNTAlignBuffer();
     }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
