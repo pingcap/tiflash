@@ -65,8 +65,8 @@ std::string S3RandomAccessFile::getInitialFileName() const
 
 namespace
 {
-static constexpr int S3UnknownError = -1;
-static constexpr int S3StreamError = -2;
+constexpr int S3UnknownError = -1;
+constexpr int S3StreamError = -2;
 
 bool isRetryableError(int ret, int err)
 {
