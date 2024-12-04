@@ -56,6 +56,24 @@ extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 } // namespace FailPoints
 
+/// FastAddPeer Result Metrics:
+/// - type_total counts the total number of FAP tasks.
+/// - type_success_transform counts how many FAP snapshots have been written.
+/// - type_failed_other counts errors not originated from FAP, such as a thread pool failure.
+/// - type_failed_cancel counts when a FAP task is canceled outside of the FAP builder thread, due to either timeout or not.
+/// - type_failed_no_suitable / type_failed_no_candidate are failures in selecting stage.
+/// - type_failed_repeated is a special case where we found an FAP snapshot exists when we are doing write staging.
+/// - type_failed_baddata counts when a exception throws from FAP builder thread, mostly it could be a unhandled exception from UniPS or DeltaTree.
+///   It results in a `BadData` returncode to Proxy.
+/// - type_failed_build_chkpt is used especially to track when exception throws when building segments in write stage.
+/// - type_reuse_chkpt_cache counts how many times a checkpoint is reused to build an FAP snapshot.
+/// - type_restore counts the number FAP snapshot is restored for applying after a restart.
+/// - type_succeed count succeed FAP tasks, when an FAP snapshot is applied.
+
+using raft_serverpb::PeerState;
+using raft_serverpb::RaftApplyState;
+using raft_serverpb::RegionLocalState;
+
 FastAddPeerRes genFastAddPeerRes(
     FastAddPeerStatus status,
     std::string && apply_str,
@@ -106,11 +124,6 @@ std::vector<StoreID> getCandidateStoreIDsForRegion(TMTContext & tmt_context, UIn
     }
     return store_ids;
 }
-
-using raft_serverpb::PeerState;
-using raft_serverpb::RaftApplyState;
-using raft_serverpb::RegionLocalState;
-
 
 std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
     ParsedCheckpointDataHolderPtr checkpoint_data_holder,
@@ -219,11 +232,14 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
 
     // Get candidate stores.
     const auto & settings = tmt.getContext().getSettingsRef();
-    auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
+    const auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
     std::vector<StoreID> candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
 
     fiu_do_on(FailPoints::force_fap_worker_throw, { throw Exception(ErrorCodes::LOGICAL_ERROR, "mocked throw"); });
 
+    // It could be the first TiFlash peer(most cases), thus there's no candidate for FAP at all.
+    // NOTE that it is unpredictable that which TiFlash node are scheduled for the peer first,
+    // it could be always TiFlash node "p1" if we schedule from 0 replica -> 2 replica.
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
@@ -244,51 +260,50 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
             auto [data_seq, checkpoint_data] = fap_ctx->getNewerCheckpointData(tmt.getContext(), store_id, checked_seq);
 
             checked_seq_map[store_id] = data_seq;
-            if (data_seq > checked_seq)
+            if (data_seq <= checked_seq)
+                continue;
+            RUNTIME_CHECK(checkpoint_data != nullptr);
+            auto maybe_region_info
+                = tryParseRegionInfoFromCheckpointData(checkpoint_data, store_id, region_id, proxy_helper);
+            if (!maybe_region_info.has_value())
+                continue;
+            const auto & checkpoint_info = std::get<0>(maybe_region_info.value());
+            auto & region = std::get<1>(maybe_region_info.value());
+            auto & region_state = std::get<3>(maybe_region_info.value());
+            if (tryResetPeerIdInRegion(region, region_state, new_peer_id))
             {
-                RUNTIME_CHECK(checkpoint_data != nullptr);
-                auto maybe_region_info
-                    = tryParseRegionInfoFromCheckpointData(checkpoint_data, store_id, region_id, proxy_helper);
-                if (!maybe_region_info.has_value())
-                    continue;
-                const auto & checkpoint_info = std::get<0>(maybe_region_info.value());
-                auto & region = std::get<1>(maybe_region_info.value());
-                auto & region_state = std::get<3>(maybe_region_info.value());
-                if (tryResetPeerIdInRegion(region, region_state, new_peer_id))
-                {
-                    LOG_INFO(
-                        log,
-                        "Select checkpoint with data_seq={}, remote_store_id={} elapsed={} size(candidate_store_id)={} "
-                        "region_id={}",
-                        data_seq,
-                        checkpoint_info->remote_store_id,
-                        watch.elapsedSeconds(),
-                        candidate_store_ids.size(),
-                        region_id);
-                    GET_METRIC(tiflash_fap_task_duration_seconds, type_select_stage).Observe(watch.elapsedSeconds());
-                    return maybe_region_info.value();
-                }
-                else
-                {
-                    LOG_DEBUG(
-                        log,
-                        "Checkpoint with seq {} doesn't contain reusable region info region_id={} from_store_id={}",
-                        data_seq,
-                        region_id,
-                        store_id);
-                }
+                LOG_INFO(
+                    log,
+                    "Select checkpoint with data_seq={}, remote_store_id={} elapsed={} size(candidate_store_id)={} "
+                    "region_id={}",
+                    data_seq,
+                    checkpoint_info->remote_store_id,
+                    watch.elapsedSeconds(),
+                    candidate_store_ids.size(),
+                    region_id);
+                GET_METRIC(tiflash_fap_task_duration_seconds, type_select_stage).Observe(watch.elapsedSeconds());
+                return maybe_region_info.value();
+            }
+            else
+            {
+                LOG_DEBUG(
+                    log,
+                    "Checkpoint with seq {} doesn't contain reusable region info region_id={} from_store_id={}",
+                    data_seq,
+                    region_id,
+                    store_id);
             }
         }
         {
             if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
             {
-                // This could happen if there are too many pending tasks in queue,
+                // This could happen if the checkpoint we got is not fresh enough.
                 LOG_INFO(
                     log,
                     "FastAddPeer timeout when select checkpoints region_id={} new_peer_id={}",
                     region_id,
                     new_peer_id);
-                GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
+                GET_METRIC(tiflash_fap_task_result, type_failed_no_suitable).Increment();
                 return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
             }
             SYNC_FOR("in_FastAddPeerImplSelect::before_sleep");
@@ -501,7 +516,8 @@ FastAddPeerRes FastAddPeerImpl(
                 new_peer_id,
                 std::move(std::get<CheckpointRegionInfoAndData>(res)),
                 start_time);
-            GET_METRIC(tiflash_fap_task_result, type_success_transform).Increment();
+            if (final_res.status == FastAddPeerStatus::Ok)
+                GET_METRIC(tiflash_fap_task_result, type_success_transform).Increment();
             return final_res;
         }
         return std::get<FastAddPeerRes>(res);

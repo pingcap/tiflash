@@ -109,6 +109,7 @@ public:
 
         global_context.getSharedContextDisagg()->initFastAddPeerContext(25);
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
+        proxy_instance->proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":3}})";
         proxy_helper = proxy_instance->generateProxyHelper();
         KVStoreTestBase::reloadKVSFromDisk(false);
         {
