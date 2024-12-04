@@ -19,9 +19,9 @@
 #include <Common/HashTable/StringHashTable.h>
 
 template <typename Key, typename TMapped>
-struct StringHashMapCell : public HashMapCell<Key, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell : public HashMapCell<Key, TMapped, HashTableNoState>
 {
-    using Base = HashMapCell<Key, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCell<Key, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
@@ -33,9 +33,9 @@ struct StringHashMapCell : public HashMapCell<Key, TMapped, StringHashTableHash,
 
 template <typename TMapped>
 struct StringHashMapCell<StringKey16, TMapped>
-    : public HashMapCell<StringKey16, TMapped, StringHashTableHash, HashTableNoState>
+    : public HashMapCell<StringKey16, TMapped, HashTableNoState>
 {
-    using Base = HashMapCell<StringKey16, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCell<StringKey16, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
@@ -54,9 +54,9 @@ struct StringHashMapCell<StringKey16, TMapped>
 
 template <typename TMapped>
 struct StringHashMapCell<StringKey24, TMapped>
-    : public HashMapCell<StringKey24, TMapped, StringHashTableHash, HashTableNoState>
+    : public HashMapCell<StringKey24, TMapped, HashTableNoState>
 {
-    using Base = HashMapCell<StringKey24, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCell<StringKey24, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
@@ -75,9 +75,9 @@ struct StringHashMapCell<StringKey24, TMapped>
 
 template <typename TMapped>
 struct StringHashMapCell<StringRef, TMapped>
-    : public HashMapCellWithSavedHash<StringRef, TMapped, StringHashTableHash, HashTableNoState>
+    : public HashMapCellWithSavedHash<StringRef, TMapped, HashTableNoState>
 {
-    using Base = HashMapCellWithSavedHash<StringRef, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCellWithSavedHash<StringRef, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;

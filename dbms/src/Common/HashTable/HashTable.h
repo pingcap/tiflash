@@ -390,7 +390,7 @@ struct AllocatorBufferDeleter<true, Allocator, Cell>
 template <typename KeyType, typename CellType, typename HashType, typename GrowerType, typename AllocatorType>
 class HashTable
     : private boost::noncopyable
-    , protected HashType
+    , public HashType
     , protected AllocatorType
     , protected CellType::State
     , protected ZeroValueStorage<CellType::need_zero_value_storage, CellType> /// empty base optimization

@@ -63,7 +63,7 @@ template <
     typename Grower = TwoLevelHashTableGrower<>,
     typename Allocator = HashTableAllocator,
     template <typename...> typename ImplTable = HashMapTable>
-using TwoLevelHashMap = TwoLevelHashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;
+using TwoLevelHashMap = TwoLevelHashMapTable<Key, HashMapCell<Key, Mapped>, Hash, Grower, Allocator, ImplTable>;
 
 
 template <
@@ -74,4 +74,4 @@ template <
     typename Allocator = HashTableAllocator,
     template <typename...> typename ImplTable = HashMapTable>
 using TwoLevelHashMapWithSavedHash
-    = TwoLevelHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;
+    = TwoLevelHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped>, Hash, Grower, Allocator, ImplTable>;

@@ -59,7 +59,7 @@ PairNoInit<std::decay_t<First>, std::decay_t<Second>> makePairNoInit(First && fi
 }
 
 
-template <typename Key, typename TMapped, typename Hash, typename TState = HashTableNoState>
+template <typename Key, typename TMapped, typename TState = HashTableNoState>
 struct HashMapCell
 {
     using Mapped = TMapped;
@@ -96,7 +96,8 @@ struct HashMapCell
     }
 
     void setHash(size_t /*hash_value*/) {}
-    size_t getHash(const Hash & hash) const { return hash(value.first); }
+    template <typename THash>
+    size_t getHash(const THash & hash) const { return hash(value.first); }
 
     bool isZero(const State & state) const { return isZero(value.first, state); }
     static bool isZero(const Key & key, const State & /*state*/) { return ZeroTraits::check(key); }
@@ -171,28 +172,28 @@ struct HashMapCell
 
 namespace std
 {
-template <typename Key, typename TMapped, typename Hash, typename TState>
-struct tuple_size<HashMapCell<Key, TMapped, Hash, TState>> : std::integral_constant<size_t, 2>
+template <typename Key, typename TMapped, typename TState>
+struct tuple_size<HashMapCell<Key, TMapped, TState>> : std::integral_constant<size_t, 2>
 {
 };
 
-template <typename Key, typename TMapped, typename Hash, typename TState>
-struct tuple_element<0, HashMapCell<Key, TMapped, Hash, TState>>
+template <typename Key, typename TMapped, typename TState>
+struct tuple_element<0, HashMapCell<Key, TMapped, TState>>
 {
     using type = Key;
 };
 
-template <typename Key, typename TMapped, typename Hash, typename TState>
-struct tuple_element<1, HashMapCell<Key, TMapped, Hash, TState>>
+template <typename Key, typename TMapped, typename TState>
+struct tuple_element<1, HashMapCell<Key, TMapped, TState>>
 {
     using type = TMapped;
 };
 } // namespace std
 
-template <typename Key, typename TMapped, typename Hash, typename TState = HashTableNoState>
-struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, Hash, TState>
+template <typename Key, typename TMapped, typename TState = HashTableNoState>
+struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, TState>
 {
-    using Base = HashMapCell<Key, TMapped, Hash, TState>;
+    using Base = HashMapCell<Key, TMapped, TState>;
 
     size_t saved_hash;
 
@@ -209,7 +210,8 @@ struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, Hash, TState>
     }
 
     void setHash(size_t hash_value) { saved_hash = hash_value; }
-    size_t getHash(const Hash & /*hash_function*/) const { return saved_hash; }
+    template <typename THash>
+    size_t getHash(const THash & /*hash_function*/) const { return saved_hash; }
 };
 
 
@@ -318,19 +320,19 @@ public:
 
 namespace std
 {
-template <typename Key, typename TMapped, typename Hash, typename TState>
-struct tuple_size<HashMapCellWithSavedHash<Key, TMapped, Hash, TState>> : std::integral_constant<size_t, 2>
+template <typename Key, typename TMapped, typename TState>
+struct tuple_size<HashMapCellWithSavedHash<Key, TMapped, TState>> : std::integral_constant<size_t, 2>
 {
 };
 
-template <typename Key, typename TMapped, typename Hash, typename TState>
-struct tuple_element<0, HashMapCellWithSavedHash<Key, TMapped, Hash, TState>>
+template <typename Key, typename TMapped, typename TState>
+struct tuple_element<0, HashMapCellWithSavedHash<Key, TMapped, TState>>
 {
     using type = Key;
 };
 
-template <typename Key, typename TMapped, typename Hash, typename TState>
-struct tuple_element<1, HashMapCellWithSavedHash<Key, TMapped, Hash, TState>>
+template <typename Key, typename TMapped, typename TState>
+struct tuple_element<1, HashMapCellWithSavedHash<Key, TMapped, TState>>
 {
     using type = TMapped;
 };
@@ -343,7 +345,7 @@ template <
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
     typename Allocator = HashTableAllocator>
-using HashMap = HashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator>;
+using HashMap = HashMapTable<Key, HashMapCell<Key, Mapped>, Hash, Grower, Allocator>;
 
 
 template <
@@ -352,16 +354,16 @@ template <
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
     typename Allocator = HashTableAllocator>
-using HashMapWithSavedHash = HashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
+using HashMapWithSavedHash = HashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped>, Hash, Grower, Allocator>;
 
 template <typename Key, typename Mapped, typename Hash, size_t initial_size_degree>
 using HashMapWithStackMemory = HashMapTable<
     Key,
-    HashMapCellWithSavedHash<Key, Mapped, Hash>,
+    HashMapCellWithSavedHash<Key, Mapped>,
     Hash,
     HashTableGrower<initial_size_degree>,
     HashTableAllocatorWithStackMemory<
-        (1ULL << initial_size_degree) * sizeof(HashMapCellWithSavedHash<Key, Mapped, Hash>)>>;
+        (1ULL << initial_size_degree) * sizeof(HashMapCellWithSavedHash<Key, Mapped>)>>;
 
 /// ConcurrentHashTable is the base class, it contains a vector of HashTableWithLock, ConcurrentHashMapTable is a derived
 /// class from ConcurrentHashTable, it makes hash table to be a hash map, and ConcurrentHashMap/ConcurrentHashMapWithSavedHash
@@ -417,7 +419,7 @@ template <
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
     typename Allocator = HashTableAllocator>
-using ConcurrentHashMap = ConcurrentHashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator>;
+using ConcurrentHashMap = ConcurrentHashMapTable<Key, HashMapCell<Key, Mapped>, Hash, Grower, Allocator>;
 
 
 template <
@@ -427,4 +429,4 @@ template <
     typename Grower = HashTableGrower<>,
     typename Allocator = HashTableAllocator>
 using ConcurrentHashMapWithSavedHash
-    = ConcurrentHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
+    = ConcurrentHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped>, Hash, Grower, Allocator>;
