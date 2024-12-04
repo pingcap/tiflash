@@ -305,36 +305,32 @@ public:
         size_t rowkey_column_size = 1,
         bool with_internal_columns = true,
         bool is_deleted = false,
-        bool with_nullable_uint64 = false)
+        bool with_nullable_uint64 = false,
+        bool including_right_boundary = false) // [beg, end) or [beg, end]
     {
         Block block;
-        const size_t num_rows = (end - beg);
+        const size_t num_rows = (end - beg) + including_right_boundary;
+        std::vector<Int64> handles(num_rows);
+        std::iota(handles.begin(), handles.end(), beg);
+        if (reversed)
+            std::reverse(handles.begin(), handles.end());
         if (is_common_handle)
         {
-            // common_pk_col
             Strings values;
-            for (size_t i = 0; i < num_rows; i++)
-            {
-                Int64 value = reversed ? end - 1 - i : beg + i;
-                values.emplace_back(genMockCommonHandle(value, rowkey_column_size));
-            }
+            for (Int64 h : handles)
+                values.emplace_back(genMockCommonHandle(h, rowkey_column_size));
             block.insert(DB::tests::createColumn<String>(std::move(values), pk_name_, pk_col_id));
         }
         else
         {
             // int-like pk_col
-            block.insert(ColumnWithTypeAndName{
-                DB::tests::makeColumn<Int64>(pk_type, createNumbers<Int64>(beg, end, reversed)),
-                pk_type,
-                pk_name_,
-                pk_col_id});
+            block.insert(
+                ColumnWithTypeAndName{DB::tests::makeColumn<Int64>(pk_type, handles), pk_type, pk_name_, pk_col_id});
             // add extra column if need
             if (pk_col_id != MutSup::extra_handle_id)
             {
                 block.insert(ColumnWithTypeAndName{
-                    DB::tests::makeColumn<Int64>(
-                        MutSup::getExtraHandleColumnIntType(),
-                        createNumbers<Int64>(beg, end, reversed)),
+                    DB::tests::makeColumn<Int64>(MutSup::getExtraHandleColumnIntType(), handles),
                     MutSup::getExtraHandleColumnIntType(),
                     MutSup::extra_handle_column_name,
                     MutSup::extra_handle_id});

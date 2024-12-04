@@ -40,10 +40,13 @@ public:
     void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
     void runOptimize();
+    void setAllMatch(bool all_match_) { all_match = all_match_; }
 
     String toDebugString() const;
     size_t count() const;
     inline size_t size() const { return filter.size(); }
+
+    IColumn::Filter & getFilter() { return filter; }
 
     friend class BitmapFilterView;
 
