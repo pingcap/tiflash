@@ -15,7 +15,6 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -53,17 +52,32 @@ std::string S3RandomAccessFile::getFileName() const
     return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
 }
 
+<<<<<<< HEAD
 bool isRetryableError(int e)
+=======
+std::string S3RandomAccessFile::getInitialFileName() const
 {
-    return e == ECONNRESET || e == EAGAIN;
+    return remote_fname;
 }
+
+namespace
+>>>>>>> a98d04cc98 (Disagg: Retry when the stream state of S3 is not good (#9698))
+{
+constexpr int S3UnknownError = -1;
+constexpr int S3StreamError = -2;
+
+bool isRetryableError(int ret, int err)
+{
+    return ret == S3StreamError || err == ECONNRESET || err == EAGAIN;
+}
+} // namespace
 
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 {
     while (true)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && isRetryableError(errno)))
+        if (unlikely(n < 0 && isRetryableError(n, errno)))
         {
             // If it is a retryable error, then initialize again
             if (initialize())
@@ -85,18 +99,21 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     // It's just a double check for more safty.
     if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
     {
+        auto state = istr.rdstate();
         LOG_ERROR(
             log,
-            "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errmsg={} "
+            "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errno={} "
+            "errmsg={} "
             "cost={}ns",
             size,
             gcount,
-            istr.rdstate(),
+            state,
             cur_offset,
             content_length,
+            errno,
             strerror(errno),
             sw.elapsed());
-        return -1;
+        return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
     auto elapsed_ns = sw.elapsed();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
@@ -120,7 +137,7 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     while (true)
     {
         auto off = seekImpl(offset_, whence);
-        if (unlikely(off < 0 && isRetryableError(errno)))
+        if (unlikely(off < 0 && isRetryableError(off, errno)))
         {
             // If it is a retryable error, then initialize again
             if (initialize())
@@ -150,8 +167,15 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     auto & istr = read_result.GetBody();
     if (!istr.ignore(offset_ - cur_offset))
     {
-        LOG_ERROR(log, "Cannot ignore from istream, errmsg={}, cost={}ns", strerror(errno), sw.elapsed());
-        return -1;
+        auto state = istr.rdstate();
+        LOG_ERROR(
+            log,
+            "Cannot ignore from istream, state=0x{:02X}, errno={} errmsg={} cost={}ns",
+            state,
+            errno,
+            strerror(errno),
+            sw.elapsed());
+        return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
     auto elapsed_ns = sw.elapsed();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
