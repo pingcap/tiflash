@@ -17,6 +17,10 @@
 #include <Columns/IColumn.h>
 #include <common/memcpy.h>
 
+#if defined(__aarch64__) && defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
+
 #include <bit>
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
