@@ -43,12 +43,12 @@ DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
     {
         if (!task.block_data)
             continue;
-
+/*
         IColumn::Permutation perm;
         task.sorted = sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), task.block_data, perm);
         if (task.sorted)
             delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
-
+*/
         task.data_page = ColumnFileTiny::writeColumnFileData(context, task.block_data, 0, task.block_data.rows(), wbs);
     }
 

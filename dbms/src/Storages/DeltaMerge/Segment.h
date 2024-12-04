@@ -27,9 +27,10 @@
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-
 namespace DB
 {
 struct GeneralCancelHandle;
@@ -663,6 +664,8 @@ public:
         }
     }
 
+    static RowKeyRanges shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -736,7 +739,8 @@ public:
         const RowKeyRanges & read_ranges,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        bool use_version_chain);
     BitmapFilterPtr buildBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -838,6 +842,8 @@ public:
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
+
+    VersionChain<Int64> version_chain; // TODO: support common handle
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);

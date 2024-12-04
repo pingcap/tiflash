@@ -17,6 +17,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -179,6 +180,34 @@ protected:
             auto expected_handle = genSequence<Int64>(test_case.expected_handle);
             ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
         }
+
+        verifyBitmapFilter(SEG_ID);
+    }
+
+    inline static constexpr bool use_version_chain = true;
+    void verifyBitmapFilter(const PageIdU64 seg_id, const UInt64 read_ts = std::numeric_limits<UInt64>::max())
+    {
+        auto [seg, snap] = getSegmentForRead(seg_id);
+
+        auto bitmap_filter1 = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            nullptr,
+            read_ts,
+            DEFAULT_BLOCK_SIZE,
+            !use_version_chain);
+
+        auto bitmap_filter2 = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            nullptr,
+            read_ts,
+            DEFAULT_BLOCK_SIZE,
+            use_version_chain);
+
+        ASSERT_EQ(bitmap_filter1->toDebugString(), bitmap_filter2->toDebugString());
     }
 
     auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
@@ -276,7 +305,7 @@ TEST_F(SegmentBitmapFilterTest, Big)
 try
 {
     runTestCase(TestCase{
-        "d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)",
+        "d_tiny:[100, 500)|d_dr:[250, 1000)|d_big:[250, 1000)|d_mem:[240, 290)",
         900,
         "[0, 140)|[1150, 1200)|[440, 1150)",
         "[100, 1000)"});
@@ -348,6 +377,9 @@ try
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
+    verifyBitmapFilter(SEG_ID);
+    verifyBitmapFilter(*new_seg_id);
+
     auto left_handle = getSegmentHandle(SEG_ID, {});
     const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
     auto expected_left_handle = genSequence<Int64>("[0, 128)|[200, 255)|[256, 305)|[310, 512)");
@@ -393,6 +425,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
     std::string expect_result;
     expect_result.append(std::string(25000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    verifyBitmapFilter(SEG_ID);
 }
 
 TEST_F(SegmentBitmapFilterTest, NotCleanStable)
@@ -420,6 +453,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '1'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+        verifyBitmapFilter(SEG_ID);
     }
     {
         // Stale read
@@ -440,6 +474,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '0'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+        verifyBitmapFilter(SEG_ID, 1);
     }
 }
 
@@ -466,6 +501,8 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
     expect_result.append(std::string(10000, '0'));
     expect_result.append(std::string(40000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+
+    verifyBitmapFilter(SEG_ID);
 }
 
 TEST_F(SegmentBitmapFilterTest, StableLogicalSplit)
@@ -482,6 +519,9 @@ try
 
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
+
+    verifyBitmapFilter(SEG_ID);
+    verifyBitmapFilter(*new_seg_id);
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
     const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
@@ -528,7 +568,8 @@ try
         {seg->getRowKeyRange()},
         loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
     ASSERT_EQ(bitmap_filter->size(), 30);
     ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
     ASSERT_EQ(bitmap_filter->toDebugString(), "000001111111111111111111100000");
@@ -558,7 +599,8 @@ try
         {seg->getRowKeyRange()},
         loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
     ASSERT_EQ(bitmap_filter->size(), 750);
     ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
     ASSERT_EQ(
