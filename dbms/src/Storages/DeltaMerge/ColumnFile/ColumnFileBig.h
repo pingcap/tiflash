@@ -72,6 +72,8 @@ public:
 
     auto getFile() const { return file; }
 
+    RowKeyRange getRange() const { return segment_range; }
+
     PageIdU64 getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }

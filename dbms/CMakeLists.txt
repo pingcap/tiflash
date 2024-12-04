@@ -404,10 +404,6 @@ if (ENABLE_TESTS)
         tiflash_aggregate_functions
         kvstore)
 
-    if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
-        target_link_libraries(bench_dbms tiflash_contrib::highfive)
-    endif()
-
     add_check(bench_dbms)
 endif ()
 

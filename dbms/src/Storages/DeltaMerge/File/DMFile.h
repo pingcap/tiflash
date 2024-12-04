@@ -210,6 +210,11 @@ public:
 
     UInt32 metaVersion() const { return meta->metaVersion(); }
 
+    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
+
 private:
     DMFile(
         UInt64 file_id_,
@@ -299,11 +304,6 @@ private:
     EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
-
-    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
-    {
-        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
-    }
 
     static String vectorIndexFileName(IndexID index_id) { return fmt::format("idx_{}.vector", index_id); }
     String vectorIndexPath(IndexID index_id) const { return subFilePath(vectorIndexFileName(index_id)); }
