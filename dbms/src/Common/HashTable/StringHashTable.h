@@ -50,6 +50,23 @@ inline StringRef ALWAYS_INLINE toStringRef(const StringKey24 & n)
     return {reinterpret_cast<const char *>(&n), 24ul - (__builtin_clzll(n.c) >> 3)};
 }
 
+inline size_t hash_string_key_24(uint64_t seed, const StringKey24 & v)
+{
+    hash_combine(seed, v.a);
+    hash_combine(seed, v.b);
+    hash_combine(seed, v.c);
+    return seed;
+}
+
+template <>
+struct HashWithMixSeed<StringKey24>
+{
+    static inline size_t operator()(const StringKey24 & v)
+    {
+        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_string_key_24(0, v));
+    }
+};
+
 struct StringHashTableHash
 {
 #if defined(__SSE4_2__)
