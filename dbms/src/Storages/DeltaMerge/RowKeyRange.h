@@ -865,6 +865,11 @@ struct RowKeyRange
     bool operator!=(const RowKeyRange & rhs) const { return !(*this == rhs); }
 }; // struct RowKeyRange
 
+inline auto format_as(const RowKeyRange & range)
+{
+    return range.toString();
+}
+
 // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
 inline String toDebugString(const RowKeyRanges & ranges)
 {

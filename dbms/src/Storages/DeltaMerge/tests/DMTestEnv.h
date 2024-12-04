@@ -21,6 +21,7 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -29,6 +30,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include <ext/scope_guard.h>
 #include <vector>
 
 namespace DB::DM::tests
@@ -568,4 +570,14 @@ public:
         return num++;
     }
 };
+
+// For some tests only for delta-index, use this function to diable version-chain temporarily.
+[[nodiscard]] inline auto disableVersionChainTemporary(Settings & settings)
+{
+    const Int64 enable_version_chain = settings.enable_version_chain;
+    settings.set("enable_version_chain", "0");
+    return ext::make_scope_guard([enable_version_chain, &settings]() {
+        settings.set("enable_version_chain", std::to_string(enable_version_chain));
+    });
+}
 } // namespace DB::DM::tests

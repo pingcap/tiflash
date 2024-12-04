@@ -211,6 +211,10 @@ public:
     UInt32 metaVersion() const { return meta->metaVersion(); }
 
     bool isColIndexExist(const ColId & col_id) const;
+    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
 
 private:
     DMFile(
@@ -300,11 +304,6 @@ private:
     EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
 
-    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
-    {
-        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
-    }
-
     static String localIndexFileName(IndexID index_id, TiDB::ColumnarIndexKind kind)
     {
         // Note: Keep sync with FileCache::getFileType()
@@ -323,6 +322,8 @@ private:
     {
         return subFilePath(localIndexFileName(index_id, kind));
     }
+    static String vectorIndexFileName(IndexID index_id) { return fmt::format("idx_{}.vector", index_id); }
+    String vectorIndexPath(IndexID index_id) const { return subFilePath(vectorIndexFileName(index_id)); }
 
     void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
