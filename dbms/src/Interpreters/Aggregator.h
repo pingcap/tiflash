@@ -93,7 +93,8 @@ using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDat
 
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashWithMixSeed<Int256>>;
 
-using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr, StringHashTableHashSelector<true>>;
+using AggregatedDataWithShortStringKeyTwoLevel
+    = TwoLevelStringHashMap<AggregateDataPtr, StringHashTableHashSelector<true>>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashWithMixSeed<UInt128>>;

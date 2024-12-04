@@ -97,7 +97,10 @@ struct HashMapCell
 
     void setHash(size_t /*hash_value*/) {}
     template <typename THash>
-    size_t getHash(const THash & hash) const { return hash(value.first); }
+    size_t getHash(const THash & hash) const
+    {
+        return hash(value.first);
+    }
 
     bool isZero(const State & state) const { return isZero(value.first, state); }
     static bool isZero(const Key & key, const State & /*state*/) { return ZeroTraits::check(key); }
@@ -211,7 +214,10 @@ struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, TState>
 
     void setHash(size_t hash_value) { saved_hash = hash_value; }
     template <typename THash>
-    size_t getHash(const THash & /*hash_function*/) const { return saved_hash; }
+    size_t getHash(const THash & /*hash_function*/) const
+    {
+        return saved_hash;
+    }
 };
 
 
@@ -362,8 +368,7 @@ using HashMapWithStackMemory = HashMapTable<
     HashMapCellWithSavedHash<Key, Mapped>,
     Hash,
     HashTableGrower<initial_size_degree>,
-    HashTableAllocatorWithStackMemory<
-        (1ULL << initial_size_degree) * sizeof(HashMapCellWithSavedHash<Key, Mapped>)>>;
+    HashTableAllocatorWithStackMemory<(1ULL << initial_size_degree) * sizeof(HashMapCellWithSavedHash<Key, Mapped>)>>;
 
 /// ConcurrentHashTable is the base class, it contains a vector of HashTableWithLock, ConcurrentHashMapTable is a derived
 /// class from ConcurrentHashTable, it makes hash table to be a hash map, and ConcurrentHashMap/ConcurrentHashMapWithSavedHash

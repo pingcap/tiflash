@@ -23,7 +23,9 @@
 #include <new>
 #include <variant>
 
-struct StringKey0 {};
+struct StringKey0
+{
+};
 using StringKey8 = UInt64;
 using StringKey16 = DB::UInt128;
 struct StringKey24

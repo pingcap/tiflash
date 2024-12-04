@@ -71,23 +71,23 @@ public:
         if (src.m0.hasZero())
             impls[0].m0.setHasZero(*src.m0.zeroValue());
 
-#define M(SUBMAP) \
-        for (auto & v : src.m##SUBMAP) \
-        { \
-            if constexpr (std::is_same_v<typename Source::SubMaps::T##SUBMAP::Hash, typename SubMaps::T##SUBMAP::Hash>) \
-            { \
-                const size_t hash_value = v.getHash(src.m##SUBMAP); \
-                size_t buck = getBucketFromHash(hash_value); \
-                impls[buck].m##SUBMAP.insertUniqueNonZero(&v, hash_value); \
-            }\
-            else \
-            { \
-                const size_t hash_value = SubMaps::T##SUBMAP::Hash::operator()(v.getKey(v.getValue())); \
-                v.setHash(hash_value); \
-                size_t buck = getBucketFromHash(hash_value); \
-                impls[buck].m##SUBMAP.insertUniqueNonZero(&v, hash_value); \
-            }\
-        }
+#define M(SUBMAP)                                                                                                   \
+    for (auto & v : src.m##SUBMAP)                                                                                  \
+    {                                                                                                               \
+        if constexpr (std::is_same_v<typename Source::SubMaps::T##SUBMAP::Hash, typename SubMaps::T##SUBMAP::Hash>) \
+        {                                                                                                           \
+            const size_t hash_value = v.getHash(src.m##SUBMAP);                                                     \
+            size_t buck = getBucketFromHash(hash_value);                                                            \
+            impls[buck].m##SUBMAP.insertUniqueNonZero(&v, hash_value);                                              \
+        }                                                                                                           \
+        else                                                                                                        \
+        {                                                                                                           \
+            const size_t hash_value = SubMaps::T##SUBMAP::Hash::operator()(v.getKey(v.getValue()));                 \
+            v.setHash(hash_value);                                                                                  \
+            size_t buck = getBucketFromHash(hash_value);                                                            \
+            impls[buck].m##SUBMAP.insertUniqueNonZero(&v, hash_value);                                              \
+        }                                                                                                           \
+    }
 
         M(1)
         M(2)
