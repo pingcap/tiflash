@@ -963,7 +963,11 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
 
     WindowDescription window_description = createAndInitWindowDesc(this, window);
     setOrderByColumnTypeAndDirectionForRangeFrame(window_description, step.actions, window);
-    buildActionsBeforeWindow(this, window_description, chain, window);
+    buildActionsBeforeWindow(
+        this,
+        window_description,
+        chain,
+        window);
     buildActionsAfterWindow(this, window_description, chain, window, source_size);
 
     return window_description;

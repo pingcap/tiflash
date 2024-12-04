@@ -78,6 +78,17 @@ public:
         ++this->data(place).count;
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        if constexpr (IsDecimal<T>)
+            this->data(place).sum -= static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num];
+        else
+        {
+            this->data(place).sum -= static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num];
+        }
+        --this->data(place).count;
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).sum += this->data(rhs).sum;

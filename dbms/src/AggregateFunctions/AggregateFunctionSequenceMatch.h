@@ -26,6 +26,7 @@
 #include <bitset>
 #include <ext/range.h>
 #include <stack>
+#include "Common/Exception.h"
 
 
 namespace DB
@@ -170,7 +171,7 @@ public:
                     + toString(AggregateFunctionSequenceMatchData::max_events) + " event arguments.",
                 ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION};
 
-        const auto time_arg = arguments.front().get();
+        const auto *const time_arg = arguments.front().get();
         if (!typeid_cast<const DataTypeDateTime *>(time_arg))
             throw Exception{
                 "Illegal type " + time_arg->getName() + " of first argument of aggregate function "
@@ -179,7 +180,7 @@ public:
 
         for (const auto i : ext::range(1, arg_count))
         {
-            const auto cond_arg = arguments[i].get();
+            const auto *const cond_arg = arguments[i].get();
             if (!typeid_cast<const DataTypeUInt8 *>(cond_arg))
                 throw Exception{
                     "Illegal type " + cond_arg->getName() + " of argument " + toString(i + 1)
@@ -202,6 +203,12 @@ public:
         }
 
         this->data(place).add(timestamp, events);
+    }
+
+    // TODO move to helper
+    void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
+    {
+        throw Exception("Not implemented yet");
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -298,7 +305,7 @@ private:
                         throw_exception("Unknown time condition");
 
                     UInt64 duration = 0;
-                    auto prev_pos = pos;
+                    const auto *prev_pos = pos;
                     pos = tryReadIntText(duration, pos, end);
                     if (pos == prev_pos)
                         throw_exception("Could not parse number");
@@ -315,7 +322,7 @@ private:
                 else
                 {
                     UInt64 event_number = 0;
-                    auto prev_pos = pos;
+                    const auto *prev_pos = pos;
                     pos = tryReadIntText(event_number, pos, end);
                     if (pos == prev_pos)
                         throw_exception("Could not parse number");

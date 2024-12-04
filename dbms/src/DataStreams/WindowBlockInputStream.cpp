@@ -246,6 +246,7 @@ WindowTransformAction::WindowTransformAction(
     const String & req_id)
     : log(Logger::get(req_id))
     , window_description(window_description_)
+    , has_agg(false)
 {
     output_header = input_header;
     for (const auto & add_column : window_description_.add_columns)
@@ -313,6 +314,8 @@ void WindowTransformAction::initialAggregateFunction(
 {
     if (window_function_description.aggregate_function == nullptr)
         return;
+
+    has_agg = true;
 
     workspace.aggregate_function = window_function_description.aggregate_function;
     const auto & aggregate_function = workspace.aggregate_function;
@@ -1357,9 +1360,13 @@ void WindowTransformAction::appendBlock(Block & current_block)
     window_block.input_columns = current_block.getColumns();
 }
 
+
 // Update the aggregation states after the frame has changed.
 void WindowTransformAction::updateAggregationState()
 {
+    if (!has_agg)
+        return;
+
     assert(frame_started);
     assert(frame_ended);
     assert(frame_start <= frame_end);
@@ -1369,76 +1376,15 @@ void WindowTransformAction::updateAggregationState()
     assert(partition_start <= frame_start);
     assert(frame_end <= partition_end);
 
-    bool reset_aggregation = false;
-    RowNumber rows_to_add_start;
-    RowNumber rows_to_add_end;
-    if (frame_start == prev_frame_start)
-    {
-        // The frame start didn't change, add the tail rows.
-        reset_aggregation = false;
-        rows_to_add_start = prev_frame_end;
-        rows_to_add_end = frame_end;
-    }
-    else
-    {
-        // The frame start changed, reset the state and aggregate over the
-        // entire frame. This can be made per-function after we learn to
-        // subtract rows from some types of aggregation states, but for now we
-        // always have to reset when the frame start changes.
-        reset_aggregation = true;
-        rows_to_add_start = frame_start;
-        rows_to_add_end = frame_end;
-    }
-
     for (auto & ws : workspaces)
     {
         if (ws.window_function)
-            continue; // No need to do anything for true window functions.
+            continue;
 
-        const auto * agg_func = ws.aggregate_function.get();
-        auto * buf = ws.aggregate_function_state.data();
-
-        if (reset_aggregation)
-        {
-            agg_func->destroy(buf);
-            agg_func->create(buf);
-        }
-
-        // To achieve better performance, we will have to loop over blocks and
-        // rows manually, instead of using advanceRowNumber().
-        // For this purpose, the past-the-end block can be different than the
-        // block of the past-the-end row (it's usually the next block).
-        const auto past_the_end_block = rows_to_add_end.row == 0 ? rows_to_add_end.block : rows_to_add_end.block + 1;
-
-        for (auto block_number = rows_to_add_start.block; block_number < past_the_end_block; ++block_number)
-        {
-            auto & block = blockAt(block_number);
-
-            if (ws.cached_block_number != block_number)
-            {
-                for (size_t i = 0; i < ws.argument_column_indices.size(); ++i)
-                {
-                    ws.argument_columns[i] = block.input_columns[ws.argument_column_indices[i]].get();
-                }
-                ws.cached_block_number = block_number;
-            }
-
-            // First and last blocks may be processed partially, and other blocks
-            // are processed in full.
-            const auto first_row = block_number == rows_to_add_start.block ? rows_to_add_start.row : 0;
-            const auto past_the_end_row = block_number == rows_to_add_end.block ? rows_to_add_end.row : block.rows;
-
-            // TODO Add an addBatch analog that can accept a starting offset.
-            // For now, add the values one by one.
-            auto * columns = ws.argument_columns.data();
-
-            // Removing arena.get() from the loop makes it faster somehow...
-            auto * arena_ptr = arena.get();
-            for (auto row = first_row; row < past_the_end_row; ++row)
-            {
-                agg_func->add(buf, columns, row, arena_ptr);
-            }
-        }
+        const RowNumber & end = frame_start <= prev_frame_end ? frame_start : prev_frame_end;
+        decreaseAggregationState(ws, prev_frame_start, end);
+        const RowNumber & start = frame_start <= prev_frame_end ? prev_frame_end : frame_start;
+        addAggregationState(ws, start, end);
     }
 }
 
@@ -1499,6 +1445,8 @@ void WindowTransformAction::tryCalculate()
             // not after end.
             assert(frame_started);
             assert(frame_ended);
+
+            updateAggregationState();
 
             // Write out the results.
             // TODO execute the window function by block instead of row.

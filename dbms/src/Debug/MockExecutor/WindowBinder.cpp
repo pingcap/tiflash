@@ -95,7 +95,6 @@ void setFieldTypeForAggFunc(
     {
         auto * ft = expr->mutable_field_type();
         ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
     }
     else if (agg_sig == tipb::ExprType::Min || agg_sig == tipb::ExprType::Max)
     {
@@ -105,7 +104,6 @@ void setFieldTypeForAggFunc(
         auto * ft = expr->mutable_field_type();
         ft->set_tp(expr->children(0).field_type().tp());
         ft->set_decimal(expr->children(0).field_type().decimal());
-        ft->set_flag(expr->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
         ft->set_collate(collator_id);
     }
     else
@@ -219,7 +217,8 @@ bool WindowBinder::toTiPBExecutor(
     return children[0]->toTiPBExecutor(window->mutable_child(), collator_id, mpp_info, context);
 }
 
-void setColumnInfoForAgg(
+// This function can only be used in window agg
+void setColumnInfoForAggInWindow(
     TiDB::ColumnInfo & ci,
     const DB::ASTFunction * func,
     const std::vector<TiDB::ColumnInfo> & children_ci)
@@ -228,7 +227,7 @@ void setColumnInfoForAgg(
     if (func->name == "count")
     {
         ci.tp = TiDB::TypeLongLong;
-        ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
+        ci.flag = TiDB::ColumnFlagUnsigned;
     }
     else if (func->name == "max" || func->name == "min" || func->name == "sum")
     {
@@ -297,7 +296,7 @@ TiDB::ColumnInfo createColumnInfo(const DB::ASTFunction * func, const std::vecto
         return ci;
     }
 
-    setColumnInfoForAgg(ci, func, children_ci);
+    setColumnInfoForAggInWindow(ci, func, children_ci);
     return ci;
 }
 

@@ -123,14 +123,14 @@ AggregateFunctionPtr createAggregateFunctionArgMax(
 
 void registerAggregateFunctionsMinMaxAny(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("any", createAggregateFunctionAny);
+    factory.registerFunction("any", createAggregateFunctionAny); // TODO no use
     factory.registerFunction("first_row", createAggregateFunctionFirstRow);
-    factory.registerFunction("anyLast", createAggregateFunctionAnyLast);
-    factory.registerFunction("anyHeavy", createAggregateFunctionAnyHeavy);
+    factory.registerFunction("anyLast", createAggregateFunctionAnyLast); // TODO no use
+    factory.registerFunction("anyHeavy", createAggregateFunctionAnyHeavy); // TODO no use
     factory.registerFunction("min", createAggregateFunctionMin, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("max", createAggregateFunctionMax, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction("argMin", createAggregateFunctionArgMin);
-    factory.registerFunction("argMax", createAggregateFunctionArgMax);
+    factory.registerFunction("argMin", createAggregateFunctionArgMin); // TODO no use
+    factory.registerFunction("argMax", createAggregateFunctionArgMax); // TODO no use
 }
 
 } // namespace DB

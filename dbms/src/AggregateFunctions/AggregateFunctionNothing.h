@@ -46,6 +46,8 @@ public:
 
     void add(AggregateDataPtr, const IColumn **, size_t, Arena *) const override {}
 
+    void decrease(AggregateDataPtr, const IColumn **, size_t, Arena *) const override {}
+
     void merge(AggregateDataPtr, ConstAggregateDataPtr, Arena *) const override {}
 
     void serialize(ConstAggregateDataPtr, WriteBuffer &) const override {}

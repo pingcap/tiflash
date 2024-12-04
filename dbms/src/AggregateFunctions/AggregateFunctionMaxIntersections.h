@@ -103,10 +103,16 @@ public:
         PointType right = static_cast<const ColumnVector<PointType> &>(*columns[1]).getData()[row_num];
 
         if (!isNaN(left))
-            this->data(place).value.push_back(std::make_pair(left, Int64(1)), arena);
+            this->data(place).value.push_back(std::make_pair(left, static_cast<Int64>(1)), arena);
 
         if (!isNaN(right))
-            this->data(place).value.push_back(std::make_pair(right, Int64(-1)), arena);
+            this->data(place).value.push_back(std::make_pair(right, static_cast<Int64>(-1)), arena);
+    }
+
+    // TODO move to helper
+    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
+    {
+        throw Exception("");
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override

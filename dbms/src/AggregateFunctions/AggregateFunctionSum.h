@@ -43,9 +43,26 @@ struct AggregateFunctionSumAddImpl<Decimal<T>>
 };
 
 template <typename T>
+struct AggregateFunctionSumMinusImpl
+{
+    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE decrease(T & lhs, const T & rhs) { lhs -= rhs; }
+};
+
+template <typename T>
+struct AggregateFunctionSumMinusImpl<Decimal<T>>
+{
+    template <typename U>
+    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE decrease(Decimal<T> & lhs, const Decimal<U> & rhs)
+    {
+        lhs.value -= static_cast<T>(rhs.value);
+    }
+};
+
+template <typename T>
 struct AggregateFunctionSumData
 {
     using Impl = AggregateFunctionSumAddImpl<T>;
+    using DescreaseImpl = AggregateFunctionSumMinusImpl<T>;
     T sum{};
 
     AggregateFunctionSumData() = default;
@@ -54,6 +71,12 @@ struct AggregateFunctionSumData
     void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(U value)
     {
         Impl::add(sum, value);
+    }
+
+    template <typename U>
+    void NO_SANITIZE_UNDEFINED ALWAYS_INLINE decrease(U value)
+    {
+        DescreaseImpl::decrease(sum, value);
     }
 
     /// Vectorized version
@@ -164,6 +187,8 @@ struct AggregateFunctionSumKahanData
     }
 
     void ALWAYS_INLINE add(T value) { addImpl(value, sum, compensation); }
+
+    void ALWAYS_INLINE decrease(T) { throw Exception("`decrease` function is not implemented in AggregateFunctionSumKahanData"); }
 
     /// Vectorized version
     template <typename Value>
@@ -334,6 +359,12 @@ public:
     {
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         this->data(place).add(column.getData()[row_num]);
+    }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        const auto & column = assert_cast<const ColVecType &>(*columns[0]);
+        this->data(place).decrease(column.getData()[row_num]);
     }
 
     /// Vectorized version when there is no GROUP BY keys.

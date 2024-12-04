@@ -80,6 +80,9 @@ public:
         this->data(place).value.push_back(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num], arena);
     }
 
+    // TODO move to helper
+    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override { throw Exception(""); }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         auto & cur_elems = this->data(place);
@@ -283,6 +286,9 @@ public:
 
         ++data(place).elems;
     }
+
+    // TODO move to helper
+    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override { throw Exception(""); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {

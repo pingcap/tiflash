@@ -72,6 +72,12 @@ public:
             this->data(place).result.change(*columns[0], row_num, arena);
     }
 
+    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
+    {
+        // TODO move to helper
+        throw Exception("");
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         if (this->data(place).value.changeIfBetter(this->data(rhs).value, arena))

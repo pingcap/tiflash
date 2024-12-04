@@ -116,19 +116,24 @@ public:
 
     DataTypePtr getReturnType() const override { return result_is_nullable ? makeNullable(ret_type) : ret_type; }
 
-    /// reject nulls before add() of nested agg
-    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    /// reject nulls before add()/decrease() of nested agg
+    template<bool is_add>
+    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
     {
         if constexpr (only_one_column)
         {
             if (is_nullable[0])
             {
-                const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
+                const auto * column = static_cast<const ColumnNullable *>(columns[0]);
                 if (!column->isNullAt(row_num))
                 {
                     this->setFlag(place);
                     const IColumn * nested_column = &column->getNestedColumn();
-                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+
+                    if constexpr (is_add)
+                        this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                    else
+                        this->nested_function->decrease(this->nestedPlace(place), &nested_column, row_num, arena);
                 }
                 return;
             }
@@ -136,12 +141,12 @@ public:
         else
         {
             /// remove the row with null, except for sort columns
-            const ColumnTuple & tuple = static_cast<const ColumnTuple &>(*columns[0]);
+            const auto & tuple = static_cast<const ColumnTuple &>(*columns[0]);
             for (size_t i = 0; i < number_of_concat_items; ++i)
             {
                 if (is_nullable[i])
                 {
-                    const ColumnNullable & nullable_col = static_cast<const ColumnNullable &>(tuple.getColumn(i));
+                    const auto & nullable_col = static_cast<const ColumnNullable &>(tuple.getColumn(i));
                     if (nullable_col.isNullAt(row_num))
                     {
                         /// If at least one column has a null value in the current row,
@@ -152,7 +157,20 @@ public:
             }
         }
         this->setFlag(place);
-        this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+        if constexpr (is_add)
+            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+        else
+            this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
+    }
+    
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        addOrDecrease<true>(place, columns, row_num, arena);
+    }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        addOrDecrease<false>(place, columns, row_num, arena);
     }
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override

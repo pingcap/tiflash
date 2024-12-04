@@ -33,7 +33,6 @@
 #include <common/mem_utils.h>
 
 #include <array>
-#include <map>
 
 namespace DB
 {
@@ -268,6 +267,17 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
+        addOrDecrease<true>(place, columns, row_num, arena);
+    }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        addOrDecrease<false>(place, columns, row_num, arena);
+    }
+
+    template<bool is_add>
+    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
+    {
         if constexpr (input_is_nullable)
         {
             if (this->getFlag(place) == 0)
@@ -278,14 +288,20 @@ public:
                 if (!is_null)
                 {
                     const IColumn * nested_column = &column->getNestedColumn();
-                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                    if constexpr (is_add)
+                        this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                    else
+                        this->nested_function->decrease(this->nestedPlace(place), &nested_column, row_num, arena);
                 }
             }
         }
         else
         {
             this->setFlag(place, 1);
-            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+            if constexpr (is_add)
+                this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+            else
+                this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
         }
     }
 
@@ -381,6 +397,17 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
+        addOrDecrease<true>(place, columns, row_num, arena);
+    }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        addOrDecrease<false>(place, columns, row_num, arena);
+    }
+
+    template<bool is_add>
+    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
+    {
         if constexpr (input_is_nullable)
         {
             const auto * column = static_cast<const ColumnNullable *>(columns[0]);
@@ -388,13 +415,19 @@ public:
             {
                 this->setFlag(place);
                 const IColumn * nested_column = &column->getNestedColumn();
-                this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                if constexpr (is_add)
+                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                else
+                    this->nested_function->decrease(this->nestedPlace(place), &nested_column, row_num, arena);
             }
         }
         else
         {
             this->setFlag(place);
-            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+            if constexpr (is_add)
+                this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+            else
+                this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
         }
     }
 
@@ -470,6 +503,17 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
+        addOrDecrease<true>(place, columns, row_num, arena);
+    }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        addOrDecrease<false>(place, columns, row_num, arena);
+    }
+
+    template<bool is_add>
+    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
+    {
         /// This container stores the columns we really pass to the nested function.
         const IColumn * nested_columns[number_of_arguments];
 
@@ -491,7 +535,10 @@ public:
         }
 
         this->setFlag(place);
-        this->nested_function->add(this->nestedPlace(place), nested_columns, row_num, arena);
+        if constexpr (is_add)
+            this->nested_function->add(this->nestedPlace(place), nested_columns, row_num, arena);
+        else
+            this->nested_function->decrease(this->nestedPlace(place), nested_columns, row_num, arena);
     }
 
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }

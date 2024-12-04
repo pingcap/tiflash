@@ -134,6 +134,12 @@ public:
         }
     }
 
+    // TODO move to helper
+    void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
+    {
+        throw Exception("");
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         auto & merged_maps = this->data(place).merged_maps;

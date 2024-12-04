@@ -61,6 +61,12 @@ public:
         this->data(place).value.insert(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        const auto & key = AggregateFunctionGroupUniqArrayData<T>::Set::Cell::getKey(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
+        this->data(place).value.erase(key);
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).value.merge(this->data(rhs).value);
@@ -82,7 +88,7 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
+        auto & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
 
         const typename State::Set & set = this->data(place).value;
@@ -171,6 +177,15 @@ public:
         set.emplace(key_holder, it, inserted);
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        auto & set = this->data(place).value;
+
+        auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
+        auto key = keyHolderGetKey(key_holder);
+        set.erase(key);
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         auto & cur_set = this->data(place).value;
@@ -188,7 +203,7 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
+        auto & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
         IColumn & data_to = arr_to.getData();
 

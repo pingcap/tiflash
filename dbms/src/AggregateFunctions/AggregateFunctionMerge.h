@@ -64,6 +64,12 @@ public:
         nested_func->merge(place, static_cast<const ColumnAggregateFunction &>(*columns[0]).getData()[row_num], arena);
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
+    {
+        nested_func->merge(place, static_cast<const ColumnAggregateFunction &>(*columns[0]).getData()[row_num], arena);
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         nested_func->merge(place, rhs, arena);

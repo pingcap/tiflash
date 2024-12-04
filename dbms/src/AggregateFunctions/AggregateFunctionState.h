@@ -60,6 +60,12 @@ public:
         nested_func->add(place, columns, row_num, arena);
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
+    {
+        nested_func->decrease(place, columns, row_num, arena);
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         nested_func->merge(place, rhs, arena);

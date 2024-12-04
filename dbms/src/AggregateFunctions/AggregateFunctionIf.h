@@ -76,6 +76,13 @@ public:
             nested_func->add(place, columns, row_num, arena);
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
+    {
+        if (static_cast<const ColumnUInt8 &>(*columns[num_arguments - 1]).getData()[row_num])
+            nested_func->decrease(place, columns, row_num, arena);
+    }
+
     void addBatch(
         size_t start_offset,
         size_t batch_size,
