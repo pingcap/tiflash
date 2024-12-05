@@ -29,6 +29,7 @@ HashJoinV2ProbeTransformOp::HashJoinV2ProbeTransformOp(
 {
     RUNTIME_CHECK_MSG(join_ptr != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(join_ptr->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+    RUNTIME_CHECK_MSG(join_ptr->isFinalize(), "join should be finalized first.");
 }
 
 void HashJoinV2ProbeTransformOp::transformHeaderImpl(Block & header_)

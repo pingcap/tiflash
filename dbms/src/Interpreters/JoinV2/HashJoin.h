@@ -66,6 +66,7 @@ public:
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }
     void finalize(const Names & parent_require);
+    bool isFinalize() const { return finalized; }
 
     size_t getBuildConcurrency() const { return build_concurrency; }
     size_t getProbeConcurrency() const { return probe_concurrency; }

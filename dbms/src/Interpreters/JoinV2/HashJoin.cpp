@@ -588,7 +588,6 @@ void HashJoin::finalize(const Names & parent_require)
 {
     if unlikely (finalized)
         return;
-
     /// finalize will do 3 things
     /// 1. update expected_output_schema
     /// 2. set expected_output_schema_for_other_condition
@@ -603,22 +602,25 @@ void HashJoin::finalize(const Names & parent_require)
     }
     for (const auto & name_and_type : output_columns)
     {
-        if (required_names_set.find(name_and_type.name) != required_names_set.end())
+        if (required_names_set.contains(name_and_type.name))
         {
             output_columns_after_finalize.push_back(name_and_type);
             output_column_names_set_after_finalize.insert(name_and_type.name);
         }
     }
+    RUNTIME_CHECK_MSG(
+        output_column_names_set_after_finalize.size() == output_columns_after_finalize.size(),
+        "Logical error, the output of join contains duplicated columns");
+
     output_block_after_finalize = Block(output_columns_after_finalize);
     Names updated_require;
     if (match_helper_name.empty())
         updated_require = parent_require;
     else
     {
-        for (const auto & name : required_names_set)
-            if (name != match_helper_name)
-                updated_require.push_back(name);
         required_names_set.erase(match_helper_name);
+        for (const auto & name : required_names_set)
+            updated_require.push_back(name);
     }
     if (!non_equal_conditions.null_aware_eq_cond_name.empty())
     {
@@ -641,6 +643,16 @@ void HashJoin::finalize(const Names & parent_require)
         non_equal_conditions.other_cond_expr->finalize(updated_require, keep_used_input_columns);
         updated_require = non_equal_conditions.other_cond_expr->getRequiredColumns();
     }
+
+    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
+    {
+        output_columns_names_set_for_other_condition_after_finalize = output_column_names_set_after_finalize;
+        for (const auto & name : updated_require)
+            output_columns_names_set_for_other_condition_after_finalize.insert(name);
+        if (!match_helper_name.empty())
+            output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
+    }
+
     /// remove duplicated column
     required_names_set.clear();
     for (const auto & name : updated_require)
@@ -656,16 +668,8 @@ void HashJoin::finalize(const Names & parent_require)
     for (const auto & name : key_names_left)
         required_names_set.insert(name);
 
-    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
-    {
-        for (const auto & name : required_names_set)
-            output_columns_names_set_for_other_condition_after_finalize.insert(name);
-        if (!match_helper_name.empty())
-            output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
-    }
     for (const auto & name : required_names_set)
         required_columns.push_back(name);
-
     finalized = true;
 }
 
