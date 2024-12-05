@@ -55,7 +55,7 @@ public:
         {
             ASSERT_EQ(key_getter.getJoinKey(i), static_cast<T>(i));
             ASSERT_EQ(key_getter.getJoinKeyWithBuffer(i), static_cast<T>(i));
-            ASSERT_EQ(key_getter.getJoinKeySize(static_cast<T>(i)), sizeof(T));
+            ASSERT_EQ(key_getter.getJoinKeyByteSize(static_cast<T>(i)), sizeof(T));
             pos[i] = &serialized_data[offset];
             offset += sizeof(T);
             key_getter.serializeJoinKey(static_cast<T>(i), pos[i]);

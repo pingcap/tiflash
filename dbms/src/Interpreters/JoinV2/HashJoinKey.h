@@ -77,7 +77,7 @@ public:
     ALWAYS_INLINE T getJoinKey(size_t row) { return unalignedLoad<T>(vec + row); }
     ALWAYS_INLINE T getJoinKeyWithBuffer(size_t row) { return unalignedLoad<T>(vec + row); }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const T &) { return sizeof(T); }
 
     ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos)
     {
@@ -171,7 +171,7 @@ public:
 
     ALWAYS_INLINE T getJoinKeyWithBuffer(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const T &) { return sizeof(T); }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const T &) { return sizeof(T); }
 
     ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos)
     {
@@ -281,7 +281,7 @@ public:
         return StringRef(&keys_buffer[row * fixed_size_sum], fixed_size_sum);
     }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const KeyType &) { return fixed_size_sum; }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const KeyType &) { return fixed_size_sum; }
 
     ALWAYS_INLINE void serializeJoinKey(const KeyType & s, char * pos) { inline_memcpy(pos, s.data, fixed_size_sum); }
 
@@ -332,7 +332,7 @@ public:
 
     ALWAYS_INLINE StringRef getJoinKeyWithBuffer(size_t row) { return getJoinKey(row); }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(UInt32) + s.size; }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const StringRef & s) { return sizeof(UInt32) + s.size; }
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
@@ -354,7 +354,7 @@ public:
 
     ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key)
     {
-        return required_key_size == 0 ? getJoinKeySize(key) : 0;
+        return required_key_size == 0 ? getJoinKeyByteSize(key) : 0;
     }
 
 private:
@@ -406,7 +406,7 @@ public:
         return keys_buffer->getDataAt(row);
     }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(UInt32) + s.size; }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const StringRef & s) { return sizeof(UInt32) + s.size; }
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
@@ -426,7 +426,7 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return getJoinKeySize(key); }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return getJoinKeyByteSize(key); }
 
 private:
     const ColumnString * column_string = nullptr;
@@ -488,7 +488,7 @@ public:
         return keys_buffer->getDataAt(row);
     }
 
-    ALWAYS_INLINE size_t getJoinKeySize(const StringRef & s) { return sizeof(UInt32) + s.size; }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const StringRef & s) { return sizeof(UInt32) + s.size; }
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos)
     {
@@ -508,7 +508,7 @@ public:
 
     ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) { return key1 == key2; }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return getJoinKeySize(key); }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef & key) { return getJoinKeyByteSize(key); }
 
 private:
     ColumnRawPtrs key_columns;

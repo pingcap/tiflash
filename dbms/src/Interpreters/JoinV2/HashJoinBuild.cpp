@@ -76,7 +76,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         wd.hashes[i] = static_cast<HashValueType>(Hash()(key));
         size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[i]);
 
-        size_t ptr_and_key_size = sizeof(RowPtr) + key_getter.getJoinKeySize(key);
+        size_t ptr_and_key_size = sizeof(RowPtr) + key_getter.getJoinKeyByteSize(key);
         if constexpr (KeyGetterType::joinKeyCompareHashFirst())
         {
             ptr_and_key_size += sizeof(HashValueType);
@@ -176,7 +176,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             }
             const auto & key = key_getter.getJoinKeyWithBuffer(j);
             key_getter.serializeJoinKey(key, ptr);
-            ptr += key_getter.getJoinKeySize(key);
+            ptr += key_getter.getJoinKeyByteSize(key);
         }
         for (const auto & [index, _] : row_layout.other_required_column_indexes)
         {
