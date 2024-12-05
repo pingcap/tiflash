@@ -23,7 +23,6 @@
 #include <IO/WriteHelpers.h>
 #include <common/memcpy.h>
 
-#include <cmath>
 #include <cstring>
 #include <ext/bit_cast.h>
 #include <ext/scope_guard.h>
@@ -541,50 +540,7 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
     const UInt8 * filt_end = filt_pos + size;
     const T * data_pos = &data[0];
 
-#if __SSE2__
-    /** A slightly more optimized version.
-        * Based on the assumption that often pieces of consecutive values
-        *  completely pass or do not pass the filter.
-        * Therefore, we will optimistically check the parts of `SIMD_BYTES` values.
-        */
-
-    static constexpr size_t SIMD_BYTES = 16;
-    const __m128i zero16 = _mm_setzero_si128();
-    const UInt8 * filt_end_sse = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
-
-    while (filt_pos < filt_end_sse)
-    {
-        int mask
-            = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
-
-        if (0 == mask)
-        {
-            /// Nothing is inserted.
-        }
-        else if (0xFFFF == mask)
-        {
-            res_data.insert(data_pos, data_pos + SIMD_BYTES);
-        }
-        else
-        {
-            for (size_t i = 0; i < SIMD_BYTES; ++i)
-                if (filt_pos[i])
-                    res_data.push_back(data_pos[i]);
-        }
-
-        filt_pos += SIMD_BYTES;
-        data_pos += SIMD_BYTES;
-    }
-#endif
-
-    while (filt_pos < filt_end)
-    {
-        if (*filt_pos)
-            res_data.push_back(*data_pos);
-
-        ++filt_pos;
-        ++data_pos;
-    }
+    filterImpl(filt_pos, filt_end, data_pos, res_data);
 
     return res;
 }
