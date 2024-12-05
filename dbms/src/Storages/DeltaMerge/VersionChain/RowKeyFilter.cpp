@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 
 namespace DB::DM

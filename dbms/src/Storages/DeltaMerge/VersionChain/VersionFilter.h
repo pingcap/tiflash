@@ -14,15 +14,12 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-
 
 namespace DB::DM
 {
+struct DMContext;
+struct SegmentSnapshot;
 std::vector<UInt8> buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,

@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <common/types.h>
 
 #include <memory>

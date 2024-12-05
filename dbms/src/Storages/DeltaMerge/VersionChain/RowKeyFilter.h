@@ -14,17 +14,15 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
-#include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 
 namespace DB::DM
 {
+struct DMContext;
+struct SegmentSnapshot;
+struct RowKeyRange;
+using RowKeyRanges = std::vector<RowKeyRange>;
+
 template <Int64OrString Handle>
 std::vector<UInt8> buildRowKeyFilter(
     const DMContext & dm_context,
