@@ -22,5 +22,5 @@ namespace DB::DM
 {
 struct DMContext;
 struct SegmentSnapshot;
-std::vector<UInt8> buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot);
+void buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, std::vector<UInt8> & filter);
 } // namespace DB::DM

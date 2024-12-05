@@ -36,7 +36,12 @@ UInt32 buildTagFilterBlock(
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
     auto tag_col = block.begin()->column;
     const auto & tags = *toColumnVectorDataPtr<UInt8>(tag_col); // Must success.
-    std::copy_n(tags.begin(), tags.size(), std::next(filter.begin(), start_row_id));
+    std::transform(
+        tags.begin(),
+        tags.end(),
+        filter.begin() + start_row_id,
+        filter.begin() + start_row_id,
+        [](UInt8 a, UInt8 b) { return a && b; });
     return tags.size();
 }
 
@@ -50,7 +55,7 @@ UInt32 buildTagFilterDMFile(
     auto pack_filter = DMFilePackFilter::loadFrom(
         dmfile,
         dm_context.global_context.getMinMaxIndexCache(),
-        true,
+        true, // set cache if miss
         segment_ranges,
         EMPTY_RS_OPERATOR,
         {},
@@ -110,10 +115,12 @@ UInt32 buildTagFilterDMFile(
         const auto itr = read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
         const UInt32 pack_start_row_id = itr->second;
-        std::copy_n(
-            std::next(tags.begin(), offset),
-            pack_stats[pack_id].rows,
-            std::next(filter.begin(), pack_start_row_id));
+        std::transform(
+            tags.begin() + offset, // input1 begin
+            tags.begin() + offset + pack_stats[pack_id].rows, // input1 end
+            filter.begin() + pack_start_row_id, // input2 begin
+            filter.begin() + pack_start_row_id, // output begin
+            [](UInt8 a, UInt8 b) { return a && b; });
         offset += pack_stats[pack_id].rows;
     }
     return rows;
@@ -140,14 +147,14 @@ UInt32 buildTagFilterStable(
     return buildTagFilterDMFile(dm_context, dmfiles[0], {}, 0, filter);
 }
 
-std::vector<UInt8> buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot)
+void buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, std::vector<UInt8> & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getRows();
     const UInt32 total_rows = delta_rows + stable_rows;
-    std::vector<UInt8> filter(total_rows, /*default_value*/ 1);
+    RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
 
     auto read_rows = buildTagFilterStable(dm_context, stable, filter);
     RUNTIME_CHECK(stable_rows == read_rows, stable_rows, read_rows);
@@ -181,6 +188,5 @@ std::vector<UInt8> buildTagFilter(const DMContext & dm_context, const SegmentSna
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == total_rows, read_rows, total_rows);
-    return filter;
 }
 } // namespace DB::DM
