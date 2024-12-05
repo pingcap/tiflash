@@ -1477,14 +1477,14 @@ protected:
         TiDB::TiDBCollators & collators) const;
 
     template <bool collect_hit_rate, bool only_loopup, bool enable_prefetch, typename Method>
-    void executeImplBatch(
+    void executeImplByRow(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
     template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
-    void executeImplBatchStringHashMap(
+    void executeImplStringHashMapByCol(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
