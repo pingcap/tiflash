@@ -36,12 +36,11 @@ UInt32 buildTagFilterBlock(
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
     auto tag_col = block.begin()->column;
     const auto & tags = *toColumnVectorDataPtr<UInt8>(tag_col); // Must success.
-    std::transform(
-        tags.begin(),
-        tags.end(),
-        filter.begin() + start_row_id,
-        filter.begin() + start_row_id,
-        [](UInt8 a, UInt8 b) { return a && b; });
+    for (UInt32 i = 0; i < tags.size(); ++i)
+    {
+        if (!tags[i])
+            filter[start_row_id + i] = 0;
+    }
     return tags.size();
 }
 
@@ -115,12 +114,11 @@ UInt32 buildTagFilterDMFile(
         const auto itr = read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
         const UInt32 pack_start_row_id = itr->second;
-        std::transform(
-            tags.begin() + offset, // input1 begin
-            tags.begin() + offset + pack_stats[pack_id].rows, // input1 end
-            filter.begin() + pack_start_row_id, // input2 begin
-            filter.begin() + pack_start_row_id, // output begin
-            [](UInt8 a, UInt8 b) { return a && b; });
+        for (UInt32 i = 0; i < pack_stats[pack_id].rows; ++i)
+        {
+            if (!tags[offset + i])
+                filter[pack_start_row_id + i] = 0;
+        }
         offset += pack_stats[pack_id].rows;
     }
     return rows;
