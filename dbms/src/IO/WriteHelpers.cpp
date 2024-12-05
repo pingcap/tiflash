@@ -88,6 +88,14 @@ void writePointerHex(const void * ptr, WriteBuffer & buf)
 template <typename T>
 void writeFloatTextNoExp(T x, WriteBuffer & buf)
 {
+    constexpr std::string_view nan = "NaN";
+    constexpr std::string_view neg_inf = "-Inf";
+    constexpr std::string_view inf = "+Inf";
+    constexpr auto c_neg = '-';
+    constexpr auto c_zero = '0';
+    constexpr auto c_dot = '.';
+    constexpr auto c_exp = 'e';
+
     static_assert(
         std::is_same_v<T, double> || std::is_same_v<T, float>,
         "Argument for writeFloatText must be float or double");
@@ -106,11 +114,7 @@ void writeFloatTextNoExp(T x, WriteBuffer & buf)
     if (!result)
         throw Exception("Cannot print floating point number", ErrorCodes::CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER);
 
-    constexpr std::string_view nan = "NaN";
-    constexpr std::string_view neg_inf = "-Inf";
-    constexpr std::string_view inf = "+Inf";
-
-    std::string_view sv{buffer, static_cast<size_t>(builder.position())};
+    std::string_view sv(buffer, builder.position());
     if (sv == "nan")
     {
         buf.write(nan.data(), nan.size());
@@ -127,13 +131,8 @@ void writeFloatTextNoExp(T x, WriteBuffer & buf)
         return;
     }
 
-    constexpr auto c_neg = '-';
-    constexpr auto c_zero = '0';
-    constexpr auto c_dot = '.';
-    constexpr auto c_exp = 'e';
-
     bool neg = buffer[0] == c_neg;
-    int bg = 0, ed = builder.position();
+    Int64 bg = 0, ed = sv.size();
     if (neg)
     {
         bg++;
@@ -154,7 +153,6 @@ void writeFloatTextNoExp(T x, WriteBuffer & buf)
     }
 
     Int64 exp10 = 0;
-    if (exp_pos >= 0)
     {
         auto exp_sv = sv.substr(exp_pos + 1);
         std::from_chars(exp_sv.begin(), exp_sv.end(), exp10);
