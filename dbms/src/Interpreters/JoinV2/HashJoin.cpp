@@ -23,15 +23,15 @@ namespace DB
 
 namespace
 {
-struct KeyColumns
+struct KeyColumn
 {
     const IColumn * column_ptr;
     bool is_nullable;
 };
-std::vector<KeyColumns> getKeyColumns(const Names & key_names, const Block & block)
+std::vector<KeyColumn> getKeyColumns(const Names & key_names, const Block & block)
 {
     size_t keys_size = key_names.size();
-    std::vector<KeyColumns> key_columns(keys_size);
+    std::vector<KeyColumn> key_columns(keys_size);
 
     for (size_t i = 0; i < keys_size; ++i)
     {
@@ -243,7 +243,7 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
 
 void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
 {
-    if (unlikely(initialized))
+    if unlikely (!initialized)
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
 
@@ -258,7 +258,7 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
             column.column = column.type->createColumn();
     }
 
-    /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
+    /// In case of LEFT and FULL joins, convert joined columns to Nullable.
     if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(right_sample_block.getByPosition(i));
@@ -293,15 +293,13 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
     if unlikely (b.rows() == 0)
         return;
 
-    if (unlikely(!initialized))
+    if unlikely (!initialized)
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
 
     Stopwatch watch;
 
     Block block = b;
     size_t rows = block.rows();
-
-    assertBlocksHaveEqualStructure(block, right_sample_block, "Join Build");
 
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
@@ -321,19 +319,14 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
     size_t columns = block.columns();
 
     /// Rare case, when joined columns are constant. To avoid code bloat, simply materialize them.
-    for (size_t i = 0; i < columns; ++i)
-    {
-        ColumnPtr col = block.safeGetByPosition(i).column;
-        if (ColumnPtr converted = col->convertToFullColumnIfConst())
-            block.safeGetByPosition(i).column = converted;
-    }
+    block = materializeBlock(block);
 
-    /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
+    /// In case of LEFT and FULL joins, convert joined columns to Nullable.
     if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
-    {
         for (size_t i = 0; i < columns; ++i)
             convertColumnToNullable(block.getByPosition(i));
-    }
+
+    assertBlocksHaveEqualStructure(block, right_sample_block_pruned, "Join Build");
 
     if (!isCrossJoin(kind))
     {

@@ -209,13 +209,18 @@ bool PhysicalJoinV2::isSupported(const tipb::Join & join)
     {
     case Inner:
         //case LeftOuter:
+        //case Semi:
+        //case Anti:
         //case RightOuter:
         //case RightSemi:
         //case RightAnti:
-        return true;
+        {
+            if (!tiflash_join.getBuildJoinKeys().empty())
+                return true;
+        }
     default:
-        return false;
     }
+    return false;
 }
 
 

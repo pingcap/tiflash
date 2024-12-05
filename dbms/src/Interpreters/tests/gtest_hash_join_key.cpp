@@ -46,7 +46,7 @@ public:
         union
         {
             T key;
-            char data[sizeof(T)];
+            char data[sizeof(T)]{};
         };
         size_t offset = 0;
         PaddedPODArray<char> serialized_data(n * sizeof(T));
