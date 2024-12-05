@@ -65,6 +65,8 @@
 namespace DB
 {
 String trim(const StringRef & value);
+template <typename T>
+void writeFloatTextNoExp(T x, WriteBuffer & buf);
 
 enum CastError
 {
@@ -244,7 +246,14 @@ struct TiDBConvertToString
             for (size_t i = 0; i < size; ++i)
             {
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
-                FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
+                if constexpr (std::is_floating_point_v<FromFieldType>)
+                {
+                    writeFloatTextNoExp(vec_from[i], element_write_buffer);
+                }
+                else
+                {
+                    FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
+                }
                 size_t byte_length = element_write_buffer.count();
                 if (tp.flen() >= 0)
                     byte_length = std::min(byte_length, tp.flen());
