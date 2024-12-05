@@ -53,7 +53,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
 
     PaddedPODArray<size_t> partition_row_sizes;
     PaddedPODArray<size_t> partition_row_count;
-    PaddedPODArray<ssize_t> last_partition_index;
+    PaddedPODArray<ssize_t> partition_last_row_index;
 
     size_t build_time = 0;
 

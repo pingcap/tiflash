@@ -13,9 +13,8 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
-
-#include "Interpreters/JoinV2/HashJoinKey.h"
 
 namespace DB
 {

@@ -33,8 +33,7 @@ HashJoinV2ProbeTransformOp::HashJoinV2ProbeTransformOp(
 
 void HashJoinV2ProbeTransformOp::transformHeaderImpl(Block & header_)
 {
-    probe_context.resetBlock(header_);
-    header_ = join_ptr->joinBlock(probe_context, 0);
+    header_ = join_ptr->getOutputBlock();
 }
 
 void HashJoinV2ProbeTransformOp::operateSuffixImpl()

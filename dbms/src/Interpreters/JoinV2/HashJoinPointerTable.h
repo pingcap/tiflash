@@ -15,8 +15,7 @@
 #pragma once
 
 #include <Interpreters/JoinV2/HashJoinBuild.h>
-
-#include "Interpreters/JoinV2/HashJoinKey.h"
+#include <Interpreters/JoinV2/HashJoinKey.h>
 
 namespace DB
 {
@@ -73,7 +72,7 @@ private:
         size_t max_build_size);
 
 private:
-    size_t hash_value_bits;
+    size_t hash_value_bits = 0;
     size_t pointer_table_size = 0;
     size_t pointer_table_size_degree = 0;
     size_t pointer_table_size_mask = 0;

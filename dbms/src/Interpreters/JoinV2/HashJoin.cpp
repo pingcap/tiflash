@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnUtils.h>
 #include <Columns/ColumnsCommon.h>
+#include <Common/Exception.h>
 #include <DataStreams/materializeBlock.h>
 #include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/NullableUtils.h>
@@ -243,7 +244,7 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
 
 void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
 {
-    if unlikely (!initialized)
+    if unlikely (initialized)
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
 
@@ -576,6 +577,11 @@ void HashJoin::removeUselessColumnForOutput(Block & block) const
         else
             ++pos;
     }
+    RUNTIME_CHECK_MSG(
+        block.columns() == output_column_names_set_after_finalize.size(),
+        "block.columns({}) != output_column_names_set_after_finalize.size({})",
+        block.columns(),
+        output_column_names_set_after_finalize.size());
 }
 
 void HashJoin::finalize(const Names & parent_require)
@@ -678,7 +684,6 @@ void HashJoin::handleOtherConditions(Block & block, size_t stream_index) const
 
     removeUselessColumn(block);
     size_t result_size_hint = countBytesInFilter(filter);
-    /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
     for (size_t i = 0; i < block.columns(); ++i)
         block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, result_size_hint);
 }

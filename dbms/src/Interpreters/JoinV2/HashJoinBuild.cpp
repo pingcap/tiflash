@@ -49,8 +49,8 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     wd.partition_row_sizes.resize_fill(part_count, 0);
     wd.partition_row_count.clear();
     wd.partition_row_count.resize_fill(part_count, 0);
-    wd.last_partition_index.clear();
-    wd.last_partition_index.resize_fill(part_count, -1);
+    wd.partition_last_row_index.clear();
+    wd.partition_last_row_index.resize_fill(part_count, -1);
 
     for (const auto & [index, is_fixed_size] : row_layout.other_required_column_indexes)
     {
@@ -86,27 +86,28 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         static_assert(CPU_CACHE_LINE_SIZE % ROW_ALIGN == 0);
         size_t remain_size = CPU_CACHE_LINE_SIZE - wd.partition_row_sizes[part_num] % CPU_CACHE_LINE_SIZE;
         size_t align_remain_size = remain_size / ROW_ALIGN * ROW_ALIGN;
+        /// Adding padding to minimize the number of cachelines read during random access to required data in each row.
         if (ptr_and_key_size % CPU_CACHE_LINE_SIZE <= align_remain_size)
         {
-            if likely (wd.last_partition_index[part_num] != -1)
+            if likely (wd.partition_last_row_index[part_num] != -1)
             {
                 size_t diff = remain_size - align_remain_size;
-                wd.row_sizes[wd.last_partition_index[part_num]] += diff;
+                wd.row_sizes[wd.partition_last_row_index[part_num]] += diff;
                 wd.partition_row_sizes[part_num] += diff;
                 wd.padding_size += diff;
             }
         }
         else
         {
-            if likely (wd.last_partition_index[part_num] != -1)
+            if likely (wd.partition_last_row_index[part_num] != -1)
             {
-                wd.row_sizes[wd.last_partition_index[part_num]] += remain_size;
+                wd.row_sizes[wd.partition_last_row_index[part_num]] += remain_size;
                 wd.partition_row_sizes[part_num] += remain_size;
                 wd.padding_size += remain_size;
             }
         }
 
-        wd.last_partition_index[part_num] = i;
+        wd.partition_last_row_index[part_num] = i;
         wd.partition_row_sizes[part_num] += wd.row_sizes[i];
         ++wd.partition_row_count[part_num];
     }
