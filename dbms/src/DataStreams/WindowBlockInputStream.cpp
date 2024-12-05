@@ -1381,6 +1381,8 @@ void WindowTransformAction::updateAggregationState()
         if (ws.window_function)
             continue;
 
+        // TODO compare the decrease and add number in previous frame
+        // when decrease > add, we create a new agg data to recalculate from start.
         const RowNumber & end = frame_start <= prev_frame_end ? frame_start : prev_frame_end;
         decreaseAggregationState(ws, prev_frame_start, end);
         const RowNumber & start = frame_start <= prev_frame_end ? prev_frame_end : frame_start;

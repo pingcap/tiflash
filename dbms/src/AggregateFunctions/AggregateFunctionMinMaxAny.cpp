@@ -124,7 +124,7 @@ AggregateFunctionPtr createAggregateFunctionArgMax(
 void registerAggregateFunctionsMinMaxAny(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("any", createAggregateFunctionAny); // TODO no use
-    factory.registerFunction("first_row", createAggregateFunctionFirstRow);
+    factory.registerFunction("first_row", createAggregateFunctionFirstRow); // TODO not used in window agg
     factory.registerFunction("anyLast", createAggregateFunctionAnyLast); // TODO no use
     factory.registerFunction("anyHeavy", createAggregateFunctionAnyHeavy); // TODO no use
     factory.registerFunction("min", createAggregateFunctionMin, AggregateFunctionFactory::CaseInsensitive);

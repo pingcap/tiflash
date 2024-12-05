@@ -29,6 +29,12 @@ struct AggregateFunctionAvgData
     T sum;
     UInt64 count;
 
+    void reset()
+    {
+        sum = 0;
+        count = 0;
+    }
+
     AggregateFunctionAvgData()
         : sum(0)
         , count(0)
@@ -67,6 +73,8 @@ public:
             return std::make_shared<DataTypeFloat64>();
     }
 
+    void prepareWindow(AggregateDataPtr __restrict) const override {}
+
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         if constexpr (IsDecimal<T>)
@@ -87,6 +95,11 @@ public:
             this->data(place).sum -= static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num];
         }
         --this->data(place).count;
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override
+    {
+        this->data(place).reset();
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

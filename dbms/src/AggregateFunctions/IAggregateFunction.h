@@ -96,10 +96,16 @@ public:
     virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
         = 0;
 
-    /// The purpose of this function is the opposite of `add` function
+    /// The purpose of this function is the opposite of `add` function, only used in window function.
     virtual void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
         const
         = 0;
+
+    // Some window aggregation functions need to prepare something before execution
+    virtual void prepareWindow(AggregateDataPtr __restrict) const = 0;
+
+    // Only used in window aggregation functions
+    virtual void reset(AggregateDataPtr __restrict) const = 0;
 
     /// Merges state (on which place points to) with other state of current aggregation function.
     virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
@@ -375,6 +381,21 @@ public:
             static_cast<const Derived *>(this)->add(place + place_offset, columns, i, arena);
         }
     }
+
+    void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
+    {
+        throw Exception("Not implemented yet");
+    }
+
+    void prepareWindow(AggregateDataPtr __restrict) const override
+    {
+        throw Exception("Not implemented yet");
+    }
+
+    void reset(AggregateDataPtr __restrict) const override
+    {
+        throw Exception("Not implemented yet");
+    }
 };
 
 namespace _IAggregateFunctionImpl
@@ -511,12 +532,6 @@ public:
 
     /// NOTE: Currently not used (structures with aggregation state are put without alignment).
     size_t alignOfData() const override { return alignof(Data); }
-
-    // TODO uncomment it
-    // void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
-    // {
-    //     throw Exception("Not implemented yet");
-    // }
 
     void addBatchLookupTable8(
         size_t start_offset,

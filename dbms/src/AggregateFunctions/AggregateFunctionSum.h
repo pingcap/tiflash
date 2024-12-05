@@ -79,6 +79,12 @@ struct AggregateFunctionSumData
         DescreaseImpl::decrease(sum, value);
     }
 
+    template <typename U>
+    void NO_SANITIZE_UNDEFINED ALWAYS_INLINE reset()
+    {
+        sum = 0;
+    }
+
     /// Vectorized version
     template <typename Value>
     void NO_SANITIZE_UNDEFINED NO_INLINE addMany(const Value * __restrict ptr, size_t count)
@@ -355,6 +361,8 @@ public:
         new (place) Data;
     }
 
+    void prepareWindow(AggregateDataPtr __restrict) const override {}
+
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
@@ -365,6 +373,11 @@ public:
     {
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         this->data(place).decrease(column.getData()[row_num]);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override
+    {
+        this->data(place).reset();
     }
 
     /// Vectorized version when there is no GROUP BY keys.

@@ -29,6 +29,8 @@ namespace DB
 struct AggregateFunctionCountData
 {
     UInt64 count = 0;
+
+    void reset() { count = 0; }
 };
 
 namespace ErrorCodes
@@ -235,6 +237,8 @@ public:
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
+    void prepareWindow(AggregateDataPtr __restrict) const override {}
+
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         for (size_t i = 0; i < number_of_arguments; ++i)
@@ -251,6 +255,11 @@ public:
                 return;
 
         --data(place).count;
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override
+    {
+        this->data(place).reset();
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
