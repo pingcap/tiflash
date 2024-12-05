@@ -252,21 +252,21 @@ void buildRowKeyFilterDeleteRange(const ColumnFileDeleteRange & cf_delete_range,
 } // namespace
 
 template <Int64OrString Handle>
-std::vector<UInt8> buildRowKeyFilter(
+void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
-    const RowKeyRanges & read_ranges)
+    const RowKeyRanges & read_ranges,
+    std::vector<UInt8> & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
-    std::vector<UInt8> filter(total_rows, /*default_value*/ 1);
+    RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
 
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
-
     RowKeyRanges delete_ranges;
     UInt32 read_rows = 0;
     // Read from new cfs to old cfs to handle delete range
@@ -316,13 +316,13 @@ std::vector<UInt8> buildRowKeyFilter(
 
     const auto n = buildRowKeyFilterStable<Handle>(dm_context, stable, delete_ranges, read_ranges, filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
-    return filter;
 }
 
-template std::vector<UInt8> buildRowKeyFilter<Int64>(
+template void buildRowKeyFilter<Int64>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
-    const RowKeyRanges & read_ranges);
+    const RowKeyRanges & read_ranges,
+    std::vector<UInt8> & filter);
 
 // TODO: String
 } // namespace DB::DM

@@ -20,9 +20,10 @@ namespace DB::DM
 {
 struct DMContext;
 struct SegmentSnapshot;
-std::vector<UInt8> buildVersionFilter(
+void buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
-    UInt64 read_ts);
+    const UInt64 read_ts,
+    std::vector<UInt8> & filter);
 } // namespace DB::DM

@@ -34,38 +34,37 @@ UInt32 buildVersionFilterBlock(
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     auto cf_reader = cf.getReader(dm_context, data_provider, getVersionColumnDefinesPtr(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
+    if (!block)
+        return 0;
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
-    auto version_col = block.begin()->column;
-    const auto & versions = *toColumnVectorDataPtr<UInt64>(version_col); // Must success.
+    const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success.
     // Traverse data from new to old
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
         const UInt32 row_id = start_row_id + i;
-        // Cannot see newer tranctions.
-        if (versions[row_id] > read_ts)
+
+        if (!filter[row_id])
+            continue;
+
+        // invisible
+        if (versions[i] > read_ts)
         {
             filter[row_id] = 0;
             continue;
         }
 
-        // Newer version is chosen and is base version.
-        if (!filter[row_id])
-        {
-            continue;
-        }
+        // visible
 
         const auto base_row_id = base_ver_snap[row_id];
-        if (base_row_id == NotExistRowID)
-        {
-            continue;
-        }
-
-        if (!filter[base_row_id])
+        // Newer version has been chosen.
+        if (base_row_id != NotExistRowID && !filter[base_row_id])
         {
             filter[row_id] = 0;
+            continue;
         }
-
-        filter[base_row_id] = 0;
+        // Choose this version
+        if (base_row_id != NotExistRowID)
+            filter[base_row_id] = 0;
     }
     return versions.size();
 }
@@ -229,18 +228,19 @@ UInt32 buildVersionFilterStable(
     return buildVersionFilterDMFile(dm_context, dmfiles[0], {}, read_ts, 0, filter);
 }
 
-std::vector<UInt8> buildVersionFilter(
+void buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
-    const UInt64 read_ts)
+    const UInt64 read_ts,
+    std::vector<UInt8> & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getRows();
     const UInt32 total_rows = delta_rows + stable_rows;
-    std::vector<UInt8> filter(total_rows, /*default_value*/ 1);
+    RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
 
     // Delta MVCC
     const auto cfs = delta.getColumnFiles();
@@ -280,6 +280,5 @@ std::vector<UInt8> buildVersionFilter(
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
     const auto n = buildVersionFilterStable(dm_context, stable, read_ts, filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
-    return filter;
 }
 } // namespace DB::DM

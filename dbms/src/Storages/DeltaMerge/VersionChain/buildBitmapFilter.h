@@ -14,19 +14,14 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 
 namespace DB::DM
 {
 struct DMContext;
 struct SegmentSnapshot;
-struct RowKeyRange;
-using RowKeyRanges = std::vector<RowKeyRange>;
 
 template <Int64OrString Handle>
-void buildRowKeyFilter(
-    const DMContext & dm_context,
-    const SegmentSnapshot & snapshot,
-    const RowKeyRanges & read_ranges,
-    std::vector<UInt8> & filter);
+BitmapFilterPtr buildBitmapFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot);
 } // namespace DB::DM
