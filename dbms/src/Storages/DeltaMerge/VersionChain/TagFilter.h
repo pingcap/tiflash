@@ -14,16 +14,13 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
-#include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
-#include <Storages/DeltaMerge/VersionChain/Common.h>
+#include <common/types.h>
+
+#include <vector>
 
 namespace DB::DM
 {
+struct DMContext;
+struct SegmentSnapshot;
 std::vector<UInt8> buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot);
 } // namespace DB::DM

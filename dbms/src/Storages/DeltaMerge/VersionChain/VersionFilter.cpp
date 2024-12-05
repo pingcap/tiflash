@@ -245,16 +245,8 @@ std::vector<UInt8> buildVersionFilter(
     std::vector<UInt8> filter(total_rows, /*default_value*/ 1);
 
     // Delta MVCC
-    auto cfs = delta.getPersistedFileSetSnapshot()->getColumnFiles();
-    const auto & memory_cfs = delta.getMemTableSetSnapshot()->getColumnFiles();
-    cfs.insert(cfs.end(), memory_cfs.begin(), memory_cfs.end());
-
-    auto storage_snap = std::make_shared<StorageSnapshot>(
-        *dm_context.storage_pool,
-        dm_context.getReadLimiter(),
-        dm_context.tracing_id,
-        /*snapshot_read*/ true);
-    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
+    const auto cfs = delta.getColumnFiles();
+    const auto & data_provider = delta.getDataProvider();
 
     UInt32 read_rows = 0;
 
@@ -273,14 +265,8 @@ std::vector<UInt8> buildVersionFilter(
         // TODO: add clean and max version in tiny file
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n = buildVersionFilterBlock(
-                dm_context,
-                data_from_storage_snap,
-                *cf,
-                read_ts,
-                base_ver_snap,
-                start_row_id,
-                filter);
+            const auto n
+                = buildVersionFilterBlock(dm_context, data_provider, *cf, read_ts, base_ver_snap, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }

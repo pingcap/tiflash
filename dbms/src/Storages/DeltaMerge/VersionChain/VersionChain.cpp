@@ -49,9 +49,8 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     }
 
     base_versions = std::make_shared<std::vector<RowID>>(*base_versions);
-    auto cfs = delta.getPersistedFileSetSnapshot()->getColumnFiles();
-    const auto & memory_cfs = delta.getMemTableSetSnapshot()->getColumnFiles();
-    cfs.insert(cfs.end(), memory_cfs.begin(), memory_cfs.end());
+    const auto cfs = delta.getColumnFiles();
+    const auto & data_provider = delta.getDataProvider();
 
     UInt32 skipped_rows_and_deletes = 0;
     auto pos = cfs.begin();
@@ -68,13 +67,6 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     // Only ColumnFileInMemory or ColumnFileTiny can be half replayed
     RUNTIME_CHECK(offset == 0 || (*pos)->isInMemoryFile() || (*pos)->isTinyFile(), offset, (*pos)->toString());
 
-    auto storage_snap = std::make_shared<StorageSnapshot>(
-        *dm_context.storage_pool,
-        dm_context.getReadLimiter(),
-        dm_context.tracing_id,
-        /*snapshot_read*/ true);
-    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
-
     const auto initial_replayed_rows_and_deletes = replayed_rows_and_deletes;
     for (; pos != cfs.end(); ++pos)
     {
@@ -82,7 +74,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
 
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            replayed_rows_and_deletes += replayBlock(dm_context, data_from_storage_snap, *cf, offset);
+            replayed_rows_and_deletes += replayBlock(dm_context, data_provider, *cf, offset);
             offset = 0;
         }
         else if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)

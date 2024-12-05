@@ -258,16 +258,8 @@ std::vector<UInt8> buildRowKeyFilter(
     const UInt32 total_rows = delta_rows + stable_rows;
     std::vector<UInt8> filter(total_rows, /*default_value*/ 1);
 
-    auto cfs = delta.getPersistedFileSetSnapshot()->getColumnFiles();
-    const auto & memory_cfs = delta.getMemTableSetSnapshot()->getColumnFiles();
-    cfs.insert(cfs.end(), memory_cfs.begin(), memory_cfs.end());
-
-    auto storage_snap = std::make_shared<StorageSnapshot>(
-        *dm_context.storage_pool,
-        dm_context.getReadLimiter(),
-        dm_context.tracing_id,
-        /*snapshot_read*/ true);
-    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
+    const auto cfs = delta.getColumnFiles();
+    const auto & data_provider = delta.getDataProvider();
 
     RowKeyRanges delete_ranges;
     UInt32 read_rows = 0;
@@ -291,7 +283,7 @@ std::vector<UInt8> buildRowKeyFilter(
         {
             const auto n = buildRowKeyFilterBlock<Handle>(
                 dm_context,
-                data_from_storage_snap,
+                data_provider,
                 *cf,
                 delete_ranges,
                 read_ranges,

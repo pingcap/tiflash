@@ -18,9 +18,8 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
+#include <Storages/DeltaMerge/VersionChain/TagFilter.h>
 
 namespace DB::DM
 {
@@ -153,17 +152,8 @@ std::vector<UInt8> buildTagFilter(const DMContext & dm_context, const SegmentSna
     auto read_rows = buildTagFilterStable(dm_context, stable, filter);
     RUNTIME_CHECK(stable_rows == read_rows, stable_rows, read_rows);
 
-    auto cfs = delta.getPersistedFileSetSnapshot()->getColumnFiles();
-    const auto & memory_cfs = delta.getMemTableSetSnapshot()->getColumnFiles();
-    cfs.insert(cfs.end(), memory_cfs.begin(), memory_cfs.end());
-
-    auto storage_snap = std::make_shared<StorageSnapshot>(
-        *dm_context.storage_pool,
-        dm_context.getReadLimiter(),
-        dm_context.tracing_id,
-        /*snapshot_read*/ true);
-    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
-
+    const auto cfs = delta.getColumnFiles();
+    const auto & data_provider = delta.getDataProvider();
     for (auto itr = cfs.begin(); itr != cfs.end(); ++itr)
     {
         const auto & cf = *itr;
@@ -177,7 +167,7 @@ std::vector<UInt8> buildTagFilter(const DMContext & dm_context, const SegmentSna
         // TODO: add deleted_rows in tiny file
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n = buildTagFilterBlock(dm_context, data_from_storage_snap, *cf, start_row_id, filter);
+            const auto n = buildTagFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
