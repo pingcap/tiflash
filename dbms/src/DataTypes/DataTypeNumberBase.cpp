@@ -14,11 +14,11 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnVector.h>
-#include <Columns/ColumnsCommon.h>
 #include <Common/NaNUtils.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNumberBase.h>
 #include <DataTypes/FormatSettingsJSON.h>
+#include <DataTypes/deserializeBinaryBulkWithFilter.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
@@ -238,47 +238,8 @@ void DataTypeNumberBase<T>::deserializeBinaryBulk(
     const IColumn::Filter * filter) const
 {
     auto & x = typeid_cast<ColumnVector<T> &>(column).getData();
-    size_t current_size = x.size();
     constexpr auto field_size = sizeof(typename ColumnVector<T>::value_type);
-    if (!filter)
-    {
-        x.resize(current_size + limit);
-        size_t size = istr.readBig(reinterpret_cast<char *>(&x[current_size]), field_size * limit);
-        x.resize(current_size + size / field_size);
-        return;
-    }
-
-    const size_t passed = countBytesInFilter(filter->data(), limit);
-    x.resize(current_size + passed);
-    UInt8 prev = (*filter)[0];
-    size_t count = 1;
-    for (size_t i = 1; i < limit; ++i)
-    {
-        bool break_point = ((*filter)[i] != prev);
-        if (break_point && prev)
-        {
-            size_t size = istr.read(reinterpret_cast<char *>(&x[current_size]), field_size * count);
-            current_size += size / field_size;
-            count = 1;
-        }
-        else if (break_point && !prev)
-        {
-            istr.ignore(field_size * count);
-            count = 1;
-        }
-        else
-        {
-            ++count;
-        }
-        prev = (*filter)[i];
-    }
-    if (prev)
-    {
-        size_t size = istr.read(reinterpret_cast<char *>(&x[current_size]), field_size * count);
-        current_size += size / field_size;
-    }
-
-    x.resize(current_size);
+    deserializeBinaryBulkWithFilter<field_size>(x, istr, limit, filter);
 }
 
 template <typename T>

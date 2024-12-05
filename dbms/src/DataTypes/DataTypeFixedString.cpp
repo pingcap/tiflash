@@ -14,7 +14,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/ColumnUtil.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -102,6 +102,92 @@ void DataTypeFixedString::serializeBinaryBulk(const IColumn & column, WriteBuffe
 }
 
 
+namespace
+{
+inline void FixedStringDeserializeBinaryBulkWithFilter(
+    size_t n,
+    ColumnFixedString::Chars_t & data,
+    ReadBuffer & istr,
+    size_t limit,
+    const IColumn::Filter * filter)
+{
+    size_t current_size = data.size();
+    data.resize(current_size + n * limit);
+
+    if (!filter)
+    {
+        size_t size = istr.readBig(reinterpret_cast<char *>(&data[current_size]), n * limit);
+        data.resize(current_size + size);
+        return;
+    }
+
+    const UInt8 * filt_pos = filter->data();
+    const UInt8 * filt_end = filt_pos + limit;
+    const UInt8 * filt_end_aligned = filt_pos + limit / FILTER_SIMD_BYTES * FILTER_SIMD_BYTES;
+
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = ToBits64(filt_pos);
+        if likely (0 != mask)
+        {
+            if (const UInt8 prefix_to_copy = prefixToCopy(mask); 0xFF != prefix_to_copy)
+            {
+                size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n * prefix_to_copy);
+                current_size += size;
+                istr.ignore(n * (FILTER_SIMD_BYTES - prefix_to_copy));
+            }
+            else
+            {
+                if (const UInt8 suffix_to_copy = suffixToCopy(mask); 0xFF != suffix_to_copy)
+                {
+                    istr.ignore(n * (FILTER_SIMD_BYTES - suffix_to_copy));
+                    size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n * suffix_to_copy);
+                    current_size += size;
+                }
+                else
+                {
+                    size_t index = 0;
+                    while (mask)
+                    {
+                        size_t m = std::countr_zero(mask);
+                        istr.ignore(n * (m - index));
+                        size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n);
+                        current_size += size;
+                        index = m + 1;
+                        mask &= mask - 1;
+                    }
+                    istr.ignore(n * (FILTER_SIMD_BYTES - index));
+                }
+            }
+        }
+        else
+        {
+            istr.ignore(n * FILTER_SIMD_BYTES);
+        }
+
+        filt_pos += FILTER_SIMD_BYTES;
+    }
+
+    while (filt_pos < filt_end)
+    {
+        if (*filt_pos)
+        {
+            size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n);
+            current_size += size;
+        }
+        else
+        {
+            istr.ignore(n);
+        }
+
+        ++filt_pos;
+    }
+
+    data.resize(current_size);
+}
+} // namespace
+
+
 void DataTypeFixedString::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
@@ -110,50 +196,7 @@ void DataTypeFixedString::deserializeBinaryBulk(
     const IColumn::Filter * filter) const
 {
     auto & data = typeid_cast<ColumnFixedString &>(column).getChars();
-    size_t current_size = data.size();
-    if (!filter)
-    {
-        data.resize(current_size + limit * n);
-        size_t size = istr.readBig(reinterpret_cast<char *>(&data[current_size]), n * limit);
-
-        if (size % n != 0)
-            throw Exception("Cannot read all data of type FixedString", ErrorCodes::CANNOT_READ_ALL_DATA);
-
-        data.resize(current_size + size);
-        return;
-    }
-
-    const size_t passed = countBytesInFilter(filter->data(), limit);
-    data.resize(current_size + passed * n);
-    UInt8 prev = (*filter)[0];
-    size_t count = 1;
-    for (size_t i = 1; i < limit; ++i)
-    {
-        bool break_point = ((*filter)[i] != prev);
-        if (break_point && prev)
-        {
-            size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n * count);
-            current_size += size;
-            count = 1;
-        }
-        else if (break_point && !prev)
-        {
-            istr.ignore(n * count);
-            count = 1;
-        }
-        else
-        {
-            ++count;
-        }
-        prev = (*filter)[i];
-    }
-    if (prev)
-    {
-        size_t size = istr.read(reinterpret_cast<char *>(&data[current_size]), n * count);
-        current_size += size;
-    }
-
-    data.resize(current_size);
+    FixedStringDeserializeBinaryBulkWithFilter(n, data, istr, limit, filter);
 }
 
 

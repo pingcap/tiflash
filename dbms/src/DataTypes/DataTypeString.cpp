@@ -14,8 +14,8 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeFactory.h>
