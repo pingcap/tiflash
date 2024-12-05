@@ -84,8 +84,7 @@ public:
     ALWAYS_INLINE static void afterExec()
     {
         current_task_timer = nullptr;
-        CurrentMemoryTracker::submitLocalDeltaMemory();
-        current_memory_tracker = nullptr;
+        endTraceMemory();
     }
     ALWAYS_INLINE void startTraceMemory()
     {
