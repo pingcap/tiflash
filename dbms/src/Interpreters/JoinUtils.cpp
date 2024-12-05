@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/JoinUtils.h>
