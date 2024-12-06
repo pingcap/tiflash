@@ -25,6 +25,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
 {
+    // Check Stable
     if (dmfile_or_delete_range_list->empty())
     {
         const auto & dmfiles = snapshot.stable->getDMFiles();
@@ -32,13 +33,9 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         dmfile_or_delete_range_list->push_back(DMFileHandleIndex<Handle>{dm_context.global_context, dmfiles[0]});
     }
 
-    assert(snapshot.delta != nullptr);
-
     const auto & delta = *(snapshot.delta);
     UInt32 delta_rows = delta.getRows();
     UInt32 delta_delete_ranges = delta.getDeletes();
-    assert(delta_rows > 0 || delta_delete_ranges > 0);
-
     std::lock_guard lock(mtx);
     if (delta_rows + delta_delete_ranges <= replayed_rows_and_deletes)
     {
