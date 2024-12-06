@@ -18,6 +18,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_semi_join_time_exceed[];
+} // namespace FailPoints
 namespace tests
 {
 class JoinExecutorTestRunner : public DB::tests::JoinTestRunner
@@ -3005,6 +3009,7 @@ try
 {
     using tipb::JoinType;
     std::vector<UInt64> cross_join_shallow_copy_thresholds{1, DEFAULT_BLOCK_SIZE * 100};
+    std::vector<bool> semi_join_time_exceed = {true, false};
     /// One join key(t.a = s.a) + no other condition.
     /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1
@@ -3056,7 +3061,18 @@ try
                 = context.scan("null_aware_semi", "t")
                       .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
                       .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune
                 = context.scan("null_aware_semi", "t")
                       .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
@@ -3159,7 +3175,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3271,7 +3298,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3439,7 +3477,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3549,7 +3598,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3650,7 +3710,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3706,6 +3777,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, SemiJoin)
 try
 {
+    std::vector<bool> semi_join_time_exceed = {true, false};
     using tipb::JoinType;
     /// One join key(t.a = s.a) + no other condition.
     /// left table(t) + right table(s) + result column.
@@ -3749,7 +3821,18 @@ try
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("semi", "t").join(context.scan("semi", "s"), type, {col("a")}).build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3793,7 +3876,18 @@ try
                 = context.scan("semi", "t")
                       .join(context.scan("semi", "s"), type, {col("a")}, {}, {}, {lt(col("t.c"), col("s.c"))}, {})
                       .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3837,7 +3931,18 @@ try
             auto request = context.scan("semi", "t")
                                .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3919,7 +4024,18 @@ try
                                    {lt(col("t.c"), col("s.c"))},
                                    {})
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3951,7 +4067,18 @@ try
             auto request = context.scan("semi", "t")
                                .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 }
