@@ -2805,6 +2805,8 @@ try
     }
 
     {
+        // Mock that after restart, the data type has been changed to new serialize. But still can read old
+        // serialized format data.
         auto table_column_defines = DMTestEnv::getDefaultColumns();
         table_column_defines->emplace_back(str_cd);
         store = reload(table_column_defines);
