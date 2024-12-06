@@ -22,7 +22,7 @@
 
 namespace DB::DM
 {
-UInt32 buildVersionFilterBlock(
+[[nodiscard]] UInt32 buildVersionFilterBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
@@ -69,7 +69,7 @@ UInt32 buildVersionFilterBlock(
     return versions.size();
 }
 
-UInt32 buildVersionFilterDMFile(
+[[nodiscard]] UInt32 buildVersionFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const RowKeyRanges & segment_ranges,
@@ -205,7 +205,7 @@ UInt32 buildVersionFilterDMFile(
     return rows;
 }
 
-UInt32 buildVersionFilterColumnFileBig(
+[[nodiscard]] UInt32 buildVersionFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const UInt64 read_ts,
@@ -217,7 +217,7 @@ UInt32 buildVersionFilterColumnFileBig(
     return buildVersionFilterDMFile(dm_context, dmfile, segment_ranges, read_ts, start_row_id, filter);
 }
 
-UInt32 buildVersionFilterStable(
+[[nodiscard]] UInt32 buildVersionFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     const UInt64 read_ts,

@@ -38,15 +38,15 @@ public:
         const SegmentSnapshot & snapshot);
 
 private:
-    UInt32 replayBlock(
+    [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,
         const IColumnFileDataProviderPtr & data_provider,
         const ColumnFile & cf,
         UInt32 offset);
-    UInt32 replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big);
-    UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
+    [[nodiscard]] UInt32 replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big);
+    [[nodiscard]] UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
 
-    std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(Handle h);
+    [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(Handle h);
 
     DISALLOW_COPY_AND_MOVE(VersionChain);
 
