@@ -78,25 +78,7 @@ public:
 
     static std::vector<Handle> loadPackIndex(const Context & global_context, const DMFile & dmfile)
     {
-        if (dmfile.getPacks() == 0)
-            return {};
-
-        auto [type, minmax_index] = DMFilePackFilter::loadIndex(
-            dmfile,
-            global_context.getFileProvider(),
-            global_context.getMinMaxIndexCache(),
-            /* set cache*/ true,
-            EXTRA_HANDLE_COLUMN_ID,
-            global_context.getReadLimiter(),
-            /*scan context*/ nullptr);
-        auto pack_count = dmfile.getPacks();
-        std::vector<Handle> pack_index;
-        pack_index.reserve(pack_count);
-        for (size_t i = 0; i < pack_count; ++i)
-        {
-            pack_index.push_back(getMaxValue(*minmax_index, i));
-        }
-        return pack_index;
+        return loadPackMaxValue<Handle>(global_context, dmfile, EXTRA_HANDLE_COLUMN_ID);
     }
 
     static std::vector<PackEntry> loadPackEntries(const DMFile & dmfile)
@@ -116,16 +98,6 @@ public:
         return pack_entries;
     }
 
-    static Handle getMaxValue(const MinMaxIndex & minmax_index, size_t i)
-    {
-        if constexpr (std::is_same_v<Handle, Int64>)
-            return minmax_index.getIntMinMax(i).second;
-        else if constexpr (std::is_same_v<Handle, String>)
-            return minmax_index.getStringMinMax(i).second;
-        else
-            static_assert(false, "Not support type");
-    }
-
     static bool isCommonHandle() { return std::is_same_v<Handle, String>; }
 
     void cleanHandle() { handle_column = nullptr; }
@@ -135,6 +107,7 @@ public:
         if (likely(handle_column))
             return;
 
+        // TODO: load by segment range.
         DMFileReader reader(
             dmfile,
             {getHandleColumnDefine<Handle>()},

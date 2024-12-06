@@ -69,39 +69,21 @@ namespace DB::DM
     return versions.size();
 }
 
+
 [[nodiscard]] UInt32 buildVersionFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
-    const RowKeyRanges & segment_ranges,
+    const std::optional<RowKeyRange> & segment_range,
     const UInt64 read_ts,
     const ssize_t start_row_id,
     std::vector<UInt8> & filter)
 {
-    auto pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        dm_context.global_context.getMinMaxIndexCache(),
-        true,
-        segment_ranges,
-        EMPTY_RS_OPERATOR,
-        {},
-        dm_context.global_context.getFileProvider(),
-        dm_context.getReadLimiter(),
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        ReadTag::MVCC);
-    const auto & seg_range_handle_res = pack_filter.getHandleRes();
-    const auto valid_start_itr
-        = std::find_if(seg_range_handle_res.begin(), seg_range_handle_res.end(), [](RSResult r) { return r.isUse(); });
-    RUNTIME_CHECK_MSG(
-        valid_start_itr != seg_range_handle_res.end(),
-        "dmfile={}, segment_ranges={}, start_row_id={}",
-        dmfile->path(),
-        toDebugString(segment_ranges),
-        start_row_id);
-    const auto valid_end_itr
-        = std::find_if(valid_start_itr, seg_range_handle_res.end(), [](RSResult r) { return !r.isUse(); });
-    const auto valid_start_pack_id = valid_start_itr - seg_range_handle_res.begin();
-    const auto valid_pack_count = valid_end_itr - valid_start_itr;
+    auto [valid_handle_res, valid_start_pack_id]
+        = getDMFilePackFilterResultBySegmentRange(dm_context, dmfile, segment_range);
+    if (valid_handle_res.empty())
+        return 0;
+
+    const auto max_versions = loadPackMaxValue<UInt64>(dm_context.global_context, *dmfile, VERSION_COLUMN_ID);
 
     auto read_packs = std::make_shared<IdSet>();
     UInt32 need_read_rows = 0;
@@ -109,12 +91,12 @@ namespace DB::DM
 
     const auto & pack_stats = dmfile->getPackStats();
     UInt32 rows = 0;
-    for (UInt32 i = 0; i < valid_pack_count; ++i)
+    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
     {
         const UInt32 pack_id = valid_start_pack_id + i;
         const UInt32 pack_start_row_id = start_row_id + rows;
         const auto & stat = pack_stats[pack_id];
-        if (stat.not_clean || pack_filter.getMaxVersion(pack_id) > read_ts)
+        if (stat.not_clean || max_versions[pack_id] > read_ts)
         {
             read_packs->insert(pack_id);
             read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
@@ -155,7 +137,7 @@ namespace DB::DM
         const UInt32 pack_start_row_id = itr->second;
 
         // Filter invisible versions
-        if (pack_filter.getMaxVersion(pack_id) > read_ts)
+        if (max_versions[pack_id] > read_ts)
         {
             for (UInt32 i = 0; i < pack_stats[pack_id].rows; ++i)
             {
@@ -212,9 +194,7 @@ namespace DB::DM
     const ssize_t start_row_id,
     std::vector<UInt8> & filter)
 {
-    auto dmfile = cf_big.getFile();
-    auto segment_ranges = RowKeyRanges{cf_big.getRange()};
-    return buildVersionFilterDMFile(dm_context, dmfile, segment_ranges, read_ts, start_row_id, filter);
+    return buildVersionFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), read_ts, start_row_id, filter);
 }
 
 [[nodiscard]] UInt32 buildVersionFilterStable(
@@ -225,7 +205,7 @@ namespace DB::DM
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildVersionFilterDMFile(dm_context, dmfiles[0], {}, read_ts, 0, filter);
+    return buildVersionFilterDMFile(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
 }
 
 void buildVersionFilter(

@@ -60,4 +60,56 @@ std::pair<RSResults, UInt32> getDMFilePackFilterResultBySegmentRange(
     const auto valid_start_pack_id = valid_start_itr - handle_res.begin();
     return std::make_pair(RSResults(valid_start_itr, valid_end_itr), valid_start_pack_id);
 }
+
+namespace
+{
+template <typename T>
+T getMaxValue(const MinMaxIndex & minmax_index, size_t i)
+{
+    if constexpr (std::is_same_v<T, Int64>)
+        return minmax_index.getIntMinMax(i).second;
+    else if constexpr (std::is_same_v<T, String>)
+        return minmax_index.getStringMinMax(i).second;
+    else if constexpr (std::is_same_v<T, UInt64>)
+        return minmax_index.getUInt64MinMax(i).second;
+    else
+        static_assert(false, "Not support type");
+}
+} // namespace
+
+template <typename T>
+std::vector<T> loadPackMaxValue(const Context & global_context, const DMFile & dmfile, const ColId col_id)
+{
+    if (dmfile.getPacks() == 0)
+        return {};
+
+    auto [type, minmax_index] = DMFilePackFilter::loadIndex(
+        dmfile,
+        global_context.getFileProvider(),
+        global_context.getMinMaxIndexCache(),
+        /* set cache*/ true,
+        col_id,
+        global_context.getReadLimiter(),
+        /*scan context*/ nullptr);
+
+    auto pack_count = dmfile.getPacks();
+    std::vector<T> pack_max_values;
+    pack_max_values.reserve(pack_count);
+    for (size_t i = 0; i < pack_count; ++i)
+    {
+        pack_max_values.push_back(getMaxValue<T>(*minmax_index, i));
+    }
+    return pack_max_values;
+}
+
+template std::vector<Int64> loadPackMaxValue<Int64>(
+    const Context & global_context,
+    const DMFile & dmfile,
+    const ColId col_id);
+template std::vector<UInt64> loadPackMaxValue<UInt64>(
+    const Context & global_context,
+    const DMFile & dmfile,
+    const ColId col_id);
+//template std::vector<String> loadPackMaxValue<String>(const Context & global_context, const DMFile & dmfile, const ColId col_id);
+
 } // namespace DB::DM
