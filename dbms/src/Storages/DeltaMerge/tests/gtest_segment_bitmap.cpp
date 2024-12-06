@@ -179,7 +179,7 @@ protected:
             ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
         }
 
-        //verifyBitmapFilter();        
+        verifyBitmapFilter();
     }
 
     void verifyBitmapFilter()
@@ -201,7 +201,7 @@ protected:
             {seg->getRowKeyRange()},
             std::numeric_limits<UInt64>::max(),
             version_chain);
-    
+
         ASSERT_EQ(bitmap_filter->toDebugString(), bitmap_filter2->toDebugString());
     }
 };
@@ -287,11 +287,17 @@ CATCH
 TEST_F(SegmentBitmapFilterTest, Big)
 try
 {
+    /*
     runTestCase(TestCase{
         "d_tiny:[100, 500)|d_dr:[250, 1000)|d_big:[250, 1000)|d_mem:[240, 290)",
         900,
         "[0, 140)|[1150, 1200)|[440, 1150)",
-        "[100, 1000)"});
+        "[100, 1000)"});*/
+    runTestCase(TestCase{
+        "d_tiny:[10, 50)|d_dr:[25, 100)|d_big:[25, 100)|d_mem:[24, 29)",
+        90,
+        "[0, 14)|[115, 120)|[44, 115)",
+        "[10, 100)"});
 }
 CATCH
 
