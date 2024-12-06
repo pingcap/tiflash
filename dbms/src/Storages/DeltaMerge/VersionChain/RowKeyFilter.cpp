@@ -79,76 +79,26 @@ template <Int64OrString Handle>
 UInt32 buildRowKeyFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
-    const RowKeyRanges & segment_ranges,
+    const std::optional<RowKeyRange> & segment_range,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
     std::vector<UInt8> & filter)
 {
-    auto seg_range_pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        dm_context.global_context.getMinMaxIndexCache(),
-        true,
-        segment_ranges,
-        EMPTY_RS_OPERATOR,
-        {},
-        dm_context.global_context.getFileProvider(),
-        dm_context.getReadLimiter(),
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        ReadTag::MVCC);
-    const auto & seg_range_handle_res = seg_range_pack_filter.getHandleRes();
-    const auto valid_start_itr
-        = std::find_if(seg_range_handle_res.begin(), seg_range_handle_res.end(), [](RSResult r) { return r.isUse(); });
-    RUNTIME_CHECK_MSG(
-        valid_start_itr != seg_range_handle_res.end(),
-        "dmfile={}, segment_ranges={}, start_row_id={}",
-        dmfile->path(),
-        toDebugString(segment_ranges),
-        start_row_id);
-    const auto valid_end_itr
-        = std::find_if(valid_start_itr, seg_range_handle_res.end(), [](RSResult r) { return !r.isUse(); });
-    const auto valid_start_pack_id = valid_start_itr - seg_range_handle_res.begin();
-    const auto valid_pack_count = valid_end_itr - valid_start_itr;
-    RSResults valid_pack_handle_res(valid_start_itr, valid_end_itr);
+    auto [valid_handle_res, valid_start_pack_id]
+        = getDMFilePackFilterResultBySegmentRange(dm_context, dmfile, segment_range);
+    if (valid_handle_res.empty())
+        return 0;
 
-    auto read_ranges_pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        dm_context.global_context.getMinMaxIndexCache(),
-        true,
-        read_ranges,
-        EMPTY_RS_OPERATOR,
-        {},
-        dm_context.global_context.getFileProvider(),
-        dm_context.getReadLimiter(),
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        ReadTag::MVCC);
-    const auto & read_ranges_handle_res = read_ranges_pack_filter.getHandleRes();
-    for (auto i = 0; i < valid_pack_count; ++i)
-    {
-        valid_pack_handle_res[i] = valid_pack_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
-    }
+    const auto read_ranges_handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, read_ranges);
+    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+        valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
 
     if (!delete_ranges.empty())
     {
-        auto delete_ranges_pack_filter = DMFilePackFilter::loadFrom(
-            dmfile,
-            dm_context.global_context.getMinMaxIndexCache(),
-            true,
-            delete_ranges,
-            EMPTY_RS_OPERATOR,
-            {},
-            dm_context.global_context.getFileProvider(),
-            dm_context.getReadLimiter(),
-            dm_context.scan_context,
-            dm_context.tracing_id,
-            ReadTag::MVCC);
-        const auto & delete_ranges_handle_res = delete_ranges_pack_filter.getHandleRes();
-        for (auto i = 0; i < valid_pack_count; ++i)
-        {
-            valid_pack_handle_res[i] = valid_pack_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
-        }
+        const auto delete_ranges_handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, delete_ranges);
+        for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+            valid_handle_res[i] = valid_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
     }
 
     auto read_packs = std::make_shared<IdSet>();
@@ -157,14 +107,14 @@ UInt32 buildRowKeyFilterDMFile(
 
     const auto & pack_stats = dmfile->getPackStats();
     UInt32 rows = 0;
-    for (auto i = 0; i < valid_pack_count; ++i)
+    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
     {
         const auto pack_id = valid_start_pack_id + i;
-        if (!valid_pack_handle_res[i].isUse())
+        if (!valid_handle_res[i].isUse())
         {
             std::fill_n(filter.begin() + start_row_id + rows, pack_stats[pack_id].rows, false);
         }
-        else if (!valid_pack_handle_res[i].allMatch())
+        else if (!valid_handle_res[i].allMatch())
         {
             read_packs->insert(pack_id);
             read_pack_to_start_row_ids.emplace(pack_id, start_row_id + rows);
@@ -215,7 +165,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
     return buildRowKeyFilterDMFile<Handle>(
         dm_context,
         cf_big.getFile(),
-        {cf_big.getRange()},
+        cf_big.getRange(),
         delete_ranges,
         read_ranges,
         start_row_id,
@@ -238,7 +188,7 @@ UInt32 buildRowKeyFilterStable(
     return buildRowKeyFilterDMFile<Handle>(
         dm_context,
         dmfile,
-        {}, // empty ranges means all
+        std::nullopt, // segment_range
         delete_ranges,
         read_ranges,
         0, // start_row_id

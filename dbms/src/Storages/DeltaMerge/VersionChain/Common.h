@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <common/types.h>
 
@@ -23,6 +24,8 @@
 
 namespace DB::DM
 {
+struct DMContext;
+
 using RowID = UInt32;
 static constexpr RowID NotExistRowID = std::numeric_limits<RowID>::max();
 
@@ -80,4 +83,14 @@ std::pair<Handle, Handle> convertRowKeyRange(const RowKeyRange & range)
     else
         static_assert(false, "TODO: support common handle");
 }
+
+RSResults getDMFilePackFilterResultByRanges(
+    const DMContext & dm_context,
+    const DMFilePtr & dmfile,
+    const RowKeyRanges & ranges);
+
+std::pair<RSResults, UInt32> getDMFilePackFilterResultBySegmentRange(
+    const DMContext & dm_context,
+    const DMFilePtr & dmfile,
+    const std::optional<RowKeyRange> & segment_range);
 } // namespace DB::DM
