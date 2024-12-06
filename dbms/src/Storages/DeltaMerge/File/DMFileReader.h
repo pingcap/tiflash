@@ -105,7 +105,9 @@ private:
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
-        const std::vector<size_t> & clean_read_packs);
+        const std::vector<size_t> & clean_read_packs,
+        const IColumn::Filter * filter,
+        size_t passed_count);
     ColumnPtr readFromDisk(
         const ColumnDefine & cd,
         const DataTypePtr & type_on_disk,
@@ -118,13 +120,15 @@ private:
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
-        const IColumn::Filter * filter);
+        const IColumn::Filter * filter,
+        size_t passed_count);
     ColumnPtr readColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
-        const IColumn::Filter * filter);
+        const IColumn::Filter * filter,
+        size_t passed_count);
     ColumnPtr cleanRead(
         const ColumnDefine & cd,
         size_t rows_count,
