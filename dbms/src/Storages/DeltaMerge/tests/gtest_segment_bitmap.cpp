@@ -178,6 +178,31 @@ protected:
             auto expected_handle = genSequence<Int64>(test_case.expected_handle);
             ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
         }
+
+        verifyBitmapFilter();        
+    }
+
+    void verifyBitmapFilter()
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+
+        auto bitmap_filter = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            nullptr,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+
+        VersionChain<Int64> version_chain;
+        auto bitmap_filter2 = buildBitmapFilter<Int64>(
+            *dm_context,
+            *snap,
+            {seg->getRowKeyRange()},
+            std::numeric_limits<UInt64>::max(),
+            version_chain);
+    
+        ASSERT_EQ(bitmap_filter->toDebugString(), bitmap_filter2->toDebugString());
     }
 };
 
@@ -185,29 +210,6 @@ TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
     runTestCase(TestCase("d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"));
-
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    auto bitmap_filter = seg->buildBitmapFilter(
-        *dm_context,
-        snap,
-        {seg->getRowKeyRange()},
-        nullptr,
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
-    ASSERT_EQ(bitmap_filter->size(), 1000);
-    ASSERT_EQ(bitmap_filter->count(), 1000);
-    ASSERT_EQ(bitmap_filter->toDebugString(), String(1000, '1'));
-
-    VersionChain<Int64> version_chain;
-    auto bitmap_filter2 = buildBitmapFilter<Int64>(
-        *dm_context,
-        *snap,
-        {seg->getRowKeyRange()},
-        std::numeric_limits<UInt64>::max(),
-        version_chain);
-    ASSERT_EQ(bitmap_filter2->size(), 1000);
-    ASSERT_EQ(bitmap_filter2->count(), 1000);
-    ASSERT_EQ(bitmap_filter2->toDebugString(), String(1000, '1'));
 }
 CATCH
 
