@@ -43,16 +43,16 @@ public:
     // Maybe we can first check pack id of all handles, and process them by pack.
 
     template <Int64OrStringView HandleView>
-    RowID getBaseVersion(HandleView h)
+    std::optional<RowID> getBaseVersion(HandleView h)
     {
         auto pack_entry = getPackEntry(h);
         if (!pack_entry)
-            return NotExistRowID;
+            return {};
         return getBaseVersion(h, pack_entry->offset, pack_entry->rows);
     }
 
     template <Int64OrStringView HandleView>
-    RowID getBaseVersion(HandleView h, UInt64 offset, UInt64 rows)
+    std::optional<RowID> getBaseVersion(HandleView h, UInt64 offset, UInt64 rows)
     {
         loadHandleIfNotLoaded();
 
@@ -64,7 +64,7 @@ public:
         auto itr = std::lower_bound(begin, end, h);
         if (itr != end && *itr == h)
             return itr - begin + offset;
-        return NotExistRowID;
+        return {};
     }
 
     template <Int64OrStringView HandleView>

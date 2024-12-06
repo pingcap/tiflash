@@ -15,8 +15,8 @@
 
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 #include <Storages/DeltaMerge/VersionChain/DeletedFilter.h>
+#include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 #include <Storages/DeltaMerge/VersionChain/buildBitmapFilter.h>
 namespace DB::DM
@@ -30,6 +30,7 @@ BitmapFilterPtr buildBitmapFilter(
     VersionChain<Handle> & version_chain)
 {
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
+    fmt::println("base_ver_snap={}", *base_ver_snap);
 
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);

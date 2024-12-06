@@ -118,12 +118,13 @@ UInt32 VersionChain<Handle>::replayBlock(
     auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
-    auto handles = block.begin()->column;
-    const auto * v = toColumnVectorDataPtr<Int64>(handles);
-    RUNTIME_CHECK_MSG(v != nullptr, "TODO: support common handle");
-    for (auto i = offset; i < v->size(); ++i)
+    const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.begin()->column);
+    RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
+    const auto & handles = *handles_ptr;
+    //fmt::println("{}:handles={}", __FUNCTION__, handles);
+    //fmt::println("{}:new_handle_to_row_ids={}", __FUNCTION__, *new_handle_to_row_ids);
+    for (auto h : handles)
     {
-        auto h = (*v)[i];
         if (auto itr = new_handle_to_row_ids->find(h); itr != new_handle_to_row_ids->end())
         {
             base_versions->push_back(itr->second);
@@ -138,7 +139,7 @@ UInt32 VersionChain<Handle>::replayBlock(
         new_handle_to_row_ids->insert(std::make_pair(h, base_versions->size()));
         base_versions->push_back(NotExistRowID);
     }
-    return v->size() - offset;
+    return handles.size() - offset;
 }
 
 template <Int64OrString Handle>
