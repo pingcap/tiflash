@@ -16,7 +16,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
-#include <Storages/DeltaMerge/VersionChain/TagFilter.h>
+#include <Storages/DeltaMerge/VersionChain/DeletedFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 #include <Storages/DeltaMerge/VersionChain/buildBitmapFilter.h>
 namespace DB::DM
@@ -45,8 +45,8 @@ BitmapFilterPtr buildBitmapFilter(
     fmt::println("buildRowKeyFilter: {}", bitmap_filter->toDebugString());
     buildVersionFilter(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     fmt::println("buildVersionFilter: {}", bitmap_filter->toDebugString());
-    buildTagFilter(dm_context, snapshot, filter);
-    fmt::println("buildTagFilter: {}", bitmap_filter->toDebugString());
+    buildDeletedFilter(dm_context, snapshot, filter);
+    fmt::println("buildDeletedFilter: {}", bitmap_filter->toDebugString());
 
     bitmap_filter->runOptimize();
     return bitmap_filter;

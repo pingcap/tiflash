@@ -19,11 +19,11 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <Storages/DeltaMerge/VersionChain/TagFilter.h>
+#include <Storages/DeltaMerge/VersionChain/DeletedFilter.h>
 
 namespace DB::DM
 {
-UInt32 buildTagFilterBlock(
+UInt32 buildDeletedFilterBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
@@ -34,17 +34,16 @@ UInt32 buildTagFilterBlock(
     auto cf_reader = cf.getReader(dm_context, data_provider, getTagColumnDefinesPtr(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
-    auto tag_col = block.begin()->column;
-    const auto & tags = *toColumnVectorDataPtr<UInt8>(tag_col); // Must success.
-    for (UInt32 i = 0; i < tags.size(); ++i)
+    const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success.
+    for (UInt32 i = 0; i < deleteds.size(); ++i)
     {
-        if (tags[i])
+        if (deleteds[i])
             filter[start_row_id + i] = 0;
     }
-    return tags.size();
+    return deleteds.size();
 }
 
-UInt32 buildTagFilterDMFile(
+UInt32 buildDeletedFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range,
@@ -85,8 +84,7 @@ UInt32 buildTagFilterDMFile(
     auto stream = builder.build(dmfile, {getTagColumnDefine()}, {}, dm_context.scan_context);
     auto block = stream->read();
     RUNTIME_CHECK(block.rows() == need_read_rows, block.rows(), need_read_rows);
-    auto tag_col = block.begin()->column;
-    const auto & tags = *toColumnVectorDataPtr<UInt8>(tag_col); // Must success
+    const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success
 
     UInt32 offset = 0;
     for (auto pack_id : *read_packs)
@@ -96,7 +94,7 @@ UInt32 buildTagFilterDMFile(
         const UInt32 pack_start_row_id = itr->second;
         for (UInt32 i = 0; i < pack_stats[pack_id].rows; ++i)
         {
-            if (tags[offset + i])
+            if (deleteds[offset + i])
                 filter[pack_start_row_id + i] = 0;
         }
         offset += pack_stats[pack_id].rows;
@@ -104,26 +102,26 @@ UInt32 buildTagFilterDMFile(
     return rows;
 }
 
-UInt32 buildTagFilterColumnFileBig(
+UInt32 buildDeletedFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const ssize_t start_row_id,
     std::vector<UInt8> & filter)
 {
-    return buildTagFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
+    return buildDeletedFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
 }
 
-UInt32 buildTagFilterStable(
+UInt32 buildDeletedFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     std::vector<UInt8> & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildTagFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
+    return buildDeletedFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
 }
 
-void buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, std::vector<UInt8> & filter)
+void buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, std::vector<UInt8> & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -132,7 +130,7 @@ void buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapsh
     const UInt32 total_rows = delta_rows + stable_rows;
     RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
 
-    auto read_rows = buildTagFilterStable(dm_context, stable, filter);
+    auto read_rows = buildDeletedFilterStable(dm_context, stable, filter);
     RUNTIME_CHECK(stable_rows == read_rows, stable_rows, read_rows);
 
     const auto cfs = delta.getColumnFiles();
@@ -150,14 +148,14 @@ void buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapsh
         // TODO: add deleted_rows in tiny file
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n = buildTagFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
+            const auto n = buildDeletedFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            const auto n = buildTagFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
+            const auto n = buildDeletedFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
