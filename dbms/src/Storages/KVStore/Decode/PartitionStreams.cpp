@@ -389,12 +389,14 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 {
     /// Remove data in region.
     auto remover = region->createCommittedRemover(lock_region);
+    size_t remove_committed_count = 0;
     for (const auto & [handle, write_type, commit_ts, value] : data_list_read)
     {
         std::ignore = write_type;
         std::ignore = value;
-        remover.remove({handle, commit_ts});
+        if(remover.remove({handle, commit_ts})) remove_committed_count++;
     }
+    GET_METRIC(tiflash_raft_process_keys, type_write_remove).Increment(remove_committed_count);
 }
 
 // ParseTS parses the ts to (physical,logical).

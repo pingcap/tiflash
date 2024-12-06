@@ -111,11 +111,14 @@ public:
                 lock = std::unique_lock<std::shared_mutex>(region_->mutex);
         }
 
-        void remove(const RegionWriteCFData::Key & key)
+        bool remove(const RegionWriteCFData::Key & key)
         {
             auto & write_cf_data = region->data.writeCF().getDataMut();
-            if (auto it = write_cf_data.find(key); it != write_cf_data.end())
+            if (auto it = write_cf_data.find(key); it != write_cf_data.end()) {
                 region->removeDataByWriteIt(it);
+                return true;
+            }
+            return false;
         }
 
     private:

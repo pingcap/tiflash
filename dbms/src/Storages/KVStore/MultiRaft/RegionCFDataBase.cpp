@@ -63,18 +63,21 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
         auto iter = data.find(kv_pair.first);
         if (iter != data.end())
         {
+            // Could be a perssimistic lock is overwritten, or a old generation large txn lock is overwritten.
             added_size -= calcTiKVKeyValueSize(iter->second);
             data.erase(iter);
-        }
-        else
-        {
-            if unlikely (is_large_txn)
-            {
-                GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_put).Increment(1);
+
+            if (decoded->lock_type == kvrpcpb::Op::PessimisticLock) {
+                GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_del).Increment(1);
             }
+            GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_replaced).Increment(1);
+        }
+        if unlikely (is_large_txn)
+        {
+            GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_put).Increment(1);
         }
     }
-    // according to the process of pessimistic lock, just overwrite.
+    // According to the process of pessimistic lock, just overwrite.
     data.emplace(std::move(kv_pair.first), std::move(kv_pair.second));
     return added_size;
 }
@@ -178,6 +181,10 @@ size_t RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
             if unlikely (std::get<2>(value)->isLargeTxn())
             {
                 GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_del).Increment(1);
+            }
+
+            if (std::get<2>(value)->lock_type == kvrpcpb::Op::PessimisticLock) {
+                GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_del).Increment(1);
             }
         }
         map.erase(it);
