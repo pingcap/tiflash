@@ -12,28 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 
 namespace DB::DM
 {
 
 template <Int64OrString Handle>
-VersionChain<Handle>::VersionChain() = default;
-
-
-template <Int64OrString Handle>
-VersionChain<Handle>::VersionChain(const Context & global_context, const Segment & seg)
-{
-    const auto & dmfiles = seg.getStable()->getDMFiles();
-    RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    dmfile_or_delete_range_list->push_back(DMFileHandleIndex<Handle>{global_context, dmfiles[0]});
-}
-
-template <Int64OrString Handle>
 std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
 {
+    if (dmfile_or_delete_range_list->empty())
+    {
+        const auto & dmfiles = snapshot.stable->getDMFiles();
+        RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
+        dmfile_or_delete_range_list->push_back(DMFileHandleIndex<Handle>{dm_context.global_context, dmfiles[0]});
+    }
+
     assert(snapshot.delta != nullptr);
 
     const auto & delta = *(snapshot.delta);

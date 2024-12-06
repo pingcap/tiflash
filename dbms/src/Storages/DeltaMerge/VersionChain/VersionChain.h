@@ -14,28 +14,26 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
 
 namespace DB::DM
 {
 
+struct DMContext;
+struct SegmentSnapshot;
+class ColumnFile;
+class ColumnFileBig;
+class ColumnFileDeleteRange;
+
 template <Int64OrString Handle>
 class VersionChain
 {
 public:
-    // TODO: just for compile test
-    VersionChain();
+    VersionChain() = default;
 
-    VersionChain(const Context & global_context, const Segment & seg);
-
-    DISALLOW_COPY_AND_MOVE(VersionChain);
-
-    std::shared_ptr<const std::vector<RowID>> replaySnapshot(
+    [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
 
@@ -49,6 +47,8 @@ private:
     UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
 
     std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(Handle h);
+
+    DISALLOW_COPY_AND_MOVE(VersionChain);
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()

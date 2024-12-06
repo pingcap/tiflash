@@ -13,12 +13,12 @@
 // limitations under the License.
 
 
+#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 #include <Storages/DeltaMerge/VersionChain/TagFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 #include <Storages/DeltaMerge/VersionChain/buildBitmapFilter.h>
-
 namespace DB::DM
 {
 template <Int64OrString Handle>
