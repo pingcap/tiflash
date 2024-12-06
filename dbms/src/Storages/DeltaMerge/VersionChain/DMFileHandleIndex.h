@@ -36,7 +36,7 @@ public:
         : global_context(global_context_)
         , dmfile(dmfile_)
         , pack_index(loadPackIndex(global_context, *dmfile))
-        , pack_entries(loadPackEntries(dmfile))
+        , pack_entries(loadPackEntries(*dmfile))
     {}
 
     // TODO: getBaseVersion one by one.
@@ -78,6 +78,9 @@ public:
 
     static std::vector<Handle> loadPackIndex(const Context & global_context, const DMFile & dmfile)
     {
+        if (dmfile.getPacks() == 0)
+            return {};
+
         auto [type, minmax_index] = DMFilePackFilter::loadIndex(
             dmfile,
             global_context.getFileProvider(),
@@ -96,9 +99,12 @@ public:
         return pack_index;
     }
 
-    static std::vector<PackEntry> loadPackEntries(const DMFilePtr & dmfile)
+    static std::vector<PackEntry> loadPackEntries(const DMFile & dmfile)
     {
-        const auto & pack_stats = dmfile->getPackStats();
+        if (dmfile.getPacks() == 0)
+            return {};
+
+        const auto & pack_stats = dmfile.getPackStats();
         std::vector<PackEntry> pack_entries;
         pack_entries.reserve(pack_stats.size());
         UInt64 offset = 0;

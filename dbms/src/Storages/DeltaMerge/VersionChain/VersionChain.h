@@ -31,7 +31,11 @@ template <Int64OrString Handle>
 class VersionChain
 {
 public:
-    VersionChain() = default;
+    VersionChain()
+        : base_versions(std::make_shared<std::vector<RowID>>())
+        , new_handle_to_row_ids(std::make_shared<std::map<Handle, RowID>>())
+        , dmfile_or_delete_range_list(std::make_shared<std::vector<DMFileOrDeleteRange>>())
+    {}
 
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
@@ -53,8 +57,8 @@ private:
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
-    std::shared_ptr<std::map<Handle, RowID>> new_handle_to_row_ids;
+    std::shared_ptr<std::map<Handle, RowID>> new_handle_to_row_ids; // TODO: shared_ptr is unneccessary
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<Handle>>;
-    std::shared_ptr<std::vector<DMFileOrDeleteRange>> dmfile_or_delete_range_list;
+    std::shared_ptr<std::vector<DMFileOrDeleteRange>> dmfile_or_delete_range_list; // TODO: shared_ptr is unneccessary
 };
 } // namespace DB::DM

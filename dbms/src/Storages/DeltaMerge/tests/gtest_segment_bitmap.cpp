@@ -16,11 +16,13 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/VersionChain/buildBitmapFilter.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
+
 using namespace std::chrono_literals;
 using namespace DB::tests;
 
@@ -183,6 +185,29 @@ TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
     runTestCase(TestCase("d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"));
+
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto bitmap_filter = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        {seg->getRowKeyRange()},
+        nullptr,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
+    ASSERT_EQ(bitmap_filter->size(), 1000);
+    ASSERT_EQ(bitmap_filter->count(), 1000);
+    ASSERT_EQ(bitmap_filter->toDebugString(), String(1000, '1'));
+
+    VersionChain<Int64> version_chain;
+    auto bitmap_filter2 = buildBitmapFilter<Int64>(
+        *dm_context,
+        *snap,
+        {seg->getRowKeyRange()},
+        std::numeric_limits<UInt64>::max(),
+        version_chain);
+    ASSERT_EQ(bitmap_filter2->size(), 1000);
+    ASSERT_EQ(bitmap_filter2->count(), 1000);
+    ASSERT_EQ(bitmap_filter2->toDebugString(), String(1000, '1'));
 }
 CATCH
 
