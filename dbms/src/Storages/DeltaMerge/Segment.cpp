@@ -3481,6 +3481,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
 
+    /*
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
@@ -3488,6 +3489,11 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         start_ts,
         build_bitmap_filter_block_rows);
+    */
+    UNUSED(build_bitmap_filter_block_rows);
+    RUNTIME_CHECK(!is_common_handle);
+    RUNTIME_CHECK(filter == nullptr);
+    auto bitmap_filter = buildBitmapFilter<Int64>(dm_context, *segment_snap, read_ranges, start_ts, version_chain);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))

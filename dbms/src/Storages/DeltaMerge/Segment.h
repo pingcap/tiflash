@@ -28,9 +28,9 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
+#include <Storages/DeltaMerge/VersionChain/buildBitmapFilter.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-
 namespace DB
 {
 struct GeneralCancelHandle;
