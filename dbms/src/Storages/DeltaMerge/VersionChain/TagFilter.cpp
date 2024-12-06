@@ -38,7 +38,7 @@ UInt32 buildTagFilterBlock(
     const auto & tags = *toColumnVectorDataPtr<UInt8>(tag_col); // Must success.
     for (UInt32 i = 0; i < tags.size(); ++i)
     {
-        if (!tags[i])
+        if (tags[i])
             filter[start_row_id + i] = 0;
     }
     return tags.size();
@@ -53,6 +53,7 @@ UInt32 buildTagFilterDMFile(
 {
     auto [valid_handle_res, valid_start_pack_id]
         = getDMFilePackFilterResultBySegmentRange(dm_context, dmfile, segment_range);
+    fmt::println("{}:valid_handle_res={}, valid_start_pack_id={}", __FUNCTION__, valid_handle_res, valid_start_pack_id);
     if (valid_handle_res.empty())
         return 0;
 
@@ -95,7 +96,7 @@ UInt32 buildTagFilterDMFile(
         const UInt32 pack_start_row_id = itr->second;
         for (UInt32 i = 0; i < pack_stats[pack_id].rows; ++i)
         {
-            if (!tags[offset + i])
+            if (tags[offset + i])
                 filter[pack_start_row_id + i] = 0;
         }
         offset += pack_stats[pack_id].rows;

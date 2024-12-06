@@ -38,11 +38,15 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt32 total_rows = delta_rows + stable_rows;
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
     auto & filter = bitmap_filter->getFilter();
+    fmt::println("Init: {}", bitmap_filter->toDebugString());
 
     // TODO: make these functions return filter out rows.
     buildRowKeyFilter<Handle>(dm_context, snapshot, read_ranges, filter);
+    fmt::println("buildRowKeyFilter: {}", bitmap_filter->toDebugString());
     buildVersionFilter(dm_context, snapshot, *base_ver_snap, read_ts, filter);
+    fmt::println("buildVersionFilter: {}", bitmap_filter->toDebugString());
     buildTagFilter(dm_context, snapshot, filter);
+    fmt::println("buildTagFilter: {}", bitmap_filter->toDebugString());
 
     bitmap_filter->runOptimize();
     return bitmap_filter;
