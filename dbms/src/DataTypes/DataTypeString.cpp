@@ -22,6 +22,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/FormatVersion.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -300,7 +301,7 @@ void registerDataTypeString(DataTypeFactory & factory)
     std::function<DataTypePtr()> creator = [] {
         return std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SeparateSizeAndChars);
     };
-    factory.registerSimpleDataType(DataTypeString::NameV1, creator);
+    factory.registerSimpleDataType(DataTypeString::NameV2, creator);
 
     /// These synonims are added for compatibility.
 
@@ -488,10 +489,25 @@ void DataTypeString::deserializeBinaryBulkWithMultipleStreams(
     }
 }
 
+static DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
+{
+    if (current.identifier < 8 || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
+    {
+        return DataTypeString::SerdesFormat::SizePrefix;
+    }
+    return DataTypeString::SerdesFormat::SeparateSizeAndChars;
+}
+
+DataTypeString::DataTypeString(SerdesFormat serdes_fmt_)
+    : serdes_fmt((serdes_fmt_ != SerdesFormat::None) ? serdes_fmt_ : getDefaultByStorageFormat(STORAGE_FORMAT_CURRENT))
+{}
+
 String DataTypeString::getDefaultName()
 {
-    if constexpr (DefaultSerdesFormat == SerdesFormat::SeparateSizeAndChars)
-        return NameV1;
+    if (STORAGE_FORMAT_CURRENT.identifier == 8 || STORAGE_FORMAT_CURRENT.identifier == 103)
+    {
+        return NameV2;
+    }
     return LegacyName;
 }
 
