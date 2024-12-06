@@ -2764,7 +2764,7 @@ CATCH
 namespace
 {
 const ColumnDefine legacy_str_cd(2, "col2", DataTypeFactory::instance().get(DataTypeString::LegacyName));
-const ColumnDefine str_cd(2, "col2", DataTypeFactory::instance().get(DataTypeString::NameV1));
+const ColumnDefine str_cd(2, "col2", DataTypeFactory::instance().get(DataTypeString::NameV2));
 
 Block createBlock(const ColumnDefine & cd, size_t begin, size_t end)
 {
@@ -2830,7 +2830,7 @@ try
 
         auto col_type_name = block.getByName(str_cd.name);
         ASSERT_EQ(col_type_name.name, str_cd.name);
-        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::NameV1);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::NameV2);
 
         for (size_t i = 0; i < block.rows(); i++)
         {
@@ -2892,7 +2892,7 @@ try
 
         auto col_type_name = block.getByName(str_cd.name);
         ASSERT_EQ(col_type_name.name, str_cd.name);
-        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::NameV1);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::NameV2);
 
         for (size_t i = 0; i < block.rows(); i++)
         {

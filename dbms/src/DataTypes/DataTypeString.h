@@ -26,7 +26,7 @@ public:
 
     const char * getFamilyName() const override { return "String"; }
 
-    String getName() const override { return serdes_fmt == SerdesFormat::SeparateSizeAndChars ? NameV1 : LegacyName; }
+    String getName() const override { return serdes_fmt == SerdesFormat::SeparateSizeAndChars ? NameV2 : LegacyName; }
 
     TypeIndex getTypeId() const override { return TypeIndex::String; }
 
@@ -86,22 +86,19 @@ public:
 
     enum class SerdesFormat
     {
-        SizePrefix = 0, // Legacy format, corresponding to `LegacyName`
-        SeparateSizeAndChars = 1, // New format, corresponding to `NameV1`
+        None = 0, // Decide by STORAGE_FORMAT_CURRENT
+        SizePrefix = 1, // Legacy format, corresponding to `LegacyName`
+        SeparateSizeAndChars = 2, // New format, corresponding to `NameV2`
     };
 
-    inline static constexpr auto DefaultSerdesFormat = SerdesFormat::SizePrefix;
-
     inline static const String LegacyName{"String"}; // For compatibility of size-prefix format.
-    inline static const String NameV1{"StringV1"}; // The separate size and chars format.
+    inline static const String NameV2{"StringV2"}; // The separate size and chars format.
 
     // Both getDefaultName and getNullableDefaultName are unit-tests helpers.
     static String getDefaultName();
     static String getNullableDefaultName();
 
-    explicit DataTypeString(SerdesFormat serdes_fmt_ = DefaultSerdesFormat)
-        : serdes_fmt(serdes_fmt_)
-    {}
+    explicit DataTypeString(SerdesFormat serdes_fmt_ = SerdesFormat::None);
 
 private:
     const SerdesFormat serdes_fmt;

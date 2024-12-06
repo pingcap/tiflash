@@ -84,8 +84,8 @@ try
         ASSERT_EQ(data_type->getName(), DataTypeString::getDefaultName());
     }
     {
-        auto str_type = typeFromString(DataTypeString::NameV1);
-        ASSERT_EQ(str_type->getName(), DataTypeString::NameV1);
+        auto str_type = typeFromString(DataTypeString::NameV2);
+        ASSERT_EQ(str_type->getName(), DataTypeString::NameV2);
         column_info = reverseGetColumnInfo(NameAndTypePair{name, str_type}, 1, default_field, true);
         ASSERT_EQ(column_info.tp, TiDB::TypeString);
         auto data_type = getDataTypeByColumnInfo(column_info);
