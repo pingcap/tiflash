@@ -47,35 +47,14 @@ UInt32 buildTagFilterBlock(
 UInt32 buildTagFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
-    const RowKeyRanges & segment_ranges,
+    const std::optional<RowKeyRange> & segment_range,
     const ssize_t start_row_id,
     std::vector<UInt8> & filter)
 {
-    auto pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        dm_context.global_context.getMinMaxIndexCache(),
-        true, // set cache if miss
-        segment_ranges,
-        EMPTY_RS_OPERATOR,
-        {},
-        dm_context.global_context.getFileProvider(),
-        dm_context.getReadLimiter(),
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        ReadTag::MVCC);
-    const auto & seg_range_handle_res = pack_filter.getHandleRes();
-    const auto valid_start_itr
-        = std::find_if(seg_range_handle_res.begin(), seg_range_handle_res.end(), [](RSResult r) { return r.isUse(); });
-    RUNTIME_CHECK_MSG(
-        valid_start_itr != seg_range_handle_res.end(),
-        "dmfile={}, segment_ranges={}, start_row_id={}",
-        dmfile->path(),
-        toDebugString(segment_ranges),
-        start_row_id);
-    const auto valid_end_itr
-        = std::find_if(valid_start_itr, seg_range_handle_res.end(), [](RSResult r) { return !r.isUse(); });
-    const auto valid_start_pack_id = valid_start_itr - seg_range_handle_res.begin();
-    const auto valid_pack_count = valid_end_itr - valid_start_itr;
+    auto [valid_handle_res, valid_start_pack_id]
+        = getDMFilePackFilterResultBySegmentRange(dm_context, dmfile, segment_range);
+    if (valid_handle_res.empty())
+        return 0;
 
     auto read_packs = std::make_shared<IdSet>();
     UInt32 need_read_rows = 0;
@@ -84,7 +63,7 @@ UInt32 buildTagFilterDMFile(
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_properties = dmfile->getPackProperties();
     UInt32 rows = 0;
-    for (UInt32 i = 0; i < valid_pack_count; ++i)
+    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
     {
         const UInt32 pack_id = valid_start_pack_id + i;
         const UInt32 pack_start_row_id = start_row_id + rows;
@@ -130,9 +109,7 @@ UInt32 buildTagFilterColumnFileBig(
     const ssize_t start_row_id,
     std::vector<UInt8> & filter)
 {
-    auto dmfile = cf_big.getFile();
-    auto segment_ranges = RowKeyRanges{cf_big.getRange()};
-    return buildTagFilterDMFile(dm_context, dmfile, segment_ranges, start_row_id, filter);
+    return buildTagFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
 }
 
 UInt32 buildTagFilterStable(
@@ -142,7 +119,7 @@ UInt32 buildTagFilterStable(
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildTagFilterDMFile(dm_context, dmfiles[0], {}, 0, filter);
+    return buildTagFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
 }
 
 void buildTagFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, std::vector<UInt8> & filter)
