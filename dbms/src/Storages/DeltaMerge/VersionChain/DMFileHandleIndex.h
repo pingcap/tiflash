@@ -32,9 +32,10 @@ public:
         UInt64 rows;
     };
 
-    DMFileHandleIndex(const Context & global_context_, const DMFilePtr & dmfile_)
+    DMFileHandleIndex(const Context & global_context_, const DMFilePtr & dmfile_, const RowID start_row_id_)
         : global_context(global_context_)
         , dmfile(dmfile_)
+        , start_row_id(start_row_id_)
         , pack_index(loadPackIndex(global_context, *dmfile))
         , pack_entries(loadPackEntries(*dmfile))
     {}
@@ -48,7 +49,7 @@ public:
         auto pack_entry = getPackEntry(h);
         if (!pack_entry)
             return {};
-        return getBaseVersion(h, pack_entry->offset, pack_entry->rows);
+        return start_row_id + getBaseVersion(h, pack_entry->offset, pack_entry->rows);
     }
 
     template <Int64OrStringView HandleView>
@@ -136,6 +137,7 @@ public:
 private:
     const Context & global_context;
     DMFilePtr dmfile;
+    const RowID start_row_id;
 
     std::vector<Handle> pack_index; // max value of each pack
     std::vector<PackEntry> pack_entries;
