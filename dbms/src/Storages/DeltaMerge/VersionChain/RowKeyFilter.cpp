@@ -26,7 +26,7 @@ namespace
 {
 template <Int64OrString Handle>
 UInt32 buildRowKeyFilterVector(
-    std::span<const Handle> handles,
+    const PaddedPODArray<Handle> & handles,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
@@ -64,11 +64,11 @@ UInt32 buildRowKeyFilterBlock(
     auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: MUST read all rows in one block!", cf.toString());
-    auto handles_col = block.begin()->column;
-    const auto * handles = toColumnVectorDataPtr<Int64>(handles_col);
-    RUNTIME_CHECK_MSG(handles != nullptr, "TODO: support common handle");
+    const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.begin()->column);
+    RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
+    const auto & handles = *handles_ptr;
     return buildRowKeyFilterVector<Handle>(
-        std::span{handles->data(), handles->size()},
+        handles,
         delete_ranges,
         read_ranges,
         start_row_id,
@@ -127,27 +127,26 @@ UInt32 buildRowKeyFilterDMFile(
         return rows;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
-    builder.setRowsThreshold(need_read_rows).setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
+    builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(dmfile, {getHandleColumnDefine<Handle>()}, {}, dm_context.scan_context);
-
-    auto block = stream->read();
-    RUNTIME_CHECK(block.rows() == need_read_rows, block.rows(), need_read_rows);
-    auto handle_col = block.begin()->column;
-    const auto * handles = toColumnVectorDataPtr<Int64>(handle_col);
-    RUNTIME_CHECK_MSG(handles != nullptr, "TODO: support common handle");
-
-    UInt32 offset = 0;
+    UInt32 read_rows = 0;
     for (auto pack_id : *read_packs)
     {
+        auto block = stream->read();
+        const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.begin()->column);
+        RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
+        const auto & handles = *handles_ptr;
+
         const auto itr = read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
-        offset += buildRowKeyFilterVector(
-            std::span{handles->data() + offset, pack_stats[pack_id].rows},
+        read_rows += buildRowKeyFilterVector(
+            handles,
             delete_ranges,
             read_ranges,
-            itr->second,
+            itr->second,  // start_row_id
             filter);
     }
+    RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
     return rows;
 }
 
