@@ -28,6 +28,7 @@ namespace DB::DM
     const ColumnFile & cf,
     const UInt64 read_ts,
     const std::vector<RowID> & base_ver_snap,
+    const UInt32 stable_rows,
     const UInt32 start_row_id,
     std::vector<UInt8> & filter)
 {
@@ -38,6 +39,8 @@ namespace DB::DM
         return 0;
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
     const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success.
+
+    fmt::println("{}:versions={}, base_ver_snap={}, start_row_id={}", __FUNCTION__, versions, base_ver_snap, start_row_id);
     // Traverse data from new to old
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
@@ -55,8 +58,9 @@ namespace DB::DM
 
         // visible
 
-        const auto base_row_id = base_ver_snap[row_id];
+        const auto base_row_id = base_ver_snap[row_id - stable_rows];
         // Newer version has been chosen.
+        fmt::println("{}:base_row_id={}, filter.size={}", __FUNCTION__, base_row_id, filter.size());
         if (base_row_id != NotExistRowID && !filter[base_row_id])
         {
             filter[row_id] = 0;
@@ -244,7 +248,7 @@ void buildVersionFilter(
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
             const auto n
-                = buildVersionFilterBlock(dm_context, data_provider, *cf, read_ts, base_ver_snap, start_row_id, filter);
+                = buildVersionFilterBlock(dm_context, data_provider, *cf, read_ts, base_ver_snap, stable_rows, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
