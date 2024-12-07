@@ -67,12 +67,7 @@ UInt32 buildRowKeyFilterBlock(
     const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.begin()->column);
     RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
     const auto & handles = *handles_ptr;
-    return buildRowKeyFilterVector<Handle>(
-        handles,
-        delete_ranges,
-        read_ranges,
-        start_row_id,
-        filter);
+    return buildRowKeyFilterVector<Handle>(handles, delete_ranges, read_ranges, start_row_id, filter);
 }
 
 template <Int64OrString Handle>
@@ -143,7 +138,7 @@ UInt32 buildRowKeyFilterDMFile(
             handles,
             delete_ranges,
             read_ranges,
-            itr->second,  // start_row_id
+            itr->second, // start_row_id
             filter);
     }
     RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);

@@ -186,21 +186,12 @@ protected:
     {
         auto [seg, snap] = getSegmentForRead(seg_id);
 
-        auto bitmap_filter = seg->buildBitmapFilter(
-            *dm_context,
-            snap,
-            {seg->getRowKeyRange()},
-            nullptr,
-            read_ts,
-            DEFAULT_BLOCK_SIZE);
+        auto bitmap_filter
+            = seg->buildBitmapFilter(*dm_context, snap, {seg->getRowKeyRange()}, nullptr, read_ts, DEFAULT_BLOCK_SIZE);
 
         VersionChain<Int64> version_chain;
-        auto bitmap_filter2 = buildBitmapFilter<Int64>(
-            *dm_context,
-            *snap,
-            {seg->getRowKeyRange()},
-            read_ts,
-            version_chain);
+        auto bitmap_filter2
+            = buildBitmapFilter<Int64>(*dm_context, *snap, {seg->getRowKeyRange()}, read_ts, version_chain);
 
         ASSERT_EQ(bitmap_filter->toDebugString(), bitmap_filter2->toDebugString());
     }

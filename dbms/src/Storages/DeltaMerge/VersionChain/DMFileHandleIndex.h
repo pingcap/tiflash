@@ -17,8 +17,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
-#include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/VersionChain/Common.h>
 namespace DB::DM
 {
 
