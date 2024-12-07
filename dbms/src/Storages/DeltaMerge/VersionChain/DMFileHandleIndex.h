@@ -49,7 +49,10 @@ public:
         auto pack_entry = getPackEntry(h);
         if (!pack_entry)
             return {};
-        return start_row_id + getBaseVersion(h, pack_entry->offset, pack_entry->rows);
+        auto row_id = getBaseVersion(h, pack_entry->offset, pack_entry->rows);
+        if (!row_id)
+            return {};
+        return start_row_id + *row_id;
     }
 
     template <Int64OrStringView HandleView>
