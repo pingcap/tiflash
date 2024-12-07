@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-
+#include <Storages/DeltaMerge/ScanContext.h>
 namespace DB::DM
 {
 
@@ -111,6 +111,7 @@ public:
         if (likely(handle_column))
             return;
 
+        auto scan_context = std::make_shared<ScanContext>(); // TODO: use dm_context.scan_context
         // TODO: load by segment range.
         DMFileReader reader(
             dmfile,
@@ -131,7 +132,7 @@ public:
             /*read_one_pack_every_time*/ false,
             "DMFileHandleIndex",
             /*max_sharing_column_bytes_for_all*/ false,
-            /*scan_context*/ nullptr,
+            scan_context,
             ReadTag::MVCC);
         auto block = reader.read();
         handle_column = block.begin()->column;
