@@ -80,25 +80,27 @@ UInt32 buildDeletedFilterDMFile(
         return rows;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
-    builder.setRowsThreshold(need_read_rows).setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
+    builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(dmfile, {getTagColumnDefine()}, {}, dm_context.scan_context);
-    auto block = stream->read();
-    RUNTIME_CHECK(block.rows() == need_read_rows, block.rows(), need_read_rows);
-    const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success
-
-    UInt32 offset = 0;
+    UInt32 read_rows = 0;
     for (auto pack_id : *read_packs)
     {
+        auto block = stream->read();
+        RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success
+
         const auto itr = read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
         const UInt32 pack_start_row_id = itr->second;
-        for (UInt32 i = 0; i < pack_stats[pack_id].rows; ++i)
+
+        for (UInt32 i = 0; i < deleteds.size(); ++i)
         {
-            if (deleteds[offset + i])
+            if (deleteds[i])
                 filter[pack_start_row_id + i] = 0;
         }
-        offset += pack_stats[pack_id].rows;
+        read_rows += pack_stats[pack_id].rows;
     }
+    RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
     return rows;
 }
 

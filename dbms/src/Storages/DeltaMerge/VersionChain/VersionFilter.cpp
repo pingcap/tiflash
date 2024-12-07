@@ -40,7 +40,12 @@ namespace DB::DM
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
     const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success.
 
-    fmt::println("{}:versions={}, base_ver_snap={}, start_row_id={}", __FUNCTION__, versions, base_ver_snap, start_row_id);
+    fmt::println(
+        "{}:versions={}, base_ver_snap={}, start_row_id={}",
+        __FUNCTION__,
+        versions,
+        base_ver_snap,
+        start_row_id);
     // Traverse data from new to old
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
@@ -116,26 +121,25 @@ namespace DB::DM
     // However, the benefits in general scenarios may not be significant.
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
-    builder.setRowsThreshold(need_read_rows).setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
+    builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(
         dmfile,
         {getHandleColumnDefine<Handle>(), getVersionColumnDefine()},
         {},
         dm_context.scan_context);
-    auto block = stream->read();
-    RUNTIME_CHECK(block.rows() == need_read_rows, block.rows(), need_read_rows);
 
-    auto handle_col = block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-    const auto * handles_ptr = toColumnVectorDataPtr<Int64>(handle_col);
-    RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
-    const auto & handles = *handles_ptr;
-
-    auto version_col = block.getByName(VERSION_COLUMN_NAME).column;
-    const auto & versions = *toColumnVectorDataPtr<UInt64>(version_col); // Must success.
-
-    UInt32 offset = 0;
+    UInt32 read_rows = 0;
     for (auto pack_id : *read_packs)
     {
+        auto block = stream->read();
+        RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        read_rows += block.rows();
+        const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.getByName(EXTRA_HANDLE_COLUMN_NAME).column);
+        RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
+        const auto & handles = *handles_ptr;
+        const auto & versions
+            = *toColumnVectorDataPtr<UInt64>(block.getByName(VERSION_COLUMN_NAME).column); // Must success.
+
         const auto itr = read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
         const UInt32 pack_start_row_id = itr->second;
@@ -143,11 +147,11 @@ namespace DB::DM
         // Filter invisible versions
         if (max_versions[pack_id] > read_ts)
         {
-            for (UInt32 i = 0; i < pack_stats[pack_id].rows; ++i)
+            for (UInt32 i = 0; i < block.rows(); ++i)
             {
                 // TODO: benchmark
-                // filter[pack_start_row_id + i] = versions[offset + i] <= read_ts;
-                if unlikely (versions[offset + i] > read_ts)
+                // filter[pack_start_row_id + i] = versions[i] <= read_ts;
+                if unlikely (versions[i] > read_ts)
                     filter[pack_start_row_id + i] = 0;
             }
         }
@@ -156,7 +160,7 @@ namespace DB::DM
         if (pack_stats[pack_id].not_clean)
         {
             // [handle_itr, handle_end) is a pack.
-            auto handle_itr = handles.begin() + offset;
+            auto handle_itr = handles.begin();
             const auto handle_end = handle_itr + pack_stats[pack_id].rows;
             for (;;)
             {
@@ -188,6 +192,7 @@ namespace DB::DM
             }
         }
     }
+    RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
     return rows;
 }
 
@@ -247,8 +252,15 @@ void buildVersionFilter(
         // TODO: add clean and max version in tiny file
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n
-                = buildVersionFilterBlock(dm_context, data_provider, *cf, read_ts, base_ver_snap, stable_rows, start_row_id, filter);
+            const auto n = buildVersionFilterBlock(
+                dm_context,
+                data_provider,
+                *cf,
+                read_ts,
+                base_ver_snap,
+                stable_rows,
+                start_row_id,
+                filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
