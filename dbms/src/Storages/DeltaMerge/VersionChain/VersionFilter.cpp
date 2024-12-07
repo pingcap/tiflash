@@ -227,7 +227,7 @@ void buildVersionFilter(
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
-    const UInt32 stable_rows = stable.getRows();
+    const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
     RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
 

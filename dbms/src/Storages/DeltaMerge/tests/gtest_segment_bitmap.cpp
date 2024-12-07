@@ -179,19 +179,19 @@ protected:
             ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
         }
 
-        verifyBitmapFilter();
+        verifyBitmapFilter(SEG_ID);
     }
 
-    void verifyBitmapFilter()
+    void verifyBitmapFilter(const PageIdU64 seg_id, const UInt64 read_ts = std::numeric_limits<UInt64>::max())
     {
-        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        auto [seg, snap] = getSegmentForRead(seg_id);
 
         auto bitmap_filter = seg->buildBitmapFilter(
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
             nullptr,
-            std::numeric_limits<UInt64>::max(),
+            read_ts,
             DEFAULT_BLOCK_SIZE);
 
         VersionChain<Int64> version_chain;
@@ -199,7 +199,7 @@ protected:
             *dm_context,
             *snap,
             {seg->getRowKeyRange()},
-            std::numeric_limits<UInt64>::max(),
+            read_ts,
             version_chain);
 
         ASSERT_EQ(bitmap_filter->toDebugString(), bitmap_filter2->toDebugString());
@@ -360,6 +360,9 @@ try
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
+    verifyBitmapFilter(SEG_ID);
+    verifyBitmapFilter(*new_seg_id);
+
     auto left_handle = getSegmentHandle(SEG_ID, {});
     const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
     auto expected_left_handle = genSequence<Int64>("[0, 128)|[200, 255)|[256, 305)|[310, 512)");
@@ -405,6 +408,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
     std::string expect_result;
     expect_result.append(std::string(25000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    verifyBitmapFilter(SEG_ID);
 }
 
 TEST_F(SegmentBitmapFilterTest, NotCleanStable)
@@ -432,6 +436,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '1'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+        verifyBitmapFilter(SEG_ID);
     }
     {
         // Stale read
@@ -452,6 +457,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '0'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+        verifyBitmapFilter(SEG_ID, 1);
     }
 }
 
@@ -477,6 +483,8 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
     expect_result.append(std::string(10000, '0'));
     expect_result.append(std::string(40000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+
+    verifyBitmapFilter(SEG_ID);
 }
 
 TEST_F(SegmentBitmapFilterTest, StableLogicalSplit)
@@ -493,6 +501,9 @@ try
 
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
+
+    verifyBitmapFilter(SEG_ID);
+    verifyBitmapFilter(*new_seg_id);
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
     const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
