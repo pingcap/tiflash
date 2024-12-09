@@ -482,7 +482,8 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
     if (context.isCurrentProbeFinished())
         wd.probe_handle_rows += context.rows;
 
-    if (block.rows() >= settings.max_block_size || output_block_after_finalize.columns() == 0)
+    size_t rows = block.rows();
+    if (rows == 0 || rows >= settings.max_block_size || output_block_after_finalize.columns() == 0)
         return block;
 
     if (!wd.result_block_buffer)
@@ -493,7 +494,6 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
         return output_block_after_finalize;
     }
 
-    size_t rows = block.rows();
     size_t current_rows = wd.result_block_buffer.rows();
     size_t clone_rows = std::min(settings.max_block_size - current_rows, rows);
     size_t columns = block.columns();

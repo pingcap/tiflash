@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
+#include <Operators/Operator.h>
 #include <Operators/OperatorHelper.h>
 
 namespace DB
@@ -145,6 +146,8 @@ OperatorStatus PipelineExec::executeImpl()
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
         HANDLE_OP_STATUS(transform_op, op_status, OperatorStatus::HAS_OUTPUT);
+        if (block && block.rows() == 0)
+            return OperatorStatus::NEED_INPUT;
     }
     op_status = sink_op->write(std::move(block));
     HANDLE_LAST_OP_STATUS(sink_op, op_status);

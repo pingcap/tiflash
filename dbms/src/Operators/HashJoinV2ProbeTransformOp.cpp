@@ -15,6 +15,8 @@
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/HashJoinV2ProbeTransformOp.h>
 
+#include "Operators/Operator.h"
+
 namespace DB
 {
 
@@ -51,7 +53,8 @@ OperatorStatus HashJoinV2ProbeTransformOp::onOutput(Block & block)
 {
     assert(!probe_context.isCurrentProbeFinished());
     block = join_ptr->joinBlock(probe_context, op_index);
-    joined_rows += block.rows();
+    size_t rows = block.rows();
+    joined_rows += rows;
     return OperatorStatus::HAS_OUTPUT;
 }
 
