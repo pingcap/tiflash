@@ -61,7 +61,7 @@ public:
     Block joinBlock(JoinProbeContext & context, size_t stream_index);
 
     void removeUselessColumn(Block & block) const;
-    void removeUselessColumnForOutput(Block & block) const;
+    Block removeUselessColumnForOutput(const Block & block) const;
 
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }

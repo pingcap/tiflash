@@ -168,7 +168,7 @@ public:
         wd.insert_batch.reserve(settings.probe_insert_batch_size);
 
         wd.selective_offsets.clear();
-        wd.selective_offsets.reserve(context.rows);
+        wd.selective_offsets.reserve(settings.max_block_size);
 
         if (pointer_table.enableProbePrefetch() && !wd.prefetch_states)
         {

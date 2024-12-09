@@ -478,7 +478,7 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
     {
         Block block = doJoinBlock(context, stream_index);
         assert(block);
-        removeUselessColumnForOutput(block);
+        block = removeUselessColumnForOutput(block);
         result_rows += block.rows();
         result_blocks.push_back(std::move(block));
         /// exit the while loop if
@@ -568,20 +568,16 @@ void HashJoin::removeUselessColumn(Block & block) const
     }
 }
 
-void HashJoin::removeUselessColumnForOutput(Block & block) const
+Block HashJoin::removeUselessColumnForOutput(const Block & block) const
 {
-    for (size_t pos = 0; pos < block.columns();)
+    // remove useless columns and adjust the order of columns
+    Block projected_block;
+    for (const auto & name_and_type : output_columns_after_finalize)
     {
-        if (!output_column_names_set_after_finalize.contains(block.getByPosition(pos).name))
-            block.erase(pos);
-        else
-            ++pos;
+        const auto & column = block.getByName(name_and_type.name);
+        projected_block.insert(std::move(column));
     }
-    RUNTIME_CHECK_MSG(
-        block.columns() == output_column_names_set_after_finalize.size(),
-        "block.columns({}) != output_column_names_set_after_finalize.size({})",
-        block.columns(),
-        output_column_names_set_after_finalize.size());
+    return projected_block;
 }
 
 void HashJoin::finalize(const Names & parent_require)
@@ -597,7 +593,7 @@ void HashJoin::finalize(const Names & parent_require)
         required_names_set.insert(name);
     if unlikely (!match_helper_name.empty() && !required_names_set.contains(match_helper_name))
     {
-        /// should only happens in some tests
+        /// should only happen in some tests
         required_names_set.insert(match_helper_name);
     }
     for (const auto & name_and_type : output_columns)
