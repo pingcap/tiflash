@@ -27,6 +27,8 @@
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 
+#include "Columns/IColumn.h"
+
 
 namespace DB
 {
@@ -73,6 +75,11 @@ public:
 
     const JoinProfileInfoPtr & getProfileInfo() const { return profile_info; }
 
+    Block getResultBlockBuffer(size_t stream_index)
+    {
+        return std::move(probe_workers_data[stream_index].result_block_buffer);
+    }
+
 private:
     void initRowLayoutAndHashJoinMethod();
 
@@ -85,7 +92,6 @@ private:
 private:
     const ASTTableJoin::Kind kind;
     const String join_req_id;
-    const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
     Names key_names_left;

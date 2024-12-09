@@ -77,6 +77,8 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t collision = 0;
 
     ColumnUInt8::MutablePtr filter_column = ColumnUInt8::create();
+
+    Block result_block_buffer;
 };
 
 void joinProbeBlock(

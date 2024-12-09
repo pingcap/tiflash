@@ -19,6 +19,8 @@
 #include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/NullableUtils.h>
 
+#include "ext/scope_guard.h"
+
 namespace DB
 {
 
@@ -104,7 +106,6 @@ HashJoin::HashJoin(
     const String & match_helper_name_)
     : kind(kind_)
     , join_req_id(req_id)
-    , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , collators(collators_)
@@ -460,6 +461,8 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
     RUNTIME_ASSERT(stream_index < probe_concurrency);
 
     Stopwatch watch;
+    SCOPE_EXIT({ probe_workers_data[stream_index].probe_time += watch.elapsedFromLastTime(); });
+
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
         : output_column_names_set_after_finalize;
@@ -472,30 +475,55 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
         collators,
         row_layout);
 
-    std::vector<Block> result_blocks;
-    size_t result_rows = 0;
-    while (true)
+    Block block = doJoinBlock(context, stream_index);
+    assert(block);
+    block = removeUselessColumnForOutput(block);
+    auto & wd = probe_workers_data[stream_index];
+    if (context.isCurrentProbeFinished())
+        wd.probe_handle_rows += context.rows;
+
+    if (block.rows() >= settings.max_block_size || output_block_after_finalize.columns() == 0)
+        return block;
+
+    if (!wd.result_block_buffer)
     {
-        Block block = doJoinBlock(context, stream_index);
-        assert(block);
-        block = removeUselessColumnForOutput(block);
-        result_rows += block.rows();
-        result_blocks.push_back(std::move(block));
-        /// exit the while loop if
-        /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
-        /// 2. the block may be expanded after join and result_rows exceeds the max_block_size
-        if (context.isCurrentProbeFinished())
-        {
-            probe_workers_data[stream_index].probe_handle_rows += context.rows;
-            break;
-        }
-        if (may_probe_side_expanded_after_join && result_rows >= settings.max_block_size)
-            break;
+        wd.result_block_buffer = std::move(block);
+        for (auto & column : wd.result_block_buffer)
+            column.column->assumeMutable()->reserve(settings.max_block_size);
+        return output_block_after_finalize;
     }
-    assert(!result_blocks.empty());
-    auto && ret = vstackBlocks(std::move(result_blocks));
-    probe_workers_data[stream_index].probe_time += watch.elapsedFromLastTime();
-    return std::move(ret);
+
+    size_t rows = block.rows();
+    size_t current_rows = wd.result_block_buffer.rows();
+    size_t clone_rows = std::min(settings.max_block_size - current_rows, rows);
+    size_t columns = block.columns();
+    assert(columns == wd.result_block_buffer.columns());
+    for (size_t i = 0; i < columns; ++i)
+        wd.result_block_buffer.getByPosition(i).column->assumeMutable()->insertRangeFrom(
+            *block.getByPosition(i).column.get(),
+            0,
+            clone_rows);
+
+    if (current_rows + clone_rows >= settings.max_block_size)
+    {
+        Block res = std::move(wd.result_block_buffer);
+
+        if (clone_rows < rows)
+        {
+            wd.result_block_buffer = output_block_after_finalize.cloneEmpty();
+            for (auto & column : wd.result_block_buffer)
+                column.column->assumeMutable()->reserve(settings.max_block_size);
+
+            for (size_t i = 0; i < columns; ++i)
+                wd.result_block_buffer.getByPosition(i).column->assumeMutable()->insertRangeFrom(
+                    *block.getByPosition(i).column.get(),
+                    clone_rows,
+                    rows - clone_rows);
+        }
+        return res;
+    }
+
+    return output_block_after_finalize;
 }
 
 Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)

@@ -61,6 +61,7 @@ OperatorStatus HashJoinV2ProbeTransformOp::transformImpl(Block & block)
     if unlikely (!block)
     {
         join_ptr->finishOneProbe(op_index);
+        block = join_ptr->getResultBlockBuffer(op_index);
         return OperatorStatus::HAS_OUTPUT;
     }
     if (block.rows() == 0)
