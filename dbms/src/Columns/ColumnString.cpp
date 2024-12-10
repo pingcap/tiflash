@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/filterColumn.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <TiDB/Collation/CollatorUtils.h>
