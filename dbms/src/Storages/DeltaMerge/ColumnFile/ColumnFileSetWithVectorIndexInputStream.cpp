@@ -134,11 +134,13 @@ Block ColumnFileSetWithVectorIndexInputStream::read()
             Block block;
             if (!rest_col_defs->empty())
             {
+                block = readOtherColumns();
                 filter.clear();
                 filter.resize_fill(file_rows, 0);
                 for (const auto rowid : file_selected_rows)
                     filter[rowid - read_rows] = 1;
-                block = readOtherColumns();
+                for (auto & col : block)
+                    col.column = col.column->filter(filter, selected_rows);
 
                 assert(block.rows() == selected_rows);
             }
@@ -152,15 +154,15 @@ Block ColumnFileSetWithVectorIndexInputStream::read()
             return block;
         }
         // If file does not have index, reader by cur_column_file_reader.
-        // Call readNextBlock rather than readWithFilter since we do not know the rows of next block (especially for ColumnFileBig).
         auto block = (*cur_column_file_reader)->readNextBlock();
         if (block)
         {
             block.setStartOffset(read_rows);
             size_t rows = block.rows();
             filter = valid_rows.createRawSubView(read_rows, rows);
+            size_t passed_count = countBytesInFilter(filter);
             for (auto & col : block)
-                col.column = col.column->filter(filter, rows);
+                col.column = col.column->filter(filter, passed_count);
             read_rows += rows;
             return block;
         }

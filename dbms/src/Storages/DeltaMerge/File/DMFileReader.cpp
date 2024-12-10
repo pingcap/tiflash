@@ -189,19 +189,24 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         const auto [new_start_pack_id, new_pack_count, new_rs_result, new_read_rows] = read_block_infos.front();
         const size_t new_start_row_offset = pack_id_to_offset[new_start_pack_id];
 
-        IColumn::Filter block_filter{
-            filter.cbegin() + new_start_row_offset - start_row_offset,
-            filter.cbegin() + new_start_row_offset - start_row_offset + new_read_rows,
-        };
+        const auto offset_begin = new_start_row_offset - start_row_offset;
+        const auto offset_end = offset_begin + new_read_rows;
 
         Block block = read();
-        if (size_t passed_count = countBytesInFilter(block_filter); passed_count != new_read_rows)
+        if (size_t passed_count = countBytesInFilter(filter, offset_begin, new_read_rows);
+            passed_count != new_read_rows)
         {
+            std::vector<size_t> positions;
+            positions.reserve(passed_count);
+            for (size_t i = offset_begin; i < offset_end; ++i)
+            {
+                if (filter[i])
+                    positions.push_back(i - offset_begin);
+            }
             for (size_t i = 0; i < block.columns(); ++i)
             {
                 auto column = block.getByPosition(i).column;
-                column = column->filter(block_filter, passed_count);
-                columns[i]->insertRangeFrom(*column, 0, passed_count);
+                columns[i]->insertDisjunctFrom(*column, positions);
             }
         }
         else
