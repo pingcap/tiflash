@@ -111,12 +111,11 @@ struct RegionLockCFDataTrait
         auto key = std::make_shared<const TiKVKey>(std::move(key_));
         auto value = std::make_shared<const TiKVValue>(std::move(value_));
         auto lo = std::make_shared<const DecodedLockCFValue>(key, value);
-        if (lo->lock_type == kvrpcpb::Op::PessimisticLock) {
+        if (lo->getLockType() == kvrpcpb::Op::PessimisticLock)
+        {
             GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_put).Increment(1);
         }
-        return {
-            {key, std::string_view(key->data(), key->dataSize())},
-            Value{key, value, std::move(lo)}};
+        return {{key, std::string_view(key->data(), key->dataSize())}, Value{key, value, std::move(lo)}};
     }
 };
 

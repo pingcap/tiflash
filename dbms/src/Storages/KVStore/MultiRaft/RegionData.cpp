@@ -224,14 +224,14 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
         std::ignore = tikv_val;
         const auto & lock_info = *lock_info_ptr;
 
-        if (lock_info.lock_version > query.read_tso || lock_info.lock_type == kvrpcpb::Op::Lock
-            || lock_info.lock_type == kvrpcpb::Op::PessimisticLock)
+        if (lock_info.getLockVersion() > query.read_tso || lock_info.getLockType() == kvrpcpb::Op::Lock
+            || lock_info.getLockType() == kvrpcpb::Op::PessimisticLock)
             continue;
-        if (lock_info.min_commit_ts > query.read_tso)
+        if (lock_info.getMinCommitTs() > query.read_tso)
             continue;
         if (query.bypass_lock_ts)
         {
-            if (query.bypass_lock_ts->count(lock_info.lock_version))
+            if (query.bypass_lock_ts->count(lock_info.getLockVersion()))
             {
                 GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
                 continue;
@@ -367,7 +367,8 @@ RegionData & RegionData::operator=(RegionData && rhs)
     return *this;
 }
 
-String RegionData::summary() const {
+String RegionData::summary() const
+{
     return fmt::format("write:{},lock:{},default:{}", write_cf.getSize(), lock_cf.getSize(), default_cf.getSize());
 }
 
