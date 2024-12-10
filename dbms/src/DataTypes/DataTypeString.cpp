@@ -504,7 +504,8 @@ DataTypeString::DataTypeString(SerdesFormat serdes_fmt_)
 
 String DataTypeString::getDefaultName()
 {
-    if (STORAGE_FORMAT_CURRENT.identifier < 8 || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
+    if (STORAGE_FORMAT_CURRENT.identifier < 8
+        || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
     {
         return LegacyName;
     }
