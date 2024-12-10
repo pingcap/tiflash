@@ -150,15 +150,23 @@ TEST(TiKVKeyValueTest, PortedTests)
         {
             auto & lock_info = lock;
             ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.getLockType());
-            ASSERT_TRUE("primary key" == lock_info.getPrimaryLock());
             ASSERT_TRUE(421321 == lock_info.getLockVersion());
             ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.getLockTtl());
             ASSERT_TRUE(66666 == lock_info.getMinCommitTs());
             ASSERT_TRUE(ori_key == lock_info.key);
             ASSERT_EQ(lock_for_update_ts, lock_info.getLockForUpdateTs());
             ASSERT_EQ(txn_size, lock_info.getTxnSize());
-
             ASSERT_EQ(true, lock_info.getUseAsyncCommit());
+            lock_info.withInner([&](const auto & in) {
+                ASSERT_TRUE(kvrpcpb::Op::Del == in.lock_type);
+                ASSERT_TRUE("primary key" == in.primary_lock);
+                ASSERT_TRUE(421321 == in.lock_version);
+                ASSERT_TRUE(std::numeric_limits<UInt64>::max() == in.lock_ttl);
+                ASSERT_TRUE(66666 == in.min_commit_ts);
+                ASSERT_EQ(lock_for_update_ts, in.lock_for_update_ts);
+                ASSERT_EQ(txn_size, in.txn_size);
+                ASSERT_EQ(true, in.use_async_commit);
+            });
         }
         {
             auto lock_info = lock.intoLockInfo();
@@ -482,15 +490,24 @@ try
     {
         auto & lock_info = lock;
         ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.getLockType());
-        ASSERT_TRUE("primary key" == lock_info.getPrimaryLock());
         ASSERT_TRUE(421321 == lock_info.getLockVersion());
         ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.getLockTtl());
         ASSERT_TRUE(66666 == lock_info.getMinCommitTs());
         ASSERT_TRUE(ori_key == lock_info.key);
         ASSERT_EQ(lock_for_update_ts, lock_info.getLockForUpdateTs());
         ASSERT_EQ(txn_size, lock_info.getTxnSize());
-
         ASSERT_EQ(true, lock_info.getUseAsyncCommit());
+
+        lock_info.withInner([&](const auto & in) {
+            ASSERT_TRUE(kvrpcpb::Op::Del == in.lock_type);
+            ASSERT_TRUE("primary key" == in.primary_lock);
+            ASSERT_TRUE(421321 == in.lock_version);
+            ASSERT_TRUE(std::numeric_limits<UInt64>::max() == in.lock_ttl);
+            ASSERT_TRUE(66666 == in.min_commit_ts);
+            ASSERT_EQ(lock_for_update_ts, in.lock_for_update_ts);
+            ASSERT_EQ(txn_size, in.txn_size);
+            ASSERT_EQ(true, in.use_async_commit);
+        });
     }
 }
 CATCH

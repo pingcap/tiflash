@@ -23,9 +23,11 @@ namespace RecordKVFormat
 {
 
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
-inline void decodeLockCfValue(DecodedLockCFValue & res)
+[[nodiscard]] DecodedLockCFValue::Inner * decodeLockCfValue(const DecodedLockCFValue & decoded)
 {
-    const TiKVValue & value = *res.val;
+    auto * inner = new DecodedLockCFValue::Inner{};
+    auto & res = *inner;
+    const TiKVValue & value = *decoded.val;
     const char * data = value.data();
     size_t len = value.dataSize();
 
@@ -146,38 +148,54 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
     }
     if (len != 0)
         throw Exception("invalid lock value " + value.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+    return inner;
 }
 
 DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_)
     : key(std::move(key_))
     , val(std::move(val_))
 {
-    decodeLockCfValue(*this);
+    // TODO do not cache when meets large txn, otherwise, still cache
+    // decodeLockCfValue(*this);
+}
+
+void DecodedLockCFValue::withInner(std::function<void(const DecodedLockCFValue::Inner &)> f) const
+{
+    if likely (inner != nullptr)
+    {
+        f(*inner);
+        return;
+    }
+    // We own a raw pointer here, remember to release it!
+    DecodedLockCFValue::Inner * in = decodeLockCfValue(*this);
+    f(*in);
+    delete in;
 }
 
 void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
 {
-    res.set_lock_type(lock_type);
-    res.set_primary_lock(primary_lock.data(), primary_lock.size());
-    res.set_lock_version(lock_version);
-    res.set_lock_ttl(lock_ttl);
-    res.set_min_commit_ts(min_commit_ts);
-    res.set_lock_for_update_ts(lock_for_update_ts);
-    res.set_txn_size(txn_size);
-    res.set_use_async_commit(use_async_commit);
-    res.set_key(decodeTiKVKey(*key));
-    res.set_is_txn_file(is_txn_file);
-
-    if (use_async_commit)
-    {
-        const auto * data = secondaries.data();
-        auto len = secondaries.size();
-        UInt64 cnt = readVarUInt(data, len);
-        for (UInt64 i = 0; i < cnt; ++i)
+    withInner([&](const Inner & in) {
+        res.set_lock_type(in.lock_type);
+        res.set_primary_lock(in.primary_lock.data(), in.primary_lock.size());
+        res.set_lock_version(in.lock_version);
+        res.set_lock_ttl(in.lock_ttl);
+        res.set_min_commit_ts(in.min_commit_ts);
+        res.set_lock_for_update_ts(in.lock_for_update_ts);
+        res.set_txn_size(in.txn_size);
+        res.set_use_async_commit(in.use_async_commit);
+        res.set_key(decodeTiKVKey(*key));
+        res.set_is_txn_file(in.is_txn_file);
+        if (in.use_async_commit)
         {
-            res.add_secondaries(readVarString<std::string>(data, len));
+            const auto * data = in.secondaries.data();
+            auto len = in.secondaries.size();
+            UInt64 cnt = readVarUInt(data, len);
+            for (UInt64 i = 0; i < cnt; ++i)
+            {
+                res.add_secondaries(readVarString<std::string>(data, len));
+            }
         }
-    }
+    });
 }
 
 std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
@@ -189,7 +207,68 @@ std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
 
 bool DecodedLockCFValue::isLargeTxn() const
 {
-    return generation > 0;
+    auto g = 0;
+    withInner([&](const Inner & in) { g = in.generation; });
+    return g > 0;
+}
+
+UInt64 DecodedLockCFValue::getLockVersion() const
+{
+    auto x = 0;
+    withInner([&](const Inner & in) { x = in.lock_version; });
+    return x;
+}
+UInt64 DecodedLockCFValue::getLockTtl() const
+{
+    auto x = 0;
+    withInner([&](const Inner & in) { x = in.lock_ttl; });
+    return x;
+}
+UInt64 DecodedLockCFValue::getTxnSize() const
+{
+    auto x = 0;
+    withInner([&](const Inner & in) { x = in.txn_size; });
+    return x;
+}
+UInt64 DecodedLockCFValue::getLockForUpdateTs() const
+{
+    auto x = 0;
+    withInner([&](const Inner & in) { x = in.lock_for_update_ts; });
+    return x;
+}
+kvrpcpb::Op DecodedLockCFValue::getLockType() const
+{
+    kvrpcpb::Op x;
+    withInner([&](const Inner & in) { x = in.lock_type; });
+    return x;
+}
+
+bool DecodedLockCFValue::getUseAsyncCommit() const
+{
+    auto x = false;
+    withInner([&](const Inner & in) { x = in.use_async_commit; });
+    return x;
+}
+
+UInt64 DecodedLockCFValue::getMinCommitTs() const
+{
+    auto x = 0;
+    withInner([&](const Inner & in) { x = in.min_commit_ts; });
+    return x;
+}
+
+bool DecodedLockCFValue::getIsTxnFile() const
+{
+    auto x = false;
+    withInner([&](const Inner & in) { x = in.is_txn_file; });
+    return x;
+}
+
+UInt64 DecodedLockCFValue::getGeneration() const
+{
+    auto x = 0;
+    withInner([&](const Inner & in) { x = in.generation; });
+    return x;
 }
 
 } // namespace RecordKVFormat

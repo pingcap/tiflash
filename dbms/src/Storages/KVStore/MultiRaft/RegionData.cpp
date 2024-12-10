@@ -18,6 +18,7 @@
 #include <Storages/KVStore/FFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
+#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 
 namespace DB
 {
@@ -222,21 +223,36 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
         const auto & [tikv_key, tikv_val, lock_info_ptr] = value;
         std::ignore = tikv_key;
         std::ignore = tikv_val;
-        const auto & lock_info = *lock_info_ptr;
+        const auto & lock_info_raw = *lock_info_ptr;
 
-        if (lock_info.getLockVersion() > query.read_tso || lock_info.getLockType() == kvrpcpb::Op::Lock
-            || lock_info.getLockType() == kvrpcpb::Op::PessimisticLock)
-            continue;
-        if (lock_info.getMinCommitTs() > query.read_tso)
-            continue;
-        if (query.bypass_lock_ts)
-        {
-            if (query.bypass_lock_ts->count(lock_info.getLockVersion()))
+        bool should_continue = false;
+        lock_info_raw.withInner([&](const RecordKVFormat::DecodedLockCFValue::Inner & in) {
+            if (in.lock_version > query.read_tso || in.lock_type == kvrpcpb::Op::Lock
+                || in.lock_type == kvrpcpb::Op::PessimisticLock)
             {
-                GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
-                continue;
+                should_continue = true;
+                return;
             }
+            if (in.min_commit_ts > query.read_tso)
+            {
+                should_continue = true;
+                return;
+            }
+            if (query.bypass_lock_ts)
+            {
+                if (query.bypass_lock_ts->count(in.lock_version))
+                {
+                    GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
+                    should_continue = true;
+                }
+            }
+            return;
+        });
+        if (should_continue)
+        {
+            continue;
         }
+
         return lock_info_ptr;
     }
 
