@@ -100,7 +100,6 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    std::pair<size_t, RSResult> getReadRows();
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
@@ -143,8 +142,11 @@ private:
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
 
-    void initAllMatchBlockInfo();
-    size_t getReadPackLimit(size_t start_pack_id);
+    void initReadBlockInfos();
+    // Will add some new read info to read_block_infos
+    // Used by readWithFilter
+    // Return the number of new added read infos
+    size_t updateReadBlockInfos(const IColumn::Filter & filter, size_t pack_start, size_t pack_end);
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;
@@ -181,9 +183,6 @@ private:
     const size_t rows_threshold_per_read;
     const size_t max_sharing_column_bytes;
 
-    size_t next_pack_id = 0;
-    size_t next_row_offset = 0;
-
     FileProviderPtr file_provider;
 
     LoggerPtr log;
@@ -191,11 +190,12 @@ private:
     // DataSharing
     ColumnCachePtr data_sharing_col_data_cache;
 
-    // <start_pack, pack_count>
-    // Each pair object indicates several continuous packs with RSResult::All and will be read as a Block.
-    // It is sorted by start_pack.
-    std::queue<std::pair<size_t, size_t>> all_match_block_infos;
-    std::unordered_map<ColId, bool> last_read_from_cache{};
+    // <start_pack_id, pack_count, RSResult, read_rows>
+    std::deque<std::tuple<size_t, size_t, RSResult, size_t>> read_block_infos;
+    // <pack_id, offset>
+    std::unordered_map<size_t, size_t> pack_id_to_offset;
+    // last read pack_id + 1, used by getSkippedRows
+    size_t next_pack_id = 0;
 
 public:
     void setColumnCacheLongTerm(ColumnCacheLongTermPtr column_cache_long_term_, ColumnID pk_col_id_)
