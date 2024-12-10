@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Columns/ColumnsCommon.h>
 #include <Columns/IColumn.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/Arena.h>
 
 

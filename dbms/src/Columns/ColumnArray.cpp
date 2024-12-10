@@ -17,8 +17,8 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/filterColumn.h>
 #include <Common/Arena.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
@@ -30,7 +30,6 @@
 #include <IO/WriteHelpers.h>
 #include <string.h> // memcpy
 
-#include <memory>
 
 namespace DB
 {
