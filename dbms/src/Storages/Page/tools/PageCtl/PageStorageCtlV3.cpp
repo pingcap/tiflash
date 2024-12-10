@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Checksum.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
@@ -871,7 +872,7 @@ private:
         ChecksumClass digest;
         digest.update(buffer, size);
         auto checksum = digest.checksum();
-        fmt::print("checksum: 0x{:X}\n", checksum);
+        fmt::println("checksum: 0x{:X}", checksum);
 
         auto hex_str = Redact::keyToHexString(buffer, size);
         delete[] buffer;

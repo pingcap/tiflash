@@ -73,16 +73,6 @@ public:
         bool auto_start = true;
     };
 
-private:
-    struct InternalTask
-    {
-        const Task user_task;
-        Stopwatch created_at{};
-        Stopwatch scheduled_at{};
-    };
-
-    using InternalTaskPtr = std::shared_ptr<InternalTask>;
-
 public:
     static LocalIndexerSchedulerPtr create(const Options & options)
     {
@@ -94,16 +84,16 @@ public:
     ~LocalIndexerScheduler();
 
     /**
+     * @brief Stop the scheduler and wait for running tasks to finish.
+     * Note that this method won't clear the task pushed.
+     */
+    void shutdown();
+
+    /**
      * @brief Start the scheduler. In some tests we need to start scheduler
      * after some tasks are pushed.
      */
     void start();
-
-    /**
-     * @brief Blocks until there is no tasks remaining in the queue and there is no running tasks.
-     * Should be only used in tests.
-     */
-    void waitForFinish();
 
     /**
      * @brief Push a task to the pool. The task may not be scheduled immediately.
@@ -114,10 +104,25 @@ public:
 
     /**
     * @brief Drop all tasks matching specified keyspace id and table id.
+    * Note that this method won't drop the running tasks.
     */
     size_t dropTasks(KeyspaceID keyspace_id, TableID table_id);
 
+    /**
+     * @brief Blocks until there is no tasks remaining in the queue and there is no running tasks.
+     * **Should be only used in tests**.
+     */
+    void waitForFinish();
+
 private:
+    struct InternalTask
+    {
+        const Task user_task;
+        Stopwatch created_at{};
+        Stopwatch scheduled_at{};
+    };
+    using InternalTaskPtr = std::shared_ptr<InternalTask>;
+
     struct FileIDHasher
     {
         std::size_t operator()(const FileID & id) const
@@ -147,9 +152,6 @@ private:
     void moveBackReadyTasks(std::unique_lock<std::mutex> & lock);
 
 private:
-    bool is_started = false;
-    std::thread scheduler_thread;
-
     /// Try to add a task to the pool. Returns false if the pool is full
     /// (for example, reaches concurrent task limit or memory limit).
     /// When pool is full, we will not try to schedule any more tasks at this moment.
@@ -159,6 +161,9 @@ private:
     /// only schedule small tasks, keep large tasks starving under
     /// heavy pressure.
     bool tryAddTaskToPool(std::unique_lock<std::mutex> & lock, const InternalTaskPtr & task);
+
+    std::thread scheduler_thread;
+    bool is_started = false;
 
     KeyspaceID last_schedule_keyspace_id = 0;
     std::map<KeyspaceID, TableID> last_schedule_table_id_by_ks;

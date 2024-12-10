@@ -417,24 +417,34 @@ SegmentPtr Segment::restoreSegment( //
     DMContext & context,
     PageIdU64 segment_id)
 {
-    Page page = context.storage_pool->metaReader()->read(segment_id); // not limit restore
-
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     Segment::SegmentMetaInfo segment_info;
-    readSegmentMetaInfo(buf, segment_info);
+    try
+    {
+        Page page = context.storage_pool->metaReader()->read(segment_id); // not limit restore
 
-    auto delta = DeltaValueSpace::restore(context, segment_info.range, segment_info.delta_id);
-    auto stable = StableValueSpace::restore(context, segment_info.stable_id);
-    auto segment = std::make_shared<Segment>(
-        parent_log,
-        segment_info.epoch,
-        segment_info.range,
-        segment_id,
-        segment_info.next_segment_id,
-        delta,
-        stable);
+        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+        readSegmentMetaInfo(buf, segment_info);
 
-    return segment;
+        auto delta = DeltaValueSpace::restore(context, segment_info.range, segment_info.delta_id);
+        auto stable = StableValueSpace::restore(context, segment_info.stable_id);
+        auto segment = std::make_shared<Segment>(
+            parent_log,
+            segment_info.epoch,
+            segment_info.range,
+            segment_id,
+            segment_info.next_segment_id,
+            delta,
+            stable);
+
+        return segment;
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format("while restoreSegment, segment_id={}", segment_id));
+        e.rethrow();
+    }
+    RUNTIME_CHECK_MSG(false, "unreachable");
+    return {};
 }
 
 Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
