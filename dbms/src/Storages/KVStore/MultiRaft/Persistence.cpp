@@ -191,6 +191,7 @@ bool KVStore::canFlushRegionDataImpl(
     const auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
 
     // TODO We will use truncated_index once Proxy/TiKV supports.
+    // They are always 0 currently.
     // When a Region is newly created in TiFlash, last_compact_log_applied is 0, we don't trigger immediately.
     if (last_compact_log_applied == 0)
     {
@@ -205,12 +206,15 @@ bool KVStore::canFlushRegionDataImpl(
 
     LOG_DEBUG(
         log,
-        "{} approx mem cache info: rows {}, bytes {}, gap {}/{}",
+        "{} approx mem cache info: rows {}, bytes {}, gap {}/{}, data_summary: {}, applied_(index): {}/{}",
         curr_region.toString(false),
         rows,
         size_bytes,
         current_applied_gap,
-        gap_threshold);
+        gap_threshold,
+        curr_region.getData().summary(),
+        curr_region.appliedIndex(),
+        index);
 
     if (can_flush && flush_if_possible)
     {

@@ -84,6 +84,7 @@ public:
     RegionData(RegionData && data);
     RegionData & operator=(RegionData &&);
 
+    String summary() const;
     struct OrphanKeysInfo
     {
         // Protected by region task lock.
@@ -127,7 +128,7 @@ private:
     RegionLockCFData lock_cf;
     OrphanKeysInfo orphan_keys_info;
 
-    // Size of data cf & write cf, without lock cf.
+    // Size of data cf & write cf, with lock cf.
     std::atomic<size_t> cf_data_size = 0;
 };
 

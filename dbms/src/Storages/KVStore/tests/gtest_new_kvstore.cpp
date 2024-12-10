@@ -1240,4 +1240,8 @@ try
 }
 CATCH
 
+TEST(PrintSize, XXX) {
+    LOG_INFO(DB::Logger::get(), "!!!! F {}", std::to_string(sizeof(RecordKVFormat::DecodedLockCFValue)));
+}
+
 } // namespace DB::tests

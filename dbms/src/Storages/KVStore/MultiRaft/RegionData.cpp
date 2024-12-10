@@ -367,4 +367,8 @@ RegionData & RegionData::operator=(RegionData && rhs)
     return *this;
 }
 
+String RegionData::summary() const {
+    return fmt::format("write:{},lock:{},default:{}", write_cf.getSize(), lock_cf.getSize(), default_cf.getSize());
+}
+
 } // namespace DB

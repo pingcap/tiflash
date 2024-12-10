@@ -153,6 +153,7 @@ public: // Stats
 
     RegionMeta & mutMeta() { return meta; }
     const RegionMeta & getMeta() const { return meta; }
+    const RegionData & getData() const { return data; }
 
     bool isPendingRemove() const;
     void setPendingRemove();

@@ -43,8 +43,8 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
-    auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto kv_pair = Trait::genKVPair(std::move(key), std::move(raw_key), std::move(value));
     if (!kv_pair)
         return 0;
 
@@ -70,7 +70,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
             if (decoded->lock_type == kvrpcpb::Op::PessimisticLock) {
                 GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_del).Increment(1);
             }
-            GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_replaced).Increment(1);
+            GET_METRIC(tiflash_raft_process_keys, type_lock_replaced).Increment(1);
         }
         if unlikely (is_large_txn)
         {

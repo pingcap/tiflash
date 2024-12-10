@@ -394,6 +394,7 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
     {
         std::ignore = write_type;
         std::ignore = value;
+        // Effectively calls `RegionData::removeDataByWriteIt`.
         if(remover.remove({handle, commit_ts})) remove_committed_count++;
     }
     GET_METRIC(tiflash_raft_process_keys, type_write_remove).Increment(remove_committed_count);
