@@ -73,6 +73,16 @@ public:
         bool auto_start = true;
     };
 
+private:
+    struct InternalTask
+    {
+        const Task user_task;
+        Stopwatch created_at{};
+        Stopwatch scheduled_at{};
+    };
+
+    using InternalTaskPtr = std::shared_ptr<InternalTask>;
+
 public:
     static LocalIndexerSchedulerPtr create(const Options & options)
     {
@@ -96,6 +106,12 @@ public:
     void start();
 
     /**
+     * @brief Blocks until there is no tasks remaining in the queue and there is no running tasks.
+     * **Should be only used in tests**.
+     */
+    void waitForFinish();
+
+    /**
      * @brief Push a task to the pool. The task may not be scheduled immediately.
      * Return <true, ""> if pushing the task is done.
      * Return <false, reason> if the task is not valid.
@@ -108,21 +124,7 @@ public:
     */
     size_t dropTasks(KeyspaceID keyspace_id, TableID table_id);
 
-    /**
-     * @brief Blocks until there is no tasks remaining in the queue and there is no running tasks.
-     * **Should be only used in tests**.
-     */
-    void waitForFinish();
-
 private:
-    struct InternalTask
-    {
-        const Task user_task;
-        Stopwatch created_at{};
-        Stopwatch scheduled_at{};
-    };
-    using InternalTaskPtr = std::shared_ptr<InternalTask>;
-
     struct FileIDHasher
     {
         std::size_t operator()(const FileID & id) const

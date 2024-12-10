@@ -303,7 +303,10 @@ bool LocalIndexerScheduler::tryAddTaskToPool(std::unique_lock<std::mutex> & lock
         }
     };
 
-    RUNTIME_CHECK(pool);
+    if (is_shutting_down || !pool)
+        // shutting down, retry again
+        return false;
+
     if (!pool->trySchedule(real_job))
         // Concurrent task limit reached
         return false;
