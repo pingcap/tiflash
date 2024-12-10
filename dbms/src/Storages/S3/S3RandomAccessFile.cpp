@@ -51,16 +51,7 @@ std::string S3RandomAccessFile::getFileName() const
     return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
 }
 
-<<<<<<< HEAD
-bool isRetryableError(int e)
-=======
-std::string S3RandomAccessFile::getInitialFileName() const
-{
-    return remote_fname;
-}
-
 namespace
->>>>>>> a98d04cc98 (Disagg: Retry when the stream state of S3 is not good (#9698))
 {
 constexpr int S3UnknownError = -1;
 constexpr int S3StreamError = -2;
