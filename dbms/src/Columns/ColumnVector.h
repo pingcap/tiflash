@@ -339,9 +339,13 @@ public:
         size_t length,
         const IColumn::Offsets & array_offsets) const;
 
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
-    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
-        override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override;
+
+    void flushNTAlignBuffer() override;
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
@@ -443,6 +447,7 @@ public:
 
 protected:
     Container data;
+    std::unique_ptr<ColumnNTAlignBufferAVX2> align_buffer_ptr;
 };
 
 

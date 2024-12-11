@@ -267,7 +267,7 @@ private:
     {
         return Poco::File(colDataPath(file_name_base)).getSize();
     }
-    size_t colIndexSize(ColId id);
+    size_t colIndexSize(ColId id) const;
     enum class ColDataType
     {
         Elements,
@@ -275,7 +275,7 @@ private:
         ArraySizes,
         StringSizes,
     };
-    size_t colDataSize(ColId id, ColDataType type);
+    size_t colDataSize(ColId id, ColDataType type) const;
 
     String colDataPath(const FileNameBase & file_name_base) const
     {

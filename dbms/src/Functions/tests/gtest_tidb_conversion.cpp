@@ -26,11 +26,48 @@
 #include <common/types.h>
 #include <gtest/gtest.h>
 
-#include <limits>
+namespace DB
+{
+template <typename T>
+void writeFloatTextNoExp(T x, WriteBuffer & buf);
+}
+
 namespace DB::tests
 {
 namespace
 {
+
+template <typename T>
+std::string formatFloat(const T x)
+{
+    std::string res;
+    WriteBufferFromString buf(res);
+    writeFloatTextNoExp(x, buf);
+    res.resize(buf.count());
+    return res;
+}
+
+String genFloatStr(std::string_view val, int zero_n)
+{
+    assert(zero_n > 0);
+
+    String s;
+    s.resize(val.size() + zero_n, '0');
+    std::memcpy(s.data(), val.data(), val.size());
+    return s;
+}
+
+String genFloatStr(int zero_n, std::string_view val)
+{
+    assert(zero_n > 0);
+
+    String s;
+    s.resize(val.size() + zero_n + 1, '0');
+    s[1] = '.';
+    std::memcpy(s.data() + zero_n + 1, val.data(), val.size());
+    return s;
+}
+
 auto getDatetimeColumn(bool single_field = false)
 {
     MyDateTime datetime(2021, 10, 26, 16, 8, 59, 0);
@@ -302,7 +339,7 @@ public:
         ASSERT_TRUE(!input_decimal.empty());
         size_t prec = input_decimal.length();
         size_t scale = 0;
-        auto pos = input_decimal.find(".");
+        auto pos = input_decimal.find('.');
         if (pos != std::string::npos)
         {
             ASSERT_TRUE(input_decimal.length() >= pos + 1);
@@ -1108,34 +1145,52 @@ CATCH
 TEST_F(TestTidbConversion, castRealAsString)
 try
 {
+    const String str_max_float32 = genFloatStr("34028235", 31);
+    const String str_min_float32 = genFloatStr(38, "11754944");
+    const String str_max_float64 = genFloatStr("17976931348623157", 292);
+    const String str_min_float64 = genFloatStr(308, "22250738585072014");
+
+    ASSERT_EQ(formatFloat(MAX_FLOAT32), str_max_float32);
+    ASSERT_EQ(formatFloat(MIN_FLOAT32), str_min_float32);
+    ASSERT_EQ(formatFloat(-MAX_FLOAT32), "-" + str_max_float32);
+    ASSERT_EQ(formatFloat(-MIN_FLOAT32), "-" + str_min_float32);
+    ASSERT_EQ(formatFloat(std::numeric_limits<Float32>::infinity()), "+Inf");
+    ASSERT_EQ(formatFloat(-std::numeric_limits<Float32>::infinity()), "-Inf");
+    ASSERT_EQ(formatFloat(-std::numeric_limits<Float32>::quiet_NaN()), "NaN");
+
+    ASSERT_EQ(formatFloat(MAX_FLOAT64), str_max_float64);
+    ASSERT_EQ(formatFloat(MIN_FLOAT64), str_min_float64);
+    ASSERT_EQ(formatFloat(-MAX_FLOAT64), "-" + str_max_float64);
+    ASSERT_EQ(formatFloat(-MIN_FLOAT64), "-" + str_min_float64);
+    ASSERT_EQ(formatFloat(std::numeric_limits<Float64>::infinity()), "+Inf");
+    ASSERT_EQ(formatFloat(-std::numeric_limits<Float64>::infinity()), "-Inf");
+    ASSERT_EQ(formatFloat(-std::numeric_limits<Float64>::quiet_NaN()), "NaN");
+
     testOnlyNull<Float32, String>();
     testOnlyNull<Float64, String>();
-
-    // TODO add tests after non-expected results fixed
 
     testNotOnlyNull<Float32, String>(0, "0");
     testNotOnlyNull<Float32, String>(12.213, "12.213");
     testNotOnlyNull<Float32, String>(-12.213, "-12.213");
-    // tiflash: 3.4028235e38
-    // tidb: 340282350000000000000000000000000000000
-    // mysql: 3.40282e38
-    // testNotOnlyNull<Float32, String>(MAX_FLOAT32, "3.4028235e38");
-    // tiflash: 1.1754944e-38
-    // tidb: 0.000000000000000000000000000000000000011754944
-    // mysql: 1.17549e-38
-    // testNotOnlyNull<Float32, String>(MIN_FLOAT32, "1.1754944e-38");
-
     testNotOnlyNull<Float64, String>(0, "0");
     testNotOnlyNull<Float64, String>(12.213, "12.213");
     testNotOnlyNull<Float64, String>(-12.213, "-12.213");
-    // tiflash: 1.7976931348623157e308
-    // tidb: 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-    // mysql: 1.7976931348623157e308
-    // testNotOnlyNull<Float64, String>(MAX_FLOAT64, "1.7976931348623157e308");
-    // tiflash: 2.2250738585072014e-308
-    // tidb: 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000022250738585072014
-    // mysql: 2.2250738585072014e-308
-    // testNotOnlyNull<Float64, String>(MIN_FLOAT64, "2.2250738585072014e-308");
+
+    testNotOnlyNull<Float32, String>(MAX_FLOAT32, str_max_float32);
+    testNotOnlyNull<Float32, String>(MIN_FLOAT32, str_min_float32);
+    testNotOnlyNull<Float32, String>(-MAX_FLOAT32, "-" + str_max_float32);
+    testNotOnlyNull<Float32, String>(-MIN_FLOAT32, "-" + str_min_float32);
+    testNotOnlyNull<Float32, String>(std::numeric_limits<Float32>::infinity(), "+Inf");
+    testNotOnlyNull<Float32, String>(-std::numeric_limits<Float32>::infinity(), "-Inf");
+    testNotOnlyNull<Float32, String>(-std::numeric_limits<Float32>::quiet_NaN(), "NaN");
+
+    testNotOnlyNull<Float64, String>(MAX_FLOAT64, str_max_float64);
+    testNotOnlyNull<Float64, String>(MIN_FLOAT64, str_min_float64);
+    testNotOnlyNull<Float64, String>(-MAX_FLOAT64, "-" + str_max_float64);
+    testNotOnlyNull<Float64, String>(-MIN_FLOAT64, "-" + str_min_float64);
+    testNotOnlyNull<Float64, String>(std::numeric_limits<Float64>::infinity(), "+Inf");
+    testNotOnlyNull<Float64, String>(-std::numeric_limits<Float64>::infinity(), "-Inf");
+    testNotOnlyNull<Float64, String>(-std::numeric_limits<Float64>::quiet_NaN(), "NaN");
 }
 CATCH
 

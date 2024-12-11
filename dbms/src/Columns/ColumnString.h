@@ -51,6 +51,8 @@ private:
     /// For convenience, every string ends with terminating zero byte. Note that strings could contain zero bytes in the middle.
     Chars_t chars;
 
+    std::unique_ptr<ColumnNTAlignBufferAVX2[]> align_buffer_ptrs;
+
     /// offset[-1] is 0 which is a guarantee from PODArray.
     size_t ALWAYS_INLINE offsetAt(ssize_t i) const { return offsets[i - 1]; }
 
@@ -270,9 +272,13 @@ public:
         size_t length,
         const IColumn::Offsets & array_offsets) const;
 
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer) override;
-    void deserializeAndInsertFromPosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
-        override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override;
+
+    void flushNTAlignBuffer() override;
 
     void updateHashWithValue(
         size_t n,

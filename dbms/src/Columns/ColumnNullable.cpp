@@ -313,18 +313,25 @@ void ColumnNullable::serializeToPosForColumnArray(
     getNestedColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
 }
 
-void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, ColumnsAlignBufferAVX2 & align_buffer)
+void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
-    getNullMapColumn().deserializeAndInsertFromPos(pos, align_buffer);
-    getNestedColumn().deserializeAndInsertFromPos(pos, align_buffer);
+    getNullMapColumn().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+    getNestedColumn().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
 }
 
 void ColumnNullable::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<char *> & pos,
-    const IColumn::Offsets & array_offsets)
+    const IColumn::Offsets & array_offsets,
+    bool use_nt_align_buffer)
 {
-    getNullMapColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets);
-    getNestedColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets);
+    getNullMapColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
+    getNestedColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
+}
+
+void ColumnNullable::flushNTAlignBuffer()
+{
+    getNullMapColumn().flushNTAlignBuffer();
+    getNestedColumn().flushNTAlignBuffer();
 }
 
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
