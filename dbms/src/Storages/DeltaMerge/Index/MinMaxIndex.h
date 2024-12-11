@@ -59,13 +59,13 @@ public:
 
     static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf, size_t bytes_limit);
 
-    std::pair<Int64, Int64> getIntMinMax(size_t pack_index);
+    std::pair<Int64, Int64> getIntMinMax(size_t pack_index) const;
 
-    std::pair<std::string, std::string> getIntMinMaxOrNull(size_t pack_index);
+    std::pair<std::string, std::string> getIntMinMaxOrNull(size_t pack_index) const;
 
-    std::pair<StringRef, StringRef> getStringMinMax(size_t pack_index);
+    std::pair<StringRef, StringRef> getStringMinMax(size_t pack_index) const;
 
-    std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
+    std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index) const;
 
     template <typename Op>
     RSResults checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);

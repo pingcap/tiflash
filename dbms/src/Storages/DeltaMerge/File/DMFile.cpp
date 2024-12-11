@@ -209,7 +209,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-size_t DMFile::colIndexSize(ColId id)
+size_t DMFile::colIndexSize(ColId id) const
 {
     if (useMetaV2())
     {
@@ -230,7 +230,7 @@ size_t DMFile::colIndexSize(ColId id)
 }
 
 // Only used when metav2 is not enabled, clean it up
-size_t DMFile::colDataSize(ColId id, ColDataType type)
+size_t DMFile::colDataSize(ColId id, ColDataType type) const
 {
     if (useMetaV2())
     {
