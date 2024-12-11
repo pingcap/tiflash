@@ -491,7 +491,7 @@ void DataTypeString::deserializeBinaryBulkWithMultipleStreams(
 
 static DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
 {
-    if (current.identifier < 8 || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
+    if (current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103))
     {
         return DataTypeString::SerdesFormat::SizePrefix;
     }
