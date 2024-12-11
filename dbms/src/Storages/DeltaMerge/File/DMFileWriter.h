@@ -105,7 +105,7 @@ public:
             const CompressionSetting & setting)
         {
             // Force use Lightweight compression for string sizes, since the string sizes almost always small.
-            // Performance of LZ4 to decompress such integers is not very well.
+            // Performance of LZ4 to decompress such integers is not good.
             return isStringSizes(type, file_base_name)
                 ? CompressionSetting{CompressionMethod::Lightweight, CompressionDataType::Int64}
                 : CompressionSetting::create<>(setting.method, setting.level, *type);
