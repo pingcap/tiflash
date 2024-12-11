@@ -34,11 +34,8 @@
 
 #include <algorithm>
 #include <cmath>
-<<<<<<< HEAD
-=======
 #include <magic_enum.hpp>
 #include <string>
->>>>>>> e3e6780e6d (*: fix the `origin_default_value` issue in disaggregated mode (#9666))
 
 namespace DB
 {
@@ -228,18 +225,12 @@ Field ColumnInfo::defaultValueToField() const
         // Never throw exception here, do not use TRY_CATCH_DEFAULT_VALUE_TO_FIELD
         return getYearValue(value.convert<String>());
     case TypeSet:
-<<<<<<< HEAD
-        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getSetValue(value.convert<String>()); });
-=======
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
             // When we got value from tipb, we have decoded it.
             if (auto is_int = value.isInteger(); is_int)
                 return value.convert<UInt64>();
             return getSetValue(value.convert<String>());
         });
-    case TypeTiDBVectorFloat32:
-        return genVectorFloat32Empty();
->>>>>>> e3e6780e6d (*: fix the `origin_default_value` issue in disaggregated mode (#9666))
     default:
         throw Exception("Have not processed type: " + std::to_string(tp));
     }
