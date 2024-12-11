@@ -57,7 +57,7 @@ struct ControlOptions
     std::vector<std::string> paths;
     DisplayType mode = DisplayType::DISPLAY_SUMMARY_INFO;
     UInt64 page_id = UINT64_MAX;
-    UInt32 blob_id = UINT32_MAX;
+    BlobFileId blob_id = INVALID_BLOBFILE_ID;
     BlobFileOffset blob_offset = INVALID_BLOBFILE_OFFSET;
     size_t blob_size = UINT64_MAX;
     UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
@@ -394,7 +394,7 @@ private:
         return 0;
     }
 
-    static String getBlobsInfo(typename Trait::BlobStore & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(typename Trait::BlobStore & blob_store, BlobFileId blob_id)
     {
         auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -424,7 +424,7 @@ private:
         {
             for (const auto & stat : stats)
             {
-                if (blob_id != UINT32_MAX)
+                if (blob_id != INVALID_BLOBFILE_ID)
                 {
                     if (stat->id == blob_id)
                     {
@@ -438,7 +438,7 @@ private:
             }
         }
 
-        if (blob_id != UINT32_MAX)
+        if (blob_id != INVALID_BLOBFILE_ID)
         {
             stats_info.fmtAppend("    no found blob {}", blob_id);
         }
