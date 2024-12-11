@@ -103,12 +103,13 @@ check_then_add_sources_compile_flag (
     TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
     "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
     src/Columns/ColumnString.cpp
-    src/Columns/ColumnsCommon.cpp
     src/Columns/ColumnVector.cpp
     src/Columns/ColumnDecimal.cpp
     src/Columns/ColumnArray.cpp
     src/Columns/ColumnNullable.cpp
     src/Columns/ColumnFixedString.cpp
+    src/Columns/countBytesInFilter.cpp
+    src/Columns/ColumnUtil.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
     src/Interpreters/JoinV2/HashJoin.cpp

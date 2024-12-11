@@ -20,7 +20,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/FieldVisitors.h>
 #include <Common/MyTime.h>
 #include <DataTypes/DataTypeArray.h>

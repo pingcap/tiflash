@@ -17,7 +17,7 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>

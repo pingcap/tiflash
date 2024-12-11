@@ -18,7 +18,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/FieldVisitors.h>
 #include <Common/MyDuration.h>
 #include <Common/MyTime.h>

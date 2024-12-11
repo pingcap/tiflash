@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
