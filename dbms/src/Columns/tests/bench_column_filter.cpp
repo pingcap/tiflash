@@ -14,6 +14,7 @@
 
 
 #include <Columns/ColumnVector.h>
+#include <Columns/countBytesInFilter.h>
 #include <Columns/filterColumn.h>
 #include <Common/typeid_cast.h>
 #include <benchmark/benchmark.h>
