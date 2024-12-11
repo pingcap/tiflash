@@ -311,7 +311,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (elem.read_rows != 0)
                 {
-                    LOG_INFO(
+                    LOG_DEBUG(
                         execute_query_logger,
                         "Read {} rows, {} in {:.3f} sec., {} rows/sec., {}/sec.",
                         elem.read_rows,
@@ -421,7 +421,7 @@ void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in)
         in->dumpTree(log_buffer);
         return log_buffer.toString();
     };
-    LOG_INFO(logger, pipeline_log_str());
+    LOG_DEBUG(logger, pipeline_log_str());
 }
 
 BlockIO executeQuery(const String & query, Context & context, bool internal, QueryProcessingStage::Enum stage)

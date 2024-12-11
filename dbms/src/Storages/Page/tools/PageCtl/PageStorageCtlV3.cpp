@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Checksum.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/CLIService.h>
+#include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
+#include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
@@ -29,6 +33,7 @@
 #include <common/types.h>
 
 #include <boost/program_options.hpp>
+#include <cstdint>
 #include <magic_enum.hpp>
 #include <unordered_set>
 
@@ -47,12 +52,15 @@ struct ControlOptions
         CHECK_ALL_DATA_CRC = 4,
         DISPLAY_WAL_ENTRIES = 5,
         DISPLAY_REGION_INFO = 6,
+        DISPLAY_BLOB_DATA = 7,
     };
 
     std::vector<std::string> paths;
     DisplayType mode = DisplayType::DISPLAY_SUMMARY_INFO;
     UInt64 page_id = UINT64_MAX;
     UInt32 blob_id = UINT32_MAX;
+    BlobFileOffset blob_offset = INVALID_BLOBFILE_OFFSET;
+    size_t blob_size = UINT64_MAX;
     UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
     StorageType storage_type = StorageType::Unknown; // only useful for universal page storage
     UInt32 keyspace_id = NullspaceID; // only useful for universal page storage
@@ -85,6 +93,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  4 is check every data is valid
  5 is dump entries in WAL log files
  6 is display all region info
+ 7 is display blob data (in hex)
 )") //
         ("show_entries",
          value<bool>()->default_value(true),
@@ -106,8 +115,14 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
          value<UInt64>()->default_value(UINT64_MAX),
          "Query a single Page id, and print its version chain.") //
         ("blob_id,B",
-         value<UInt32>()->default_value(UINT32_MAX),
-         "Query a single Blob id, and print its data distribution.") //
+         value<BlobFileId>()->default_value(INVALID_BLOBFILE_ID),
+         "Specify the blob_id") //
+        ("blob_offset",
+         value<BlobFileOffset>()->default_value(INVALID_BLOBFILE_OFFSET),
+         "Specify the offset.") //
+        ("blob_size",
+         value<size_t>()->default_value(0),
+         "Specify the size.") //
         //
         ("imitative,I",
          value<bool>()->default_value(true),
@@ -140,7 +155,9 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     opt.paths = options["paths"].as<std::vector<std::string>>();
     auto mode_int = options["mode"].as<int>();
     opt.page_id = options["page_id"].as<UInt64>();
-    opt.blob_id = options["blob_id"].as<UInt32>();
+    opt.blob_id = options["blob_id"].as<BlobFileId>();
+    opt.blob_offset = options["blob_offset"].as<BlobFileOffset>();
+    opt.blob_size = options["blob_size"].as<size_t>();
     opt.show_entries = options["show_entries"].as<bool>();
     opt.check_fields = options["check_fields"].as<bool>();
     auto storage_type_int = options["storage_type"].as<int>();
@@ -344,6 +361,12 @@ private:
                 {
                     std::cout << "Only UniversalPageStorage support this mode." << std::endl;
                 }
+                break;
+            }
+            case ControlOptions::DisplayType::DISPLAY_BLOB_DATA:
+            {
+                String hex_data = getBlobData(blob_store, opts.blob_id, opts.blob_offset, opts.blob_size);
+                fmt::println("hex:{}", hex_data);
                 break;
             }
             default:
@@ -819,6 +842,32 @@ private:
         error_msg.append("Please use `--query_table_id` + `--page_id` to get the more error info.");
 
         return error_msg.toString();
+    }
+
+    static String getBlobData(
+        typename Trait::BlobStore & blob_store,
+        BlobFileId blob_id,
+        BlobFileOffset offset,
+        size_t size)
+    {
+        auto page_id = []() {
+            if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+                return PageIdV3Internal(0, 0);
+            else
+                return UniversalPageId("");
+        }();
+        char * buffer = new char[size];
+        blob_store.read(page_id, blob_id, offset, buffer, size, nullptr, false);
+
+        using ChecksumClass = Digest::CRC64;
+        ChecksumClass digest;
+        digest.update(buffer, size);
+        auto checksum = digest.checksum();
+        fmt::println("checksum: 0x{:X}", checksum);
+
+        auto hex_str = Redact::keyToHexString(buffer, size);
+        delete[] buffer;
+        return hex_str;
     }
 
 private:

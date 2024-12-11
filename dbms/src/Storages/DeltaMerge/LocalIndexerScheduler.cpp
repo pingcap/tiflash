@@ -64,9 +64,9 @@ LocalIndexerScheduler::LocalIndexerScheduler(const Options & options)
         start();
 }
 
-LocalIndexerScheduler::~LocalIndexerScheduler()
+void LocalIndexerScheduler::shutdown()
 {
-    LOG_INFO(logger, "LocalIndexerScheduler is destroying. Waiting scheduler and tasks to finish...");
+    LOG_INFO(logger, "LocalIndexerScheduler is shutting down. Waiting scheduler and tasks to finish...");
 
     // First quit the scheduler. Don't schedule more tasks.
     is_shutting_down = true;
@@ -81,7 +81,15 @@ LocalIndexerScheduler::~LocalIndexerScheduler()
 
     // Then wait all running tasks to finish.
     pool.reset();
+    LOG_INFO(logger, "LocalIndexerScheduler is shutdown.");
+}
 
+LocalIndexerScheduler::~LocalIndexerScheduler()
+{
+    if (!is_shutting_down)
+    {
+        shutdown();
+    }
     LOG_INFO(logger, "LocalIndexerScheduler is destroyed");
 }
 
@@ -295,7 +303,10 @@ bool LocalIndexerScheduler::tryAddTaskToPool(std::unique_lock<std::mutex> & lock
         }
     };
 
-    RUNTIME_CHECK(pool);
+    if (is_shutting_down || !pool)
+        // shutting down, retry again
+        return false;
+
     if (!pool->trySchedule(real_job))
         // Concurrent task limit reached
         return false;
