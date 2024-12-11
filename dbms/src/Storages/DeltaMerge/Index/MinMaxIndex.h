@@ -16,7 +16,7 @@
 
 #include <AggregateFunctions/Helpers.h>
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/LRUCache.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
