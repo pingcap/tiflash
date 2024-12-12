@@ -14,6 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <IO/Encryption/MockKeyManager.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/PatternFormatter.h>
@@ -58,7 +59,11 @@ struct ControlOptions
     std::vector<std::string> paths;
     DisplayType mode = DisplayType::DISPLAY_SUMMARY_INFO;
     UInt64 page_id = UINT64_MAX;
+<<<<<<< HEAD
     UInt32 blob_id = UINT32_MAX;
+=======
+    BlobFileId blob_id = INVALID_BLOBFILE_ID;
+>>>>>>> c2c041c711 (PageCtl: Support getting blob data from PageStorage instance (#9723))
     BlobFileOffset blob_offset = INVALID_BLOBFILE_OFFSET;
     size_t blob_size = UINT64_MAX;
     UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
@@ -268,29 +273,36 @@ public:
     }
 
 private:
-    static int getPageStorageV3Info(Context & context, const ControlOptions & options)
+    static DB::PSDiskDelegatorPtr getDelegator(const ControlOptions & opts)
     {
-        DB::PSDiskDelegatorPtr delegator;
-        if (options.paths.size() == 1)
+        if (opts.paths.size() == 1)
         {
-            delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
+            return std::make_shared<DB::tests::MockDiskDelegatorSingle>(opts.paths[0]);
         }
         else
         {
-            delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(options.paths);
+            return std::make_shared<DB::tests::MockDiskDelegatorMulti>(opts.paths);
         }
+    }
 
-        FileProviderPtr provider;
-        if (options.is_imitative)
+    static FileProviderPtr getProvider(Context & context, const ControlOptions & opts)
+    {
+        if (opts.is_imitative)
         {
             auto key_manager = std::make_shared<DB::MockKeyManager>(false);
-            provider = std::make_shared<DB::FileProvider>(key_manager, false);
+            return std::make_shared<DB::FileProvider>(key_manager, false);
         }
         else
         {
-            provider = context.getFileProvider();
+            return context.getFileProvider();
         }
+    }
 
+    static int getPageStorageV3Info(Context & context, const ControlOptions & options)
+    {
+        DB::PSDiskDelegatorPtr delegator = getDelegator(options);
+
+        FileProviderPtr provider = getProvider(context, options);
 
         constexpr static std::string_view NAME = "PageStorageControlV3";
         PageStorageConfig config;
@@ -311,13 +323,13 @@ private:
             {
             case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
             {
-                std::cout << getSummaryInfo(mvcc_table_directory, blob_store) << std::endl;
+                fmt::println("{}", getSummaryInfo(mvcc_table_directory, blob_store));
                 break;
             }
             case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
             {
-                fmt::print(
-                    "{}\n",
+                fmt::println(
+                    "{}",
                     getDirectoryInfo(
                         mvcc_table_directory,
                         opts.show_entries,
@@ -329,25 +341,26 @@ private:
             }
             case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
             {
-                std::cout << getBlobsInfo(blob_store, opts.blob_id) << std::endl;
+                fmt::println("{}", getBlobsInfo(blob_store, opts.blob_id));
                 break;
             }
             case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
             {
                 if (opts.page_id != UINT64_MAX)
                 {
-                    std::cout << checkSinglePage(
-                        mvcc_table_directory,
-                        blob_store,
-                        opts.storage_type,
-                        opts.keyspace_id,
-                        opts.namespace_id,
-                        opts.page_id)
-                              << std::endl;
+                    fmt::println(
+                        "{}",
+                        checkSinglePage(
+                            mvcc_table_directory,
+                            blob_store,
+                            opts.storage_type,
+                            opts.keyspace_id,
+                            opts.namespace_id,
+                            opts.page_id));
                 }
                 else
                 {
-                    std::cout << checkAllDataCrc(mvcc_table_directory, blob_store, opts.check_fields) << std::endl;
+                    fmt::println("{}", checkAllDataCrc(mvcc_table_directory, blob_store, opts.check_fields));
                 }
                 break;
             }
@@ -355,11 +368,11 @@ private:
             {
                 if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
                 {
-                    std::cout << getAllRegionInfo(mvcc_table_directory) << std::endl;
+                    fmt::println("{}", getAllRegionInfo(mvcc_table_directory));
                 }
                 else
                 {
-                    std::cout << "Only UniversalPageStorage support this mode." << std::endl;
+                    fmt::println("Only UniversalPageStorage support this mode.");
                 }
                 break;
             }
@@ -395,7 +408,7 @@ private:
         return 0;
     }
 
-    static String getBlobsInfo(typename Trait::BlobStore & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(typename Trait::BlobStore & blob_store, BlobFileId blob_id)
     {
         auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -425,7 +438,7 @@ private:
         {
             for (const auto & stat : stats)
             {
-                if (blob_id != UINT32_MAX)
+                if (blob_id != INVALID_BLOBFILE_ID)
                 {
                     if (stat->id == blob_id)
                     {
@@ -439,7 +452,7 @@ private:
             }
         }
 
-        if (blob_id != UINT32_MAX)
+        if (blob_id != INVALID_BLOBFILE_ID)
         {
             stats_info.fmtAppend("    no found blob {}", blob_id);
         }
@@ -863,7 +876,11 @@ private:
         ChecksumClass digest;
         digest.update(buffer, size);
         auto checksum = digest.checksum();
+<<<<<<< HEAD
         fmt::println("checksum: 0x{:X}", checksum);
+=======
+        fmt::print("checksum: 0x{:X}\n", checksum);
+>>>>>>> c2c041c711 (PageCtl: Support getting blob data from PageStorage instance (#9723))
 
         auto hex_str = Redact::keyToHexString(buffer, size);
         delete[] buffer;
