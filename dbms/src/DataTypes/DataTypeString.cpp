@@ -22,6 +22,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/FormatVersion.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -292,9 +293,15 @@ bool DataTypeString::equals(const IDataType & rhs) const
 
 void registerDataTypeString(DataTypeFactory & factory)
 {
-    auto creator = static_cast<DataTypePtr (*)()>([] { return DataTypePtr(std::make_shared<DataTypeString>()); });
+    std::function<DataTypePtr()> legacy_creator = [] {
+        return std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SizePrefix);
+    };
+    factory.registerSimpleDataType(DataTypeString::LegacyName, legacy_creator);
 
-    factory.registerSimpleDataType("String", creator);
+    std::function<DataTypePtr()> creator = [] {
+        return std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SeparateSizeAndChars);
+    };
+    factory.registerSimpleDataType(DataTypeString::NameV2, creator);
 
     /// These synonims are added for compatibility.
 
@@ -308,6 +315,206 @@ void registerDataTypeString(DataTypeFactory & factory)
     factory.registerSimpleDataType("TINYBLOB", creator, DataTypeFactory::CaseInsensitive);
     factory.registerSimpleDataType("MEDIUMBLOB", creator, DataTypeFactory::CaseInsensitive);
     factory.registerSimpleDataType("LONGBLOB", creator, DataTypeFactory::CaseInsensitive);
+}
+
+namespace
+{
+
+using Offset = ColumnString::Offset;
+
+// Returns <offsets_stream, chars_stream>.
+template <typename B, typename G>
+std::pair<B *, B *> getStream(const G & getter, IDataType::SubstreamPath & path)
+{
+    auto * chars_stream = getter(path);
+    path.emplace_back(IDataType::Substream::StringSizes);
+    auto * offsets_stream = getter(path);
+    return {offsets_stream, chars_stream};
+}
+
+PaddedPODArray<Offset> offsetToStrSize(
+    const ColumnString::Offsets & chars_offsets,
+    const size_t begin,
+    const size_t end)
+{
+    assert(!chars_offsets.empty());
+    // The class PODArrayBase ensure chars_offsets[-1] is well defined as 0.
+    // For details, check the `pad_left` argument in PODArrayBase.
+    // In the for loop code below, when `begin` and `i` are 0:
+    // str_sizes[0] = chars_offsets[0] - chars_offsets[-1];
+    assert(chars_offsets[-1] == 0);
+
+    PaddedPODArray<Offset> str_sizes(end - begin);
+    auto chars_offsets_pos = chars_offsets.begin() + begin;
+
+    // clang-format off
+    #pragma clang loop vectorize(enable)
+    // clang-format on
+    for (ssize_t i = 0; i < static_cast<ssize_t>(str_sizes.size()); ++i)
+    {
+        str_sizes[i] = chars_offsets_pos[i] - chars_offsets_pos[i - 1];
+    }
+    return str_sizes;
+}
+
+void strSizeToOffset(const PaddedPODArray<Offset> & str_sizes, ColumnString::Offsets & chars_offsets)
+{
+    assert(!str_sizes.empty());
+    assert(chars_offsets[-1] == 0);
+    const auto initial_size = chars_offsets.size();
+    chars_offsets.resize(initial_size + str_sizes.size());
+    auto chars_offsets_pos = chars_offsets.begin() + initial_size;
+    // Cannot be vectorize by compiler because chars_offsets[i] depends on chars_offsets[i-1]
+    // #pragma clang loop vectorize(enable)
+    for (ssize_t i = 0; i < static_cast<ssize_t>(str_sizes.size()); ++i)
+    {
+        chars_offsets_pos[i] = str_sizes[i] + chars_offsets_pos[i - 1];
+    }
+}
+
+std::pair<size_t, size_t> serializeOffsetsBinary(
+    const ColumnString::Offsets & chars_offsets,
+    WriteBuffer & ostr,
+    size_t offset,
+    size_t limit)
+{
+    // [begin, end) is the range that need to be serialized of `chars_offsets`.
+    const auto begin = offset;
+    const auto end = limit != 0 && offset + limit < chars_offsets.size() ? offset + limit : chars_offsets.size();
+
+    PaddedPODArray<Offset> sizes = offsetToStrSize(chars_offsets, begin, end);
+    ostr.write(reinterpret_cast<const char *>(sizes.data()), sizeof(Offset) * sizes.size());
+
+    // [chars_begin, chars_end) is the range that need to be serialized of `chars`.
+    const auto chars_begin = begin == 0 ? 0 : chars_offsets[begin - 1];
+    const auto chars_end = chars_offsets[end - 1];
+    return {chars_begin, chars_end};
+}
+
+void serializeCharsBinary(const ColumnString::Chars_t & chars, WriteBuffer & ostr, size_t begin, size_t end)
+{
+    ostr.write(reinterpret_cast<const char *>(&chars[begin]), end - begin);
+}
+
+size_t deserializeOffsetsBinary(ColumnString::Offsets & chars_offsets, ReadBuffer & istr, size_t limit)
+{
+    PaddedPODArray<Offset> str_sizes(limit);
+    const auto size = istr.readBig(reinterpret_cast<char *>(str_sizes.data()), sizeof(Offset) * limit);
+    str_sizes.resize(size / sizeof(Offset));
+    strSizeToOffset(str_sizes, chars_offsets);
+    return std::accumulate(str_sizes.begin(), str_sizes.end(), 0uz);
+}
+
+void deserializeCharsBinary(ColumnString::Chars_t & chars, ReadBuffer & istr, size_t bytes)
+{
+    const auto initial_size = chars.size();
+    chars.resize(initial_size + bytes);
+    istr.readStrict(reinterpret_cast<char *>(&chars[initial_size]), bytes);
+}
+
+void serializeBinaryBulkV2(
+    const IColumn & column,
+    WriteBuffer & offsets_stream,
+    WriteBuffer & chars_stream,
+    size_t offset,
+    size_t limit)
+{
+    if (column.empty())
+        return;
+    const auto & column_string = typeid_cast<const ColumnString &>(column);
+    const auto & chars = column_string.getChars();
+    const auto & offsets = column_string.getOffsets();
+    auto [chars_begin, chars_end] = serializeOffsetsBinary(offsets, offsets_stream, offset, limit);
+    serializeCharsBinary(chars, chars_stream, chars_begin, chars_end);
+}
+
+void deserializeBinaryBulkV2(IColumn & column, ReadBuffer & offsets_stream, ReadBuffer & chars_stream, size_t limit)
+{
+    if (limit == 0)
+        return;
+    auto & column_string = typeid_cast<ColumnString &>(column);
+    auto & chars = column_string.getChars();
+    auto & offsets = column_string.getOffsets();
+    auto bytes = deserializeOffsetsBinary(offsets, offsets_stream, limit);
+    deserializeCharsBinary(chars, chars_stream, bytes);
+}
+
+} // namespace
+
+void DataTypeString::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+{
+    callback(path);
+    if (serdes_fmt == SerdesFormat::SeparateSizeAndChars)
+    {
+        path.emplace_back(Substream::StringSizes);
+        callback(path);
+    }
+}
+
+void DataTypeString::serializeBinaryBulkWithMultipleStreams(
+    const IColumn & column,
+    const OutputStreamGetter & getter,
+    size_t offset,
+    size_t limit,
+    bool /*position_independent_encoding*/,
+    SubstreamPath & path) const
+{
+    if (serdes_fmt == SerdesFormat::SeparateSizeAndChars)
+    {
+        auto [offsets_stream, chars_stream] = getStream<WriteBuffer, IDataType::OutputStreamGetter>(getter, path);
+        serializeBinaryBulkV2(column, *offsets_stream, *chars_stream, offset, limit);
+    }
+    else
+    {
+        serializeBinaryBulk(column, *getter(path), offset, limit);
+    }
+}
+
+void DataTypeString::deserializeBinaryBulkWithMultipleStreams(
+    IColumn & column,
+    const InputStreamGetter & getter,
+    size_t limit,
+    double avg_value_size_hint,
+    bool /*position_independent_encoding*/,
+    SubstreamPath & path) const
+{
+    if (serdes_fmt == SerdesFormat::SeparateSizeAndChars)
+    {
+        auto [offsets_stream, chars_stream] = getStream<ReadBuffer, IDataType::InputStreamGetter>(getter, path);
+        deserializeBinaryBulkV2(column, *offsets_stream, *chars_stream, limit);
+    }
+    else
+    {
+        deserializeBinaryBulk(column, *getter(path), limit, avg_value_size_hint);
+    }
+}
+
+static DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
+{
+    if (current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103))
+    {
+        return DataTypeString::SerdesFormat::SizePrefix;
+    }
+    return DataTypeString::SerdesFormat::SeparateSizeAndChars;
+}
+
+DataTypeString::DataTypeString(SerdesFormat serdes_fmt_)
+    : serdes_fmt((serdes_fmt_ != SerdesFormat::None) ? serdes_fmt_ : getDefaultByStorageFormat(STORAGE_FORMAT_CURRENT))
+{}
+
+String DataTypeString::getDefaultName()
+{
+    if (STORAGE_FORMAT_CURRENT.identifier < 8
+        || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
+    {
+        return LegacyName;
+    }
+    return NameV2;
+}
+
+String DataTypeString::getNullableDefaultName()
+{
+    return fmt::format("Nullable({})", getDefaultName());
 }
 
 } // namespace DB
