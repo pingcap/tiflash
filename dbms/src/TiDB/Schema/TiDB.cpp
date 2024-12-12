@@ -17,13 +17,16 @@
 #include <Common/MyTime.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/FieldToDataType.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <Poco/Base64Decoder.h>
+#include <Poco/Dynamic/Var.h>
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Collation/Collator.h>
+#include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
@@ -31,6 +34,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <magic_enum.hpp>
+#include <string>
 
 namespace DB
 {
@@ -120,7 +125,8 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
 Field ColumnInfo::defaultValueToField() const
 {
     const auto & value = origin_default_value;
-    if (value.isEmpty())
+    const auto & bit_value = origin_default_bit_value;
+    if (value.isEmpty() && bit_value.isEmpty())
     {
         if (hasNotNullFlag())
             return DB::GenDefaultField(*this);
@@ -152,14 +158,12 @@ Field ColumnInfo::defaultValueToField() const
         });
     case TypeBit:
     {
-        const auto & bit_value = origin_default_bit_value;
-        if (bit_value.isEmpty())
-        {
-            if (hasNotNullFlag())
-                return DB::GenDefaultField(*this);
-            return Field();
-        }
-        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getBitValue(bit_value.convert<String>()); });
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            // When we got bit_value from tipb, we have decoded it.
+            if (auto is_int = bit_value.isInteger(); is_int)
+                return bit_value.convert<UInt64>();
+            return getBitValue(bit_value.convert<String>());
+        });
     }
     // Floating type.
     case TypeFloat:
@@ -168,7 +172,12 @@ Field ColumnInfo::defaultValueToField() const
     case TypeDate:
     case TypeDatetime:
     case TypeTimestamp:
-        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return DB::parseMyDateTime(value.convert<String>()); });
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            // When we got value from tipb, we have decoded it.
+            if (auto is_int = value.isInteger(); is_int)
+                return value.convert<UInt64>();
+            return DB::parseMyDateTime(value.convert<String>());
+        });
     case TypeVarchar:
     case TypeTinyBlob:
     case TypeMediumBlob:
@@ -206,12 +215,22 @@ Field ColumnInfo::defaultValueToField() const
             return getDecimalValue(text);
         });
     case TypeTime:
-        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getTimeValue(value.convert<String>()); });
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            // When we got value from tipb, we have decoded it.
+            if (auto is_int = value.isInteger(); is_int)
+                return value.convert<UInt64>();
+            return getTimeValue(value.convert<String>());
+        });
     case TypeYear:
         // Never throw exception here, do not use TRY_CATCH_DEFAULT_VALUE_TO_FIELD
         return getYearValue(value.convert<String>());
     case TypeSet:
-        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getSetValue(value.convert<String>()); });
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            // When we got value from tipb, we have decoded it.
+            if (auto is_int = value.isInteger(); is_int)
+                return value.convert<UInt64>();
+            return getSetValue(value.convert<String>());
+        });
     default:
         throw Exception("Have not processed type: " + std::to_string(tp));
     }
@@ -1261,17 +1280,61 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     tidb_column_info.flag = tipb_column_info.flag();
     tidb_column_info.flen = tipb_column_info.columnlen();
     tidb_column_info.decimal = tipb_column_info.decimal();
-    // TiFlash get default value from origin_default_value, check `Field ColumnInfo::defaultValueToField() const`
-    // So we need to set origin_default_value to tipb_column_info.default_val()
-    // Related logic in tidb, https://github.com/pingcap/tidb/blob/45318da24d8e4c0c6aab836d291a33f949dd18bf/pkg/table/tables/tables.go#L2303-L2329
-    // For TypeBit, we need to set origin_default_bit_value to tipb_column_info.default_val().
-    if (tidb_column_info.tp == TypeBit)
-        tidb_column_info.origin_default_bit_value = tipb_column_info.default_val();
-    else
-        tidb_column_info.origin_default_value = tipb_column_info.default_val();
     tidb_column_info.collate = tipb_column_info.collation();
     for (int i = 0; i < tipb_column_info.elems_size(); ++i)
         tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
+    // TiFlash get default value from origin_default_value, check `Field ColumnInfo::defaultValueToField() const`
+    // So we need to set origin_default_value to tipb_column_info.default_val()
+    // Related logic in tidb, https://github.com/pingcap/tidb/blob/45318da24d8e4c0c6aab836d291a33f949dd18bf/pkg/table/tables/tables.go#L2303-L2329
+    // And, decode tipb_column_info.default_val.
+    {
+        // The default value is null.
+        if (tipb_column_info.default_val().empty())
+        {
+            Poco::Dynamic::Var empty_val;
+            tidb_column_info.origin_default_value = empty_val;
+            return tidb_column_info;
+        }
+        size_t cursor = 0;
+        auto val = DB::DecodeDatum(cursor, tipb_column_info.default_val());
+        if (val.getType() == DB::Field::Types::String)
+        {
+            tidb_column_info.origin_default_value = val.get<String>();
+            return tidb_column_info;
+        }
+        switch (tidb_column_info.tp)
+        {
+        case TypeDate:
+        case TypeDatetime:
+        case TypeTimestamp:
+        case TypeSet:
+            tidb_column_info.origin_default_value = val.get<UInt64>();
+            break;
+        case TypeTime:
+            tidb_column_info.origin_default_value = val.get<Int64>();
+            break;
+        case TypeBit:
+            // For TypeBit, we need to set origin_default_bit_value to tipb_column_info.default_val().
+            tidb_column_info.origin_default_bit_value = val.get<UInt64>();
+            break;
+        case TypeYear:
+            // If the year column has 'not null' option and the value is 0, this year value is '0000'.
+            if (val.get<Int64>() == 0)
+            {
+                Poco::Dynamic::Var empty_val;
+                tidb_column_info.origin_default_value = empty_val;
+                break;
+            }
+            // else fallthrough
+        // The above types will be processed again when defaultValueToField is called.
+        // By distinguishing the type of the string type(by synchronizing the default values in the schema, its type is string),
+        // we can distinguish whether it needs to be processed.
+        default:
+            auto str_val = DB::applyVisitor(DB::FieldVisitorToString(false), val);
+            tidb_column_info.origin_default_value = str_val;
+        }
+    }
+
     return tidb_column_info;
 }
 

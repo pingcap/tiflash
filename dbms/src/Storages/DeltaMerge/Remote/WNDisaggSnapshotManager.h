@@ -25,10 +25,6 @@
 #include <common/types.h>
 #include <fmt/chrono.h>
 
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
-
 namespace DB::DM::Remote
 {
 /**
@@ -41,8 +37,25 @@ public:
     struct SnapshotWithExpireTime
     {
         DisaggReadSnapshotPtr snap;
+        std::chrono::seconds refresh_duration;
+        std::mutex mtx;
         Timepoint expired_at;
+
+        SnapshotWithExpireTime(DisaggReadSnapshotPtr snap_, std::chrono::seconds refresh_duration_)
+            : snap(std::move(snap_))
+            , refresh_duration(refresh_duration_)
+        {
+            refreshExpiredTime();
+        }
+
+        void refreshExpiredTime()
+        {
+            std::lock_guard lock(mtx);
+            expired_at = Clock::now() + refresh_duration;
+        }
     };
+
+    using SnapshotWithExpireTimePtr = std::unique_ptr<SnapshotWithExpireTime>;
 
 public:
     explicit WNDisaggSnapshotManager(BackgroundProcessingPool & bg_pool);
@@ -52,22 +65,26 @@ public:
     bool registerSnapshot(
         const DisaggTaskId & task_id,
         const DisaggReadSnapshotPtr & snap,
-        const Timepoint & expired_at)
+        std::chrono::seconds refresh_duration)
     {
         std::unique_lock lock(mtx);
         LOG_INFO(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
         // Since EstablishDisagg may be retried, there may be existing snapshot.
         // We replace these existing snapshot using a new one.
-        snapshots.insert_or_assign(task_id, SnapshotWithExpireTime{.snap = snap, .expired_at = expired_at});
+        snapshots[task_id] = std::make_unique<SnapshotWithExpireTime>(snap, refresh_duration);
         return true;
     }
 
-    DisaggReadSnapshotPtr getSnapshot(const DisaggTaskId & task_id) const
+    DisaggReadSnapshotPtr getSnapshot(const DisaggTaskId & task_id, bool refresh_expiration = false) const
     {
         std::shared_lock read_lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            return iter->second.snap;
+        {
+            if (refresh_expiration)
+                iter->second->refreshExpiredTime();
+            return iter->second->snap;
+        }
         return nullptr;
     }
 
@@ -92,7 +109,7 @@ private:
 
 private:
     mutable std::shared_mutex mtx;
-    std::unordered_map<DisaggTaskId, SnapshotWithExpireTime> snapshots;
+    std::unordered_map<DisaggTaskId, SnapshotWithExpireTimePtr> snapshots;
 
     BackgroundProcessingPool & pool;
     BackgroundProcessingPool::TaskHandle handle;
