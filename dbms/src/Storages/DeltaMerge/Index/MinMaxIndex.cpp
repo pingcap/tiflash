@@ -201,12 +201,12 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
     return std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
 }
 
-std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index)
+std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index) const
 {
     return {minmaxes->getInt(pack_index * 2), minmaxes->getInt(pack_index * 2 + 1)};
 }
 
-std::pair<std::string, std::string> MinMaxIndex::getIntMinMaxOrNull(size_t pack_index)
+std::pair<std::string, std::string> MinMaxIndex::getIntMinMaxOrNull(size_t pack_index) const
 {
     std::string min, max;
     Field min_field, max_field;
@@ -217,12 +217,12 @@ std::pair<std::string, std::string> MinMaxIndex::getIntMinMaxOrNull(size_t pack_
     return {min, max};
 }
 
-std::pair<StringRef, StringRef> MinMaxIndex::getStringMinMax(size_t pack_index)
+std::pair<StringRef, StringRef> MinMaxIndex::getStringMinMax(size_t pack_index) const
 {
     return {minmaxes->getDataAt(pack_index * 2), minmaxes->getDataAt(pack_index * 2 + 1)};
 }
 
-std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index)
+std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index) const
 {
     return {minmaxes->get64(pack_index * 2), minmaxes->get64(pack_index * 2 + 1)};
 }

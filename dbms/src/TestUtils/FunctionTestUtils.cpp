@@ -234,6 +234,19 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
     if (_restrict)
         return blockEqual(Block(expected), Block(actual));
 
+    auto check_empty = [](const ColumnsWithTypeAndName & column) -> bool {
+        auto cols_size = column.size();
+        for (size_t i = 0; i < cols_size; ++i)
+        {
+            if (!column[i].column->empty())
+                return false;
+        }
+        return true;
+    };
+
+    if ((expected.empty() || actual.empty()) && check_empty(expected) && check_empty(actual))
+        return testing::AssertionSuccess();
+
     auto expect_cols_size = expected.size();
     auto actual_cols_size = actual.size();
 
