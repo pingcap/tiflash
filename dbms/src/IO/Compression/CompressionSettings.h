@@ -60,21 +60,31 @@ struct CompressionSetting
         : CompressionSetting(CompressionMethod::LZ4)
     {}
 
-    explicit CompressionSetting(CompressionMethod method_)
+    explicit CompressionSetting(
+        CompressionMethod method_,
+        CompressionDataType data_type_ = CompressionDataType::Unknown)
         : method(method_)
         , level(getDefaultLevel(method))
+        , data_type(data_type_)
         , method_byte(method_byte_map[static_cast<size_t>(method_)])
     {}
 
-    explicit CompressionSetting(CompressionMethodByte method_byte_)
+    explicit CompressionSetting(
+        CompressionMethodByte method_byte_,
+        CompressionDataType data_type_ = CompressionDataType::Unknown)
         : method(method_map.at(method_byte_))
         , level(getDefaultLevel(method))
+        , data_type(data_type_)
         , method_byte(method_byte_)
     {}
 
-    CompressionSetting(CompressionMethod method_, int level_)
+    CompressionSetting(
+        CompressionMethod method_,
+        int level_,
+        CompressionDataType data_type_ = CompressionDataType::Unknown)
         : method(method_)
         , level(level_)
+        , data_type(data_type_)
         , method_byte(method_byte_map[static_cast<size_t>(method_)])
     {}
 
