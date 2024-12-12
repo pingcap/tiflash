@@ -907,7 +907,7 @@ struct TestTypeSingle<T1, TestTypeList<T2, T2Rest...>, Func, FuncParam>
 {
     static void run(FuncParam & p)
     {
-        Func<T1, T2>::operator()(p);
+        Func<T1, T2>().operator()(p);
         // Recursively handle the rest of T2List
         TestTypeSingle<T1, TestTypeList<T2Rest...>, Func, FuncParam>::run(p);
     }
