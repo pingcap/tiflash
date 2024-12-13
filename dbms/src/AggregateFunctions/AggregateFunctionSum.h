@@ -79,11 +79,7 @@ struct AggregateFunctionSumData
         DescreaseImpl::decrease(sum, value);
     }
 
-    template <typename U>
-    void NO_SANITIZE_UNDEFINED ALWAYS_INLINE reset()
-    {
-        sum = 0;
-    }
+    void NO_SANITIZE_UNDEFINED ALWAYS_INLINE reset() { sum = T(0); }
 
     /// Vectorized version
     template <typename Value>
@@ -194,7 +190,9 @@ struct AggregateFunctionSumKahanData
 
     void ALWAYS_INLINE add(T value) { addImpl(value, sum, compensation); }
 
-    void ALWAYS_INLINE decrease(T) { throw Exception("`decrease` function is not implemented in AggregateFunctionSumKahanData"); }
+    void ALWAYS_INLINE decrease(T) { throw Exception("Not implemented yet"); }
+
+    void ALWAYS_INLINE reset() { throw Exception("Not implemented yet"); }
 
     /// Vectorized version
     template <typename Value>
@@ -342,7 +340,7 @@ public:
     AggregateFunctionSum(PrecType prec, ScaleType scale)
     {
         std::tie(result_prec, result_scale) = Name::decimalInfer(prec, scale);
-    };
+    }
 
     DataTypePtr getReturnType() const override
     {
@@ -375,10 +373,7 @@ public:
         this->data(place).decrease(column.getData()[row_num]);
     }
 
-    void reset(AggregateDataPtr __restrict place) const override
-    {
-        this->data(place).reset();
-    }
+    void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
 
     /// Vectorized version when there is no GROUP BY keys.
     void addBatchSinglePlace(

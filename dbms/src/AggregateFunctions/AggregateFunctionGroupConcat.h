@@ -117,7 +117,7 @@ public:
     DataTypePtr getReturnType() const override { return result_is_nullable ? makeNullable(ret_type) : ret_type; }
 
     /// reject nulls before add()/decrease() of nested agg
-    template<bool is_add>
+    template <bool is_add>
     void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
     {
         if constexpr (only_one_column)
@@ -162,13 +162,14 @@ public:
         else
             this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
     }
-    
+
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         addOrDecrease<true>(place, columns, row_num, arena);
     }
 
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
     {
         addOrDecrease<false>(place, columns, row_num, arena);
     }

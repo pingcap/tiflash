@@ -23,6 +23,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <common/StringRef.h>
+
 #include <deque>
 #include <memory>
 
@@ -78,17 +79,11 @@ public:
             readBinary(value, buf);
     }
 
-    void insertMaxResultInto(IColumn & to)
-    {
-        insertMinOrMaxResultInto<false>(to);
-    }
+    void insertMaxResultInto(IColumn & to) { insertMinOrMaxResultInto<false>(to); }
 
-    void insertMinResultInto(IColumn & to)
-    {
-        insertMinOrMaxResultInto<true>(to);
-    }
+    void insertMinResultInto(IColumn & to) { insertMinOrMaxResultInto<true>(to); }
 
-    template<bool is_min>
+    template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to)
     {
         if (has())
@@ -102,7 +97,7 @@ public:
                     if ((*saved_values)[i] < value)
                         value = (*saved_values)[i];
                 }
-                else    
+                else
                 {
                     if (value < (*saved_values)[i])
                         value = (*saved_values)[i];
@@ -116,10 +111,7 @@ public:
         }
     }
 
-    void prepareWindow()
-    {
-        saved_values = std::make_unique<std::deque<T>>();
-    }
+    void prepareWindow() { saved_values = std::make_unique<std::deque<T>>(); }
 
     void reset()
     {
@@ -285,8 +277,8 @@ private:
 
 public:
     static constexpr Int32 AUTOMATIC_STORAGE_SIZE = 72;
-    static constexpr Int32 MAX_SMALL_STRING_SIZE
-        = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data) - sizeof(TiDB::TiDBCollatorPtr) - sizeof(std::unique_ptr<std::deque<std::string>>);
+    static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity)
+        - sizeof(large_data) - sizeof(TiDB::TiDBCollatorPtr) - sizeof(std::unique_ptr<std::deque<std::string>>);
 
 private:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
@@ -361,17 +353,11 @@ public:
         }
     }
 
-    void insertMaxResultInto(IColumn & to)
-    {
-        insertMinOrMaxResultInto<false>(to);
-    }
+    void insertMaxResultInto(IColumn & to) { insertMinOrMaxResultInto<false>(to); }
 
-    void insertMinResultInto(IColumn & to)
-    {
-        insertMinOrMaxResultInto<true>(to);
-    }
+    void insertMinResultInto(IColumn & to) { insertMinOrMaxResultInto<true>(to); }
 
-    template<bool is_min>
+    template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to)
     {
         if (has())
@@ -386,7 +372,7 @@ public:
                     if (less(cmp_value, value))
                         value = (*saved_values)[i];
                 }
-                else    
+                else
                 {
                     if (less(value, cmp_value))
                         value = (*saved_values)[i];
@@ -401,10 +387,7 @@ public:
         }
     }
 
-    void prepareWindow()
-    {
-        saved_values = std::make_unique<std::deque<std::string>>();
-    }
+    void prepareWindow() { saved_values = std::make_unique<std::deque<std::string>>(); }
 
     void reset()
     {
@@ -604,17 +587,11 @@ public:
             data_type.deserializeBinary(value, buf);
     }
 
-    void insertMaxResultInto(IColumn & to)
-    {
-        insertMinOrMaxResultInto<false>(to);
-    }
+    void insertMaxResultInto(IColumn & to) { insertMinOrMaxResultInto<false>(to); }
 
-    void insertMinResultInto(IColumn & to)
-    {
-        insertMinOrMaxResultInto<true>(to);
-    }
+    void insertMinResultInto(IColumn & to) { insertMinOrMaxResultInto<true>(to); }
 
-    template<bool is_min>
+    template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to)
     {
         if (has())
@@ -628,7 +605,7 @@ public:
                     if ((*saved_values)[i] < value)
                         value = (*saved_values)[i];
                 }
-                else    
+                else
                 {
                     if (value < (*saved_values)[i])
                         value = (*saved_values)[i];
@@ -642,11 +619,8 @@ public:
         }
     }
 
-    void prepareWindow()
-    {
-        saved_values = std::make_unique<std::deque<Field>>();
-    }
-    
+    void prepareWindow() { saved_values = std::make_unique<std::deque<Field>>(); }
+
     void reset()
     {
         value = Field();
@@ -957,20 +931,14 @@ public:
         this->data(place).changeIfBetter(*columns[0], row_num, arena);
     }
 
-    void prepareWindow(AggregateDataPtr __restrict place) const override
-    {
-        this->data(place).prepareWindow();
-    }
+    void prepareWindow(AggregateDataPtr __restrict place) const override { this->data(place).prepareWindow(); }
 
     void decrease(AggregateDataPtr __restrict place, const IColumn **, size_t, Arena *) const override
     {
         this->data(place).decrease();
     }
 
-    void reset(AggregateDataPtr __restrict place) const override
-    {
-        this->data(place).reset();
-    }
+    void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {

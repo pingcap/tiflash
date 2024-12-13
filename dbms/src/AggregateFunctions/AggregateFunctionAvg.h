@@ -31,7 +31,7 @@ struct AggregateFunctionAvgData
 
     void reset()
     {
-        sum = 0;
+        sum = T(0);
         count = 0;
     }
 
@@ -97,10 +97,7 @@ public:
         --this->data(place).count;
     }
 
-    void reset(AggregateDataPtr __restrict place) const override
-    {
-        this->data(place).reset();
-    }
+    void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {

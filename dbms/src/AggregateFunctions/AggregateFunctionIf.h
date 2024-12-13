@@ -83,6 +83,8 @@ public:
             nested_func->decrease(place, columns, row_num, arena);
     }
 
+    void reset(AggregateDataPtr __restrict place) const override { nested_func->reset(place); }
+
     void addBatch(
         size_t start_offset,
         size_t batch_size,

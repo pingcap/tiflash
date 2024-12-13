@@ -63,7 +63,8 @@ public:
 
     void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        const auto & key = AggregateFunctionGroupUniqArrayData<T>::Set::Cell::getKey(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
+        const auto & key = AggregateFunctionGroupUniqArrayData<T>::Set::Cell::getKey(
+            assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
         this->data(place).value.erase(key);
     }
 
@@ -177,7 +178,8 @@ public:
         set.emplace(key_holder, it, inserted);
     }
 
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
     {
         auto & set = this->data(place).value;
 

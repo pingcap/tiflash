@@ -270,12 +270,13 @@ public:
         addOrDecrease<true>(place, columns, row_num, arena);
     }
 
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
     {
         addOrDecrease<false>(place, columns, row_num, arena);
     }
 
-    template<bool is_add>
+    template <bool is_add>
     void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
     {
         if constexpr (input_is_nullable)
@@ -400,12 +401,13 @@ public:
         addOrDecrease<true>(place, columns, row_num, arena);
     }
 
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
     {
         addOrDecrease<false>(place, columns, row_num, arena);
     }
 
-    template<bool is_add>
+    template <bool is_add>
     void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
     {
         if constexpr (input_is_nullable)
@@ -429,6 +431,11 @@ public:
             else
                 this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
         }
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override
+    {
+        this->nested_function->reset(this->nestedPlace(place));
     }
 
     void addBatchSinglePlace( // NOLINT(google-default-arguments)
@@ -506,12 +513,13 @@ public:
         addOrDecrease<true>(place, columns, row_num, arena);
     }
 
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
     {
         addOrDecrease<false>(place, columns, row_num, arena);
     }
 
-    template<bool is_add>
+    template <bool is_add>
     void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
     {
         /// This container stores the columns we really pass to the nested function.
@@ -539,6 +547,11 @@ public:
             this->nested_function->add(this->nestedPlace(place), nested_columns, row_num, arena);
         else
             this->nested_function->decrease(this->nestedPlace(place), nested_columns, row_num, arena);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override
+    {
+        this->nested_function->reset(this->nestedPlace(place));
     }
 
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }

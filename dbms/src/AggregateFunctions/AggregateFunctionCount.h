@@ -30,7 +30,7 @@ struct AggregateFunctionCountData
 {
     UInt64 count = 0;
 
-    void reset() { count = 0; }
+    inline void reset() noexcept { count = 0; }
 };
 
 namespace ErrorCodes
@@ -58,6 +58,8 @@ public:
     {
         --data(place).count;
     }
+
+    void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
 
     void addBatchSinglePlace(
         size_t start_offset,
@@ -185,6 +187,8 @@ public:
         data(place).count -= !static_cast<const ColumnNullable &>(*columns[0]).isNullAt(row_num);
     }
 
+    void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         data(place).count += data(rhs).count;
@@ -257,10 +261,7 @@ public:
         --data(place).count;
     }
 
-    void reset(AggregateDataPtr __restrict place) const override
-    {
-        this->data(place).reset();
-    }
+    void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {

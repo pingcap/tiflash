@@ -387,15 +387,9 @@ public:
         throw Exception("Not implemented yet");
     }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override
-    {
-        throw Exception("Not implemented yet");
-    }
+    void prepareWindow(AggregateDataPtr __restrict) const override { throw Exception("Not implemented yet"); }
 
-    void reset(AggregateDataPtr __restrict) const override
-    {
-        throw Exception("Not implemented yet");
-    }
+    void reset(AggregateDataPtr __restrict) const override { throw Exception("Not implemented yet"); }
 };
 
 namespace _IAggregateFunctionImpl

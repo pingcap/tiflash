@@ -110,6 +110,8 @@ public:
                 nested_func->decrease(place, nested, i, arena);
     }
 
+    void reset(AggregateDataPtr __restrict place) const override { nested_func->reset(place); }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         nested_func->merge(place, rhs, arena);
