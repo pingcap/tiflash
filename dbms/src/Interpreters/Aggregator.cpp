@@ -666,26 +666,53 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
+    // start_row!=0 and stringHashTableRecoveryInfo not empty and cannot be true at the same time.
+    RUNTIME_CHECK(!(agg_process_info.start_row != 0 && !agg_process_info.stringHashTableRecoveryInfoEmpty()));
+
 #ifndef NDEBUG
     bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
     fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
 #else
     const bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
 #endif
-    if (disable_prefetch)
+    disable_prefetch = true;
+
+    // key_serialized and key_string(StringHashMap) needs column-wise handling for prefetch.
+    // Because:
+    // 1. StringHashMap(key_string) is composed by 5 submaps, so prefetch needs to be done for each specific submap.
+    // 2. getKeyHolder of key_serialized have to copy real data into Arena.
+    //    It means we better getKeyHolder for all Columns once and then use it both for getHash() and emplaceKey().
+    // 3. For other group by key(key_int8/16/32/...), it's ok to use row-wise handling even prefetch is enabled.
+    //    But getHashVals() still needs to be column-wise.
+    if constexpr (Method::State::is_serialized_key)
     {
-        executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        // TODO: batch serialize method for Columns is still under development.
+        // if (!disable_prefetch)
+        //     executeImplSerializedKeyByCol();
+        // else
+        //     executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
-    else
+    else if constexpr (Method::Data::is_string_hash_map)
     {
-        if constexpr (Method::Data::is_string_hash_map)
-            executeImplBatchStringHashMap<collect_hit_rate, only_lookup, true>(
+        // If agg_process_info.start_row != 0, it means the computation process of the current block was interrupted by resize exception in executeImplByRow.
+        // For clarity and simplicity of implementation, the processing functions for column-wise and row-wise methods handle the entire block independently.
+        // A block will not be processed first by the row-wise method and then by the column-wise method, or vice-versa.
+        if (!disable_prefetch && likely(agg_process_info.start_row == 0))
+            executeImplStringHashMapByCol<collect_hit_rate, only_lookup, true>(
                 method,
                 state,
                 aggregates_pool,
                 agg_process_info);
         else
-            executeImplBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
+            executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+    }
+    else
+    {
+        if (disable_prefetch)
+            executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        else
+            executeImplByRow<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
     }
 }
 
@@ -759,7 +786,7 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     }
 }
 
-// This is only used by executeImplBatchStringHashMap.
+// This is only used by executeImplStringHashMapByCol.
 // It will choose specifix submap of StringHashMap then do emplace/find.
 // StringKeyType can be StringRef/StringKey8/StringKey16/StringKey24/ArenaKeyHolder.
 template <
@@ -849,14 +876,20 @@ size_t Aggregator::emplaceOrFindStringKey(
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
-ALWAYS_INLINE void Aggregator::executeImplBatch(
+ALWAYS_INLINE void Aggregator::executeImplByRow(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
+    LOG_TRACE(log, "executeImplByRow");
     // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
+    // If agg_process_info.stringHashTableRecoveryInfoEmpty() is false, it means the current block was
+    // handled by executeImplStringHashMapByCol(column-wise) before, and resize execption happened.
+    // This situation is unexpected because for the sake of clarity, we assume that a block will be **fully** processed
+    // either column-wise or row-wise and cannot be split for processing.
+    RUNTIME_CHECK(agg_process_info.stringHashTableRecoveryInfoEmpty());
 
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
@@ -1086,12 +1119,13 @@ M(4)
 // NOTE: this function is column-wise, which means sort key buffer cannot be reused.
 // This buffer will not be release until this block is processed done.
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
-ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
+ALWAYS_INLINE void Aggregator::executeImplStringHashMapByCol(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
+    LOG_TRACE(log, "executeImplStringHashMapByCol");
     // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
     static_assert(Method::Data::is_string_hash_map);
@@ -1125,7 +1159,11 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
 
     // If no resize exception happens, so this is a new Block.
     // If resize exception happens, start_row has already been set to zero at the end of this function.
-    RUNTIME_CHECK(agg_process_info.start_row == 0);
+    RUNTIME_CHECK_MSG(
+        agg_process_info.start_row == 0,
+        "unexpected agg_process_info.start_row: {}, end_row: {}",
+        agg_process_info.start_row,
+        agg_process_info.end_row);
 
     if likely (agg_process_info.stringHashTableRecoveryInfoEmpty())
     {
@@ -1233,10 +1271,9 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
     M(4, key_str_infos, key_str_datas, key_str_places)
 #undef M
 
-    if (zero_agg_func_size)
-        return;
-
-    std::vector<AggregateDataPtr> places(rows, nullptr);
+    if (!zero_agg_func_size)
+    {
+        std::vector<AggregateDataPtr> places(rows, nullptr);
 #define M(INFO, PLACES)                        \
     for (size_t i = 0; i < (INFO).size(); ++i) \
     {                                          \
@@ -1244,24 +1281,26 @@ ALWAYS_INLINE void Aggregator::executeImplBatchStringHashMap(
         places[row] = (PLACES)[i];             \
     }
 
-    M(key0_infos, key0_places)
-    M(key8_infos, key8_places)
-    M(key16_infos, key16_places)
-    M(key24_infos, key24_places)
-    M(key_str_infos, key_str_places)
+        M(key0_infos, key0_places)
+        M(key8_infos, key8_places)
+        M(key16_infos, key16_places)
+        M(key24_infos, key24_places)
+        M(key_str_infos, key_str_places)
 #undef M
 
-    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
-         ++inst)
-    {
-        inst->batch_that->addBatch(
-            agg_process_info.start_row,
-            rows,
-            &places[0],
-            inst->state_offset,
-            inst->batch_arguments,
-            aggregates_pool);
+        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+             ++inst)
+        {
+            inst->batch_that->addBatch(
+                agg_process_info.start_row,
+                rows,
+                &places[0],
+                inst->state_offset,
+                inst->batch_arguments,
+                aggregates_pool);
+        }
     }
+
     if unlikely (got_resize_exception)
     {
         RUNTIME_CHECK(!agg_process_info.stringHashTableRecoveryInfoEmpty());
