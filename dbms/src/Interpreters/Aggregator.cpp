@@ -675,14 +675,29 @@ void NO_INLINE Aggregator::executeImpl(
 #else
     const bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
 #endif
+    disable_prefetch = true;
 
-    if constexpr (Method::Data::is_string_hash_map)
+    // key_serialized and key_string(StringHashMap) needs column-wise handling for prefetch.
+    // Because:
+    // 1. StringHashMap(key_string) is composed by 5 submaps, so prefetch needs to be done for each specific submap.
+    // 2. getKeyHolder of key_serialized have to copy real data into Arena.
+    //    It means we better getKeyHolder for all Columns once and then use it both for getHash() and emplaceKey().
+    // 3. For other group by key(key_int8/16/32/...), it's ok to use row-wise handling even prefetch is enabled.
+    //    But getHashVals() still needs to be column-wise.
+    if constexpr (Method::State::is_serialized_key)
     {
-        // When will handled by column-wise(executeImplStringHashMapByCol):
-        // 1. For StringHashMap, which is composed by 5 submaps, needs be handled by column-wise when prefetch is enabled.
-        // 2. If agg_process_info.start_row != 0, it means the computation process of the current block was interrupted by resize exception in executeImplByRow.
-        //    For clarity and simplicity of implementation, the processing functions for column-wise and row-wise methods handle the entire block independently.
-        //    A block will not be processed first by the row-wise method and then by the column-wise method, or vice-versa.
+        // TODO: batch serialize method for Columns is still under development.
+        // if (!disable_prefetch)
+        //     executeImplSerializedKeyByCol();
+        // else
+        //     executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+    }
+    else if constexpr (Method::Data::is_string_hash_map)
+    {
+        // If agg_process_info.start_row != 0, it means the computation process of the current block was interrupted by resize exception in executeImplByRow.
+        // For clarity and simplicity of implementation, the processing functions for column-wise and row-wise methods handle the entire block independently.
+        // A block will not be processed first by the row-wise method and then by the column-wise method, or vice-versa.
         if (!disable_prefetch && likely(agg_process_info.start_row == 0))
             executeImplStringHashMapByCol<collect_hit_rate, only_lookup, true>(
                 method,
@@ -867,6 +882,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
+    LOG_TRACE(log, "executeImplByRow");
     // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
     // If agg_process_info.stringHashTableRecoveryInfoEmpty() is false, it means the current block was
@@ -1109,6 +1125,7 @@ ALWAYS_INLINE void Aggregator::executeImplStringHashMapByCol(
     Arena * aggregates_pool,
     AggProcessInfo & agg_process_info) const
 {
+    LOG_TRACE(log, "executeImplStringHashMapByCol");
     // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
     static_assert(Method::Data::is_string_hash_map);
