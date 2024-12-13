@@ -59,11 +59,7 @@ struct ControlOptions
     std::vector<std::string> paths;
     DisplayType mode = DisplayType::DISPLAY_SUMMARY_INFO;
     UInt64 page_id = UINT64_MAX;
-<<<<<<< HEAD
-    UInt32 blob_id = UINT32_MAX;
-=======
     BlobFileId blob_id = INVALID_BLOBFILE_ID;
->>>>>>> c2c041c711 (PageCtl: Support getting blob data from PageStorage instance (#9723))
     BlobFileOffset blob_offset = INVALID_BLOBFILE_OFFSET;
     size_t blob_size = UINT64_MAX;
     UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
@@ -876,11 +872,7 @@ private:
         ChecksumClass digest;
         digest.update(buffer, size);
         auto checksum = digest.checksum();
-<<<<<<< HEAD
         fmt::println("checksum: 0x{:X}", checksum);
-=======
-        fmt::print("checksum: 0x{:X}\n", checksum);
->>>>>>> c2c041c711 (PageCtl: Support getting blob data from PageStorage instance (#9723))
 
         auto hex_str = Redact::keyToHexString(buffer, size);
         delete[] buffer;
