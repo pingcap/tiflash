@@ -32,9 +32,6 @@
 
 #include <future>
 
-#include "IO/Buffer/ReadBufferFromString.h"
-#include "Storages/DeltaMerge/Segment.h"
-
 namespace ProfileEvents
 {
 extern const Event DMSegmentIsEmptyFastPath;
@@ -51,11 +48,7 @@ namespace DB::ErrorCodes
 extern const int DT_DELTA_INDEX_ERROR;
 }
 
-namespace DB
-{
-namespace DM
-{
-namespace GC
+namespace DB::DM::GC
 {
 bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(
     const DMContext & context, //
@@ -66,7 +59,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(
     double invalid_data_ratio_threshold,
     const LoggerPtr & log);
 }
-namespace tests
+namespace DB::DM::tests
 {
 
 class SegmentOperationTest : public SegmentTestBasic
@@ -1369,58 +1362,4 @@ try
 }
 CATCH
 
-dtpb::StableLayerMeta derializeMetaV2FromBuf(ReadBuffer & buf)
-{
-    dtpb::StableLayerMeta meta;
-    String data;
-    readStringBinary(data, buf);
-    RUNTIME_CHECK_MSG(
-        meta.ParseFromString(data),
-        "Failed to parse StableLayerMeta from string: {}",
-        Redact::keyToHexString(data.data(), data.size()));
-    return meta;
-}
-
-dtpb::StableLayerMeta derializeMetaFromBuf(ReadBuffer & buf)
-{
-    UInt64 version;
-    readIntBinary(version, buf);
-    if (version == StableFormat::V2)
-        return derializeMetaV2FromBuf(buf);
-    else
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected version: {}", version);
-}
-TEST(SSS, sss)
-{
-    // page_id:451.8822
-    std::string_view hex_datas[] = {
-        // version:250723.0
-        "030000000300000000000000230A18080010011A08800000000003D05C2208800000000007A11510F04418F74420F544",
-        // version:251826.0
-        "030000000400000000000000230A18080010011A08800000000003D05C2208800000000007A11510F04418F74420F544",
-        // version:251829.0
-        // "02000000000000001108B9A10F1092C9A9F2021A0508F4661001",
-        // version:251830.0
-        "030000000500000000000000220A18080010011A08800000000003D05C2208800000000007A11510F04418F744201A",
-    };
-    for (const auto & hex_data : hex_datas)
-    {
-        auto data = Redact::hexStringToKey(hex_data.data(), hex_data.size());
-        ReadBufferFromString buf(data);
-        Segment::SegmentMetaInfo info;
-        readSegmentMetaInfo(buf, info);
-        LOG_INFO(Logger::get(), "hex:{} segment_info:{}", hex_data, info.toString());
-    }
-
-    {
-        std::string_view hex_data = "02000000000000001108B9A10F1092C9A9F2021A0508F4661001";
-        auto data = Redact::hexStringToKey(hex_data.data(), hex_data.size());
-        ReadBufferFromString buf(data);
-        auto stable_meta = derializeMetaFromBuf(buf);
-        LOG_INFO(Logger::get(), "hex:{} stable_meta:{}", hex_data, stable_meta.DebugString());
-    }
-}
-
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests
