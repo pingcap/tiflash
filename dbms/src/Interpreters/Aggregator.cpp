@@ -675,7 +675,6 @@ void NO_INLINE Aggregator::executeImpl(
 #else
     const bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
 #endif
-    disable_prefetch = true;
 
     // key_serialized and key_string(StringHashMap) needs column-wise handling for prefetch.
     // Because:
