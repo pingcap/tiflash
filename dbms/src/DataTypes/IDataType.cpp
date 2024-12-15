@@ -103,6 +103,13 @@ bool IDataType::isArraySizes(const SubstreamPath & path)
     return false;
 }
 
+bool IDataType::isStringSizes(const SubstreamPath & path)
+{
+    return std::any_of(path.cbegin(), path.cend(), [](const auto & elem) {
+        return elem.type == IDataType::Substream::StringSizes;
+    });
+}
+
 String IDataType::getFileNameForStream(const String & column_name, const IDataType::SubstreamPath & path)
 {
     String nested_table_name = Nested::extractTableName(column_name);
@@ -127,6 +134,8 @@ String IDataType::getFileNameForStream(const String & column_name, const IDataTy
             ///  and name is encoded as a whole.
             stream_name += "%2E" + escapeForFileName(elem.tuple_element_name);
         }
+        else if (elem.type == Substream::StringSizes)
+            stream_name += ".size";
     }
     return stream_name;
 }

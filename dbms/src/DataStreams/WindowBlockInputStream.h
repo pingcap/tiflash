@@ -101,8 +101,6 @@ public:
 
     void appendBlock(Block & current_block);
 
-    void tryCalculate();
-
     bool onlyHaveRowNumber();
 
     Int64 getPartitionEndRow(size_t block_rows);
@@ -149,6 +147,8 @@ private:
 
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
+
+    void tryCalculate();
 
     template <
         typename AuxColType,
@@ -258,7 +258,7 @@ public:
         const WindowDescription & window_description_,
         const String & req_id);
 
-    Block getHeader() const override { return action.output_header; };
+    Block getHeader() const override { return action.output_header; }
 
     String getName() const override { return NAME; }
 

@@ -555,8 +555,7 @@ bool DeltaMergeStore::segmentEnsureStableLocalIndexAsync(const SegmentPtr & segm
     }
 
     auto store_weak_ptr = weak_from_this();
-    auto tracing_id
-        = fmt::format("segmentEnsureStableLocalIndex<{}> source_segment={}", log->identifier(), segment->simpleInfo());
+    auto tracing_id = fmt::format("segmentEnsureStableLocalIndex source_segment={}", segment->simpleInfo());
     auto workload = [store_weak_ptr, build_info, tracing_id]() -> void {
         auto store = store_weak_ptr.lock();
         if (store == nullptr) // Store is destroyed before the task is executed.
@@ -873,7 +872,7 @@ bool DeltaMergeStore::segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segme
     lock->unlock();
 
     auto store_weak_ptr = weak_from_this();
-    auto tracing_id = fmt::format("segmentEnsureDeltaLocalIndexAsync<{}>", log->identifier());
+    auto tracing_id = fmt::format("segmentEnsureDeltaLocalIndexAsync source_segment={}", segment->simpleInfo());
     auto workload = [store_weak_ptr, build_info, delta_weak_ptr, segment, tracing_id]() -> void {
         auto store = store_weak_ptr.lock();
         if (!store) // Store is destroyed before the task is executed.

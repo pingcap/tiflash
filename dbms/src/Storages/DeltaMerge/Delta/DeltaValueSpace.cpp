@@ -266,19 +266,19 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneAllColumnFile
 size_t DeltaValueSpace::getTotalCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getRows() + persisted_file_set->getTotalCacheRows();
+    return mem_table_set->getRows();
 }
 
 size_t DeltaValueSpace::getTotalCacheBytes() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getBytes() + persisted_file_set->getTotalCacheBytes();
+    return mem_table_set->getBytes();
 }
 
 size_t DeltaValueSpace::getValidCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    return mem_table_set->getRows() + persisted_file_set->getValidCacheRows();
+    return mem_table_set->getRows();
 }
 
 void DeltaValueSpace::recordRemoveColumnFilesPages(WriteBatches & wbs) const
