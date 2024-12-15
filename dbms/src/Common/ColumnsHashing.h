@@ -48,6 +48,8 @@ struct HashMethodOneNumber
     using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 
+    static constexpr bool is_serialized_key = false;
+
     const FieldType * vec;
     const size_t total_rows;
 
@@ -95,6 +97,8 @@ struct HashMethodString
 {
     using Self = HashMethodString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+
+    static constexpr bool is_serialized_key = false;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -154,6 +158,8 @@ struct HashMethodStringBin
 {
     using Self = HashMethodStringBin<Value, Mapped, padding>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+
+    static constexpr bool is_serialized_key = false;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -359,6 +365,8 @@ struct HashMethodFastPathTwoKeysSerialized
     using Self = HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
 
+    static constexpr bool is_serialized_key = true;
+
     Key1Desc key_1_desc;
     Key2Desc key_2_desc;
     const size_t total_rows;
@@ -394,6 +402,8 @@ struct HashMethodFixedString
 {
     using Self = HashMethodFixedString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+
+    static constexpr bool is_serialized_key = false;
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
@@ -453,6 +463,7 @@ struct HashMethodKeysFixed
     using BaseHashed = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::BaseStateKeysFixed<Key, has_nullable_keys_>;
 
+    static constexpr bool is_serialized_key = false;
     static constexpr bool has_nullable_keys = has_nullable_keys_;
 
     Sizes key_sizes;
@@ -610,6 +621,8 @@ struct HashMethodSerialized
     using Self = HashMethodSerialized<Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
 
+    static constexpr bool is_serialized_key = true;
+
     ColumnRawPtrs key_columns;
     size_t keys_size;
     TiDB::TiDBCollators collators;
@@ -647,6 +660,8 @@ struct HashMethodHashed
     using Key = UInt128;
     using Self = HashMethodHashed<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+
+    static constexpr bool is_serialized_key = false;
 
     ColumnRawPtrs key_columns;
     TiDB::TiDBCollators collators;
