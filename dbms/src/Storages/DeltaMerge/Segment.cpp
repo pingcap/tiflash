@@ -3043,9 +3043,18 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
     UInt64 start_ts,
-    size_t expected_block_size)
+    size_t expected_block_size,
+    bool use_version_chain)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
+    RUNTIME_CHECK(!is_common_handle);
+    
+    if (use_version_chain)
+    {
+        return buildBitmapFilter<Int64>(
+            dm_context, *segment_snap, read_ranges, filter, start_ts, version_chain);
+    }
+    
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
@@ -3458,16 +3467,21 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
 }
 
-RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
+RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges)
 {
     RowKeyRanges real_ranges;
     for (const auto & read_range : read_ranges)
     {
-        auto real_range = rowkey_range.shrink(read_range);
+        auto real_range = target_range.shrink(read_range);
         if (!real_range.none())
             real_ranges.emplace_back(std::move(real_range));
     }
     return real_ranges;
+}
+
+RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
+{
+    return shrinkRowKeyRanges(rowkey_range, read_ranges);
 }
 
 static bool hasCacheableColumn(const ColumnDefines & columns)
@@ -3490,19 +3504,15 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     {
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
-    /*
+
     auto bitmap_filter = buildBitmapFilter(
-        dm_context,
-        segment_snap,
-        real_ranges,
-        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-        start_ts,
-        build_bitmap_filter_block_rows);
-    */
-    UNUSED(build_bitmap_filter_block_rows);
-    RUNTIME_CHECK(!is_common_handle);
-    //RUNTIME_CHECK(filter == nullptr);
-    auto bitmap_filter = buildBitmapFilter<Int64>(dm_context, *segment_snap, read_ranges, start_ts, version_chain);
+            dm_context,
+            segment_snap,
+            real_ranges,
+            filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+            start_ts,
+            build_bitmap_filter_block_rows,
+            dm_context.global_context.getSettingsRef().dt_enable_version_chain);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))

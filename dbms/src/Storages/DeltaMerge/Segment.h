@@ -664,6 +664,8 @@ public:
         }
     }
 
+    static RowKeyRanges shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -737,7 +739,8 @@ public:
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         UInt64 start_ts,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        bool use_version_chain);
     BitmapFilterPtr buildBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,

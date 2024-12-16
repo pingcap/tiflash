@@ -32,6 +32,7 @@ BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
+    const RSOperatorPtr & rs_operator,
     const UInt64 read_ts,
     VersionChain<Handle> & version_chain);
 } // namespace DB::DM

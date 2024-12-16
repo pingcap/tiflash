@@ -28,5 +28,6 @@ void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
+    const RSResults & stable_pack_res,
     std::vector<UInt8> & filter);
 } // namespace DB::DM

@@ -1027,6 +1027,11 @@ try
 }
 CATCH
 
+namespace
+{
+constexpr bool use_version_chain = true;
+}
+
 TEST_F(SegmentTest, ColumnFileBigRangeGreaterThanSegment)
 try
 {
@@ -1089,7 +1094,8 @@ try
             real_ranges,
             EMPTY_RS_OPERATOR,
             std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE);
+            DEFAULT_BLOCK_SIZE,
+            use_version_chain);
         // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
         ASSERT_EQ(bitmap_filter->size(), 60);
         ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
@@ -1138,6 +1144,29 @@ try
         // write range [80, 90)
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(80, 90, false);
         segment->write(dmContext(), std::move(block2));
+
+        // test built bitmap filter
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto read_ranges = {RowKeyRange::newAll(false, 1)};
+        auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+        auto bitmap_filter1 = segment->buildBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            EMPTY_RS_OPERATOR,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            !use_version_chain);
+        auto bitmap_filter2 = segment->buildBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            EMPTY_RS_OPERATOR,
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            use_version_chain);
+
+        ASSERT_EQ(bitmap_filter1->toDebugString(), bitmap_filter2->toDebugString());
     }
     {
         // test read data with delete-range and new writes

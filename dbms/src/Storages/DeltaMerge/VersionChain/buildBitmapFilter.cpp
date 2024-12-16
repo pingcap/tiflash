@@ -19,18 +19,54 @@
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 #include <Storages/DeltaMerge/VersionChain/buildBitmapFilter.h>
+
+#include <Storages/DeltaMerge/DMContext.h>
+
 namespace DB::DM
 {
+RSResults getDMFileRSFilterResults(
+    const DMContext & dm_context,
+    const DMFilePtr & dmfile,
+    const RSOperatorPtr & rs_operator)
+{
+    if (!rs_operator)
+        return RSResults(dmfile->getPacks(), RSResult::Some);
+
+    auto pack_filter = DMFilePackFilter::loadFrom(
+        dmfile,
+        dm_context.global_context.getMinMaxIndexCache(),
+        true,
+        {}, // read_ranges
+        rs_operator,
+        {},
+        dm_context.global_context.getFileProvider(),
+        dm_context.getReadLimiter(),
+        dm_context.scan_context,
+        dm_context.tracing_id,
+        ReadTag::MVCC);
+    return pack_filter.getPackResConst();
+}
+
+RSResults getStableRSFilterResults(
+    const DMContext & dm_context,
+    const StableValueSpace::Snapshot & stable,
+    const RSOperatorPtr & rs_operator)
+{
+    const auto & dmfiles = stable.getDMFiles();
+    RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
+    return getDMFileRSFilterResults(dm_context, dmfiles[0], rs_operator);
+}
+
 template <Int64OrString Handle>
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
+    const RSOperatorPtr & rs_operator,
     const UInt64 read_ts,
     VersionChain<Handle> & version_chain)
 {
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
-
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
@@ -40,7 +76,9 @@ BitmapFilterPtr buildBitmapFilter(
     auto & filter = bitmap_filter->getFilter();
 
     // TODO: make these functions return filter out rows.
-    buildRowKeyFilter<Handle>(dm_context, snapshot, read_ranges, filter);
+    // TODO: send the pack res to buildVersionFilter and buildDeletedFilter to skip some packs.
+    auto stable_pack_res = getStableRSFilterResults(dm_context, stable, rs_operator);
+    buildRowKeyFilter<Handle>(dm_context, snapshot, read_ranges, stable_pack_res, filter);
     buildVersionFilter(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     buildDeletedFilter(dm_context, snapshot, filter);
 
@@ -52,6 +90,7 @@ template BitmapFilterPtr buildBitmapFilter<Int64>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
+    const RSOperatorPtr & rs_operator,
     const UInt64 read_ts,
     VersionChain<Handle> & version_chain);
 } // namespace DB::DM

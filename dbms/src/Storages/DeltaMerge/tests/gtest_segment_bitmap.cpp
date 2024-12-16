@@ -181,19 +181,19 @@ protected:
 
         verifyBitmapFilter(SEG_ID);
     }
-
+    
+    inline static constexpr bool use_version_chain = true;
     void verifyBitmapFilter(const PageIdU64 seg_id, const UInt64 read_ts = std::numeric_limits<UInt64>::max())
     {
         auto [seg, snap] = getSegmentForRead(seg_id);
 
-        auto bitmap_filter
-            = seg->buildBitmapFilter(*dm_context, snap, {seg->getRowKeyRange()}, nullptr, read_ts, DEFAULT_BLOCK_SIZE);
-
-        VersionChain<Int64> version_chain;
+        auto bitmap_filter1
+            = seg->buildBitmapFilter(*dm_context, snap, {seg->getRowKeyRange()}, nullptr, read_ts, DEFAULT_BLOCK_SIZE, !use_version_chain);
+        
         auto bitmap_filter2
-            = buildBitmapFilter<Int64>(*dm_context, *snap, {seg->getRowKeyRange()}, read_ts, version_chain);
+            = seg->buildBitmapFilter(*dm_context, snap, {seg->getRowKeyRange()}, nullptr, read_ts, DEFAULT_BLOCK_SIZE, use_version_chain);
 
-        ASSERT_EQ(bitmap_filter->toDebugString(), bitmap_filter2->toDebugString());
+        ASSERT_EQ(bitmap_filter1->toDebugString(), bitmap_filter2->toDebugString());
     }
 };
 
@@ -541,7 +541,8 @@ try
         {seg->getRowKeyRange()},
         nullptr,
         std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
     ASSERT_EQ(bitmap_filter->size(), 30);
     ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
     ASSERT_EQ(bitmap_filter->toDebugString(), "000001111111111111111111100000");
@@ -571,7 +572,8 @@ try
         {seg->getRowKeyRange()},
         nullptr,
         std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
     ASSERT_EQ(bitmap_filter->size(), 750);
     ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
     ASSERT_EQ(

@@ -61,8 +61,9 @@ private:
         const IColumnFileDataProviderPtr & data_provider,
         const ColumnFile & cf,
         const UInt32 offset,
+        const UInt32 stable_rows,
         const bool calculate_read_packs);
-    [[nodiscard]] UInt32 replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big);
+    [[nodiscard]] UInt32 replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big, const UInt32 stable_rows);
     [[nodiscard]] UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
 
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(Handle h);

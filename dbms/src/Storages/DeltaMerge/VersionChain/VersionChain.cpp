@@ -31,12 +31,14 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
         dmfile_or_delete_range_list->push_back(
-            DMFileHandleIndex<Handle>{dm_context.global_context, dmfiles[0], /*start_row_id*/ 0});
+            DMFileHandleIndex<Handle>{dm_context, dmfiles[0], /*start_row_id*/ 0, std::nullopt});
     }
 
+    const auto & stable = *(snapshot.stable);
+    const UInt32 stable_rows = stable.getDMFilesRows();
     const auto & delta = *(snapshot.delta);
-    UInt32 delta_rows = delta.getRows();
-    UInt32 delta_delete_ranges = delta.getDeletes();
+    const UInt32 delta_rows = delta.getRows();
+    const UInt32 delta_delete_ranges = delta.getDeletes();
     std::lock_guard lock(mtx);
     if (delta_rows + delta_delete_ranges <= replayed_rows_and_deletes)
     {
@@ -73,7 +75,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
 
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            replayed_rows_and_deletes += replayBlock(dm_context, data_provider, *cf, offset, calculate_read_packs);
+            replayed_rows_and_deletes += replayBlock(dm_context, data_provider, *cf, offset, stable_rows, calculate_read_packs);
             offset = 0;
         }
         else if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
@@ -82,7 +84,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         }
         else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            replayed_rows_and_deletes += replayColumnFileBig(dm_context, *cf_big);
+            replayed_rows_and_deletes += replayColumnFileBig(dm_context, *cf_big, stable_rows);
         }
         else
         {
@@ -116,6 +118,7 @@ UInt32 VersionChain<Handle>::replayBlock(
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
     const UInt32 offset,
+    const UInt32 stable_rows,
     const bool calculate_read_packs)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
@@ -132,6 +135,7 @@ UInt32 VersionChain<Handle>::replayBlock(
 
     for (auto h : handles)
     {
+        const RowID curr_row_id = base_versions->size() + stable_rows;
         if (auto itr = new_handle_to_row_ids->find(h); itr != new_handle_to_row_ids->end())
         {
             base_versions->push_back(itr->second);
@@ -143,21 +147,21 @@ UInt32 VersionChain<Handle>::replayBlock(
             continue;
         }
 
-        new_handle_to_row_ids->insert(std::make_pair(h, base_versions->size()));
+        new_handle_to_row_ids->insert(std::make_pair(h, curr_row_id));
         base_versions->push_back(NotExistRowID);
     }
     return handles.size() - offset;
 }
 
 template <Int64OrString Handle>
-UInt32 VersionChain<Handle>::replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big)
+UInt32 VersionChain<Handle>::replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big, const UInt32 stable_rows)
 {
     const UInt32 rows = cf_big.getRows();
-    const UInt32 start_row_id = base_versions->size();
+    const UInt32 start_row_id = base_versions->size() + stable_rows;
     base_versions->insert(base_versions->end(), rows, NotExistRowID);
 
     dmfile_or_delete_range_list->push_back(
-        DMFileHandleIndex<Handle>{dm_context.global_context, cf_big.getFile(), start_row_id});
+        DMFileHandleIndex<Handle>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
     return rows;
 }
 

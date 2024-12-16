@@ -24,6 +24,8 @@ namespace DB::DM
 {
 namespace
 {
+
+// TODO: shrinking read_range by segment_range
 template <Int64OrString Handle>
 UInt32 buildRowKeyFilterVector(
     const PaddedPODArray<Handle> & handles,
@@ -77,6 +79,7 @@ UInt32 buildRowKeyFilterDMFile(
     const std::optional<RowKeyRange> & segment_range,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
+    const RSResults * stable_pack_res,
     const UInt32 start_row_id,
     std::vector<UInt8> & filter)
 {
@@ -84,6 +87,18 @@ UInt32 buildRowKeyFilterDMFile(
         = getDMFilePackFilterResultBySegmentRange(dm_context, dmfile, segment_range);
     if (valid_handle_res.empty())
         return 0;
+
+    if (stable_pack_res)
+    {
+        const auto & s_pack_res = *stable_pack_res;
+        RUNTIME_CHECK(
+            stable_pack_res->size() == valid_handle_res.size(),
+            stable_pack_res->size(),
+            valid_handle_res.size());
+        for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+            if (!s_pack_res[i].isUse())
+                valid_handle_res[i] = RSResult::None;
+    }
 
     const auto read_ranges_handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, read_ranges);
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
@@ -120,7 +135,7 @@ UInt32 buildRowKeyFilterDMFile(
 
     if (need_read_rows == 0)
         return rows;
-
+    
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(dmfile, {getHandleColumnDefine<Handle>()}, {}, dm_context.scan_context);
@@ -161,7 +176,8 @@ UInt32 buildRowKeyFilterColumnFileBig(
         cf_big.getFile(),
         cf_big.getRange(),
         delete_ranges,
-        read_ranges,
+        Segment::shrinkRowKeyRanges(cf_big.getRange(), read_ranges),
+        nullptr, // stable_pack_res
         start_row_id,
         filter);
 }
@@ -172,6 +188,7 @@ UInt32 buildRowKeyFilterStable(
     const StableValueSpace::Snapshot & stable,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
+    const RSResults & stable_pack_res,
     std::vector<UInt8> & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
@@ -185,6 +202,7 @@ UInt32 buildRowKeyFilterStable(
         std::nullopt, // segment_range
         delete_ranges,
         read_ranges,
+        &stable_pack_res,
         0, // start_row_id
         filter);
 }
@@ -200,6 +218,7 @@ void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
+    const RSResults & stable_pack_res,
     std::vector<UInt8> & filter)
 {
     const auto & delta = *(snapshot.delta);
@@ -258,7 +277,8 @@ void buildRowKeyFilter(
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
 
-    const auto n = buildRowKeyFilterStable<Handle>(dm_context, stable, delete_ranges, read_ranges, filter);
+    const auto n
+        = buildRowKeyFilterStable<Handle>(dm_context, stable, delete_ranges, read_ranges, stable_pack_res, filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
 }
 
@@ -266,6 +286,7 @@ template void buildRowKeyFilter<Int64>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
+    const RSResults & stable_pack_res,
     std::vector<UInt8> & filter);
 
 // TODO: String
