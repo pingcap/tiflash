@@ -113,7 +113,8 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        bool substream_can_index = !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
+        bool substream_can_index = !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path)
+            && !IDataType::isStringSizes(substream_path);
         auto stream = std::make_unique<Stream>(
             dmfile,
             stream_name,
@@ -125,7 +126,6 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             do_index && substream_can_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
-
     type->enumerateStreams(callback, {});
 }
 
@@ -280,6 +280,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
         const bool is_null = IDataType::isNullMap(substream);
         const bool is_array = IDataType::isArraySizes(substream);
+        const bool is_string_sizes = IDataType::isStringSizes(substream);
 
         // v3
         if (dmfile->useMetaV2())
@@ -296,9 +297,9 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             {
                 col_stat.nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
             }
-            else if (is_array)
+            else if (is_array || is_string_sizes)
             {
-                col_stat.array_sizes_bytes = stream->plain_file->getMaterializedBytes();
+                col_stat.sizes_bytes = stream->plain_file->getMaterializedBytes();
             }
             else
             {
@@ -365,9 +366,9 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 {
                     col_stat.nullmap_mark_bytes = mark_size;
                 }
-                else if (is_array)
+                else if (is_array || is_string_sizes)
                 {
-                    col_stat.array_sizes_mark_bytes = mark_size;
+                    col_stat.sizes_mark_bytes = mark_size;
                 }
                 else
                 {

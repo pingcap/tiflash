@@ -14,14 +14,12 @@
 
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
-#include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 
 #include <memory>
@@ -29,122 +27,6 @@
 
 namespace DB::DM
 {
-
-Columns ColumnFileTiny::readFromCache(const ColumnDefines & column_defines, size_t col_start, size_t col_end) const
-{
-    if (!cache)
-        return {};
-
-    Columns columns;
-    const auto & colid_to_offset = schema->getColIdToOffset();
-    for (size_t i = col_start; i < col_end; ++i)
-    {
-        const auto & cd = column_defines[i];
-        if (auto it = colid_to_offset.find(cd.id); it != colid_to_offset.end())
-        {
-            auto col_offset = it->second;
-            // Copy data from cache
-            const auto & type = getDataType(cd.id);
-            auto col_data = type->createColumn();
-            col_data->insertRangeFrom(*cache->block.getByPosition(col_offset).column, 0, rows);
-            // Cast if need
-            auto col_converted = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
-            columns.push_back(std::move(col_converted));
-        }
-        else
-        {
-            ColumnPtr column = createColumnWithDefaultValue(cd, rows);
-            columns.emplace_back(std::move(column));
-        }
-    }
-    return columns;
-}
-
-Columns ColumnFileTiny::readFromDisk(
-    const IColumnFileDataProviderPtr & data_provider, //
-    const ColumnDefines & column_defines,
-    size_t col_start,
-    size_t col_end) const
-{
-    const size_t num_columns_read = col_end - col_start;
-
-    Columns columns(num_columns_read); // allocate empty columns
-
-    std::vector<size_t> fields;
-    const auto & colid_to_offset = schema->getColIdToOffset();
-    for (size_t index = col_start; index < col_end; ++index)
-    {
-        const auto & cd = column_defines[index];
-        if (auto it = colid_to_offset.find(cd.id); it != colid_to_offset.end())
-        {
-            auto col_index = it->second;
-            fields.emplace_back(col_index);
-        }
-        else
-        {
-            // New column after ddl is not exist in this CFTiny, fill with default value
-            columns[index - col_start] = createColumnWithDefaultValue(cd, rows);
-        }
-    }
-
-    // All columns to be read are not exist in this CFTiny and filled with default value,
-    // we can skip reading from disk
-    if (fields.empty())
-        return columns;
-
-    // Read the columns from disk and apply DDL cast if need
-    Page page = data_provider->readTinyData(data_page_id, fields);
-    // use `unlikely` to reduce performance impact on keyspaces without enable encryption
-    if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)))
-    {
-        // decrypt the page data in place
-        size_t data_size = page.data.size();
-        char * data = page.mem_holder.get();
-        file_provider->decryptPage(keyspace_id, data, data_size, data_page_id);
-    }
-
-    for (size_t index = col_start; index < col_end; ++index)
-    {
-        const size_t index_in_read_columns = index - col_start;
-        if (columns[index_in_read_columns] != nullptr)
-        {
-            // the column is fill with default values.
-            continue;
-        }
-        auto col_id = column_defines[index].id;
-        auto col_index = colid_to_offset.at(col_id);
-        auto data_buf = page.getFieldData(col_index);
-
-        const auto & cd = column_defines[index];
-        // Deserialize column by pack's schema
-        const auto & type = getDataType(cd.id);
-        auto col_data = type->createColumn();
-        deserializeColumn(*col_data, type, data_buf, rows);
-
-        columns[index_in_read_columns] = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
-    }
-
-    return columns;
-}
-
-void ColumnFileTiny::fillColumns(
-    const IColumnFileDataProviderPtr & data_provider,
-    const ColumnDefines & col_defs,
-    size_t col_count,
-    Columns & result) const
-{
-    if (result.size() >= col_count)
-        return;
-
-    size_t col_start = result.size();
-    size_t col_end = col_count;
-
-    Columns read_cols = readFromCache(col_defs, col_start, col_end);
-    if (read_cols.empty())
-        read_cols = readFromDisk(data_provider, col_defs, col_start, col_end);
-
-    result.insert(result.end(), read_cols.begin(), read_cols.end());
-}
 
 ColumnFileReaderPtr ColumnFileTiny::getReader(
     const DMContext &,
@@ -367,35 +249,22 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
 
 Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader) const
 {
-    if (cache)
+    const auto & schema_ref = schema->getSchema();
+    auto page = page_reader.read(data_page_id);
+    auto columns = schema_ref.cloneEmptyColumns();
+
+    if (unlikely(columns.size() != page.fieldSize()))
+        throw Exception("Column size and field size not the same");
+
+    for (size_t index = 0; index < schema_ref.columns(); ++index)
     {
-        std::scoped_lock lock(cache->mutex);
-
-        auto & cache_block = cache->block;
-        MutableColumns columns = cache_block.cloneEmptyColumns();
-        for (size_t i = 0; i < cache_block.columns(); ++i)
-            columns[i]->insertRangeFrom(*cache_block.getByPosition(i).column, 0, rows);
-        return cache_block.cloneWithColumns(std::move(columns));
+        auto data_buf = page.getFieldData(index);
+        const auto & type = schema_ref.getByPosition(index).type;
+        auto & column = columns[index];
+        deserializeColumn(*column, type, data_buf, rows);
     }
-    else
-    {
-        const auto & schema_ref = schema->getSchema();
-        auto page = page_reader.read(data_page_id);
-        auto columns = schema_ref.cloneEmptyColumns();
 
-        if (unlikely(columns.size() != page.fieldSize()))
-            throw Exception("Column size and field size not the same");
-
-        for (size_t index = 0; index < schema_ref.columns(); ++index)
-        {
-            auto data_buf = page.getFieldData(index);
-            const auto & type = schema_ref.getByPosition(index).type;
-            auto & column = columns[index];
-            deserializeColumn(*column, type, data_buf, rows);
-        }
-
-        return schema_ref.cloneWithColumns(std::move(columns));
-    }
+    return schema_ref.cloneWithColumns(std::move(columns));
 }
 
 ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
@@ -403,15 +272,14 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
     const Block & block,
     size_t offset,
     size_t limit,
-    WriteBatches & wbs,
-    const CachePtr & cache)
+    WriteBatches & wbs)
 {
     auto page_id = writeColumnFileData(context, block, offset, limit, wbs);
 
     auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
 
     auto bytes = block.bytes(offset, limit);
-    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, context, nullptr, cache);
+    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, context);
 }
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(
@@ -485,8 +353,7 @@ ColumnFileTiny::ColumnFileTiny(
     UInt64 bytes_,
     PageIdU64 data_page_id_,
     const DMContext & dm_context,
-    const IndexInfosPtr & index_infos_,
-    const CachePtr & cache_)
+    const IndexInfosPtr & index_infos_)
     : schema(schema_)
     , rows(rows_)
     , bytes(bytes_)
@@ -494,7 +361,6 @@ ColumnFileTiny::ColumnFileTiny(
     , index_infos(index_infos_)
     , keyspace_id(dm_context.keyspace_id)
     , file_provider(dm_context.global_context.getFileProvider())
-    , cache(cache_)
 {}
 
 } // namespace DB::DM

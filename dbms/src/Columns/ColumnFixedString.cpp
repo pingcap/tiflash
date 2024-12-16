@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
+#include <Columns/filterColumn.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
@@ -230,9 +231,7 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
 }
 
 /// TODO: optimize by using align_buffer
-void ColumnFixedString::deserializeAndInsertFromPos(
-    PaddedPODArray<char *> & pos,
-    ColumnsAlignBufferAVX2 & /* align_buffer */)
+void ColumnFixedString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool /* use_nt_align_buffer */)
 {
     size_t size = pos.size();
     size_t old_char_size = chars.size();
@@ -247,7 +246,8 @@ void ColumnFixedString::deserializeAndInsertFromPos(
 
 void ColumnFixedString::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<char *> & pos,
-    const IColumn::Offsets & array_offsets)
+    const IColumn::Offsets & array_offsets,
+    bool /* use_nt_align_buffer */)
 {
     if unlikely (pos.empty())
         return;

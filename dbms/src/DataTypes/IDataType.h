@@ -95,6 +95,8 @@ public:
             NullMap,
 
             TupleElement,
+
+            StringSizes,
         };
         Type type;
 
@@ -421,6 +423,7 @@ public:
 
     static bool isNullMap(const SubstreamPath & path);
     static bool isArraySizes(const SubstreamPath & path);
+    static bool isStringSizes(const SubstreamPath & path);
 };
 
 

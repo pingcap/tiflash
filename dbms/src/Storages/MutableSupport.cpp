@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeString.h>
 #include <Storages/MutableSupport.h>
-
 
 namespace DB
 {
@@ -27,7 +27,8 @@ const String MutableSupport::delmark_column_name = "_INTERNAL_DELMARK";
 const String MutableSupport::extra_table_id_column_name = "_tidb_tid";
 
 const DataTypePtr MutableSupport::tidb_pk_column_int_type = DataTypeFactory::instance().get("Int64");
-const DataTypePtr MutableSupport::tidb_pk_column_string_type = DataTypeFactory::instance().get("String");
+const DataTypePtr MutableSupport::tidb_pk_column_string_type
+    = DataTypeFactory::instance().get(DataTypeString::getDefaultName());
 const DataTypePtr MutableSupport::version_column_type = DataTypeFactory::instance().get("UInt64");
 const DataTypePtr MutableSupport::delmark_column_type = DataTypeFactory::instance().get("UInt8");
 /// it should not be nullable, but TiDB does not set not null flag for extra_table_id_column_type, so has to align with TiDB
