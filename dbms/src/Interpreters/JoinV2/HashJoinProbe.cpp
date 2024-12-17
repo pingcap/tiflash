@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnUtils.h>
 #include <Common/Stopwatch.h>
+#include <DataStreams/materializeBlock.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
@@ -55,6 +56,7 @@ void JoinProbeContext::prepareForHashProbe(
     const Names & key_names,
     const String & filter_column,
     const NameSet & probe_output_name_set,
+    const Block & sample_block_pruned,
     const TiDB::TiDBCollators & collators,
     const HashJoinRowLayout & row_layout)
 {
@@ -79,28 +81,19 @@ void JoinProbeContext::prepareForHashProbe(
 
     if unlikely (!key_getter)
         key_getter = createHashJoinKeyGetter(method, collators);
-
     resetHashJoinKeyGetter(method, key_getter, key_columns, row_layout);
 
-    /** If you use FULL or RIGHT JOIN, then the columns from the "left" table must be materialized.
-     * Because if they are constants, then in the "not joined" rows, they may have different values
-     *  - default values, which can differ from the values of these constants.
-     */
+    block = materializeBlock(block);
+
+    /// In case of RIGHT and FULL joins, convert left columns to Nullable.
     if (getFullness(kind))
     {
-        size_t existing_columns = block.columns();
-        for (size_t i = 0; i < existing_columns; ++i)
-        {
-            auto & col = block.getByPosition(i).column;
-
-            if (ColumnPtr converted = col->convertToFullColumnIfConst())
-                col = converted;
-
-            /// convert left columns (except keys) to Nullable
-            if (std::end(key_names) == std::find(key_names.begin(), key_names.end(), block.getByPosition(i).name))
-                convertColumnToNullable(block.getByPosition(i));
-        }
+        size_t columns = block.columns();
+        for (size_t i = 0; i < columns; ++i)
+            convertColumnToNullable(block.getByPosition(i));
     }
+
+    assertBlocksHaveEqualStructure(block, sample_block_pruned, "Join Probe");
 
     is_prepared = true;
 }
@@ -153,7 +146,8 @@ public:
         const HashJoinSettings & settings,
         const HashJoinPointerTable & pointer_table,
         const HashJoinRowLayout & row_layout,
-        MutableColumns & added_columns)
+        MutableColumns & added_columns,
+        size_t added_rows)
         : context(context)
         , wd(wd)
         , method(method)
@@ -163,6 +157,7 @@ public:
         , pointer_table(pointer_table)
         , row_layout(row_layout)
         , added_columns(added_columns)
+        , added_rows(added_rows)
     {
         wd.insert_batch.clear();
         wd.insert_batch.reserve(settings.probe_insert_batch_size);
@@ -170,9 +165,9 @@ public:
         wd.selective_offsets.clear();
         wd.selective_offsets.reserve(settings.max_block_size);
 
-        if (pointer_table.enableProbePrefetch() && !wd.prefetch_states)
+        if (pointer_table.enableProbePrefetch() && !context.prefetch_states)
         {
-            wd.prefetch_states = decltype(wd.prefetch_states)(
+            context.prefetch_states = decltype(context.prefetch_states)(
                 static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
                 [](void * ptr) { delete static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
         }
@@ -290,13 +285,14 @@ private:
     const HashJoinPointerTable & pointer_table;
     const HashJoinRowLayout & row_layout;
     MutableColumns & added_columns;
+    size_t added_rows;
 };
 
 template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
 void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockInner()
 {
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
-    size_t current_offset = 0;
+    size_t current_offset = added_rows;
     auto & selective_offsets = wd.selective_offsets;
     size_t idx = context.start_row_idx;
     RowPtr ptr = context.current_probe_row_ptr;
@@ -368,13 +364,13 @@ template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
 void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockInnerPrefetch()
 {
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
+    auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(context.prefetch_states.get());
     auto & selective_offsets = wd.selective_offsets;
-    auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(wd.prefetch_states.get());
 
     size_t idx = context.start_row_idx;
     size_t active_states = context.prefetch_active_states;
-    size_t k = wd.prefetch_iter;
-    size_t current_offset = 0;
+    size_t k = context.prefetch_iter;
+    size_t current_offset = added_rows;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -492,7 +488,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
 
     context.start_row_idx = idx;
     context.prefetch_active_states = active_states;
-    wd.prefetch_iter = k;
+    context.prefetch_iter = k;
     wd.collision += collision;
 }
 
@@ -602,7 +598,8 @@ void joinProbeBlock(
     const HashJoinSettings & settings,
     const HashJoinPointerTable & pointer_table,
     const HashJoinRowLayout & row_layout,
-    MutableColumns & added_columns)
+    MutableColumns & added_columns,
+    size_t added_rows)
 {
     if (context.rows == 0)
         return;
@@ -623,7 +620,8 @@ void joinProbeBlock(
         settings,                                                  \
         pointer_table,                                             \
         row_layout,                                                \
-        added_columns)                                             \
+        added_columns,                                             \
+        added_rows)                                                \
         .joinProbeBlockImpl();
 
 #define CALL2(KeyGetter, has_null_map)        \

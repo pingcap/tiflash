@@ -683,8 +683,8 @@ void ExpressionActions::finalize(const Names & output_columns, bool keep_used_in
     NameSet columns_should_not_be_removed;
     if (keep_used_input_columns)
     {
-        /// if keep_used_input_columns is true, then don't remove the input_columns
-        /// this is used in nullaware/semi join which intends to reuse the input column
+        /// If keep_used_input_columns is true, then don't remove the input_columns.
+        /// Currently, this is used in join which intends to reuse the input column.
         for (const auto & column : input_columns)
             columns_should_not_be_removed.insert(column.name);
     }

@@ -41,6 +41,6 @@ void filterArraysImplOnlyData(
     ssize_t result_size_hint);
 
 template <typename T, typename Container>
-void filterImpl(const UInt8 *& filt_pos, const UInt8 *& filt_end, const T *& data_pos, Container & res_data);
+void filterImpl(const UInt8 * filt_pos, const UInt8 * filt_end, const T * data_pos, Container & res_data);
 
 } // namespace DB

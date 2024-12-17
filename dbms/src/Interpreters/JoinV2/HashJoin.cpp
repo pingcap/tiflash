@@ -13,13 +13,19 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
+#include <Columns/filterColumn.h>
 #include <Common/Exception.h>
+#include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/materializeBlock.h>
 #include <Interpreters/JoinV2/HashJoin.h>
+#include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
+#include <Interpreters/Settings.h>
 
-#include "ext/scope_guard.h"
+#include <ext/scope_guard.h>
+
+#include "Common/Stopwatch.h"
 
 namespace DB
 {
@@ -92,6 +98,15 @@ StringCollatorKind getStringCollatorKind(const TiDB::TiDBCollators & collators)
     }
 }
 
+IColumn::Offsets initBaseOffsets(bool has_other_condition, size_t max_block_size)
+{
+    if (!has_other_condition)
+        return {};
+    IColumn::Offsets offset(max_block_size);
+    std::iota(offset.begin(), offset.end(), 0ULL);
+    return offset;
+}
+
 } // namespace
 
 HashJoin::HashJoin(
@@ -115,6 +130,7 @@ HashJoin::HashJoin(
     , log(Logger::get(join_req_id))
     , has_other_condition(non_equal_conditions.other_cond_expr != nullptr)
     , output_columns(output_columns_)
+    , base_offsets(initBaseOffsets(has_other_condition, settings.max_block_size))
 {
     RUNTIME_ASSERT(key_names_left.size() == key_names_right.size());
     output_block = Block(output_columns);
@@ -245,25 +261,19 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
 
 void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
 {
-    if unlikely (initialized)
-        throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
-    initialized = true;
+    RUNTIME_CHECK_MSG(!build_initialized, "Logical error: Join build has been initialized");
+    build_initialized = true;
+    RUNTIME_CHECK_MSG(isFinalize(), "join should be finalized first");
 
     right_sample_block = materializeBlock(sample_block);
 
-    size_t num_columns_to_add = right_sample_block.columns();
-
-    for (size_t i = 0; i < num_columns_to_add; ++i)
-    {
-        auto & column = right_sample_block.getByPosition(i);
-        if (!column.column)
-            column.column = column.type->createColumn();
-    }
-
     /// In case of LEFT and FULL joins, convert joined columns to Nullable.
     if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
-        for (size_t i = 0; i < num_columns_to_add; ++i)
+    {
+        size_t columns = right_sample_block.columns();
+        for (size_t i = 0; i < columns; ++i)
             convertColumnToNullable(right_sample_block.getByPosition(i));
+    }
 
     right_sample_block_pruned = right_sample_block;
     removeUselessColumn(right_sample_block_pruned);
@@ -281,7 +291,36 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
 
 void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
 {
-    left_sample_block = sample_block;
+    RUNTIME_CHECK_MSG(build_initialized, "join build should be initialized first");
+    RUNTIME_CHECK_MSG(!probe_initialized, "Logical error: Join probe has been initialized");
+    probe_initialized = true;
+    RUNTIME_CHECK_MSG(isFinalize(), "join should be finalized first");
+
+    left_sample_block = materializeBlock(sample_block);
+
+    /// In case of RIGHT and FULL joins, convert left columns to Nullable.
+    if (getFullness(kind))
+    {
+        size_t columns = left_sample_block.columns();
+        for (size_t i = 0; i < columns; ++i)
+            convertColumnToNullable(left_sample_block.getByPosition(i));
+    }
+
+    left_sample_block_pruned = left_sample_block;
+    removeUselessColumn(left_sample_block_pruned);
+
+    all_sample_block_pruned = left_sample_block_pruned.cloneEmpty();
+    size_t right_columns = right_sample_block_pruned.columns();
+    for (size_t i = 0; i < right_columns; ++i)
+    {
+        ColumnWithTypeAndName new_column = right_sample_block_pruned.safeGetByPosition(i).cloneEmpty();
+        RUNTIME_CHECK_MSG(
+            !all_sample_block_pruned.has(new_column.name),
+            "block from probe side has a column with the same name: {} as a column in right_sample_block_pruned",
+            new_column.name);
+
+        all_sample_block_pruned.insert(std::move(new_column));
+    }
 
     probe_concurrency = probe_concurrency_;
     active_probe_worker = probe_concurrency;
@@ -291,12 +330,10 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
 void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
 {
     RUNTIME_ASSERT(stream_index < build_concurrency);
+    RUNTIME_CHECK_MSG(build_initialized, "Logical error: Join build was not initialized");
 
     if unlikely (b.rows() == 0)
         return;
-
-    if unlikely (!initialized)
-        throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
 
     Stopwatch watch;
 
@@ -318,15 +355,16 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
     /// match the join filter will not insert to the maps
     recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
 
-    size_t columns = block.columns();
-
     /// Rare case, when joined columns are constant. To avoid code bloat, simply materialize them.
     block = materializeBlock(block);
 
     /// In case of LEFT and FULL joins, convert joined columns to Nullable.
     if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
+    {
+        size_t columns = block.columns();
         for (size_t i = 0; i < columns; ++i)
             convertColumnToNullable(block.getByPosition(i));
+    }
 
     assertBlocksHaveEqualStructure(block, right_sample_block_pruned, "Join Build");
 
@@ -446,7 +484,7 @@ bool HashJoin::buildPointerTable(size_t stream_index)
     if (is_end)
     {
         auto & wd = build_workers_data[stream_index];
-        LOG_INFO(
+        LOG_DEBUG(
             log,
             "{} build pointer table finish cost {}ms, build rows {}",
             stream_index,
@@ -459,9 +497,10 @@ bool HashJoin::buildPointerTable(size_t stream_index)
 Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
 {
     RUNTIME_ASSERT(stream_index < probe_concurrency);
+    RUNTIME_CHECK_MSG(probe_initialized, "Logical error: Join probe was not initialized");
 
-    Stopwatch watch;
-    SCOPE_EXIT({ probe_workers_data[stream_index].probe_time += watch.elapsedFromLastTime(); });
+    Stopwatch all_watch;
+    SCOPE_EXIT({ probe_workers_data[stream_index].probe_time += all_watch.elapsedFromLastTime(); });
 
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
@@ -472,114 +511,74 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
         key_names_left,
         non_equal_conditions.left_filter_column,
         probe_output_name_set,
+        left_sample_block_pruned,
         collators,
         row_layout);
 
-    Block block = doJoinBlock(context, stream_index);
-    assert(block);
-    block = removeUselessColumnForOutput(block);
     auto & wd = probe_workers_data[stream_index];
-    if (context.isCurrentProbeFinished())
-        wd.probe_handle_rows += context.rows;
-
-    size_t rows = block.rows();
-    if (rows == 0 || rows >= settings.max_block_size || output_block_after_finalize.columns() == 0)
-        return block;
-
-    if (!wd.result_block_buffer)
+    size_t left_columns = left_sample_block_pruned.columns();
+    size_t right_columns = right_sample_block_pruned.columns();
+    RUNTIME_CHECK_MSG(
+        context.block.columns() == left_columns,
+        "columns of block from probe side {} != columns of left_sample_block_pruned {}",
+        context.block.columns(),
+        left_columns);
+    if (!wd.result_block)
     {
-        wd.result_block_buffer = std::move(block);
-        for (auto & column : wd.result_block_buffer)
-            column.column->assumeMutable()->reserve(settings.max_block_size);
-        return output_block_after_finalize;
-    }
-
-    size_t current_rows = wd.result_block_buffer.rows();
-    size_t clone_rows = std::min(settings.max_block_size - current_rows, rows);
-    size_t columns = block.columns();
-    assert(columns == wd.result_block_buffer.columns());
-    for (size_t i = 0; i < columns; ++i)
-        wd.result_block_buffer.getByPosition(i).column->assumeMutable()->insertRangeFrom(
-            *block.getByPosition(i).column.get(),
-            0,
-            clone_rows);
-
-    if (current_rows + clone_rows >= settings.max_block_size)
-    {
-        Block res = std::move(wd.result_block_buffer);
-
-        if (clone_rows < rows)
+        for (size_t i = 0; i < left_columns + right_columns; ++i)
         {
-            wd.result_block_buffer = output_block_after_finalize.cloneEmpty();
-            for (auto & column : wd.result_block_buffer)
-                column.column->assumeMutable()->reserve(settings.max_block_size);
-
-            for (size_t i = 0; i < columns; ++i)
-                wd.result_block_buffer.getByPosition(i).column->assumeMutable()->insertRangeFrom(
-                    *block.getByPosition(i).column.get(),
-                    clone_rows,
-                    rows - clone_rows);
+            ColumnWithTypeAndName new_column = all_sample_block_pruned.safeGetByPosition(i).cloneEmpty();
+            new_column.column->assumeMutable()->reserveAlign(settings.max_block_size, FULL_VECTOR_SIZE_AVX2);
+            wd.result_block.insert(std::move(new_column));
         }
-        return res;
     }
 
-    return output_block_after_finalize;
-}
+    MutableColumns added_columns(right_columns);
+    for (size_t i = 0; i < right_columns; ++i)
+        added_columns[i] = wd.result_block.safeGetByPosition(left_columns + i).column->assumeMutable();
 
-Block HashJoin::doJoinBlock(JoinProbeContext & context, size_t stream_index)
-{
-    Block block = context.block;
-    size_t rows = context.rows;
-    size_t existing_columns = block.columns();
-
-    size_t num_columns_to_add = right_sample_block_pruned.columns();
-    /// Add new columns to the block.
-    MutableColumns added_columns;
-    added_columns.reserve(num_columns_to_add);
-
-    RUNTIME_ASSERT(rows >= context.start_row_idx);
-    for (size_t i = 0; i < num_columns_to_add; ++i)
-    {
-        const ColumnWithTypeAndName & src_column = right_sample_block_pruned.getByPosition(i);
-        RUNTIME_CHECK_MSG(
-            !block.has(src_column.name),
-            "block from probe side has a column with the same name: {} as a column in right_sample_block",
-            src_column.name);
-
-        added_columns.push_back(src_column.column->cloneEmpty());
-        if (src_column.type && src_column.type->haveMaximumSizeOfValue())
-            added_columns.back()->reserveAlign(rows, FULL_VECTOR_SIZE_AVX2);
-    }
-
-    auto & wd = probe_workers_data[stream_index];
     Stopwatch watch;
-    joinProbeBlock(context, wd, method, kind, non_equal_conditions, settings, pointer_table, row_layout, added_columns);
+    joinProbeBlock(
+        context,
+        wd,
+        method,
+        kind,
+        non_equal_conditions,
+        settings,
+        pointer_table,
+        row_layout,
+        added_columns,
+        wd.result_block.rows());
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
-    for (size_t index = 0; index < num_columns_to_add; ++index)
-    {
-        const ColumnWithTypeAndName & sample_col = right_sample_block_pruned.getByPosition(index);
-        block.insert(ColumnWithTypeAndName(std::move(added_columns[index]), sample_col.type, sample_col.name));
-    }
+    for (size_t i = 0; i < right_columns; ++i)
+        wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
 
-    if likely (rows > 0)
+    if (!wd.selective_offsets.empty())
     {
-        for (size_t i = 0; i < existing_columns; ++i)
+        for (size_t i = 0; i < left_columns; ++i)
         {
-            auto mutable_column = block.safeGetByPosition(i).column->cloneEmpty();
-            mutable_column->insertSelectiveFrom(*block.safeGetByPosition(i).column.get(), wd.selective_offsets);
-            block.safeGetByPosition(i).column = std::move(mutable_column);
+            wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
+                *context.block.safeGetByPosition(i).column.get(),
+                wd.selective_offsets);
         }
     }
     wd.replicate_time += watch.elapsedFromLastTime();
 
     if (has_other_condition)
     {
-        handleOtherConditions(block, stream_index);
+        auto res_block = handleOtherConditions(stream_index);
         wd.other_condition_time += watch.elapsedFromLastTime();
+        return res_block;
     }
 
-    return block;
+    if (wd.result_block.rows() >= settings.max_block_size)
+    {
+        auto res_block = removeUselessColumnForOutput(wd.result_block);
+        wd.result_block = {};
+        return res_block;
+    }
+    return output_block_after_finalize;
 }
 
 void HashJoin::removeUselessColumn(Block & block) const
@@ -654,17 +653,15 @@ void HashJoin::finalize(const Names & parent_require)
         updated_require.push_back(non_equal_conditions.other_eq_cond_from_in_name);
     if (!non_equal_conditions.other_cond_name.empty())
         updated_require.push_back(non_equal_conditions.other_cond_name);
-    auto keep_used_input_columns
-        = !isCrossJoin(kind) && (isNullAwareSemiFamily(kind) || isSemiFamily(kind) || isLeftOuterSemiFamily(kind));
     /// nullaware/semi join will reuse the input columns so need to let finalize keep the input columns
     if (non_equal_conditions.null_aware_eq_cond_expr != nullptr)
     {
-        non_equal_conditions.null_aware_eq_cond_expr->finalize(updated_require, keep_used_input_columns);
+        non_equal_conditions.null_aware_eq_cond_expr->finalize(updated_require, true);
         updated_require = non_equal_conditions.null_aware_eq_cond_expr->getRequiredColumns();
     }
     if (non_equal_conditions.other_cond_expr != nullptr)
     {
-        non_equal_conditions.other_cond_expr->finalize(updated_require, keep_used_input_columns);
+        non_equal_conditions.other_cond_expr->finalize(updated_require, true);
         updated_require = non_equal_conditions.other_cond_expr->getRequiredColumns();
     }
 
@@ -697,23 +694,102 @@ void HashJoin::finalize(const Names & parent_require)
     finalized = true;
 }
 
-void HashJoin::handleOtherConditions(Block & block, size_t stream_index) const
+Block HashJoin::handleOtherConditions(size_t stream_index)
 {
-    /// save block_rows because block.rows() returns the first column's size, after other_cond_expr->execute(block),
-    /// some column maybe removed, and the first column maybe the match_helper_column which does not have the same size
-    /// as the other columns
-    auto block_rows = block.rows();
-    non_equal_conditions.other_cond_expr->execute(block);
+    auto & wd = probe_workers_data[stream_index];
+    non_equal_conditions.other_cond_expr->execute(wd.result_block);
 
-    auto & filter = probe_workers_data[stream_index].filter_column->getData();
-    filter.clear();
-    filter.reserve(block_rows);
-    mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
+    size_t rows = wd.result_block.rows();
+    RUNTIME_CHECK_MSG(
+        rows <= settings.max_block_size,
+        "result_block rows {} > max_block_size {}",
+        rows,
+        settings.max_block_size);
 
-    removeUselessColumn(block);
-    size_t result_size_hint = countBytesInFilter(filter);
-    for (size_t i = 0; i < block.columns(); ++i)
-        block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, result_size_hint);
+    wd.filter.clear();
+    wd.filter.reserve(rows);
+    mergeNullAndFilterResult(wd.result_block, wd.filter, non_equal_conditions.other_cond_name, false);
+    RUNTIME_CHECK(wd.filter.size() == rows);
+
+    size_t columns = output_block_after_finalize.columns();
+
+    auto init_result_block_for_other_condition = [&]() {
+        wd.result_block_for_other_condition = {};
+        for (size_t i = 0; i < columns; ++i)
+        {
+            ColumnWithTypeAndName new_column = output_block_after_finalize.safeGetByPosition(i).cloneEmpty();
+            new_column.column->assumeMutable()->reserveAlign(settings.max_block_size, FULL_VECTOR_SIZE_AVX2);
+            wd.result_block_for_other_condition.insert(std::move(new_column));
+        }
+    };
+
+    if (!wd.result_block_for_other_condition)
+        init_result_block_for_other_condition();
+
+    RUNTIME_CHECK_MSG(
+        wd.result_block_for_other_condition.rows() < settings.max_block_size,
+        "result_block_for_other_condition rows {} >= max_block_size {}",
+        wd.result_block_for_other_condition.rows(),
+        settings.max_block_size);
+    size_t remaining_insert_size = settings.max_block_size - wd.result_block_for_other_condition.rows();
+
+    size_t result_size = countBytesInFilter(wd.filter);
+    wd.filter_offsets1.clear();
+    wd.filter_offsets1.reserve(result_size);
+    filterImpl(&wd.filter[0], &wd.filter[rows], &base_offsets[0], wd.filter_offsets1);
+    RUNTIME_CHECK(wd.filter_offsets1.size() == result_size);
+
+    if (result_size > remaining_insert_size)
+    {
+        wd.filter_offsets2.clear();
+        wd.filter_offsets2.resize(result_size - remaining_insert_size);
+        memcpy(
+            &wd.filter_offsets2[0],
+            &wd.filter_offsets1[remaining_insert_size],
+            sizeof(IColumn::Offset) * (result_size - remaining_insert_size));
+        wd.filter_offsets1.resize(remaining_insert_size);
+    }
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(i);
+        auto & src_column = wd.result_block.getByName(des_column.name);
+        des_column.column->assumeMutable()->insertSelectiveFrom(*src_column.column.get(), wd.filter_offsets1);
+    }
+
+    Block res_block = output_block_after_finalize;
+    if (result_size >= remaining_insert_size)
+    {
+        res_block = wd.result_block_for_other_condition;
+        init_result_block_for_other_condition();
+        if (result_size > remaining_insert_size)
+        {
+            for (size_t i = 0; i < columns; ++i)
+            {
+                auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(i);
+                auto & src_column = wd.result_block.getByName(des_column.name);
+                des_column.column->assumeMutable()->insertSelectiveFrom(*src_column.column.get(), wd.filter_offsets2);
+            }
+        }
+    }
+
+    /// Remove the new column added from other condition expressions.
+    removeUselessColumn(wd.result_block);
+
+    assertBlocksHaveEqualStructure(
+        wd.result_block,
+        all_sample_block_pruned,
+        "Join Probe reuse result_block for other condition");
+
+    /// Clear the data in result_block.
+    for (size_t i = 0; i < wd.result_block.columns(); ++i)
+    {
+        auto column = wd.result_block.getByPosition(i).column->assumeMutable();
+        column->popBack(column->size());
+        wd.result_block.getByPosition(i).column = std::move(column);
+    }
+
+    return res_block;
 }
 
 } // namespace DB

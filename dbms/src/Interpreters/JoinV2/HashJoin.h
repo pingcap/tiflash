@@ -27,8 +27,6 @@
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 
-#include "Columns/IColumn.h"
-
 
 namespace DB
 {
@@ -75,19 +73,26 @@ public:
 
     const JoinProfileInfoPtr & getProfileInfo() const { return profile_info; }
 
-    Block getResultBlockBuffer(size_t stream_index)
+    Block getProbeBufferedResultBlock(size_t stream_index)
     {
-        return std::move(probe_workers_data[stream_index].result_block_buffer);
+        auto & wd = probe_workers_data[stream_index];
+        if (has_other_condition)
+            return std::move(wd.result_block_for_other_condition);
+        if (wd.result_block)
+        {
+            auto res_block = removeUselessColumnForOutput(wd.result_block);
+            wd.result_block = {};
+            return res_block;
+        }
+        return {};
     }
 
 private:
     void initRowLayoutAndHashJoinMethod();
 
-    Block doJoinBlock(JoinProbeContext & context, size_t stream_index);
-
     void workAfterBuildFinish();
 
-    void handleOtherConditions(Block & block, size_t stream_index) const;
+    Block handleOtherConditions(size_t stream_index);
 
 private:
     const ASTTableJoin::Kind kind;
@@ -112,7 +117,8 @@ private:
 
     const bool has_other_condition;
 
-    bool initialized = false;
+    bool build_initialized = false;
+    bool probe_initialized = false;
 
     HashJoinRowLayout row_layout;
     HashJoinKeyMethod method = HashJoinKeyMethod::Empty;
@@ -122,6 +128,9 @@ private:
     Block right_sample_block_pruned;
     /// Block with columns from the left-side table.
     Block left_sample_block;
+    Block left_sample_block_pruned;
+    /// Block with columns from left-side and right-side table.
+    Block all_sample_block_pruned;
 
     NamesAndTypes output_columns;
     Block output_block;
@@ -148,6 +157,9 @@ private:
     HashJoinPointerTable pointer_table;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
+
+    /// For other condition
+    const IColumn::Offsets base_offsets;
 };
 
 using HashJoinPtr = std::shared_ptr<HashJoin>;

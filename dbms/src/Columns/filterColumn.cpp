@@ -283,7 +283,7 @@ inline void filterImplAligned(
 
 
 template <typename T, typename Container>
-void filterImpl(const UInt8 *& filt_pos, const UInt8 *& filt_end, const T *& data_pos, Container & res_data)
+void filterImpl(const UInt8 * filt_pos, const UInt8 * filt_end, const T * data_pos, Container & res_data)
 {
     const UInt8 * filt_end_aligned = filt_pos + (filt_end - filt_pos) / FILTER_SIMD_BYTES * FILTER_SIMD_BYTES;
     filterImplAligned<T, Container>(filt_pos, filt_end_aligned, data_pos, res_data);
@@ -301,9 +301,9 @@ void filterImpl(const UInt8 *& filt_pos, const UInt8 *& filt_end, const T *& dat
 /// Explicit instantiations - not to place the implementation of the function above in the header file.
 #define INSTANTIATE(T, Container)           \
     template void filterImpl<T, Container>( \
-        const UInt8 *& filt_pos,            \
-        const UInt8 *& filt_end,            \
-        const T *& data_pos,                \
+        const UInt8 * filt_pos,             \
+        const UInt8 * filt_end,             \
+        const T * data_pos,                 \
         Container & res_data); // NOLINT
 
 INSTANTIATE(UInt8, PaddedPODArray<UInt8>)
