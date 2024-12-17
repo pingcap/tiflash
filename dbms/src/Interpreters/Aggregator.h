@@ -1318,6 +1318,8 @@ public:
         size_t hit_row_cnt = 0;
         std::vector<UInt64> not_found_rows;
 
+        std::vector<size_t> hashvals{};
+
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
@@ -1336,6 +1338,8 @@ public:
             hit_row_cnt = 0;
             not_found_rows.clear();
             not_found_rows.reserve(block_.rows() / 2);
+
+            hashvals.clear();
         }
     };
 
