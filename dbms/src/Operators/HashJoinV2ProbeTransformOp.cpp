@@ -14,8 +14,7 @@
 
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/HashJoinV2ProbeTransformOp.h>
-
-#include "Operators/Operator.h"
+#include <Operators/Operator.h>
 
 namespace DB
 {

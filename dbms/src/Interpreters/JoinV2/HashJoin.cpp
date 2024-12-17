@@ -16,6 +16,7 @@
 #include <Columns/countBytesInFilter.h>
 #include <Columns/filterColumn.h>
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/materializeBlock.h>
 #include <Interpreters/JoinV2/HashJoin.h>
@@ -24,8 +25,6 @@
 #include <Interpreters/Settings.h>
 
 #include <ext/scope_guard.h>
-
-#include "Common/Stopwatch.h"
 
 namespace DB
 {
