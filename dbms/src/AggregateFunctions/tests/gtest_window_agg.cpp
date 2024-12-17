@@ -31,8 +31,10 @@ namespace DB
 namespace tests
 {
 constexpr int scale = 2;
-const std::vector<String> input_string_vec{"0", "71.94", "12.34", "-34.26", "80.02", "-84.39", "28.41", "45.32", "11.11", "-10.32"};
-const std::vector<String> input_string_vec_aux{"0", "7194", "1234", "-3426", "8002", "-8439", "2841", "4532", "1111", "-1032"};
+const std::vector<String>
+    input_string_vec{"0", "71.94", "12.34", "-34.26", "80.02", "-84.39", "28.41", "45.32", "11.11", "-10.32"};
+const std::vector<String>
+    input_string_vec_aux{"0", "7194", "1234", "-3426", "8002", "-8439", "2841", "4532", "1111", "-1032"};
 const std::vector<Int64> input_int_vec{1, -2, 7, 4, 0, -3, -1, 0, 0, 9, 2, 0, -4, 2, 6, -3, 5};
 const std::vector<Int64> input_decimal_vec{
     std::stoi(input_string_vec_aux[0]),
@@ -53,7 +55,11 @@ struct SumMocker
 template <typename OpMocker>
 struct TestCase
 {
-    TestCase(DataTypePtr type_, const std::vector<Int64> & input_vec_, int scale_) : type(type_), input_vec(input_vec_), scale(scale_) {}
+    TestCase(DataTypePtr type_, const std::vector<Int64> & input_vec_, int scale_)
+        : type(type_)
+        , input_vec(input_vec_)
+        , scale(scale_)
+    {}
 
     inline void addInMock(Int64 & res, Int64 row_idx) noexcept { mocker.add(res, input_vec[row_idx]); }
     inline void decreaseInMock(Int64 & res, Int64 row_idx) noexcept { mocker.decrease(res, input_vec[row_idx]); }
@@ -78,7 +84,7 @@ private:
     }
 
 protected:
-    template<typename Op>
+    template <typename Op>
     void executeWindowAggTest(TestCase<Op> & test_case);
 
     static const IColumn * getInputColumn(const IDataType * type)
@@ -137,7 +143,7 @@ DataTypePtr ExecutorWindowAgg::type_int = std::make_shared<DataTypeInt64>();
 DataTypePtr ExecutorWindowAgg::type_decimal128 = std::make_shared<DataTypeDecimal128>(10, scale);
 DataTypePtr ExecutorWindowAgg::type_decimal256 = std::make_shared<DataTypeDecimal256>(30, scale);
 
-template<typename Op>
+template <typename Op>
 void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
 {
     Arena arena;
@@ -145,8 +151,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     std::deque<int> added_row_idx_queue;
 
     added_row_idx_queue.clear();
-    auto agg_func
-        = AggregateFunctionFactory::instance().get(*context, "sum", {test_case.type}, {}, 0, true);
+    auto agg_func = AggregateFunctionFactory::instance().get(*context, "sum", {test_case.type}, {}, 0, true);
     AlignedBuffer agg_state;
     agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
     agg_func->create(agg_state.data());
@@ -196,7 +201,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     const auto nested_res_col = null_res_col->getNestedColumnPtr();
     size_t res_num = res_vec.size();
     ASSERT_EQ(res_num, null_res_col->size());
-    
+
     Field res_field;
     for (size_t i = 0; i < res_num; i++)
     {
@@ -214,7 +219,7 @@ try
     TestCase<SumMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, 0);
     TestCase<SumMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, scale);
     TestCase<SumMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, scale);
-    
+
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
     executeWindowAggTest(decimal256_case);
