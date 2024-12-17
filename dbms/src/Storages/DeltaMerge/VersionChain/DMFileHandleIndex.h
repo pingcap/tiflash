@@ -28,12 +28,6 @@ template <Int64OrString Handle>
 class DMFileHandleIndex
 {
 public:
-    struct PackEntry
-    {
-        UInt64 offset;
-        UInt64 rows;
-    };
-
     DMFileHandleIndex(
         const DMContext & dm_context_,
         const DMFilePtr & dmfile_,
@@ -44,14 +38,14 @@ public:
         , start_row_id(start_row_id_)
         , rowkey_range(std::move(rowkey_range_))
         , pack_range(getPackRange(dm_context_))
-        , read_packs(std::make_shared<IdSet>())
         , pack_index(loadPackIndex())
         , pack_entries(loadPackEntries())
-        , handle_packs(pack_range.end_pack_id - pack_range.start_pack_id)
-    {}
-
-    // TODO: getBaseVersion one by one.
-    // Maybe we can first check pack id of all handles, and process them by pack.
+        , handle_packs(pack_range.count())
+        , need_read_packs(std::vector<UInt8>(pack_range.count(), 1))  // read all packs by default
+    {
+        RUNTIME_CHECK(pack_index.size() == pack_range.count(), pack_index.size(), pack_range.count());
+        RUNTIME_CHECK(pack_entries.size() == pack_range.count(), pack_entries.size(), pack_range.count());
+    }
 
     template <Int64OrStringView HandleView>
     std::optional<RowID> getBaseVersion(HandleView h)
@@ -64,6 +58,40 @@ public:
             return {};
         return start_row_id + *row_id;
     }
+
+    void calculateReadPacks(const PaddedPODArray<Handle> & handles)
+    {
+        std::vector<UInt8> calc_read_packs(pack_range.count(), 0);
+        UInt32 calc_read_count = 0;
+        for (Handle h : handles)
+        {
+            auto pa = getPackEntry(h);
+            if (!pa || calc_read_packs[pa->first])
+                continue;
+        
+            calc_read_packs[pa->first] = 1;
+            ++calc_read_count;
+            
+            // Read too many packs, read all by default
+            if (calc_read_count * 4 >= pack_range.count())
+                return;
+        }
+        need_read_packs->swap(calc_read_packs);
+    }
+
+    void cleanHandleColumn()
+    {
+        // Reset handle column data to save memory.
+        std::fill(handle_packs.begin(), handle_packs.end(), nullptr);
+        need_read_packs.emplace(pack_range.count(), 1);
+    }
+
+private:
+    struct PackEntry
+    {
+        UInt32 offset;
+        UInt32 rows;
+    };
 
     template <Int64OrStringView HandleView>
     std::optional<std::pair<UInt32, PackEntry>> getPackEntry(HandleView h)
@@ -102,13 +130,10 @@ public:
 
     std::vector<PackEntry> loadPackEntries()
     {
-        if (dmfile->getPacks() == 0)
-            return {};
-
         const auto & pack_stats = dmfile->getPackStats();
         std::vector<PackEntry> pack_entries;
-        pack_entries.reserve(pack_stats.size());
-        UInt64 offset = 0;
+        pack_entries.reserve(pack_range.count());
+        UInt32 offset = 0;
         for (UInt32 pack_id = pack_range.start_pack_id; pack_id < pack_range.end_pack_id; ++pack_id)
         {
             const auto & stat = pack_stats[pack_id];
@@ -122,23 +147,15 @@ public:
 
     void loadHandleIfNotLoaded()
     {
-        if (likely(!read_packs))
+        if (likely(!need_read_packs))
             return;
-
-        // Read all
-        if (read_packs->empty())
+        
+        auto read_pack_ids = std::make_shared<IdSet>();
+        const auto & packs = *need_read_packs;
+        for (UInt32 i = 0; i < packs.size(); ++i)
         {
-            for (UInt32 pack_id = pack_range.start_pack_id; pack_id < pack_range.end_pack_id; ++pack_id)
-                read_packs->insert(pack_id);
-        }
-        else if (pack_range.start_pack_id > 0)
-        {
-            auto old_read_packs = read_packs;
-            read_packs = std::make_shared<IdSet>();
-            for (auto pack_id : *old_read_packs)
-            {
-                read_packs->insert(pack_id + pack_range.start_pack_id);
-            }
+            if (packs[i])
+                read_pack_ids->insert(i + pack_range.start_pack_id);
         }
 
         auto scan_context = std::make_shared<ScanContext>(); // TODO: use dm_context.scan_context
@@ -149,7 +166,7 @@ public:
             true, //set_cache_if_miss
             {}, // rowkey_ranges, empty means all
             nullptr, // RSOperatorPtr
-            read_packs,
+            read_pack_ids,
             global_context.getFileProvider(),
             global_context.getReadLimiter(),
             scan_context, // TODO:
@@ -179,46 +196,21 @@ public:
             ReadTag::MVCC);
 
 
-        for (UInt32 pack_id : *read_packs)
+        for (UInt32 pack_id : *read_pack_ids)
         {
             auto block = reader.read();
             handle_packs[pack_id - pack_range.start_pack_id] = block.begin()->column;
         }
-        read_packs = nullptr;
+        need_read_packs.reset();
     }
 
-    void calculateReadPacks(const PaddedPODArray<Handle> & handles)
-    {
-        std::vector<UInt8> inserted_packs(dmfile->getPacks(), 0);
-        for (Handle h : handles)
-        {
-            auto pa = getPackEntry(h);
-            if (!pa || inserted_packs[pa->first])
-                continue;
-
-            inserted_packs[pa->first] = 1;
-            read_packs->insert(pa->first);
-
-            if (read_packs->size() * 4 >= inserted_packs.size())
-            {
-                read_packs->clear();
-                break;
-            }
-        }
-    }
-
-    void cleanHandleColumn()
-    {
-        std::fill(handle_packs.begin(), handle_packs.end(), nullptr);
-        read_packs = std::make_shared<IdSet>();
-    }
-
-private:
     struct PackRange
     {
         // [start_pack_id, end_pack_id)
         UInt32 start_pack_id;
         UInt32 end_pack_id;
+
+        UInt32 count() const { return end_pack_id - start_pack_id; }
     };
 
     PackRange getPackRange(const DMContext & dm_context)
@@ -245,11 +237,13 @@ private:
     const std::optional<const RowKeyRange> rowkey_range;
     const PackRange pack_range;
 
-    IdSetPtr read_packs;
+    //IdSetPtr read_packs;
 
     std::vector<Handle> pack_index; // max value of each pack
     std::vector<PackEntry> pack_entries;
     std::vector<ColumnPtr> handle_packs;
+
+    std::optional<std::vector<UInt8>> need_read_packs;
 };
 
 } // namespace DB::DM
