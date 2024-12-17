@@ -75,7 +75,8 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
 
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            replayed_rows_and_deletes += replayBlock(dm_context, data_provider, *cf, offset, stable_rows, calculate_read_packs);
+            replayed_rows_and_deletes
+                += replayBlock(dm_context, data_provider, *cf, offset, stable_rows, calculate_read_packs);
             offset = 0;
         }
         else if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
@@ -154,7 +155,10 @@ UInt32 VersionChain<Handle>::replayBlock(
 }
 
 template <Int64OrString Handle>
-UInt32 VersionChain<Handle>::replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big, const UInt32 stable_rows)
+UInt32 VersionChain<Handle>::replayColumnFileBig(
+    const DMContext & dm_context,
+    const ColumnFileBig & cf_big,
+    const UInt32 stable_rows)
 {
     const UInt32 rows = cf_big.getRows();
     const UInt32 start_row_id = base_versions->size() + stable_rows;

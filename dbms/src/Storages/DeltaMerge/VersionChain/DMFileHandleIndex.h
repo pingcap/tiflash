@@ -41,7 +41,7 @@ public:
         , pack_index(loadPackIndex())
         , pack_entries(loadPackEntries())
         , handle_packs(pack_range.count())
-        , need_read_packs(std::vector<UInt8>(pack_range.count(), 1))  // read all packs by default
+        , need_read_packs(std::vector<UInt8>(pack_range.count(), 1)) // read all packs by default
     {
         RUNTIME_CHECK(pack_index.size() == pack_range.count(), pack_index.size(), pack_range.count());
         RUNTIME_CHECK(pack_entries.size() == pack_range.count(), pack_entries.size(), pack_range.count());
@@ -68,10 +68,10 @@ public:
             auto pa = getPackEntry(h);
             if (!pa || calc_read_packs[pa->first])
                 continue;
-        
+
             calc_read_packs[pa->first] = 1;
             ++calc_read_count;
-            
+
             // Read too many packs, read all by default
             if (calc_read_count * 4 >= pack_range.count())
                 return;
@@ -149,7 +149,7 @@ private:
     {
         if (likely(!need_read_packs))
             return;
-        
+
         auto read_pack_ids = std::make_shared<IdSet>();
         const auto & packs = *need_read_packs;
         for (UInt32 i = 0; i < packs.size(); ++i)
@@ -237,12 +237,10 @@ private:
     const std::optional<const RowKeyRange> rowkey_range;
     const PackRange pack_range;
 
-    //IdSetPtr read_packs;
-
+    // These vector are clipped by pack_range.
     std::vector<Handle> pack_index; // max value of each pack
     std::vector<PackEntry> pack_entries;
     std::vector<ColumnPtr> handle_packs;
-
     std::optional<std::vector<UInt8>> need_read_packs;
 };
 

@@ -135,7 +135,7 @@ UInt32 buildRowKeyFilterDMFile(
 
     if (need_read_rows == 0)
         return rows;
-    
+
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(dmfile, {getHandleColumnDefine<Handle>()}, {}, dm_context.scan_context);

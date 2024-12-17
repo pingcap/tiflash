@@ -181,17 +181,29 @@ protected:
 
         verifyBitmapFilter(SEG_ID);
     }
-    
+
     inline static constexpr bool use_version_chain = true;
     void verifyBitmapFilter(const PageIdU64 seg_id, const UInt64 read_ts = std::numeric_limits<UInt64>::max())
     {
         auto [seg, snap] = getSegmentForRead(seg_id);
 
-        auto bitmap_filter1
-            = seg->buildBitmapFilter(*dm_context, snap, {seg->getRowKeyRange()}, nullptr, read_ts, DEFAULT_BLOCK_SIZE, !use_version_chain);
-        
-        auto bitmap_filter2
-            = seg->buildBitmapFilter(*dm_context, snap, {seg->getRowKeyRange()}, nullptr, read_ts, DEFAULT_BLOCK_SIZE, use_version_chain);
+        auto bitmap_filter1 = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            nullptr,
+            read_ts,
+            DEFAULT_BLOCK_SIZE,
+            !use_version_chain);
+
+        auto bitmap_filter2 = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            nullptr,
+            read_ts,
+            DEFAULT_BLOCK_SIZE,
+            use_version_chain);
 
         ASSERT_EQ(bitmap_filter1->toDebugString(), bitmap_filter2->toDebugString());
     }

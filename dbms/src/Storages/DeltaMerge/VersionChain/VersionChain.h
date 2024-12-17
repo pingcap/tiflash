@@ -47,14 +47,13 @@ public:
         new_version_chain->replayed_rows_and_deletes = replayed_rows_and_deletes;
         new_version_chain->base_versions = std::make_shared<std::vector<RowID>>(*base_versions);
         new_version_chain->new_handle_to_row_ids = std::make_shared<std::map<Handle, RowID>>(*new_handle_to_row_ids);
-        new_version_chain->dmfile_or_delete_range_list = std::make_shared<std::vector<DMFileOrDeleteRange>>(*dmfile_or_delete_range_list);
+        new_version_chain->dmfile_or_delete_range_list
+            = std::make_shared<std::vector<DMFileOrDeleteRange>>(*dmfile_or_delete_range_list);
         return new_version_chain;
     }
 
-    UInt32 getReplayedRows() const
-    {
-        return base_versions->size();
-    }
+    UInt32 getReplayedRows() const { return base_versions->size(); }
+
 private:
     [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,
@@ -63,7 +62,10 @@ private:
         const UInt32 offset,
         const UInt32 stable_rows,
         const bool calculate_read_packs);
-    [[nodiscard]] UInt32 replayColumnFileBig(const DMContext & dm_context, const ColumnFileBig & cf_big, const UInt32 stable_rows);
+    [[nodiscard]] UInt32 replayColumnFileBig(
+        const DMContext & dm_context,
+        const ColumnFileBig & cf_big,
+        const UInt32 stable_rows);
     [[nodiscard]] UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
 
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(Handle h);

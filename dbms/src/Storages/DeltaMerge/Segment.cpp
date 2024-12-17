@@ -3048,13 +3048,12 @@ BitmapFilterPtr Segment::buildBitmapFilter(
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
     RUNTIME_CHECK(!is_common_handle);
-    
+
     if (use_version_chain)
     {
-        return buildBitmapFilter<Int64>(
-            dm_context, *segment_snap, read_ranges, filter, start_ts, version_chain);
+        return buildBitmapFilter<Int64>(dm_context, *segment_snap, read_ranges, filter, start_ts, version_chain);
     }
-    
+
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
@@ -3506,13 +3505,13 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     }
 
     auto bitmap_filter = buildBitmapFilter(
-            dm_context,
-            segment_snap,
-            real_ranges,
-            filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-            start_ts,
-            build_bitmap_filter_block_rows,
-            dm_context.global_context.getSettingsRef().dt_enable_version_chain);
+        dm_context,
+        segment_snap,
+        real_ranges,
+        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+        start_ts,
+        build_bitmap_filter_block_rows,
+        dm_context.global_context.getSettingsRef().dt_enable_version_chain);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))
