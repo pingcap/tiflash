@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <span>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
@@ -69,7 +70,7 @@ private:
     [[nodiscard]] UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
 
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(Handle h);
-    void calculateReadPacks(const PaddedPODArray<Handle> & handles);
+    void calculateReadPacks(const std::span<const Handle> handles);
     void cleanHandleColumn();
 
     DISALLOW_COPY_AND_MOVE(VersionChain);

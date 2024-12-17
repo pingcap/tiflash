@@ -90,6 +90,15 @@ protected:
         // hack to change the "immutable" delta-index on delta-snapshot for testing
         (*const_cast<DeltaIndexPtr *>(&first_snap->delta->getSharedDeltaIndex())) = broken_delta_index;
 
+        // Always use delta index in this case.
+        auto & global_settings = db_context->getGlobalContext().getSettingsRef();
+        bool enable_version_chain = global_settings.dt_enable_version_chain;
+        if (enable_version_chain)
+            global_settings.set("dt_enable_version_chain", "false");
+        SCOPE_EXIT({
+            if (enable_version_chain)
+                global_settings.set("dt_enable_version_chain", "true");
+        });
         auto task = std::make_shared<DM::SegmentReadTask>(
             first,
             first_snap,

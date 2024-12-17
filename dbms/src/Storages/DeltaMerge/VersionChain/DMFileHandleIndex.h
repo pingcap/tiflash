@@ -59,7 +59,7 @@ public:
         return start_row_id + *row_id;
     }
 
-    void calculateReadPacks(const PaddedPODArray<Handle> & handles)
+    void calculateReadPacks(const std::span<const Handle> handles)
     {
         std::vector<UInt8> calc_read_packs(pack_range.count(), 0);
         UInt32 calc_read_count = 0;

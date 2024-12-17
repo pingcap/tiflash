@@ -127,9 +127,11 @@ UInt32 VersionChain<Handle>::replayBlock(
     auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
-    const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.begin()->column);
-    RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
-    const auto & handles = *handles_ptr;
+    const auto * handle_col = toColumnVectorDataPtr<Int64>(block.begin()->column);
+    RUNTIME_CHECK_MSG(handle_col != nullptr, "TODO: support common handle");
+    RUNTIME_CHECK(handle_col->size() > offset, handle_col->size(), offset);
+    const std::span<const Handle> handles{
+        handle_col->data() + offset, handle_col->size() - offset};
 
     if (calculate_read_packs)
         calculateReadPacks(handles);
@@ -151,7 +153,7 @@ UInt32 VersionChain<Handle>::replayBlock(
         new_handle_to_row_ids->insert(std::make_pair(h, curr_row_id));
         base_versions->push_back(NotExistRowID);
     }
-    return handles.size() - offset;
+    return handles.size();
 }
 
 template <Int64OrString Handle>
@@ -206,7 +208,7 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
 }
 
 template <Int64OrString Handle>
-void VersionChain<Handle>::calculateReadPacks(const PaddedPODArray<Handle> & handles)
+void VersionChain<Handle>::calculateReadPacks(const std::span<const Handle> handles)
 {
     assert(dmfile_or_delete_range_list->size() == 1);
     auto & dmfile_index = std::get<DMFileHandleIndex<Handle>>(dmfile_or_delete_range_list->front());
