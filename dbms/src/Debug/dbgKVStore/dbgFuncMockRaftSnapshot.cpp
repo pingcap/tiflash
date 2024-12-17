@@ -172,7 +172,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
 
     // Mock to apply a snapshot with data in `region`
     auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>(region, tmt);
+    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(region, tmt);
     output(fmt::format("put region #{}, range{} to table #{} with {} records", region_id, range_string, table_id, cnt));
 }
 
@@ -488,12 +488,13 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
 struct GlobalRegionMap
 {
     using Key = std::string;
-    using BlockVal = std::pair<RegionPtr, RegionPtrWithBlock::CachePtr>;
-    std::unordered_map<Key, BlockVal> regions_block;
+    // using BlockVal = std::pair<RegionPtr, RegionPtrWithBlock::CachePtr>;
+    // std::unordered_map<Key, BlockVal> regions_block;
     using SnapPath = std::pair<RegionPtr, std::vector<DM::ExternalDTFileInfo>>;
     std::unordered_map<Key, SnapPath> regions_snap_files;
     std::mutex mutex;
 
+#if 0
     void insertRegionCache(const Key & name, BlockVal && val)
     {
         auto _ = std::lock_guard(mutex);
@@ -511,6 +512,7 @@ struct GlobalRegionMap
             return ret;
         }
     }
+#endif
 
     void insertRegionSnap(const Key & name, SnapPath && val)
     {
@@ -533,6 +535,7 @@ struct GlobalRegionMap
 
 static GlobalRegionMap GLOBAL_REGION_MAP;
 
+#if 0
 /// Mock to pre-decode snapshot to block then apply
 
 /// Pre-decode region data into block cache and remove committed data from `region`
@@ -635,6 +638,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
+#endif
 
 void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(
     Context & context,
@@ -645,6 +649,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(
     auto region = GenDbgRegionSnapshotWithData(context, args);
     const auto region_name = "__snap_" + std::to_string(region->id());
     fmt_buf.fmtAppend("pre-handle {} snapshot with data {}", region->toString(false), region->dataInfo());
+#if 0
     auto & tmt = context.getTMTContext();
     auto block_cache = GenRegionPreDecodeBlockData(region, tmt.getContext());
     fmt_buf.append(", pre-decode block cache");
@@ -655,10 +660,11 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(
         block_cache->block.columns(),
         block_cache->block.bytes());
     GLOBAL_REGION_MAP.insertRegionCache(region_name, {region, std::move(block_cache)});
+#endif
     output(fmt_buf.toString());
 }
 
-void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 1)
     {
@@ -666,13 +672,15 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
     }
 
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value));
+#if 0
     auto [region, block_cache] = GLOBAL_REGION_MAP.popRegionCache("__snap_" + std::to_string(region_id));
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>(
         {region, std::move(block_cache)},
         tmt);
+#endif
 
-    output(fmt::format("success apply {} with block cache", region->id()));
+    output(fmt::format("success apply {} with block cache", region_id));
 }
 
 

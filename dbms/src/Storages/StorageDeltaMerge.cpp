@@ -1292,7 +1292,7 @@ inline OptionTableInfoConstRef getTableInfoForCreateStatement(
 
     /// If TableInfo from TiDB is empty, for example, create DM table for test,
     /// we refine TableInfo from store's table column, so that we can restore column id next time
-    table_info_from_store.schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+    // table_info_from_store.schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     for (const auto & column_define : store_table_columns)
     {
         if (hidden_columns.has(column_define.name))

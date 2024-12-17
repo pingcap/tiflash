@@ -120,7 +120,7 @@ public:
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
-    RegionDataReadInfoList tryWriteBlockByRegion(const RegionPtrWithBlock & region);
+    RegionDataReadInfoList tryWriteBlockByRegion(const RegionPtr& region);
 
     void handleInternalRegionsByTable(
         KeyspaceID keyspace_id,
@@ -136,7 +136,7 @@ public:
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
     static DM::WriteResult writeCommittedByRegion(
         Context & context,
-        const RegionPtrWithBlock & region,
+        const RegionPtr & region,
         RegionDataReadInfoList & data_list_to_remove,
         const LoggerPtr & log,
         bool lock_region = true);
@@ -231,6 +231,7 @@ struct RegionPreDecodeBlockData
     }
 };
 
+#if 0
 // A wrap of RegionPtr, could try to use its block cache while writing region data to storage.
 struct RegionPtrWithBlock
 {
@@ -260,7 +261,7 @@ private:
         , pre_decode_cache(std::move(cache))
     {}
 };
-
+#endif
 
 // A wrap of RegionPtr, with snapshot files directory waitting to be ingested
 struct RegionPtrWithSnapshotFiles

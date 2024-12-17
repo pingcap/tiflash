@@ -27,7 +27,6 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
 class TMTContext;
-struct RegionPtrWithBlock;
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region);
 void RemoveRegionCommitCache(
@@ -48,7 +47,7 @@ Block GenRegionBlockDataWithSchema(
 template <typename ReadList>
 DM::WriteResult writeRegionDataToStorage(
     Context & context,
-    const RegionPtrWithBlock & region,
+    const RegionPtr& region,
     ReadList & data_list_read,
     const LoggerPtr & log);
 

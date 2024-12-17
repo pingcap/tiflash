@@ -1005,7 +1005,7 @@ try
         }
     }
 
-    json->set("schema_version", schema_version);
+    // json->set("schema_version", schema_version);
 
     json->set("tiflash_replica", replica_info.getJSONObject());
 
@@ -1085,10 +1085,10 @@ try
         if (!partition_obj.isNull())
             partition.deserialize(partition_obj);
     }
-    if (obj->has("schema_version"))
-    {
-        schema_version = obj->getValue<Int64>("schema_version");
-    }
+    // if (obj->has("schema_version"))
+    // {
+    //     schema_version = obj->getValue<Int64>("schema_version");
+    // }
     if (obj->has("view") && !obj->getObject("view").isNull())
     {
         is_view = true;

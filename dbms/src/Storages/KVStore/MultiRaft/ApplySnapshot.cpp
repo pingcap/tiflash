@@ -28,6 +28,7 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 
 #include <ext/scope_guard.h>
+#include <type_traits>
 
 namespace DB
 {
@@ -195,6 +196,10 @@ void KVStore::onSnapshot(
     UInt64 old_region_index,
     TMTContext & tmt)
 {
+    static_assert(
+        std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>
+        || std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>);
+
     RegionID region_id = new_region_wrap->id();
 
     // 1. Try to clean stale data.
@@ -259,14 +264,6 @@ void KVStore::onSnapshot(
                         context.getSettingsRef());
                     maybeUpdateRU(dm_storage, keyspace_id, ingested_bytes);
                 }
-                else
-                {
-                    // It is only for debug usage now.
-                    static_assert(std::is_same_v<RegionPtrWrap, RegionPtrWithBlock>);
-                    // Call `deleteRange` to delete data for range
-                    dm_storage->deleteRange(new_key_range, context.getSettingsRef());
-                    // We don't flushCache here, but flush as a whole in stage 2 in `tryFlushRegionCacheInStorage`.
-                }
             }
             catch (DB::Exception & e)
             {
@@ -283,24 +280,6 @@ void KVStore::onSnapshot(
         auto & region_table = tmt.getRegionTable();
         // extend region to make sure data won't be removed.
         region_table.extendRegionRange(region_id, *range);
-        // For `RegionPtrWithBlock`, try to flush data into storage first.
-        if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithBlock>)
-        {
-            try
-            {
-                auto tmp = region_table.tryWriteBlockByRegion(new_region_wrap);
-                {
-                    std::lock_guard lock(bg_gc_region_data_mutex);
-                    bg_gc_region_data.push_back(std::move(tmp));
-                }
-                tryFlushRegionCacheInStorage(tmt, *new_region_wrap, log);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(__PRETTY_FUNCTION__);
-            }
-        }
-        // For `RegionPtrWithSnapshotFiles`, don't need to flush cache.
     }
 
     // Register the new Region.
@@ -403,11 +382,9 @@ template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
     const RegionPtrWithSnapshotFiles &,
     TMTContext &);
 
-template void KVStore::checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
 template void KVStore::checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
     const RegionPtrWithSnapshotFiles &,
     TMTContext &);
-template void KVStore::onSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, RegionPtr, UInt64, TMTContext &);
 template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(
     const RegionPtrWithSnapshotFiles &,
     RegionPtr,

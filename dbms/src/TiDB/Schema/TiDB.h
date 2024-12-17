@@ -307,8 +307,10 @@ struct TableInfo
     bool is_view = false;
     // If the table is sequence, we should ignore it.
     bool is_sequence = false;
+#if 0
     Int64 schema_version
         = DEFAULT_UNSPECIFIED_SCHEMA_VERSION; // TODO(hyy):can be removed after removing RegionPtrWithBlock
+#endif
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
