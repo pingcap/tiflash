@@ -59,6 +59,7 @@ public:
     bool buildPointerTable(size_t stream_index);
 
     Block joinBlock(JoinProbeContext & context, size_t stream_index);
+    Block getLastResultBlock(size_t stream_index);
 
     void removeUselessColumn(Block & block) const;
     Block removeUselessColumnForOutput(const Block & block) const;
@@ -72,20 +73,6 @@ public:
     size_t getProbeConcurrency() const { return probe_concurrency; }
 
     const JoinProfileInfoPtr & getProfileInfo() const { return profile_info; }
-
-    Block getProbeBufferedResultBlock(size_t stream_index)
-    {
-        auto & wd = probe_workers_data[stream_index];
-        if (has_other_condition)
-            return std::move(wd.result_block_for_other_condition);
-        if (wd.result_block)
-        {
-            auto res_block = removeUselessColumnForOutput(wd.result_block);
-            wd.result_block = {};
-            return res_block;
-        }
-        return {};
-    }
 
 private:
     void initRowLayoutAndHashJoinMethod();

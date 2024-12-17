@@ -576,6 +576,21 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
     return output_block_after_finalize;
 }
 
+Block HashJoin::getLastResultBlock(size_t stream_index)
+{
+    auto & wd = probe_workers_data[stream_index];
+    if (has_other_condition)
+        return std::move(wd.result_block_for_other_condition);
+
+    if (wd.result_block)
+    {
+        auto res_block = removeUselessColumnForOutput(wd.result_block);
+        wd.result_block = {};
+        return res_block;
+    }
+    return {};
+}
+
 void HashJoin::removeUselessColumn(Block & block) const
 {
     const NameSet & probe_output_name_set = has_other_condition

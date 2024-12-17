@@ -64,7 +64,7 @@ OperatorStatus HashJoinV2ProbeTransformOp::transformImpl(Block & block)
     {
         join_ptr->finishOneProbe(op_index);
         probe_context.input_is_finished = true;
-        block = join_ptr->getProbeBufferedResultBlock(op_index);
+        block = join_ptr->getLastResultBlock(op_index);
         return OperatorStatus::HAS_OUTPUT;
     }
     if (block.rows() == 0)
