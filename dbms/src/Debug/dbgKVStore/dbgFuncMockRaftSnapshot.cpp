@@ -664,7 +664,10 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(
     output(fmt_buf.toString());
 }
 
-void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(
+    Context & /*context*/,
+    const ASTs & args,
+    DBGInvoker::Printer output)
 {
     if (args.size() != 1)
     {

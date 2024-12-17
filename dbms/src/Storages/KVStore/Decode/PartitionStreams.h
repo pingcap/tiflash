@@ -47,7 +47,7 @@ Block GenRegionBlockDataWithSchema(
 template <typename ReadList>
 DM::WriteResult writeRegionDataToStorage(
     Context & context,
-    const RegionPtr& region,
+    const RegionPtr & region,
     ReadList & data_list_read,
     const LoggerPtr & log);
 
