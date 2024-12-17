@@ -61,25 +61,6 @@ std::pair<RSResults, UInt32> getDMFilePackFilterResultBySegmentRange(
     return std::make_pair(RSResults(valid_start_itr, valid_end_itr), valid_start_pack_id);
 }
 
-std::pair<UInt32, UInt32> getDMFilePackRangeBySegmentRange(
-    const DMContext & dm_context,
-    const DMFilePtr & dmfile,
-    const std::optional<RowKeyRange> & segment_range)
-{
-    if (!segment_range)
-        return std::make_pair(0, dmfile->getPacks());
-
-    const auto handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, {*segment_range});
-    const auto valid_start_itr
-        = std::find_if(handle_res.begin(), handle_res.end(), [](RSResult r) { return r.isUse(); });
-    if (valid_start_itr == handle_res.end())
-        return {0, 0};
-    const auto valid_end_itr = std::find_if(valid_start_itr, handle_res.end(), [](RSResult r) { return !r.isUse(); });
-    const auto valid_start_pack_id = valid_start_itr - handle_res.begin();
-    const auto valid_pack_count = valid_end_itr - valid_start_itr;
-    return {valid_start_pack_id, valid_pack_count};
-}
-
 namespace
 {
 template <typename T>

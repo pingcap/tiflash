@@ -15,11 +15,11 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <Storages/DeltaMerge/DMContext.h>
 
 namespace DB::DM
 {
@@ -34,19 +34,21 @@ public:
         UInt64 rows;
     };
 
-    DMFileHandleIndex(const DMContext & dm_context_, const DMFilePtr & dmfile_, const RowID start_row_id_, std::optional<RowKeyRange> range_)
+    DMFileHandleIndex(
+        const DMContext & dm_context_,
+        const DMFilePtr & dmfile_,
+        const RowID start_row_id_,
+        std::optional<RowKeyRange> rowkey_range_)
         : global_context(dm_context_.global_context)
         , dmfile(dmfile_)
         , start_row_id(start_row_id_)
-        , range(std::move(range_))
-        , pack_range(getDMFilePackRangeBySegmentRange(dm_context_, dmfile, range))
+        , rowkey_range(std::move(rowkey_range_))
+        , pack_range(getPackRange(dm_context_))
         , read_packs(std::make_shared<IdSet>())
         , pack_index(loadPackIndex())
         , pack_entries(loadPackEntries())
-        , handle_packs(pack_range.second)
-    {
-
-    }
+        , handle_packs(pack_range.end_pack_id - pack_range.start_pack_id)
+    {}
 
     // TODO: getBaseVersion one by one.
     // Maybe we can first check pack id of all handles, and process them by pack.
@@ -66,7 +68,7 @@ public:
     template <Int64OrStringView HandleView>
     std::optional<std::pair<UInt32, PackEntry>> getPackEntry(HandleView h)
     {
-        if unlikely (range && !inRowKeyRange(*range, h))
+        if unlikely (rowkey_range && !inRowKeyRange(*rowkey_range, h))
             return {};
 
         auto itr = std::lower_bound(pack_index.begin(), pack_index.end(), h);
@@ -93,7 +95,9 @@ public:
     std::vector<Handle> loadPackIndex()
     {
         auto max_values = loadPackMaxValue<Handle>(global_context, *dmfile, EXTRA_HANDLE_COLUMN_ID);
-        return std::vector<Handle>(max_values.begin() + pack_range.first, max_values.begin() + pack_range.first + pack_range.second);
+        return std::vector<Handle>(
+            max_values.begin() + pack_range.start_pack_id,
+            max_values.begin() + pack_range.end_pack_id);
     }
 
     std::vector<PackEntry> loadPackEntries()
@@ -105,7 +109,7 @@ public:
         std::vector<PackEntry> pack_entries;
         pack_entries.reserve(pack_stats.size());
         UInt64 offset = 0;
-        for (UInt32 pack_id = pack_range.first; pack_id < pack_range.first + pack_range.second; ++pack_id)
+        for (UInt32 pack_id = pack_range.start_pack_id; pack_id < pack_range.end_pack_id; ++pack_id)
         {
             const auto & stat = pack_stats[pack_id];
             pack_entries.push_back(PackEntry{.offset = offset, .rows = stat.rows});
@@ -124,16 +128,16 @@ public:
         // Read all
         if (read_packs->empty())
         {
-            for (UInt32 pack_id = pack_range.first; pack_id < pack_range.first + pack_range.second; ++pack_id)
+            for (UInt32 pack_id = pack_range.start_pack_id; pack_id < pack_range.end_pack_id; ++pack_id)
                 read_packs->insert(pack_id);
         }
-        else if (pack_range.first > 0)
+        else if (pack_range.start_pack_id > 0)
         {
             auto old_read_packs = read_packs;
             read_packs = std::make_shared<IdSet>();
             for (auto pack_id : *old_read_packs)
             {
-                read_packs->insert(pack_id + pack_range.first);
+                read_packs->insert(pack_id + pack_range.start_pack_id);
             }
         }
 
@@ -174,11 +178,11 @@ public:
             scan_context,
             ReadTag::MVCC);
 
-        
+
         for (UInt32 pack_id : *read_packs)
         {
             auto block = reader.read();
-            handle_packs[pack_id - pack_range.first] = block.begin()->column;
+            handle_packs[pack_id - pack_range.start_pack_id] = block.begin()->column;
         }
         read_packs = nullptr;
     }
@@ -210,11 +214,36 @@ public:
     }
 
 private:
+    struct PackRange
+    {
+        // [start_pack_id, end_pack_id)
+        UInt32 start_pack_id;
+        UInt32 end_pack_id;
+    };
+
+    PackRange getPackRange(const DMContext & dm_context)
+    {
+        if (!rowkey_range)
+            return PackRange{.start_pack_id = 0, .end_pack_id = static_cast<UInt32>(dmfile->getPacks())};
+
+        const auto handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, {*rowkey_range});
+        const auto valid_start_itr
+            = std::find_if(handle_res.begin(), handle_res.end(), [](RSResult r) { return r.isUse(); });
+        if (valid_start_itr == handle_res.end())
+            return PackRange{.start_pack_id = 0, .end_pack_id = 0};
+
+        const auto valid_end_itr
+            = std::find_if(valid_start_itr, handle_res.end(), [](RSResult r) { return !r.isUse(); });
+        return PackRange{
+            .start_pack_id = static_cast<UInt32>(valid_start_itr - handle_res.begin()),
+            .end_pack_id = static_cast<UInt32>(valid_end_itr - handle_res.begin())};
+    }
+
     const Context & global_context;
     DMFilePtr dmfile;
     const RowID start_row_id;
-    const std::optional<const RowKeyRange> range;
-    const std::pair<UInt32, UInt32> pack_range;
+    const std::optional<const RowKeyRange> rowkey_range;
+    const PackRange pack_range;
 
     IdSetPtr read_packs;
 

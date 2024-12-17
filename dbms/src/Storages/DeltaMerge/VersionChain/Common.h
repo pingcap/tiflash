@@ -98,8 +98,4 @@ std::pair<RSResults, UInt32> getDMFilePackFilterResultBySegmentRange(
 template <typename T>
 std::vector<T> loadPackMaxValue(const Context & global_context, const DMFile & dmfile, const ColId col_id);
 
-std::pair<UInt32, UInt32> getDMFilePackRangeBySegmentRange(
-    const DMContext & dm_context,
-    const DMFilePtr & dmfile,
-    const std::optional<RowKeyRange> & segment_range);
 } // namespace DB::DM
