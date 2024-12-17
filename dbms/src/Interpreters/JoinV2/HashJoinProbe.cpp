@@ -285,7 +285,7 @@ private:
     const HashJoinPointerTable & pointer_table;
     const HashJoinRowLayout & row_layout;
     MutableColumns & added_columns;
-    size_t added_rows;
+    const size_t added_rows;
 };
 
 template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
@@ -353,7 +353,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
         }
     }
     FlushBatchIfNecessary<true>();
-    FillNullMap(current_offset);
+    FillNullMap(current_offset - added_rows);
 
     context.start_row_idx = idx;
     context.current_probe_row_ptr = ptr;
@@ -484,7 +484,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
     }
 
     FlushBatchIfNecessary<true>();
-    FillNullMap(current_offset);
+    FillNullMap(current_offset - added_rows);
 
     context.start_row_idx = idx;
     context.prefetch_active_states = active_states;
