@@ -247,10 +247,6 @@ void insertBlockToRowContainers(
 {
     switch (method)
     {
-    case HashJoinKeyMethod::Empty:
-    case HashJoinKeyMethod::Cross:
-        break;
-
 #define M(METHOD)                                                                          \
     case HashJoinKeyMethod::METHOD:                                                        \
         using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
@@ -268,7 +264,9 @@ void insertBlockToRowContainers(
 #undef M
 
     default:
-        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        throw Exception(
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
+            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 

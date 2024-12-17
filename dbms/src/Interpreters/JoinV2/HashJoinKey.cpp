@@ -14,6 +14,8 @@
 
 #include <Interpreters/JoinV2/HashJoinKey.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 
@@ -21,10 +23,6 @@ size_t getHashValueByteSize(HashJoinKeyMethod method)
 {
     switch (method)
     {
-    case HashJoinKeyMethod::Empty:
-    case HashJoinKeyMethod::Cross:
-        return 0;
-
 #define M(METHOD)                                                                                   \
     case HashJoinKeyMethod::METHOD:                                                                 \
         return sizeof(typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::HashValueType); \
@@ -33,7 +31,9 @@ size_t getHashValueByteSize(HashJoinKeyMethod method)
 #undef M
 
     default:
-        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        throw Exception(
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
+            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 
@@ -74,10 +74,6 @@ std::unique_ptr<void, std::function<void(void *)>> createHashJoinKeyGetter(
 {
     switch (method)
     {
-    case HashJoinKeyMethod::Empty:
-    case HashJoinKeyMethod::Cross:
-        return nullptr;
-
 #define M(METHOD)                                                                                         \
     case HashJoinKeyMethod::METHOD:                                                                       \
         using KeyGetterType##METHOD = typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::Type; \
@@ -89,7 +85,9 @@ std::unique_ptr<void, std::function<void(void *)>> createHashJoinKeyGetter(
 #undef M
 
     default:
-        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        throw Exception(
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
+            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 
@@ -101,10 +99,6 @@ void resetHashJoinKeyGetter(
 {
     switch (method)
     {
-    case HashJoinKeyMethod::Empty:
-    case HashJoinKeyMethod::Cross:
-        return;
-
 #define M(METHOD)                                                                                     \
     case HashJoinKeyMethod::METHOD:                                                                   \
         using KeyGetter##METHOD = typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::Type; \
@@ -115,7 +109,9 @@ void resetHashJoinKeyGetter(
 #undef M
 
     default:
-        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        throw Exception(
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
+            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 

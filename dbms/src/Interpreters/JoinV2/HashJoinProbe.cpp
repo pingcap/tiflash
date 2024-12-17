@@ -606,10 +606,6 @@ void joinProbeBlock(
 
     switch (method)
     {
-    case HashJoinKeyMethod::Empty:
-    case HashJoinKeyMethod::Cross:
-        break;
-
 #define CALL(KeyGetter, has_null_map, tagged_pointer)              \
     JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>( \
         context,                                                   \
@@ -658,7 +654,9 @@ void joinProbeBlock(
 #undef CALL
 
     default:
-        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        throw Exception(
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
+            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 }
 

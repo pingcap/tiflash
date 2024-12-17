@@ -25,6 +25,7 @@
 #include <Interpreters/Settings.h>
 
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -367,19 +368,16 @@ void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
 
     assertBlocksHaveEqualStructure(block, right_sample_block_pruned, "Join Build");
 
-    if (!isCrossJoin(kind))
-    {
-        insertBlockToRowContainers(
-            method,
-            needRecordNotInsertRows(kind),
-            block,
-            rows,
-            key_columns,
-            null_map,
-            row_layout,
-            multi_row_containers,
-            build_workers_data[stream_index]);
-    }
+    insertBlockToRowContainers(
+        method,
+        needRecordNotInsertRows(kind),
+        block,
+        rows,
+        key_columns,
+        null_map,
+        row_layout,
+        multi_row_containers,
+        build_workers_data[stream_index]);
 
     build_workers_data[stream_index].build_time += watch.elapsedMilliseconds();
 }
@@ -455,10 +453,6 @@ bool HashJoin::buildPointerTable(size_t stream_index)
     bool is_end;
     switch (method)
     {
-    case HashJoinKeyMethod::Empty:
-    case HashJoinKeyMethod::Cross:
-        return true;
-
 #define M(METHOD)                                                                          \
     case HashJoinKeyMethod::METHOD:                                                        \
         using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
@@ -477,7 +471,9 @@ bool HashJoin::buildPointerTable(size_t stream_index)
 #undef M
 
     default:
-        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        throw Exception(
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
+            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
 
     if (is_end)
