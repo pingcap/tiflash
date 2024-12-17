@@ -182,7 +182,7 @@ public:
         {
             // We have to copy the keys to our arena.
             assert(arena != nullptr);
-            cur_set.emplace(ArenaKeyHolder{rhs_elem.getValue(), arena}, it, inserted);
+            cur_set.emplace(ArenaKeyHolder{rhs_elem.getValue(), *arena}, it, inserted);
         }
     }
 

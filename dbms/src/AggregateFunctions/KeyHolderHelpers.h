@@ -24,7 +24,7 @@ inline auto getKeyHolder(const IColumn & column, size_t row_num, Arena & arena)
 {
     if constexpr (is_plain_column)
     {
-        return ArenaKeyHolder{column.getDataAt(row_num), &arena};
+        return ArenaKeyHolder{column.getDataAt(row_num), arena};
     }
     else
     {

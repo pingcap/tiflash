@@ -192,11 +192,6 @@ public:
         return DB::BinCollatorSortKey<padding>(s, length);
     }
 
-    StringRef sortKey(const char * s, size_t length, DB::Arena &) const override
-    {
-        return DB::BinCollatorSortKey<padding>(s, length);
-    }
-
     StringRef sortKeyNoTrim(const char * s, size_t length, std::string &) const override
     {
         return convertForBinCollator<false>(s, length, nullptr);
@@ -278,52 +273,9 @@ public:
         return convertImpl<false, true>(s, length, container, nullptr);
     }
 
-    StringRef sortKey(const char * s, size_t length, DB::Arena & pool) const override
-    {
-        return convertImpl<false, true>(s, length, pool, nullptr);
-    }
-
     StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
     {
         return convertImpl<false, false>(s, length, container, nullptr);
-    }
-
-    template <bool need_len, bool need_trim>
-    StringRef convertImpl(const char * s, size_t length, DB::Arena & pool, std::vector<size_t> * lens) const
-    {
-        std::string_view v;
-
-        if constexpr (need_trim)
-            v = rtrim(s, length);
-        else
-            v = std::string_view(s, length);
-
-        const size_t size = length * sizeof(WeightType);
-        auto * buffer = pool.alignedAlloc(size, 16);
-
-        size_t offset = 0;
-        size_t total_size = 0;
-        size_t v_length = v.length();
-
-        if constexpr (need_len)
-        {
-            if (lens->capacity() < v_length)
-                lens->reserve(v_length);
-            lens->resize(0);
-        }
-
-        while (offset < v_length)
-        {
-            auto c = decodeChar(s, offset);
-            auto sk = weight(c);
-            buffer[total_size++] = static_cast<char>(sk >> 8);
-            buffer[total_size++] = static_cast<char>(sk);
-
-            if constexpr (need_len)
-                lens->push_back(2);
-        }
-
-        return StringRef(buffer, total_size);
     }
 
     template <bool need_len, bool need_trim>
@@ -527,63 +479,9 @@ public:
         return convertImpl<false, true>(s, length, container, nullptr);
     }
 
-    StringRef sortKey(const char * s, size_t length, DB::Arena & pool) const override
-    {
-        return convertImpl<false, true>(s, length, pool, nullptr);
-    }
-
     StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
     {
         return convertImpl<false, false>(s, length, container, nullptr);
-    }
-
-    // Use Arena to store decoded string. Normally it's used by column-wise Agg/Join,
-    // because column-wise process cannot reuse string container.
-    template <bool need_len, bool need_trim>
-    StringRef convertImpl(const char * s, size_t length, DB::Arena & pool, std::vector<size_t> * lens) const
-    {
-        std::string_view v;
-
-        if constexpr (need_trim)
-            v = preprocess(s, length);
-        else
-            v = std::string_view(s, length);
-
-        // every char have 8 uint16 at most.
-        const auto size = 8 * length * sizeof(uint16_t);
-        auto * buffer = pool.alignedAlloc(size, 16);
-
-        size_t offset = 0;
-        size_t total_size = 0;
-        size_t v_length = v.length();
-
-        uint64_t first = 0, second = 0;
-
-        if constexpr (need_len)
-        {
-            if (lens->capacity() < v_length)
-                lens->reserve(v_length);
-            lens->resize(0);
-        }
-
-        while (offset < v_length)
-        {
-            weight(first, second, offset, v_length, s);
-
-            if constexpr (need_len)
-                lens->push_back(total_size);
-
-            writeResult(first, buffer, total_size);
-            writeResult(second, buffer, total_size);
-
-            if constexpr (need_len)
-            {
-                size_t end_idx = lens->size() - 1;
-                (*lens)[end_idx] = total_size - (*lens)[end_idx];
-            }
-        }
-
-        return StringRef(buffer, total_size);
     }
 
     template <bool need_len, bool need_trim>
@@ -648,16 +546,6 @@ private:
         {
             container[total_size++] = static_cast<char>(w >> 8);
             container[total_size++] = static_cast<char>(w);
-            w >>= 16;
-        }
-    }
-
-    static inline void writeResult(uint64_t & w, char * buffer, size_t & total_size)
-    {
-        while (w != 0)
-        {
-            buffer[total_size++] = static_cast<char>(w >> 8);
-            buffer[total_size++] = static_cast<char>(w);
             w >>= 16;
         }
     }

@@ -16,9 +16,7 @@
 
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashTable.h>
-#include <Common/Logger.h>
 #include <IO/Endian.h>
-#include <common/logger_useful.h>
 
 #include <new>
 #include <variant>
@@ -194,99 +192,6 @@ struct StringHashTableLookupResult
     friend bool operator!=(const std::nullptr_t &, const StringHashTableLookupResult & b) { return b.mapped_ptr; }
 };
 
-template <typename KeyHolder, typename Func0, typename Func8, typename Func16, typename Func24, typename FuncStr>
-static auto
-#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)
-    NO_INLINE NO_SANITIZE_ADDRESS NO_SANITIZE_THREAD
-#else
-    ALWAYS_INLINE
-#endif
-    dispatchStringHashTable(
-        size_t row,
-        KeyHolder && key_holder,
-        Func0 && func0,
-        Func8 && func8,
-        Func16 && func16,
-        Func24 && func24,
-        FuncStr && func_str)
-{
-    const StringRef & x = keyHolderGetKey(key_holder);
-    const size_t sz = x.size;
-    if (sz == 0)
-    {
-        return func0(x, row);
-    }
-
-    if (x.data[sz - 1] == 0)
-    {
-        // Strings with trailing zeros are not representable as fixed-size
-        // string keys. Put them to the generic table.
-        return func_str(key_holder, row);
-    }
-
-    const char * p = x.data;
-    // pending bits that needs to be shifted out
-    const char s = (-sz & 7) * 8;
-    union
-    {
-        StringKey8 k8;
-        StringKey16 k16;
-        StringKey24 k24;
-        UInt64 n[3];
-    };
-    switch ((sz - 1) >> 3)
-    {
-    case 0: // 1..8 bytes
-    {
-        // first half page
-        if ((reinterpret_cast<uintptr_t>(p) & 2048) == 0)
-        {
-            memcpy(&n[0], p, 8);
-            if constexpr (DB::isLittleEndian())
-                n[0] &= (-1ULL >> s);
-            else
-                n[0] &= (-1ULL << s);
-        }
-        else
-        {
-            const char * lp = x.data + x.size - 8;
-            memcpy(&n[0], lp, 8);
-            if constexpr (DB::isLittleEndian())
-                n[0] >>= s;
-            else
-                n[0] <<= s;
-        }
-        return func8(k8, row);
-    }
-    case 1: // 9..16 bytes
-    {
-        memcpy(&n[0], p, 8);
-        const char * lp = x.data + x.size - 8;
-        memcpy(&n[1], lp, 8);
-        if constexpr (DB::isLittleEndian())
-            n[1] >>= s;
-        else
-            n[1] <<= s;
-        return func16(k16, row);
-    }
-    case 2: // 17..24 bytes
-    {
-        memcpy(&n[0], p, 16);
-        const char * lp = x.data + x.size - 8;
-        memcpy(&n[2], lp, 8);
-        if constexpr (DB::isLittleEndian())
-            n[2] >>= s;
-        else
-            n[2] <<= s;
-        return func24(k24, row);
-    }
-    default: // >= 25 bytes
-    {
-        return func_str(key_holder, row);
-    }
-    }
-}
-
 template <typename SubMaps>
 class StringHashTable : private boost::noncopyable
 {
@@ -307,8 +212,6 @@ protected:
 
     template <typename, typename, size_t>
     friend class TwoLevelStringHashTable;
-    template <size_t, bool, typename>
-    friend struct StringHashTableSubMapSelector;
 
     T0 m0;
     T1 m1;
@@ -564,50 +467,4 @@ public:
         m3.clearAndShrink();
         ms.clearAndShrink();
     }
-};
-
-template <size_t SubMapIndex, bool is_two_level, typename Data>
-struct StringHashTableSubMapSelector;
-
-template <typename Data>
-struct StringHashTableSubMapSelector<0, false, Data>
-{
-    struct Hash
-    {
-        static ALWAYS_INLINE size_t operator()(const StringRef &) { return 0; }
-    };
-
-    static typename Data::T0 & getSubMap(size_t, Data & data) { return data.m0; }
-};
-
-template <typename Data>
-struct StringHashTableSubMapSelector<1, false, Data>
-{
-    using Hash = StringHashTableHash;
-
-    static typename Data::T1 & getSubMap(size_t, Data & data) { return data.m1; }
-};
-
-template <typename Data>
-struct StringHashTableSubMapSelector<2, false, Data>
-{
-    using Hash = StringHashTableHash;
-
-    static typename Data::T2 & getSubMap(size_t, Data & data) { return data.m2; }
-};
-
-template <typename Data>
-struct StringHashTableSubMapSelector<3, false, Data>
-{
-    using Hash = StringHashTableHash;
-
-    static typename Data::T3 & getSubMap(size_t, Data & data) { return data.m3; }
-};
-
-template <typename Data>
-struct StringHashTableSubMapSelector<4, false, Data>
-{
-    using Hash = StringHashTableHash;
-
-    static typename Data::Ts & getSubMap(size_t, Data & data) { return data.ms; }
 };

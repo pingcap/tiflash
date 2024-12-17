@@ -204,44 +204,6 @@ public:
         }
     }
 
-    template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
-    ALWAYS_INLINE inline EmplaceResult emplaceStringKey(
-        Data & data,
-        size_t idx,
-        std::vector<StringKeyType> & datas,
-        const std::vector<size_t> & hashvals)
-    {
-        // For spill, hashvals.size() will be le to total_rows.
-        // Because only remaining rows that didn't insert into HashMap will be handled here.
-        assert(hashvals.size() <= static_cast<Derived &>(*this).total_rows);
-
-        auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
-            hashvals[idx],
-            data);
-        if constexpr (enable_prefetch)
-            prefetch(submap, idx, hashvals);
-
-        return emplaceImpl(datas[idx], submap, hashvals[idx]);
-    }
-
-    template <size_t SubMapIndex, bool enable_prefetch = false, typename Data, typename StringKeyType>
-    ALWAYS_INLINE inline FindResult findStringKey(
-        Data & data,
-        size_t idx,
-        std::vector<StringKeyType> & datas,
-        const std::vector<size_t> & hashvals)
-    {
-        assert(hashvals.size() <= static_cast<Derived &>(*this).total_rows);
-
-        auto & submap = StringHashTableSubMapSelector<SubMapIndex, Data::is_two_level, std::decay_t<Data>>::getSubMap(
-            hashvals[idx],
-            data);
-        if constexpr (enable_prefetch)
-            prefetch(submap, idx, hashvals);
-
-        return findKeyImpl(keyHolderGetKey(datas[idx]), submap, hashvals[idx]);
-    }
-
     template <typename Data>
     ALWAYS_INLINE inline size_t getHash(
         const Data & data,

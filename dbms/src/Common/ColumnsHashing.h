@@ -122,34 +122,19 @@ struct HashMethodString
     ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(
         ssize_t row,
         [[maybe_unused]] Arena * pool,
-        [[maybe_unused]] std::vector<String> & sort_key_containers) const
+        std::vector<String> & sort_key_containers) const
     {
-        auto key = getKey(row);
+        auto last_offset = row == 0 ? 0 : offsets[row - 1];
+        // Remove last zero byte.
+        StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
         if (likely(collator))
             key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
 
-        return ArenaKeyHolder{key, pool};
-    }
-
-    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(ssize_t row, Arena * pool, Arena * sort_key_pool) const
-    {
-        auto key = getKey(row);
-        if (likely(collator))
-            key = collator->sortKey(key.data, key.size, *sort_key_pool);
-
-        return ArenaKeyHolder{key, pool};
+        return ArenaKeyHolder{key, *pool};
     }
 
 protected:
     friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
-
-private:
-    ALWAYS_INLINE inline StringRef getKey(size_t row) const
-    {
-        auto last_offset = row == 0 ? 0 : offsets[row - 1];
-        // Remove last zero byte.
-        return StringRef(chars + last_offset, offsets[row] - last_offset - 1);
-    }
 };
 
 template <typename Value, typename Mapped, bool padding>
@@ -176,15 +161,10 @@ struct HashMethodStringBin
 
     ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, Arena * pool, std::vector<String> &) const
     {
-        return getKeyHolder(row, pool, nullptr);
-    }
-
-    ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, Arena * pool, Arena *) const
-    {
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
         key = BinCollatorSortKey<padding>(key.data, key.size);
-        return ArenaKeyHolder{key, pool};
+        return ArenaKeyHolder{key, *pool};
     }
 
 protected:
@@ -433,16 +413,7 @@ struct HashMethodFixedString
         if (collator)
             key = collator->sortKeyFastPath(key.data, key.size, sort_key_containers[0]);
 
-        return ArenaKeyHolder{key, pool};
-    }
-
-    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(size_t row, Arena * pool, Arena * sort_key_pool) const
-    {
-        StringRef key(&(*chars)[row * n], n);
-        if (collator)
-            key = collator->sortKeyFastPath(key.data, key.size, *sort_key_pool);
-
-        return ArenaKeyHolder{key, pool};
+        return ArenaKeyHolder{key, *pool};
     }
 
 protected:
