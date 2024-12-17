@@ -31,18 +31,38 @@ namespace DB
 namespace tests
 {
 constexpr int scale = 2;
-const std::vector<String> input_string_vec{"0", "71.94", "12.34", "-34.26", "80.02", "-84.39", "28.41", "45.32"};
-const std::vector<String> input_string_vec_aux{"0", "7194", "1234", "-3426", "8002", "-8439", "2841", "4532"};
+const std::vector<String> input_string_vec{"0", "71.94", "12.34", "-34.26", "80.02", "-84.39", "28.41", "45.32", "11.11", "-10.32"};
+const std::vector<String> input_string_vec_aux{"0", "7194", "1234", "-3426", "8002", "-8439", "2841", "4532", "1111", "-1032"};
 const std::vector<Int64> input_int_vec{1, -2, 7, 4, 0, -3, -1, 0, 0, 9, 2, 0, -4, 2, 6, -3, 5};
-const std::vector<Decimal256> input_decimal_vec{
-    Decimal256(std::stoi(input_string_vec_aux[0])),
-    Decimal256(std::stoi(input_string_vec_aux[1])),
-    Decimal256(std::stoi(input_string_vec_aux[2])),
-    Decimal256(std::stoi(input_string_vec_aux[3])),
-    Decimal256(std::stoi(input_string_vec_aux[4])),
-    Decimal256(std::stoi(input_string_vec_aux[5])),
-    Decimal256(std::stoi(input_string_vec_aux[6])),
-    Decimal256(std::stoi(input_string_vec_aux[7]))};
+const std::vector<Int64> input_decimal_vec{
+    std::stoi(input_string_vec_aux[0]),
+    std::stoi(input_string_vec_aux[1]),
+    std::stoi(input_string_vec_aux[2]),
+    std::stoi(input_string_vec_aux[3]),
+    std::stoi(input_string_vec_aux[4]),
+    std::stoi(input_string_vec_aux[5]),
+    std::stoi(input_string_vec_aux[6]),
+    std::stoi(input_string_vec_aux[7])};
+
+struct SumMocker
+{
+    inline static void add(Int64 & res, Int64 data) noexcept { res += data; }
+    inline static void decrease(Int64 & res, Int64 data) noexcept { res -= data; }
+};
+
+template <typename OpMocker>
+struct TestCase
+{
+    TestCase(DataTypePtr type_, const std::vector<Int64> & input_vec_, int scale_) : type(type_), input_vec(input_vec_), scale(scale_) {}
+
+    inline void addInMock(Int64 & res, Int64 row_idx) noexcept { mocker.add(res, input_vec[row_idx]); }
+    inline void decreaseInMock(Int64 & res, Int64 row_idx) noexcept { mocker.decrease(res, input_vec[row_idx]); }
+
+    const DataTypePtr type;
+    const std::vector<Int64> input_vec;
+    int scale; // scale is 0 when test type is int
+    OpMocker mocker;
+};
 
 class ExecutorWindowAgg : public DB::tests::AggregationTest
 {
@@ -58,6 +78,9 @@ private:
     }
 
 protected:
+    template<typename Op>
+    void executeWindowAggTest(TestCase<Op> & test_case);
+
     static const IColumn * getInputColumn(const IDataType * type)
     {
         if (const auto * tmp = dynamic_cast<const DataTypeInt64 *>(type); tmp != nullptr)
@@ -114,140 +137,87 @@ DataTypePtr ExecutorWindowAgg::type_int = std::make_shared<DataTypeInt64>();
 DataTypePtr ExecutorWindowAgg::type_decimal128 = std::make_shared<DataTypeDecimal128>(10, scale);
 DataTypePtr ExecutorWindowAgg::type_decimal256 = std::make_shared<DataTypeDecimal256>(30, scale);
 
-TEST_F(ExecutorWindowAgg, Sum)
-try
+template<typename Op>
+void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
 {
     Arena arena;
     auto context = TiFlashTestEnv::getContext();
     std::deque<int> added_row_idx_queue;
 
+    added_row_idx_queue.clear();
+    auto agg_func
+        = AggregateFunctionFactory::instance().get(*context, "sum", {test_case.type}, {}, 0, true);
+    AlignedBuffer agg_state;
+    agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
+    agg_func->create(agg_state.data());
+
+    std::vector<Int64> res_vec;
+    res_vec.reserve(10);
+
+    const UInt32 col_row_num = test_case.input_vec.size();
+
+    UInt32 reset_num = getResetNum();
+    auto res_col = test_case.type->createColumn();
+    auto null_map_col = ColumnUInt8::create();
+    auto null_res_col = ColumnNullable::create(std::move(res_col), std::move(null_map_col));
+    const IColumn * input_col = getInputColumn(test_case.type.get());
+
+    for (UInt32 i = 0; i < reset_num; i++)
     {
-        // Test for int
-        added_row_idx_queue.clear();
-        auto agg_func
-            = AggregateFunctionFactory::instance().get(*context, "sum", {ExecutorWindowAgg::type_int}, {}, 0, true);
-        AlignedBuffer agg_state;
-        agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
-        agg_func->create(agg_state.data());
+        Int64 res = 0;
+        agg_func->reset(agg_state.data());
 
-        std::vector<Int64> res_int;
-        res_int.reserve(10);
-
-        const UInt32 col_int_size = input_int_vec.size();
-
-        UInt32 reset_num = getResetNum();
-        auto res_col = ExecutorWindowAgg::type_int->createColumn();
-        auto null_map_col = ColumnUInt8::create();
-        auto null_res_col = ColumnNullable::create(std::move(res_col), std::move(null_map_col));
-        const IColumn * input_col = getInputColumn(ExecutorWindowAgg::type_int.get());
-
-        for (UInt32 i = 0; i < reset_num; i++)
+        const UInt32 res_num = getResultNum();
+        for (UInt32 j = 0; j < res_num; j++)
         {
-            Int64 res = 0;
-            agg_func->reset(agg_state.data());
-
-            const UInt32 res_num = getResultNum();
-            for (UInt32 j = 0; j < res_num; j++)
+            const UInt32 add_num = getAddNum();
+            for (UInt32 k = 0; k < add_num; k++)
             {
-                const UInt32 add_num = getAddNum();
-                for (UInt32 k = 0; k < add_num; k++)
-                {
-                    const UInt32 row_idx = getRowIdx(0, col_int_size - 1);
-                    added_row_idx_queue.push_back(row_idx);
-                    agg_func->add(agg_state.data(), &input_col, row_idx, &arena);
-                    res += input_int_vec[row_idx];
-                }
-
-                const UInt32 decrease_num = getDecreaseNum(added_row_idx_queue.size());
-                for (UInt32 k = 0; k < decrease_num; k++)
-                {
-                    const UInt32 row_idx = added_row_idx_queue.front();
-                    added_row_idx_queue.pop_front();
-                    agg_func->decrease(agg_state.data(), &input_col, row_idx, &arena);
-                    res -= input_int_vec[row_idx];
-                }
-
-                agg_func->insertResultInto(agg_state.data(), *null_res_col, &arena);
-                res_int.push_back(res);
+                const UInt32 row_idx = getRowIdx(0, col_row_num - 1);
+                added_row_idx_queue.push_back(row_idx);
+                agg_func->add(agg_state.data(), &input_col, row_idx, &arena);
+                test_case.addInMock(res, row_idx);
             }
-        }
 
-        const auto nested_res_col = null_res_col->getNestedColumnPtr();
-        size_t res_num = res_int.size();
-        ASSERT_EQ(res_num, null_res_col->size());
-        for (size_t i = 0; i < res_num; i++)
-        {
-            ASSERT_FALSE(null_res_col->isNullAt(i));
-            ASSERT_EQ(res_int[i], nested_res_col->getInt(i));
+            const UInt32 decrease_num = getDecreaseNum(added_row_idx_queue.size());
+            for (UInt32 k = 0; k < decrease_num; k++)
+            {
+                const UInt32 row_idx = added_row_idx_queue.front();
+                added_row_idx_queue.pop_front();
+                agg_func->decrease(agg_state.data(), &input_col, row_idx, &arena);
+                test_case.decreaseInMock(res, row_idx);
+            }
+
+            agg_func->insertResultInto(agg_state.data(), *null_res_col, &arena);
+            res_vec.push_back(res);
         }
     }
 
+    const auto nested_res_col = null_res_col->getNestedColumnPtr();
+    size_t res_num = res_vec.size();
+    ASSERT_EQ(res_num, null_res_col->size());
+    
+    Field res_field;
+    for (size_t i = 0; i < res_num; i++)
     {
-        // Test for decimal
-        DataTypes test_types{type_decimal128, type_decimal256};
-        for (const auto & type : test_types)
-        {
-            added_row_idx_queue.clear();
-            auto agg_func = AggregateFunctionFactory::instance().get(*context, "sum", {type}, {}, 0, true);
-            AlignedBuffer agg_state;
-            agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
-            agg_func->create(agg_state.data());
+        ASSERT_FALSE(null_res_col->isNullAt(i));
+        nested_res_col->get(i, res_field);
 
-            std::vector<String> res_vec;
-            res_vec.reserve(10);
-
-            const UInt32 col_decimal_size = input_decimal_vec.size();
-
-            UInt32 reset_num = getResetNum();
-            auto res_col = type->createColumn();
-            auto null_map_col = ColumnUInt8::create();
-            auto null_res_col = ColumnNullable::create(std::move(res_col), std::move(null_map_col));
-            const IColumn * input_col = getInputColumn(type.get());
-
-            for (UInt32 i = 0; i < reset_num; i++)
-            {
-                Decimal256 res(0);
-                agg_func->reset(agg_state.data());
-
-                const UInt32 res_num = getResultNum();
-                for (UInt32 j = 0; j < res_num; j++)
-                {
-                    const UInt32 add_num = getAddNum();
-                    for (UInt32 k = 0; k < add_num; k++)
-                    {
-                        const UInt32 row_idx = getRowIdx(0, col_decimal_size - 1);
-                        added_row_idx_queue.push_back(row_idx);
-                        agg_func->add(agg_state.data(), &input_col, row_idx, &arena);
-                        res += input_decimal_vec[row_idx];
-                    }
-
-                    const UInt32 decrease_num = getDecreaseNum(added_row_idx_queue.size());
-                    for (UInt32 k = 0; k < decrease_num; k++)
-                    {
-                        const UInt32 row_idx = added_row_idx_queue.front();
-                        added_row_idx_queue.pop_front();
-                        agg_func->decrease(agg_state.data(), &input_col, row_idx, &arena);
-                        res -= input_decimal_vec[row_idx];
-                    }
-
-                    agg_func->insertResultInto(agg_state.data(), *null_res_col, &arena);
-                    res_vec.push_back(res.toString(scale));
-                }
-            }
-
-            const auto nested_res_col = null_res_col->getNestedColumnPtr();
-            size_t res_num = res_vec.size();
-            ASSERT_EQ(res_num, null_res_col->size());
-
-            Field res_field;
-            for (size_t i = 0; i < res_num; i++)
-            {
-                ASSERT_FALSE(null_res_col->isNullAt(i));
-                nested_res_col->get(i, res_field);
-                ASSERT_EQ(res_vec[i], getValue(res_field));
-            }
-        }
+        // No matter what type the result is, we always use decimal to convert the result to string so that it's easy to check result
+        ASSERT_EQ(Decimal256(res_vec[i]).toString(test_case.scale), getValue(res_field));
     }
+}
+
+TEST_F(ExecutorWindowAgg, Sum)
+try
+{
+    TestCase<SumMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, 0);
+    TestCase<SumMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, scale);
+    TestCase<SumMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, scale);
+    
+    executeWindowAggTest(int_case);
+    executeWindowAggTest(decimal128_case);
+    executeWindowAggTest(decimal256_case);
 }
 CATCH
 
