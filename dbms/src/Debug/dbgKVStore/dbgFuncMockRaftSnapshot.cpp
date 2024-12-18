@@ -46,6 +46,8 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -87,9 +89,10 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
         // Get start key and end key form multiple column if it is clustered_index.
         std::vector<Field> start_keys;
         std::vector<Field> end_keys;
+        const auto & pk_idx_cols = table_info.getPrimaryIndexInfo().idx_cols;
         for (size_t i = 0; i < handle_column_size; i++)
         {
-            auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
+            auto & column_info = table_info.columns[pk_idx_cols[i].offset];
             auto start_field
                 = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
@@ -108,8 +111,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
 
     const size_t len = table->table_info.columns.size() + 3;
 
-    if ((args_end - args_begin) % len)
-        throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG((((args_end - args_begin) % len) == 0), "Number of insert values and columns do not match.");
 
     // Parse row values
     for (auto it = args_begin; it != args_end; it += len)
@@ -172,7 +174,12 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
 
     // Mock to apply a snapshot with data in `region`
     auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(region, tmt);
+    tmt.getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(region, tmt);
+    // Decode the committed rows into Block and flush to the IStorage layer
+    if (auto region_applied = tmt.getKVStore()->getRegion(region_id); region_applied)
+    {
+        tmt.getRegionTable().tryWriteBlockByRegion(region_applied);
+    }
     output(fmt::format("put region #{}, range{} to table #{} with {} records", region_id, range_string, table_id, cnt));
 }
 
