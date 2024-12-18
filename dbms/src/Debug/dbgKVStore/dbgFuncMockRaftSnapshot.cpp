@@ -171,7 +171,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
     auto table_id = region->getMappedTableID();
     auto cnt = region->writeCFCount();
 
-    // Mock to apply a snapshot with data in `region`
+    // Mock to apply a snapshot with committed rows in `region`
     auto & tmt = context.getTMTContext();
     tmt.getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(region, tmt);
     // Decode the committed rows into Block and flush to the IStorage layer

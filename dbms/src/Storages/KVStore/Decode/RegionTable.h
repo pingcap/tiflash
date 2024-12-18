@@ -46,7 +46,6 @@ class Block;
 struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
-struct RegionPtrWithBlock;
 struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;

@@ -46,7 +46,7 @@ extern const int TABLE_IS_DROPPED;
 template <typename RegionPtrWrap>
 void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
-    auto region_id = new_region->id();
+    const auto region_id = new_region->id();
     auto old_region = getRegion(region_id);
     UInt64 old_applied_index = 0;
 
@@ -75,18 +75,16 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             return;
         }
 
-        {
-            LOG_INFO(log, "{} set state to `Applying`", old_region->toString());
-            // Set original region state to `Applying` and any read request toward this region should be rejected because
-            // engine may delete data unsafely.
-            auto region_lock = region_manager.genRegionTaskLock(old_region->id());
-            old_region->setStateApplying();
-            // It is not worthy to call `tryWriteBlockByRegion` and `tryFlushRegionCacheInStorage` here,
-            // even if the written data is useful, it could be overwritten later in `onSnapshot`.
-            // Note that we must persistRegion. This is to ensure even if a restart happens before
-            // the apply snapshot is finished, TiFlash can correctly reject the read index requests
-            persistRegion(*old_region, region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
-        }
+        LOG_INFO(log, "{} set state to `Applying`", old_region->toString());
+        // Set original region state to `Applying` and any read request toward this region should be rejected because
+        // engine may delete data unsafely.
+        auto region_lock = region_manager.genRegionTaskLock(old_region->id());
+        old_region->setStateApplying();
+        // It is not worthy to call `tryWriteBlockByRegion` and `tryFlushRegionCacheInStorage` here,
+        // even if the written data is useful, it could be overwritten later in `onSnapshot`.
+        // Note that we must persistRegion. This is to ensure even if a restart happens before
+        // the apply snapshot is finished, TiFlash can correctly reject the read index requests
+        persistRegion(*old_region, region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
     }
 
     {
@@ -153,14 +151,14 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             }
         }
     }
+
     // NOTE Do NOT move it to prehandle stage!
     // Otherwise a fap snapshot may be cleaned when prehandling after restarted.
-    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
     {
-        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+        if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
         {
             auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-            auto region_id = new_region->id();
             // Everytime we meet a regular snapshot, we try to clean obsolete fap ingest info.
             fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
         }
