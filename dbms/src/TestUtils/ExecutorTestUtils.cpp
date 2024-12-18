@@ -189,7 +189,7 @@ void ExecutorTest::executeExecutor(
     std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
-        std::vector<size_t> block_sizes{1, 2, 100, DEFAULT_BLOCK_SIZE};
+        std::vector<size_t> block_sizes{1, 2, 10, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
@@ -211,7 +211,7 @@ void ExecutorTest::checkBlockSorted(
     for (auto concurrency : concurrencies)
     {
         auto expected_res = executeStreams(request, concurrency);
-        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        std::vector<size_t> block_sizes{1, 2, 10, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
