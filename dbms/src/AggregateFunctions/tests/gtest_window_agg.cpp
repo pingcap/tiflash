@@ -48,6 +48,28 @@ const std::vector<Int64> input_decimal_vec{
     std::stoi(input_string_vec_aux[6]),
     std::stoi(input_string_vec_aux[7])};
 
+String eliminateTailing(String str)
+{
+    int point_idx = -1;
+    size_t size = str.size();
+    for (size_t i = 0; i < size; i++)
+    {
+        if (str[i] == '.')
+        {
+            point_idx = i;
+            break;
+        }
+    }
+
+    // Can't find point
+    if (point_idx == -1)
+        return str;
+
+    if (static_cast<int>(size) > point_idx + 3)
+        return String(str.c_str(), point_idx + 3);
+    return str;
+}
+
 class MockerBase
 {
 public:
@@ -125,13 +147,15 @@ public:
 
     void saveResult() noexcept
     {
-        WriteBufferFromOwnString wb;
-        writeFloatText(avgImpl(), wb);
-        results.push_back(wb.str());
+        if (scale == 0)
+            results.push_back(std::to_string(avgIntImpl()));
+        else
+            results.push_back(convertResIntToString(avgDecimalImpl()));
     }
 
 private:
-    inline Float64 avgImpl() const noexcept { return static_cast<Float64>(sum) / static_cast<Float64>(count); }
+    inline Float64 avgIntImpl() const noexcept { return static_cast<Float64>(sum) / static_cast<Float64>(count); }
+    inline Int64 avgDecimalImpl() const noexcept { return sum / count; }
 
     Int64 sum;
     Int64 count;
@@ -181,16 +205,10 @@ private:
 template <typename OpMocker>
 struct TestCase
 {
-    TestCase(
-        DataTypePtr type_,
-        const std::vector<Int64> & input_vec_,
-        const String & agg_name_,
-        Int64 init_res_,
-        int scale_)
+    TestCase(DataTypePtr type_, const std::vector<Int64> & input_vec_, const String & agg_name_, int scale_)
         : type(type_)
         , input_vec(input_vec_)
         , agg_name(agg_name_)
-        , init_res(init_res_)
         , mocker(scale_)
     {}
 
@@ -203,7 +221,6 @@ struct TestCase
     const DataTypePtr type;
     const std::vector<Int64> input_vec;
     const String agg_name;
-    Int64 init_res;
     OpMocker mocker;
 };
 
@@ -246,10 +263,12 @@ protected:
             return std::to_string(field.template get<UInt64>());
         case Field::Types::Which::Float64:
             return std::to_string(field.template get<Float64>());
+        case Field::Types::Which::Decimal64:
+            return eliminateTailing(field.template get<DecimalField<Decimal64>>().toString());
         case Field::Types::Which::Decimal128:
-            return field.template get<DecimalField<Decimal128>>().toString();
+            return eliminateTailing(field.template get<DecimalField<Decimal128>>().toString());
         case Field::Types::Which::Decimal256:
-            return field.template get<DecimalField<Decimal256>>().toString();
+            return eliminateTailing(field.template get<DecimalField<Decimal256>>().toString());
         default:
             throw Exception("Invalid data type");
         }
@@ -310,7 +329,6 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     for (UInt32 i = 0; i < reset_num; i++)
     {
         test_case.reset();
-        std::cout << "----------- reset" << std::endl;
         agg_func->reset(agg_state.data());
         added_row_idx_queue.clear();
 
@@ -355,7 +373,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     {
         res_col->get(i, res_field);
         ASSERT_FALSE(res_field.isNull());
-        std::cout << "i: " << i << std::endl;
+
         // No matter what type the result is, we always use decimal to convert the result to string so that it's easy to check result
         ASSERT_EQ(res_vec[i], getValue(res_field));
     }
@@ -364,9 +382,9 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
 TEST_F(ExecutorWindowAgg, Sum)
 try
 {
-    TestCase<SumMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "sum", 0, 0);
-    TestCase<SumMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "sum", 0, scale);
-    TestCase<SumMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "sum", 0, scale);
+    TestCase<SumMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "sum", 0);
+    TestCase<SumMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "sum", scale);
+    TestCase<SumMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "sum", scale);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
@@ -378,9 +396,9 @@ CATCH
 TEST_F(ExecutorWindowAgg, Count)
 try
 {
-    TestCase<CountMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "count", 0, 0);
-    TestCase<CountMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "count", 0, 0);
-    TestCase<CountMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "count", 0, 0);
+    TestCase<CountMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "count", 0);
+    TestCase<CountMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "count", 0);
+    TestCase<CountMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "count", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
@@ -391,34 +409,32 @@ CATCH
 TEST_F(ExecutorWindowAgg, Avg)
 try
 {
-    // TestCase<CountMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "avg", 0, 0);
-    // TestCase<CountMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "avg", 0, 0);
-    // TestCase<CountMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "avg", 0, 0);
+    TestCase<AvgMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "avg", 0);
+    TestCase<AvgMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "avg", scale);
+    TestCase<AvgMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "avg", scale);
 
-    // executeWindowAggTest(int_case);
-    // executeWindowAggTest(decimal128_case);
-    // executeWindowAggTest(decimal256_case);
+    executeWindowAggTest(int_case);
+    executeWindowAggTest(decimal128_case);
+    executeWindowAggTest(decimal256_case);
 }
 CATCH
 
 // TODO use unique_ptr in data
+// TODO ensure that if data will be called destructor
 TEST_F(ExecutorWindowAgg, Min)
 try
 {
     // TODO add string type etc... in AggregateFunctionMinMaxAny.h
-    TestCase<MinOrMaxMocker<false>>
-        int_case(ExecutorWindowAgg::type_int, input_int_vec, "min", std::numeric_limits<Int64>::max(), 0);
+    TestCase<MinOrMaxMocker<false>> int_case(ExecutorWindowAgg::type_int, input_int_vec, "min", 0);
     TestCase<MinOrMaxMocker<false>> decimal128_case(
         ExecutorWindowAgg::type_decimal128,
         input_decimal_vec,
         "min",
-        std::numeric_limits<Int64>::max(),
         scale);
     TestCase<MinOrMaxMocker<false>> decimal256_case(
         ExecutorWindowAgg::type_decimal256,
         input_decimal_vec,
         "min",
-        std::numeric_limits<Int64>::max(),
         scale);
 
     executeWindowAggTest(int_case);
@@ -431,20 +447,9 @@ TEST_F(ExecutorWindowAgg, Max)
 try
 {
     // TODO add string type etc... in AggregateFunctionMinMaxAny.h
-    TestCase<MinOrMaxMocker<true>>
-        int_case(ExecutorWindowAgg::type_int, input_int_vec, "max", std::numeric_limits<Int64>::min(), 0);
-    TestCase<MinOrMaxMocker<true>> decimal128_case(
-        ExecutorWindowAgg::type_decimal128,
-        input_decimal_vec,
-        "max",
-        std::numeric_limits<Int64>::min(),
-        scale);
-    TestCase<MinOrMaxMocker<true>> decimal256_case(
-        ExecutorWindowAgg::type_decimal256,
-        input_decimal_vec,
-        "max",
-        std::numeric_limits<Int64>::min(),
-        scale);
+    TestCase<MinOrMaxMocker<true>> int_case(ExecutorWindowAgg::type_int, input_int_vec, "max", 0);
+    TestCase<MinOrMaxMocker<true>> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "max", scale);
+    TestCase<MinOrMaxMocker<true>> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "max", scale);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
