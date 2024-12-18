@@ -841,8 +841,13 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         {
             if constexpr (enable_prefetch)
             {
-                auto emplace_result_hold
-                    = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers, agg_process_info.hashvals);
+                auto emplace_result_hold = emplaceOrFindKey<only_lookup>(
+                    method,
+                    state,
+                    i,
+                    *aggregates_pool,
+                    sort_key_containers,
+                    agg_process_info.hashvals);
 
                 HANDLE_AGG_EMPLACE_RESULT
             }
@@ -961,8 +966,13 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         AggregateDataPtr aggregate_data = nullptr;
         if constexpr (enable_prefetch)
         {
-            auto emplace_result_holder
-                = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers, agg_process_info.hashvals);
+            auto emplace_result_holder = emplaceOrFindKey<only_lookup>(
+                method,
+                state,
+                i,
+                *aggregates_pool,
+                sort_key_containers,
+                agg_process_info.hashvals);
 
             HANDLE_AGG_EMPLACE_RESULT
         }
