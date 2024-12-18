@@ -438,6 +438,11 @@ public:
         this->nested_function->reset(this->nestedPlace(place));
     }
 
+    void prepareWindow(AggregateDataPtr __restrict place) const override
+    {
+        this->nested_function->prepareWindow(this->nestedPlace(place));
+    }
+
     void addBatchSinglePlace( // NOLINT(google-default-arguments)
         size_t start_offset,
         size_t batch_size,
@@ -552,6 +557,11 @@ public:
     void reset(AggregateDataPtr __restrict place) const override
     {
         this->nested_function->reset(this->nestedPlace(place));
+    }
+
+    void prepareWindow(AggregateDataPtr __restrict place) const override
+    {
+        this->nested_function->prepareWindow(this->nestedPlace(place));
     }
 
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }

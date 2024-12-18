@@ -359,8 +359,6 @@ public:
         new (place) Data;
     }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override {}
-
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
@@ -374,6 +372,8 @@ public:
     }
 
     void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
+
+    void prepareWindow(AggregateDataPtr __restrict) const override {}
 
     /// Vectorized version when there is no GROUP BY keys.
     void addBatchSinglePlace(

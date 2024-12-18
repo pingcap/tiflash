@@ -61,6 +61,8 @@ public:
 
     void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
 
+    void prepareWindow(AggregateDataPtr __restrict) const override {}
+
     void addBatchSinglePlace(
         size_t start_offset,
         size_t batch_size,
@@ -189,6 +191,8 @@ public:
 
     void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
 
+    void prepareWindow(AggregateDataPtr __restrict) const override {}
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         data(place).count += data(rhs).count;
@@ -241,8 +245,6 @@ public:
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override {}
-
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         for (size_t i = 0; i < number_of_arguments; ++i)
@@ -262,6 +264,8 @@ public:
     }
 
     void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
+
+    void prepareWindow(AggregateDataPtr __restrict) const override {}
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {

@@ -48,11 +48,13 @@ private:
     T value;
 
     // It's only used in window aggregation
-    mutable std::unique_ptr<std::deque<T>> saved_values;
+    mutable std::deque<T> * saved_values;
 
     using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
 public:
+    ~SingleValueDataFixed() { delete saved_values; }
+
     bool has() const { return has_value; }
 
     void setCollators(const TiDB::TiDBCollators &) {}
@@ -79,31 +81,31 @@ public:
             readBinary(value, buf);
     }
 
-    void insertMaxResultInto(IColumn & to) { insertMinOrMaxResultInto<false>(to); }
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
-    void insertMinResultInto(IColumn & to) { insertMinOrMaxResultInto<true>(to); }
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     template <bool is_min>
-    void insertMinOrMaxResultInto(IColumn & to)
+    void insertMinOrMaxResultInto(IColumn & to) const
     {
         if (has())
         {
             auto size = saved_values->size();
-            value = (*saved_values)[0];
+            T tmp = (*saved_values)[0];
             for (size_t i = 1; i < size; i++)
             {
                 if constexpr (is_min)
                 {
-                    if ((*saved_values)[i] < value)
-                        value = (*saved_values)[i];
+                    if ((*saved_values)[i] < tmp)
+                        tmp = (*saved_values)[i];
                 }
                 else
                 {
-                    if (value < (*saved_values)[i])
-                        value = (*saved_values)[i];
+                    if (tmp < (*saved_values)[i])
+                        tmp = (*saved_values)[i];
                 }
             }
-            static_cast<ColumnType &>(to).getData().push_back(value);
+            static_cast<ColumnType &>(to).getData().push_back(tmp);
         }
         else
         {
@@ -111,7 +113,11 @@ public:
         }
     }
 
-    void prepareWindow() { saved_values = std::make_unique<std::deque<T>>(); }
+    void prepareWindow()
+    {
+        saved_values = new std::deque<T>();
+        std::cout << "saved_values: " << saved_values << std::endl;
+    }
 
     void reset()
     {
@@ -131,9 +137,6 @@ public:
     {
         has_value = true;
         value = static_cast<const ColumnType &>(column).getData()[row_num];
-
-        if (saved_values)
-            saved_values->push_back(value);
     }
 
     /// Assuming to.has()
@@ -141,8 +144,6 @@ public:
     {
         has_value = true;
         value = to.value;
-        if (saved_values)
-            saved_values->push_back(value);
     }
 
     bool changeFirstTime(const IColumn & column, size_t row_num, Arena * arena)
@@ -186,7 +187,11 @@ public:
 
     bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || static_cast<const ColumnType &>(column).getData()[row_num] < value)
+        auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
+        if (saved_values != nullptr)
+            saved_values->push_back(to_value);
+
+        if (!has() || to_value < value)
         {
             change(column, row_num, arena);
             return true;
@@ -197,6 +202,9 @@ public:
 
     bool changeIfLess(const Self & to, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saved_values->push_back(to.value);
+
         if (to.has() && (!has() || to.value < value))
         {
             change(to, arena);
@@ -208,7 +216,11 @@ public:
 
     bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || static_cast<const ColumnType &>(column).getData()[row_num] > value)
+        auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
+        if (saved_values != nullptr)
+            saved_values->push_back(to_value);
+
+        if (!has() || to_value > value)
         {
             change(column, row_num, arena);
             return true;
@@ -219,6 +231,9 @@ public:
 
     bool changeIfGreater(const Self & to, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saved_values->push_back(to.value);
+
         if (to.has() && (!has() || to.value > value))
         {
             change(to, arena);
@@ -252,7 +267,7 @@ private:
 
     // TODO use std::string is inefficient
     // It's only used in window aggregation
-    mutable std::unique_ptr<std::deque<std::string>> saved_values;
+    mutable std::deque<std::string> * saved_values{};
 
     bool less(const StringRef & a, const StringRef & b) const
     {
@@ -276,7 +291,7 @@ private:
     }
 
 public:
-    static constexpr Int32 AUTOMATIC_STORAGE_SIZE = 72;
+    static constexpr Int32 AUTOMATIC_STORAGE_SIZE = 64;
     static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity)
         - sizeof(large_data) - sizeof(TiDB::TiDBCollatorPtr) - sizeof(std::unique_ptr<std::deque<std::string>>);
 
@@ -284,6 +299,8 @@ private:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
 
 public:
+    ~SingleValueDataString() { delete saved_values; }
+
     bool has() const { return size >= 0; }
 
     const char * getData() const { return size <= MAX_SMALL_STRING_SIZE ? small_data : large_data; }
@@ -353,12 +370,12 @@ public:
         }
     }
 
-    void insertMaxResultInto(IColumn & to) { insertMinOrMaxResultInto<false>(to); }
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
-    void insertMinResultInto(IColumn & to) { insertMinOrMaxResultInto<true>(to); }
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     template <bool is_min>
-    void insertMinOrMaxResultInto(IColumn & to)
+    void insertMinOrMaxResultInto(IColumn & to) const
     {
         if (has())
         {
@@ -387,7 +404,7 @@ public:
         }
     }
 
-    void prepareWindow() { saved_values = std::make_unique<std::deque<std::string>>(); }
+    void prepareWindow() { saved_values = new std::deque<std::string>(); }
 
     void reset()
     {
@@ -403,6 +420,8 @@ public:
             size = -1;
     }
 
+    void saveValue(StringRef value) { saved_values->push_back(value.toString()); }
+
     /// Assuming to.has()
     void changeImpl(StringRef value, Arena * arena)
     {
@@ -415,9 +434,6 @@ public:
 
             if (size > 0)
                 memcpy(small_data, value.data, size);
-
-            if (saved_values)
-                saved_values->push_back(std::string(small_data, size));
         }
         else
         {
@@ -430,9 +446,6 @@ public:
 
             size = value_size;
             memcpy(large_data, value.data, size);
-
-            if (saved_values)
-                saved_values->push_back(std::string(large_data, size));
         }
     }
 
@@ -484,6 +497,9 @@ public:
 
     bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
+
         if (!has()
             || less(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num), getStringRef()))
         {
@@ -496,6 +512,9 @@ public:
 
     bool changeIfLess(const Self & to, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saveValue(to.getStringRef());
+
         // todo should check the collator in `to` and `this`
         if (to.has() && (!has() || less(to.getStringRef(), getStringRef())))
         {
@@ -508,6 +527,9 @@ public:
 
     bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
+
         if (!has()
             || greater(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num), getStringRef()))
         {
@@ -520,6 +542,9 @@ public:
 
     bool changeIfGreater(const Self & to, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saveValue(to.getStringRef());
+
         if (to.has() && (!has() || greater(to.getStringRef(), getStringRef())))
         {
             change(to, arena);
@@ -552,9 +577,11 @@ private:
     Field value;
 
     // It's only used in window aggregation
-    std::unique_ptr<std::deque<Field>> saved_values;
+    mutable std::deque<Field> * saved_values;
 
 public:
+    ~SingleValueDataGeneric() { delete saved_values; }
+
     bool has() const { return !value.isNull(); }
 
     void setCollators(const TiDB::TiDBCollators &) {}
@@ -587,31 +614,31 @@ public:
             data_type.deserializeBinary(value, buf);
     }
 
-    void insertMaxResultInto(IColumn & to) { insertMinOrMaxResultInto<false>(to); }
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
-    void insertMinResultInto(IColumn & to) { insertMinOrMaxResultInto<true>(to); }
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     template <bool is_min>
-    void insertMinOrMaxResultInto(IColumn & to)
+    void insertMinOrMaxResultInto(IColumn & to) const
     {
         if (has())
         {
             auto size = saved_values->size();
-            value = (*saved_values)[0];
+            Field tmp = (*saved_values)[0];
             for (size_t i = 1; i < size; i++)
             {
                 if constexpr (is_min)
                 {
-                    if ((*saved_values)[i] < value)
-                        value = (*saved_values)[i];
+                    if ((*saved_values)[i] < tmp)
+                        tmp = (*saved_values)[i];
                 }
                 else
                 {
-                    if (value < (*saved_values)[i])
-                        value = (*saved_values)[i];
+                    if (tmp < (*saved_values)[i])
+                        tmp = (*saved_values)[i];
                 }
             }
-            to.insert(value);
+            to.insert(tmp);
         }
         else
         {
@@ -619,7 +646,7 @@ public:
         }
     }
 
-    void prepareWindow() { saved_values = std::make_unique<std::deque<Field>>(); }
+    void prepareWindow() { saved_values = new std::deque<Field>(); }
 
     void reset()
     {
@@ -635,19 +662,9 @@ public:
             value = Field();
     }
 
-    void change(const IColumn & column, size_t row_num, Arena *)
-    {
-        column.get(row_num, value);
-        if (saved_values)
-            saved_values->push_back(value);
-    }
+    void change(const IColumn & column, size_t row_num, Arena *) { column.get(row_num, value); }
 
-    void change(const Self & to, Arena *)
-    {
-        value = to.value;
-        if (saved_values)
-            saved_values->push_back(value);
-    }
+    void change(const Self & to, Arena *) { value = to.value; }
 
     bool changeFirstTime(const IColumn & column, size_t row_num, Arena * arena)
     {
@@ -693,12 +710,19 @@ public:
         if (!has())
         {
             change(column, row_num, arena);
+
+            if (saved_values != nullptr)
+                saved_values->push_back(value);
             return true;
         }
         else
         {
             Field new_value;
             column.get(row_num, new_value);
+
+            if (saved_values != nullptr)
+                saved_values->push_back(new_value);
+
             if (new_value < value)
             {
                 value = new_value;
@@ -711,6 +735,9 @@ public:
 
     bool changeIfLess(const Self & to, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saved_values->push_back(to.value);
+
         if (to.has() && (!has() || to.value < value))
         {
             change(to, arena);
@@ -725,12 +752,19 @@ public:
         if (!has())
         {
             change(column, row_num, arena);
+
+            if (saved_values != nullptr)
+                saved_values->push_back(value);
             return true;
         }
         else
         {
             Field new_value;
             column.get(row_num, new_value);
+
+            if (saved_values != nullptr)
+                saved_values->push_back(new_value);
+
             if (new_value > value)
             {
                 value = new_value;
@@ -743,6 +777,9 @@ public:
 
     bool changeIfGreater(const Self & to, Arena * arena)
     {
+        if (saved_values != nullptr)
+            saved_values->push_back(to.value);
+
         if (to.has() && (!has() || to.value > value))
         {
             change(to, arena);
@@ -774,13 +811,43 @@ struct AggregateFunctionMinData : Data
     }
     bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfLess(to, arena); }
 
+    void prepareWindow()
+    {
+        is_in_window = true;
+        Data::prepareWindow();
+    }
+
+    void insertResultInto(IColumn & to) const
+    {
+        if (is_in_window)
+            Data::insertMinResultInto(to);
+        else
+            Data::insertResultInto(to);
+    }
+
     static const char * name() { return "min"; }
+
+    bool is_in_window = false;
 };
 
 template <typename Data>
 struct AggregateFunctionMaxData : Data
 {
     using Self = AggregateFunctionMaxData<Data>;
+
+    void prepareWindow()
+    {
+        is_in_window = true;
+        Data::prepareWindow();
+    }
+
+    void insertResultInto(IColumn & to) const
+    {
+        if (is_in_window)
+            Data::insertMaxResultInto(to);
+        else
+            Data::insertResultInto(to);
+    }
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
     {
@@ -789,6 +856,8 @@ struct AggregateFunctionMaxData : Data
     bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfGreater(to, arena); }
 
     static const char * name() { return "max"; }
+
+    bool is_in_window = false;
 };
 
 template <typename Data>
@@ -931,14 +1000,14 @@ public:
         this->data(place).changeIfBetter(*columns[0], row_num, arena);
     }
 
-    void prepareWindow(AggregateDataPtr __restrict place) const override { this->data(place).prepareWindow(); }
-
     void decrease(AggregateDataPtr __restrict place, const IColumn **, size_t, Arena *) const override
     {
         this->data(place).decrease();
     }
 
     void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
+
+    void prepareWindow(AggregateDataPtr __restrict place) const override { this->data(place).prepareWindow(); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
