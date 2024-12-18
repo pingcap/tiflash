@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/setThreadName.h>
@@ -45,8 +46,6 @@
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
-
-#include "Common/Exception.h"
 
 namespace DB
 {
@@ -495,31 +494,9 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
 struct GlobalRegionMap
 {
     using Key = std::string;
-    // using BlockVal = std::pair<RegionPtr, RegionPtrWithBlock::CachePtr>;
-    // std::unordered_map<Key, BlockVal> regions_block;
     using SnapPath = std::pair<RegionPtr, std::vector<DM::ExternalDTFileInfo>>;
     std::unordered_map<Key, SnapPath> regions_snap_files;
     std::mutex mutex;
-
-#if 0
-    void insertRegionCache(const Key & name, BlockVal && val)
-    {
-        auto _ = std::lock_guard(mutex);
-        regions_block[name] = std::move(val);
-    }
-    BlockVal popRegionCache(const Key & name)
-    {
-        auto _ = std::lock_guard(mutex);
-        if (auto it = regions_block.find(name); it == regions_block.end())
-            throw Exception(std::string(__PRETTY_FUNCTION__) + " ... " + name);
-        else
-        {
-            auto ret = std::move(it->second);
-            regions_block.erase(it);
-            return ret;
-        }
-    }
-#endif
 
     void insertRegionSnap(const Key & name, SnapPath && val)
     {
@@ -541,158 +518,6 @@ struct GlobalRegionMap
 };
 
 static GlobalRegionMap GLOBAL_REGION_MAP;
-
-#if 0
-/// Mock to pre-decode snapshot to block then apply
-
-/// Pre-decode region data into block cache and remove committed data from `region`
-RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
-{
-    auto keyspace_id = region->getKeyspaceID();
-    const auto & tmt = context.getTMTContext();
-    {
-        Timestamp gc_safe_point = 0;
-        if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
-        {
-            gc_safe_point = PDClientHelper::getGCSafePointWithRetry(
-                pd_client,
-                keyspace_id,
-                false,
-                context.getSettingsRef().safe_point_update_interval_seconds);
-        }
-        /**
-         * In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
-         * If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
-         */
-        region->tryCompactionFilter(gc_safe_point);
-    }
-    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
-    try
-    {
-        data_list_read = ReadRegionCommitCache(region, true);
-        if (!data_list_read)
-            return nullptr;
-    }
-    catch (const Exception & e)
-    {
-        if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
-        {
-            // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_WARNING(
-                Logger::get(__PRETTY_FUNCTION__),
-                "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
-                e.displayText());
-            // set data_list_read and let apply snapshot process use empty block
-            data_list_read = RegionDataReadInfoList();
-        }
-        else
-            throw;
-    }
-
-    TableID table_id = region->getMappedTableID();
-    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
-    Block res_block;
-
-    const auto atomic_decode = [&](bool force_decode) -> bool {
-        Stopwatch watch;
-        auto storage = tmt.getStorages().get(keyspace_id, table_id);
-        if (storage == nullptr || storage->isTombstone())
-        {
-            if (!force_decode) // Need to update.
-                return false;
-            if (storage == nullptr) // Table must have just been GC-ed.
-                return true;
-        }
-
-        /// Get a structure read lock throughout decode, during which schema must not change.
-        TableStructureLockHolder lock;
-        try
-        {
-            lock = storage->lockStructureForShare(getThreadNameAndID());
-        }
-        catch (DB::Exception & e)
-        {
-            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to decode snapshot, consider the decode done.
-            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
-                return true;
-            else
-                throw;
-        }
-
-        DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot
-            = storage->getSchemaSnapshotAndBlockForDecoding(lock, false, true).first;
-        res_block = createBlockSortByColumnID(decoding_schema_snapshot);
-        auto reader = RegionBlockReader(decoding_schema_snapshot);
-        return reader.read(res_block, *data_list_read, force_decode);
-    };
-
-    /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
-    /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
-    /// decoding data. Check the test case for more details.
-    FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_snapshot);
-
-    if (!atomic_decode(false))
-    {
-        tmt.getSchemaSyncerManager()->syncSchemas(context, keyspace_id);
-
-        if (!atomic_decode(true))
-            throw Exception(
-                "Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
-                ErrorCodes::LOGICAL_ERROR);
-    }
-
-    RemoveRegionCommitCache(region, *data_list_read);
-
-    return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
-}
-#endif
-
-void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(
-    Context & context,
-    const ASTs & args,
-    DBGInvoker::Printer output)
-{
-    FmtBuffer fmt_buf;
-    auto region = GenDbgRegionSnapshotWithData(context, args);
-    const auto region_name = "__snap_" + std::to_string(region->id());
-    fmt_buf.fmtAppend("pre-handle {} snapshot with data {}", region->toString(false), region->dataInfo());
-#if 0
-    auto & tmt = context.getTMTContext();
-    auto block_cache = GenRegionPreDecodeBlockData(region, tmt.getContext());
-    fmt_buf.append(", pre-decode block cache");
-    fmt_buf.fmtAppend(
-        " {{ schema_version: ?, data_list size: {}, block row: {} col: {} bytes: {} }}",
-        block_cache->data_list_read.size(),
-        block_cache->block.rows(),
-        block_cache->block.columns(),
-        block_cache->block.bytes());
-    GLOBAL_REGION_MAP.insertRegionCache(region_name, {region, std::move(block_cache)});
-#endif
-    output(fmt_buf.toString());
-}
-
-void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(
-    Context & /*context*/,
-    const ASTs & args,
-    DBGInvoker::Printer output)
-{
-    if (args.size() != 1)
-    {
-        throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value));
-#if 0
-    auto [region, block_cache] = GLOBAL_REGION_MAP.popRegionCache("__snap_" + std::to_string(region_id));
-    auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>(
-        {region, std::move(block_cache)},
-        tmt);
-#endif
-
-    output(fmt::format("success apply {} with block cache", region_id));
-}
-
 
 /// Mock to pre-decode snapshot to DTFile(s) then apply
 
