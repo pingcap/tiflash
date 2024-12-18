@@ -48,40 +48,73 @@ const std::vector<Int64> input_decimal_vec{
     std::stoi(input_string_vec_aux[6]),
     std::stoi(input_string_vec_aux[7])};
 
-struct SumMocker
-{
-    inline static void add(Int64 & res, Int64 data) noexcept { res += data; }
-    inline static void decrease(Int64 & res, Int64 data) noexcept { res -= data; }
-    inline static void reset() noexcept {}
-};
-
-struct CountMocker
-{
-    inline static void add(Int64 & res, Int64) noexcept { res++; }
-    inline static void decrease(Int64 & res, Int64) noexcept { res--; }
-    inline static void reset() noexcept {}
-};
-
-class AvgMocker
+class MockerBase
 {
 public:
-    AvgMocker()
-        : sum(0)
+    explicit MockerBase(Int32 scale_)
+        : scale(scale_)
+    {}
+
+    inline const std::vector<String> & getResults() noexcept { return results; }
+
+protected:
+    inline String convertResIntToString(Int64 res) const noexcept { return Decimal256(res).toString(scale); }
+
+    std::vector<String> results;
+    Int32 scale; // scale is 0 when test type is int
+};
+
+class SumMocker : public MockerBase
+{
+public:
+    explicit SumMocker(Int32 scale)
+        : MockerBase(scale)
+    {}
+
+    inline void add(Int64 data) noexcept { res += data; }
+    inline void decrease(Int64 data) noexcept { res -= data; }
+    inline void reset() noexcept { res = 0; }
+    inline void saveResult() noexcept { results.push_back(convertResIntToString(res)); }
+
+private:
+    Int64 res{};
+};
+
+class CountMocker : public MockerBase
+{
+public:
+    explicit CountMocker(Int32 scale)
+        : MockerBase(scale)
+    {}
+
+    inline void add(Int64) noexcept { res++; }
+    inline void decrease(Int64) noexcept { res--; }
+    inline void reset() noexcept { res = 0; }
+    inline void saveResult() noexcept { results.push_back(convertResIntToString(res)); }
+
+private:
+    Int64 res{};
+};
+
+class AvgMocker : public MockerBase
+{
+public:
+    explicit AvgMocker(Int32 scale)
+        : MockerBase(scale)
+        , sum(0)
         , count(0)
     {}
 
-    inline void add(Int64 & res, Int64 data) noexcept
+    inline void add(Int64 data) noexcept
     {
         sum += data;
         count++;
-        avgImpl(res);
     }
 
-    inline void decrease(Int64 & res, Int64 data) noexcept
+    inline void decrease(Int64 data) noexcept
     {
         sum -= data;
         count--;
-        avgImpl(res);
     }
 
     inline void reset() noexcept
@@ -90,34 +123,42 @@ public:
         count = 0;
     }
 
+    void saveResult() noexcept
+    {
+        WriteBufferFromOwnString wb;
+        writeFloatText(avgImpl(), wb);
+        results.push_back(wb.str());
+    }
+
 private:
-    inline void avgImpl(Int64 & res) const noexcept { res = sum / count; }
+    inline Float64 avgImpl() const noexcept { return static_cast<Float64>(sum) / static_cast<Float64>(count); }
 
     Int64 sum;
     Int64 count;
 };
 
 template <bool is_max>
-class MinOrMaxMocker
+class MinOrMaxMocker : public MockerBase
 {
 public:
-    inline void add(Int64 & res, Int64 data) noexcept
-    {
-        cmpAndChange(res, data);
-        saved_values.push_back(data);
-    }
+    explicit MinOrMaxMocker(Int32 scale)
+        : MockerBase(scale)
+    {}
 
-    inline void decrease(Int64 & res, Int64) noexcept
+    inline void add(Int64 data) noexcept { saved_values.push_back(data); }
+    inline void decrease(Int64) noexcept { saved_values.pop_front(); }
+    inline void reset() noexcept { saved_values.clear(); }
+
+    inline void saveResult() noexcept
     {
-        saved_values.pop_front();
-        res = is_max ? std::numeric_limits<Int64>::min() : std::numeric_limits<Int64>::max();
+        Int64 res = is_max ? std::numeric_limits<Int64>::min() : std::numeric_limits<Int64>::max();
 
         // Inefficient, but it's ok in the ut
         for (auto value : saved_values)
             cmpAndChange(res, value);
-    }
 
-    inline void reset() noexcept { saved_values.clear(); }
+        results.push_back(convertResIntToString(res));
+    }
 
 private:
     static void inline cmpAndChange(Int64 & res, Int64 value) noexcept
@@ -150,18 +191,19 @@ struct TestCase
         , input_vec(input_vec_)
         , agg_name(agg_name_)
         , init_res(init_res_)
-        , scale(scale_)
+        , mocker(scale_)
     {}
 
-    inline void addInMock(Int64 & res, Int64 row_idx) noexcept { mocker.add(res, input_vec[row_idx]); }
-    inline void decreaseInMock(Int64 & res, Int64 row_idx) noexcept { mocker.decrease(res, input_vec[row_idx]); }
+    inline void addInMock(Int64 row_idx) noexcept { mocker.add(input_vec[row_idx]); }
+    inline void decreaseInMock(Int64 row_idx) noexcept { mocker.decrease(input_vec[row_idx]); }
     inline void reset() noexcept { mocker.reset(); }
+    inline void saveResult() noexcept { mocker.saveResult(); }
+    inline const std::vector<String> & getResults() noexcept { return mocker.getResults(); }
 
     const DataTypePtr type;
     const std::vector<Int64> input_vec;
     const String agg_name;
     Int64 init_res;
-    int scale; // scale is 0 when test type is int
     OpMocker mocker;
 };
 
@@ -202,6 +244,8 @@ protected:
             return std::to_string(field.template get<Int64>());
         case Field::Types::Which::UInt64:
             return std::to_string(field.template get<UInt64>());
+        case Field::Types::Which::Float64:
+            return std::to_string(field.template get<Float64>());
         case Field::Types::Which::Decimal128:
             return field.template get<DecimalField<Decimal128>>().toString();
         case Field::Types::Which::Decimal256:
@@ -256,9 +300,6 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     agg_func->create(agg_state.data());
     agg_func->prepareWindow(agg_state.data());
 
-    std::vector<Int64> res_vec;
-    res_vec.reserve(10);
-
     const UInt32 col_row_num = test_case.input_vec.size();
 
     UInt32 reset_num = getResetNum();
@@ -268,7 +309,6 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     // Start test
     for (UInt32 i = 0; i < reset_num; i++)
     {
-        Int64 res = test_case.init_res;
         test_case.reset();
         std::cout << "----------- reset" << std::endl;
         agg_func->reset(agg_state.data());
@@ -285,8 +325,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
                 const UInt32 row_idx = getRowIdx(0, col_row_num - 1);
                 added_row_idx_queue.push_back(row_idx);
                 agg_func->add(agg_state.data(), &input_col, row_idx, &arena);
-                test_case.addInMock(res, row_idx);
-                std::cout << "add: " << test_case.input_vec[row_idx] << " res: " << res << std::endl;
+                test_case.addInMock(row_idx);
             }
 
             if likely (!added_row_idx_queue.empty())
@@ -298,17 +337,16 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
                     const UInt32 row_idx = added_row_idx_queue.front();
                     added_row_idx_queue.pop_front();
                     agg_func->decrease(agg_state.data(), &input_col, row_idx, &arena);
-                    test_case.decreaseInMock(res, row_idx);
-                    std::cout << "decrease: " << test_case.input_vec[row_idx] << " res: " << res << std::endl;
+                    test_case.decreaseInMock(row_idx);
                 }
             }
 
-            std::cout << "insert, res: " << res << std::endl;
             agg_func->insertResultInto(agg_state.data(), *res_col, &arena);
-            res_vec.push_back(res);
+            test_case.saveResult();
         }
     }
 
+    const std::vector<String> res_vec = test_case.getResults();
     size_t res_num = res_vec.size();
     ASSERT_EQ(res_num, res_col->size());
 
@@ -319,7 +357,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
         ASSERT_FALSE(res_field.isNull());
         std::cout << "i: " << i << std::endl;
         // No matter what type the result is, we always use decimal to convert the result to string so that it's easy to check result
-        ASSERT_EQ(Decimal256(res_vec[i]).toString(test_case.scale), getValue(res_field));
+        ASSERT_EQ(res_vec[i], getValue(res_field));
     }
 }
 
