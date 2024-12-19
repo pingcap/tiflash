@@ -3149,7 +3149,6 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
     UInt32 preceded_rows = 0;
 
     auto file_provider = dm_context.global_context.getFileProvider();
-
     for (size_t i = 0; i < dmfiles.size(); ++i)
     {
         const auto & dmfile = dmfiles[i];
@@ -3220,7 +3219,6 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     };
 
     auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, pack_filter_results, start_ts, dm_context);
-
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
