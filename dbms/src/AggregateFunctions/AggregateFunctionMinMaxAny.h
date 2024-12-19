@@ -113,11 +113,7 @@ public:
         }
     }
 
-    void prepareWindow()
-    {
-        saved_values = new std::deque<T>();
-        std::cout << "saved_values: " << saved_values << std::endl;
-    }
+    void prepareWindow() { saved_values = new std::deque<T>(); }
 
     void reset()
     {
@@ -396,7 +392,7 @@ public:
                 }
             }
 
-            static_cast<ColumnString &>(to).insertDataWithTerminatingZero(getData(), size);
+            static_cast<ColumnString &>(to).insertDataWithTerminatingZero(value.data, value.size);
         }
         else
         {

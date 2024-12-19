@@ -26,27 +26,39 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <limits>
+#include "DataTypes/DataTypeString.h"
 
 namespace DB
 {
 namespace tests
 {
-constexpr int scale = 2;
-const std::vector<String>
-    input_string_vec{"0", "71.94", "12.34", "-34.26", "80.02", "-84.39", "28.41", "45.32", "11.11", "-10.32"};
-const std::vector<String>
-    input_string_vec_aux{"0", "7194", "1234", "-3426", "8002", "-8439", "2841", "4532", "1111", "-1032"};
-const std::vector<Int64> input_int_vec{1, -2, 7, 4, 0, -3, -1, 0, 0, 9, 2, 0, -4, 2, 6, -3, 5};
-const std::vector<Int64> input_decimal_vec{
-    std::stoi(input_string_vec_aux[0]),
-    std::stoi(input_string_vec_aux[1]),
-    std::stoi(input_string_vec_aux[2]),
-    std::stoi(input_string_vec_aux[3]),
-    std::stoi(input_string_vec_aux[4]),
-    std::stoi(input_string_vec_aux[5]),
-    std::stoi(input_string_vec_aux[6]),
-    std::stoi(input_string_vec_aux[7])};
+const String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
+const UInt32 CHARACTERS_LEN = CHARACTERS.size();
+constexpr int SCALE = 2;
+std::vector<String> input_decimal_in_string_vec{
+    "0",
+    "71.94",
+    "12.34",
+    "-34.26",
+    "80.02",
+    "-84.39",
+    "28.41",
+    "45.32",
+    "11.11",
+    "-10.32"};
+std::vector<String>
+    input_decimal_in_string_vec_aux{"0", "7194", "1234", "-3426", "8002", "-8439", "2841", "4532", "1111", "-1032"};
+std::vector<Int64> input_int_vec{1, -2, 7, 4, 0, -3, -1, 0, 0, 9, 2, 0, -4, 2, 6, -3, 5};
+std::vector<Int64> input_decimal_vec{
+    std::stoi(input_decimal_in_string_vec_aux[0]),
+    std::stoi(input_decimal_in_string_vec_aux[1]),
+    std::stoi(input_decimal_in_string_vec_aux[2]),
+    std::stoi(input_decimal_in_string_vec_aux[3]),
+    std::stoi(input_decimal_in_string_vec_aux[4]),
+    std::stoi(input_decimal_in_string_vec_aux[5]),
+    std::stoi(input_decimal_in_string_vec_aux[6]),
+    std::stoi(input_decimal_in_string_vec_aux[7])};
+std::vector<String> input_string_vec;
 
 String eliminateTailing(String str)
 {
@@ -78,6 +90,8 @@ public:
     {}
 
     inline const std::vector<String> & getResults() noexcept { return results; }
+    inline static void addString(const String &) { throw Exception("Not implemented yet"); }
+    inline static void decreaseString() { throw Exception("Not implemented yet"); }
 
 protected:
     inline String convertResIntToString(Int64 res) const noexcept { return Decimal256(res).toString(scale); }
@@ -171,21 +185,39 @@ public:
 
     inline void add(Int64 data) noexcept { saved_values.push_back(data); }
     inline void decrease(Int64) noexcept { saved_values.pop_front(); }
-    inline void reset() noexcept { saved_values.clear(); }
+    inline void reset() noexcept
+    {
+        saved_values.clear();
+        saved_string_values.clear();
+    }
+
+    inline void addString(const String & data) noexcept { saved_string_values.push_back(data); }
+    inline void decreaseString() noexcept { saved_string_values.pop_front(); }
 
     inline void saveResult() noexcept
     {
-        Int64 res = is_max ? std::numeric_limits<Int64>::min() : std::numeric_limits<Int64>::max();
-
         // Inefficient, but it's ok in the ut
-        for (auto value : saved_values)
-            cmpAndChange(res, value);
-
-        results.push_back(convertResIntToString(res));
+        if (saved_string_values.empty())
+        {
+            Int64 res = saved_values[0];
+            auto size = saved_values.size();
+            for (size_t i = 1; i < size; i++)
+                cmpAndChange(res, saved_values[i]);
+            results.push_back(convertResIntToString(res));
+        }
+        else
+        {
+            String res = saved_string_values[0];
+            auto size = saved_string_values.size();
+            for (size_t i = 1; i < size; i++)
+                cmpAndChange(res, saved_string_values[i]);
+            results.push_back(res);
+        }
     }
 
 private:
-    static void inline cmpAndChange(Int64 & res, Int64 value) noexcept
+    template <typename T>
+    static void inline cmpAndChange(T & res, T value) noexcept
     {
         if constexpr (is_max)
         {
@@ -200,26 +232,56 @@ private:
     }
 
     std::deque<Int64> saved_values;
+    std::deque<String> saved_string_values;
 };
 
 template <typename OpMocker>
 struct TestCase
 {
-    TestCase(DataTypePtr type_, const std::vector<Int64> & input_vec_, const String & agg_name_, int scale_)
+    TestCase(
+        DataTypePtr type_,
+        const std::vector<Int64> & input_int_vec_,
+        const std::vector<String> & input_string_vec_,
+        const String & agg_name_,
+        int scale_)
         : type(type_)
-        , input_vec(input_vec_)
+        , input_int_vec(input_int_vec_)
+        , input_string_vec(input_string_vec_)
         , agg_name(agg_name_)
         , mocker(scale_)
     {}
 
-    inline void addInMock(Int64 row_idx) noexcept { mocker.add(input_vec[row_idx]); }
-    inline void decreaseInMock(Int64 row_idx) noexcept { mocker.decrease(input_vec[row_idx]); }
+    inline void addInMock(Int64 row_idx) noexcept
+    {
+        if (input_string_vec.empty())
+            mocker.add(input_int_vec[row_idx]);
+        else
+            mocker.addString(input_string_vec[row_idx]);
+    }
+
+    inline void decreaseInMock(Int64 row_idx) noexcept
+    {
+        if (input_string_vec.empty())
+            mocker.decrease(input_int_vec[row_idx]);
+        else
+            mocker.decreaseString();
+    }
+
+    inline UInt32 getRowNum() noexcept
+    {
+        if (input_string_vec.empty())
+            return input_int_vec.size();
+        else
+            return input_string_vec.size();
+    }
+
     inline void reset() noexcept { mocker.reset(); }
     inline void saveResult() noexcept { mocker.saveResult(); }
     inline const std::vector<String> & getResults() noexcept { return mocker.getResults(); }
 
     const DataTypePtr type;
-    const std::vector<Int64> input_vec;
+    const std::vector<Int64> input_int_vec;
+    const std::vector<String> input_string_vec;
     const String agg_name;
     OpMocker mocker;
 };
@@ -228,6 +290,37 @@ class ExecutorWindowAgg : public DB::tests::AggregationTest
 {
 public:
     void SetUp() override { dre = std::default_random_engine(r()); }
+
+    static void SetUpTestCase()
+    {
+        AggregationTest::SetUpTestCase();
+
+        std::random_device r;
+        std::default_random_engine dre(r());
+        std::uniform_int_distribution<UInt32> di;
+
+        di.param(std::uniform_int_distribution<UInt32>::param_type{5, 15});
+        auto elem_num = di(dre);
+        for (UInt32 i = 0; i < elem_num; i++)
+        {
+            di.param(std::uniform_int_distribution<UInt32>::param_type{0, 64});
+            auto len = di(dre);
+            di.param(std::uniform_int_distribution<UInt32>::param_type{0, CHARACTERS_LEN - 1});
+
+            String str;
+            for (UInt32 j = 0; j < len; j++)
+            {
+                auto idx = di(dre);
+                str += CHARACTERS[idx];
+            }
+            input_string_vec.push_back(str);
+        }
+
+        input_int_col = createColumn<Int64>(input_int_vec).column;
+        input_decimal128_col = createColumn<Decimal128>(std::make_tuple(10, SCALE), input_decimal_in_string_vec).column;
+        input_decimal256_col = createColumn<Decimal256>(std::make_tuple(30, SCALE), input_decimal_in_string_vec).column;
+        input_string_col = createColumn<String>(input_string_vec).column;
+    }
 
 private:
     // range: [begin, end]
@@ -249,6 +342,8 @@ protected:
             return &(*ExecutorWindowAgg::input_decimal128_col);
         else if (const auto * tmp = dynamic_cast<const DataTypeDecimal256 *>(type); tmp != nullptr)
             return &(*ExecutorWindowAgg::input_decimal256_col);
+        else if (const auto * tmp = dynamic_cast<const DataTypeString *>(type); tmp != nullptr)
+            return &(*ExecutorWindowAgg::input_string_col);
         else
             throw Exception("Invalid data type");
     }
@@ -263,6 +358,8 @@ protected:
             return std::to_string(field.template get<UInt64>());
         case Field::Types::Which::Float64:
             return std::to_string(field.template get<Float64>());
+        case Field::Types::Which::String:
+            return field.template get<String>();
         case Field::Types::Which::Decimal64:
             return eliminateTailing(field.template get<DecimalField<Decimal64>>().toString());
         case Field::Types::Which::Decimal128:
@@ -284,24 +381,26 @@ protected:
     std::default_random_engine dre;
     std::uniform_int_distribution<UInt32> di;
 
-    static const ColumnPtr input_int_col;
-    static const ColumnPtr input_decimal128_col;
-    static const ColumnPtr input_decimal256_col;
+    static ColumnPtr input_int_col;
+    static ColumnPtr input_decimal128_col;
+    static ColumnPtr input_decimal256_col;
+    static ColumnPtr input_string_col;
 
     static DataTypePtr type_int;
     static DataTypePtr type_decimal128;
     static DataTypePtr type_decimal256;
+    static DataTypePtr type_string;
 };
 
-const ColumnPtr ExecutorWindowAgg::input_int_col = createColumn<Int64>(input_int_vec).column;
-const ColumnPtr ExecutorWindowAgg::input_decimal128_col
-    = createColumn<Decimal128>(std::make_tuple(10, scale), input_string_vec).column;
-const ColumnPtr ExecutorWindowAgg::input_decimal256_col
-    = createColumn<Decimal256>(std::make_tuple(30, scale), input_string_vec).column;
+ColumnPtr ExecutorWindowAgg::input_int_col;
+ColumnPtr ExecutorWindowAgg::input_decimal128_col;
+ColumnPtr ExecutorWindowAgg::input_decimal256_col;
+ColumnPtr ExecutorWindowAgg::input_string_col;
 
 DataTypePtr ExecutorWindowAgg::type_int = std::make_shared<DataTypeInt64>();
-DataTypePtr ExecutorWindowAgg::type_decimal128 = std::make_shared<DataTypeDecimal128>(10, scale);
-DataTypePtr ExecutorWindowAgg::type_decimal256 = std::make_shared<DataTypeDecimal256>(30, scale);
+DataTypePtr ExecutorWindowAgg::type_decimal128 = std::make_shared<DataTypeDecimal128>(10, SCALE);
+DataTypePtr ExecutorWindowAgg::type_decimal256 = std::make_shared<DataTypeDecimal256>(30, SCALE);
+DataTypePtr ExecutorWindowAgg::type_string = std::make_shared<DataTypeString>();
 
 template <typename Op>
 void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
@@ -319,7 +418,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     agg_func->create(agg_state.data());
     agg_func->prepareWindow(agg_state.data());
 
-    const UInt32 col_row_num = test_case.input_vec.size();
+    const UInt32 col_row_num = test_case.getRowNum();
 
     UInt32 reset_num = getResetNum();
     auto res_col = return_type->createColumn();
@@ -328,6 +427,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     // Start test
     for (UInt32 i = 0; i < reset_num; i++)
     {
+        std::cout << "reset ---------" << std::endl; // TODO delete
         test_case.reset();
         agg_func->reset(agg_state.data());
         added_row_idx_queue.clear();
@@ -371,9 +471,9 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     Field res_field;
     for (size_t i = 0; i < res_num; i++)
     {
+        std::cout << "i: " << i << std::endl; // TODO delete
         res_col->get(i, res_field);
         ASSERT_FALSE(res_field.isNull());
-
         // No matter what type the result is, we always use decimal to convert the result to string so that it's easy to check result
         ASSERT_EQ(res_vec[i], getValue(res_field));
     }
@@ -382,9 +482,9 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
 TEST_F(ExecutorWindowAgg, Sum)
 try
 {
-    TestCase<SumMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "sum", 0);
-    TestCase<SumMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "sum", scale);
-    TestCase<SumMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "sum", scale);
+    TestCase<SumMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "sum", 0);
+    TestCase<SumMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "sum", SCALE);
+    TestCase<SumMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "sum", SCALE);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
@@ -396,9 +496,9 @@ CATCH
 TEST_F(ExecutorWindowAgg, Count)
 try
 {
-    TestCase<CountMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "count", 0);
-    TestCase<CountMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "count", 0);
-    TestCase<CountMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "count", 0);
+    TestCase<CountMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "count", 0);
+    TestCase<CountMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "count", 0);
+    TestCase<CountMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "count", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
@@ -409,9 +509,9 @@ CATCH
 TEST_F(ExecutorWindowAgg, Avg)
 try
 {
-    TestCase<AvgMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, "avg", 0);
-    TestCase<AvgMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "avg", scale);
-    TestCase<AvgMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "avg", scale);
+    TestCase<AvgMocker> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "avg", 0);
+    TestCase<AvgMocker> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "avg", SCALE);
+    TestCase<AvgMocker> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "avg", SCALE);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
@@ -419,41 +519,40 @@ try
 }
 CATCH
 
-// TODO use unique_ptr in data
 // TODO ensure that if data will be called destructor
+// TODO DataTypeMyDuration SingleValueDataGeneric and check it indeed be tested
 TEST_F(ExecutorWindowAgg, Min)
 try
 {
-    // TODO add string type etc... in AggregateFunctionMinMaxAny.h
-    TestCase<MinOrMaxMocker<false>> int_case(ExecutorWindowAgg::type_int, input_int_vec, "min", 0);
-    TestCase<MinOrMaxMocker<false>> decimal128_case(
-        ExecutorWindowAgg::type_decimal128,
-        input_decimal_vec,
-        "min",
-        scale);
-    TestCase<MinOrMaxMocker<false>> decimal256_case(
-        ExecutorWindowAgg::type_decimal256,
-        input_decimal_vec,
-        "min",
-        scale);
+    TestCase<MinOrMaxMocker<false>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "min", 0);
+    TestCase<MinOrMaxMocker<false>>
+        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "min", SCALE);
+    TestCase<MinOrMaxMocker<false>>
+        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "min", SCALE);
+    TestCase<MinOrMaxMocker<false>> string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "min", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
     executeWindowAggTest(decimal256_case);
+    executeWindowAggTest(string_case);
 }
 CATCH
 
+// TODO DataTypeMyDuration SingleValueDataGeneric and check it indeed be tested
 TEST_F(ExecutorWindowAgg, Max)
 try
 {
-    // TODO add string type etc... in AggregateFunctionMinMaxAny.h
-    TestCase<MinOrMaxMocker<true>> int_case(ExecutorWindowAgg::type_int, input_int_vec, "max", 0);
-    TestCase<MinOrMaxMocker<true>> decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, "max", scale);
-    TestCase<MinOrMaxMocker<true>> decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, "max", scale);
+    TestCase<MinOrMaxMocker<true>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "max", 0);
+    TestCase<MinOrMaxMocker<true>>
+        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "max", SCALE);
+    TestCase<MinOrMaxMocker<true>>
+        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "max", SCALE);
+    TestCase<MinOrMaxMocker<true>> string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "max", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
     executeWindowAggTest(decimal256_case);
+    executeWindowAggTest(string_case);
 }
 CATCH
 
