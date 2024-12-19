@@ -20,13 +20,13 @@
 #include <Common/Decimal.h>
 #include <Core/Field.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "DataTypes/DataTypeString.h"
 
 namespace DB
 {
@@ -59,6 +59,7 @@ std::vector<Int64> input_decimal_vec{
     std::stoi(input_decimal_in_string_vec_aux[6]),
     std::stoi(input_decimal_in_string_vec_aux[7])};
 std::vector<String> input_string_vec;
+std::vector<Int64> input_duration_vec{12, 43, 2, 0, 54, 23, 65, 76, 23, 12, 43, 56, 2, 2};
 
 String eliminateTailing(String str)
 {
@@ -320,6 +321,7 @@ public:
         input_decimal128_col = createColumn<Decimal128>(std::make_tuple(10, SCALE), input_decimal_in_string_vec).column;
         input_decimal256_col = createColumn<Decimal256>(std::make_tuple(30, SCALE), input_decimal_in_string_vec).column;
         input_string_col = createColumn<String>(input_string_vec).column;
+        input_duration_col = createColumn<Int64>(input_duration_vec).column;
     }
 
 private:
@@ -344,6 +346,8 @@ protected:
             return &(*ExecutorWindowAgg::input_decimal256_col);
         else if (const auto * tmp = dynamic_cast<const DataTypeString *>(type); tmp != nullptr)
             return &(*ExecutorWindowAgg::input_string_col);
+        else if (const auto * tmp = dynamic_cast<const DataTypeMyDuration *>(type); tmp != nullptr)
+            return &(*ExecutorWindowAgg::input_duration_col);
         else
             throw Exception("Invalid data type");
     }
@@ -385,22 +389,26 @@ protected:
     static ColumnPtr input_decimal128_col;
     static ColumnPtr input_decimal256_col;
     static ColumnPtr input_string_col;
+    static ColumnPtr input_duration_col;
 
     static DataTypePtr type_int;
     static DataTypePtr type_decimal128;
     static DataTypePtr type_decimal256;
     static DataTypePtr type_string;
+    static DataTypePtr type_duration;
 };
 
 ColumnPtr ExecutorWindowAgg::input_int_col;
 ColumnPtr ExecutorWindowAgg::input_decimal128_col;
 ColumnPtr ExecutorWindowAgg::input_decimal256_col;
 ColumnPtr ExecutorWindowAgg::input_string_col;
+ColumnPtr ExecutorWindowAgg::input_duration_col;
 
 DataTypePtr ExecutorWindowAgg::type_int = std::make_shared<DataTypeInt64>();
 DataTypePtr ExecutorWindowAgg::type_decimal128 = std::make_shared<DataTypeDecimal128>(10, SCALE);
 DataTypePtr ExecutorWindowAgg::type_decimal256 = std::make_shared<DataTypeDecimal256>(30, SCALE);
 DataTypePtr ExecutorWindowAgg::type_string = std::make_shared<DataTypeString>();
+DataTypePtr ExecutorWindowAgg::type_duration = std::make_shared<DataTypeMyDuration>();
 
 template <typename Op>
 void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
@@ -520,7 +528,6 @@ try
 CATCH
 
 // TODO ensure that if data will be called destructor
-// TODO DataTypeMyDuration SingleValueDataGeneric and check it indeed be tested
 TEST_F(ExecutorWindowAgg, Min)
 try
 {
@@ -530,15 +537,16 @@ try
     TestCase<MinOrMaxMocker<false>>
         decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "min", SCALE);
     TestCase<MinOrMaxMocker<false>> string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "min", 0);
+    TestCase<MinOrMaxMocker<false>> duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "min", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
     executeWindowAggTest(decimal256_case);
     executeWindowAggTest(string_case);
+    executeWindowAggTest(duration_case);
 }
 CATCH
 
-// TODO DataTypeMyDuration SingleValueDataGeneric and check it indeed be tested
 TEST_F(ExecutorWindowAgg, Max)
 try
 {
@@ -548,11 +556,13 @@ try
     TestCase<MinOrMaxMocker<true>>
         decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "max", SCALE);
     TestCase<MinOrMaxMocker<true>> string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "max", 0);
+    TestCase<MinOrMaxMocker<true>> duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "max", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
     executeWindowAggTest(decimal256_case);
     executeWindowAggTest(string_case);
+    executeWindowAggTest(duration_case);
 }
 CATCH
 
