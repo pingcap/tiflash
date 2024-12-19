@@ -1025,7 +1025,7 @@ std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need
         columns_to_read,
         snapshot,
         ranges.empty() ? RowKeyRanges{segment->getRowKeyRange()} : ranges,
-        nullptr,
+        {},
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
         need_row_id);

@@ -46,7 +46,7 @@ DMFileReader::DMFileReader(
     bool is_fast_scan_,
     UInt64 max_read_version_,
     // filters
-    DMFilePackFilter && pack_filter_,
+    const DMFilePackFilterResult & pack_filter_,
     // caches
     const MarkCachePtr & mark_cache_,
     bool enable_column_cache_,
@@ -69,7 +69,7 @@ DMFileReader::DMFileReader(
     , is_fast_scan(is_fast_scan_)
     , enable_column_cache(enable_column_cache_ && column_cache_)
     , max_read_version(max_read_version_)
-    , pack_filter(std::move(pack_filter_))
+    , pack_filter(pack_filter_)
     , mark_cache(mark_cache_)
     , column_cache(column_cache_)
     , scan_context(scan_context_)

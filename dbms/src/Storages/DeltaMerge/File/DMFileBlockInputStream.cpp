@@ -19,7 +19,6 @@
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
-
 namespace DB::DM
 {
 
@@ -58,19 +57,6 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
 
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
-    DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        index_cache,
-        /*set_cache_if_miss*/ true,
-        rowkey_ranges,
-        rs_filter,
-        read_packs,
-        file_provider,
-        read_limiter,
-        scan_context,
-        tracing_id,
-        read_tag);
-
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
 
     if (!enable_read_thread || max_sharing_column_bytes_for_all <= 0)
@@ -87,7 +73,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         enable_del_clean_read,
         is_fast_scan,
         max_data_version,
-        std::move(pack_filter),
+        *pack_filter,
         mark_cache,
         enable_column_cache,
         column_cache,
@@ -140,18 +126,13 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         return build(dmfile, read_columns, rowkey_ranges, scan_context);
     };
 
-    if (!rs_filter)
-        return fallback();
-
-    auto filter_with_ann = std::dynamic_pointer_cast<WithANNQueryInfo>(rs_filter);
-    if (!filter_with_ann)
+    if (!ann_query_info)
         return fallback();
 
     if (!bitmap_filter.has_value())
         return fallback();
 
     Block header_layout = toEmptyBlock(read_columns);
-    auto ann_query_info = filter_with_ann->ann_query_info;
 
     // Copy out the vector column for later use. Copy is intentionally performed after the
     // fast check so that in fallback conditions we don't need unnecessary copies.
@@ -181,19 +162,6 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
 
     // All check passed. Let's read via vector index.
 
-    DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        index_cache,
-        /*set_cache_if_miss*/ true,
-        rowkey_ranges,
-        rs_filter,
-        read_packs,
-        file_provider,
-        read_limiter,
-        scan_context,
-        tracing_id,
-        ReadTag::Query);
-
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
@@ -205,7 +173,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         enable_del_clean_read,
         is_fast_scan,
         max_data_version,
-        std::move(pack_filter),
+        *pack_filter,
         mark_cache,
         enable_column_cache,
         column_cache,

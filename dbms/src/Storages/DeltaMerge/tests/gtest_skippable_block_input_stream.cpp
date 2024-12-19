@@ -105,6 +105,7 @@ protected:
             columns_to_read,
             read_ranges,
             EMPTY_RS_OPERATOR,
+            {},
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             ReadTag::Internal);

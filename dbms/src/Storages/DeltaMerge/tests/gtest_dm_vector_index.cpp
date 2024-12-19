@@ -240,7 +240,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -265,7 +265,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -290,7 +290,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -318,7 +318,7 @@ try
         bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -343,7 +343,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -368,7 +368,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -393,7 +393,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -428,7 +428,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -453,7 +453,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -491,7 +491,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -589,7 +589,7 @@ try
             ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -615,7 +615,7 @@ try
             ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -644,7 +644,7 @@ try
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -674,7 +674,7 @@ try
             ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -700,7 +700,7 @@ try
             ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -729,7 +729,7 @@ try
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -759,7 +759,7 @@ try
             ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -784,7 +784,7 @@ try
             ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -812,7 +812,7 @@ try
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+            auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
                               .tryBuildWithVectorIndex(
                                   dm_file,
@@ -876,7 +876,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(5, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -944,7 +944,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({5.0, 5.0, 5.5}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -969,7 +969,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.0}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -994,7 +994,7 @@ try
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({0.0, 0.0, 0.0}));
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -1022,7 +1022,7 @@ try
         bitmap_filter->set(/* start */ 5, /* limit */ 1, false);
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 6))
                           .tryBuildWithVectorIndex(
                               dm_file,
@@ -1093,7 +1093,7 @@ try
         bitmap_filter->set(0, 6); // 0~6 rows are valid, 6~9 rows are invalid due to pack filter.
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
                           .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1107,7 +1107,7 @@ try
         // TopK=4
         ann_query_info->set_top_k(4);
         builder = DMFileBlockInputStreamBuilder(dbContext());
-        stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        stream = builder.setAnnQureyInfo(ann_query_info)
                      .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
                      .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1136,7 +1136,7 @@ try
         bitmap_filter->set(3, 2);
 
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+        auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
                           .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1204,6 +1204,7 @@ public:
             snapshot,
             {range},
             std::make_shared<PushDownFilter>(wrapWithANNQueryInfo({}, ann_query)),
+            {},
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);

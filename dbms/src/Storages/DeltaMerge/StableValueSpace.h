@@ -14,12 +14,16 @@
 
 #pragma once
 
+#include <IO/FileProvider/FileProvider_fwd.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage_fwd.h>
@@ -224,11 +228,26 @@ public:
             const DMContext & context, //
             const ColumnDefines & read_columns,
             const RowKeyRanges & rowkey_ranges,
-            const RSOperatorPtr & filter,
             UInt64 max_data_version,
             size_t expected_block_size,
             bool enable_handle_clean_read,
             ReadTag read_tag,
+            const DMFilePackFilterResults & pack_filter_results = {},
+            bool is_fast_scan = false,
+            bool enable_del_clean_read = false,
+            const std::vector<IdSetPtr> & read_packs = {},
+            bool need_row_id = false);
+
+        SkippableBlockInputStreamPtr tryGetInputStreamWithVectorIndex(
+            const DMContext & context,
+            const ColumnDefines & read_columns,
+            const RowKeyRanges & rowkey_ranges,
+            const ANNQueryInfoPtr & ann_query_info,
+            UInt64 max_data_version,
+            size_t expected_block_size,
+            bool enable_handle_clean_read,
+            ReadTag read_tag,
+            const DMFilePackFilterResults & pack_filter_results,
             bool is_fast_scan = false,
             bool enable_del_clean_read = false,
             const std::vector<IdSetPtr> & read_packs = {},

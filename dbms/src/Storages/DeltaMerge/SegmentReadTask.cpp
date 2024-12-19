@@ -521,7 +521,7 @@ void SegmentReadTask::checkMemTableSet(const ColumnFileSetSnapshotPtr & mem_tabl
 void SegmentReadTask::checkMemTableSetReady() const
 {
     const auto & mem_table_snap = read_snapshot->delta->getMemTableSetSnapshot();
-    for (auto & cf : mem_table_snap->getColumnFiles())
+    for (const auto & cf : mem_table_snap->getColumnFiles())
     {
         if (auto * in_mem_cf = cf->tryToInMemoryFile(); in_mem_cf)
         {
