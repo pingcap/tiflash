@@ -174,7 +174,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
     // Mock to apply a snapshot with committed rows in `region`
     auto & tmt = context.getTMTContext();
     tmt.getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(region, tmt);
-    // Decode the committed rows into Block and flush to the IStorage layer
+    // Decode the committed rows into Block and flush to the IStorage layer.
+    // This dose not ensure the atomic of "apply snapshot". But we only use it for writing tests now.
     if (auto region_applied = tmt.getKVStore()->getRegion(region_id); region_applied)
     {
         tmt.getRegionTable().tryWriteBlockByRegion(region_applied);
