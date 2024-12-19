@@ -250,7 +250,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtrWithBlock & region)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtr & region)
 {
     const RegionID region_id = region->id();
 

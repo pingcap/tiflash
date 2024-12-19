@@ -81,7 +81,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
         TMTContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
-        tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
+        tmt.getKVStore()->onSnapshot<RegionPtrWithSnapshotFiles>(region, nullptr, 0, tmt);
 
         output(fmt::format(
             "put region #{}, range{} to table #{} with kvstore.onSnapshot",
@@ -96,7 +96,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
         TMTContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-        tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
+        tmt.getKVStore()->onSnapshot<RegionPtrWithSnapshotFiles>(region, nullptr, 0, tmt);
 
         output(fmt::format(
             "put region #{}, range[{}, {}) to table #{} with kvstore.onSnapshot",
