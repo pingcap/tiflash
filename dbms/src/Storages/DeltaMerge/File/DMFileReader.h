@@ -190,10 +190,15 @@ private:
     // DataSharing
     ColumnCachePtr data_sharing_col_data_cache;
 
-    // <start_pack_id, pack_count, RSResult, read_rows>
-    std::deque<std::tuple<size_t, size_t, RSResult, size_t>> read_block_infos;
-    // <pack_id, offset>
-    std::unordered_map<size_t, size_t> pack_id_to_offset;
+    struct ReadBlockInfo
+    {
+        size_t start_pack_id;
+        size_t pack_count;
+        RSResult rs_result;
+        size_t read_rows;
+    };
+    std::deque<ReadBlockInfo> read_block_infos;
+    std::vector<size_t> pack_offset;
     // last read pack_id + 1, used by getSkippedRows
     size_t next_pack_id = 0;
 

@@ -73,7 +73,7 @@ Block DMFileWithVectorIndexBlockInputStream::read()
         return {};
 
     const auto [start_pack_id, pack_count, rs_result, read_rows] = reader.read_block_infos.front();
-    const auto start_row_offset = reader.pack_id_to_offset[start_pack_id];
+    const auto start_row_offset = reader.pack_offset[start_pack_id];
 
     auto vec_column = vec_cd.type->createColumn();
     auto begin = std::lower_bound(sorted_results.cbegin(), sorted_results.cend(), start_row_offset);
@@ -162,11 +162,11 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
     {
         if (sorted_results_it == sorted_results.cend())
             break;
-        auto begin = std::lower_bound(sorted_results_it, sorted_results.cend(), reader.pack_id_to_offset[pack_id]);
+        auto begin = std::lower_bound(sorted_results_it, sorted_results.cend(), reader.pack_offset[pack_id]);
         auto end = std::lower_bound(
             begin,
             sorted_results.cend(),
-            reader.pack_id_to_offset[pack_id] + pack_stats[pack_id].rows);
+            reader.pack_offset[pack_id] + pack_stats[pack_id].rows);
         bool is_use = begin != end;
         bool reach_limit = read_rows >= reader.rows_threshold_per_read;
         bool break_all_match = !pack_res[pack_id].allMatch() && read_rows >= reader.rows_threshold_per_read / 2;
