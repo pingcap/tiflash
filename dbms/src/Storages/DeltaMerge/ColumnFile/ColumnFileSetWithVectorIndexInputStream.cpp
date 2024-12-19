@@ -159,7 +159,7 @@ Block ColumnFileSetWithVectorIndexInputStream::read()
         {
             block.setStartOffset(read_rows);
             size_t rows = block.rows();
-            filter = valid_rows.createRawSubView(read_rows, rows);
+            filter = valid_rows.getRawSubFilter(read_rows, rows);
             size_t passed_count = countBytesInFilter(filter);
             for (auto & col : block)
                 col.column = col.column->filter(filter, passed_count);

@@ -52,7 +52,7 @@ public:
         return BitmapFilterView(filter, filter_offset + offset, size);
     }
 
-    IColumn::Filter createRawSubView(UInt32 offset, UInt32 size) const
+    IColumn::Filter getRawSubFilter(UInt32 offset, UInt32 size) const
     {
         RUNTIME_CHECK(offset + size <= filter_size, offset, size, filter_size);
         return IColumn::Filter{
