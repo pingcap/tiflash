@@ -370,11 +370,14 @@ void DMFileMetaV2::finalizeSmallFiles(
             delete_file_name.emplace_back(std::move(fname));
         }
 
-        // check .size0.dat
-        if (stat.array_sizes_bytes > 0 && stat.array_sizes_bytes <= small_file_size_threshold)
+        // check .size0.dat and .size.dat
+        if (stat.sizes_bytes > 0 && stat.sizes_bytes <= small_file_size_threshold)
         {
-            auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::ArraySizes}));
-            auto fsize = stat.array_sizes_bytes;
+            auto substream = removeNullable(stat.type)->getTypeId() == TypeIndex::String
+                ? IDataType::Substream::StringSizes
+                : IDataType::Substream::ArraySizes;
+            auto fname = colDataFileName(getFileNameBase(col_id, {substream}));
+            auto fsize = stat.sizes_bytes;
             copy_file_to_cur(fname, fsize);
             delete_file_name.emplace_back(std::move(fname));
         }

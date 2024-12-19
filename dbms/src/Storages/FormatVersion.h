@@ -151,6 +151,16 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V7 = StorageFormatVersio
     .identifier = 7,
 };
 
+inline static const StorageFormatVersion STORAGE_FORMAT_V8 = StorageFormatVersion{
+    // diff is DataTypeString.DefaultName
+    .segment = SegmentFormat::V3,
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2,
+    .delta = DeltaFormat::V4,
+    .page = PageFormat::V3,
+    .identifier = 8,
+};
+
 // STORAGE_FORMAT_V100 is used for S3 only
 inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVersion{
     .segment = SegmentFormat::V2,
@@ -179,6 +189,17 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V102 = StorageFormatVers
     .delta = DeltaFormat::V4, // diff
     .page = PageFormat::V4,
     .identifier = 102,
+};
+
+// STORAGE_FORMAT_V103 is used for S3 only
+inline static const StorageFormatVersion STORAGE_FORMAT_V103 = StorageFormatVersion{
+    // diff is DataTypeString.DefaultName
+    .segment = SegmentFormat::V3,
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2,
+    .delta = DeltaFormat::V4,
+    .page = PageFormat::V4,
+    .identifier = 103,
 };
 
 inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V7;
