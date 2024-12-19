@@ -94,6 +94,12 @@ public:
     ~LocalIndexerScheduler();
 
     /**
+     * @brief Stop the scheduler and wait for running tasks to finish.
+     * Note that this method won't clear the task pushed.
+     */
+    void shutdown();
+
+    /**
      * @brief Start the scheduler. In some tests we need to start scheduler
      * after some tasks are pushed.
      */
@@ -101,7 +107,7 @@ public:
 
     /**
      * @brief Blocks until there is no tasks remaining in the queue and there is no running tasks.
-     * Should be only used in tests.
+     * **Should be only used in tests**.
      */
     void waitForFinish();
 
@@ -114,6 +120,7 @@ public:
 
     /**
     * @brief Drop all tasks matching specified keyspace id and table id.
+    * Note that this method won't drop the running tasks.
     */
     size_t dropTasks(KeyspaceID keyspace_id, TableID table_id);
 
@@ -147,9 +154,6 @@ private:
     void moveBackReadyTasks(std::unique_lock<std::mutex> & lock);
 
 private:
-    bool is_started = false;
-    std::thread scheduler_thread;
-
     /// Try to add a task to the pool. Returns false if the pool is full
     /// (for example, reaches concurrent task limit or memory limit).
     /// When pool is full, we will not try to schedule any more tasks at this moment.
@@ -159,6 +163,9 @@ private:
     /// only schedule small tasks, keep large tasks starving under
     /// heavy pressure.
     bool tryAddTaskToPool(std::unique_lock<std::mutex> & lock, const InternalTaskPtr & task);
+
+    std::thread scheduler_thread;
+    bool is_started = false;
 
     KeyspaceID last_schedule_keyspace_id = 0;
     std::map<KeyspaceID, TableID> last_schedule_table_id_by_ks;
