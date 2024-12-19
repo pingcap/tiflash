@@ -143,10 +143,18 @@ private:
     void addSkippedRows(UInt64 rows);
 
     void initReadBlockInfos();
+
+    struct ReadBlockInfo
+    {
+        size_t start_pack_id;
+        size_t pack_count;
+        RSResult rs_result;
+        size_t read_rows;
+    };
     // Will add some new read info to read_block_infos
     // Used by readWithFilter
-    // Return the number of new added read infos
-    size_t updateReadBlockInfos(const IColumn::Filter & filter, size_t pack_start, size_t pack_end);
+    // Return the original read block info and the number of new read block info
+    std::tuple<ReadBlockInfo, size_t> updateReadBlockInfos(const IColumn::Filter & filter);
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;
@@ -190,13 +198,6 @@ private:
     // DataSharing
     ColumnCachePtr data_sharing_col_data_cache;
 
-    struct ReadBlockInfo
-    {
-        size_t start_pack_id;
-        size_t pack_count;
-        RSResult rs_result;
-        size_t read_rows;
-    };
     std::deque<ReadBlockInfo> read_block_infos;
     std::vector<size_t> pack_offset;
     // last read pack_id + 1, used by getSkippedRows

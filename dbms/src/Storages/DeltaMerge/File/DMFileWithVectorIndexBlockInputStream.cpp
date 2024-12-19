@@ -163,10 +163,8 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
         if (sorted_results_it == sorted_results.cend())
             break;
         auto begin = std::lower_bound(sorted_results_it, sorted_results.cend(), reader.pack_offset[pack_id]);
-        auto end = std::lower_bound(
-            begin,
-            sorted_results.cend(),
-            reader.pack_offset[pack_id] + pack_stats[pack_id].rows);
+        auto end
+            = std::lower_bound(begin, sorted_results.cend(), reader.pack_offset[pack_id] + pack_stats[pack_id].rows);
         bool is_use = begin != end;
         bool reach_limit = read_rows >= reader.rows_threshold_per_read;
         bool break_all_match = !pack_res[pack_id].allMatch() && read_rows >= reader.rows_threshold_per_read / 2;
