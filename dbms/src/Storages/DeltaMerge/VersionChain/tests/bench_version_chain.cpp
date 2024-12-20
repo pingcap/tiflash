@@ -339,7 +339,8 @@ try
                 {segment->getRowKeyRange()},
                 nullptr,
                 std::numeric_limits<UInt64>::max(),
-                DEFAULT_BLOCK_SIZE);
+                DEFAULT_BLOCK_SIZE,
+                false);
             benchmark::DoNotOptimize(bitmap_filter);
         }
     }
@@ -354,6 +355,7 @@ try
                 *dm_context,
                 *segment_snapshot,
                 {segment->getRowKeyRange()},
+                nullptr,
                 std::numeric_limits<UInt64>::max(),
                 version_chain);
             benchmark::DoNotOptimize(bitmap_filter);
@@ -388,11 +390,13 @@ try
         {segment->getRowKeyRange()},
         nullptr,
         std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
+        DEFAULT_BLOCK_SIZE,
+        false);
     auto bitmap_filter2 = buildBitmapFilter<Int64>(
         *dm_context,
         *segment_snapshot,
         {segment->getRowKeyRange()},
+        nullptr,
         std::numeric_limits<UInt64>::max(),
         version_chain);
 
