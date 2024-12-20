@@ -300,30 +300,9 @@ void WindowTransformAction::initialWorkspaces()
         WindowFunctionWorkspace workspace;
         workspace.window_function = window_function_description.window_function;
         workspace.arguments = window_function_description.arguments;
-        workspace.argument_column_indices = window_function_description.arguments;
-        workspace.argument_columns.assign(workspace.argument_column_indices.size(), nullptr);
-        initialAggregateFunction(workspace, window_function_description);
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
-}
-
-void WindowTransformAction::initialAggregateFunction(
-    WindowFunctionWorkspace & workspace,
-    const WindowFunctionDescription & window_function_description)
-{
-    if (window_function_description.aggregate_function == nullptr)
-        return;
-
-    has_agg = true;
-
-    workspace.aggregate_function = window_function_description.aggregate_function;
-    const auto & aggregate_function = workspace.aggregate_function;
-    if (!arena && aggregate_function->allocatesMemoryInArena())
-        arena = std::make_unique<Arena>();
-
-    workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
-    aggregate_function->create(workspace.aggregate_function_state.data());
 }
 
 bool WindowBlockInputStream::returnIfCancelledOrKilled()
@@ -1258,18 +1237,6 @@ void WindowTransformAction::writeOutCurrentRow()
     for (size_t wi = 0; wi < workspaces.size(); ++wi)
     {
         auto & ws = workspaces[wi];
-        if (ws.window_function)
-            ws.window_function->windowInsertResultInto(*this, wi, ws.arguments);
-        else
-        {
-            const auto & block = blockAt(current_row);
-            IColumn * result_column = block.output_columns[wi].get();
-            const auto * agg_func = ws.aggregate_function.get();
-            auto * buf = ws.aggregate_function_state.data();
-
-            // TODO add `insertMergeResultInto` function?
-            agg_func->insertResultInto(buf, *result_column, arena.get());
-        }
     }
 }
 
@@ -1307,7 +1274,7 @@ bool WindowTransformAction::onlyHaveRowNumber()
 {
     for (const auto & workspace : workspaces)
     {
-        if (workspace.window_function != nullptr && workspace.window_function->getName() != "row_number")
+        if (workspace.window_function->getName() != "row_number")
             return false;
     }
     return true;
@@ -1356,46 +1323,12 @@ void WindowTransformAction::appendBlock(Block & current_block)
     // Initialize output columns and add new columns to output block.
     for (auto & ws : workspaces)
     {
-        MutableColumnPtr res;
-        if (ws.window_function != nullptr)
-            res = ws.window_function->getReturnType()->createColumn();
-        else
-            res = ws.aggregate_function->getReturnType()->createColumn();
+        MutableColumnPtr res = ws.window_function->getReturnType()->createColumn();
         res->reserve(window_block.rows);
         window_block.output_columns.push_back(std::move(res));
     }
 
     window_block.input_columns = current_block.getColumns();
-}
-
-// TODO ensure and check that if data's destructor will be called and the allocated memory could be released
-// Update the aggregation states after the frame has changed.
-void WindowTransformAction::updateAggregationState()
-{
-    if (!has_agg)
-        return;
-
-    assert(frame_started);
-    assert(frame_ended);
-    assert(frame_start <= frame_end);
-    assert(prev_frame_start <= prev_frame_end);
-    assert(prev_frame_start <= frame_start);
-    assert(prev_frame_end <= frame_end);
-    assert(partition_start <= frame_start);
-    assert(frame_end <= partition_end);
-
-    for (auto & ws : workspaces)
-    {
-        if (ws.window_function)
-            continue;
-
-        // TODO compare the decrease and add number in previous frame
-        // when decrease > add, we create a new agg data to recalculate from start.
-        const RowNumber & end = frame_start <= prev_frame_end ? frame_start : prev_frame_end;
-        decreaseAggregationState(ws, prev_frame_start, end);
-        const RowNumber & start = frame_start <= prev_frame_end ? prev_frame_end : frame_start;
-        addAggregationState(ws, start, end);
-    }
 }
 
 void WindowTransformAction::tryCalculate()
@@ -1459,8 +1392,6 @@ void WindowTransformAction::tryCalculate()
             // not after end.
             assert(frame_started);
             assert(frame_ended);
-
-            updateAggregationState();
 
             // Write out the results.
             // TODO execute the window function by block instead of row.

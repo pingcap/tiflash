@@ -52,6 +52,9 @@ public:
     Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
 
+    void initialWorkspaces();
+    void initialPartitionAndOrderColumnIndices();
+
     Columns & inputAt(const RowNumber & x)
     {
         assert(x.block >= first_block_number);
@@ -162,69 +165,6 @@ private:
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
-    void initialWorkspaces();
-    void initialPartitionAndOrderColumnIndices();
-    void initialAggregateFunction(
-        WindowFunctionWorkspace & workspace,
-        const WindowFunctionDescription & window_function_description);
-
-    void addAggregationState(WindowFunctionWorkspace & ws, const RowNumber & start, const RowNumber & end)
-    {
-        addOrDecreaseAggregationState<true>(ws, start, end);
-    }
-
-    void decreaseAggregationState(WindowFunctionWorkspace & ws, const RowNumber & start, const RowNumber & end)
-    {
-        addOrDecreaseAggregationState<false>(ws, start, end);
-    }
-
-    template <bool is_add>
-    void addOrDecreaseAggregationState(WindowFunctionWorkspace & ws, const RowNumber & start, const RowNumber & end)
-    {
-        if unlikely (start == end)
-            return;
-
-        const auto * agg_func = ws.aggregate_function.get();
-        auto * buf = ws.aggregate_function_state.data();
-
-        // Used for aggregate function.
-        // To achieve better performance, we will have to loop over blocks and
-        // rows manually, instead of using advanceRowNumber().
-        // For this purpose, the end block can be different than the
-        // block of the end row (it's usually the next block).
-        const auto past_the_end_block = end.row == 0 ? end.block : end.block + 1;
-
-        for (auto block_number = frame_start.block; block_number < past_the_end_block; ++block_number)
-        {
-            auto & block = blockAt(block_number);
-
-            if (ws.cached_block_number != block_number)
-            {
-                for (size_t i = 0; i < ws.argument_column_indices.size(); ++i)
-                    ws.argument_columns[i] = block.input_columns[ws.argument_column_indices[i]].get();
-                ws.cached_block_number = block_number;
-            }
-
-            // First and last blocks may be processed partially, and other blocks are processed in full.
-            const auto start_row = block_number == start.block ? start.row : 0;
-            const auto end_row = block_number == end.block ? end.row : block.rows;
-            auto * columns = ws.argument_columns.data();
-
-            auto * arena_ptr = arena.get();
-            for (auto row = start_row; row < end_row; ++row)
-            {
-                if constexpr (is_add)
-                    agg_func->add(buf, columns, row, arena_ptr);
-                else
-                    agg_func->decrease(buf, columns, row, arena_ptr);
-            }
-        }
-    }
-
-    void updateAggregationState();
-
-    void reinitializeAggFuncBeforeNextPartition();
-
 public:
     LoggerPtr log;
 
@@ -241,8 +181,6 @@ public:
 
     // Per-window-function scratch spaces.
     std::vector<WindowFunctionWorkspace> workspaces;
-
-    bool has_agg;
 
     // A sliding window of blocks we currently need. We add the input blocks as
     // they arrive, and discard the blocks we don't need anymore. The blocks
@@ -305,8 +243,6 @@ public:
 
     // Auxiliary variable for range frame type when calculating frame_end
     RowNumber prev_frame_end;
-
-    std::unique_ptr<Arena> arena;
 
     //TODO: used as template parameters
     bool only_have_row_number = false;
