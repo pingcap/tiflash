@@ -160,7 +160,7 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
     auto last_pack_res = RSResult::All;
     auto sorted_results_it = sorted_results.cbegin();
     size_t pack_id = 0;
-    bool prev_all_match = false;
+    bool prev_all_match = true;
     for (; pack_id < pack_stats.size(); ++pack_id)
     {
         if (sorted_results_it == sorted_results.cend())
@@ -179,7 +179,7 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
             start_pack_id = pack_id + 1;
             read_rows = 0;
             last_pack_res = RSResult::All;
-            prev_all_match = false;
+            prev_all_match = true;
         }
         else if (reach_limit || break_all_match)
         {
@@ -188,7 +188,7 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
             last_pack_res = pack_res[pack_id];
-            prev_all_match = false;
+            prev_all_match = true;
         }
         else
         {

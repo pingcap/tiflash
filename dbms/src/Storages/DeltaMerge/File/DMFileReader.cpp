@@ -108,10 +108,8 @@ DMFileReader::DMFileReader(
         data_sharing_col_data_cache = std::make_unique<ColumnCache>(ColumnCacheType::DataSharingCache);
     }
 
-    // Initialize pack_offset
     initPackOffset();
 
-    // Initialize read_block_infos
     initReadBlockInfos();
 }
 
@@ -477,7 +475,6 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
         return createColumnWithDefaultValue(cd, read_rows);
 
     auto type_on_disk = dmfile->getColumnStat(cd.id).type;
-    ColumnPtr column;
     // try read PK column from ColumnCacheLongTerm
     if (column_cache_long_term && cd.id == pk_col_id && ColumnCacheLongTerm::isCacheableColumn(cd))
     {
@@ -488,37 +485,38 @@ ColumnPtr DMFileReader::readColumn(const ColumnDefine & cd, size_t start_pack_id
                   return readFromDiskOrSharingCache(cd, type_on_disk, 0, dmfile->getPacks(), dmfile->getRows());
               });
 
-        auto mut_column = type_on_disk->createColumn();
-        mut_column->insertRangeFrom(*column_all_data, pack_offset[start_pack_id], read_rows);
-        column = std::move(mut_column);
-    }
-    // Not cached
-    else if (!enable_column_cache || !isCacheableColumn(cd))
-    {
-        column = readFromDiskOrSharingCache(cd, type_on_disk, start_pack_id, pack_count, read_rows);
+        auto column = column_all_data->cut(pack_offset[start_pack_id], read_rows);
+        // Cast column's data from DataType in disk to what we need now
         return convertColumnByColumnDefineIfNeed(type_on_disk, std::move(column), cd);
     }
-    // enable_column_cache && isCacheableColumn(cd)
-    else
+
+    // Not cached
+    if (!enable_column_cache || !isCacheableColumn(cd))
     {
-        // try to get column from cache
-        column = getColumnFromCache(
-            column_cache,
-            cd,
-            type_on_disk,
-            start_pack_id,
-            pack_count,
-            read_rows,
-            [&](const ColumnDefine & cd,
-                const DataTypePtr & type_on_disk,
-                size_t start_pack_id,
-                size_t pack_count,
-                size_t read_rows) {
-                return readFromDiskOrSharingCache(cd, type_on_disk, start_pack_id, pack_count, read_rows);
-            });
-        // add column to cache
-        addColumnToCache(column_cache, cd.id, start_pack_id, pack_count, column);
+        auto column = readFromDiskOrSharingCache(cd, type_on_disk, start_pack_id, pack_count, read_rows);
+        // Cast column's data from DataType in disk to what we need now
+        return convertColumnByColumnDefineIfNeed(type_on_disk, std::move(column), cd);
     }
+
+    // enable_column_cache && isCacheableColumn(cd)
+
+    // try to get column from cache
+    auto column = getColumnFromCache(
+        column_cache,
+        cd,
+        type_on_disk,
+        start_pack_id,
+        pack_count,
+        read_rows,
+        [&](const ColumnDefine & cd,
+            const DataTypePtr & type_on_disk,
+            size_t start_pack_id,
+            size_t pack_count,
+            size_t read_rows) {
+            return readFromDiskOrSharingCache(cd, type_on_disk, start_pack_id, pack_count, read_rows);
+        });
+    // add column to cache
+    addColumnToCache(column_cache, cd.id, start_pack_id, pack_count, column);
     // Cast column's data from DataType in disk to what we need now
     return convertColumnByColumnDefineIfNeed(type_on_disk, std::move(column), cd);
 }
@@ -715,7 +713,7 @@ void DMFileReader::initReadBlockInfos()
     size_t start_pack_id = 0;
     size_t read_rows = 0;
     auto last_pack_res = RSResult::All;
-    bool prev_all_match = false;
+    bool prev_all_match = true;
     for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
     {
         bool is_use = pack_res[pack_id].isUse();
@@ -731,7 +729,7 @@ void DMFileReader::initReadBlockInfos()
             start_pack_id = pack_id + 1;
             read_rows = 0;
             last_pack_res = RSResult::All;
-            prev_all_match = false;
+            prev_all_match = true;
         }
         else if (reach_limit || break_all_match)
         {
@@ -741,7 +739,7 @@ void DMFileReader::initReadBlockInfos()
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
             last_pack_res = pack_res[pack_id];
-            prev_all_match = false;
+            prev_all_match = true;
         }
         else
         {
