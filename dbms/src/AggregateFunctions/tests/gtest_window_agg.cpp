@@ -435,7 +435,6 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     // Start test
     for (UInt32 i = 0; i < reset_num; i++)
     {
-        std::cout << "reset ---------" << std::endl; // TODO delete
         test_case.reset();
         agg_func->reset(agg_state.data());
         added_row_idx_queue.clear();
@@ -479,7 +478,6 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     Field res_field;
     for (size_t i = 0; i < res_num; i++)
     {
-        std::cout << "i: " << i << std::endl; // TODO delete
         res_col->get(i, res_field);
         ASSERT_FALSE(res_field.isNull());
         // No matter what type the result is, we always use decimal to convert the result to string so that it's easy to check result
@@ -500,7 +498,6 @@ try
 }
 CATCH
 
-// TODO add count distinct
 TEST_F(ExecutorWindowAgg, Count)
 try
 {
@@ -527,7 +524,6 @@ try
 }
 CATCH
 
-// TODO ensure that if data will be called destructor
 TEST_F(ExecutorWindowAgg, Min)
 try
 {

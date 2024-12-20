@@ -1360,7 +1360,7 @@ void WindowTransformAction::appendBlock(Block & current_block)
     window_block.input_columns = current_block.getColumns();
 }
 
-
+// TODO ensure and check that if data's destructor will be called and the allocated memory could be released
 // Update the aggregation states after the frame has changed.
 void WindowTransformAction::updateAggregationState()
 {
