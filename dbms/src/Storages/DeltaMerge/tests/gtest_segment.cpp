@@ -48,11 +48,7 @@ namespace DB::ErrorCodes
 extern const int DT_DELTA_INDEX_ERROR;
 }
 
-namespace DB
-{
-namespace DM
-{
-namespace GC
+namespace DB::DM::GC
 {
 bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(
     const DMContext & context, //
@@ -63,7 +59,8 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(
     double invalid_data_ratio_threshold,
     const LoggerPtr & log);
 }
-namespace tests
+
+namespace DB::DM::tests
 {
 
 class SegmentOperationTest : public SegmentTestBasic
@@ -1367,6 +1364,4 @@ try
 CATCH
 
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests
