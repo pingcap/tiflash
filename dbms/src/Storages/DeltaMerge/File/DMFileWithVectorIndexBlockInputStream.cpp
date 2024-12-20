@@ -150,14 +150,17 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_res = reader.pack_filter.getPackResConst();
 
+    // Update valid_packs_before_search
     for (const auto res : pack_res)
         valid_packs_before_search += res.isUse();
 
+    // Update read_block_infos
     size_t start_pack_id = 0;
     size_t read_rows = 0;
     auto last_pack_res = RSResult::All;
     auto sorted_results_it = sorted_results.cbegin();
     size_t pack_id = 0;
+    bool prev_all_match = false;
     for (; pack_id < pack_stats.size(); ++pack_id)
     {
         if (sorted_results_it == sorted_results.cend())
@@ -172,13 +175,11 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
         if (!is_use)
         {
             if (read_rows > 0)
-            {
                 reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
-                valid_packs_after_search += (pack_id - start_pack_id);
-            }
             start_pack_id = pack_id + 1;
             read_rows = 0;
             last_pack_res = RSResult::All;
+            prev_all_match = false;
         }
         else if (reach_limit || break_all_match)
         {
@@ -187,20 +188,23 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
             last_pack_res = pack_res[pack_id];
+            prev_all_match = false;
         }
         else
         {
             last_pack_res = last_pack_res && pack_res[pack_id];
             read_rows += pack_stats[pack_id].rows;
+            prev_all_match = prev_all_match && pack_res[pack_id].allMatch();
         }
 
         sorted_results_it = end;
     }
     if (read_rows > 0)
-    {
         reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
-        valid_packs_after_search += (pack_id - start_pack_id);
-    }
+
+    // Update valid_packs_after_search
+    for (const auto & block_info : reader.read_block_infos)
+        valid_packs_after_search += block_info.pack_count;
 
     RUNTIME_CHECK_MSG(sorted_results_it == sorted_results.cend(), "All results are not consumed");
     loaded = true;

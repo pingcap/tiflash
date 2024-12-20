@@ -153,11 +153,7 @@ private:
     };
     // Split the first read block info to multiple read block infos
     // Used by readWithFilter, return new read block infos.
-    std::vector<ReadBlockInfo> getNewReadBlockInfos(
-        size_t pack_begin,
-        size_t pack_end,
-        RSResult rs_result,
-        const IColumn::Filter & filter);
+    std::vector<ReadBlockInfo> getNewReadBlockInfos(size_t pack_begin, size_t pack_end, const IColumn::Filter & filter);
 
     Block readImpl(const ReadBlockInfo & block_info);
 
