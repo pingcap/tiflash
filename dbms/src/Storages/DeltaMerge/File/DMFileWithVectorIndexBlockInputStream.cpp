@@ -146,7 +146,10 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
 
     // The following logic is nearly the same with DMFileReader::initReadBlockInfos.
 
-    reader.read_block_infos.clear();
+    auto & read_block_infos = reader.read_block_infos;
+    const auto & pack_offset = reader.pack_offset;
+
+    read_block_infos.clear();
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_res = reader.pack_filter.getPackResConst();
 
@@ -157,50 +160,49 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
     // Update read_block_infos
     size_t start_pack_id = 0;
     size_t read_rows = 0;
-    auto last_pack_res = RSResult::All;
+    auto prev_block_pack_res = RSResult::All;
     auto sorted_results_it = sorted_results.cbegin();
     size_t pack_id = 0;
     for (; pack_id < pack_stats.size(); ++pack_id)
     {
         if (sorted_results_it == sorted_results.cend())
             break;
-        auto begin = std::lower_bound(sorted_results_it, sorted_results.cend(), reader.pack_offset[pack_id]);
-        auto end
-            = std::lower_bound(begin, sorted_results.cend(), reader.pack_offset[pack_id] + pack_stats[pack_id].rows);
+        auto begin = std::lower_bound(sorted_results_it, sorted_results.cend(), pack_offset[pack_id]);
+        auto end = std::lower_bound(begin, sorted_results.cend(), pack_offset[pack_id] + pack_stats[pack_id].rows);
         bool is_use = begin != end;
         bool reach_limit = read_rows >= reader.rows_threshold_per_read;
-        bool break_all_match = last_pack_res.allMatch() && !pack_res[pack_id].allMatch()
+        bool break_all_match = prev_block_pack_res.allMatch() && !pack_res[pack_id].allMatch()
             && read_rows >= reader.rows_threshold_per_read / 2;
 
         if (!is_use)
         {
             if (read_rows > 0)
-                reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
             start_pack_id = pack_id + 1;
             read_rows = 0;
-            last_pack_res = RSResult::All;
+            prev_block_pack_res = RSResult::All;
         }
         else if (reach_limit || break_all_match)
         {
             if (read_rows > 0)
-                reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
-            last_pack_res = pack_res[pack_id];
+            prev_block_pack_res = pack_res[pack_id];
         }
         else
         {
-            last_pack_res = last_pack_res && pack_res[pack_id];
+            prev_block_pack_res = prev_block_pack_res && pack_res[pack_id];
             read_rows += pack_stats[pack_id].rows;
         }
 
         sorted_results_it = end;
     }
     if (read_rows > 0)
-        reader.read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+        read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
 
     // Update valid_packs_after_search
-    for (const auto & block_info : reader.read_block_infos)
+    for (const auto & block_info : read_block_infos)
         valid_packs_after_search += block_info.pack_count;
 
     RUNTIME_CHECK_MSG(sorted_results_it == sorted_results.cend(), "All results are not consumed");

@@ -711,40 +711,40 @@ void DMFileReader::initReadBlockInfos()
     const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
     size_t start_pack_id = 0;
     size_t read_rows = 0;
-    auto last_pack_res = RSResult::All;
+    auto prev_block_pack_res = RSResult::All;
     for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
     {
         bool is_use = pack_res[pack_id].isUse();
         bool reach_limit = pack_id - start_pack_id >= read_pack_limit || read_rows >= rows_threshold_per_read;
-        bool break_all_match
-            = last_pack_res.allMatch() && !pack_res[pack_id].allMatch() && read_rows >= rows_threshold_per_read / 2;
+        bool break_all_match = prev_block_pack_res.allMatch() && !pack_res[pack_id].allMatch()
+            && read_rows >= rows_threshold_per_read / 2;
 
         if (!is_use)
         {
             if (read_rows > 0)
-                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
             // Current pack is not included in the next read_block_info
             start_pack_id = pack_id + 1;
             read_rows = 0;
-            last_pack_res = RSResult::All;
+            prev_block_pack_res = RSResult::All;
         }
         else if (reach_limit || break_all_match)
         {
             if (read_rows > 0)
-                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
             // Current pack must be included in the next read_block_info
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
-            last_pack_res = pack_res[pack_id];
+            prev_block_pack_res = pack_res[pack_id];
         }
         else
         {
-            last_pack_res = last_pack_res && pack_res[pack_id];
+            prev_block_pack_res = prev_block_pack_res && pack_res[pack_id];
             read_rows += pack_stats[pack_id].rows;
         }
     }
     if (read_rows > 0)
-        read_block_infos.emplace_back(start_pack_id, pack_res.size() - start_pack_id, last_pack_res, read_rows);
+        read_block_infos.emplace_back(start_pack_id, pack_res.size() - start_pack_id, prev_block_pack_res, read_rows);
 }
 
 std::vector<DMFileReader::ReadBlockInfo> DMFileReader::getNewReadBlockInfos(
