@@ -65,6 +65,7 @@ private:
 class ConcatVectorIndexBlockInputStream : public SkippableBlockInputStream
 {
 public:
+    // Only return the rows that match `bitmap_filter_`
     ConcatVectorIndexBlockInputStream(
         const BitmapFilterPtr & bitmap_filter_,
         std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
@@ -106,7 +107,7 @@ private:
     bool loaded = false;
 
     BitmapFilterPtr bitmap_filter;
-    IColumn::Filter filter;
+    IColumn::Filter filter; // reuse the memory allocated among all `read`
 };
 
 } // namespace DB::DM

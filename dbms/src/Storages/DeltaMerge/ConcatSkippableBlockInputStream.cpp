@@ -248,7 +248,8 @@ Block ConcatVectorIndexBlockInputStream::read()
     load();
     auto block = stream->read();
 
-    // for streams which are not VectorIndexBlockInputStream, block should filter by bitmap.
+    // The block read from `VectorIndexBlockInputStream` only return the selected rows. Return it directly.
+    // For streams which are not `VectorIndexBlockInputStream`, the block should be filtered by bitmap.
     if (auto index = std::distance(stream->children.begin(), stream->current_stream); !index_streams[index])
     {
         filter.resize(block.rows());

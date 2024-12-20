@@ -708,6 +708,7 @@ void DMFileReader::initReadBlockInfos()
         {
             if (read_rows > 0)
                 read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+            // Current pack is not included in the next read_block_info
             start_pack_id = pack_id + 1;
             read_rows = 0;
             last_pack_res = RSResult::All;
@@ -717,6 +718,7 @@ void DMFileReader::initReadBlockInfos()
         {
             if (read_rows > 0)
                 read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, last_pack_res, read_rows);
+            // Current pack must be included in the next read_block_info
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
             last_pack_res = pack_res[pack_id];
@@ -743,18 +745,21 @@ std::tuple<DMFileReader::ReadBlockInfo, size_t> DMFileReader::updateReadBlockInf
     RUNTIME_CHECK(block_info.read_rows == filter.size(), block_info.read_rows, filter.size());
 
     const auto & pack_stats = dmfile->getPackStats();
-    std::vector<ReadBlockInfo> new_read_block_infos;
-    new_read_block_infos.reserve(block_info.pack_count);
+    std::vector<ReadBlockInfo> new_read_block_infos(block_info.pack_count, ReadBlockInfo{});
     size_t read_rows = 0;
     size_t start_pack_id = block_info.start_pack_id;
-    for (size_t pack_id = block_info.start_pack_id; pack_id < block_info.start_pack_id + block_info.pack_count;
-         ++pack_id)
+    const size_t end_pack_id = block_info.start_pack_id + block_info.pack_count;
+    for (size_t pack_id = start_pack_id; pack_id < end_pack_id; ++pack_id)
     {
         if (countBytesInFilter(filter, pack_offset[pack_id] - start_row_offset, pack_stats[pack_id].rows) == 0)
         {
+            // no rows should be returned in this pack according to the `filter`
             if (read_rows > 0)
-                // rs_result is not important here, we can use RSResult::Some
-                new_read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, RSResult::Some, read_rows);
+                new_read_block_infos.emplace_back( //
+                    start_pack_id,
+                    pack_id - start_pack_id,
+                    block_info.rs_result,
+                    read_rows);
             start_pack_id = pack_id + 1;
             read_rows = 0;
         }
@@ -764,11 +769,8 @@ std::tuple<DMFileReader::ReadBlockInfo, size_t> DMFileReader::updateReadBlockInf
         }
     }
     if (read_rows > 0)
-        new_read_block_infos.emplace_back(
-            start_pack_id,
-            block_info.start_pack_id + block_info.pack_count - start_pack_id,
-            RSResult::All,
-            read_rows);
+        new_read_block_infos.emplace_back(start_pack_id, end_pack_id - start_pack_id, block_info.rs_result, read_rows);
+    // TODO: directly return the `new_read_block_infos` to readWithFilter
     size_t size = new_read_block_infos.size();
     for (auto & new_read_block_info : std::ranges::reverse_view(new_read_block_infos))
         read_block_infos.emplace_front(std::move(new_read_block_info));
