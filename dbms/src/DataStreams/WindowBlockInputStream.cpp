@@ -246,7 +246,6 @@ WindowTransformAction::WindowTransformAction(
     const String & req_id)
     : log(Logger::get(req_id))
     , window_description(window_description_)
-    , has_agg(false)
 {
     output_header = input_header;
     for (const auto & add_column : window_description_.add_columns)
@@ -1237,6 +1236,7 @@ void WindowTransformAction::writeOutCurrentRow()
     for (size_t wi = 0; wi < workspaces.size(); ++wi)
     {
         auto & ws = workspaces[wi];
+        ws.window_function->windowInsertResultInto(*this, wi, ws.arguments);
     }
 }
 

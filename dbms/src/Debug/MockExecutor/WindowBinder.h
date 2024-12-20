@@ -166,10 +166,6 @@ public:
         const Context & context) override;
 
 private:
-    void buildWindowFunc();
-    void buildAggFunc();
-
-private:
     std::vector<ASTPtr> func_descs;
     std::vector<ASTPtr> partition_by_exprs;
     std::vector<ASTPtr> order_by_exprs;

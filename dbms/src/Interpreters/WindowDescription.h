@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <AggregateFunctions/IAggregateFunction.h>
 #include <Core/Field.h>
 #include <Core/Names.h>
 #include <Core/NamesAndTypes.h>
@@ -25,16 +24,16 @@
 #include <WindowFunctions/IWindowFunction.h>
 #include <tipb/select.pb.h>
 
+
 namespace DB
 {
 struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
-    AggregateFunctionPtr aggregate_function;
     Array parameters;
     ColumnNumbers arguments;
     Names argument_names;
-    String column_name;
+    std::string column_name;
 };
 
 using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;
