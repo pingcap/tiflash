@@ -156,8 +156,10 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
     /// 1. Get start_pack_id, rs_result, read_rows, and new read block infos
 
-    const auto & original_block_info = read_block_infos.front();
-    const auto [start_pack_id, pack_count, rs_result, read_rows] = original_block_info;
+    const auto [start_pack_id, pack_count, rs_result, read_rows] = read_block_infos.front();
+    read_block_infos.pop_front();
+    // do not update next_pack_id here, it will be updated in readImpl().
+    // next_pack_id = start_pack_id + pack_count;
     RUNTIME_CHECK(read_rows == filter.size(), read_rows, filter.size());
     const auto new_block_infos = getNewReadBlockInfos(start_pack_id, start_pack_id + pack_count, filter);
     const size_t start_row_offset = pack_offset[start_pack_id];
@@ -752,11 +754,7 @@ std::vector<DMFileReader::ReadBlockInfo> DMFileReader::getNewReadBlockInfos(
     size_t pack_end,
     const IColumn::Filter & filter)
 {
-    read_block_infos.pop_front();
-    // do not update next_pack_id here, it will be updated in read().
-    // next_pack_id = start_pack_id + pack_count;
     const size_t start_row_offset = pack_offset[pack_begin];
-
     const auto & pack_res = pack_filter.getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
     std::vector<ReadBlockInfo> new_read_block_infos;
