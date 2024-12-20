@@ -34,8 +34,6 @@ namespace DB
   * For example: min, max, any, anyLast.
   */
 
-// TODO maybe we can create a new class to be inherited by SingleValueDataFixed, SingleValueDataString and SingleValueDataGeneric
-
 /// For numeric values.
 template <typename T>
 struct SingleValueDataFixed
@@ -289,7 +287,7 @@ private:
 public:
     static constexpr Int32 AUTOMATIC_STORAGE_SIZE = 64;
     static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity)
-        - sizeof(large_data) - sizeof(TiDB::TiDBCollatorPtr) - sizeof(std::unique_ptr<std::deque<std::string>>);
+        - sizeof(large_data) - sizeof(TiDB::TiDBCollatorPtr) - sizeof(std::deque<std::string> *);
 
 private:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.

@@ -27,9 +27,6 @@
 #include <ext/range.h>
 #include <stack>
 
-#include "Common/Exception.h"
-
-
 namespace DB
 {
 namespace ErrorCodes

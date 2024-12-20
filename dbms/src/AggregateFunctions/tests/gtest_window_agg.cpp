@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
+#include <AggregateFunctions/AggregateFunctionMinMaxAny.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
@@ -304,7 +306,8 @@ public:
         auto elem_num = di(dre);
         for (UInt32 i = 0; i < elem_num; i++)
         {
-            di.param(std::uniform_int_distribution<UInt32>::param_type{0, 64});
+            di.param(
+                std::uniform_int_distribution<UInt32>::param_type{0, SingleValueDataString::MAX_SMALL_STRING_SIZE * 2});
             auto len = di(dre);
             di.param(std::uniform_int_distribution<UInt32>::param_type{0, CHARACTERS_LEN - 1});
 
