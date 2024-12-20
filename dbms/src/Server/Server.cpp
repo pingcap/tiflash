@@ -73,7 +73,7 @@
 #include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/DMFileReaderPool.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>

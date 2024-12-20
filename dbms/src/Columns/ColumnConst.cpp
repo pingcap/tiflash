@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
+#include <Columns/filterColumn.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/typeid_cast.h>
 #include <IO/WriteHelpers.h>

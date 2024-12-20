@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeString.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -34,7 +35,7 @@ try
            "UInt64",
            "Float32",
            "Float64",
-           "String",
+           DataTypeString::getDefaultName(),
            "MyDateTime",
            "MyDate",
            "Decimal"};

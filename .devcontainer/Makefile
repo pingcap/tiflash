@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CONTAINER_SHELL := devcontainer exec --workspace-folder=.. /usr/local/bin/zsh
+CONTAINER_SHELL := devcontainer exec --workspace-folder=.. /usr/bin/zsh
 
 .PHONY: dev
 dev: SHELL := $(CONTAINER_SHELL)

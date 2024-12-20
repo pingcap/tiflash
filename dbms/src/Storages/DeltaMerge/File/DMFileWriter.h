@@ -69,10 +69,7 @@ public:
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
             assert(compression_settings.settings.size() == 1);
-            auto setting = CompressionSetting::create<>(
-                compression_settings.settings[0].method,
-                compression_settings.settings[0].level,
-                *type);
+            auto setting = getCompressionSetting(type, file_base_name, compression_settings.settings[0]);
             compressed_buf = CompressedWriteBuffer<>::build(
                 *plain_file,
                 CompressionSettings(setting),
@@ -95,6 +92,23 @@ public:
             {
                 marks = std::make_shared<MarksInCompressedFile>();
             }
+        }
+
+        static bool isStringSizes(const DataTypePtr & type, const String & file_base_name)
+        {
+            return removeNullable(type)->getTypeId() == TypeIndex::String && file_base_name.ends_with(".size");
+        }
+
+        static CompressionSetting getCompressionSetting(
+            const DataTypePtr & type,
+            const String & file_base_name,
+            const CompressionSetting & setting)
+        {
+            // Force use Lightweight compression for string sizes, since the string sizes almost always small.
+            // Performance of LZ4 to decompress such integers is not good.
+            return isStringSizes(type, file_base_name)
+                ? CompressionSetting{CompressionMethod::Lightweight, CompressionDataType::Int64}
+                : CompressionSetting::create<>(setting.method, setting.level, *type);
         }
 
         // compressed_buf -> plain_file

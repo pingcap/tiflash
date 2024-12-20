@@ -338,27 +338,30 @@ bool WindowBlockInputStream::returnIfCancelledOrKilled()
 
 Block WindowBlockInputStream::readImpl()
 {
-    const auto & stream = children.back();
-    while (!action.input_is_finished)
+    // first try to get result without reading from children
+    auto block = action.tryGetOutputBlock();
+    if (block)
+        return block;
+
+    // then if input is not finished, keep reading input until one result block is generated
+    if (!action.input_is_finished)
     {
-        if (returnIfCancelledOrKilled())
-            return {};
+        const auto & stream = children.back();
+        while (!action.input_is_finished)
+        {
+            if (returnIfCancelledOrKilled())
+                return {};
 
-        if (Block output_block = action.tryGetOutputBlock())
-            return output_block;
-
-        Block block = stream->read();
-        if (!block)
-            action.input_is_finished = true;
-        else
-            action.appendBlock(block);
-        action.tryCalculate();
+            Block block = stream->read();
+            if (!block)
+                action.input_is_finished = true;
+            else
+                action.appendBlock(block);
+            if (auto block = action.tryGetOutputBlock())
+                return block;
+        }
     }
-
-    if (returnIfCancelledOrKilled())
-        return {};
-    // return last partition block, if already return then return null
-    return action.tryGetOutputBlock();
+    return {};
 }
 
 // Judge whether current_partition_row is end row of partition in current block
@@ -408,7 +411,9 @@ bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partitio
 
 void WindowTransformAction::advancePartitionEnd()
 {
-    RUNTIME_ASSERT(!partition_ended, log, "partition_ended should be false here.");
+    // if partition_ended is true, we don't need to advance partition_end
+    if (partition_ended)
+        return;
     const RowNumber end = blocksEnd();
 
     // If we're at the total end of data, we must end the partition. This is one
@@ -1270,6 +1275,9 @@ void WindowTransformAction::writeOutCurrentRow()
 
 Block WindowTransformAction::tryGetOutputBlock()
 {
+    // first try calculate the result based on current data
+    tryCalculate();
+    // then return block if it is ready
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
     // calculated the window functions for all input rows. That's why the
@@ -1392,6 +1400,10 @@ void WindowTransformAction::updateAggregationState()
 
 void WindowTransformAction::tryCalculate()
 {
+    // if there is no input data, we don't need to calculate
+    if (window_blocks.empty())
+        return;
+    auto start_block_index = current_row.block;
     // Start the calculations. First, advance the partition end.
     for (;;)
     {
@@ -1465,6 +1477,11 @@ void WindowTransformAction::tryCalculate()
             first_not_ready_row = current_row;
             frame_ended = false;
             frame_started = false;
+            // each `tryCalculate()` will calculate at most 1 block's data
+            // this is to make sure that in pipeline mode, the execution time
+            // of each iterator won't be too long
+            if (current_row.block != start_block_index)
+                return;
         }
 
         if (input_is_finished)
@@ -1544,7 +1561,7 @@ void WindowTransformAction::advanceRowNumber(RowNumber & row_num) const
 RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num) const
 {
     assert(row_num.block >= first_block_number);
-    assert(!(row_num.block == 0 && row_num.row == 0));
+    assert(row_num.block != 0 || row_num.row != 0);
 
     RowNumber prev_row_num = row_num;
     if (row_num.row > 0)

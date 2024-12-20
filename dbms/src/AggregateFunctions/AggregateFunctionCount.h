@@ -16,7 +16,7 @@
 
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
@@ -123,7 +123,7 @@ public:
     }
 
     /// May be used for optimization.
-    void addDelta(AggregateDataPtr __restrict place, UInt64 x) const { data(place).count += x; }
+    static void addDelta(AggregateDataPtr __restrict place, UInt64 x) { data(place).count += x; }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
@@ -134,7 +134,7 @@ class AggregateFunctionCountNotNullUnary final
     : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullUnary>
 {
 public:
-    AggregateFunctionCountNotNullUnary(const DataTypePtr & argument)
+    explicit AggregateFunctionCountNotNullUnary(const DataTypePtr & argument)
     {
         if (!argument->isNullable())
             throw Exception(
@@ -222,7 +222,7 @@ class AggregateFunctionCountNotNullVariadic final
     : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullVariadic>
 {
 public:
-    AggregateFunctionCountNotNullVariadic(const DataTypes & arguments)
+    explicit AggregateFunctionCountNotNullVariadic(const DataTypes & arguments)
     {
         number_of_arguments = arguments.size();
 
@@ -234,7 +234,7 @@ public:
         if (number_of_arguments > MAX_ARGS)
             throw Exception(
                 "Maximum number of arguments for aggregate function with Nullable types is "
-                    + toString(size_t(MAX_ARGS)),
+                    + toString(static_cast<size_t>(MAX_ARGS)),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (size_t i = 0; i < number_of_arguments; ++i)
@@ -295,7 +295,7 @@ private:
         MAX_ARGS = 8
     };
     size_t number_of_arguments = 0;
-    std::array<char, MAX_ARGS> is_nullable; /// Plain array is better than std::vector due to one indirection less.
+    std::array<char, MAX_ARGS> is_nullable{}; /// Plain array is better than std::vector due to one indirection less.
 };
 
 } // namespace DB
