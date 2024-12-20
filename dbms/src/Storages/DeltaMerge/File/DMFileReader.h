@@ -142,6 +142,9 @@ private:
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
 
+    // Initialize, called by constructor
+    // Initialize pack_offset before initializing read_block_infos
+    void initPackOffset();
     void initReadBlockInfos();
 
     struct ReadBlockInfo

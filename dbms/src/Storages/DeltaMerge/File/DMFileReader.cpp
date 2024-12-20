@@ -27,8 +27,6 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
-#include <ranges>
-
 
 namespace DB::ErrorCodes
 {
@@ -81,6 +79,7 @@ DMFileReader::DMFileReader(
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
 {
+    // Initialize column_streams
     for (const auto & cd : read_columns)
     {
         // New inserted column, will be filled with default value later
@@ -102,26 +101,32 @@ DMFileReader::DMFileReader(
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
     }
+
+    // Initialize data_sharing_col_data_cache if needed
     if (max_sharing_column_bytes > 0)
     {
         data_sharing_col_data_cache = std::make_unique<ColumnCache>(ColumnCacheType::DataSharingCache);
     }
 
     // Initialize pack_offset
-    {
-        const auto & pack_stats = dmfile->getPackStats();
-        pack_offset.resize(pack_stats.size());
-        {
-            size_t offset = 0;
-            for (size_t i = 0; i < pack_stats.size(); ++i)
-            {
-                pack_offset[i] = offset;
-                offset += pack_stats[i].rows;
-            }
-        }
-    }
+    initPackOffset();
+
     // Initialize read_block_infos
     initReadBlockInfos();
+}
+
+void DMFileReader::initPackOffset()
+{
+    const auto & pack_stats = dmfile->getPackStats();
+    pack_offset.resize(pack_stats.size());
+    {
+        size_t offset = 0;
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            pack_offset[i] = offset;
+            offset += pack_stats[i].rows;
+        }
+    }
 }
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
