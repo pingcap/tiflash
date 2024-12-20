@@ -104,7 +104,7 @@ Block DMFileWithVectorIndexBlockInputStream::read()
     }
     else
     {
-        // Since we do not call read() here, we need to pop the read_block_infos manually.
+        // Since we do not call `reader.read()` here, we need to pop the read_block_infos manually.
         reader.read_block_infos.pop_front();
     }
 

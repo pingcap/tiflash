@@ -136,6 +136,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
         skip_rows += pack_stats[next_pack_id].rows;
     addSkippedRows(skip_rows);
 
+    // return false if it is the end of stream.
     return !read_block_infos.empty();
 }
 
@@ -716,6 +717,8 @@ void DMFileReader::initReadBlockInfos()
     {
         bool is_use = pack_res[pack_id].isUse();
         bool reach_limit = pack_id - start_pack_id >= read_pack_limit || read_rows >= rows_threshold_per_read;
+        // Get continuous packs with RSResult::All but don't split the read if it is too small.
+        // Too small block may hurts performance.
         bool break_all_match = prev_block_pack_res.allMatch() && !pack_res[pack_id].allMatch()
             && read_rows >= rows_threshold_per_read / 2;
 
