@@ -988,17 +988,50 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
 
     if (processed_rows)
     {
-        /// Add values to the aggregate functions.
-        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
-             ++inst)
+        // /// Add values to the aggregate functions.
+        // for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+        //      ++inst)
+        // {
+        //     inst->batch_that->addBatch(
+        //         agg_process_info.start_row,
+        //         *processed_rows - agg_process_info.start_row + 1,
+        //         places.get(),
+        //         inst->state_offset,
+        //         inst->batch_arguments,
+        //         aggregates_pool);
+        // }
+        size_t i = agg_process_info.start_row;
+        const size_t end = *processed_rows - agg_process_info.start_row + 1;
+        const size_t step = 256;
+        while (i < end)
         {
-            inst->batch_that->addBatch(
-                agg_process_info.start_row,
-                *processed_rows - agg_process_info.start_row + 1,
-                places.get(),
-                inst->state_offset,
-                inst->batch_arguments,
-                aggregates_pool);
+            size_t batch_size = step;
+            if unlikely (i + batch_size > end)
+                batch_size = end - i;
+
+            bool first_inst = true;
+            for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+                 ++inst)
+            {
+                if (first_inst)
+                    inst->batch_that->addBatchWithPrefetch(
+                        i,
+                        batch_size,
+                        places.get() + i,
+                        inst->state_offset,
+                        inst->batch_arguments,
+                        aggregates_pool);
+                else
+                    inst->batch_that->addBatch(
+                        i,
+                        batch_size,
+                        places.get() + i,
+                        inst->state_offset,
+                        inst->batch_arguments,
+                        aggregates_pool);
+                first_inst = false;
+            }
+            i += batch_size;
         }
         agg_process_info.start_row = *processed_rows + 1;
     }

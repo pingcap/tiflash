@@ -128,6 +128,15 @@ public:
     /** Contains a loop with calls to "add" function. You can collect arguments into array "places"
       *  and do a single call to "addBatch" for devirtualization and inlining.
       */
+    virtual void addBatchWithPrefetch(
+        size_t start_offset,
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const { RUNTIME_CHECK_MSG(false, "cannot be here");}
+
     virtual void addBatch(
         size_t start_offset,
         size_t batch_size,
@@ -236,6 +245,39 @@ public:
         ssize_t if_argument_pos = -1) const override
     {
         const auto end = start_offset + batch_size;
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            for (size_t i = start_offset; i < end; ++i)
+            {
+                const auto place_idx = i - start_offset;
+
+                if (flags[i] && places[place_idx])
+                    static_cast<const Derived *>(this)->add(places[place_idx] + place_offset, columns, i, arena);
+            }
+        }
+        else
+        {
+            for (size_t i = start_offset; i < end; ++i)
+            {
+                const auto place_idx = i - start_offset;
+
+                if (places[place_idx])
+                    static_cast<const Derived *>(this)->add(places[place_idx] + place_offset, columns, i, arena);
+            }
+        }
+    }
+
+    void addBatchWithPrefetch(
+        size_t start_offset,
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
+    {
+        const auto end = start_offset + batch_size;
         static constexpr size_t prefetch_step = 16;
         if (if_argument_pos >= 0)
         {
@@ -248,7 +290,7 @@ public:
                 if (flags[i] && places[place_idx])
                 {
                     if likely (prefetch_idx < end)
-                        __builtin_prefetch(places[prefetch_idx] + place_offset);
+                        __builtin_prefetch(places[prefetch_idx]);
 
                     static_cast<const Derived *>(this)->add(places[place_idx] + place_offset, columns, i, arena);
                 }
@@ -264,7 +306,7 @@ public:
                 if (places[place_idx])
                 {
                     if likely (prefetch_idx < end)
-                        __builtin_prefetch(places[prefetch_idx] + place_offset);
+                        __builtin_prefetch(places[prefetch_idx]);
 
                     static_cast<const Derived *>(this)->add(places[place_idx] + place_offset, columns, i, arena);
                 }
