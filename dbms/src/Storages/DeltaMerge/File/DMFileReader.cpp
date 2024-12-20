@@ -188,7 +188,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         const auto offset_begin = new_start_row_offset - start_row_offset;
         const auto offset_end = offset_begin + new_read_rows;
 
-        Block block = readImpl(block_info);
+        Block block = readImpl(new_start_pack_id, new_pack_count, new_rs_result, new_read_rows);
         block_pack_res = block_pack_res && new_rs_result;
         if (size_t passed_count = countBytesInFilter(filter, offset_begin, new_read_rows);
             passed_count != new_read_rows)
@@ -233,22 +233,21 @@ Block DMFileReader::read()
     if (size_t skip_rows = 0; !getSkippedRows(skip_rows))
         return {};
 
-    const auto block_info = read_block_infos.front();
+    const auto [start_pack_id, pack_count, rs_result, read_rows] = read_block_infos.front();
     read_block_infos.pop_front();
-
-    if (read_tag == ReadTag::Query && block_info.rs_result.allMatch())
-        scan_context->rs_dmfile_read_with_all += block_info.pack_count;
-
-    return readImpl(block_info);
+    return readImpl(start_pack_id, pack_count, rs_result, read_rows);
 }
 
-Block DMFileReader::readImpl(const ReadBlockInfo & block_info)
+Block DMFileReader::readImpl(size_t start_pack_id, size_t pack_count, RSResult rs_result, size_t read_rows)
 {
     Stopwatch watch;
     SCOPE_EXIT(scan_context->total_dmfile_read_time_ns += watch.elapsed(););
 
-    /// 1. Find the rows can be read.
-    const auto [start_pack_id, pack_count, rs_result, read_rows] = block_info;
+    /// 1. Update next_pack_id and add scanned rows
+
+    if (read_tag == ReadTag::Query && rs_result.allMatch())
+        scan_context->rs_dmfile_read_with_all += pack_count;
+
     next_pack_id = start_pack_id + pack_count;
     const size_t start_row_offset = pack_offset[start_pack_id];
     addScannedRows(read_rows);

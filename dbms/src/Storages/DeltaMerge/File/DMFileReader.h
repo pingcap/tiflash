@@ -100,6 +100,7 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
+    Block readImpl(size_t start_pack_id, size_t pack_count, RSResult rs_result, size_t read_rows);
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
@@ -157,8 +158,6 @@ private:
     // Split the first read block info to multiple read block infos
     // Used by readWithFilter, return new read block infos.
     std::vector<ReadBlockInfo> getNewReadBlockInfos(size_t pack_begin, size_t pack_end, const IColumn::Filter & filter);
-
-    Block readImpl(const ReadBlockInfo & block_info);
 
 private:
     DMFilePtr dmfile;
