@@ -18,6 +18,8 @@
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Operators/Operator.h>
 
+#include <optional>
+
 namespace DB
 {
 class ExchangeSenderSinkOp : public SinkOp
@@ -47,8 +49,10 @@ protected:
 
 private:
     OperatorStatus waitForWriter() const;
+    OperatorStatus tryFlush();
 
 private:
+    std::optional<Block> buffer;
     std::unique_ptr<DAGResponseWriter> writer;
     size_t total_rows = 0;
 };

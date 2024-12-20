@@ -28,15 +28,34 @@ void ExchangeSenderSinkOp::operateSuffixImpl()
 
 OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
-    if (!block)
-    {
-        writer->flush();
-        return OperatorStatus::FINISHED;
-    }
+    assert(!buffer);
+    buffer.emplace(std::move(block));
+    return tryFlush();
+}
 
-    total_rows += block.rows();
-    writer->write(block);
-    return OperatorStatus::NEED_INPUT;
+OperatorStatus ExchangeSenderSinkOp::tryFlush()
+{
+    assert(buffer);
+    auto res = waitForWriter();
+    if (res == OperatorStatus::NEED_INPUT)
+    {
+        // if writer is ready, write/flush should always succeed
+        if (buffer.value())
+        {
+            total_rows += buffer->rows();
+            writer->write(std::move(*buffer));
+        }
+        else
+        {
+            // meet eof, flush the writer, and the return status should be FINISHED
+            writer->flush();
+            res = OperatorStatus::FINISHED;
+        }
+        buffer.reset();
+        return res;
+    }
+    // writer is not ready, return the status
+    return res;
 }
 
 OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
@@ -55,7 +74,8 @@ OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
 
 OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
-    return waitForWriter();
+    // if there is cached data, flush it
+    return buffer ? tryFlush() : OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus ExchangeSenderSinkOp::awaitImpl()
