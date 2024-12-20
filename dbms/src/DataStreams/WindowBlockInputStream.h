@@ -221,6 +221,8 @@ private:
         }
     }
 
+    // Use decrease interface only when add row number is larger than decrease row number
+    bool checkIfNeedDecrease();
     void updateAggregationState();
 
     void reinitializeAggFuncBeforeNextPartition();

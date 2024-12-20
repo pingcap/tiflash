@@ -1368,6 +1368,18 @@ void WindowTransformAction::appendBlock(Block & current_block)
     window_block.input_columns = current_block.getColumns();
 }
 
+// TODO test this function with ut
+bool WindowTransformAction::checkIfNeedDecrease()
+{
+    if (prev_frame_end <= frame_start)
+        return false;
+
+    // added row refers to the rows that have been added in the previous frame
+    UInt64 add_row_num = distance(prev_frame_end, frame_start);
+    UInt64 decrease_row_num = distance(frame_start, prev_frame_start);
+    return add_row_num > decrease_row_num;
+}
+
 // TODO ensure and check that if data's destructor will be called and the allocated memory could be released
 // Update the aggregation states after the frame has changed.
 void WindowTransformAction::updateAggregationState()
@@ -1389,12 +1401,15 @@ void WindowTransformAction::updateAggregationState()
         if (ws.window_function)
             continue;
 
-        // TODO compare the decrease and add number in previous frame
-        // when decrease > add, we create a new agg data to recalculate from start.
-        const RowNumber & end = frame_start <= prev_frame_end ? frame_start : prev_frame_end;
-        decreaseAggregationState(ws, prev_frame_start, end);
-        const RowNumber & start = frame_start <= prev_frame_end ? prev_frame_end : frame_start;
-        addAggregationState(ws, start, end);
+        RowNumber start = frame_start;
+
+        if (checkIfNeedDecrease())
+        {
+            decreaseAggregationState(ws, prev_frame_start, frame_start);
+            start = prev_frame_end;
+        }
+
+        addAggregationState(ws, start, frame_end);
     }
 }
 
