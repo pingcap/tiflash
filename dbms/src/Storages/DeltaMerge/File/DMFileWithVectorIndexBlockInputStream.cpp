@@ -160,7 +160,6 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
     auto last_pack_res = RSResult::All;
     auto sorted_results_it = sorted_results.cbegin();
     size_t pack_id = 0;
-    bool prev_all_match = true;
     for (; pack_id < pack_stats.size(); ++pack_id)
     {
         if (sorted_results_it == sorted_results.cend())
@@ -170,7 +169,8 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
             = std::lower_bound(begin, sorted_results.cend(), reader.pack_offset[pack_id] + pack_stats[pack_id].rows);
         bool is_use = begin != end;
         bool reach_limit = read_rows >= reader.rows_threshold_per_read;
-        bool break_all_match = !pack_res[pack_id].allMatch() && read_rows >= reader.rows_threshold_per_read / 2;
+        bool break_all_match = last_pack_res.allMatch() && !pack_res[pack_id].allMatch()
+            && read_rows >= reader.rows_threshold_per_read / 2;
 
         if (!is_use)
         {
@@ -179,7 +179,6 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
             start_pack_id = pack_id + 1;
             read_rows = 0;
             last_pack_res = RSResult::All;
-            prev_all_match = true;
         }
         else if (reach_limit || break_all_match)
         {
@@ -188,13 +187,11 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
             last_pack_res = pack_res[pack_id];
-            prev_all_match = true;
         }
         else
         {
             last_pack_res = last_pack_res && pack_res[pack_id];
             read_rows += pack_stats[pack_id].rows;
-            prev_all_match = prev_all_match && pack_res[pack_id].allMatch();
         }
 
         sorted_results_it = end;

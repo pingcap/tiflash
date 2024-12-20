@@ -712,13 +712,12 @@ void DMFileReader::initReadBlockInfos()
     size_t start_pack_id = 0;
     size_t read_rows = 0;
     auto last_pack_res = RSResult::All;
-    bool prev_all_match = true;
     for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
     {
         bool is_use = pack_res[pack_id].isUse();
         bool reach_limit = pack_id - start_pack_id >= read_pack_limit || read_rows >= rows_threshold_per_read;
         bool break_all_match
-            = prev_all_match && !pack_res[pack_id].allMatch() && read_rows >= rows_threshold_per_read / 2;
+            = last_pack_res.allMatch() && !pack_res[pack_id].allMatch() && read_rows >= rows_threshold_per_read / 2;
 
         if (!is_use)
         {
@@ -728,7 +727,6 @@ void DMFileReader::initReadBlockInfos()
             start_pack_id = pack_id + 1;
             read_rows = 0;
             last_pack_res = RSResult::All;
-            prev_all_match = true;
         }
         else if (reach_limit || break_all_match)
         {
@@ -738,13 +736,11 @@ void DMFileReader::initReadBlockInfos()
             start_pack_id = pack_id;
             read_rows = pack_stats[pack_id].rows;
             last_pack_res = pack_res[pack_id];
-            prev_all_match = true;
         }
         else
         {
             last_pack_res = last_pack_res && pack_res[pack_id];
             read_rows += pack_stats[pack_id].rows;
-            prev_all_match = prev_all_match && pack_res[pack_id].allMatch();
         }
     }
     if (read_rows > 0)
