@@ -206,12 +206,6 @@ public:
         this->data(place).add(timestamp, events);
     }
 
-    // TODO move to helper
-    void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
-    {
-        throw Exception("Not implemented yet");
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).merge(this->data(rhs));

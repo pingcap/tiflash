@@ -71,12 +71,6 @@ public:
         set.insert(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
-    // TODO move to helper
-    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
-    {
-        throw Exception("");
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).value.merge(this->data(rhs).value);

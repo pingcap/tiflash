@@ -109,12 +109,6 @@ public:
             this->data(place).value.push_back(std::make_pair(right, static_cast<Int64>(-1)), arena);
     }
 
-    // TODO move to helper
-    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
-    {
-        throw Exception("");
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         auto & cur_elems = this->data(place);

@@ -57,7 +57,7 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
-    //{tipb::ExprType::Avg, ""},
+    {tipb::ExprType::Avg, "avg"}, // Only used in aggregation in window function
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},

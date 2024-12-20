@@ -231,12 +231,6 @@ public:
             threshold);
     }
 
-    // TODO move to helper
-    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
-    {
-        throw Exception("");
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).merge(this->data(rhs), threshold);

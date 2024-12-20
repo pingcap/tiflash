@@ -221,12 +221,6 @@ public:
             this->data(place).add(static_cast<const ColumnVector<T1> &>(*columns[0]).getData()[row_num]);
     }
 
-    // TODO move to helper
-    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
-    {
-        throw Exception("");
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).merge(this->data(rhs));
