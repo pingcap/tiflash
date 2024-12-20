@@ -151,10 +151,15 @@ private:
         RSResult rs_result = RSResult::All;
         size_t read_rows = 0;
     };
-    // Will add some new read info to read_block_infos
-    // Used by readWithFilter
-    // Return the original read block info and the number of new read block info
-    std::tuple<ReadBlockInfo, size_t> updateReadBlockInfos(const IColumn::Filter & filter);
+    // Split the first read block info to multiple read block infos
+    // Used by readWithFilter, return new read block infos.
+    std::vector<ReadBlockInfo> getNewReadBlockInfos(
+        size_t pack_begin,
+        size_t pack_end,
+        RSResult rs_result,
+        const IColumn::Filter & filter);
+
+    Block readImpl(const ReadBlockInfo & block_info);
 
 private:
     DMFilePtr dmfile;
