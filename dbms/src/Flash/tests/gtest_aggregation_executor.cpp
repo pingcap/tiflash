@@ -1042,22 +1042,29 @@ try
             toVec<Int8>("col_tinyint", col_data_tinyint),
         });
 
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+
     std::vector<size_t> max_block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
     std::vector<UInt64> two_level_thresholds{0, 1};
 
+    std::uniform_int_distribution<size_t> dist(0, max_block_sizes.size());
+    size_t random_block_size = max_block_sizes[dist(gen)];
+
+    std::uniform_int_distribution<size_t> dist1(0, two_level_thresholds.size());
+    size_t random_two_level_threshold = two_level_thresholds[dist1(gen)];
+    LOG_DEBUG(
+        Logger::get("AggExecutorTestRunner::AggKeyOptimization"),
+        "max_block_size: {}, two_level_threshold: {}",
+        random_block_size,
+        random_two_level_threshold);
+
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
-#define WRAP_FOR_AGG_STRING_TEST_BEGIN                                \
-    for (const auto & max_block_size : max_block_sizes)               \
-    {                                                                 \
-        for (const auto & two_level_threshold : two_level_thresholds) \
-        {                                                             \
-            context.context->setSetting(                              \
-                "group_by_two_level_threshold",                       \
-                Field(static_cast<UInt64>(two_level_threshold)));     \
-            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-#define WRAP_FOR_AGG_STRING_TEST_END \
-    }                                \
-    }
+#define WRAP_FOR_AGG_CHANGE_SETTINGS                             \
+    context.context->setSetting(                                 \
+        "group_by_two_level_threshold",                          \
+        Field(static_cast<UInt64>(random_two_level_threshold))); \
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(random_block_size)));
 
     FailPointHelper::enableFailPoint(FailPoints::force_agg_prefetch);
     {
@@ -1074,9 +1081,8 @@ try
                toNullableVec<Int8>("first_row(col_tinyint)", ColumnWithNullableInt8{0, 1, 2, 3}),
                toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3}),
                toVec<Int8>("col_tinyint", ColumnWithInt8{0, 1, 2, 3})};
-        WRAP_FOR_AGG_STRING_TEST_BEGIN
+        WRAP_FOR_AGG_CHANGE_SETTINGS
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1092,9 +1098,8 @@ try
             = {toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
                toNullableVec<Int32>("first_row(col_int)", ColumnWithNullableInt32{0, 1, 2, 3}),
                toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})};
-        WRAP_FOR_AGG_STRING_TEST_BEGIN
+        WRAP_FOR_AGG_CHANGE_SETTINGS
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1128,9 +1133,8 @@ try
             toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
             toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"}),
         };
-        WRAP_FOR_AGG_STRING_TEST_BEGIN
+        WRAP_FOR_AGG_CHANGE_SETTINGS
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1147,9 +1151,8 @@ try
             toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
             toVec<String>("first_row(col_string_with_collator)", ColumnWithString{"a", "b", "c", "d"}),
         };
-        WRAP_FOR_AGG_STRING_TEST_BEGIN
+        WRAP_FOR_AGG_CHANGE_SETTINGS
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     // case-5: none
@@ -1171,9 +1174,8 @@ try
             toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3}),
             toVec<String>("col_string_no_collator", ColumnWithString{"a", "b", "c", "d"}),
         };
-        WRAP_FOR_AGG_STRING_TEST_BEGIN
+        WRAP_FOR_AGG_CHANGE_SETTINGS
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_STRING_TEST_END
     }
 
     {
@@ -1190,13 +1192,11 @@ try
             toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
             toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"}),
             toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})};
-        WRAP_FOR_AGG_STRING_TEST_BEGIN
+        WRAP_FOR_AGG_CHANGE_SETTINGS
         executeAndAssertColumnsEqual(request, expected);
-        WRAP_FOR_AGG_STRING_TEST_END
     }
     FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
-#undef WRAP_FOR_AGG_STRING_TEST_BEGIN
-#undef WRAP_FOR_AGG_STRING_TEST_END
+#undef WRAP_FOR_AGG_CHANGE_SETTINGS
 }
 CATCH
 

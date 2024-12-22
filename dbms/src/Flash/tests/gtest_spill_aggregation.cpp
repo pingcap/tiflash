@@ -376,7 +376,6 @@ try
         {
             for (const auto & agg_func : agg_funcs)
             {
-                FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
                 context.setCollation(collator_id);
                 const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
                 ASSERT_TRUE(current_collator != nullptr);

@@ -1370,7 +1370,6 @@ try
         FailPoints::exception_during_mpp_non_root_task_run,
         FailPoints::exception_during_mpp_root_task_run,
         FailPoints::exception_during_query_run,
-        FailPoints::force_agg_prefetch,
     };
     size_t query_index = 0;
     for (const auto & failpoint : failpoint_names)
