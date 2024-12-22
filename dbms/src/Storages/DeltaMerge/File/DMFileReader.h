@@ -100,7 +100,25 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    Block readImpl(size_t start_pack_id, size_t pack_count, RSResult rs_result, size_t read_rows);
+    // Initialize, called by constructor
+    // Initialize pack_offset before initializing read_block_infos
+    void initPackOffset();
+    void initReadBlockInfos();
+
+    struct ReadBlockInfo
+    {
+        size_t start_pack_id = 0;
+        size_t pack_count = 0;
+        RSResult rs_result = RSResult::All;
+        size_t read_rows = 0;
+    };
+    // Split the first read block info to multiple read block infos accroding to `filter`
+    // Used by readWithFilter, return new read block infos.
+    std::vector<ReadBlockInfo> splitReadBlockInfos(const ReadBlockInfo & read_info, const IColumn::Filter & filter)
+        const;
+
+    Block readImpl(const ReadBlockInfo & read_info);
+
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
@@ -142,22 +160,6 @@ private:
 
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
-
-    // Initialize, called by constructor
-    // Initialize pack_offset before initializing read_block_infos
-    void initPackOffset();
-    void initReadBlockInfos();
-
-    struct ReadBlockInfo
-    {
-        size_t start_pack_id = 0;
-        size_t pack_count = 0;
-        RSResult rs_result = RSResult::All;
-        size_t read_rows = 0;
-    };
-    // Split the first read block info to multiple read block infos
-    // Used by readWithFilter, return new read block infos.
-    std::vector<ReadBlockInfo> getNewReadBlockInfos(size_t pack_begin, size_t pack_end, const IColumn::Filter & filter);
 
 private:
     DMFilePtr dmfile;

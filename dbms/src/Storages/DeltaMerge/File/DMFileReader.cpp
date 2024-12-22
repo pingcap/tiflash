@@ -160,13 +160,14 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
     /// 1. Get start_pack_id, rs_result, read_rows, and new read block infos
 
-    const auto [start_pack_id, pack_count, rs_result, read_rows] = read_block_infos.front();
+    // The read_block_info before splited by `filter`
+    const auto ori_block_info = read_block_infos.front();
     read_block_infos.pop_front();
     // do not update next_pack_id here, it will be updated in readImpl().
     // next_pack_id = start_pack_id + pack_count;
-    RUNTIME_CHECK(read_rows == filter.size(), read_rows, filter.size());
-    const auto new_block_infos = getNewReadBlockInfos(start_pack_id, start_pack_id + pack_count, filter);
-    const size_t start_row_offset = pack_offset[start_pack_id];
+    RUNTIME_CHECK(ori_block_info.read_rows == filter.size(), ori_block_info.read_rows, filter.size());
+    const auto new_block_infos = splitReadBlockInfos(ori_block_info, filter);
+    const size_t start_row_offset = pack_offset[ori_block_info.start_pack_id];
 
     /// 2. Read and filter packs
 
@@ -183,16 +184,15 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     auto block_pack_res = RSResult::All;
     for (const auto & block_info : new_block_infos)
     {
-        const auto [new_start_pack_id, new_pack_count, new_rs_result, new_read_rows] = block_info;
-        const size_t new_start_row_offset = pack_offset[new_start_pack_id];
+        const size_t new_start_row_offset = pack_offset[block_info.start_pack_id];
 
         const auto offset_begin = new_start_row_offset - start_row_offset;
-        const auto offset_end = offset_begin + new_read_rows;
+        const auto offset_end = offset_begin + block_info.read_rows;
 
-        Block block = readImpl(new_start_pack_id, new_pack_count, new_rs_result, new_read_rows);
-        block_pack_res = block_pack_res && new_rs_result;
-        if (size_t passed_count = countBytesInFilter(filter, offset_begin, new_read_rows);
-            passed_count != new_read_rows)
+        Block block = readImpl(block_info);
+        block_pack_res = block_pack_res && block_info.rs_result;
+        if (size_t passed_count = countBytesInFilter(filter, offset_begin, block_info.read_rows);
+            passed_count != block_info.read_rows)
         {
             std::vector<size_t> positions;
             positions.reserve(passed_count);
@@ -219,7 +219,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     Block res = getHeader().cloneWithColumns(std::move(columns));
     res.setStartOffset(start_row_offset);
     res.setRSResult(block_pack_res);
-    addSkippedRows(read_rows - total_passed_count);
+    addSkippedRows(ori_block_info.read_rows - total_passed_count);
 
     return res;
 }
@@ -234,18 +234,18 @@ Block DMFileReader::read()
     if (size_t skip_rows = 0; !getSkippedRows(skip_rows))
         return {};
 
-    const auto [start_pack_id, pack_count, rs_result, read_rows] = read_block_infos.front();
+    const auto read_info = read_block_infos.front();
     read_block_infos.pop_front();
-    return readImpl(start_pack_id, pack_count, rs_result, read_rows);
+    return readImpl(read_info);
 }
 
-Block DMFileReader::readImpl(size_t start_pack_id, size_t pack_count, RSResult rs_result, size_t read_rows)
+Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
 {
     Stopwatch watch;
     SCOPE_EXIT(scan_context->total_dmfile_read_time_ns += watch.elapsed(););
 
     /// 1. Update next_pack_id and add scanned rows
-
+    const auto & [start_pack_id, pack_count, rs_result, read_rows] = read_info;
     if (read_tag == ReadTag::Query && rs_result.allMatch())
         scan_context->rs_dmfile_read_with_all += pack_count;
 
@@ -750,20 +750,20 @@ void DMFileReader::initReadBlockInfos()
         read_block_infos.emplace_back(start_pack_id, pack_res.size() - start_pack_id, prev_block_pack_res, read_rows);
 }
 
-std::vector<DMFileReader::ReadBlockInfo> DMFileReader::getNewReadBlockInfos(
-    size_t pack_begin,
-    size_t pack_end,
-    const IColumn::Filter & filter)
+std::vector<DMFileReader::ReadBlockInfo> DMFileReader::splitReadBlockInfos(
+    const ReadBlockInfo & read_info,
+    const IColumn::Filter & filter) const
 {
-    const size_t start_row_offset = pack_offset[pack_begin];
+    const auto pack_end = read_info.start_pack_id + read_info.pack_count;
+    const size_t start_row_offset = pack_offset[read_info.start_pack_id];
     const auto & pack_res = pack_filter.getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
     std::vector<ReadBlockInfo> new_read_block_infos;
-    new_read_block_infos.reserve(pack_end - pack_begin);
+    new_read_block_infos.reserve(pack_end - read_info.start_pack_id);
     size_t read_rows = 0;
-    size_t start_pack_id = pack_begin;
+    size_t start_pack_id = read_info.start_pack_id;
     auto last_pack_res = RSResult::All;
-    for (size_t pack_id = pack_begin; pack_id < pack_end; ++pack_id)
+    for (size_t pack_id = read_info.start_pack_id; pack_id < pack_end; ++pack_id)
     {
         if (countBytesInFilter(filter, pack_offset[pack_id] - start_row_offset, pack_stats[pack_id].rows) == 0)
         {
