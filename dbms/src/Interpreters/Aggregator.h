@@ -1479,6 +1479,15 @@ protected:
         typename Method::State & state,
         size_t index,
         Arena & aggregates_pool,
+        std::vector<std::string> & sort_key_containers,
+        size_t hashval) const;
+
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
+        Method & method,
+        typename Method::State & state,
+        size_t index,
+        Arena & aggregates_pool,
         std::vector<std::string> & sort_key_containers) const;
 
     /// For case when there are no keys (all aggregate into one row).
