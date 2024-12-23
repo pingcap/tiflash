@@ -666,11 +666,12 @@ void NO_INLINE Aggregator::executeImpl(
 {
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
+    const size_t prefetch_threshold = 8192 * 16;
 #ifndef NDEBUG
-    bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
+    bool disable_prefetch = (method.data.getBufferSizeInCells() < prefetch_threshold);
     fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
 #else
-    const bool disable_prefetch = (method.data.getBufferSizeInCells() < 8192);
+    const bool disable_prefetch = (method.data.getBufferSizeInCells() < prefetch_threshold);
 #endif
 
     // key_serialized needs column-wise handling for prefetch.
