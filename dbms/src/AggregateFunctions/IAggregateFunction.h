@@ -278,7 +278,7 @@ public:
         ssize_t if_argument_pos = -1) const override
     {
         const auto end = start_offset + batch_size;
-        static constexpr size_t prefetch_step = 32;
+        static constexpr size_t prefetch_step = 16;
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();

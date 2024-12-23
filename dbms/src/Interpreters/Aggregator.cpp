@@ -1888,6 +1888,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     });
 
     auto prefetch_idx = 16;
+    data_index = 0;
     for (size_t i = 0; i < rows; ++i)
     {
         if (prefetch_idx < rows)
@@ -1895,6 +1896,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
 
         size_t key_columns_vec_index = data_index / params.max_block_size;
         insertAggregatesIntoColumns(places[i], final_aggregate_columns_vec[key_columns_vec_index], arena);
+        ++data_index;
     }
 }
 
