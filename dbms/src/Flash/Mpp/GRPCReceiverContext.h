@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
@@ -104,12 +105,15 @@ public:
         LocalRequestHandler & local_request_handler,
         bool has_remote_conn);
 
+    const ConnTypeVec & getConnTypeVec() const { return conn_type_vec; }
+
     static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(
         const ::mpp::EstablishMPPConnectionRequest * request,
         const std::shared_ptr<MPPTaskManager> & task_manager);
 
 private:
     tipb::ExchangeReceiver exchange_receiver_meta;
+    mutable ConnTypeVec conn_type_vec;
     mpp::TaskMeta task_meta;
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;

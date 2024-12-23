@@ -30,6 +30,7 @@ struct ConnectionProfileInfo
         InnerZoneRemote = 1,
         InterZoneRemote = 2,
     };
+    using ConnTypeVec = std::vector<ConnectionProfileInfo::ConnectionType>;
     static ALWAYS_INLINE ConnectionType inferConnectionType(bool is_local, bool same_zone)
     {
         if (is_local)

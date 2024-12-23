@@ -44,6 +44,20 @@ struct IOProfileInfo
         return info;
     }
 
+    static IOProfileInfoPtr createForRemote(
+        const OperatorProfileInfoPtr & profile_info,
+        size_t connections,
+        const ConnTypeVec & conn_type_vec)
+    {
+        auto info = std::make_shared<IOProfileInfo>(profile_info, false);
+        info->connection_profile_infos.resize(connections);
+        for (size_t i = 0; i < connections; ++i)
+        {
+            info->connection_profile_infos[i].type = conn_type_vec[i];
+        }
+        return info;
+    }
+
     OperatorProfileInfoPtr operator_info;
 
     const bool is_local;

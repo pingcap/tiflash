@@ -19,9 +19,12 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 
 #include <memory>
 #include <mutex>
+
+
 
 namespace DB
 {
@@ -142,6 +145,7 @@ public:
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
     void verifyStreamId(size_t stream_id) const;
+    const ConnTypeVec & getConnTypeVec() const;
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
