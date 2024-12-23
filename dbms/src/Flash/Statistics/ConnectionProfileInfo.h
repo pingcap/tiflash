@@ -16,11 +16,37 @@
 
 #include <common/types.h>
 
+#include "common/defines.h"
+
 namespace DB
 {
+
 struct ConnectionProfileInfo
 {
+    enum ConnectionType
+    {
+        Local = 0,
+        InnerZoneRemote = 1,
+        InterZoneRemote = 2,
+    };
+    static ALWAYS_INLINE ConnectionType inferConnectionType(bool is_local, bool same_zone)
+    {
+        if (is_local)
+        {
+            return Local;
+        }
+        else if (same_zone)
+        {
+            return InnerZoneRemote;
+        }
+        else
+        {
+            return InterZoneRemote;
+        }
+    }
+
     Int64 packets = 0;
     Int64 bytes = 0;
+    ConnectionType type = Local;
 };
 } // namespace DB

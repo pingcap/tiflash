@@ -23,6 +23,8 @@
 
 #include <magic_enum.hpp>
 
+#include "Flash/Statistics/ConnectionProfileInfo.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -74,6 +76,7 @@ MPPTunnel::MPPTunnel(
     const CapacityLimits & queue_limits_,
     bool is_local_,
     bool is_async_,
+    bool same_zone,
     const String & req_id)
     : MPPTunnel(
         fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()),
@@ -81,6 +84,7 @@ MPPTunnel::MPPTunnel(
         queue_limits_,
         is_local_,
         is_async_,
+        same_zone,
         req_id)
 {}
 
@@ -90,6 +94,7 @@ MPPTunnel::MPPTunnel(
     const CapacityLimits & queue_limits_,
     bool is_local_,
     bool is_async_,
+    bool same_zone,
     const String & req_id)
     : status(TunnelStatus::Unconnected)
     , timeout(timeout_)
@@ -107,6 +112,7 @@ MPPTunnel::MPPTunnel(
         mode = TunnelSenderMode::ASYNC_GRPC;
     else
         mode = TunnelSenderMode::SYNC_GRPC;
+    connection_profile_info.type = ConnectionProfileInfo::inferConnectionType(is_local_, same_zone);
     GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
 }
 

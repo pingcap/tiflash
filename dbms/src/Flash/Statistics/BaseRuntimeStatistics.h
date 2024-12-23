@@ -32,6 +32,10 @@ struct BaseRuntimeStatistics
     UInt64 minTSO_wait_time_ns = 0;
     UInt64 queue_wait_time_ns = 0;
     UInt64 pipeline_breaker_wait_time_ns = 0;
+    UInt64 inner_zone_send_bytes = 0;
+    UInt64 inner_zone_receive_bytes = 0;
+    UInt64 inter_zone_send_bytes = 0;
+    UInt64 inter_zone_receive_bytes = 0;
 
     void append(const BlockStreamProfileInfo &);
     void append(const OperatorProfileInfo &);

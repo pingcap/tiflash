@@ -18,18 +18,21 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
 
+#include "Flash/Statistics/ConnectionProfileInfo.h"
+
 namespace DB
 {
 String MPPTunnelDetail::toJson() const
 {
     return fmt::format(
-        R"({{"tunnel_id":"{}","sender_target_task_id":{},"sender_target_host":"{}","is_local":{},"packets":{},"bytes":{}}})",
+        R"({{"tunnel_id":"{}","sender_target_task_id":{},"sender_target_host":"{}","is_local":{},"conn_type":{},"packets":{},"bytes":{}}})",
         tunnel_id,
         sender_target_task_id,
         sender_target_host,
         is_local,
-        packets,
-        bytes);
+        static_cast<Int32>(conn_profile_info.type),
+        conn_profile_info.packets,
+        conn_profile_info.bytes);
 }
 
 void ExchangeSenderStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
@@ -53,8 +56,19 @@ void ExchangeSenderStatistics::collectExtraRuntimeDetail()
     for (UInt16 i = 0; i < partition_num; ++i)
     {
         const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
-        mpp_tunnel_details[i].packets = connection_profile_info.packets;
-        mpp_tunnel_details[i].bytes = connection_profile_info.bytes;
+        mpp_tunnel_details[i].conn_profile_info.packets = connection_profile_info.packets;
+        mpp_tunnel_details[i].conn_profile_info.bytes = connection_profile_info.bytes;
+        switch (mpp_tunnel_details[i].conn_profile_info.type)
+        {
+        case ConnectionProfileInfo::InnerZoneRemote:
+            base.inner_zone_send_bytes += connection_profile_info.bytes;
+            break;
+        case DB::ConnectionProfileInfo::InterZoneRemote:
+            base.inter_zone_send_bytes += connection_profile_info.bytes;
+            break;
+        default:
+            break;
+        }
     }
 }
 
@@ -83,8 +97,12 @@ ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * execut
         sender_target_task_ids.push_back(task_meta.task_id());
 
         const auto & mpp_tunnel = mpp_tunnels[i];
-        mpp_tunnel_details
-            .emplace_back(mpp_tunnel->id(), task_meta.task_id(), task_meta.address(), mpp_tunnel->isLocal());
+        mpp_tunnel_details.emplace_back(
+            mpp_tunnel->getConnectionProfileInfo(),
+            mpp_tunnel->id(),
+            task_meta.task_id(),
+            task_meta.address(),
+            mpp_tunnel->isLocal());
     }
 
     // for root task, exchange_sender_executor.task_meta[0].address is blank or not tidb host

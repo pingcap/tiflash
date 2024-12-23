@@ -215,6 +215,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         std::max(5, context->getSettingsRef().max_threads * 5),
         tunnel_queue_memory_bound); // MPMCQueue can benefit from a slightly larger queue size
 
+    bool safe_zone_flag_fields = exchange_sender.same_zone_flag_size() == exchange_sender.encoded_task_meta_size();
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
@@ -235,6 +236,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
             queue_limit,
             is_local,
             is_async,
+            safe_zone_flag_fields ? exchange_sender.same_zone_flag().Get(i) : true,
             log->identifier());
 
         LOG_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
