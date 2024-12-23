@@ -18,6 +18,10 @@
 #include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
+#include <optional>
+
+#include "TestUtils/FunctionTestUtils.h"
+
 
 namespace DB::tests
 {
@@ -28,6 +32,19 @@ public:
 
     void initializeContext() override { ExecutorTest::initializeContext(); }
 };
+
+// TODO test frame position list:
+// 1. prev_start = frame_start, prev_end = frame_end
+// 2. prev_start < frame_start, prev_end = frame_end
+// 3. prev_start < frame_start, prev_end < frame_end
+// 4. prev_end <= frame_start
+
+// TODO decrease and add test list:
+// 1. decrease = 0
+// 2. decrease < add
+// 3. decrease = add
+// 4. decrease > add
+// 5. add = 0
 
 TEST_F(WindowAggFuncTest, windowAggSumTests)
 try
@@ -40,7 +57,7 @@ try
         frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 3);
         std::vector<Int64> frame_start_offset{0, 1, 3, 10};
 
-        std::vector<std::vector<Int64>> res{
+        std::vector<std::vector<std::optional<Int64>>> res{
             {0, 15, 14, 12, 8, 26, 41, 38, 28, 15, 18, 32, 49, 75, 66, 51, 31},
             {0, 15, 15, 14, 12, 26, 41, 41, 38, 28, 18, 33, 52, 80, 75, 66, 51},
             {0, 15, 15, 15, 15, 26, 41, 41, 41, 41, 18, 33, 53, 84, 83, 80, 75},
@@ -48,10 +65,11 @@ try
 
         for (size_t i = 0; i < frame_start_offset.size(); ++i)
         {
+            std::cout << "--------- i: " << i << std::endl;
             frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
 
             executeFunctionAndAssert(
-                toVec<Int64>(res[i]),
+                toNullableVec<Int64>(res[i]),
                 Sum(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
                  toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
@@ -102,7 +120,7 @@ try
         frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 3);
         std::vector<Int64> frame_start_offset{0, 1, 3, 10};
 
-        std::vector<std::vector<Int64>> res{
+        std::vector<std::vector<std::optional<Int64>>> res{
             {1, 4, 3, 2, 1, 4, 4, 3, 2, 1, 4, 4, 4, 4, 3, 2, 1},
             {1, 4, 4, 3, 2, 4, 5, 4, 3, 2, 4, 5, 5, 5, 4, 3, 2},
             {1, 4, 4, 4, 4, 4, 5, 5, 5, 4, 4, 5, 6, 7, 6, 5, 4},
@@ -113,7 +131,7 @@ try
             frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
 
             executeFunctionAndAssert(
-                toVec<Int64>(res[i]),
+                toNullableVec<Int64>(res[i]),
                 Count(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
                  toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),

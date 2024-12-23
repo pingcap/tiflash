@@ -247,6 +247,7 @@ WindowTransformAction::WindowTransformAction(
     : log(Logger::get(req_id))
     , window_description(window_description_)
     , has_agg(false)
+    , first_processed(true)
 {
     output_header = input_header;
     for (const auto & add_column : window_description_.add_columns)
@@ -1371,6 +1372,9 @@ void WindowTransformAction::appendBlock(Block & current_block)
 // TODO test this function with ut
 bool WindowTransformAction::checkIfNeedDecrease()
 {
+    if (first_processed)
+        return false;
+
     if (prev_frame_end <= frame_start)
         return false;
 
@@ -1401,16 +1405,22 @@ void WindowTransformAction::updateAggregationState()
         if (ws.window_function)
             continue;
 
+        std::cout << "------ update" << std::endl; // TODO delete it
         RowNumber start = frame_start;
-
         if (checkIfNeedDecrease())
         {
             decreaseAggregationState(ws, prev_frame_start, frame_start);
             start = prev_frame_end;
         }
+        else
+        {
+            ws.aggregate_function->reset(ws.aggregate_function_state.data());
+        }
 
         addAggregationState(ws, start, frame_end);
     }
+
+    first_processed = false;
 }
 
 void WindowTransformAction::tryCalculate()
@@ -1526,6 +1536,7 @@ void WindowTransformAction::tryCalculate()
         frame_end = partition_start;
         prev_frame_start = partition_start;
         prev_frame_end = partition_end;
+        first_processed = true;
         assert(current_row == partition_start);
         current_row_number = 1;
         peer_group_last = partition_start;

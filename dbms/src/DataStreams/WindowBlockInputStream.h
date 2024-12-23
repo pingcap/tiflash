@@ -194,7 +194,7 @@ private:
         // block of the end row (it's usually the next block).
         const auto past_the_end_block = end.row == 0 ? end.block : end.block + 1;
 
-        for (auto block_number = frame_start.block; block_number < past_the_end_block; ++block_number)
+        for (auto block_number = start.block; block_number < past_the_end_block; ++block_number)
         {
             auto & block = blockAt(block_number);
 
@@ -214,9 +214,15 @@ private:
             for (auto row = start_row; row < end_row; ++row)
             {
                 if constexpr (is_add)
+                {
+                    std::cout << "-------- add" << std::endl; // TODO delete it
                     agg_func->add(buf, columns, row, arena_ptr);
+                }
                 else
+                {
+                    std::cout << "-------- decrease" << std::endl; // TODO delete it
                     agg_func->decrease(buf, columns, row, arena_ptr);
+                }
             }
         }
     }
@@ -245,6 +251,9 @@ public:
     std::vector<WindowFunctionWorkspace> workspaces;
 
     bool has_agg;
+
+    // We are processing the first row in the current partition if it's true
+    bool first_processed;
 
     // A sliding window of blocks we currently need. We add the input blocks as
     // they arrive, and discard the blocks we don't need anymore. The blocks
