@@ -202,9 +202,7 @@ private:
 
     std::shared_ptr<RPCContext> rpc_context;
 
-    const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
-    const ::mpp::TaskMeta task_meta;
     const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;
