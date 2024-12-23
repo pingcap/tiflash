@@ -47,7 +47,7 @@ struct IOProfileInfo
     static IOProfileInfoPtr createForRemote(
         const OperatorProfileInfoPtr & profile_info,
         size_t connections,
-        const ConnTypeVec & conn_type_vec)
+        const ConnectionProfileInfo::ConnTypeVec & conn_type_vec)
     {
         auto info = std::make_shared<IOProfileInfo>(profile_info, false);
         info->connection_profile_infos.resize(connections);

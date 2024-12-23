@@ -25,7 +25,6 @@
 #include <mutex>
 
 
-
 namespace DB
 {
 constexpr Int32 batch_packet_count_v1 = 16;
@@ -145,7 +144,7 @@ public:
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
     void verifyStreamId(size_t stream_id) const;
-    const ConnTypeVec & getConnTypeVec() const;
+    const ConnectionProfileInfo::ConnTypeVec & getConnTypeVec() const;
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;

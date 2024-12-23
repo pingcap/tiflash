@@ -383,7 +383,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 }
 
 template <typename RPCContext>
-const ConnTypeVec & ExchangeReceiverBase<RPCContext>::getConnTypeVec() const
+const ConnectionProfileInfo::ConnTypeVec & ExchangeReceiverBase<RPCContext>::getConnTypeVec() const
 {
     return rpc_context->getConnTypeVec();
 }

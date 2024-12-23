@@ -105,7 +105,7 @@ public:
         LocalRequestHandler & local_request_handler,
         bool has_remote_conn);
 
-    const ConnTypeVec & getConnTypeVec() const { return conn_type_vec; }
+    const ConnectionProfileInfo::ConnTypeVec & getConnTypeVec() const { return conn_type_vec; }
 
     static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(
         const ::mpp::EstablishMPPConnectionRequest * request,
@@ -113,7 +113,7 @@ public:
 
 private:
     tipb::ExchangeReceiver exchange_receiver_meta;
-    mutable ConnTypeVec conn_type_vec;
+    mutable ConnectionProfileInfo::ConnTypeVec conn_type_vec;
     mpp::TaskMeta task_meta;
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;
