@@ -38,7 +38,7 @@ void AlignedBuffer::alloc(size_t size, size_t alignment)
 void AlignedBuffer::dealloc()
 {
     if (buf)
-        ::free(buf);
+        ::free(buf); //NOLINT
 }
 
 void AlignedBuffer::reset(size_t size, size_t alignment)

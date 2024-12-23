@@ -30,6 +30,8 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <random>
+
 namespace DB
 {
 namespace tests
