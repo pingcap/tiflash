@@ -944,8 +944,8 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         }                                                                                                           \
     }                                                                                                               \
                                                                                                                     \
-    places[i - agg_process_info.start_row] = aggregate_data;                                                        \
-    processed_rows = i;
+    places[j - agg_process_info.start_row] = aggregate_data;                                                        \
+    processed_rows = j;
 
     if constexpr (enable_prefetch)
     {
@@ -962,80 +962,143 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         RUNTIME_CHECK(agg_process_info.hashvals.size() == agg_process_info.end_row);
     }
 
-    for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
+    // for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
+    // {
+    //     AggregateDataPtr aggregate_data = nullptr;
+    //     if constexpr (enable_prefetch)
+    //     {
+    //         auto emplace_result_holder = emplaceOrFindKey<only_lookup>(
+    //             method,
+    //             state,
+    //             i,
+    //             *aggregates_pool,
+    //             sort_key_containers,
+    //             agg_process_info.hashvals);
+
+    //         HANDLE_AGG_EMPLACE_RESULT
+    //     }
+    //     else
+    //     {
+    //         auto emplace_result_holder
+    //             = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
+
+    //         HANDLE_AGG_EMPLACE_RESULT
+    //     }
+    // }
+
+    size_t i = agg_process_info.start_row;
+    const size_t end = agg_process_info.end_row;
+    // const size_t end = *processed_rows - agg_process_info.start_row + 1;
+    const size_t step = 256;
+    while (i < end)
     {
-        AggregateDataPtr aggregate_data = nullptr;
-        if constexpr (enable_prefetch)
-        {
-            auto emplace_result_holder = emplaceOrFindKey<only_lookup>(
-                method,
-                state,
-                i,
-                *aggregates_pool,
-                sort_key_containers,
-                agg_process_info.hashvals);
+        size_t batch_size = step;
+        if unlikely (i + batch_size > end)
+            batch_size = end - i;
 
-            HANDLE_AGG_EMPLACE_RESULT
-        }
-        else
+        const auto end_iter = i + batch_size;
+        for (size_t j = i; j < end_iter; ++j)
         {
-            auto emplace_result_holder
-                = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
+            AggregateDataPtr aggregate_data = nullptr;
+            if constexpr (enable_prefetch)
+            {
+                auto emplace_result_holder = emplaceOrFindKey<only_lookup>(
+                        method,
+                        state,
+                        j,
+                        *aggregates_pool,
+                        sort_key_containers,
+                        agg_process_info.hashvals);
 
-            HANDLE_AGG_EMPLACE_RESULT
+                HANDLE_AGG_EMPLACE_RESULT
+            }
+            else
+            {
+                auto emplace_result_holder
+                    = emplaceOrFindKey<only_lookup>(method, state, j, *aggregates_pool, sort_key_containers);
+
+                HANDLE_AGG_EMPLACE_RESULT
+            }
         }
+
+        bool first_inst = true;
+        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+                ++inst)
+        {
+            if (first_inst)
+                inst->batch_that->addBatchWithPrefetch(
+                        i,
+                        batch_size,
+                        places.get() + i,
+                        inst->state_offset,
+                        inst->batch_arguments,
+                        aggregates_pool);
+            else
+                inst->batch_that->addBatch(
+                        i,
+                        batch_size,
+                        places.get() + i,
+                        inst->state_offset,
+                        inst->batch_arguments,
+                        aggregates_pool);
+            first_inst = false;
+        }
+        
+        i += batch_size;
     }
+    agg_process_info.start_row = agg_process_info.end_row;
+
 #undef HANDLE_AGG_EMPLACE_RESULT
 
-    if (processed_rows)
-    {
-        // /// Add values to the aggregate functions.
-        // for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
-        //      ++inst)
-        // {
-        //     inst->batch_that->addBatch(
-        //         agg_process_info.start_row,
-        //         *processed_rows - agg_process_info.start_row + 1,
-        //         places.get(),
-        //         inst->state_offset,
-        //         inst->batch_arguments,
-        //         aggregates_pool);
-        // }
-        size_t i = agg_process_info.start_row;
-        const size_t end = *processed_rows - agg_process_info.start_row + 1;
-        const size_t step = 256;
-        while (i < end)
-        {
-            size_t batch_size = step;
-            if unlikely (i + batch_size > end)
-                batch_size = end - i;
+    // if (processed_rows)
+    // {
+    //     // /// Add values to the aggregate functions.
+    //     // for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+    //     //      ++inst)
+    //     // {
+    //     //     inst->batch_that->addBatch(
+    //     //         agg_process_info.start_row,
+    //     //         *processed_rows - agg_process_info.start_row + 1,
+    //     //         places.get(),
+    //     //         inst->state_offset,
+    //     //         inst->batch_arguments,
+    //     //         aggregates_pool);
+    //     // }
+    //     size_t i = agg_process_info.start_row;
+    //     const size_t end = *processed_rows - agg_process_info.start_row + 1;
+    //     const size_t step = 256;
+    //     while (i < end)
+    //     {
+    //         size_t batch_size = step;
+    //         if unlikely (i + batch_size > end)
+    //             batch_size = end - i;
 
-            bool first_inst = true;
-            for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
-                 ++inst)
-            {
-                if (first_inst)
-                    inst->batch_that->addBatchWithPrefetch(
-                        i,
-                        batch_size,
-                        places.get() + i,
-                        inst->state_offset,
-                        inst->batch_arguments,
-                        aggregates_pool);
-                else
-                    inst->batch_that->addBatch(
-                        i,
-                        batch_size,
-                        places.get() + i,
-                        inst->state_offset,
-                        inst->batch_arguments,
-                        aggregates_pool);
-                first_inst = false;
-            }
-            i += batch_size;
-        }
-        agg_process_info.start_row = *processed_rows + 1;
-    }
+    //         bool first_inst = true;
+    //         for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+    //              ++inst)
+    //         {
+    //             if (first_inst)
+    //                 inst->batch_that->addBatchWithPrefetch(
+    //                     i,
+    //                     batch_size,
+    //                     places.get() + i,
+    //                     inst->state_offset,
+    //                     inst->batch_arguments,
+    //                     aggregates_pool);
+    //             else
+    //                 inst->batch_that->addBatch(
+    //                     i,
+    //                     batch_size,
+    //                     places.get() + i,
+    //                     inst->state_offset,
+    //                     inst->batch_arguments,
+    //                     aggregates_pool);
+    //             first_inst = false;
+    //         }
+    //         i += batch_size;
+    //     }
+    //     agg_process_info.start_row = *processed_rows + 1;
+    // }
 
     if likely (agg_process_info.start_row == agg_process_info.end_row)
         agg_process_info.hashvals.clear();
