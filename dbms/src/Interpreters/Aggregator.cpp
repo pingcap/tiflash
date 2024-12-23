@@ -1872,6 +1872,9 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     }
 
     size_t data_index = 0;
+    const auto rows = data.size();
+    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
         if constexpr (!skip_convert_key)
@@ -1879,9 +1882,20 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             agg_keys_helpers[key_columns_vec_index]
                 ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
         }
-        insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[key_columns_vec_index], arena);
+        // insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[key_columns_vec_index], arena);
+        places[data_index] = mapped;
         ++data_index;
     });
+
+    auto prefetch_idx = 16;
+    for (size_t i = 0; i < rows; ++i)
+    {
+        if (prefetch_idx < rows)
+            __builtin_prefetch(places[prefetch_idx++]);
+
+        size_t key_columns_vec_index = data_index / params.max_block_size;
+        insertAggregatesIntoColumns(places[i], final_aggregate_columns_vec[key_columns_vec_index], arena);
+    }
 }
 
 template <typename Method, typename Table, bool skip_convert_key>
