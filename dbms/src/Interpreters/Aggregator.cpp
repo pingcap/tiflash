@@ -941,6 +941,9 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                                                                                                                     \
             if constexpr (collect_hit_rate)                                                                         \
                 ++agg_process_info.hit_row_cnt;                                                                     \
+                                                \
+            if constexpr (enable_prefetch) \
+                __builtin_prefetch(aggregate_data); \
         }                                                                                                           \
     }                                                                                                               \
                                                                                                                     \
