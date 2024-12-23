@@ -50,8 +50,21 @@ SkippableBlockInputStreamPtr ColumnFileSetWithVectorIndexInputStream::tryBuild(
             rest_columns->emplace_back(cd);
     }
 
-    // No vector index column is specified, just use the normal logic.
+    // No vector index column is specified, fallback.
     if (!vec_cd.has_value())
+        return fallback();
+
+    bool has_vector_index = false;
+    for (const auto & file : delta_snap->getColumnFiles())
+    {
+        if (auto * tiny_file = file->tryToTinyFile(); tiny_file && tiny_file->hasIndex(ann_query_info->index_id()))
+        {
+            has_vector_index = true;
+            break;
+        }
+    }
+    // No file has vector index, fallback.
+    if (!has_vector_index)
         return fallback();
 
     // All check passed. Let's read via vector index.
@@ -66,25 +79,6 @@ SkippableBlockInputStreamPtr ColumnFileSetWithVectorIndexInputStream::tryBuild(
         std::move(*vec_cd),
         rest_columns,
         read_tag_);
-}
-
-Block ColumnFileSetWithVectorIndexInputStream::read(FilterPtr & res_filter, bool return_filter)
-{
-    if (return_filter)
-        return readImpl(res_filter);
-
-    // If return_filter == false, we must filter by ourselves.
-
-    FilterPtr filter = nullptr;
-    auto res = readImpl(filter);
-    if (filter != nullptr)
-    {
-        auto passed_count = countBytesInFilter(*filter);
-        for (auto & col : res)
-            col.column = col.column->filter(*filter, passed_count);
-    }
-    // filter == nullptr means all rows are valid and no need to filter.
-    return res;
 }
 
 Block ColumnFileSetWithVectorIndexInputStream::readOtherColumns()
@@ -102,7 +96,7 @@ void ColumnFileSetWithVectorIndexInputStream::toNextFile(size_t current_file_ind
     tiny_readers[current_file_index].reset();
 }
 
-Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
+Block ColumnFileSetWithVectorIndexInputStream::read()
 {
     load();
 
@@ -115,7 +109,7 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
             continue;
         }
         auto current_file_index = std::distance(reader.column_file_readers.begin(), cur_column_file_reader);
-        // If has index, we can read the column by vector index.
+        // If file has index, we can read the column by vector index.
         if (tiny_readers[current_file_index] != nullptr)
         {
             const auto file_rows = column_files[current_file_index]->getRows();
@@ -133,44 +127,43 @@ Block ColumnFileSetWithVectorIndexInputStream::readImpl(FilterPtr & res_filter)
             auto tiny_reader = tiny_readers[current_file_index];
             auto vec_column = vec_cd.type->createColumn();
             const std::span file_selected_rows{selected_row_begin, selected_row_end};
-            tiny_reader->read(vec_column, file_selected_rows, /* rowid_start_offset= */ read_rows, file_rows);
-            assert(vec_column->size() == file_rows);
+            tiny_reader->read(vec_column, file_selected_rows, /* rowid_start_offset= */ read_rows);
+            assert(vec_column->size() == selected_rows);
 
+            // read other columns if needed
             Block block;
             if (!rest_col_defs->empty())
             {
                 block = readOtherColumns();
-                assert(block.rows() == vec_column->size());
-            }
-
-            auto index = header.getPositionByName(vec_cd.name);
-            block.insert(index, ColumnWithTypeAndName(std::move(vec_column), vec_cd.type, vec_cd.name));
-
-            // Fill res_filter
-            if (selected_rows == file_rows)
-            {
-                res_filter = nullptr;
-            }
-            else
-            {
                 filter.clear();
                 filter.resize_fill(file_rows, 0);
                 for (const auto rowid : file_selected_rows)
                     filter[rowid - read_rows] = 1;
-                res_filter = &filter;
+                for (auto & col : block)
+                    col.column = col.column->filter(filter, selected_rows);
+
+                assert(block.rows() == selected_rows);
             }
+
+            auto index = header.getPositionByName(vec_cd.name);
+            block.insert(index, ColumnWithTypeAndName(std::move(vec_column), vec_cd.type, vec_cd.name));
 
             // All rows in this ColumnFileTiny have been read.
             block.setStartOffset(read_rows);
             toNextFile(current_file_index, file_rows);
             return block;
         }
+        // If file does not have index, reader by cur_column_file_reader.
         auto block = (*cur_column_file_reader)->readNextBlock();
         if (block)
         {
             block.setStartOffset(read_rows);
-            read_rows += block.rows();
-            res_filter = nullptr;
+            size_t rows = block.rows();
+            filter = valid_rows.getRawSubFilter(read_rows, rows);
+            size_t passed_count = countBytesInFilter(filter);
+            for (auto & col : block)
+                col.column = col.column->filter(filter, passed_count);
+            read_rows += rows;
             return block;
         }
         else

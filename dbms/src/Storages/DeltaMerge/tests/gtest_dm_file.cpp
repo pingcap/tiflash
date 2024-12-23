@@ -170,9 +170,15 @@ public:
         ASSERT_EQ(n, s.size());
     }
 
-    static RSResults & getReaderPackRes(DMFileBlockInputStreamPtr & stream)
+    static void skipFirstPack(DMFileBlockInputStreamPtr & stream)
     {
-        return stream->reader.pack_filter.getPackRes();
+        const auto & pack_stats = stream->reader.dmfile->getPackStats();
+        auto [pack_id, pack_count, res, rows] = stream->reader.read_block_infos.front();
+        stream->reader.read_block_infos.pop_front();
+        stream->reader.read_block_infos
+            .emplace_front(pack_id + 1, pack_count - 1, res, rows - pack_stats[pack_id].rows);
+        stream->reader.read_block_infos.emplace_front(pack_id, 1, res, pack_stats[pack_id].rows);
+        ASSERT_EQ(stream->skipNextBlock(), pack_stats[pack_id].rows);
     }
 
 protected:
@@ -910,10 +916,7 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & pack_res = getReaderPackRes(stream);
-        pack_res[1] = RSResult::None;
-        stream->skipNextBlock();
-        pack_res[1] = RSResult::Some;
+        skipFirstPack(stream);
         std::vector<Array> partial_expect_arr_values;
         partial_expect_arr_values.insert(
             partial_expect_arr_values.cend(),
@@ -1125,10 +1128,7 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & pack_res = getReaderPackRes(stream);
-        pack_res[1] = RSResult::None;
-        ASSERT_EQ(stream->skipNextBlock(), num_rows_write / 3);
-        pack_res[1] = RSResult::Some;
+        skipFirstPack(stream);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),

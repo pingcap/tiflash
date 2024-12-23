@@ -100,7 +100,25 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    std::pair<size_t, RSResult> getReadRows();
+    // Initialize, called by constructor
+    // Initialize pack_offset before initializing read_block_infos
+    void initPackOffset();
+    void initReadBlockInfos();
+
+    struct ReadBlockInfo
+    {
+        size_t start_pack_id = 0;
+        size_t pack_count = 0;
+        RSResult rs_result = RSResult::All;
+        size_t read_rows = 0;
+    };
+    // Split the first read block info to multiple read block infos accroding to `filter`
+    // Used by readWithFilter, return new read block infos.
+    std::vector<ReadBlockInfo> splitReadBlockInfos(const ReadBlockInfo & read_info, const IColumn::Filter & filter)
+        const;
+
+    Block readImpl(const ReadBlockInfo & read_info);
+
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
@@ -143,9 +161,7 @@ private:
     void addScannedRows(UInt64 rows);
     void addSkippedRows(UInt64 rows);
 
-    void initAllMatchBlockInfo();
-    size_t getReadPackLimit(size_t start_pack_id);
-
+private:
     DMFilePtr dmfile;
     ColumnDefines read_columns;
     ColumnReadStreamMap column_streams;
@@ -167,7 +183,6 @@ private:
 
     const UInt64 max_read_version;
 
-private:
     /// Filters
     DMFilePackFilter pack_filter;
 
@@ -181,9 +196,6 @@ private:
     const size_t rows_threshold_per_read;
     const size_t max_sharing_column_bytes;
 
-    size_t next_pack_id = 0;
-    size_t next_row_offset = 0;
-
     FileProviderPtr file_provider;
 
     LoggerPtr log;
@@ -191,11 +203,11 @@ private:
     // DataSharing
     ColumnCachePtr data_sharing_col_data_cache;
 
-    // <start_pack, pack_count>
-    // Each pair object indicates several continuous packs with RSResult::All and will be read as a Block.
-    // It is sorted by start_pack.
-    std::queue<std::pair<size_t, size_t>> all_match_block_infos;
-    std::unordered_map<ColId, bool> last_read_from_cache{};
+    std::deque<ReadBlockInfo> read_block_infos;
+    // row_offset of the given pack_id
+    std::vector<size_t> pack_offset;
+    // last read pack_id + 1, used by getSkippedRows
+    size_t next_pack_id = 0;
 
 public:
     void setColumnCacheLongTerm(ColumnCacheLongTermPtr column_cache_long_term_, ColumnID pk_col_id_)

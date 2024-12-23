@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/countBytesInFilter.h>
 #include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
@@ -132,13 +133,13 @@ Block ConcatSkippableBlockInputStream<need_row_id>::readWithFilter(const IColumn
 }
 
 template <bool need_row_id>
-Block ConcatSkippableBlockInputStream<need_row_id>::read(FilterPtr & res_filter, bool return_filter)
+Block ConcatSkippableBlockInputStream<need_row_id>::read()
 {
     Block res;
 
     while (current_stream != children.end())
     {
-        res = (*current_stream)->read(res_filter, return_filter);
+        res = (*current_stream)->read();
         if (res)
         {
             res.setStartOffset(res.startOffset() + precede_stream_rows);
@@ -239,12 +240,34 @@ void ConcatVectorIndexBlockInputStream::load()
         sr_it = end;
     }
 
-    // Not used anymore, release memory.
-    index_streams.clear();
     loaded = true;
 }
 
+Block ConcatVectorIndexBlockInputStream::read()
+{
+    load();
+    auto block = stream->read();
+
+    // The block read from `VectorIndexBlockInputStream` only return the selected rows. Return it directly.
+    // For streams which are not `VectorIndexBlockInputStream`, the block should be filtered by bitmap.
+    if (auto index = std::distance(stream->children.begin(), stream->current_stream); !index_streams[index])
+    {
+        filter.resize(block.rows());
+        if (bool all_match = bitmap_filter->get(filter, block.startOffset(), block.rows()); all_match)
+            return block;
+
+        size_t passed_count = countBytesInFilter(filter);
+        for (auto & col : block)
+        {
+            col.column = col.column->filter(filter, passed_count);
+        }
+    }
+
+    return block;
+}
+
 SkippableBlockInputStreamPtr ConcatVectorIndexBlockInputStream::build(
+    const BitmapFilterPtr & bitmap_filter,
     std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
     const ANNQueryInfoPtr & ann_query_info)
 {
@@ -267,6 +290,7 @@ SkippableBlockInputStreamPtr ConcatVectorIndexBlockInputStream::build(
         return stream;
 
     return std::make_shared<ConcatVectorIndexBlockInputStream>(
+        bitmap_filter,
         stream,
         std::move(index_streams),
         ann_query_info->top_k());

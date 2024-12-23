@@ -213,7 +213,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         file_provider,
         read_limiter,
         rows_threshold_per_read,
-        read_one_pack_every_time,
+        false, // read multiple packs at once
         tracing_id,
         enable_read_thread,
         scan_context,
