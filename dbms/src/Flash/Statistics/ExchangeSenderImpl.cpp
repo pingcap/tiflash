@@ -30,7 +30,7 @@ String MPPTunnelDetail::toJson() const
         sender_target_task_id,
         sender_target_host,
         is_local,
-        static_cast<Int32>(conn_profile_info.type),
+        conn_profile_info.getTypeString(),
         conn_profile_info.packets,
         conn_profile_info.bytes);
 }
@@ -57,14 +57,15 @@ void ExchangeSenderStatistics::collectExtraRuntimeDetail()
     {
         const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
         mpp_tunnel_details[i].conn_profile_info.packets = connection_profile_info.packets;
-        mpp_tunnel_details[i].conn_profile_info.bytes = connection_profile_info.bytes;
+        auto bytes = connection_profile_info.bytes;
+        mpp_tunnel_details[i].conn_profile_info.bytes += bytes;
         switch (mpp_tunnel_details[i].conn_profile_info.type)
         {
         case ConnectionProfileInfo::InnerZoneRemote:
-            base.inner_zone_send_bytes += connection_profile_info.bytes;
+            base.inner_zone_send_bytes += bytes;
             break;
         case DB::ConnectionProfileInfo::InterZoneRemote:
-            base.inter_zone_send_bytes += connection_profile_info.bytes;
+            base.inter_zone_send_bytes += bytes;
             break;
         default:
             break;

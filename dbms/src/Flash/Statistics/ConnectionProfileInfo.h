@@ -14,9 +14,10 @@
 
 #pragma once
 
+#include <common/defines.h>
 #include <common/types.h>
 
-#include "common/defines.h"
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -44,6 +45,15 @@ struct ConnectionProfileInfo
             return InterZoneRemote;
         }
     }
+    ConnectionProfileInfo() = default;
+    explicit ConnectionProfileInfo(ConnectionType type_)
+        : type(type_)
+    {}
+    ConnectionProfileInfo(bool is_local, bool same_zone)
+        : ConnectionProfileInfo(inferConnectionType(is_local, same_zone))
+    {}
+
+    String getTypeString() const { return String(magic_enum::enum_name(type)); }
 
     Int64 packets = 0;
     Int64 bytes = 0;

@@ -102,6 +102,7 @@ MPPTunnel::MPPTunnel(
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , queue_limit(queue_limits_)
+    , connection_profile_info(is_local_, same_zone)
     , log(Logger::get(req_id, tunnel_id))
     , data_size_in_queue(0)
 {
@@ -112,7 +113,6 @@ MPPTunnel::MPPTunnel(
         mode = TunnelSenderMode::ASYNC_GRPC;
     else
         mode = TunnelSenderMode::SYNC_GRPC;
-    connection_profile_info.type = ConnectionProfileInfo::inferConnectionType(is_local_, same_zone);
     GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
 }
 

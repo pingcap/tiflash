@@ -20,10 +20,11 @@ namespace DB
 String ExchangeReceiveDetail::toJson() const
 {
     return fmt::format(
-        R"({{"receiver_source_task_id":{},"packets":{},"bytes":{}}})",
+        R"({{"receiver_source_task_id":{},"conn_type":{},"packets":{},"bytes":{}}})",
         receiver_source_task_id,
-        packets,
-        bytes);
+        conn_profile_info.getTypeString(),
+        conn_profile_info.packets,
+        conn_profile_info.bytes);
 }
 
 void ExchangeReceiverStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
@@ -46,8 +47,21 @@ void ExchangeReceiverStatistics::updateExchangeReceiveDetail(
     RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
     for (size_t i = 0; i < partition_num; ++i)
     {
-        exchange_receive_details[i].packets += connection_profile_infos[i].packets;
-        exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
+        exchange_receive_details[i].conn_profile_info.type = connection_profile_infos[i].type;
+        exchange_receive_details[i].conn_profile_info.packets += connection_profile_infos[i].packets;
+        auto bytes = connection_profile_infos[i].bytes;
+        exchange_receive_details[i].conn_profile_info.bytes += bytes;
+        switch (exchange_receive_details[i].conn_profile_info.type)
+        {
+        case ConnectionProfileInfo::InnerZoneRemote:
+            base.inner_zone_receive_bytes += bytes;
+            break;
+        case DB::ConnectionProfileInfo::InterZoneRemote:
+            base.inter_zone_receive_bytes += bytes;
+            break;
+        default:
+            break;
+        }
     }
 }
 
