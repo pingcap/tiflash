@@ -1021,19 +1021,19 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             }
         }
 
-        bool first_inst = true;
+        // bool first_inst = true;
         for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
                 ++inst)
         {
-            if (first_inst)
-                inst->batch_that->addBatchWithPrefetch(
-                        i,
-                        batch_size,
-                        places.get() + i,
-                        inst->state_offset,
-                        inst->batch_arguments,
-                        aggregates_pool);
-            else
+            // if (first_inst)
+            //     inst->batch_that->addBatchWithPrefetch(
+            //             i,
+            //             batch_size,
+            //             places.get() + i,
+            //             inst->state_offset,
+            //             inst->batch_arguments,
+            //             aggregates_pool);
+            // else
                 inst->batch_that->addBatch(
                         i,
                         batch_size,
@@ -1041,7 +1041,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                         inst->state_offset,
                         inst->batch_arguments,
                         aggregates_pool);
-            first_inst = false;
+            // first_inst = false;
         }
         
         i += batch_size;
