@@ -14,9 +14,7 @@
 
 #pragma once
 
-#include <Common/Exception.h>
 #include <Core/Types.h>
-#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -202,45 +200,15 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V103 = StorageFormatVers
     .identifier = 103,
 };
 
+// Default storage format for non-disaggregated mode
 inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V7;
+// Default storage format for disaggregated mode
+inline static const StorageFormatVersion DEFAULT_STORAGE_FORMAT_FOR_DISAGG = STORAGE_FORMAT_V102;
 
-inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
-{
-    switch (setting)
-    {
-    case 1:
-        return STORAGE_FORMAT_V1;
-    case 2:
-        return STORAGE_FORMAT_V2;
-    case 3:
-        return STORAGE_FORMAT_V3;
-    case 4:
-        return STORAGE_FORMAT_V4;
-    case 5:
-        return STORAGE_FORMAT_V5;
-    case 6:
-        return STORAGE_FORMAT_V6;
-    case 7:
-        return STORAGE_FORMAT_V7;
-    case 100:
-        return STORAGE_FORMAT_V100;
-    case 101:
-        return STORAGE_FORMAT_V101;
-    case 102:
-        return STORAGE_FORMAT_V102;
-    default:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal setting value: {}", setting);
-    }
-}
+bool isStorageFormatForDisagg(UInt64 version);
+const auto & getStorageFormatsForDisagg();
 
-inline void setStorageFormat(UInt64 setting)
-{
-    STORAGE_FORMAT_CURRENT = toStorageFormat(setting);
-}
-
-inline void setStorageFormat(const StorageFormatVersion & version)
-{
-    STORAGE_FORMAT_CURRENT = version;
-}
+void setStorageFormat(UInt64 setting);
+void setStorageFormat(const StorageFormatVersion & version);
 
 } // namespace DB
