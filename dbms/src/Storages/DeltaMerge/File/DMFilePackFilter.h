@@ -19,6 +19,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
@@ -64,7 +65,33 @@ public:
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id);
-        return pack_filter.load(dm_context);
+        return pack_filter.load();
+    }
+
+    static DMFilePackFilterResultPtr loadFrom(
+        const MinMaxIndexCachePtr & index_cache_,
+        const FileProviderPtr & file_provider_,
+        const ReadLimiterPtr & read_limiter_,
+        const ScanContextPtr & scan_context,
+        const DMFilePtr & dmfile,
+        bool set_cache_if_miss,
+        const RowKeyRanges & rowkey_ranges,
+        const RSOperatorPtr & filter,
+        const IdSetPtr & read_packs,
+        const String & tracing_id)
+    {
+        DMFilePackFilter pack_filter(
+            dmfile,
+            index_cache_,
+            set_cache_if_miss,
+            rowkey_ranges,
+            filter,
+            read_packs,
+            file_provider_,
+            read_limiter_,
+            scan_context,
+            tracing_id);
+        return pack_filter.load();
     }
 
 private:
@@ -91,7 +118,7 @@ private:
         , read_limiter(read_limiter_)
     {}
 
-    DMFilePackFilterResultPtr load(const DMContext & dm_context);
+    DMFilePackFilterResultPtr load();
 
     static void loadIndex(
         ColumnIndexes & indexes,

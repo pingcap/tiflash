@@ -68,8 +68,17 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     // If pack_filter is not set, we will create a default one.
     if (!pack_filter)
     {
-        pack_filter
-            = std::make_shared<DMFilePackFilterResult>(index_cache, file_provider, read_limiter, scan_context, dmfile);
+        pack_filter = DMFilePackFilter::loadFrom(
+            index_cache,
+            file_provider,
+            read_limiter,
+            scan_context,
+            dmfile,
+            true,
+            rowkey_ranges,
+            EMPTY_RS_OPERATOR,
+            read_packs,
+            tracing_id);
     }
 
     DMFileReader reader(
@@ -175,8 +184,17 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     // If pack_filter is not set, we will create a default one.
     if (!pack_filter)
     {
-        pack_filter
-            = std::make_shared<DMFilePackFilterResult>(index_cache, file_provider, read_limiter, scan_context, dmfile);
+        pack_filter = DMFilePackFilter::loadFrom(
+            index_cache,
+            file_provider,
+            read_limiter,
+            scan_context,
+            dmfile,
+            true,
+            rowkey_ranges,
+            EMPTY_RS_OPERATOR,
+            read_packs,
+            tracing_id);
     }
 
     DMFileReader rest_columns_reader(

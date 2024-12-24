@@ -1198,13 +1198,27 @@ public:
     {
         auto range = buildRowKeyRange(begin, end);
         auto [segment, snapshot] = getSegmentForRead(segment_id);
+        // load DMilePackFilterResult for each DMFile
+        DMFilePackFilterResults pack_filter_results;
+        pack_filter_results.reserve(snapshot->stable->getDMFiles().size());
+        for (const auto & dmfile : snapshot->stable->getDMFiles())
+        {
+            auto result = DMFilePackFilter::loadFrom(
+                *dm_context,
+                dmfile,
+                /*set_cache_if_miss*/ true,
+                {range},
+                EMPTY_RS_OPERATOR,
+                /*read_pack*/ {});
+            pack_filter_results.push_back(result);
+        }
         auto stream = segment->getBitmapFilterInputStream(
             *dm_context,
             columns_to_read,
             snapshot,
             {range},
             std::make_shared<PushDownFilter>(wrapWithANNQueryInfo({}, ann_query)),
-            {},
+            pack_filter_results,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);

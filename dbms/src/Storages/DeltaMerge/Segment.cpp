@@ -3526,7 +3526,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             read_data_block_rows);
     }
 
-    std::cout << "getBitmapFilterInputStream" << std::endl;
     auto stream = getConcatSkippableBlockInputStream(
         bitmap_filter,
         segment_snap,

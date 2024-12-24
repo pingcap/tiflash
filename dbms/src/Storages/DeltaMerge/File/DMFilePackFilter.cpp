@@ -21,12 +21,12 @@
 namespace DB::DM
 {
 
-DMFilePackFilterResultPtr DMFilePackFilter::load(const DMContext & dm_context)
+DMFilePackFilterResultPtr DMFilePackFilter::load()
 {
     Stopwatch watch;
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
     size_t pack_count = dmfile->getPacks();
-    DMFilePackFilterResult result(dm_context, dmfile);
+    DMFilePackFilterResult result(index_cache, file_provider, read_limiter, scan_context, dmfile);
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {

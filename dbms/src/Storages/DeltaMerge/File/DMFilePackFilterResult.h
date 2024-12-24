@@ -14,9 +14,8 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 
@@ -32,16 +31,6 @@ class DMFilePackFilterResult
     friend class DMFilePackFilter;
 
 public:
-    DMFilePackFilterResult(const DMContext & dm_context_, const DMFilePtr & dmfile_)
-        : index_cache(dm_context_.global_context.getMinMaxIndexCache())
-        , file_provider(dm_context_.global_context.getFileProvider())
-        , read_limiter(dm_context_.global_context.getReadLimiter())
-        , scan_context(dm_context_.scan_context)
-        , dmfile(dmfile_)
-        , handle_res(dmfile->getPacks(), RSResult::All)
-        , pack_res(dmfile->getPacks(), RSResult::Some)
-    {}
-
     DMFilePackFilterResult(
         const MinMaxIndexCachePtr & index_cache_,
         const FileProviderPtr & file_provider_,
@@ -83,16 +72,6 @@ public:
             tryLoadIndex(VERSION_COLUMN_ID);
         auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
         return minmax_index->getUInt64MinMax(pack_id).second;
-    }
-
-    // Only for test
-    static DMFilePackFilterResults defaultResults(const DMContext & dm_context, const DMFiles & files)
-    {
-        DMFilePackFilterResults results;
-        results.reserve(files.size());
-        for (const auto & file : files)
-            results.push_back(std::make_shared<DMFilePackFilterResult>(dm_context, file));
-        return results;
     }
 
     // Get valid rows and bytes after filter invalid packs by handle_range and filter
