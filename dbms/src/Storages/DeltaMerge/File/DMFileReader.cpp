@@ -46,7 +46,7 @@ DMFileReader::DMFileReader(
     bool is_fast_scan_,
     UInt64 max_read_version_,
     // filters
-    const DMFilePackFilterResult & pack_filter_,
+    const DMFilePackFilterResultPtr & pack_filter_,
     // caches
     const MarkCachePtr & mark_cache_,
     bool enable_column_cache_,
@@ -260,7 +260,7 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
     });
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_properties = dmfile->getPackProperties();
-    const auto & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
+    const auto & handle_res = pack_filter->getHandleRes(); // alias of handle_res in pack_filter
     std::vector<size_t> handle_column_clean_read_packs;
     std::vector<size_t> del_column_clean_read_packs;
     std::vector<size_t> version_column_clean_read_packs;
@@ -311,7 +311,7 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
             // If all handle in a pack are in the given range, no not_clean rows, and max version <= max_read_version,
             // we do not need to read handle column.
             if (handle_res[i] == RSResult::All && pack_stats[i].not_clean == 0
-                && pack_filter.getMaxVersion(i) <= max_read_version)
+                && pack_filter->getMaxVersion(i) <= max_read_version)
             {
                 handle_column_clean_read_packs.push_back(i);
                 version_column_clean_read_packs.push_back(i);
@@ -374,12 +374,12 @@ ColumnPtr DMFileReader::cleanRead(
     {
         if (is_common_handle)
         {
-            StringRef min_handle = pack_filter.getMinStringHandle(range.first);
+            StringRef min_handle = pack_filter->getMinStringHandle(range.first);
             return cd.type->createColumnConst(rows_count, Field(min_handle.data, min_handle.size));
         }
         else
         {
-            Handle min_handle = pack_filter.getMinHandle(range.first);
+            Handle min_handle = pack_filter->getMinHandle(range.first);
             return cd.type->createColumnConst(rows_count, Field(min_handle));
         }
     }
@@ -706,7 +706,7 @@ void DMFileReader::addSkippedRows(UInt64 rows)
 
 void DMFileReader::initReadBlockInfos()
 {
-    const auto & pack_res = pack_filter.getPackResConst();
+    const auto & pack_res = pack_filter->getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
 
     const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
@@ -756,7 +756,7 @@ std::vector<DMFileReader::ReadBlockInfo> DMFileReader::splitReadBlockInfos(
 {
     const auto pack_end = read_info.start_pack_id + read_info.pack_count;
     const size_t start_row_offset = pack_offset[read_info.start_pack_id];
-    const auto & pack_res = pack_filter.getPackResConst();
+    const auto & pack_res = pack_filter->getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
     std::vector<ReadBlockInfo> new_read_block_infos;
     new_read_block_infos.reserve(pack_end - read_info.start_pack_id);

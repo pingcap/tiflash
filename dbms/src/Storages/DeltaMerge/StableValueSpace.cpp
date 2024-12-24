@@ -58,7 +58,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 {range},
                 EMPTY_RS_OPERATOR,
                 {});
-            auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
+            auto [file_valid_rows, file_valid_bytes] = pack_filter->validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
         }
@@ -377,12 +377,12 @@ void StableValueSpace::calculateStableProperty(
             {rowkey_range},
             EMPTY_RS_OPERATOR,
             {});
-        const auto & pack_res = pack_filter.getPackResConst();
+        const auto & pack_res = pack_filter->getPackResConst();
         size_t new_pack_properties_index = 0;
         const bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
-            const size_t use_packs_count = pack_filter.countUsePack();
+            const size_t use_packs_count = pack_filter->countUsePack();
 
             RUNTIME_CHECK_MSG(
                 static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count,
@@ -472,15 +472,12 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     streams.reserve(stable->files.size());
     rows.reserve(stable->files.size());
 
-    for (size_t i = 0; i < stable->files.size(); i++)
+    for (size_t i = 0; i < stable->files.size(); ++i)
     {
         DMFileBlockInputStreamBuilder builder(context.global_context);
-        const auto & pack_filter_result = !pack_filter_results.empty()
-            ? pack_filter_results[i]
-            : DMFilePackFilterResult::emptyResult(context, stable->files[i]);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .enableColumnCacheLongTerm(context.pk_col_id)
-            .setDMFilePackFilterResult(pack_filter_result)
+            .setDMFilePackFilterResult(!pack_filter_results.empty() ? pack_filter_results[i] : nullptr)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
@@ -536,16 +533,13 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::tryGetInputStreamWithVe
 
     size_t last_rows = 0;
 
-    for (size_t i = 0; i < stable->files.size(); i++)
+    for (size_t i = 0; i < stable->files.size(); ++i)
     {
         DMFileBlockInputStreamBuilder builder(context.global_context);
-        const auto & pack_filter_result = !pack_filter_results.empty()
-            ? pack_filter_results[i]
-            : DMFilePackFilterResult::emptyResult(context, stable->files[i]);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .enableColumnCacheLongTerm(context.pk_col_id)
             .setAnnQureyInfo(ann_query_info)
-            .setDMFilePackFilterResult(pack_filter_result)
+            .setDMFilePackFilterResult(!pack_filter_results.empty() ? pack_filter_results[i] : nullptr)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
@@ -553,7 +547,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::tryGetInputStreamWithVe
             .setReadTag(read_tag);
         if (bitmap_filter)
         {
-            builder = builder.setBitmapFilter(
+            builder.setBitmapFilter(
                 BitmapFilterView(bitmap_filter, last_rows, last_rows + stable->files[i]->getRows()));
             last_rows += stable->files[i]->getRows();
         }
@@ -604,7 +598,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             RSOperatorPtr{},
             IdSetPtr{});
         const auto & pack_stats = f->getPackStats();
-        const auto & pack_res = filter.getPackResConst();
+        const auto & pack_res = filter->getPackResConst();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (pack_res[i].isUse())
@@ -644,7 +638,7 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             {range},
             RSOperatorPtr{},
             IdSetPtr{});
-        const auto & handle_filter_result = filter.getHandleRes();
+        const auto & handle_filter_result = filter->getHandleRes();
         if (file_idx == 0)
         {
             // TODO: this check may not be correct when support multiple files in a stable, let's just keep it now for simplicity

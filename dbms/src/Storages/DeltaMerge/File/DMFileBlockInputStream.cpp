@@ -65,6 +65,13 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         max_sharing_column_bytes_for_all = 0;
     }
 
+    // If pack_filter is not set, we will create a default one.
+    if (!pack_filter)
+    {
+        pack_filter
+            = std::make_shared<DMFilePackFilterResult>(index_cache, file_provider, read_limiter, scan_context, dmfile);
+    }
+
     DMFileReader reader(
         dmfile,
         read_columns,
@@ -73,7 +80,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         enable_del_clean_read,
         is_fast_scan,
         max_data_version,
-        *pack_filter,
+        pack_filter,
         mark_cache,
         enable_column_cache,
         column_cache,
@@ -165,6 +172,13 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
+    // If pack_filter is not set, we will create a default one.
+    if (!pack_filter)
+    {
+        pack_filter
+            = std::make_shared<DMFilePackFilterResult>(index_cache, file_provider, read_limiter, scan_context, dmfile);
+    }
+
     DMFileReader rest_columns_reader(
         dmfile,
         rest_columns,
@@ -173,7 +187,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         enable_del_clean_read,
         is_fast_scan,
         max_data_version,
-        *pack_filter,
+        pack_filter,
         mark_cache,
         enable_column_cache,
         column_cache,
@@ -185,7 +199,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         tracing_id,
         enable_read_thread,
         scan_context,
-        ReadTag::Query);
+        read_tag);
 
     if (column_cache_long_term && pk_col_id)
         // ColumnCacheLongTerm is only filled in Vector Search.

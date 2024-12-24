@@ -1088,7 +1088,7 @@ try
             dmContext(),
             segment_snap,
             real_ranges,
-            DMFilePackFilterResult::emptyResults(dmContext(), segment_snap->stable->getDMFiles()),
+            DMFilePackFilterResult::defaultResults(dmContext(), segment_snap->stable->getDMFiles()),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
@@ -1108,7 +1108,7 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
-            DMFilePackFilterResult::emptyResults(dmContext(), segment_snap->stable->getDMFiles()),
+            DMFilePackFilterResult::defaultResults(dmContext(), segment_snap->stable->getDMFiles()),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
@@ -1150,7 +1150,7 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
-            DMFilePackFilterResult::emptyResults(dmContext(), segment_snap->stable->getDMFiles()),
+            DMFilePackFilterResult::defaultResults(dmContext(), segment_snap->stable->getDMFiles()),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);

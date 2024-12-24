@@ -1576,8 +1576,7 @@ try
         // Filtered by rough set filter
         auto filter = toRSFilter(i64_cd, range);
         const auto read_ranges = RowKeyRanges{RowKeyRange::newAll(false, 1)};
-        auto pack_result = std::make_shared<DMFilePackFilterResult>(
-            DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {}));
+        auto pack_result = DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {});
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setColumnCache(column_cache)
@@ -1659,8 +1658,7 @@ try
     filters.emplace_back(createOr({one_part_filter, createUnsupported("test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         const auto read_ranges = RowKeyRanges{RowKeyRange::newAll(false, 1)};
-        auto pack_result = std::make_shared<DMFilePackFilterResult>(
-            DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {}));
+        auto pack_result = DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {});
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setColumnCache(column_cache)

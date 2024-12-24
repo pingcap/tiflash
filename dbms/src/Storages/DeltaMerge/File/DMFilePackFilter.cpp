@@ -21,12 +21,12 @@
 namespace DB::DM
 {
 
-DMFilePackFilterResult DMFilePackFilter::load(const DMContext & dm_context)
+DMFilePackFilterResultPtr DMFilePackFilter::load(const DMContext & dm_context)
 {
     Stopwatch watch;
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
     size_t pack_count = dmfile->getPacks();
-    DMFilePackFilterResult result(dm_context, dmfile, pack_count);
+    DMFilePackFilterResult result(dm_context, dmfile);
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {
@@ -153,7 +153,7 @@ DMFilePackFilterResult DMFilePackFilter::load(const DMContext & dm_context)
         some_count,
         all_count,
         all_null_count);
-    return result;
+    return std::make_shared<DMFilePackFilterResult>(std::move(result));
 }
 
 void DMFilePackFilter::loadIndex(

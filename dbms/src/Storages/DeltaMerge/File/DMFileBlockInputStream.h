@@ -138,7 +138,7 @@ public:
         return *this;
     }
 
-    DMFileBlockInputStreamBuilder setAnnQureyInfo(const ANNQueryInfoPtr & ann_query_info_)
+    DMFileBlockInputStreamBuilder & setAnnQureyInfo(const ANNQueryInfoPtr & ann_query_info_)
     {
         ann_query_info = ann_query_info_;
         return *this;
@@ -162,6 +162,7 @@ public:
         read_one_pack_every_time = true;
         return *this;
     }
+
     DMFileBlockInputStreamBuilder & setRowsThreshold(size_t rows_threshold_per_read_)
     {
         rows_threshold_per_read = rows_threshold_per_read_;

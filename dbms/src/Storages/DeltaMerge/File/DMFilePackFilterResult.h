@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -31,15 +32,33 @@ class DMFilePackFilterResult
     friend class DMFilePackFilter;
 
 public:
-    DMFilePackFilterResult(const DMContext & dm_context_, const DMFilePtr & dmfile_, size_t pack_count_)
-        : dm_context(dm_context_)
+    DMFilePackFilterResult(const DMContext & dm_context_, const DMFilePtr & dmfile_)
+        : index_cache(dm_context_.global_context.getMinMaxIndexCache())
+        , file_provider(dm_context_.global_context.getFileProvider())
+        , read_limiter(dm_context_.global_context.getReadLimiter())
+        , scan_context(dm_context_.scan_context)
         , dmfile(dmfile_)
-        , handle_res(pack_count_, RSResult::All)
+        , handle_res(dmfile->getPacks(), RSResult::All)
+        , pack_res(dmfile->getPacks(), RSResult::Some)
+    {}
+
+    DMFilePackFilterResult(
+        const MinMaxIndexCachePtr & index_cache_,
+        const FileProviderPtr & file_provider_,
+        const ReadLimiterPtr & read_limiter_,
+        const ScanContextPtr & scan_context,
+        const DMFilePtr & dmfile_)
+        : index_cache(index_cache_)
+        , file_provider(file_provider_)
+        , read_limiter(read_limiter_)
+        , scan_context(scan_context)
+        , dmfile(dmfile_)
+        , handle_res(dmfile->getPacks(), RSResult::All)
+        , pack_res(dmfile->getPacks(), RSResult::Some)
     {}
 
     const RSResults & getHandleRes() const { return handle_res; }
     const RSResults & getPackResConst() const { return pack_res; }
-    RSResults & getPackRes() { return pack_res; }
     UInt64 countUsePack() const;
 
     Handle getMinHandle(size_t pack_id) const
@@ -66,19 +85,13 @@ public:
         return minmax_index->getUInt64MinMax(pack_id).second;
     }
 
-    static DMFilePackFilterResultPtr emptyResult(const DMContext & dm_context, const DMFilePtr & dmfile)
-    {
-        return std::make_shared<DMFilePackFilterResult>(dm_context, dmfile, 0);
-    }
-
-    static DMFilePackFilterResults emptyResults(const DMContext & dm_context, const DMFiles & files)
+    // Only for test
+    static DMFilePackFilterResults defaultResults(const DMContext & dm_context, const DMFiles & files)
     {
         DMFilePackFilterResults results;
         results.reserve(files.size());
         for (const auto & file : files)
-        {
-            results.push_back(emptyResult(dm_context, file));
-        }
+            results.push_back(std::make_shared<DMFilePackFilterResult>(dm_context, file));
         return results;
     }
 
@@ -92,7 +105,11 @@ private:
     void tryLoadIndex(ColId col_id) const;
 
 private:
-    const DMContext & dm_context;
+    MinMaxIndexCachePtr index_cache;
+    FileProviderPtr file_provider;
+    ReadLimiterPtr read_limiter;
+
+    const ScanContextPtr scan_context;
 
     DMFilePtr dmfile;
     mutable RSCheckParam param;

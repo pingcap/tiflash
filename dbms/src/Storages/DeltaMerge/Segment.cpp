@@ -950,16 +950,17 @@ BlockInputStreamPtr Segment::getInputStream(
 
     // load DMilePackFilterResult for each DMFile
     DMFilePackFilterResults pack_filter_results;
+    pack_filter_results.reserve(segment_snap->stable->getDMFiles().size());
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
-        auto result = std::make_shared<DMFilePackFilterResult>(DMFilePackFilter::loadFrom(
+        auto result = DMFilePackFilter::loadFrom(
             dm_context,
             dmfile,
             /*set_cache_if_miss*/ true,
             read_ranges,
             filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-            /*read_pack*/ {}));
-        pack_filter_results.emplace_back(std::move(result));
+            /*read_pack*/ {});
+        pack_filter_results.push_back(result);
     }
 
     switch (read_mode)
@@ -3525,6 +3526,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             read_data_block_rows);
     }
 
+    std::cout << "getBitmapFilterInputStream" << std::endl;
     auto stream = getConcatSkippableBlockInputStream(
         bitmap_filter,
         segment_snap,

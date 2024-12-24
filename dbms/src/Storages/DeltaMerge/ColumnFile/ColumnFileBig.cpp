@@ -45,7 +45,7 @@ void ColumnFileBig::calculateStat(const DMContext & dm_context)
         {segment_range},
         EMPTY_RS_OPERATOR,
         {});
-    std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
+    std::tie(valid_rows, valid_bytes) = pack_filter->validRowsAndBytes();
 }
 
 void ColumnFileBig::removeData(WriteBatches & wbs) const

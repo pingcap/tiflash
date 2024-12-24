@@ -45,7 +45,7 @@ class DMFilePackFilter
 
 public:
     // Empty `rowkey_ranges` means do not filter by rowkey_ranges
-    static DMFilePackFilterResult loadFrom(
+    static DMFilePackFilterResultPtr loadFrom(
         const DMContext & dm_context,
         const DMFilePtr & dmfile,
         bool set_cache_if_miss,
@@ -91,7 +91,7 @@ private:
         , read_limiter(read_limiter_)
     {}
 
-    DMFilePackFilterResult load(const DMContext & dm_context);
+    DMFilePackFilterResultPtr load(const DMContext & dm_context);
 
     static void loadIndex(
         ColumnIndexes & indexes,

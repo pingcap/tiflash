@@ -2778,7 +2778,7 @@ Block createBlock(const ColumnDefine & cd, size_t begin, size_t end)
 
 } // namespace
 
-TEST_F(DeltaMergeStoreTest, ReadLegacyStringData_CFTiny)
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringDataCFTiny)
 try
 {
     // Write legacy string data to CFTiny.
@@ -2843,7 +2843,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStoreTest, ReadLegacyStringData_DMFile)
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringDataDMFile)
 try
 {
     // Write legacy string data to DMFile.

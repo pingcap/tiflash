@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
 
@@ -72,12 +71,12 @@ void DMFilePackFilterResult::tryLoadIndex(ColId col_id) const
     DMFilePackFilter::loadIndex(
         param.indexes,
         dmfile,
-        dm_context.global_context.getFileProvider(),
-        dm_context.global_context.getMinMaxIndexCache(),
+        file_provider,
+        index_cache,
         true,
         col_id,
-        dm_context.global_context.getReadLimiter(),
-        dm_context.scan_context);
+        read_limiter,
+        scan_context);
 }
 
 } // namespace DB::DM

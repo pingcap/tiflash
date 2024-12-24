@@ -374,7 +374,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        DMFilePackFilterResult::emptyResults(*dm_context, snap->stable->getDMFiles()),
+        DMFilePackFilterResult::defaultResults(*dm_context, snap->stable->getDMFiles()),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -396,7 +396,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            DMFilePackFilterResult::emptyResults(*dm_context, snap->stable->getDMFiles()),
+            DMFilePackFilterResult::defaultResults(*dm_context, snap->stable->getDMFiles()),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -416,7 +416,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            DMFilePackFilterResult::emptyResults(*dm_context, snap->stable->getDMFiles()),
+            DMFilePackFilterResult::defaultResults(*dm_context, snap->stable->getDMFiles()),
             1,
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -444,7 +444,7 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
         *dm_context,
         snap,
         {buildRowKeyRange(10000, 50000)}, // [10000, 50000)
-        DMFilePackFilterResult::emptyResults(*dm_context, snap->stable->getDMFiles()),
+        DMFilePackFilterResult::defaultResults(*dm_context, snap->stable->getDMFiles()),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -513,7 +513,7 @@ try
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        DMFilePackFilterResult::emptyResults(*dm_context, snap->stable->getDMFiles()),
+        DMFilePackFilterResult::defaultResults(*dm_context, snap->stable->getDMFiles()),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_EQ(bitmap_filter->size(), 30);
@@ -543,7 +543,7 @@ try
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        DMFilePackFilterResult::emptyResults(*dm_context, snap->stable->getDMFiles()),
+        DMFilePackFilterResult::defaultResults(*dm_context, snap->stable->getDMFiles()),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_EQ(bitmap_filter->size(), 750);
