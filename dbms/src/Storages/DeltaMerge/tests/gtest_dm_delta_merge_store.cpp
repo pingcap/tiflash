@@ -4172,7 +4172,14 @@ try
         return filter;
     };
 
-    DB::registerFunctions();
+    try
+    {
+        DB::registerFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
 
     constexpr Int64 num_rows = 128;
     auto filter_all = create_filter(0);
@@ -4295,7 +4302,14 @@ try
         return filter;
     };
 
-    DB::registerFunctions();
+    try
+    {
+        DB::registerFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
 
     constexpr Int64 num_rows = 128;
     auto filter_all = create_filter(0);
