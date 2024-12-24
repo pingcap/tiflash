@@ -235,27 +235,20 @@ public:
         Arena * arena,
         ssize_t if_argument_pos = -1) const override
     {
-        const auto end = start_offset + batch_size;
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = start_offset; i < end; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
             {
-                const auto place_idx = i - start_offset;
-
-                if (flags[i] && places[place_idx])
-                    static_cast<const Derived *>(this)->add(places[place_idx] + place_offset, columns, i, arena);
+                if (flags[i] && places[i - start_offset])
+                    static_cast<const Derived *>(this)->add(places[i - start_offset] + place_offset, columns, i, arena);
             }
         }
         else
         {
-            for (size_t i = start_offset; i < end; ++i)
-            {
-                const auto place_idx = i - start_offset;
-
-                if (places[place_idx])
-                    static_cast<const Derived *>(this)->add(places[place_idx] + place_offset, columns, i, arena);
-            }
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
+                if (places[i - start_offset])
+                    static_cast<const Derived *>(this)->add(places[i - start_offset] + place_offset, columns, i, arena);
         }
     }
 

@@ -922,7 +922,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         }                                                                                                           \
         else                                                                                                        \
         {                                                                                                           \
-            agg_process_info.not_found_rows.push_back(i);                                                           \
+            agg_process_info.not_found_rows.push_back(j);                                                           \
         }                                                                                                           \
     }                                                                                                               \
     else                                                                                                            \
@@ -954,17 +954,19 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     std::vector<size_t> hashvals;
     if constexpr (enable_prefetch)
     {
-        const auto hashvals_size = std::min(prefetch_step, rows);
-        hashvals.resize(hashvals_size);
-        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + hashvals_size; ++i)
+        hashvals.resize(prefetch_step);
+        for (size_t i = agg_process_info.start_row;
+             i < agg_process_info.start_row + prefetch_step && i < agg_process_info.end_row;
+             ++i)
         {
-            hashvals[i] = state.getHash(method.data, i, *aggregates_pool, sort_key_containers);
+            hashvals[i % prefetch_step] = state.getHash(method.data, i, *aggregates_pool, sort_key_containers);
         }
     }
 
     size_t i = agg_process_info.start_row;
-    const size_t end = agg_process_info.end_row;
+    const size_t end = agg_process_info.start_row + rows;
     const size_t mini_batch = 256;
+    // i is the begin row index of each mini batch.
     while (i < end)
     {
         size_t batch_size = mini_batch;
@@ -1013,7 +1015,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             inst->batch_that->addBatch(
                 i,
                 processed_size,
-                places.get() + i,
+                places.get() + i - agg_process_info.start_row,
                 inst->state_offset,
                 inst->batch_arguments,
                 aggregates_pool);
@@ -1880,15 +1882,13 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     // convertToBlockImplFinal didn't prefetch because it's used during spill.
     // places vector will occupy extra memory, also it doesn't care performance during spill.
     size_t prefetch_idx = 16;
-    data_index = 0;
     for (size_t i = 0; i < rows; ++i)
     {
         if (prefetch_idx < rows)
             __builtin_prefetch(places[prefetch_idx++]);
 
-        size_t key_columns_vec_index = data_index / params.max_block_size;
+        size_t key_columns_vec_index = i / params.max_block_size;
         insertAggregatesIntoColumns(places[i], final_aggregate_columns_vec[key_columns_vec_index], arena);
-        ++data_index;
     }
 }
 
