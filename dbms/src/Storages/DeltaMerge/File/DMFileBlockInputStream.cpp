@@ -15,7 +15,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream.h>
-#include <Storages/DeltaMerge/Filter/WithANNQueryInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
@@ -65,7 +64,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         max_sharing_column_bytes_for_all = 0;
     }
 
-    // If pack_filter is not set, we will create a default one.
+    // If pack_filter is not set, load from EMPTY_RS_OPERATOR.
     if (!pack_filter)
     {
         pack_filter = DMFilePackFilter::loadFrom(
@@ -181,7 +180,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
-    // If pack_filter is not set, we will create a default one.
+    // If pack_filter is not set, load from EMPTY_RS_OPERATOR.
     if (!pack_filter)
     {
         pack_filter = DMFilePackFilter::loadFrom(

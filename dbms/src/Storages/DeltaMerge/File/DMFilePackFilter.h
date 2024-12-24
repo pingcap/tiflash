@@ -14,21 +14,15 @@
 
 #pragma once
 
-#include <Common/Exception.h>
-#include <Common/Logger.h>
-#include <Common/TiFlashMetrics.h>
-#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
-#include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
-#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
-#include <Storages/S3/S3Common.h>
+
 
 namespace ProfileEvents
 {

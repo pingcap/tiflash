@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 
@@ -30,7 +29,6 @@ class DMFilePackFilterResult
 {
     friend class DMFilePackFilter;
 
-public:
     DMFilePackFilterResult(
         const MinMaxIndexCachePtr & index_cache_,
         const FileProviderPtr & file_provider_,
@@ -46,6 +44,7 @@ public:
         , pack_res(dmfile->getPacks(), RSResult::Some)
     {}
 
+public:
     const RSResults & getHandleRes() const { return handle_res; }
     const RSResults & getPackRes() const { return pack_res; }
     UInt64 countUsePack() const;
