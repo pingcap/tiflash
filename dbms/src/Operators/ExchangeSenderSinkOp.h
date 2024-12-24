@@ -47,7 +47,6 @@ protected:
 
 private:
     OperatorStatus waitForWriter() const;
-    OperatorStatus tryFlush();
 
 private:
     bool need_flush = false;
