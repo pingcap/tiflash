@@ -271,6 +271,13 @@ struct ContextShared
             return;
         shutdown_called = true;
 
+        // The local index scheduler must be shutdown to stop all
+        // running tasks before shutting down `global_storage_pool`.
+        if (global_local_indexer_scheduler)
+        {
+            global_local_indexer_scheduler->shutdown();
+        }
+
         if (global_storage_pool)
         {
             // shutdown the gc task of global storage pool before
