@@ -21,6 +21,9 @@
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <TiDB/Decode/TypeMapping.h>
 
+#include "Flash/Coprocessor/DAGResponseWriter.h"
+#include "Flash/Mpp/MppVersion.h"
+
 namespace DB
 {
 constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE
@@ -74,32 +77,32 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
 }
 
 template <class ExchangeWriterPtr>
-bool HashPartitionWriter<ExchangeWriterPtr>::doFlush()
+WriteResult HashPartitionWriter<ExchangeWriterPtr>::flush()
 {
     if (0 == rows_in_blocks)
-        return false;
+        return WriteResult::DONE;
 
-    switch (data_codec_version)
+    auto wait_res = waitForWritable();
+    if (wait_res == WaitResult::Ready)
     {
-    case MPPDataPacketV0:
-    {
-        partitionAndWriteBlocks();
-        break;
+        switch (data_codec_version)
+        {
+        case MPPDataPacketV0:
+        {
+            partitionAndWriteBlocks();
+            break;
+        }
+        case MPPDataPacketV1:
+        default:
+        {
+            partitionAndWriteBlocksV1();
+            break;
+        }
+        }
+        return WriteResult::DONE;
     }
-    case MPPDataPacketV1:
-    default:
-    {
-        partitionAndWriteBlocksV1();
-        break;
-    }
-    }
-    return true;
-}
-
-template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
-{
-    writer->notifyNextPipelineWriter();
+    return wait_res == WaitResult::WaitForPolling ? WriteResult::NEED_WAIT_FOR_POLLING
+                                                  : WriteResult::NEED_WAIT_FOR_NOTIFY;
 }
 
 template <class ExchangeWriterPtr>
@@ -109,70 +112,33 @@ WaitResult HashPartitionWriter<ExchangeWriterPtr>::waitForWritable() const
 }
 
 template <class ExchangeWriterPtr>
-bool HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
-{
-    size_t rows = 0;
-    if (block.info.selective)
-        rows = block.info.selective->size();
-    else
-        rows = block.rows();
-
-    if (rows > 0)
-    {
-        rows_in_blocks += rows;
-        mem_size_in_blocks += block.bytes();
-        blocks.push_back(block);
-    }
-    if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit
-        || mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE)
-    {
-        partitionAndWriteBlocksV1();
-        return true;
-    }
-    return false;
-}
-
-template <class ExchangeWriterPtr>
-bool HashPartitionWriter<ExchangeWriterPtr>::writeImpl(const Block & block)
-{
-    size_t rows = 0;
-    if (block.info.selective)
-        rows = block.info.selective->size();
-    else
-        rows = block.rows();
-
-    if (rows > 0)
-    {
-        rows_in_blocks += rows;
-        blocks.push_back(block);
-    }
-    if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit)
-    {
-        partitionAndWriteBlocks();
-        return true;
-    }
-    return false;
-}
-
-template <class ExchangeWriterPtr>
-bool HashPartitionWriter<ExchangeWriterPtr>::doWrite(const Block & block)
+WriteResult HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
 
-    switch (data_codec_version)
+    size_t rows = 0;
+    if (block.info.selective)
+        rows = block.info.selective->size();
+    else
+        rows = block.rows();
+
+    if (rows > 0)
     {
-    case MPPDataPacketV0:
-    {
-        return writeImpl(block);
+        rows_in_blocks += rows;
+        if (data_codec_version == MPPDataPacketV1)
+            mem_size_in_blocks += block.bytes();
+        blocks.push_back(block);
     }
-    case MPPDataPacketV1:
-    default:
-    {
-        return writeImplV1(block);
-    }
-    }
+
+    auto row_count_exceed = static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit;
+    auto row_bytes_exceed
+        = data_codec_version == MPPDataPacketV1 && mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
+
+    if (row_count_exceed || row_bytes_exceed)
+        return flush();
+    return WriteResult::DONE;
 }
 
 template <class ExchangeWriterPtr>
@@ -289,12 +255,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
         rows_in_blocks = 0;
     }
 
-    writePartitionBlocks(partition_blocks);
-}
-
-template <class ExchangeWriterPtr>
-void HashPartitionWriter<ExchangeWriterPtr>::writePartitionBlocks(std::vector<Blocks> & partition_blocks)
-{
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
         auto & blocks = partition_blocks[part_id];

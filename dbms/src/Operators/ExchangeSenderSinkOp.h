@@ -52,7 +52,7 @@ private:
     OperatorStatus tryFlush();
 
 private:
-    std::optional<Block> buffer;
+    bool need_flush = false;
     std::unique_ptr<DAGResponseWriter> writer;
     size_t total_rows = 0;
 };

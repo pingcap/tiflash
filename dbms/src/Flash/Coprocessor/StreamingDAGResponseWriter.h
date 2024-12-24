@@ -38,11 +38,10 @@ public:
         DAGContext & dag_context_);
     WaitResult waitForWritable() const override;
 
-protected:
-    bool doWrite(const Block & block) override;
-    bool doFlush() override;
-    void notifyNextPipelineWriter() override;
+    WriteResult write(const Block & block) override;
+    WriteResult flush() override;
 
+protected:
 private:
     void encodeThenWriteBlocks();
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Operators/ExchangeSenderSinkOp.h>
 
 namespace DB
@@ -28,34 +29,25 @@ void ExchangeSenderSinkOp::operateSuffixImpl()
 
 OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
-    assert(!buffer);
-    buffer.emplace(std::move(block));
-    return tryFlush();
-}
-
-OperatorStatus ExchangeSenderSinkOp::tryFlush()
-{
-    assert(buffer);
-    auto res = waitForWriter();
-    if (res == OperatorStatus::NEED_INPUT)
+    assert(!need_flush);
+    WriteResult write_res;
+    OperatorStatus ret = block ? OperatorStatus::NEED_INPUT : OperatorStatus::FINISHED;
+    if (block)
     {
-        // if writer is ready, write/flush should always succeed
-        if (buffer.value())
-        {
-            total_rows += buffer->rows();
-            writer->write(std::move(*buffer));
-        }
-        else
-        {
-            // meet eof, flush the writer, and the return status should be FINISHED
-            writer->flush();
-            res = OperatorStatus::FINISHED;
-        }
-        buffer.reset();
-        return res;
+        // write
+        write_res = writer->write(std::move(block));
     }
-    // writer is not ready, return the status
-    return res;
+    else
+    {
+        write_res = writer->flush();
+    }
+    if (write_res != WriteResult::DONE)
+    {
+        need_flush = true;
+        ret = write_res == WriteResult::NEED_WAIT_FOR_POLLING ? OperatorStatus::WAITING
+                                                              : OperatorStatus::WAIT_FOR_NOTIFY;
+    }
+    return ret;
 }
 
 OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
@@ -75,11 +67,26 @@ OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
 OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
     // if there is cached data, flush it
-    return buffer ? tryFlush() : OperatorStatus::NEED_INPUT;
+    if (need_flush)
+    {
+        auto res = writer->flush();
+        if (res == WriteResult::DONE)
+        {
+            need_flush = false;
+            return OperatorStatus::NEED_INPUT;
+        }
+        else
+        {
+            return res == WriteResult::NEED_WAIT_FOR_POLLING ? OperatorStatus::WAITING
+                                                             : OperatorStatus::WAIT_FOR_NOTIFY;
+        }
+    }
+    return OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus ExchangeSenderSinkOp::awaitImpl()
 {
+    assert(need_flush);
     return waitForWriter();
 }
 

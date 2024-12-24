@@ -21,6 +21,8 @@
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <TiDB/Decode/TypeMapping.h>
 
+#include "Flash/Coprocessor/DAGResponseWriter.h"
+
 namespace DB
 {
 
@@ -90,20 +92,20 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
 }
 
 template <class ExchangeWriterPtr>
-bool FineGrainedShuffleWriter<ExchangeWriterPtr>::doFlush()
+WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
     {
-        batchWriteFineGrainedShuffle();
-        return true;
+        auto wait_res = waitForWritable();
+        if (wait_res == WaitResult::Ready)
+        {
+            batchWriteFineGrainedShuffle();
+            return WriteResult::DONE;
+        }
+        return wait_res == WaitResult::WaitForPolling ? WriteResult::NEED_WAIT_FOR_POLLING
+                                                      : WriteResult::NEED_WAIT_FOR_NOTIFY;
     }
-    return false;
-}
-
-template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
-{
-    writer->notifyNextPipelineWriter();
+    return WriteResult::DONE;
 }
 
 template <class ExchangeWriterPtr>
@@ -113,7 +115,7 @@ WaitResult FineGrainedShuffleWriter<ExchangeWriterPtr>::waitForWritable() const
 }
 
 template <class ExchangeWriterPtr>
-bool FineGrainedShuffleWriter<ExchangeWriterPtr>::doWrite(const Block & block)
+WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");
     RUNTIME_CHECK_MSG(
@@ -135,10 +137,9 @@ bool FineGrainedShuffleWriter<ExchangeWriterPtr>::doWrite(const Block & block)
     if (blocks.size() == fine_grained_shuffle_stream_count
         || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
     {
-        batchWriteFineGrainedShuffle();
-        return true;
+        return flush();
     }
-    return false;
+    return WriteResult::DONE;
 }
 
 template <class ExchangeWriterPtr>

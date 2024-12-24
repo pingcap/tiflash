@@ -19,6 +19,8 @@
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 
+#include "Flash/Coprocessor/DAGResponseWriter.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -71,7 +73,7 @@ void UnaryDAGResponseWriter::appendWarningsToDAGResponse()
     dag_response->set_warning_count(dag_context.getWarningCount());
 }
 
-bool UnaryDAGResponseWriter::doFlush()
+WriteResult UnaryDAGResponseWriter::flush()
 {
     if (current_records_num > 0)
     {
@@ -86,10 +88,10 @@ bool UnaryDAGResponseWriter::doFlush()
         throw TiFlashException(
             "DAG response is too big, please check config about region size or region merge scheduler",
             Errors::Coprocessor::Internal);
-    return true;
+    return WriteResult::DONE;
 }
 
-bool UnaryDAGResponseWriter::doWrite(const Block & block)
+WriteResult UnaryDAGResponseWriter::write(const Block & block)
 {
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
@@ -117,6 +119,6 @@ bool UnaryDAGResponseWriter::doWrite(const Block & block)
             row_index = upper;
         }
     }
-    return true;
+    return WriteResult::DONE;
 }
 } // namespace DB

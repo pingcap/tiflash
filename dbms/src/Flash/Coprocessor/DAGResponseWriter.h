@@ -23,19 +23,20 @@ namespace DB
 {
 class DAGContext;
 
+enum class WriteResult
+{
+    DONE,
+    NEED_WAIT_FOR_POLLING,
+    NEED_WAIT_FOR_NOTIFY,
+};
+
 class DAGResponseWriter
 {
 public:
     DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_);
     /// prepared with sample block
     virtual void prepare(const Block &){};
-    void write(const Block & block)
-    {
-        if (!doWrite(block))
-        {
-            notifyNextPipelineWriter();
-        }
-    }
+    virtual WriteResult write(const Block & block) = 0;
 
     // For async writer, `waitForWritable` need to be called before calling `write`.
     // ```
@@ -43,26 +44,14 @@ public:
     // switch (res) case...
     // write(block);
     // ```
-    virtual WaitResult waitForWritable() const { throw Exception("Unsupport"); }
+    virtual WaitResult waitForWritable() const { return WaitResult::Ready; }
 
     /// flush cached blocks for batch writer
-    void flush()
-    {
-        if (!doFlush())
-        {
-            notifyNextPipelineWriter();
-        }
-    }
+    virtual WriteResult flush() = 0;
 
     virtual ~DAGResponseWriter() = default;
 
 protected:
-    // return true if write is actually write the data
-    virtual bool doWrite(const Block & block) = 0;
-    // return true if flush is actually flush data
-    virtual bool doFlush() = 0;
-    virtual void notifyNextPipelineWriter() = 0;
-
     Int64 records_per_chunk;
     DAGContext & dag_context;
 };

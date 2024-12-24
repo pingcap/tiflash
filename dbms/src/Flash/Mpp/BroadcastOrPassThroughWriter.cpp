@@ -20,6 +20,8 @@
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <TiDB/Decode/TypeMapping.h>
 
+#include "Flash/Coprocessor/DAGResponseWriter.h"
+
 namespace DB
 {
 template <class ExchangeWriterPtr>
@@ -66,14 +68,20 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 }
 
 template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doFlush()
+WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
     {
-        writeBlocks();
-        return true;
+        auto wait_res = waitForWritable();
+        if (wait_res == WaitResult::Ready)
+        {
+            writeBlocks();
+            return WriteResult::DONE;
+        }
+        return wait_res == WaitResult::WaitForPolling ? WriteResult::NEED_WAIT_FOR_POLLING
+                                                      : WriteResult::NEED_WAIT_FOR_NOTIFY;
     }
-    return false;
+    return WriteResult::DONE;
 }
 
 template <class ExchangeWriterPtr>
@@ -83,13 +91,7 @@ WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() co
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
-{
-    writer->notifyNextPipelineWriter();
-}
-
-template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doWrite(const Block & block)
+WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK(!block.info.selective);
     RUNTIME_CHECK_MSG(
@@ -104,10 +106,9 @@ bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doWrite(const Block & bloc
 
     if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit)
     {
-        writeBlocks();
-        return true;
+        return flush();
     }
-    return false;
+    return WriteResult::DONE;
 }
 
 template <class ExchangeWriterPtr>

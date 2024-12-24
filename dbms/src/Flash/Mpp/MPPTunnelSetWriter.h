@@ -17,6 +17,8 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <IO/Compression/CompressionMethod.h>
 
+#include "Flash/Coprocessor/WaitResult.h"
+
 namespace DB
 {
 class MPPTunnelSetWriterBase : private boost::noncopyable
@@ -93,8 +95,7 @@ public:
     {}
 
     // For sync writer, `waitForWritable` will not be called, so an exception is thrown here.
-    WaitResult waitForWritable() const override { throw Exception("Unsupport sync writer"); }
-    void notifyNextPipelineWriter() const override {}
+    WaitResult waitForWritable() const override { return WaitResult::Ready; }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
@@ -113,7 +114,6 @@ public:
     {}
 
     WaitResult waitForWritable() const override { return mpp_tunnel_set->waitForWritable(); }
-    void notifyNextPipelineWriter() const override { mpp_tunnel_set->notifyNextPipelineWriter(); }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;

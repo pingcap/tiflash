@@ -61,14 +61,20 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 }
 
 template <class StreamWriterPtr>
-bool StreamingDAGResponseWriter<StreamWriterPtr>::doFlush()
+WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
     {
-        encodeThenWriteBlocks();
-        return true;
+        auto wait_res = waitForWritable();
+        if (wait_res == WaitResult::Ready)
+        {
+            encodeThenWriteBlocks();
+            return WriteResult::DONE;
+        }
+        return wait_res == WaitResult::WaitForPolling ? WriteResult::NEED_WAIT_FOR_POLLING
+                                                      : WriteResult::NEED_WAIT_FOR_NOTIFY;
     }
-    return false;
+    return WriteResult::DONE;
 }
 
 template <class StreamWriterPtr>
@@ -78,13 +84,7 @@ WaitResult StreamingDAGResponseWriter<StreamWriterPtr>::waitForWritable() const
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::notifyNextPipelineWriter()
-{
-    return writer->notifyNextPipelineWriter();
-}
-
-template <class StreamWriterPtr>
-bool StreamingDAGResponseWriter<StreamWriterPtr>::doWrite(const Block & block)
+WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -98,10 +98,9 @@ bool StreamingDAGResponseWriter<StreamWriterPtr>::doWrite(const Block & block)
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
     {
-        encodeThenWriteBlocks();
-        return true;
+        return flush();
     }
-    return false;
+    return WriteResult::DONE;
 }
 
 template <class StreamWriterPtr>
