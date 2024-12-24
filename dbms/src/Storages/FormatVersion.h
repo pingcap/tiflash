@@ -16,6 +16,8 @@
 
 #include <Core/Types.h>
 
+#include <span>
+
 namespace DB
 {
 // Those versions use different data types. It is definitely a bad design pattern.
@@ -206,7 +208,7 @@ inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V7;
 inline static const StorageFormatVersion DEFAULT_STORAGE_FORMAT_FOR_DISAGG = STORAGE_FORMAT_V102;
 
 bool isStorageFormatForDisagg(UInt64 version);
-const auto & getStorageFormatsForDisagg();
+std::span<const size_t> getStorageFormatsForDisagg();
 
 void setStorageFormat(UInt64 setting);
 void setStorageFormat(const StorageFormatVersion & version);

@@ -54,7 +54,7 @@ const StorageFormatVersion & toStorageFormat(UInt64 setting)
 }
 } // namespace
 
-const auto & getStorageFormatsForDisagg()
+std::span<const size_t> getStorageFormatsForDisagg()
 {
     static const auto formats = std::array{
         STORAGE_FORMAT_V100.identifier,
