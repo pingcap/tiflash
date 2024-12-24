@@ -41,11 +41,10 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
     {
         write_res = writer->flush();
     }
-    if (write_res != WriteResult::DONE)
+    if (write_res != WriteResult::Done)
     {
         need_flush = true;
-        ret = write_res == WriteResult::NEED_WAIT_FOR_POLLING ? OperatorStatus::WAITING
-                                                              : OperatorStatus::WAIT_FOR_NOTIFY;
+        ret = write_res == WriteResult::NeedWaitForPolling ? OperatorStatus::WAITING : OperatorStatus::WAIT_FOR_NOTIFY;
     }
     return ret;
 }
@@ -70,15 +69,14 @@ OperatorStatus ExchangeSenderSinkOp::prepareImpl()
     if (need_flush)
     {
         auto res = writer->flush();
-        if (res == WriteResult::DONE)
+        if (res == WriteResult::Done)
         {
             need_flush = false;
             return OperatorStatus::NEED_INPUT;
         }
         else
         {
-            return res == WriteResult::NEED_WAIT_FOR_POLLING ? OperatorStatus::WAITING
-                                                             : OperatorStatus::WAIT_FOR_NOTIFY;
+            return res == WriteResult::NeedWaitForPolling ? OperatorStatus::WAITING : OperatorStatus::WAIT_FOR_NOTIFY;
         }
     }
     return OperatorStatus::NEED_INPUT;

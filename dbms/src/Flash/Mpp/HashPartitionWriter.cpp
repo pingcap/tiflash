@@ -80,7 +80,7 @@ template <class ExchangeWriterPtr>
 WriteResult HashPartitionWriter<ExchangeWriterPtr>::flush()
 {
     if (0 == rows_in_blocks)
-        return WriteResult::DONE;
+        return WriteResult::Done;
 
     auto wait_res = waitForWritable();
     if (wait_res == WaitResult::Ready)
@@ -99,10 +99,9 @@ WriteResult HashPartitionWriter<ExchangeWriterPtr>::flush()
             break;
         }
         }
-        return WriteResult::DONE;
+        return WriteResult::Done;
     }
-    return wait_res == WaitResult::WaitForPolling ? WriteResult::NEED_WAIT_FOR_POLLING
-                                                  : WriteResult::NEED_WAIT_FOR_NOTIFY;
+    return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling : WriteResult::NeedWaitForNotify;
 }
 
 template <class ExchangeWriterPtr>
@@ -138,7 +137,7 @@ WriteResult HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 
     if (row_count_exceed || row_bytes_exceed)
         return flush();
-    return WriteResult::DONE;
+    return WriteResult::Done;
 }
 
 template <class ExchangeWriterPtr>

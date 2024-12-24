@@ -88,7 +88,7 @@ WriteResult UnaryDAGResponseWriter::flush()
         throw TiFlashException(
             "DAG response is too big, please check config about region size or region merge scheduler",
             Errors::Coprocessor::Internal);
-    return WriteResult::DONE;
+    return WriteResult::Done;
 }
 
 WriteResult UnaryDAGResponseWriter::write(const Block & block)
@@ -119,6 +119,6 @@ WriteResult UnaryDAGResponseWriter::write(const Block & block)
             row_index = upper;
         }
     }
-    return WriteResult::DONE;
+    return WriteResult::Done;
 }
 } // namespace DB

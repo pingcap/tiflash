@@ -69,12 +69,12 @@ WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::flush()
         if (wait_res == WaitResult::Ready)
         {
             encodeThenWriteBlocks();
-            return WriteResult::DONE;
+            return WriteResult::Done;
         }
-        return wait_res == WaitResult::WaitForPolling ? WriteResult::NEED_WAIT_FOR_POLLING
-                                                      : WriteResult::NEED_WAIT_FOR_NOTIFY;
+        return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling
+                                                      : WriteResult::NeedWaitForNotify;
     }
-    return WriteResult::DONE;
+    return WriteResult::Done;
 }
 
 template <class StreamWriterPtr>
@@ -100,7 +100,7 @@ WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & blo
     {
         return flush();
     }
-    return WriteResult::DONE;
+    return WriteResult::Done;
 }
 
 template <class StreamWriterPtr>

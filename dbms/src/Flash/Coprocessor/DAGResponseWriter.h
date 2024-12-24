@@ -25,9 +25,9 @@ class DAGContext;
 
 enum class WriteResult
 {
-    DONE,
-    NEED_WAIT_FOR_POLLING,
-    NEED_WAIT_FOR_NOTIFY,
+    Done,
+    NeedWaitForPolling,
+    NeedWaitForNotify,
 };
 
 class DAGResponseWriter

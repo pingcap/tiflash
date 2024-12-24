@@ -100,12 +100,12 @@ WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
         if (wait_res == WaitResult::Ready)
         {
             batchWriteFineGrainedShuffle();
-            return WriteResult::DONE;
+            return WriteResult::Done;
         }
-        return wait_res == WaitResult::WaitForPolling ? WriteResult::NEED_WAIT_FOR_POLLING
-                                                      : WriteResult::NEED_WAIT_FOR_NOTIFY;
+        return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling
+                                                      : WriteResult::NeedWaitForNotify;
     }
-    return WriteResult::DONE;
+    return WriteResult::Done;
 }
 
 template <class ExchangeWriterPtr>
@@ -139,7 +139,7 @@ WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & blo
     {
         return flush();
     }
-    return WriteResult::DONE;
+    return WriteResult::Done;
 }
 
 template <class ExchangeWriterPtr>
