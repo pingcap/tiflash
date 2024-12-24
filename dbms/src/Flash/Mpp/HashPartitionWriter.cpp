@@ -21,9 +21,6 @@
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <TiDB/Decode/TypeMapping.h>
 
-#include "Flash/Coprocessor/DAGResponseWriter.h"
-#include "Flash/Mpp/MppVersion.h"
-
 namespace DB
 {
 constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE

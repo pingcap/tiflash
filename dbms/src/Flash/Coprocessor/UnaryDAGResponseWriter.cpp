@@ -19,8 +19,6 @@
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 
-#include "Flash/Coprocessor/DAGResponseWriter.h"
-
 namespace DB
 {
 namespace ErrorCodes

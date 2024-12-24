@@ -18,8 +18,6 @@
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Operators/Operator.h>
 
-#include <optional>
-
 namespace DB
 {
 class ExchangeSenderSinkOp : public SinkOp

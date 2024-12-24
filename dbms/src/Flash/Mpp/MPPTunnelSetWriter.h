@@ -17,8 +17,6 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <IO/Compression/CompressionMethod.h>
 
-#include "Flash/Coprocessor/WaitResult.h"
-
 namespace DB
 {
 class MPPTunnelSetWriterBase : private boost::noncopyable

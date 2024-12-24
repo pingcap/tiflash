@@ -21,8 +21,6 @@
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <TiDB/Decode/TypeMapping.h>
 
-#include "Flash/Coprocessor/DAGResponseWriter.h"
-
 namespace DB
 {
 
