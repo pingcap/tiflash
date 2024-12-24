@@ -774,6 +774,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
 
+    const size_t prefetch_step = 16;
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
     size_t rows = agg_process_info.end_row - agg_process_info.start_row;
@@ -827,10 +828,15 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                     agg_process_info.hashvals);
         }
 
-        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
+        const auto end = agg_process_info.start_row + rows;
+        for (size_t i = agg_process_info.start_row; i < end; ++i)
         {
             if constexpr (enable_prefetch)
             {
+                const auto prefetch_idx = i + prefetch_step;
+                if likely (prefetch_idx < end)
+                    method.data.prefetch(agg_process_info.hashvals[prefetch_idx]);
+
                 auto emplace_result_hold = emplaceOrFindKey<only_lookup>(
                     method,
                     state,
@@ -945,7 +951,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     places[j - agg_process_info.start_row] = aggregate_data;                                                        \
     processed_rows = j;
 
-    const size_t prefetch_step = 16;
     std::vector<size_t> hashvals;
     if constexpr (enable_prefetch)
     {
