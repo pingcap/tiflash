@@ -53,7 +53,9 @@ private:
     using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
 public:
-    SingleValueDataFixed() : saved_values(nullptr) {}
+    SingleValueDataFixed()
+        : saved_values(nullptr)
+    {}
     ~SingleValueDataFixed() { delete saved_values; }
 
     bool has() const { return has_value; }
@@ -296,7 +298,9 @@ private:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
 
 public:
-    SingleValueDataString() : saved_values(nullptr) {}
+    SingleValueDataString()
+        : saved_values(nullptr)
+    {}
     ~SingleValueDataString() { delete saved_values; }
 
     bool has() const { return size >= 0; }
@@ -578,7 +582,9 @@ private:
     mutable std::deque<Field> * saved_values;
 
 public:
-    SingleValueDataGeneric() : saved_values(nullptr) {}
+    SingleValueDataGeneric()
+        : saved_values(nullptr)
+    {}
     ~SingleValueDataGeneric() { delete saved_values; }
 
     bool has() const { return !value.isNull(); }
