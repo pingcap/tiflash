@@ -151,6 +151,18 @@ public:
     }
 
     template <typename Data>
+    ALWAYS_INLINE inline EmplaceResult emplaceKey(
+        Data & data,
+        size_t row,
+        Arena & pool,
+        std::vector<String> & sort_key_containers,
+        size_t hashval)
+    {
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        return emplaceImpl(key_holder, data, hashval);
+    }
+
+    template <typename Data>
     ALWAYS_INLINE inline FindResult findKey(
         Data & data,
         size_t row,
@@ -159,6 +171,18 @@ public:
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return findKeyImpl(keyHolderGetKey(key_holder), data);
+    }
+
+    template <typename Data>
+    ALWAYS_INLINE inline FindResult findKey(
+        Data & data,
+        size_t row,
+        Arena & pool,
+        std::vector<String> & sort_key_containers,
+        size_t hashval)
+    {
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        return findKeyImpl(keyHolderGetKey(key_holder), data, hashval);
     }
 
     // Emplace key using hashval, you can enable prefetch or not.
