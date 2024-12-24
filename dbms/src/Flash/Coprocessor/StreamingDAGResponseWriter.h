@@ -40,6 +40,7 @@ public:
 
     WriteResult write(const Block & block) override;
     WriteResult flush() override;
+    bool hasDataToFlush() override { return rows_in_blocks > 0; }
 
 protected:
 private:

@@ -37,6 +37,7 @@ public:
     void appendWarningsToDAGResponse();
     WriteResult write(const Block & block) override;
     WriteResult flush() override;
+    bool hasDataToFlush() override { return dag_response->chunks_size() > 0 || current_records_num > 0; }
 
 private:
     tipb::SelectResponse * dag_response;

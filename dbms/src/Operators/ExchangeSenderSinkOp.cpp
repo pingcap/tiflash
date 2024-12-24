@@ -68,6 +68,8 @@ OperatorStatus ExchangeSenderSinkOp::prepareImpl()
     // if there is cached data, flush it
     if (need_flush)
     {
+        // the writer must has data to flush
+        assert(writer->hasDataToFlush());
         auto res = writer->flush();
         if (res == WriteResult::Done)
         {
