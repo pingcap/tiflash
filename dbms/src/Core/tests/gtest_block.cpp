@@ -86,10 +86,10 @@ try
         "Nullable(Int64)",
         DataTypeString::getNullableDefaultName()};
     std::vector<size_t> data_size{
-        16,
-        ColumnString::APPROX_STRING_SIZE * 2,
-        24,
-        ColumnString::APPROX_STRING_SIZE * 2 + 8};
+        32,
+        ColumnString::APPROX_STRING_SIZE * 2 + 8,
+        40,
+        ColumnString::APPROX_STRING_SIZE * 2 + 16};
     for (size_t i = 0; i < types.size(); ++i)
     {
         auto agg_data_type = DataTypeFactory::instance().get(fmt::format("AggregateFunction(Min, {})", types[i]));
