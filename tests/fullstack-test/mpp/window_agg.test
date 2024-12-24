@@ -21,7 +21,9 @@ func> wait_table test test.agg
 
 mysql> use test; set tidb_enforce_mpp=1;
 
-//TODO ast.AggFuncSum, ast.AggFuncCount, ast.AggFuncAvg, ast.AggFuncMax, ast.AggFuncMin ... 
+// TODO ast.AggFuncSum, ast.AggFuncCount, ast.AggFuncAvg, ast.AggFuncMax, ast.AggFuncMin
+// TODO int decimal64 decimal256 should be tested for add agg
+// TODO string and duration should be tested fow min/max
 
 mysql> use test; set tidb_enforce_mpp=1; select *, sum(v) over (partition by p order by o rows between 1 preceding and 1 following) as a from test.agg;
 +---+----+----+------+
