@@ -65,7 +65,7 @@ extern const char proactive_flush_force_set_type[];
 
 namespace DB::tests
 {
-DM::PushDownFilterPtr generatePushDownFilter(
+DM::PushDownExecutorPtr generatePushDownExecutor(
     Context & ctx,
     const String & table_info_json,
     const String & query,
@@ -582,7 +582,7 @@ try
         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
         /* num_streams= */ 1,
         /* start_ts= */ std::numeric_limits<UInt64>::max(),
-        std::make_shared<PushDownFilter>(filter),
+        std::make_shared<PushDownExecutor>(filter),
         std::vector<RuntimeFilterPtr>{},
         0,
         TRACING_NAME,
@@ -4108,7 +4108,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4153,7 +4153,7 @@ try
 })json";
 
     auto create_filter = [&](Int64 value) {
-        auto filter = generatePushDownFilter(
+        auto filter = generatePushDownExecutor(
             *db_context,
             table_info_json,
             fmt::format("select * from default.t_111 where col_time >= {}", value));
@@ -4237,7 +4237,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4283,7 +4283,7 @@ try
 })json";
 
     auto create_filter = [&](Int64 value) {
-        auto filter = generatePushDownFilter(
+        auto filter = generatePushDownExecutor(
             *db_context,
             table_info_json,
             fmt::format("select * from default.t_111 where col_time >= {}", value));

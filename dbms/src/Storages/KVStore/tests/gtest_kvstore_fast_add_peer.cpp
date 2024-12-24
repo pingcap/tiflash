@@ -14,7 +14,7 @@
 
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>

@@ -37,7 +37,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
@@ -1228,12 +1228,12 @@ ReadMode DeltaMergeStore::getReadMode(
     const Context & db_context,
     bool is_fast_scan,
     bool keep_order,
-    const PushDownFilterPtr & filter)
+    const PushDownExecutorPtr & filter)
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
     RUNTIME_CHECK_MSG(
         !filter || !filter->before_where || read_mode == ReadMode::Bitmap,
-        "Push down filters needs bitmap, push down filters is empty: {}, read mode: {}",
+        "Push down executor needs bitmap, push down executor is empty: {}, read mode: {}",
         filter == nullptr || filter->before_where == nullptr,
         magic_enum::enum_name(read_mode));
     return read_mode;
@@ -1246,7 +1246,7 @@ BlockInputStreams DeltaMergeStore::read(
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
     UInt64 start_ts,
-    const PushDownFilterPtr & filter,
+    const PushDownExecutorPtr & filter,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
@@ -1332,7 +1332,7 @@ BlockInputStreams DeltaMergeStore::read(
     LOG_INFO(
         tracing_logger,
         "Read create stream done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={} columns_to_read={} "
+        "is_fast_scan={} is_push_down_executor_empty={} pool_id={} num_streams={} columns_to_read={} "
         "final_columns_to_read={}",
         keep_order,
         db_context.getSettingsRef().dt_enable_read_thread,
@@ -1356,7 +1356,7 @@ void DeltaMergeStore::read(
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
     UInt64 start_ts,
-    const PushDownFilterPtr & filter,
+    const PushDownExecutorPtr & filter,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
@@ -1452,7 +1452,7 @@ void DeltaMergeStore::read(
     LOG_INFO(
         tracing_logger,
         "Read create PipelineExec done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={} columns_to_read={} "
+        "is_fast_scan={} is_push_down_executor_empty={} pool_id={} num_streams={} columns_to_read={} "
         "final_columns_to_read={}",
         keep_order,
         db_context.getSettingsRef().dt_enable_read_thread,
