@@ -128,15 +128,6 @@ public:
     using FindResult = FindResultImpl<Mapped>;
     static constexpr bool has_mapped = !std::is_same<Mapped, VoidMapped>::value;
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
-    static constexpr size_t prefetch_step = 16;
-
-    template <typename Map>
-    static ALWAYS_INLINE inline void prefetch(Map & map, size_t idx, const std::vector<size_t> & hashvals)
-    {
-        const auto prefetch_idx = idx + prefetch_step;
-        if likely (prefetch_idx < hashvals.size())
-            map.prefetch(hashvals[prefetch_idx]);
-    }
 
     // Emplace key without hashval, and this method doesn't support prefetch.
     template <typename Data>
@@ -183,49 +174,6 @@ public:
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return findKeyImpl(keyHolderGetKey(key_holder), data, hashval);
-    }
-
-    // Emplace key using hashval, you can enable prefetch or not.
-    template <bool enable_prefetch = false, typename Data>
-    ALWAYS_INLINE inline EmplaceResult emplaceKey(
-        Data & data,
-        size_t row,
-        Arena & pool,
-        std::vector<String> & sort_key_containers,
-        const std::vector<size_t> & hashvals)
-    {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
-        if constexpr (enable_prefetch)
-        {
-            assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
-            prefetch(data, row, hashvals);
-            return emplaceImpl(key_holder, data, hashvals[row]);
-        }
-        else
-        {
-            return emplaceImpl(key_holder, data);
-        }
-    }
-
-    template <bool enable_prefetch = false, typename Data>
-    ALWAYS_INLINE inline FindResult findKey(
-        Data & data,
-        size_t row,
-        Arena & pool,
-        std::vector<String> & sort_key_containers,
-        const std::vector<size_t> & hashvals)
-    {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
-        if constexpr (enable_prefetch)
-        {
-            assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
-            prefetch(data, row, hashvals);
-            return findKeyImpl(keyHolderGetKey(key_holder), data, hashvals[row]);
-        }
-        else
-        {
-            return findKeyImpl(keyHolderGetKey(key_holder), data);
-        }
     }
 
     template <typename Data>
