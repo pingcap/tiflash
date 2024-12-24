@@ -72,7 +72,6 @@ public:
     uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
     virtual WaitResult waitForWritable() const = 0;
-    virtual void notifyNextPipelineWriter() const = 0;
 
 protected:
     virtual void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) = 0;

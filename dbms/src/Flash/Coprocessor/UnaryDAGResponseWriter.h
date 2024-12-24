@@ -35,8 +35,6 @@ public:
 
     void encodeChunkToDAGResponse();
     void appendWarningsToDAGResponse();
-
-protected:
     WriteResult write(const Block & block) override;
     WriteResult flush() override;
 
