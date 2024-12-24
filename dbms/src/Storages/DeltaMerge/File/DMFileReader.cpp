@@ -706,7 +706,7 @@ void DMFileReader::addSkippedRows(UInt64 rows)
 
 void DMFileReader::initReadBlockInfos()
 {
-    const auto & pack_res = pack_filter->getPackResConst();
+    const auto & pack_res = pack_filter->getPackRes();
     const auto & pack_stats = dmfile->getPackStats();
 
     const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
@@ -756,7 +756,7 @@ std::vector<DMFileReader::ReadBlockInfo> DMFileReader::splitReadBlockInfos(
 {
     const auto pack_end = read_info.start_pack_id + read_info.pack_count;
     const size_t start_row_offset = pack_offset[read_info.start_pack_id];
-    const auto & pack_res = pack_filter->getPackResConst();
+    const auto & pack_res = pack_filter->getPackRes();
     const auto & pack_stats = dmfile->getPackStats();
     std::vector<ReadBlockInfo> new_read_block_infos;
     new_read_block_infos.reserve(pack_end - read_info.start_pack_id);

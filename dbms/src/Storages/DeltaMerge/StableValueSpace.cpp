@@ -377,7 +377,7 @@ void StableValueSpace::calculateStableProperty(
             {rowkey_range},
             EMPTY_RS_OPERATOR,
             {});
-        const auto & pack_res = pack_filter->getPackResConst();
+        const auto & pack_res = pack_filter->getPackRes();
         size_t new_pack_properties_index = 0;
         const bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
@@ -598,7 +598,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             RSOperatorPtr{},
             IdSetPtr{});
         const auto & pack_stats = f->getPackStats();
-        const auto & pack_res = filter->getPackResConst();
+        const auto & pack_res = filter->getPackRes();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (pack_res[i].isUse())

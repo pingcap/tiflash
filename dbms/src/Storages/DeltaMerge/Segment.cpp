@@ -3151,7 +3151,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
     {
         const auto & dmfile = dmfiles[i];
         const auto & pack_filter = pack_filter_result[i];
-        const auto & pack_res = pack_filter->getPackResConst();
+        const auto & pack_res = pack_filter->getPackRes();
         const auto & handle_res = pack_filter->getHandleRes();
         const auto & pack_stats = dmfile->getPackStats();
 

@@ -58,7 +58,7 @@ public:
     {}
 
     const RSResults & getHandleRes() const { return handle_res; }
-    const RSResults & getPackResConst() const { return pack_res; }
+    const RSResults & getPackRes() const { return pack_res; }
     UInt64 countUsePack() const;
 
     Handle getMinHandle(size_t pack_id) const
