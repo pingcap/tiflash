@@ -988,7 +988,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             auto message = fmt::format(
                 "'storage.format_version' must be set to {} when S3 is enabled!",
                 getStorageFormatsForDisagg());
-            LOG_WARNING(log, message);
+            LOG_ERROR(log, message);
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
         setStorageFormat(storage_config.format_version);
@@ -1016,7 +1016,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (auto disaggregated_mode = getDisaggregatedMode(config()); disaggregated_mode == DisaggregatedMode::None)
         {
             const String message = "'flash.disaggregated_mode' must be set when S3 is enabled!";
-            LOG_WARNING(log, message);
+            LOG_ERROR(log, message);
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
     }
