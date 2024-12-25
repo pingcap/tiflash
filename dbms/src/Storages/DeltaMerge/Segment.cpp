@@ -3314,8 +3314,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
-    auto ann_query_info = getANNQueryInfo(filter);
-    SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->tryGetInputStreamWithVectorIndex(
+    SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         columns_to_read,
         read_ranges,
@@ -3582,7 +3581,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     SkippableBlockInputStreamPtr stream;
     if (executor && executor->ann_query_info)
     {
-        // If has ANN index query, use ANN index query
+        // For ANN query, try to use vector index to accelerate.
         bool is_vector = false;
         std::tie(stream, is_vector) = getConcatVectorIndexBlockInputStream(
             bitmap_filter,
