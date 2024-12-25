@@ -523,6 +523,7 @@ try
 }
 CATCH
 
+
 TEST(TiKVKeyValueTest, Redact)
 try
 {

@@ -23,9 +23,9 @@ namespace RecordKVFormat
 {
 
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
-[[nodiscard]] DecodedLockCFValue::Inner * decodeLockCfValue(const DecodedLockCFValue & decoded)
+[[nodiscard]] std::unique_ptr<DecodedLockCFValue::Inner> DecodedLockCFValue::decodeLockCfValue(const DecodedLockCFValue & decoded) const
 {
-    auto * inner = new DecodedLockCFValue::Inner{};
+    auto inner = std::make_unique<DecodedLockCFValue::Inner>();
     auto & res = *inner;
     const TiKVValue & value = *decoded.val;
     const char * data = value.data();
@@ -155,18 +155,15 @@ DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std:
     : key(std::move(key_))
     , val(std::move(val_))
 {
-    auto * parsed = decodeLockCfValue(*this);
-    if (parsed->generation > 0)
-    {
-        delete parsed;
-    }
-    else
-    {
-        inner = parsed;
-    }
+    auto parsed = decodeLockCfValue(*this);
     if (parsed->lock_type == kvrpcpb::Op::PessimisticLock)
     {
         GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_put).Increment(1);
+    }
+    if (parsed->generation == 0)
+    {
+        // It is not a large txn, we cache the parsed lock.
+        inner = std::move(parsed);
     }
 }
 
@@ -177,10 +174,8 @@ void DecodedLockCFValue::withInner(std::function<void(const DecodedLockCFValue::
         f(*inner);
         return;
     }
-    // We own a raw pointer here, remember to release it!
-    DecodedLockCFValue::Inner * in = decodeLockCfValue(*this);
+    std::unique_ptr<DecodedLockCFValue::Inner> in = decodeLockCfValue(*this);
     f(*in);
-    delete in;
 }
 
 void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const

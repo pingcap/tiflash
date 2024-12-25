@@ -50,9 +50,9 @@ struct DecodedLockCFValue : boost::noncopyable
     std::shared_ptr<const TiKVValue> val;
 
 private:
-    friend DecodedLockCFValue::Inner * decodeLockCfValue(const DecodedLockCFValue & res);
+    std::unique_ptr<DecodedLockCFValue::Inner> decodeLockCfValue(const DecodedLockCFValue & res) const;
     // Avoid using shared_ptr to reduce space.
-    Inner * inner{nullptr};
+    std::unique_ptr<Inner> inner{nullptr};
 };
 
 } // namespace DB::RecordKVFormat
