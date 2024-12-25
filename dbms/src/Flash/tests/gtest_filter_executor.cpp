@@ -235,7 +235,7 @@ try
 }
 CATCH
 
-TEST_F(FilterExecutorTestRunner, convert_bool)
+TEST_F(FilterExecutorTestRunner, convertBool)
 try
 {
     {

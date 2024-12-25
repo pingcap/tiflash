@@ -35,13 +35,16 @@ PushDownExecutorPtr PushDownExecutor::build(
 {
     // check if the ann_query_info is valid
     auto valid_ann_query_info = ann_query_info;
-    bool is_valid_ann_query = ann_query_info->top_k() != std::numeric_limits<UInt32>::max();
-    bool is_matching_ann_query = std::any_of(
-        columns_to_read.begin(),
-        columns_to_read.end(),
-        [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
-    if (!is_valid_ann_query || !is_matching_ann_query)
-        valid_ann_query_info = nullptr;
+    if (ann_query_info)
+    {
+        bool is_valid_ann_query = ann_query_info->top_k() != std::numeric_limits<UInt32>::max();
+        bool is_matching_ann_query = std::any_of(
+            columns_to_read.begin(),
+            columns_to_read.end(),
+            [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
+        if (!is_valid_ann_query || !is_matching_ann_query)
+            valid_ann_query_info = nullptr;
+    }
 
     if (pushed_down_filters.empty())
     {
