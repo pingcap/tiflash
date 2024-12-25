@@ -67,10 +67,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
             added_size -= calcTiKVKeyValueSize(iter->second);
             data.erase(iter);
 
-            if (decoded->getLockType() == kvrpcpb::Op::PessimisticLock)
-            {
-                GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_del).Increment(1);
-            }
+            // In most cases, an optimistic lock replace a pessimistic lock.
             GET_METRIC(tiflash_raft_process_keys, type_lock_replaced).Increment(1);
         }
         if unlikely (is_large_txn)
@@ -182,11 +179,6 @@ size_t RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
             if unlikely (std::get<2>(value)->isLargeTxn())
             {
                 GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_del).Increment(1);
-            }
-
-            if (std::get<2>(value)->getLockType() == kvrpcpb::Op::PessimisticLock)
-            {
-                GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_del).Increment(1);
             }
         }
         map.erase(it);

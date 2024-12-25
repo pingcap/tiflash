@@ -656,8 +656,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
             auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_NE(lock, nullptr);
-            auto k = lock->intoLockInfo();
-            ASSERT_EQ(k->lock_version(), 3);
+            ASSERT_EQ(lock->lock_version(), 3);
         }
         {
             // The record is committed since there is a write record.

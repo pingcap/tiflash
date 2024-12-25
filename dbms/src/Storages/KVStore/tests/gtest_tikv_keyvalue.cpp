@@ -33,7 +33,8 @@ TiKVValue encode_lock_cf_value(
     Timestamp for_update_ts,
     uint64_t txn_size,
     const std::vector<std::string> & async_commit,
-    const std::vector<uint64_t> & rollback)
+    const std::vector<uint64_t> & rollback,
+    UInt64 generation = 0)
 {
     auto lock_value = RecordKVFormat::encodeLockCfValue(lock_type, primary, ts, ttl, short_value, min_commit_ts);
     WriteBufferFromOwnString res;
@@ -78,6 +79,11 @@ TiKVValue encode_lock_cf_value(
     }
     {
         res.write(RecordKVFormat::PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX);
+    }
+    if (generation > 0)
+    {
+        res.write(RecordKVFormat::GENERATION_PREFIX);
+        RecordKVFormat::encodeUInt64(generation, res);
     }
     return TiKVValue(res.releaseStr());
 }
@@ -150,13 +156,7 @@ TEST(TiKVKeyValueTest, PortedTests)
         {
             auto & lock_info = lock;
             ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.getLockType());
-            ASSERT_TRUE(421321 == lock_info.getLockVersion());
-            ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.getLockTtl());
-            ASSERT_TRUE(66666 == lock_info.getMinCommitTs());
             ASSERT_TRUE(ori_key == lock_info.key);
-            ASSERT_EQ(lock_for_update_ts, lock_info.getLockForUpdateTs());
-            ASSERT_EQ(txn_size, lock_info.getTxnSize());
-            ASSERT_EQ(true, lock_info.getUseAsyncCommit());
             lock_info.withInner([&](const auto & in) {
                 ASSERT_TRUE(kvrpcpb::Op::Del == in.lock_type);
                 ASSERT_TRUE("primary key" == in.primary_lock);
@@ -490,13 +490,8 @@ try
     {
         auto & lock_info = lock;
         ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.getLockType());
-        ASSERT_TRUE(421321 == lock_info.getLockVersion());
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.getLockTtl());
-        ASSERT_TRUE(66666 == lock_info.getMinCommitTs());
         ASSERT_TRUE(ori_key == lock_info.key);
-        ASSERT_EQ(lock_for_update_ts, lock_info.getLockForUpdateTs());
-        ASSERT_EQ(txn_size, lock_info.getTxnSize());
-        ASSERT_EQ(true, lock_info.getUseAsyncCommit());
+        ASSERT_FALSE(lock_info.isLargeTxn());
 
         lock_info.withInner([&](const auto & in) {
             ASSERT_TRUE(kvrpcpb::Op::Del == in.lock_type);
@@ -509,6 +504,22 @@ try
             ASSERT_EQ(true, in.use_async_commit);
         });
     }
+
+    auto lock_value2 = encode_lock_cf_value(
+        Region::DelFlag,
+        "primary key",
+        421321,
+        std::numeric_limits<UInt64>::max(),
+        &shor_value,
+        66666,
+        lock_for_update_ts,
+        txn_size,
+        async_commit,
+        rollback,
+        1111);
+
+    auto lock2 = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value2)));
+    ASSERT_TRUE(lock2.isLargeTxn());
 }
 CATCH
 

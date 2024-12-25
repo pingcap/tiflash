@@ -155,8 +155,19 @@ DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std:
     : key(std::move(key_))
     , val(std::move(val_))
 {
-    // TODO do not cache when meets large txn, otherwise, still cache
-    // decodeLockCfValue(*this);
+    auto * parsed = decodeLockCfValue(*this);
+    if (parsed->generation > 0)
+    {
+        delete parsed;
+    }
+    else
+    {
+        inner = parsed;
+    }
+    if (parsed->lock_type == kvrpcpb::Op::PessimisticLock)
+    {
+        GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_put).Increment(1);
+    }
 }
 
 void DecodedLockCFValue::withInner(std::function<void(const DecodedLockCFValue::Inner &)> f) const
@@ -207,35 +218,10 @@ std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
 
 bool DecodedLockCFValue::isLargeTxn() const
 {
-    auto g = 0;
-    withInner([&](const Inner & in) { g = in.generation; });
-    return g > 0;
+    // Because we do not cache the parsed result for large txn.
+    return inner == nullptr;
 }
 
-UInt64 DecodedLockCFValue::getLockVersion() const
-{
-    auto x = 0;
-    withInner([&](const Inner & in) { x = in.lock_version; });
-    return x;
-}
-UInt64 DecodedLockCFValue::getLockTtl() const
-{
-    auto x = 0;
-    withInner([&](const Inner & in) { x = in.lock_ttl; });
-    return x;
-}
-UInt64 DecodedLockCFValue::getTxnSize() const
-{
-    auto x = 0;
-    withInner([&](const Inner & in) { x = in.txn_size; });
-    return x;
-}
-UInt64 DecodedLockCFValue::getLockForUpdateTs() const
-{
-    auto x = 0;
-    withInner([&](const Inner & in) { x = in.lock_for_update_ts; });
-    return x;
-}
 kvrpcpb::Op DecodedLockCFValue::getLockType() const
 {
     kvrpcpb::Op x;
@@ -243,31 +229,10 @@ kvrpcpb::Op DecodedLockCFValue::getLockType() const
     return x;
 }
 
-bool DecodedLockCFValue::getUseAsyncCommit() const
-{
-    auto x = false;
-    withInner([&](const Inner & in) { x = in.use_async_commit; });
-    return x;
-}
-
-UInt64 DecodedLockCFValue::getMinCommitTs() const
+UInt64 DecodedLockCFValue::getLockVersion() const
 {
     auto x = 0;
-    withInner([&](const Inner & in) { x = in.min_commit_ts; });
-    return x;
-}
-
-bool DecodedLockCFValue::getIsTxnFile() const
-{
-    auto x = false;
-    withInner([&](const Inner & in) { x = in.is_txn_file; });
-    return x;
-}
-
-UInt64 DecodedLockCFValue::getGeneration() const
-{
-    auto x = 0;
-    withInner([&](const Inner & in) { x = in.generation; });
+    withInner([&](const Inner & in) { x = in.lock_version; });
     return x;
 }
 

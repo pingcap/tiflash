@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
-#include <Common/TiFlashMetrics.h>
 
 #include <map>
 

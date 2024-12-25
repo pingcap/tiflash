@@ -464,7 +464,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_default_put, {"type", "default_put"}),                                                                                 \
       F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_lock_del, {"type", "lock_del"}),                                                                                       \
-      F(type_pessimistic_lock_del, {"type", "pessimistic_lock_del"}),                                                               \
       F(type_pessimistic_lock_put, {"type", "pessimistic_lock_put"}),                                                               \
       F(type_lock_replaced, {"type", "lock_replaced"}),                                                                             \
       F(type_default_del, {"type", "default_del"}),                                                                                 \
