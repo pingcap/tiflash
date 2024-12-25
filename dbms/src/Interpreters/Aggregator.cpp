@@ -747,7 +747,7 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
 }
 
 template <typename Method>
-ALWAYS_INLINE inline size_t getCurrentHashAndSetUpPrefetchHash(
+ALWAYS_INLINE inline size_t getCurrentHashAndDoPrefetch(
     size_t row_idx,
     size_t end_idx,
     size_t prefetch_step,
@@ -838,7 +838,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         {
             if constexpr (enable_prefetch)
             {
-                const size_t hashval = getCurrentHashAndSetUpPrefetchHash(
+                const size_t hashval = getCurrentHashAndDoPrefetch(
                     i,
                     end,
                     prefetch_step,
@@ -969,7 +969,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             AggregateDataPtr aggregate_data = nullptr;
             if constexpr (enable_prefetch)
             {
-                const size_t hashval = getCurrentHashAndSetUpPrefetchHash(
+                const size_t hashval = getCurrentHashAndDoPrefetch(
                     j,
                     end,
                     prefetch_step,
@@ -1776,6 +1776,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
 
+    // Doesn't prefetch agg data, because places[data.size()] is needed, which can be very large.
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_convert_key)
         {
@@ -1867,8 +1868,6 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
         ++data_index;
     });
 
-    // convertToBlockImplFinal didn't prefetch because it's used during spill.
-    // places vector will occupy extra memory, also it doesn't care performance during spill.
     size_t prefetch_idx = 16;
     for (size_t i = 0; i < rows; ++i)
     {
