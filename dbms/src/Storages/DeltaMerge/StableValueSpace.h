@@ -46,8 +46,8 @@ public:
         , log(Logger::get())
     {}
 
-    static StableValueSpacePtr restore(DMContext & context, PageIdU64 id);
-    static StableValueSpacePtr restore(DMContext & context, ReadBuffer & buf, PageIdU64 id);
+    static StableValueSpacePtr restore(DMContext & dm_context, PageIdU64 id);
+    static StableValueSpacePtr restore(DMContext & dm_context, ReadBuffer & buf, PageIdU64 id);
 
     static StableValueSpacePtr createFromCheckpoint( //
         const LoggerPtr & parent_log,
@@ -112,7 +112,7 @@ public:
      */
     size_t getDMFilesBytes() const;
 
-    void enableDMFilesGC(DMContext & context);
+    void enableDMFilesGC(DMContext & dm_context);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
@@ -139,7 +139,7 @@ public:
 
     const StableProperty & getStableProperty() const { return property; }
 
-    void calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
+    void calculateStableProperty(const DMContext & dm_context, const RowKeyRange & rowkey_range, bool is_common_handle);
 
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -225,7 +225,7 @@ public:
         }
 
         SkippableBlockInputStreamPtr getInputStream(
-            const DMContext & context, //
+            const DMContext & dm_context, //
             const ColumnDefines & read_columns,
             const RowKeyRanges & rowkey_ranges,
             UInt64 max_data_version,
@@ -239,7 +239,7 @@ public:
             bool need_row_id = false);
 
         SkippableBlockInputStreamPtr tryGetInputStreamWithVectorIndex(
-            const DMContext & context,
+            const DMContext & dm_context,
             const ColumnDefines & read_columns,
             const RowKeyRanges & rowkey_ranges,
             const ANNQueryInfoPtr & ann_query_info,
@@ -254,7 +254,7 @@ public:
             bool need_row_id = false,
             BitmapFilterPtr bitmap_filter = nullptr);
 
-        RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
+        RowsAndBytes getApproxRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
 
         struct AtLeastRowsAndBytesResult
         {
@@ -268,7 +268,7 @@ public:
          * Get the rows and bytes calculated from packs that is **fully contained** by the given range.
          * If the pack is partially intersected, then it is not counted.
          */
-        AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
+        AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
 
     private:
         LoggerPtr log;
