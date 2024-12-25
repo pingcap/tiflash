@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
-#include <Storages/KVStore/Region.h>
 #include <Common/typeid_cast.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 #include <benchmark/benchmark.h>
 
 #include <random>
@@ -86,14 +86,16 @@ TiKVValue encode_lock_cf_value(
     }
     if (generation > 0)
     {
-        res.write(RecordKVFormat::GENERATION_PREFIX);
-        RecordKVFormat::encodeUInt64(generation, res);
+        // res.write(RecordKVFormat::GENERATION_PREFIX);
+        // RecordKVFormat::encodeUInt64(generation, res);
     }
     return TiKVValue(res.releaseStr());
 }
 
-void parseTest(benchmark::State& state) {
-    try {
+void parseTest(benchmark::State & state)
+{
+    try
+    {
         std::string shor_value = "value";
         auto lock_for_update_ts = 7777, txn_size = 1;
         const std::vector<std::string> & async_commit = {"s1", "s2"};
@@ -109,19 +111,23 @@ void parseTest(benchmark::State& state) {
             txn_size,
             async_commit,
             rollback,
-            111);
+            1111);
+
         auto ori_key = std::make_shared<const TiKVKey>(RecordKVFormat::genKey(1, 88888));
         for (auto _ : state)
         {
-            auto x = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value2)));
-            benchmark::DoNotOptimize(x);
+            auto lock2 = RecordKVFormat::DecodedLockCFValue(
+                ori_key,
+                std::make_shared<TiKVValue>(TiKVValue::copyFrom(lock_value2)));
+            benchmark::DoNotOptimize(lock2);
         }
-    } catch (...) {
+    }
+    catch (...)
+    {
         tryLogCurrentException(DB::Logger::get(), __PRETTY_FUNCTION__);
     }
 }
-    
+
 BENCHMARK(parseTest);
 
-} // namespace
-
+} // namespace DB::tests

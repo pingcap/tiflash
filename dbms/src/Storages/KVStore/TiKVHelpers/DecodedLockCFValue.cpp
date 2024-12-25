@@ -23,7 +23,8 @@ namespace RecordKVFormat
 {
 
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
-[[nodiscard]] std::unique_ptr<DecodedLockCFValue::Inner> DecodedLockCFValue::decodeLockCfValue(const DecodedLockCFValue & decoded) const
+[[nodiscard]] std::unique_ptr<DecodedLockCFValue::Inner> DecodedLockCFValue::decodeLockCfValue(
+    const DecodedLockCFValue & decoded) const
 {
     auto inner = std::make_unique<DecodedLockCFValue::Inner>();
     auto & res = *inner;
@@ -215,20 +216,6 @@ bool DecodedLockCFValue::isLargeTxn() const
 {
     // Because we do not cache the parsed result for large txn.
     return inner == nullptr;
-}
-
-kvrpcpb::Op DecodedLockCFValue::getLockType() const
-{
-    kvrpcpb::Op x;
-    withInner([&](const Inner & in) { x = in.lock_type; });
-    return x;
-}
-
-UInt64 DecodedLockCFValue::getLockVersion() const
-{
-    UInt64 x = 0;
-    withInner([&](const Inner & in) { x = in.lock_version; });
-    return x;
 }
 
 } // namespace RecordKVFormat

@@ -155,7 +155,6 @@ TEST(TiKVKeyValueTest, PortedTests)
         auto lock = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value)));
         {
             auto & lock_info = lock;
-            ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.getLockType());
             ASSERT_TRUE(ori_key == lock_info.key);
             lock_info.withInner([&](const auto & in) {
                 ASSERT_TRUE(kvrpcpb::Op::Del == in.lock_type);
@@ -216,12 +215,12 @@ TEST(TiKVKeyValueTest, PortedTests)
                     nullptr,
                     66666));
             ASSERT_TRUE(d.getSize() == 2);
-            ASSERT_TRUE(
-                std::get<2>(d.getData()
-                                .find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})
-                                ->second)
-                    ->getLockVersion()
-                == 5678);
+
+            std::get<2>(d.getData()
+                            .find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})
+                            ->second)
+                ->withInner([&](const auto & in) { ASSERT_EQ(in.lock_version, 5678); });
+
             d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k1.data(), k1.dataSize())}, true);
             ASSERT_TRUE(d.getSize() == 1);
             d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())}, true);
@@ -489,7 +488,6 @@ try
     // check the parsed result
     {
         auto & lock_info = lock;
-        ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.getLockType());
         ASSERT_TRUE(ori_key == lock_info.key);
         ASSERT_FALSE(lock_info.isLargeTxn());
 

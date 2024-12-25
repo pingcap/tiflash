@@ -41,8 +41,6 @@ struct DecodedLockCFValue : boost::noncopyable
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
     void intoLockInfo(kvrpcpb::LockInfo &) const;
     bool isLargeTxn() const;
-    kvrpcpb::Op getLockType() const;
-    UInt64 getLockVersion() const;
     void withInner(std::function<void(const Inner &)> f) const;
 
     std::shared_ptr<const TiKVKey> key;
