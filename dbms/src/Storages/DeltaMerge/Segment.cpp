@@ -3314,7 +3314,8 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
-    SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
+    auto ann_query_info = getANNQueryInfo(filter);
+    SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->tryGetInputStreamWithVectorIndex(
         dm_context,
         columns_to_read,
         read_ranges,
