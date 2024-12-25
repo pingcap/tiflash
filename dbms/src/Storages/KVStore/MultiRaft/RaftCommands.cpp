@@ -454,15 +454,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         }
         approx_mem_cache_rows += cmd_write_cf_cnt;
         auto current_size = dataSize();
-        if (current_size > ori_cache_size)
-            approx_mem_cache_bytes += (current_size - ori_cache_size);
+        if (auto t = approx_mem_cache_rows + current_size; t > ori_cache_size)
+            approx_mem_cache_rows = t - ori_cache_size;
         else
-        {
-            if (approx_mem_cache_bytes > ori_cache_size - current_size)
-                approx_mem_cache_bytes -= (ori_cache_size - current_size);
-            else
-                approx_mem_cache_bytes = 0;
-        }
+            approx_mem_cache_rows = 0;
     };
 
     DM::WriteResult write_result = std::nullopt;
