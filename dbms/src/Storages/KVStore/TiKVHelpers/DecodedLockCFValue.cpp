@@ -231,7 +231,7 @@ kvrpcpb::Op DecodedLockCFValue::getLockType() const
 
 UInt64 DecodedLockCFValue::getLockVersion() const
 {
-    auto x = 0;
+    UInt64 x = 0;
     withInner([&](const Inner & in) { x = in.lock_version; });
     return x;
 }
