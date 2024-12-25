@@ -1575,12 +1575,13 @@ try
     auto test_read_filter = [&](const HandleRange & range) {
         // Filtered by rough set filter
         auto filter = toRSFilter(i64_cd, range);
+        const auto read_ranges = RowKeyRanges{RowKeyRange::newAll(false, 1)};
+        auto pack_result = DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {});
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .setRSOperator(filter) // Filtered by rough set filter
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        auto stream = builder.setColumnCache(column_cache)
+                          .setDMFilePackFilterResult(pack_result)
+                          .build(dm_file, *cols, read_ranges, std::make_shared<ScanContext>());
 
         Int64 expect_first_pk = static_cast<int>(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
         Int64 expect_last_pk = std::min(
@@ -1656,12 +1657,13 @@ try
     // (first range) Or (Unsupported) -> should NOT filter any chunk
     filters.emplace_back(createOr({one_part_filter, createUnsupported("test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
+        const auto read_ranges = RowKeyRanges{RowKeyRange::newAll(false, 1)};
+        auto pack_result = DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {});
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .setRSOperator(filter) // Filtered by rough set filter
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        auto stream = builder.setColumnCache(column_cache)
+                          .setDMFilePackFilterResult(pack_result)
+                          .build(dm_file, *cols, read_ranges, std::make_shared<ScanContext>());
 
         Int64 expect_first_pk = 0;
         Int64 expect_last_pk = num_rows_should_read;

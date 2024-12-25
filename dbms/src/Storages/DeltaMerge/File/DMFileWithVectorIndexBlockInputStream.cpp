@@ -151,7 +151,7 @@ void DMFileWithVectorIndexBlockInputStream::updateReadBlockInfos()
 
     read_block_infos.clear();
     const auto & pack_stats = dmfile->getPackStats();
-    const auto & pack_res = reader.pack_filter.getPackResConst();
+    const auto & pack_res = reader.pack_filter->getPackRes();
 
     // Update valid_packs_before_search
     for (const auto res : pack_res)
