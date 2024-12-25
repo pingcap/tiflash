@@ -49,13 +49,13 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     {
         for (const auto & file : files_)
         {
-            auto [file_valid_rows, file_valid_bytes] = DMFilePackFilter::loadValidRowsAndBytes(
+            auto match = DMFilePackFilter::loadValidRowsAndBytes(
                 *dm_context,
                 file,
                 /*set_cache_if_miss*/ true,
                 {range});
-            rows += file_valid_rows;
-            bytes += file_valid_bytes;
+            rows += match.match_rows;
+            bytes += match.match_bytes;
         }
     }
 
@@ -585,26 +585,13 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     // Usually, this method will be called for some "cold" key ranges.
     // Loading the index into cache may pollute the cache and make the hot index cache invalid.
     // So don't refill the cache if the index does not exist.
+    constexpr bool set_cache_if_miss = false;
     for (auto & f : stable->files)
     {
-        auto filter = DMFilePackFilter::loadFrom(
-            dm_context,
-            f,
-            /*set_cache_if_miss*/ false,
-            {range},
-            RSOperatorPtr{},
-            IdSetPtr{});
-        const auto & pack_stats = f->getPackStats();
-        const auto & pack_res = filter->getPackRes();
-        for (size_t i = 0; i < pack_stats.size(); ++i)
-        {
-            if (pack_res[i].isUse())
-            {
-                ++match_packs;
-                total_match_rows += pack_stats[i].rows;
-                total_match_bytes += pack_stats[i].bytes;
-            }
-        }
+        auto match = DMFilePackFilter::loadValidRowsAndBytes(dm_context, f, set_cache_if_miss, {range});
+        match_packs += match.match_packs;
+        total_match_rows += match.match_rows;
+        total_match_bytes += match.match_bytes;
     }
     if (!total_match_rows || !match_packs)
         return {0, 0};
@@ -625,16 +612,12 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & dm_context,
     // Usually, this method will be called for some "cold" key ranges.
     // Loading the index into cache may pollute the cache and make the hot index cache invalid.
     // So don't refill the cache if the index does not exist.
+    constexpr bool set_cache_if_miss = false;
     for (size_t file_idx = 0; file_idx < stable->files.size(); ++file_idx)
     {
         const auto & file = stable->files[file_idx];
-        auto filter = DMFilePackFilter::loadFrom(
-            dm_context,
-            file,
-            /*set_cache_if_miss*/ false,
-            {range},
-            RSOperatorPtr{},
-            IdSetPtr{});
+        auto filter
+            = DMFilePackFilter::loadFrom(dm_context, file, set_cache_if_miss, {range}, RSOperatorPtr{}, IdSetPtr{});
         const auto & handle_filter_result = filter->getHandleRes();
         if (file_idx == 0)
         {

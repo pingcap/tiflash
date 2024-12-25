@@ -25,7 +25,7 @@
 namespace DB::DM
 {
 
-std::pair<size_t, size_t> DMFilePackFilter::loadValidRowsAndBytes(
+DMFilePackFilter::MatchDetails DMFilePackFilter::loadValidRowsAndBytes(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     bool set_cache_if_miss,
@@ -33,18 +33,18 @@ std::pair<size_t, size_t> DMFilePackFilter::loadValidRowsAndBytes(
 {
     auto pack_filter = loadFrom(dm_context, dmfile, set_cache_if_miss, rowkey_ranges, EMPTY_RS_OPERATOR, {});
 
-    size_t rows = 0;
-    size_t bytes = 0;
+    MatchDetails res;
     const auto & pack_stats = dmfile->getPackStats();
     for (size_t i = 0; i < pack_stats.size(); ++i)
     {
         if (pack_filter->pack_res[i].isUse())
         {
-            rows += pack_stats[i].rows;
-            bytes += pack_stats[i].bytes;
+            res.match_packs += 1;
+            res.match_rows += pack_stats[i].rows;
+            res.match_bytes += pack_stats[i].bytes;
         }
     }
-    return {rows, bytes};
+    return res;
 }
 
 DMFilePackFilterResultPtr DMFilePackFilter::load()
