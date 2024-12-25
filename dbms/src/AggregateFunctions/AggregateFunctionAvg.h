@@ -91,10 +91,10 @@ public:
         if constexpr (IsDecimal<T>)
             this->data(place).sum -= static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num];
         else
-        {
             this->data(place).sum -= static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num];
-        }
+
         --this->data(place).count;
+        assert(this->data(place).count >= 0);
     }
 
     void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
