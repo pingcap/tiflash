@@ -680,7 +680,6 @@ void NO_INLINE Aggregator::executeImpl(
     // 1. getKeyHolder of key_serialized have to copy real data into Arena.
     //    It means we better getKeyHolder for all Columns once and then use it both for getHash() and emplaceKey().
     // 2. For other group by key(key_int8/16/32/...), it's ok to use row-wise handling even prefetch is enabled.
-    //    But getHashVals() still needs to be column-wise.
     if constexpr (Method::State::is_serialized_key)
     {
         // TODO: batch serialize method for Columns is still under development.
@@ -701,23 +700,6 @@ void NO_INLINE Aggregator::executeImpl(
             executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
         else
             executeImplByRow<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
-    }
-}
-
-template <typename Data, typename State>
-void getHashVals(
-    size_t start_row,
-    size_t end_row,
-    const Data & data,
-    const State & state,
-    std::vector<String> & sort_key_containers,
-    Arena * pool,
-    std::vector<size_t> & hashvals)
-{
-    hashvals.resize(state.total_rows);
-    for (size_t i = start_row; i < end_row; ++i)
-    {
-        hashvals[i] = state.getHash(data, i, *pool, sort_key_containers);
     }
 }
 
