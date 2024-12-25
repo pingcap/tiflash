@@ -37,14 +37,11 @@ ColumnFileBig::ColumnFileBig(const DMContext & dm_context, const DMFilePtr & fil
 
 void ColumnFileBig::calculateStat(const DMContext & dm_context)
 {
-    auto pack_filter = DMFilePackFilter::loadFrom(
+    std::tie(valid_rows, valid_bytes) = DMFilePackFilter::loadValidRowsAndBytes(
         dm_context,
         file,
         /*set_cache_if_miss*/ false,
-        {segment_range},
-        EMPTY_RS_OPERATOR,
-        {});
-    std::tie(valid_rows, valid_bytes) = pack_filter->validRowsAndBytes();
+        {segment_range});
 }
 
 void ColumnFileBig::removeData(WriteBatches & wbs) const

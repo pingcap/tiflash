@@ -39,6 +39,13 @@ class DMFilePackFilter
     friend class DMFilePackFilterResult;
 
 public:
+    // Get valid rows and bytes after filter invalid packs by rowkey_ranges
+    static std::pair<size_t, size_t> loadValidRowsAndBytes(
+        const DMContext & dm_context,
+        const DMFilePtr & dmfile,
+        bool set_cache_if_miss,
+        const RowKeyRanges & rowkey_ranges);
+
     // Empty `rowkey_ranges` means do not filter by rowkey_ranges
     static DMFilePackFilterResultPtr loadFrom(
         const DMContext & dm_context,

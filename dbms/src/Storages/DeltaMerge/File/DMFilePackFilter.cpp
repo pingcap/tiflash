@@ -17,6 +17,7 @@
 #include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
@@ -24,12 +25,34 @@
 namespace DB::DM
 {
 
+std::pair<size_t, size_t> DMFilePackFilter::loadValidRowsAndBytes(
+    const DMContext & dm_context,
+    const DMFilePtr & dmfile,
+    bool set_cache_if_miss,
+    const RowKeyRanges & rowkey_ranges)
+{
+    auto pack_filter = loadFrom(dm_context, dmfile, set_cache_if_miss, rowkey_ranges, EMPTY_RS_OPERATOR, {});
+
+    size_t rows = 0;
+    size_t bytes = 0;
+    const auto & pack_stats = dmfile->getPackStats();
+    for (size_t i = 0; i < pack_stats.size(); ++i)
+    {
+        if (pack_filter->pack_res[i].isUse())
+        {
+            rows += pack_stats[i].rows;
+            bytes += pack_stats[i].bytes;
+        }
+    }
+    return {rows, bytes};
+}
+
 DMFilePackFilterResultPtr DMFilePackFilter::load()
 {
     Stopwatch watch;
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
     size_t pack_count = dmfile->getPacks();
-    DMFilePackFilterResult result(index_cache, file_provider, read_limiter, scan_context, dmfile);
+    DMFilePackFilterResult result(index_cache, read_limiter, pack_count);
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {

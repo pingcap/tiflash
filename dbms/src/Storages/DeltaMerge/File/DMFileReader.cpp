@@ -312,7 +312,7 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
             // If all handle in a pack are in the given range, no not_clean rows, and max version <= max_read_version,
             // we do not need to read handle column.
             if (handle_res[i] == RSResult::All && pack_stats[i].not_clean == 0
-                && pack_filter->getMaxVersion(i) <= max_read_version)
+                && pack_filter->getMaxVersion(dmfile, i, file_provider, scan_context) <= max_read_version)
             {
                 handle_column_clean_read_packs.push_back(i);
                 version_column_clean_read_packs.push_back(i);
@@ -375,12 +375,12 @@ ColumnPtr DMFileReader::cleanRead(
     {
         if (is_common_handle)
         {
-            StringRef min_handle = pack_filter->getMinStringHandle(range.first);
+            StringRef min_handle = pack_filter->getMinStringHandle(dmfile, range.first, file_provider, scan_context);
             return cd.type->createColumnConst(rows_count, Field(min_handle.data, min_handle.size));
         }
         else
         {
-            Handle min_handle = pack_filter->getMinHandle(range.first);
+            Handle min_handle = pack_filter->getMinHandle(dmfile, range.first, file_provider, scan_context);
             return cd.type->createColumnConst(rows_count, Field(min_handle));
         }
     }

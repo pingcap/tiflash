@@ -49,14 +49,11 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     {
         for (const auto & file : files_)
         {
-            auto pack_filter = DMFilePackFilter::loadFrom(
+            auto [file_valid_rows, file_valid_bytes] = DMFilePackFilter::loadValidRowsAndBytes(
                 *dm_context,
                 file,
                 /*set_cache_if_miss*/ true,
-                {range},
-                EMPTY_RS_OPERATOR,
-                {});
-            auto [file_valid_rows, file_valid_bytes] = pack_filter->validRowsAndBytes();
+                {range});
             rows += file_valid_rows;
             bytes += file_valid_bytes;
         }
