@@ -25,18 +25,17 @@ struct DecodedLockCFValue : boost::noncopyable
 {
     struct Inner
     {
+        std::string_view secondaries;
+        std::string_view primary_lock;
         UInt64 lock_version{0};
         UInt64 lock_ttl{0};
         UInt64 txn_size{0};
         UInt64 lock_for_update_ts{0};
+        UInt64 min_commit_ts{0};
+        UInt64 generation{0}; // For large txn, generation is not zero.
         kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
         bool use_async_commit{false};
-        UInt64 min_commit_ts{0};
-        std::string_view secondaries;
-        std::string_view primary_lock;
         bool is_txn_file{false};
-        // For large txn, generation is not zero.
-        UInt64 generation{0};
     };
     DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_);
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
