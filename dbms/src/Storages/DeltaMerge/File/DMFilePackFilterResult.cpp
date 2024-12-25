@@ -73,7 +73,7 @@ void DMFilePackFilterResult::tryLoadIndex(ColId col_id) const
         dmfile,
         file_provider,
         index_cache,
-        true,
+        /*set_cache_if_miss=*/true,
         col_id,
         read_limiter,
         scan_context);
