@@ -12,39 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CodecUtils.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-} // namespace ErrorCodes
+} // namespace DB::ErrorCodes
 
-namespace CodecUtils
+namespace DB::CodecUtils
 {
 void checkColumnSize(const String & identifier, size_t expected, size_t actual)
 {
-    if unlikely (expected != actual)
+    if (unlikely(expected != actual))
         throw Exception(
-            fmt::format("{} schema size mismatch, expected {}, actual {}.", identifier, expected, actual),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "{} schema size mismatch, expected {}, actual {}.",
+            identifier,
+            expected,
+            actual);
 }
 
 void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual)
 {
-    if unlikely (expected != actual)
+    if (unlikely(expected != actual))
         throw Exception(
-            fmt::format(
-                "{} schema mismatch at column {}, expected {}, actual {}",
-                identifier,
-                column_index,
-                expected,
-                actual),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "{} schema mismatch at column {}, expected {}, actual {}",
+            identifier,
+            column_index,
+            expected,
+            actual);
 }
 
-} // namespace CodecUtils
-} // namespace DB
+} // namespace DB::CodecUtils
