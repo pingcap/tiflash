@@ -21,10 +21,6 @@
 namespace DB::DM
 {
 
-class DMFilePackFilterResult;
-using DMFilePackFilterResultPtr = std::shared_ptr<DMFilePackFilterResult>;
-using DMFilePackFilterResults = std::vector<DMFilePackFilterResultPtr>;
-
 class DMFilePackFilterResult
 {
     friend class DMFilePackFilter;
