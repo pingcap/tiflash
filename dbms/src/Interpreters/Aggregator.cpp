@@ -749,6 +749,7 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
 template <typename Method>
 ALWAYS_INLINE inline std::pair<typename Method::State::Derived::KeyHolderType, size_t> getCurrentHashAndDoPrefetch(
     size_t cur_row_idx,
+    size_t start_row_idx,
     size_t end_row_idx,
     Method & method,
     typename Method::State & state,
@@ -759,7 +760,7 @@ ALWAYS_INLINE inline std::pair<typename Method::State::Derived::KeyHolderType, s
 {
     assert(hashvals.size() == agg_prefetch_step);
 
-    const auto hashvals_idx = cur_row_idx % agg_prefetch_step;
+    const auto hashvals_idx = (cur_row_idx - start_row_idx) % agg_prefetch_step;
     const size_t prefetch_row_idx = cur_row_idx + agg_prefetch_step;
 
     const size_t cur_hashval = hashvals[hashvals_idx];
@@ -805,9 +806,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     {
         hashvals.resize(agg_prefetch_step);
         key_holders.resize(agg_prefetch_step);
-        for (size_t i = agg_process_info.start_row % agg_prefetch_step;
-                i < agg_prefetch_step && i + agg_process_info.start_row < agg_process_info.end_row;
-             ++i)
+        for (size_t i = 0; i < agg_prefetch_step && i + agg_process_info.start_row < agg_process_info.end_row; ++i)
         {
             auto key_holder = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
                 i + agg_process_info.start_row,
@@ -858,6 +857,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             {
                 auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
                     i,
+                    agg_process_info.start_row,
                     end,
                     method,
                     state,
@@ -985,6 +985,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             {
                 auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
                     j,
+                    agg_process_info.start_row,
                     end,
                     method,
                     state,
