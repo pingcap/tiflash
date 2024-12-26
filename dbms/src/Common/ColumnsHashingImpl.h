@@ -129,6 +129,15 @@ public:
     static constexpr bool has_mapped = !std::is_same<Mapped, VoidMapped>::value;
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
 
+    static const size_t prefetch_step = 16;
+    template <typename Map>
+    static ALWAYS_INLINE inline void prefetch(Map & map, size_t idx, const std::vector<size_t> & hashvals)
+    {
+        const auto prefetch_idx = idx + prefetch_step;
+        if likely (prefetch_idx < hashvals.size())
+            map.prefetch(hashvals[prefetch_idx]);
+    }
+
     // Emplace key without hashval, and this method doesn't support prefetch.
     template <typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
@@ -142,15 +151,17 @@ public:
     }
 
     template <typename Data>
-    ALWAYS_INLINE inline EmplaceResult emplaceKey(
+    ALWAYS_INLINE inline EmplaceResult emplaceKeyWithPrefetch(
         Data & data,
         size_t row,
         Arena & pool,
         std::vector<String> & sort_key_containers,
-        size_t hashval)
+        const std::vector<size_t> & hashvals)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
-        return emplaceImpl(key_holder, data, hashval);
+        assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+        prefetch(data, row, hashvals);
+        return emplaceImpl(key_holder, data, hashvals[row]);
     }
 
     template <typename Data>
@@ -165,15 +176,17 @@ public:
     }
 
     template <typename Data>
-    ALWAYS_INLINE inline FindResult findKey(
+    ALWAYS_INLINE inline FindResult findKeyWithPrefetch(
         Data & data,
         size_t row,
         Arena & pool,
         std::vector<String> & sort_key_containers,
-        size_t hashval)
+        const std::vector<size_t> & hashvals)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
-        return findKeyImpl(keyHolderGetKey(key_holder), data, hashval);
+        assert(hashvals.size() == static_cast<Derived &>(*this).total_rows);
+        prefetch(data, row, hashvals);
+        return findKeyImpl(keyHolderGetKey(key_holder), data, hashvals[row]);
     }
 
     template <typename Data>
