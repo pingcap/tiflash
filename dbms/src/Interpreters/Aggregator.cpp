@@ -798,7 +798,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                 agg_process_info.hashvals);
     }
 
-
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
     {
@@ -906,9 +905,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");         \
         break;                                                                                                      \
     }                                                                                                               \
-                                                                                                                    \
     auto & emplace_result = emplace_result_holder.value();                                                          \
-                                                                                                                    \
     if constexpr (only_lookup)                                                                                      \
     {                                                                                                               \
         if (emplace_result.isFound())                                                                               \
@@ -942,7 +939,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                 __builtin_prefetch(aggregate_data);                                                                 \
         }                                                                                                           \
     }                                                                                                               \
-                                                                                                                    \
     places[j - agg_process_info.start_row] = aggregate_data;                                                        \
     processed_rows = j;
 
