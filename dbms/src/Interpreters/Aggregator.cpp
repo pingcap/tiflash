@@ -46,6 +46,8 @@ extern const char random_fail_in_resize_callback[];
 extern const char force_agg_prefetch[];
 } // namespace FailPoints
 
+static constexpr size_t agg_prefetch_step = 16;
+
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
 #define AggregationMethodNameTwoLevel(NAME) AggregatedDataVariants::AggregationMethod_##NAME##_two_level
 #define AggregationMethodType(NAME) AggregatedDataVariants::Type::NAME
@@ -704,23 +706,18 @@ void NO_INLINE Aggregator::executeImpl(
 }
 
 template <bool only_lookup, typename Method>
-std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::
-    emplaceOrFindKeyWithPrefetch(
-        Method & method,
-        typename Method::State & state,
-        size_t index,
-        Arena & aggregates_pool,
-        std::vector<std::string> & sort_key_containers,
-        const std::vector<size_t> & hashvals) const
+std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
+    Method & method,
+    typename Method::State & state,
+    typename Method::State::Derived::KeyHolderType && key_holder,
+    size_t hashval) const
 {
     try
     {
         if constexpr (only_lookup)
-            return state
-                .template findKeyWithPrefetch(method.data, index, aggregates_pool, sort_key_containers, hashvals);
+            return state.template findKey(method.data, std::move(key_holder), hashval);
         else
-            return state
-                .template emplaceKeyWithPrefetch(method.data, index, aggregates_pool, sort_key_containers, hashvals);
+            return state.template emplaceKey(method.data, std::move(key_holder), hashval);
     }
     catch (ResizeException &)
     {
@@ -749,21 +746,39 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     }
 }
 
-template <typename Data, typename State>
-void getHashVals(
-    size_t start_row,
-    size_t end_row,
-    const Data & data,
-    const State & state,
-    std::vector<String> & sort_key_containers,
-    Arena * pool,
-    std::vector<size_t> & hashvals)
+template <typename Method>
+ALWAYS_INLINE inline std::pair<typename Method::State::Derived::KeyHolderType, size_t> getCurrentHashAndDoPrefetch(
+    size_t cur_row_idx,
+    size_t end_row_idx,
+    Method & method,
+    typename Method::State & state,
+    Arena * aggregates_pool,
+    std::vector<std::string> & sort_key_containers,
+    std::vector<size_t> & hashvals,
+    std::vector<typename Method::State::Derived::KeyHolderType> & key_holders)
 {
-    hashvals.resize(state.total_rows);
-    for (size_t i = start_row; i < end_row; ++i)
+    assert(hashvals.size() == agg_prefetch_step);
+
+    const auto hashvals_idx = cur_row_idx % agg_prefetch_step;
+    const size_t prefetch_row_idx = cur_row_idx + agg_prefetch_step;
+
+    const size_t cur_hashval = hashvals[hashvals_idx];
+    auto cur_key_holder = std::move(key_holders[hashvals_idx]);
+
+    if likely (prefetch_row_idx < end_row_idx)
     {
-        hashvals[i] = state.getHash(data, i, *pool, sort_key_containers);
+        auto key_holder = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
+            prefetch_row_idx,
+            aggregates_pool,
+            sort_key_containers);
+        const size_t new_hashval = method.data.hash(keyHolderGetKey(key_holder));
+
+        key_holders[hashvals_idx] = std::move(key_holder);
+        hashvals[hashvals_idx] = new_hashval;
+
+        method.data.prefetch(new_hashval);
     }
+    return {cur_key_holder, cur_hashval};
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
@@ -784,18 +799,25 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             rows = std::max(rows / 2, 1);
     });
 
+    std::vector<size_t> hashvals;
+    std::vector<typename Method::State::KeyHolderType> key_holders;
     if constexpr (enable_prefetch)
     {
-        // agg_process_info.hashvals.empty() is false only when resize exception happens.
-        if likely (agg_process_info.hashvals.empty())
-            getHashVals(
-                agg_process_info.start_row,
-                agg_process_info.end_row,
-                method.data,
-                state,
-                sort_key_containers,
+        hashvals.resize(agg_prefetch_step);
+        key_holders.resize(agg_prefetch_step);
+        for (size_t i = agg_process_info.start_row % agg_prefetch_step;
+                i < agg_prefetch_step && i + agg_process_info.start_row < agg_process_info.end_row;
+             ++i)
+        {
+            auto key_holder = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
+                i + agg_process_info.start_row,
                 aggregates_pool,
-                agg_process_info.hashvals);
+                sort_key_containers);
+            const size_t hashval = method.data.hash(keyHolderGetKey(key_holder));
+
+            key_holders[i] = std::move(key_holder);
+            hashvals[i] = hashval;
+        }
     }
 
     /// Optimization for special case when there are no aggregate functions.
@@ -829,17 +851,22 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     }
 
         std::optional<size_t> processed_rows;
-        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + rows; ++i)
+        const auto end = agg_process_info.start_row + rows;
+        for (size_t i = agg_process_info.start_row; i < end; ++i)
         {
             if constexpr (enable_prefetch)
             {
-                auto emplace_result_hold = emplaceOrFindKeyWithPrefetch<only_lookup>(
+                auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
+                    i,
+                    end,
                     method,
                     state,
-                    i,
-                    *aggregates_pool,
+                    aggregates_pool,
                     sort_key_containers,
-                    agg_process_info.hashvals);
+                    hashvals,
+                    key_holders);
+
+                auto emplace_result_hold = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
 
                 HANDLE_AGG_EMPLACE_RESULT
             }
@@ -854,9 +881,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
 
         if likely (processed_rows)
             agg_process_info.start_row = *processed_rows + 1;
-
-        if likely (agg_process_info.start_row == agg_process_info.end_row)
-            agg_process_info.hashvals.clear();
 
 #undef HANDLE_AGG_EMPLACE_RESULT
         return;
@@ -959,13 +983,18 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             AggregateDataPtr aggregate_data = nullptr;
             if constexpr (enable_prefetch)
             {
-                auto emplace_result_holder = emplaceOrFindKeyWithPrefetch<only_lookup>(
+                auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
+                    j,
+                    end,
                     method,
                     state,
-                    j,
-                    *aggregates_pool,
+                    aggregates_pool,
                     sort_key_containers,
-                    agg_process_info.hashvals);
+                    hashvals,
+                    key_holders);
+
+                auto emplace_result_holder
+                    = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
 
                 HANDLE_AGG_EMPLACE_RESULT
             }
@@ -1002,9 +1031,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
 
     if likely (processed_rows)
         agg_process_info.start_row = *processed_rows + 1;
-
-    if likely (agg_process_info.start_row == agg_process_info.end_row)
-        agg_process_info.hashvals.clear();
 
 #undef HANDLE_AGG_EMPLACE_RESULT
 }

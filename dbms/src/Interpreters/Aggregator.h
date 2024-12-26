@@ -1318,9 +1318,6 @@ public:
         size_t hit_row_cnt = 0;
         std::vector<UInt64> not_found_rows;
 
-        // For prefetch.
-        std::vector<size_t> hashvals;
-
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
@@ -1339,8 +1336,6 @@ public:
             hit_row_cnt = 0;
             not_found_rows.clear();
             not_found_rows.reserve(block_.rows() / 2);
-
-            hashvals.clear();
         }
     };
 
@@ -1466,13 +1461,11 @@ protected:
         AggProcessInfo & agg_process_info) const;
 
     template <bool only_lookup, typename Method>
-    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKeyWithPrefetch(
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
         Method & method,
         typename Method::State & state,
-        size_t index,
-        Arena & aggregates_pool,
-        std::vector<std::string> & sort_key_containers,
-        const std::vector<size_t> & hashvals) const;
+        typename Method::State::Derived::KeyHolderType && key_holder,
+        size_t hashval) const;
 
     template <bool only_lookup, typename Method>
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
