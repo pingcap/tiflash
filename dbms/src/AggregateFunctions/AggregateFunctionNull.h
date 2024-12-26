@@ -90,13 +90,23 @@ protected:
     }
 
 public:
-    explicit AggregateFunctionNullBase(AggregateFunctionPtr nested_function_)
+    explicit AggregateFunctionNullBase(AggregateFunctionPtr nested_function_, bool need_counter = false)
         : nested_function{nested_function_}
     {
         if (result_is_nullable)
             prefix_size = nested_function->alignOfData();
         else
             prefix_size = 0;
+
+        if (result_is_nullable && need_counter)
+        {
+            auto tmp = prefix_size;
+            prefix_size += sizeof(Int64);
+            if ((prefix_size % tmp) != 0)
+                prefix_size += tmp - (prefix_size % tmp);
+            assert((prefix_size % tmp) == 0);
+            assert(prefix_size >= (tmp + sizeof(Int64)));
+        }
     }
 
     String getName() const override
@@ -267,18 +277,6 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        addOrDecrease<true>(place, columns, row_num, arena);
-    }
-
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
-        const override
-    {
-        addOrDecrease<false>(place, columns, row_num, arena);
-    }
-
-    template <bool is_add>
-    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
-    {
         if constexpr (input_is_nullable)
         {
             if (this->getFlag(place) == 0)
@@ -289,20 +287,14 @@ public:
                 if (!is_null)
                 {
                     const IColumn * nested_column = &column->getNestedColumn();
-                    if constexpr (is_add)
-                        this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
-                    else
-                        this->nested_function->decrease(this->nestedPlace(place), &nested_column, row_num, arena);
+                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
                 }
             }
         }
         else
         {
             this->setFlag(place, 1);
-            if constexpr (is_add)
-                this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
-            else
-                this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
+            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
         }
     }
 
@@ -398,18 +390,6 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        addOrDecrease<true>(place, columns, row_num, arena);
-    }
-
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
-        const override
-    {
-        addOrDecrease<false>(place, columns, row_num, arena);
-    }
-
-    template <bool is_add>
-    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
-    {
         if constexpr (input_is_nullable)
         {
             const auto * column = static_cast<const ColumnNullable *>(columns[0]);
@@ -417,30 +397,14 @@ public:
             {
                 this->setFlag(place);
                 const IColumn * nested_column = &column->getNestedColumn();
-                if constexpr (is_add)
-                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
-                else
-                    this->nested_function->decrease(this->nestedPlace(place), &nested_column, row_num, arena);
+                this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
             }
         }
         else
         {
             this->setFlag(place);
-            if constexpr (is_add)
-                this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
-            else
-                this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
+            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
         }
-    }
-
-    void reset(AggregateDataPtr __restrict place) const override
-    {
-        this->nested_function->reset(this->nestedPlace(place));
-    }
-
-    void prepareWindow(AggregateDataPtr __restrict place) const override
-    {
-        this->nested_function->prepareWindow(this->nestedPlace(place));
     }
 
     void addBatchSinglePlace( // NOLINT(google-default-arguments)
@@ -515,18 +479,6 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        addOrDecrease<true>(place, columns, row_num, arena);
-    }
-
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
-        const override
-    {
-        addOrDecrease<false>(place, columns, row_num, arena);
-    }
-
-    template <bool is_add>
-    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
-    {
         /// This container stores the columns we really pass to the nested function.
         const IColumn * nested_columns[number_of_arguments];
 
@@ -548,20 +500,7 @@ public:
         }
 
         this->setFlag(place);
-        if constexpr (is_add)
-            this->nested_function->add(this->nestedPlace(place), nested_columns, row_num, arena);
-        else
-            this->nested_function->decrease(this->nestedPlace(place), nested_columns, row_num, arena);
-    }
-
-    void reset(AggregateDataPtr __restrict place) const override
-    {
-        this->nested_function->reset(this->nestedPlace(place));
-    }
-
-    void prepareWindow(AggregateDataPtr __restrict place) const override
-    {
-        this->nested_function->prepareWindow(this->nestedPlace(place));
+        this->nested_function->add(this->nestedPlace(place), nested_columns, row_num, arena);
     }
 
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }
@@ -573,6 +512,109 @@ private:
     };
     size_t number_of_arguments = 0;
     std::array<char, MAX_ARGS> is_nullable; /// Plain array is better than std::vector due to one indirection less.
+};
+
+template <bool result_is_nullable, bool input_is_nullable>
+class AggregateFunctionNullUnaryForWindow final
+    : public AggregateFunctionNullBase<
+          result_is_nullable,
+          AggregateFunctionNullUnaryForWindow<result_is_nullable, input_is_nullable>>
+{
+public:
+    explicit AggregateFunctionNullUnaryForWindow(AggregateFunctionPtr nested_function)
+        : AggregateFunctionNullBase<
+            result_is_nullable,
+            AggregateFunctionNullUnaryForWindow<result_is_nullable, input_is_nullable>>(nested_function, true)
+    {}
+
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        addOrDecrease<true>(place, columns, row_num, arena);
+    }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const override
+    {
+        addOrDecrease<false>(place, columns, row_num, arena);
+    }
+
+    template <bool is_add>
+    void addOrDecreaseImpl(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const
+    {
+        if constexpr (is_add)
+        {
+            this->addCounter(place);
+            this->setFlag(place);
+            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+        }
+        else
+        {
+            this->decreaseCounter(place);
+            if (this->getCounter(place) == 0)
+                this->resetFlag(place);
+            this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
+        }
+    }
+
+    template <bool is_add>
+    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
+    {
+        if constexpr (input_is_nullable)
+        {
+            const auto * column = static_cast<const ColumnNullable *>(columns[0]);
+            if (!column->isNullAt(row_num))
+            {
+                const IColumn * nested_column = &column->getNestedColumn();
+                addOrDecreaseImpl<is_add>(place, &nested_column, row_num, arena);
+            }
+        }
+        else
+        {
+            addOrDecreaseImpl<is_add>(place, columns, row_num, arena);
+        }
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override
+    {
+        this->resetFlag(place);
+        this->resetCounter(place);
+        this->nested_function->reset(this->nestedPlace(place));
+    }
+
+    void prepareWindow(AggregateDataPtr __restrict place) const override
+    {
+        this->nested_function->prepareWindow(this->nestedPlace(place));
+        reset(place);
+    }
+
+private:
+    inline void resetFlag(AggregateDataPtr __restrict place) const noexcept { this->initFlag(place); }
+
+    inline void addCounter(AggregateDataPtr __restrict place) const noexcept
+    {
+        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        ++(*counter);
+    }
+
+    inline void decreaseCounter(AggregateDataPtr __restrict place) const noexcept
+    {
+        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        --(*counter);
+        assert((*counter) >= 0);
+    }
+
+    inline Int64 getCounter(AggregateDataPtr __restrict place) const noexcept
+    {
+        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        return *counter;
+    }
+
+    inline void resetCounter(AggregateDataPtr __restrict place) const noexcept
+    {
+        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        (*counter) = 0;
+    }
 };
 
 } // namespace DB

@@ -16,6 +16,7 @@
 
 #include <AggregateFunctions/AggregateFunctionArgMinMax.h>
 #include <AggregateFunctions/AggregateFunctionMinMaxAny.h>
+#include <AggregateFunctions/AggregateFunctionMinMaxWindow.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
 #include <Common/typeid_cast.h>
@@ -61,6 +62,40 @@ static IAggregateFunction * createAggregateFunctionSingleValue(
     return new AggregateFunctionTemplate<Data<SingleValueDataGeneric>>(argument_type);
 }
 
+template <template <typename> class AggregateFunctionTemplate, template <typename> class Data>
+static IAggregateFunction * createAggregateFunctionSingleValueForWindow(
+    const String & name,
+    const DataTypes & argument_types,
+    const Array & parameters)
+{
+    assertNoParameters(name, parameters);
+    assertUnary(name, argument_types);
+
+    const DataTypePtr & argument_type = argument_types[0];
+
+#define DISPATCH(TYPE)                                            \
+    if (typeid_cast<const DataType##TYPE *>(argument_type.get())) \
+        return new AggregateFunctionTemplate<Data<SingleValueDataFixedForWindow<TYPE>>>(argument_type);
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+
+#define DISPATCH(TYPE, DATATYPE)                            \
+    if (typeid_cast<const DATATYPE *>(argument_type.get())) \
+        return new AggregateFunctionTemplate<Data<SingleValueDataFixedForWindow<TYPE>>>(argument_type);
+    FOR_DECIMAL_TYPES(DISPATCH)
+#undef DISPATCH
+
+    if (typeid_cast<const DataTypeDate *>(argument_type.get()))
+        return new AggregateFunctionTemplate<Data<SingleValueDataFixedForWindow<DataTypeDate::FieldType>>>(
+            argument_type);
+    if (typeid_cast<const DataTypeDateTime *>(argument_type.get()))
+        return new AggregateFunctionTemplate<Data<SingleValueDataFixedForWindow<DataTypeDateTime::FieldType>>>(
+            argument_type);
+    if (typeid_cast<const DataTypeString *>(argument_type.get()))
+        return new AggregateFunctionTemplate<Data<SingleValueDataStringForWindow>>(argument_type);
+
+    return new AggregateFunctionTemplate<Data<SingleValueDataGenericForWindow>>(argument_type);
+}
 
 /// argMin, argMax
 template <template <typename> class MinMaxData, typename ResData>
