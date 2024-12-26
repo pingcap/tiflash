@@ -419,7 +419,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
 
     added_row_idx_queue.clear();
     auto agg_func
-        = AggregateFunctionFactory::instance().get(*context, test_case.agg_name, {test_case.type}, {}, 0, true);
+        = AggregateFunctionFactory::instance().getForWindow(*context, test_case.agg_name, {test_case.type}, {}, true);
     auto return_type = agg_func->getReturnType();
     AlignedBuffer agg_state;
     agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
@@ -527,13 +527,15 @@ CATCH
 TEST_F(ExecutorWindowAgg, Min)
 try
 {
-    TestCase<MinOrMaxMocker<false>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "min", 0);
+    TestCase<MinOrMaxMocker<false>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "min_for_window", 0);
     TestCase<MinOrMaxMocker<false>>
-        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "min", SCALE);
+        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "min_for_window", SCALE);
     TestCase<MinOrMaxMocker<false>>
-        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "min", SCALE);
-    TestCase<MinOrMaxMocker<false>> string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "min", 0);
-    TestCase<MinOrMaxMocker<false>> duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "min", 0);
+        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "min_for_window", SCALE);
+    TestCase<MinOrMaxMocker<false>>
+        string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "min_for_window", 0);
+    TestCase<MinOrMaxMocker<false>>
+        duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "min_for_window", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);
@@ -546,13 +548,15 @@ CATCH
 TEST_F(ExecutorWindowAgg, Max)
 try
 {
-    TestCase<MinOrMaxMocker<true>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "max", 0);
+    TestCase<MinOrMaxMocker<true>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "max_for_window", 0);
     TestCase<MinOrMaxMocker<true>>
-        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "max", SCALE);
+        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "max_for_window", SCALE);
     TestCase<MinOrMaxMocker<true>>
-        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "max", SCALE);
-    TestCase<MinOrMaxMocker<true>> string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "max", 0);
-    TestCase<MinOrMaxMocker<true>> duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "max", 0);
+        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "max_for_window", SCALE);
+    TestCase<MinOrMaxMocker<true>>
+        string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "max_for_window", 0);
+    TestCase<MinOrMaxMocker<true>>
+        duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "max_for_window", 0);
 
     executeWindowAggTest(int_case);
     executeWindowAggTest(decimal128_case);

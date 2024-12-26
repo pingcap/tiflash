@@ -18,6 +18,7 @@
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <fmt/core.h>
 
 #include <unordered_set>
 
@@ -33,7 +34,7 @@ extern const std::unordered_set<String> hacking_return_non_null_agg_func_names;
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Null"; };
+    String getName() const override { return "Null"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {
@@ -141,9 +142,73 @@ public:
     }
 };
 
+class AggregateFunctionCombinatorNullForWindow final : public IAggregateFunctionCombinator
+{
+public:
+    String getName() const override { return "NullForWindow"; }
+
+    DataTypes transformArguments(const DataTypes & arguments) const override
+    {
+        size_t size = arguments.size();
+        if (size != 1)
+            throw Exception(fmt::format("Aggregation in window accepts exact 1 argument, but gets {} arguments", size));
+        DataTypes res(size);
+        res[0] = removeNullable(arguments[0]);
+        return res;
+    }
+
+    AggregateFunctionPtr transformAggregateFunction(
+        const AggregateFunctionPtr & nested_function,
+        const DataTypes & arguments,
+        const Array &) const override
+    {
+        bool has_nullable_types = false;
+        bool has_null_types = false;
+        for (const auto & arg_type : arguments)
+        {
+            if (arg_type->isNullable())
+            {
+                has_nullable_types = true;
+                if (arg_type->onlyNull())
+                {
+                    has_null_types = true;
+                    break;
+                }
+            }
+        }
+
+        if (nested_function && nested_function->getName() == "count")
+        {
+            if (has_nullable_types)
+                return std::make_shared<AggregateFunctionCountNotNullUnary>(arguments[0]);
+            else
+                return std::make_shared<AggregateFunctionCount>();
+        }
+
+        if (has_null_types)
+            return std::make_shared<AggregateFunctionNothing>();
+
+        if (nested_function->getReturnType()->canBeInsideNullable())
+        {
+            if (has_nullable_types)
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<true, true>>(nested_function);
+            else
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<true, false>>(nested_function);
+        }
+        else
+        {
+            if (has_nullable_types)
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<false, true>>(nested_function);
+            else
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<false, false>>(nested_function);
+        }
+    }
+};
+
 void registerAggregateFunctionCombinatorNull(AggregateFunctionCombinatorFactory & factory)
 {
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorNull>());
+    factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorNullForWindow>());
 }
 
 } // namespace DB

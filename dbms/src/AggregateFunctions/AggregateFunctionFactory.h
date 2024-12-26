@@ -67,6 +67,14 @@ public:
         int recursion_level = 0,
         bool empty_input_as_null = false) const;
 
+    /// Throws an exception if not found.
+    AggregateFunctionPtr getForWindow(
+        const Context & context,
+        const String & name,
+        const DataTypes & argument_types,
+        const Array & parameters = {},
+        int recursion_level = 0) const;
+
     /// Returns nullptr if not found.
     AggregateFunctionPtr tryGet(
         const Context & context,
