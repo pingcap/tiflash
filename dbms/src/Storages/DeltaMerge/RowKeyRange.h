@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/dtpb/column_file.pb.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>

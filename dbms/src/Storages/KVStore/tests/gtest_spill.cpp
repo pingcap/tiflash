@@ -67,8 +67,8 @@ try
     {
         auto [schema_snapshot, block] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
         UNUSED(schema_snapshot);
-        EXPECT_NO_THROW(block->getPositionByName(MutableSupport::delmark_column_name));
-        EXPECT_THROW(block->getPositionByName(MutableSupport::version_column_name), Exception);
+        EXPECT_NO_THROW(block->getPositionByName(MutSup::delmark_column_name));
+        EXPECT_THROW(block->getPositionByName(MutSup::version_column_name), Exception);
         ASSERT_EQ(block->columns(), 3);
     }
     {

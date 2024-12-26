@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
@@ -20,7 +21,6 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
-
 
 namespace DB::ErrorCodes
 {

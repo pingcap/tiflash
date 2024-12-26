@@ -101,20 +101,20 @@ TEST(RowV2Suite, DecimalValueLength)
     ASSERT_DECIMAL_VALUE(DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 2), 2));
 }
 
-#define ASSERT_ROW_VALUE(is_big, ...)                                                                    \
-    {                                                                                                    \
-        auto [table_info, fields] = getTableInfoAndFields({EXTRA_HANDLE_COLUMN_ID}, false, __VA_ARGS__); \
-        auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);                             \
-        WriteBufferFromOwnString ss;                                                                     \
-        encodeRowV2(table_info, fields, ss);                                                             \
-        auto encoded = ss.str();                                                                         \
-        ASSERT_EQ(is_big, isBig(encoded));                                                               \
-        auto block = decodeRowToBlock(encoded, decoding_schema);                                         \
-        ASSERT_EQ(fields.size(), block.columns());                                                       \
-        for (size_t i = 0; i < fields.size(); i++)                                                       \
-        {                                                                                                \
-            ASSERT_EQ(fields[i], ((*block.getByPosition(i).column)[0]));                                 \
-        }                                                                                                \
+#define ASSERT_ROW_VALUE(is_big, ...)                                                                     \
+    {                                                                                                     \
+        auto [table_info, fields] = getTableInfoAndFields({MutSup::extra_handle_id}, false, __VA_ARGS__); \
+        auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);                              \
+        WriteBufferFromOwnString ss;                                                                      \
+        encodeRowV2(table_info, fields, ss);                                                              \
+        auto encoded = ss.str();                                                                          \
+        ASSERT_EQ(is_big, isBig(encoded));                                                                \
+        auto block = decodeRowToBlock(encoded, decoding_schema);                                          \
+        ASSERT_EQ(fields.size(), block.columns());                                                        \
+        for (size_t i = 0; i < fields.size(); i++)                                                        \
+        {                                                                                                 \
+            ASSERT_EQ(fields[i], ((*block.getByPosition(i).column)[0]));                                  \
+        }                                                                                                 \
     }
 
 TEST(RowV2Suite, SmallRow)

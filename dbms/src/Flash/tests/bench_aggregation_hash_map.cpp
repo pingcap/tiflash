@@ -14,6 +14,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Columns/ColumnDecimal.h>
+#include <Common/Stopwatch.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeString.h>

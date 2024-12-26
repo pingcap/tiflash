@@ -146,7 +146,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandle)
 (benchmark::State & state)
 {
     size_t num_rows = state.range(0);
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
