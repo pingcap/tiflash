@@ -57,19 +57,8 @@ void ExchangeSenderStatistics::collectExtraRuntimeDetail()
     {
         const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
         mpp_tunnel_details[i].conn_profile_info.packets = connection_profile_info.packets;
-        auto bytes = connection_profile_info.bytes;
-        mpp_tunnel_details[i].conn_profile_info.bytes += bytes;
-        switch (mpp_tunnel_details[i].conn_profile_info.type)
-        {
-        case ConnectionProfileInfo::InnerZoneRemote:
-            base.inner_zone_send_bytes += bytes;
-            break;
-        case DB::ConnectionProfileInfo::InterZoneRemote:
-            base.inter_zone_send_bytes += bytes;
-            break;
-        default:
-            break;
-        }
+        mpp_tunnel_details[i].conn_profile_info.bytes += connection_profile_info.bytes;
+        base.updateConnectionInfo(connection_profile_info);
     }
 }
 

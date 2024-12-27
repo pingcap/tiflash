@@ -17,6 +17,8 @@
 #include <Common/FmtUtils.h>
 #include <common/types.h>
 
+#include "Flash/Statistics/ConnectionProfileInfo.h"
+
 namespace DB
 {
 struct BlockStreamProfileInfo;
@@ -39,5 +41,6 @@ struct BaseRuntimeStatistics
 
     void append(const BlockStreamProfileInfo &);
     void append(const OperatorProfileInfo &);
+    void updateConnectionInfo(const ConnectionProfileInfo & conn_profile_info);
 };
 } // namespace DB

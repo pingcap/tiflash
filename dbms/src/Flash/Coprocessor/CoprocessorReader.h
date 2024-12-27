@@ -23,6 +23,8 @@
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <common/logger_useful.h>
 
+#include "Flash/Statistics/ConnectionProfileInfo.h"
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -134,6 +136,7 @@ struct CoprocessorReaderResult
     bool meet_error;
     String error_msg;
     bool eof;
+    bool same_zone_flag;
     String req_info = "cop request";
     DecodeDetail decode_detail;
 
@@ -142,11 +145,13 @@ struct CoprocessorReaderResult
         bool meet_error_ = false,
         const String & error_msg_ = "",
         bool eof_ = false,
-        DecodeDetail decode_detail_ = {})
+        DecodeDetail decode_detail_ = {},
+        bool same_zone_flag_ = true)
         : resp(resp_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
+        , same_zone_flag(same_zone_flag_)
         , decode_detail(decode_detail_)
     {}
 };
@@ -158,6 +163,9 @@ class CoprocessorReader
 public:
     static constexpr bool is_streaming_reader = false;
     static constexpr auto name = "CoprocessorReader";
+    static const inline ConnectionProfileInfo::ConnTypeVec conn_type_vec{
+        ConnectionProfileInfo::InnerZoneRemote,
+        ConnectionProfileInfo::InterZoneRemote};
 
 private:
     const DAGSchema schema;
@@ -177,7 +185,8 @@ public:
         size_t queue_size,
         UInt64 cop_timeout,
         const pingcap::kv::LabelFilter & tiflash_label_filter_,
-        const String & source_identifier)
+        const String & source_identifier,
+        const String & store_zone_label = "")
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , concurrency(concurrency_)
@@ -189,7 +198,8 @@ public:
               concurrency_,
               &Poco::Logger::get(fmt::format("{} pingcap/coprocessor", source_identifier)),
               cop_timeout,
-              tiflash_label_filter_)
+              tiflash_label_filter_,
+              store_zone_label)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -291,7 +301,7 @@ public:
                     false};
             }
             auto detail = decodeChunks(resp, block_queue, header, schema);
-            return {resp, false, "", false, detail};
+            return {resp, false, "", false, detail, result.same_zone};
         }
         else
         {
@@ -311,7 +321,7 @@ public:
         return toResult(result_pair, block_queue, header);
     }
 
-    static size_t getSourceNum() { return 1; }
+    static size_t getSourceNum() { return 2; }
 
     size_t getConcurrency() const { return concurrency; }
 

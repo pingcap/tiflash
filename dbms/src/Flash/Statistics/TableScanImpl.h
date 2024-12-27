@@ -20,9 +20,10 @@
 
 namespace DB
 {
-struct TableScanDetail : public ConnectionProfileInfo
+struct TableScanDetail
 {
     const bool is_local;
+    ConnectionProfileInfo conn_profile_info;
     double min_stream_cost_ns = -1.0;
     double max_stream_cost_ns = -1.0;
 

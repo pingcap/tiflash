@@ -18,6 +18,8 @@
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 struct IOProfileInfo;
@@ -49,6 +51,7 @@ struct IOProfileInfo
         size_t connections,
         const ConnectionProfileInfo::ConnTypeVec & conn_type_vec)
     {
+        RUNTIME_CHECK(connections == conn_type_vec.size());
         auto info = std::make_shared<IOProfileInfo>(profile_info, false);
         info->connection_profile_infos.resize(connections);
         for (size_t i = 0; i < connections; ++i)

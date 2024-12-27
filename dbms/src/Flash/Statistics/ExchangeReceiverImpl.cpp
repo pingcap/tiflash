@@ -49,19 +49,8 @@ void ExchangeReceiverStatistics::updateExchangeReceiveDetail(
     {
         exchange_receive_details[i].conn_profile_info.type = connection_profile_infos[i].type;
         exchange_receive_details[i].conn_profile_info.packets += connection_profile_infos[i].packets;
-        auto bytes = connection_profile_infos[i].bytes;
-        exchange_receive_details[i].conn_profile_info.bytes += bytes;
-        switch (exchange_receive_details[i].conn_profile_info.type)
-        {
-        case ConnectionProfileInfo::InnerZoneRemote:
-            base.inner_zone_receive_bytes += bytes;
-            break;
-        case DB::ConnectionProfileInfo::InterZoneRemote:
-            base.inter_zone_receive_bytes += bytes;
-            break;
-        default:
-            break;
-        }
+        exchange_receive_details[i].conn_profile_info.bytes += connection_profile_infos[i].bytes;
+        base.updateConnectionInfo(connection_profile_infos[i]);
     }
 }
 

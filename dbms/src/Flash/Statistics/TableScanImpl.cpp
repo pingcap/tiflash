@@ -24,10 +24,11 @@ String TableScanDetail::toJson() const
     auto max_cost_ms = max_stream_cost_ns < 0 ? 0 : max_stream_cost_ns / 1'000'000.0;
     auto min_cost_ms = min_stream_cost_ns < 0 ? 0 : min_stream_cost_ns / 1'000'000.0;
     return fmt::format(
-        R"({{"is_local":{},"packets":{},"bytes":{},"max":{},"min":{}}})",
+        R"({{"is_local":{},"type:":{},"packets":{},"bytes":{},"max":{},"min":{}}})",
         is_local,
-        packets,
-        bytes,
+        conn_profile_info.getTypeString(),
+        conn_profile_info.packets,
+        conn_profile_info.bytes,
         max_cost_ms,
         min_cost_ms);
 }
@@ -48,8 +49,9 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
 {
     for (const auto & connection_profile_info : connection_profile_infos)
     {
-        remote_table_scan_detail.packets += connection_profile_info.packets;
-        remote_table_scan_detail.bytes += connection_profile_info.bytes;
+        remote_table_scan_detail.conn_profile_info.packets += connection_profile_info.packets;
+        remote_table_scan_detail.conn_profile_info.bytes += connection_profile_info.bytes;
+        base.updateConnectionInfo(connection_profile_info);
     }
 }
 
@@ -72,7 +74,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             {
                 /// local read input stream also is IProfilingBlockInputStream
                 const auto & prof = local_stream->getProfileInfo();
-                local_table_scan_detail.bytes += prof.bytes;
+                local_table_scan_detail.conn_profile_info.bytes += prof.bytes;
                 const double this_execution_time = prof.execution_time * 1.0;
                 if (local_table_scan_detail.max_stream_cost_ns < 0.0 // not inited
                     || local_table_scan_detail.max_stream_cost_ns < this_execution_time)
@@ -91,7 +93,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
         transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const IOProfileInfo & profile_info) {
             if (profile_info.is_local)
             {
-                local_table_scan_detail.bytes += profile_info.operator_info->bytes;
+                local_table_scan_detail.conn_profile_info.bytes += profile_info.operator_info->bytes;
                 const double this_execution_time = profile_info.operator_info->execution_time * 1.0;
                 if (local_table_scan_detail.max_stream_cost_ns < 0.0 // not inited
                     || local_table_scan_detail.max_stream_cost_ns < this_execution_time)

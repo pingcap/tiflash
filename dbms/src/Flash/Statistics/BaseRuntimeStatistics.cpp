@@ -42,4 +42,19 @@ void BaseRuntimeStatistics::append(const OperatorProfileInfo & profile_info)
     }
     ++concurrency;
 }
+
+void BaseRuntimeStatistics::updateConnectionInfo(const ConnectionProfileInfo & conn_profile_info)
+{
+    switch (conn_profile_info.type)
+    {
+    case ConnectionProfileInfo::InnerZoneRemote:
+        inner_zone_receive_bytes += bytes;
+        break;
+    case DB::ConnectionProfileInfo::InterZoneRemote:
+        inter_zone_receive_bytes += bytes;
+        break;
+    default:
+        break;
+    }
+}
 } // namespace DB

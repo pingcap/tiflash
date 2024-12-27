@@ -16,6 +16,8 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Operators/CoprocessorReaderSourceOp.h>
 
+#include "Flash/Coprocessor/CoprocessorReader.h"
+
 namespace DB
 {
 CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
@@ -24,7 +26,10 @@ CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
     CoprocessorReaderPtr coprocessor_reader_)
     : SourceOp(exec_context_, req_id)
     , coprocessor_reader(coprocessor_reader_)
-    , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, coprocessor_reader->getSourceNum()))
+    , io_profile_info(IOProfileInfo::createForRemote(
+          profile_info_ptr,
+          coprocessor_reader->getSourceNum(),
+          CoprocessorReader::conn_type_vec))
 {
     assert(coprocessor_reader);
     setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(coprocessor_reader->getOutputSchema()))));
@@ -90,9 +95,16 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
             }
 
             const auto & decode_detail = result.decode_detail;
-            auto & connection_profile_info = io_profile_info->connection_profile_infos[0];
-            connection_profile_info.packets += decode_detail.packets;
-            connection_profile_info.bytes += decode_detail.packet_bytes;
+            if (result.same_zone_flag)
+            {
+                io_profile_info->connection_profile_infos[0].packets += decode_detail.packets;
+                io_profile_info->connection_profile_infos[0].bytes += decode_detail.packet_bytes;
+            }
+            else
+            {
+                io_profile_info->connection_profile_infos[1].packets += decode_detail.packets;
+                io_profile_info->connection_profile_infos[1].bytes += decode_detail.packet_bytes;
+            }
 
             total_rows += decode_detail.rows;
             LOG_TRACE(
