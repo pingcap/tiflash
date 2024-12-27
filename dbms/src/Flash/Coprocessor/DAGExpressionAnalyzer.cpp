@@ -206,7 +206,7 @@ void appendWindowDescription(
     if (is_agg)
     {
         window_function_description.aggregate_function
-            = AggregateFunctionFactory::instance().get(context, func_name, arg_types, {}, 0, true);
+            = AggregateFunctionFactory::instance().getForWindow(context, func_name, arg_types, {});
         result_type = window_function_description.aggregate_function->getReturnType();
     }
     else
