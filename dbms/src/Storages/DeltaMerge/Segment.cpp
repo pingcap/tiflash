@@ -3311,9 +3311,9 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
 {
     static constexpr bool NeedRowID = false;
     // set `is_fast_scan` to true to try to enable clean read
-    auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, MutSup::extra_handle_id);
     constexpr auto is_fast_scan = true;
-    auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
+    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::version_col_id);
 
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
