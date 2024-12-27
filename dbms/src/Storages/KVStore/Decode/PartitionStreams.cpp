@@ -312,26 +312,24 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
         lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
     }
 
+    if (lock_info) return lock_info;
+    
     /// If there is no lock, leave scope of region scanner and raise LockException.
     /// Read raw KVs from region cache.
-    if (!lock_info)
-    {
-        RegionDataReadInfoList data_list_read;
-        // Shortcut for empty region.
-        if (!scanner.hasNext())
-            return data_list_read;
-
-        // If worked with raftstore v2, the final size may not equal to here.
-        data_list_read.reserve(scanner.writeMapSize());
-
-        // Tiny optimization for queries that need only handle, tso, delmark.
-        do
-        {
-            data_list_read.emplace_back(scanner.next());
-        } while (scanner.hasNext());
+    RegionDataReadInfoList data_list_read;
+    // Shortcut for empty region.
+    if (!scanner.hasNext())
         return data_list_read;
-    }
-    return lock_info;
+
+    // If worked with raftstore v2, the final size may not equal to here.
+    data_list_read.reserve(scanner.writeMapSize());
+
+    // Tiny optimization for queries that need only handle, tso, delmark.
+    do
+    {
+        data_list_read.emplace_back(scanner.next());
+    } while (scanner.hasNext());
+    return data_list_read;
 }
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
