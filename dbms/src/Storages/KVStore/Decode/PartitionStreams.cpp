@@ -314,7 +314,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
 
     if (lock_info) return lock_info;
     
-    /// If there is no lock, leave scope of region scanner and raise LockException.
+    /// If there is any lock, return the lock to the caller.
     /// Read raw KVs from region cache.
     RegionDataReadInfoList data_list_read;
     // Shortcut for empty region.
