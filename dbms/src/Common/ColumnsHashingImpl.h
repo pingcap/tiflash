@@ -17,7 +17,6 @@
 #include <Columns/IColumn.h>
 #include <Common/HashTable/HashTable.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
-#include <Common/HashTable/StringHashTable.h>
 #include <Common/assert_cast.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/AggregationCommon.h>
@@ -130,7 +129,6 @@ public:
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
     using Derived = TDerived;
 
-    // Emplace key without hashval, and this method doesn't support prefetch.
     template <typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
         Data & data,
@@ -194,7 +192,6 @@ protected:
         }
     }
 
-    // This method is performance critical, so there are two emplaceImpl to make sure caller can use the one they need.
     template <typename Data, typename KeyHolder>
     ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval)
     {

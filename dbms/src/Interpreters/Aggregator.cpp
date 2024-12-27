@@ -879,7 +879,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         if likely (processed_rows)
             agg_process_info.start_row = *processed_rows + 1;
 
-#undef HANDLE_AGG_EMPLACE_RESULT
         return;
     }
 
@@ -1026,8 +1025,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
 
     if likely (processed_rows)
         agg_process_info.start_row = *processed_rows + 1;
-
-#undef HANDLE_AGG_EMPLACE_RESULT
 }
 
 void NO_INLINE
@@ -1877,7 +1874,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
         ++data_index;
     });
 
-    size_t prefetch_idx = 16;
+    size_t prefetch_idx = agg_prefetch_step;
     for (size_t i = 0; i < rows; ++i)
     {
         if (prefetch_idx < rows)
