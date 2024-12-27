@@ -274,7 +274,6 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     bool resolve_locks,
     bool need_data_value)
 {
-    RegionDataReadInfoList data_list_read;
     LockInfoPtr lock_info;
 
     auto scanner = region->createCommittedScanner(true, need_data_value);
@@ -317,6 +316,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     /// Read raw KVs from region cache.
     if (!lock_info)
     {
+        RegionDataReadInfoList data_list_read;
         // Shortcut for empty region.
         if (!scanner.hasNext())
             return data_list_read;
@@ -329,13 +329,10 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
         {
             data_list_read.emplace_back(scanner.next());
         } while (scanner.hasNext());
+        return data_list_read;
     }
     else
-    {
         return lock_info;
-    }
-
-    return data_list_read;
 }
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)

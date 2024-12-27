@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Read/RegionLockInfo.h>
 
 namespace DB::RecordKVFormat
 {
@@ -36,12 +37,20 @@ struct DecodedLockCFValue : boost::noncopyable
         kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
         bool use_async_commit{false};
         bool is_txn_file{false};
+        /// Set `res` if the `query` could be blocked by this lock. Otherwise `set` res to nullptr.
+        void getLockInfoPtr(
+            const RegionLockReadQuery & query,
+            const std::shared_ptr<const TiKVKey> & key,
+            LockInfoPtr & res) const;
+        void intoLockInfo(const std::shared_ptr<const TiKVKey> & key, kvrpcpb::LockInfo &) const;
     };
     DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_);
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
     void intoLockInfo(kvrpcpb::LockInfo &) const;
     bool isLargeTxn() const;
     void withInner(std::function<void(const Inner &)> f) const;
+    /// Return LockInfoPtr if the `query` could be blocked by this lock. Otherwise return nullptr.
+    LockInfoPtr getLockInfoPtr(const RegionLockReadQuery & query) const;
 
     std::shared_ptr<const TiKVKey> key;
     std::shared_ptr<const TiKVValue> val;

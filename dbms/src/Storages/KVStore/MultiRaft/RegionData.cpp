@@ -225,35 +225,10 @@ LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
         std::ignore = tikv_val;
         const auto & lock_info_raw = *lock_info_ptr;
 
-        bool should_continue = false;
-        lock_info_raw.withInner([&](const RecordKVFormat::DecodedLockCFValue::Inner & in) {
-            if (in.lock_version > query.read_tso || in.lock_type == kvrpcpb::Op::Lock
-                || in.lock_type == kvrpcpb::Op::PessimisticLock)
-            {
-                should_continue = true;
-                return;
-            }
-            if (in.min_commit_ts > query.read_tso)
-            {
-                should_continue = true;
-                return;
-            }
-            if (query.bypass_lock_ts)
-            {
-                if (query.bypass_lock_ts->count(in.lock_version))
-                {
-                    GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
-                    should_continue = true;
-                }
-            }
-            return;
-        });
-        if (should_continue)
+        if (auto t = lock_info_raw.getLockInfoPtr(query); t != nullptr)
         {
-            continue;
+            return t;
         }
-
-        return lock_info_ptr->intoLockInfo();
     }
 
     return nullptr;
