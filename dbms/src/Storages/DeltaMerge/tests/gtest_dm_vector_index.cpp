@@ -1217,7 +1217,7 @@ public:
             columns_to_read,
             snapshot,
             {range},
-            std::make_shared<PushDownFilter>(wrapWithANNQueryInfo({}, ann_query)),
+            std::make_shared<PushDownExecutor>(ann_query),
             pack_filter_results,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
@@ -1798,7 +1798,7 @@ public:
     BlockInputStreamPtr createComputeNodeStream(
         const SegmentPtr & write_node_segment,
         const ColumnDefines & columns_to_read,
-        const PushDownFilterPtr & filter,
+        const PushDownExecutorPtr & filter,
         const ScanContextPtr & read_scan_context = nullptr)
     {
         auto write_dm_context = dmContext();
@@ -1951,7 +1951,7 @@ public:
         auto stream = createComputeNodeStream(
             wn_segment,
             {cdPK(), cdVec()},
-            std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info)),
+            std::make_shared<PushDownExecutor>(ann_query_info),
             read_scan_context);
         return stream;
     }

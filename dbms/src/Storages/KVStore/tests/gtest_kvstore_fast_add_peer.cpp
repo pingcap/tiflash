@@ -14,7 +14,7 @@
 
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
@@ -179,7 +179,7 @@ protected:
 
 protected:
     UInt64 upload_sequence = 1000;
-    UInt64 table_id;
+    UInt64 table_id{};
 
 private:
     ContextPtr context;
@@ -596,7 +596,14 @@ try
         return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
     });
     // Will generate and persist some information in local ps, which will not be uploaded.
-    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    auto mock_data_cp = mock_data;
+    FastAddPeerImplWrite(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333,
+        std::move(mock_data_cp),
+        0);
     dumpCheckpoint();
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     exe_lock.unlock();

@@ -936,7 +936,7 @@ BlockInputStreamPtr Segment::getInputStream(
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
-    const PushDownFilterPtr & filter,
+    const PushDownExecutorPtr & executor,
     UInt64 start_ts,
     size_t expected_block_size)
 {
@@ -958,7 +958,7 @@ BlockInputStreamPtr Segment::getInputStream(
             dmfile,
             /*set_cache_if_miss*/ true,
             read_ranges,
-            filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+            executor ? executor->rs_operator : EMPTY_RS_OPERATOR,
             /*read_pack*/ {});
         pack_filter_results.push_back(result);
     }
@@ -995,7 +995,7 @@ BlockInputStreamPtr Segment::getInputStream(
             columns_to_read,
             segment_snap,
             read_ranges,
-            filter,
+            executor,
             pack_filter_results,
             start_ts,
             expected_block_size,
@@ -3149,7 +3149,6 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
     UInt32 preceded_rows = 0;
 
     auto file_provider = dm_context.global_context.getFileProvider();
-
     for (size_t i = 0; i < dmfiles.size(); ++i)
     {
         const auto & dmfile = dmfiles[i];
@@ -3220,7 +3219,6 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     };
 
     auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, pack_filter_results, start_ts, dm_context);
-
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
@@ -3301,12 +3299,10 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
 }
 
 SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
-    BitmapFilterPtr bitmap_filter,
     const SegmentSnapshotPtr & segment_snap,
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & read_ranges,
-    const RSOperatorPtr & filter,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
     size_t expected_block_size,
@@ -3318,7 +3314,62 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
-    auto ann_query_info = getANNQueryInfo(filter);
+    SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
+        dm_context,
+        columns_to_read,
+        read_ranges,
+        start_ts,
+        expected_block_size,
+        enable_handle_clean_read,
+        read_tag,
+        pack_filter_results,
+        is_fast_scan,
+        enable_del_clean_read,
+        /* read_packs */ {},
+        NeedRowID);
+
+    auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
+
+    auto memtable = segment_snap->delta->getMemTableSetSnapshot();
+    auto persisted_files = segment_snap->delta->getPersistedFileSetSnapshot();
+    SkippableBlockInputStreamPtr mem_table_stream = std::make_shared<ColumnFileSetInputStream>(
+        dm_context,
+        memtable,
+        columns_to_read_ptr,
+        this->rowkey_range,
+        read_tag);
+    SkippableBlockInputStreamPtr persisted_files_stream = std::make_shared<ColumnFileSetInputStream>(
+        dm_context,
+        persisted_files,
+        columns_to_read_ptr,
+        this->rowkey_range,
+        read_tag);
+
+    auto stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<NeedRowID>>(stable_stream);
+    assert(stream != nullptr);
+    stream->appendChild(persisted_files_stream, persisted_files->getRows());
+    stream->appendChild(mem_table_stream, memtable->getRows());
+    return stream;
+}
+
+std::tuple<SkippableBlockInputStreamPtr, bool> Segment::getConcatVectorIndexBlockInputStream(
+    BitmapFilterPtr bitmap_filter,
+    const SegmentSnapshotPtr & segment_snap,
+    const DMContext & dm_context,
+    const ColumnDefines & columns_to_read,
+    const RowKeyRanges & read_ranges,
+    const ANNQueryInfoPtr & ann_query_info,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size,
+    ReadTag read_tag)
+{
+    static constexpr bool NeedRowID = false;
+    // set `is_fast_scan` to true to try to enable clean read
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+    constexpr auto is_fast_scan = true;
+    auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
+
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->tryGetInputStreamWithVectorIndex(
         dm_context,
         columns_to_read,
@@ -3369,19 +3420,17 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & data_ranges,
-    const PushDownFilterPtr & filter,
+    const PushDownExecutorPtr & executor,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
     size_t expected_block_size)
 {
-    const auto & filter_columns = filter->filter_columns;
+    const auto & filter_columns = executor->filter_columns;
     BlockInputStreamPtr filter_column_stream = getConcatSkippableBlockInputStream(
-        bitmap_filter,
         segment_snap,
         dm_context,
         *filter_columns,
         data_ranges,
-        filter->rs_operator,
         pack_filter_results,
         start_ts,
         expected_block_size,
@@ -3396,29 +3445,31 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             filter_columns->size());
         BlockInputStreamPtr stream
             = std::make_shared<BitmapFilterBlockInputStream>(*filter_columns, filter_column_stream, bitmap_filter);
-        if (filter->extra_cast)
+        if (executor->extra_cast)
         {
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast, dm_context.tracing_id);
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, executor->extra_cast, dm_context.tracing_id);
             stream->setExtraInfo("cast after tableScan");
         }
         stream = std::make_shared<FilterBlockInputStream>(
             stream,
-            filter->before_where,
-            filter->filter_column_name,
+            executor->before_where,
+            executor->filter_column_name,
             dm_context.tracing_id);
         stream->setExtraInfo("push down filter");
-        stream
-            = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
+        stream = std::make_shared<ExpressionBlockInputStream>(
+            stream,
+            executor->project_after_where,
+            dm_context.tracing_id);
         stream->setExtraInfo("project after where");
         return stream;
     }
 
     // construct extra cast stream if needed
-    if (filter->extra_cast)
+    if (executor->extra_cast)
     {
         filter_column_stream = std::make_shared<ExpressionBlockInputStream>(
             filter_column_stream,
-            filter->extra_cast,
+            executor->extra_cast,
             dm_context.tracing_id);
         filter_column_stream->setExtraInfo("cast after tableScan");
     }
@@ -3426,8 +3477,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(
         filter_column_stream,
-        filter->before_where,
-        filter->filter_column_name,
+        executor->before_where,
+        executor->filter_column_name,
         dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
 
@@ -3445,12 +3496,10 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
 
     // construct stream for the rest columns
     auto rest_column_stream = getConcatSkippableBlockInputStream(
-        bitmap_filter,
         segment_snap,
         dm_context,
         *rest_columns_to_read,
         data_ranges,
-        filter->rs_operator,
         pack_filter_results,
         start_ts,
         expected_block_size,
@@ -3459,7 +3508,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     // construct late materialization stream
     return std::make_shared<LateMaterializationBlockInputStream>(
         columns_to_read,
-        filter->filter_column_name,
+        executor->filter_column_name,
         filter_column_stream,
         rest_column_stream,
         bitmap_filter,
@@ -3488,7 +3537,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
-    const PushDownFilterPtr & filter,
+    const PushDownExecutorPtr & executor,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
     size_t build_bitmap_filter_block_rows,
@@ -3514,7 +3563,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         segment_snap->stable->clearColumnCaches();
     }
 
-    if (filter && filter->before_where)
+    if (executor && executor->before_where)
     {
         // if has filter conditions pushed down, use late materialization
         return getLateMaterializationStream(
@@ -3523,34 +3572,51 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             columns_to_read,
             segment_snap,
             real_ranges,
-            filter,
+            executor,
             pack_filter_results,
             start_ts,
             read_data_block_rows);
     }
 
-    auto stream = getConcatSkippableBlockInputStream(
-        bitmap_filter,
-        segment_snap,
-        dm_context,
-        columns_to_read,
-        real_ranges,
-        filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-        pack_filter_results,
-        start_ts,
-        read_data_block_rows,
-        ReadTag::Query);
-    if (auto * vector_index_stream = dynamic_cast<ConcatVectorIndexBlockInputStream *>(stream.get());
-        vector_index_stream)
+    SkippableBlockInputStreamPtr stream;
+    if (executor && executor->ann_query_info)
     {
-        // For vector search, there are more likely to return small blocks from different
-        // sub-streams. Squash blocks to reduce the number of blocks thus improve the
-        // performance of upper layer.
-        return std::make_shared<SquashingBlockInputStream>(
-            stream,
-            /*min_block_size_rows=*/read_data_block_rows,
-            /*min_block_size_bytes=*/0,
-            dm_context.tracing_id);
+        // For ANN query, try to use vector index to accelerate.
+        bool is_vector = false;
+        std::tie(stream, is_vector) = getConcatVectorIndexBlockInputStream(
+            bitmap_filter,
+            segment_snap,
+            dm_context,
+            columns_to_read,
+            real_ranges,
+            executor->ann_query_info,
+            pack_filter_results,
+            start_ts,
+            read_data_block_rows,
+            ReadTag::Query);
+        if (is_vector)
+        {
+            // For vector search, there are more likely to return small blocks from different
+            // sub-streams. Squash blocks to reduce the number of blocks thus improve the
+            // performance of upper layer.
+            return std::make_shared<SquashingBlockInputStream>(
+                stream,
+                /*min_block_size_rows=*/read_data_block_rows,
+                /*min_block_size_bytes=*/0,
+                dm_context.tracing_id);
+        }
+    }
+    else
+    {
+        stream = getConcatSkippableBlockInputStream(
+            segment_snap,
+            dm_context,
+            columns_to_read,
+            real_ranges,
+            pack_filter_results,
+            start_ts,
+            read_data_block_rows,
+            ReadTag::Query);
     }
     return std::make_shared<BitmapFilterBlockInputStream>(columns_to_read, stream, bitmap_filter);
 }

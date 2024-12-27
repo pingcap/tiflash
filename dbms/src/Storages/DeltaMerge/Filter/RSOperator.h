@@ -164,10 +164,4 @@ RSOperatorPtr createIsNull(const Attr & attr);
 //
 RSOperatorPtr createUnsupported(const String & reason);
 
-// Wrap with a ANNQueryInfo
-RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoPtr & ann_query_info);
-
-// Get ANNQueryInfo from RSOperator
-ANNQueryInfoPtr getANNQueryInfo(const RSOperatorPtr & op);
-
 } // namespace DB::DM
