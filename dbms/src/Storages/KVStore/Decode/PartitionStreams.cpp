@@ -331,8 +331,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
         } while (scanner.hasNext());
         return data_list_read;
     }
-    else
-        return lock_info;
+    return lock_info;
 }
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
