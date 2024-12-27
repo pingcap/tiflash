@@ -82,15 +82,14 @@ TEST(RowV2Suite, FloatValue)
     ASSERT_FLOAT_VALUE(std::numeric_limits<Float64>::max());
 }
 
+#define ASSERT_STRING_VALUE_LENGTH(b, s) ASSERT_EQ(getValueLengthByRowV2<b>(s), std::make_tuple(s, (s).length()))
+
 TEST(RowV2Suite, StringValueLength)
 {
-    auto assert_string_value_length = [](bool b, String s) {
-        ASSERT_EQ(getValueLengthByRowV2<b>(s), std::make_tuple(s, s.length()));
-    };
-    assert_string_value_length(false, String(""));
-    assert_string_value_length(false, String("aaa"));
-    assert_string_value_length(false, String(std::numeric_limits<UInt16>::max(), 'a'));
-    assert_string_value_length(true, String(std::numeric_limits<UInt16>::max() + 1, 'a'));
+    ASSERT_STRING_VALUE_LENGTH(false, String(""));
+    ASSERT_STRING_VALUE_LENGTH(false, String("aaa"));
+    ASSERT_STRING_VALUE_LENGTH(false, String(std::numeric_limits<UInt16>::max(), 'a'));
+    ASSERT_STRING_VALUE_LENGTH(true, String(std::numeric_limits<UInt16>::max() + 1, 'a'));
 }
 
 #define ASSERT_DECIMAL_VALUE(d) ASSERT_EQ(std::get<0>(getValueLengthByRowV2<false>(d)), d)
