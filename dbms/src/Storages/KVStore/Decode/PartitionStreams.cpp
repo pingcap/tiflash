@@ -330,10 +330,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
             data_list_read.emplace_back(scanner.next());
         } while (scanner.hasNext());
     }
-    else
-    {
-        return lock_info;
-    }
+    return lock_info;
 
     return data_list_read;
 }
