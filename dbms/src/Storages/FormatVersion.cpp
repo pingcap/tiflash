@@ -49,7 +49,7 @@ const StorageFormatVersion & toStorageFormat(UInt64 setting)
     case 103:
         return STORAGE_FORMAT_V103;
     default:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal setting value: {}", setting);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal format_version value: {}", setting);
     }
 }
 } // namespace

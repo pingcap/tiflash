@@ -1021,8 +1021,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    LOG_INFO(log, "Using api_version={}", storage_config.api_version);
-
     // Set whether to use safe point v2.
     PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
 
