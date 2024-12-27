@@ -824,33 +824,10 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-#define HANDLE_AGG_EMPLACE_RESULT                                                                           \
-    if likely (emplace_result_hold.has_value())                                                             \
-    {                                                                                                       \
-        if constexpr (collect_hit_rate)                                                                     \
-        {                                                                                                   \
-            ++agg_process_info.hit_row_cnt;                                                                 \
-        }                                                                                                   \
-                                                                                                            \
-        if constexpr (only_lookup)                                                                          \
-        {                                                                                                   \
-            if (!emplace_result_hold.value().isFound())                                                     \
-                agg_process_info.not_found_rows.push_back(i);                                               \
-        }                                                                                                   \
-        else                                                                                                \
-        {                                                                                                   \
-            emplace_result_hold.value().setMapped(place);                                                   \
-        }                                                                                                   \
-        processed_rows = i;                                                                                 \
-    }                                                                                                       \
-    else                                                                                                    \
-    {                                                                                                       \
-        LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill"); \
-        break;                                                                                              \
-    }
-
         std::optional<size_t> processed_rows;
+        std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplace_result_holder;
         const auto end = agg_process_info.start_row + rows;
+
         for (size_t i = agg_process_info.start_row; i < end; ++i)
         {
             if constexpr (enable_prefetch)
@@ -866,16 +843,36 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                     hashvals,
                     key_holders);
 
-                auto emplace_result_hold = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
-
-                HANDLE_AGG_EMPLACE_RESULT
+                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
             }
             else
             {
-                auto emplace_result_hold
+                emplace_result_holder
                     = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
+            }
 
-                HANDLE_AGG_EMPLACE_RESULT
+            if likely (emplace_result_holder.has_value())
+            {
+                if constexpr (collect_hit_rate)
+                {
+                    ++agg_process_info.hit_row_cnt;
+                }
+
+                if constexpr (only_lookup)
+                {
+                    if (!emplace_result_holder.value().isFound())
+                        agg_process_info.not_found_rows.push_back(i);
+                }
+                else
+                {
+                    emplace_result_holder.value().setMapped(place);
+                }
+                processed_rows = i;
+            }
+            else
+            {
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                break;
             }
         }
 
@@ -952,8 +949,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                     hashvals,
                     key_holders);
 
-                emplace_result_holder
-                    = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
+                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
             }
             else
             {
@@ -961,47 +957,48 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                     = emplaceOrFindKey<only_lookup>(method, state, j, *aggregates_pool, sort_key_containers);
             }
 
-            if unlikely (!emplace_result_holder.has_value())                                                                
-            {                                                                                                               
-                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");         
-                break;                                                                                                      
-            }                                                                                                               
+            if unlikely (!emplace_result_holder.has_value())
+            {
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                break;
+            }
 
-            auto & emplace_result = emplace_result_holder.value();                                                          
-            if constexpr (only_lookup)                                                                                      
-            {                                                                                                               
-                if (emplace_result.isFound())                                                                               
-                {                                                                                                           
-                    aggregate_data = emplace_result.getMapped();                                                            
-                }                                                                                                           
-                else                                                                                                        
-                {                                                                                                           
-                    agg_process_info.not_found_rows.push_back(j);                                                           
-                }                                                                                                           
-            }                                                                                                               
-            else                                                                                                            
-            {                                                                                                               
-                if (emplace_result.isInserted())                                                                            
-                {                                                                                                           
-                    emplace_result.setMapped(nullptr);                                                                      
+            auto emplace_result = emplace_result_holder.value();
+            if constexpr (only_lookup)
+            {
+                if (emplace_result.isFound())
+                {
+                    aggregate_data = emplace_result.getMapped();
+                }
+                else
+                {
+                    agg_process_info.not_found_rows.push_back(j);
+                }
+            }
+            else
+            {
+                if (emplace_result.isInserted())
+                {
+                    emplace_result.setMapped(nullptr);
 
-                    aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states); 
-                    createAggregateStates(aggregate_data);                                                                  
+                    aggregate_data
+                        = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                    createAggregateStates(aggregate_data);
 
-                    emplace_result.setMapped(aggregate_data);                                                               
-                }                                                                                                           
-                else                                                                                                        
-                {                                                                                                           
-                    aggregate_data = emplace_result.getMapped();                                                            
+                    emplace_result.setMapped(aggregate_data);
+                }
+                else
+                {
+                    aggregate_data = emplace_result.getMapped();
 
-                    if constexpr (collect_hit_rate)                                                                         
-                        ++agg_process_info.hit_row_cnt;                                                                     
+                    if constexpr (collect_hit_rate)
+                        ++agg_process_info.hit_row_cnt;
 
-                    if constexpr (enable_prefetch)                                                                          
-                        __builtin_prefetch(aggregate_data);                                                                 
-                }                                                                                                           
-            }                                                                                                               
-            places[j - agg_process_info.start_row] = aggregate_data;                                                        
+                    if constexpr (enable_prefetch)
+                        __builtin_prefetch(aggregate_data);
+                }
+            }
+            places[j - agg_process_info.start_row] = aggregate_data;
             processed_rows = j;
         }
 
