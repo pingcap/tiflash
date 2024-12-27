@@ -82,7 +82,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     {
         if (table_expression->table_function)
         {
-            auto table_function = typeid_cast<const ASTFunction *>(table_expression->table_function.get());
+            const auto * table_function = typeid_cast<const ASTFunction *>(table_expression->table_function.get());
             /// Get the table function
             TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(table_function->name, context);
             /// Run it and remember the result

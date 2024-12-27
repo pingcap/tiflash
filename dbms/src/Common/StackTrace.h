@@ -89,6 +89,6 @@ public:
 
 private:
     using Frame = void *;
-    Frame frames[STACK_TRACE_MAX_DEPTH];
+    Frame frames[STACK_TRACE_MAX_DEPTH] = {};
     size_t frames_size;
 };

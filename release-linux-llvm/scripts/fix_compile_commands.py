@@ -47,6 +47,7 @@ def main():
         data = check_files(data, args.load_diff_files_from)
     json.dump(data, open(args.file_path, 'w'), indent=4)
     print('process {} elements'.format(len(data)))
+    print('{}'.format(json.dumps(data, ident=4)))
 
 
 if __name__ == '__main__':
