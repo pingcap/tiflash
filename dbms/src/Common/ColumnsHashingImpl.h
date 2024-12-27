@@ -194,129 +194,157 @@ protected:
         }
     }
 
-#define DEFINE_EMPLACE_IMPL_BEGIN                                                    \
-    if constexpr (Cache::consecutive_keys_optimization)                              \
-    {                                                                                \
-        if (cache.found && cache.check(keyHolderGetKey(key_holder)))                 \
-        {                                                                            \
-            if constexpr (has_mapped)                                                \
-                return EmplaceResult(cache.value.second, cache.value.second, false); \
-            else                                                                     \
-                return EmplaceResult(false);                                         \
-        }                                                                            \
-    }                                                                                \
-    typename Data::LookupResult it;                                                  \
-    bool inserted = false;
-
-#define DEFINE_EMPLACE_IMPL_END                                   \
-    [[maybe_unused]] Mapped * cached = nullptr;                   \
-    if constexpr (has_mapped)                                     \
-        cached = &it->getMapped();                                \
-                                                                  \
-    if (inserted)                                                 \
-    {                                                             \
-        if constexpr (has_mapped)                                 \
-        {                                                         \
-            new (&it->getMapped()) Mapped();                      \
-        }                                                         \
-    }                                                             \
-                                                                  \
-    if constexpr (consecutive_keys_optimization)                  \
-    {                                                             \
-        cache.found = true;                                       \
-        cache.empty = false;                                      \
-                                                                  \
-        if constexpr (has_mapped)                                 \
-        {                                                         \
-            cache.value.first = it->getKey();                     \
-            cache.value.second = it->getMapped();                 \
-            cached = &cache.value.second;                         \
-        }                                                         \
-        else                                                      \
-        {                                                         \
-            cache.value = it->getKey();                           \
-        }                                                         \
-    }                                                             \
-                                                                  \
-    if constexpr (has_mapped)                                     \
-        return EmplaceResult(it->getMapped(), *cached, inserted); \
-    else                                                          \
-        return EmplaceResult(inserted);
-
     // This method is performance critical, so there are two emplaceImpl to make sure caller can use the one they need.
     template <typename Data, typename KeyHolder>
     ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval)
     {
-        DEFINE_EMPLACE_IMPL_BEGIN
+        if constexpr (Cache::consecutive_keys_optimization)                              
+        {                                                                                
+            if (cache.found && cache.check(keyHolderGetKey(key_holder)))                 
+            {                                                                            
+                if constexpr (has_mapped)                                                
+                    return EmplaceResult(cache.value.second, cache.value.second, false); 
+                else                                                                     
+                    return EmplaceResult(false);                                         
+            }                                                                            
+        }                                                                                
+
+        typename Data::LookupResult it;                                                  
+        bool inserted = false;
+
         data.emplace(key_holder, it, inserted, hashval);
-        DEFINE_EMPLACE_IMPL_END
+
+        return handleEmplaceResult<Data>(it, inserted);
     }
 
     template <typename Data, typename KeyHolder>
     ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data)
     {
-        DEFINE_EMPLACE_IMPL_BEGIN
+        if constexpr (Cache::consecutive_keys_optimization)                              
+        {                                                                                
+            if (cache.found && cache.check(keyHolderGetKey(key_holder)))                 
+            {                                                                            
+                if constexpr (has_mapped)                                                
+                    return EmplaceResult(cache.value.second, cache.value.second, false); 
+                else                                                                     
+                    return EmplaceResult(false);                                         
+            }                                                                            
+        }                                                                                
+
+        typename Data::LookupResult it;                                                  
+        bool inserted = false;
+
         data.emplace(key_holder, it, inserted);
-        DEFINE_EMPLACE_IMPL_END
+
+        return handleEmplaceResult<Data>(it, inserted);
     }
-#undef DEFINE_EMPLACE_IMPL_BEGIN
-#undef DEFINE_EMPLACE_IMPL_END
 
-#define DEFINE_FIND_IMPL_BEGIN                                       \
-    if constexpr (Cache::consecutive_keys_optimization)              \
-    {                                                                \
-        if (cache.check(key))                                        \
-        {                                                            \
-            if constexpr (has_mapped)                                \
-                return FindResult(&cache.value.second, cache.found); \
-            else                                                     \
-                return FindResult(cache.found);                      \
-        }                                                            \
-    }                                                                \
-    typename Data::LookupResult it;
+    template <typename Data>
+    ALWAYS_INLINE inline EmplaceResult handleEmplaceResult(typename Data::LookupResult & it, bool inserted)
+    {
+        [[maybe_unused]] Mapped * cached = nullptr;                   
+        if constexpr (has_mapped)                                     
+            cached = &it->getMapped();                                
 
-#define DEFINE_FIND_IMPL_END                                               \
-    if constexpr (consecutive_keys_optimization)                           \
-    {                                                                      \
-        cache.found = it != nullptr;                                       \
-        cache.empty = false;                                               \
-                                                                           \
-        if constexpr (has_mapped)                                          \
-        {                                                                  \
-            cache.value.first = key;                                       \
-            if (it)                                                        \
-            {                                                              \
-                cache.value.second = it->getMapped();                      \
-            }                                                              \
-        }                                                                  \
-        else                                                               \
-        {                                                                  \
-            cache.value = key;                                             \
-        }                                                                  \
-    }                                                                      \
-                                                                           \
-    if constexpr (has_mapped)                                              \
-        return FindResult(it ? &it->getMapped() : nullptr, it != nullptr); \
-    else                                                                   \
-        return FindResult(it != nullptr);
+        if (inserted)                                                 
+        {                                                             
+            if constexpr (has_mapped)                                 
+            {                                                         
+                new (&it->getMapped()) Mapped();                      
+            }                                                         
+        }                                                             
+
+        if constexpr (consecutive_keys_optimization)                  
+        {                                                             
+            cache.found = true;                                       
+            cache.empty = false;                                      
+
+            if constexpr (has_mapped)                                 
+            {                                                         
+                cache.value.first = it->getKey();                     
+                cache.value.second = it->getMapped();                 
+                cached = &cache.value.second;                         
+            }                                                         
+            else                                                      
+            {                                                         
+                cache.value = it->getKey();                           
+            }                                                         
+        }                                                             
+
+        if constexpr (has_mapped)                                     
+            return EmplaceResult(it->getMapped(), *cached, inserted); 
+        else                                                          
+            return EmplaceResult(inserted);
+    }
 
     template <typename Data, typename Key>
     ALWAYS_INLINE inline FindResult findKeyImpl(Key & key, Data & data)
     {
-        DEFINE_FIND_IMPL_BEGIN
+        if constexpr (Cache::consecutive_keys_optimization)              
+        {                                                                
+            if (cache.check(key))                                        
+            {                                                            
+                if constexpr (has_mapped)                                
+                    return FindResult(&cache.value.second, cache.found); 
+                else                                                     
+                    return FindResult(cache.found);                      
+            }                                                            
+        }                                                                
+
+        typename Data::LookupResult it;
         it = data.find(key);
-        DEFINE_FIND_IMPL_END
+
+        return handleFindResult<Data, Key>(key, it);
     }
 
     template <typename Data, typename Key>
     ALWAYS_INLINE inline FindResult findKeyImpl(Key & key, Data & data, size_t hashval)
     {
-        DEFINE_FIND_IMPL_BEGIN
+        if constexpr (Cache::consecutive_keys_optimization)              
+        {                                                                
+            if (cache.check(key))                                        
+            {                                                            
+                if constexpr (has_mapped)                                
+                    return FindResult(&cache.value.second, cache.found); 
+                else                                                     
+                    return FindResult(cache.found);                      
+            }                                                            
+        }                                                                
+
+        typename Data::LookupResult it;
         it = data.find(key, hashval);
-        DEFINE_FIND_IMPL_END
+
+        return handleFindResult<Data, Key>(key, it);
     }
-#undef DEFINE_FIND_IMPL_BEGIN
-#undef DEFINE_FIND_IMPL_END
+
+    template <typename Data, typename Key>
+    ALWAYS_INLINE inline FindResult handleFindResult(Key & key, typename Data::LookupResult & it)
+    {
+        if constexpr (consecutive_keys_optimization)                           
+        {                                                                      
+            cache.found = it != nullptr;                                       
+            cache.empty = false;                                               
+
+            if constexpr (has_mapped)                                          
+            {                                                                  
+                cache.value.first = key;                                       
+                if (it)                                                        
+                {                                                              
+                    cache.value.second = it->getMapped();                      
+                }                                                              
+            }                                                                  
+            else                                                               
+            {                                                                  
+                cache.value = key;                                             
+            }                                                                  
+        }                                                                      
+
+        if constexpr (has_mapped)                                              
+            return FindResult(it ? &it->getMapped() : nullptr, it != nullptr); 
+        else                                                                   
+            return FindResult(it != nullptr);
+    }
+
 };
 
 
