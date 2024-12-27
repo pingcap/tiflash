@@ -135,7 +135,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandle)
     auto [table_info, fields] = getNormalTableInfoFields({2, 3, 4}, true);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
+    for (auto _ : state) // NOLINT
     {
         decodeColumns(decoding_schema, true);
     }
@@ -149,7 +149,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandle)
     auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
+    for (auto _ : state) // NOLINT
     {
         decodeColumns(decoding_schema, true);
     }
@@ -162,7 +162,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandle)
     auto [table_info, fields] = getNormalTableInfoFields({2}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
+    for (auto _ : state) // NOLINT
     {
         decodeColumns(decoding_schema, true);
     }
