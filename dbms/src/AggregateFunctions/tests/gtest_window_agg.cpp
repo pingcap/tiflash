@@ -36,11 +36,11 @@ namespace DB
 {
 namespace tests
 {
-const String NULL_VALUE = "NULL";
-const String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
-const UInt32 CHARACTERS_LEN = CHARACTERS.size();
-constexpr int SCALE = 2;
-std::vector<String> input_decimal_in_string_vec{
+static const String NULL_VALUE = "NULL";
+static const String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
+static const UInt32 CHARACTERS_LEN = CHARACTERS.size();
+static constexpr int SCALE = 2;
+static std::vector<String> input_decimal_in_string_vec{
     "0",
     "71.94",
     "12.34",
@@ -58,7 +58,7 @@ std::vector<String> input_decimal_in_string_vec{
     "43.62",
     "33.33",
     "-90.72"};
-std::vector<String> input_decimal_in_string_vec_aux{
+static std::vector<String> input_decimal_in_string_vec_aux{
     "0",
     "7194",
     "1234",
@@ -76,8 +76,8 @@ std::vector<String> input_decimal_in_string_vec_aux{
     "4362",
     "3333",
     "-9072"};
-std::vector<Int64> input_int_vec{1, -2, 7, 4, 0, -3, -1, 0, 0, 9, 2, 0, -4, 2, 6, -3, 5};
-std::vector<Int64> input_decimal_vec{
+static std::vector<Int64> input_int_vec{1, -2, 7, 4, 0, -3, -1, 0, 0, 9, 2, 0, -4, 2, 6, -3, 5};
+static std::vector<Int64> input_decimal_vec{
     std::stoi(input_decimal_in_string_vec_aux[0]),
     std::stoi(input_decimal_in_string_vec_aux[1]),
     std::stoi(input_decimal_in_string_vec_aux[2]),
@@ -96,10 +96,10 @@ std::vector<Int64> input_decimal_vec{
     std::stoi(input_decimal_in_string_vec_aux[15]),
     std::stoi(input_decimal_in_string_vec_aux[16]),
 };
-std::vector<String> input_string_vec;
-std::vector<Int64> input_duration_vec{12, 43, 2, 0, 54, 23, 65, 76, 23, 12, 43, 56, 2, 2, 23, 54, 67};
+static std::vector<String> input_string_vec;
+static std::vector<Int64> input_duration_vec{12, 43, 2, 0, 54, 23, 65, 76, 23, 12, 43, 56, 2, 2, 23, 54, 67};
 
-std::vector<Int32> null_map{0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1};
+static std::vector<Int32> null_map{0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1};
 
 String eliminateTailing(String str)
 {
