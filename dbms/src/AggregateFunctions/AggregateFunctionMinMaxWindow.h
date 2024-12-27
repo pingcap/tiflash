@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionMinMaxAny.h>
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
@@ -35,6 +35,7 @@ private:
     using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
     mutable std::deque<T> * saved_values;
+
 public:
     SingleValueDataFixedForWindow()
         : saved_values(nullptr)
@@ -201,7 +202,7 @@ public:
     {
         if (saved_values != nullptr)
             saveValue(to.getStringRef());
-        
+
         return SingleValueDataString::changeIfLess(to, arena);
     }
 
@@ -210,7 +211,7 @@ public:
         if (saved_values != nullptr)
             saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
 
-        
+
         return SingleValueDataString::changeIfGreater(column, row_num, arena);
     }
 
@@ -228,6 +229,7 @@ struct SingleValueDataGenericForWindow : public SingleValueDataGeneric
 private:
     using Self = SingleValueDataGenericForWindow;
     mutable std::deque<Field> * saved_values;
+
 public:
     SingleValueDataGenericForWindow()
         : saved_values(nullptr)
@@ -378,7 +380,10 @@ struct AggregateFunctionMaxDataForWindow : Data
 
     void insertResultInto(IColumn & to) const { Data::insertMaxResultInto(to); }
 
-    bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeIfGreater(column, row_num, arena); }
+    bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
+    {
+        return this->changeIfGreater(column, row_num, arena);
+    }
 
     bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfGreater(to, arena); }
 

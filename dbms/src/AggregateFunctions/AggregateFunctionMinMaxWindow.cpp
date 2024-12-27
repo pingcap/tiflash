@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionMinMaxWindow.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/HelpersMinMaxAny.h>
-#include <AggregateFunctions/AggregateFunctionMinMaxWindow.h>
 
 namespace DB
 {
@@ -50,7 +50,13 @@ AggregateFunctionPtr createAggregateFunctionMaxForWindow(
 
 void registerAggregateFunctionsMinMaxForWindow(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("min_for_window", createAggregateFunctionMinForWindow, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction("max_for_window", createAggregateFunctionMaxForWindow, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(
+        "min_for_window",
+        createAggregateFunctionMinForWindow,
+        AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(
+        "max_for_window",
+        createAggregateFunctionMaxForWindow,
+        AggregateFunctionFactory::CaseInsensitive);
 }
 } // namespace DB
