@@ -52,7 +52,7 @@ public:
 
 protected:
     StorageDeltaMergePtr storage;
-    TableID table_id;
+    TableID table_id{0};
 };
 
 TEST_F(KVStoreSpillTest, CreateBlock)

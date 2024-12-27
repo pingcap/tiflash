@@ -1392,7 +1392,7 @@ void ExpressionAnalyzer::optimizeGroupBy()
         }
 
         select_query->group_expression_list = std::make_shared<ASTExpressionList>();
-        select_query->group_expression_list->children.emplace_back(std::make_shared<ASTLiteral>(UInt64(unused_column)));
+        select_query->group_expression_list->children.emplace_back(std::make_shared<ASTLiteral>(unused_column));
     }
 }
 

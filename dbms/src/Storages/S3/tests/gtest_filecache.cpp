@@ -192,8 +192,7 @@ protected:
     void waitForBgDownload(const FileCache & file_cache)
     {
         Stopwatch sw;
-        UInt64 downloading = 0;
-        while ((downloading = file_cache.bg_downloading_count.load(std::memory_order_relaxed)) > 0)
+        while (file_cache.bg_downloading_count.load(std::memory_order_relaxed) > 0)
         {
             std::this_thread::sleep_for(1000ms);
         }
