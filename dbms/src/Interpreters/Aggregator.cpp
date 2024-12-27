@@ -922,49 +922,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     /// Generic case.
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
     std::optional<size_t> processed_rows;
-
-#define HANDLE_AGG_EMPLACE_RESULT                                                                                   \
-    if unlikely (!emplace_result_holder.has_value())                                                                \
-    {                                                                                                               \
-        LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");         \
-        break;                                                                                                      \
-    }                                                                                                               \
-    auto & emplace_result = emplace_result_holder.value();                                                          \
-    if constexpr (only_lookup)                                                                                      \
-    {                                                                                                               \
-        if (emplace_result.isFound())                                                                               \
-        {                                                                                                           \
-            aggregate_data = emplace_result.getMapped();                                                            \
-        }                                                                                                           \
-        else                                                                                                        \
-        {                                                                                                           \
-            agg_process_info.not_found_rows.push_back(j);                                                           \
-        }                                                                                                           \
-    }                                                                                                               \
-    else                                                                                                            \
-    {                                                                                                               \
-        if (emplace_result.isInserted())                                                                            \
-        {                                                                                                           \
-            emplace_result.setMapped(nullptr);                                                                      \
-                                                                                                                    \
-            aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states); \
-            createAggregateStates(aggregate_data);                                                                  \
-                                                                                                                    \
-            emplace_result.setMapped(aggregate_data);                                                               \
-        }                                                                                                           \
-        else                                                                                                        \
-        {                                                                                                           \
-            aggregate_data = emplace_result.getMapped();                                                            \
-                                                                                                                    \
-            if constexpr (collect_hit_rate)                                                                         \
-                ++agg_process_info.hit_row_cnt;                                                                     \
-                                                                                                                    \
-            if constexpr (enable_prefetch)                                                                          \
-                __builtin_prefetch(aggregate_data);                                                                 \
-        }                                                                                                           \
-    }                                                                                                               \
-    places[j - agg_process_info.start_row] = aggregate_data;                                                        \
-    processed_rows = j;
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplace_result_holder;
 
     size_t i = agg_process_info.start_row;
     const size_t end = agg_process_info.start_row + rows;
@@ -994,18 +952,57 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                     hashvals,
                     key_holders);
 
-                auto emplace_result_holder
+                emplace_result_holder
                     = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
-
-                HANDLE_AGG_EMPLACE_RESULT
             }
             else
             {
-                auto emplace_result_holder
+                emplace_result_holder
                     = emplaceOrFindKey<only_lookup>(method, state, j, *aggregates_pool, sort_key_containers);
-
-                HANDLE_AGG_EMPLACE_RESULT
             }
+
+            if unlikely (!emplace_result_holder.has_value())                                                                
+            {                                                                                                               
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");         
+                break;                                                                                                      
+            }                                                                                                               
+
+            auto & emplace_result = emplace_result_holder.value();                                                          
+            if constexpr (only_lookup)                                                                                      
+            {                                                                                                               
+                if (emplace_result.isFound())                                                                               
+                {                                                                                                           
+                    aggregate_data = emplace_result.getMapped();                                                            
+                }                                                                                                           
+                else                                                                                                        
+                {                                                                                                           
+                    agg_process_info.not_found_rows.push_back(j);                                                           
+                }                                                                                                           
+            }                                                                                                               
+            else                                                                                                            
+            {                                                                                                               
+                if (emplace_result.isInserted())                                                                            
+                {                                                                                                           
+                    emplace_result.setMapped(nullptr);                                                                      
+
+                    aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states); 
+                    createAggregateStates(aggregate_data);                                                                  
+
+                    emplace_result.setMapped(aggregate_data);                                                               
+                }                                                                                                           
+                else                                                                                                        
+                {                                                                                                           
+                    aggregate_data = emplace_result.getMapped();                                                            
+
+                    if constexpr (collect_hit_rate)                                                                         
+                        ++agg_process_info.hit_row_cnt;                                                                     
+
+                    if constexpr (enable_prefetch)                                                                          
+                        __builtin_prefetch(aggregate_data);                                                                 
+                }                                                                                                           
+            }                                                                                                               
+            places[j - agg_process_info.start_row] = aggregate_data;                                                        
+            processed_rows = j;
         }
 
         if unlikely (!processed_rows.has_value())

@@ -60,24 +60,24 @@ struct LastElementCache<Data, false>
 template <typename Mapped>
 class EmplaceResultImpl
 {
-    Mapped & value;
-    Mapped & cached_value;
-    bool inserted;
+    Mapped * value = nullptr;
+    Mapped * cached_value = nullptr;
+    bool inserted = false;
 
 public:
     EmplaceResultImpl(Mapped & value_, Mapped & cached_value_, bool inserted_)
-        : value(value_)
-        , cached_value(cached_value_)
+        : value(&value_)
+        , cached_value(&cached_value_)
         , inserted(inserted_)
     {}
 
     bool isInserted() const { return inserted; }
-    auto & getMapped() const { return value; }
+    auto & getMapped() const { return *value; }
 
     void setMapped(const Mapped & mapped)
     {
-        cached_value = mapped;
-        value = mapped;
+        *cached_value = mapped;
+        *value = mapped;
     }
 };
 
