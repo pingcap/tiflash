@@ -440,7 +440,7 @@ SegmentPtr Segment::restoreSegment( //
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(fmt::format("while restoreSegment, segment_id={}", segment_id));
+        e.addMessage(fmt::format("while restoreSegment, segment_id={} ident={}", segment_id, parent_log->identifier()));
         e.rethrow();
     }
     RUNTIME_CHECK_MSG(false, "unreachable");
