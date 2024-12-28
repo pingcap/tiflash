@@ -71,7 +71,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     ColumnDefaults column_defaults;
     StoragePtr table;
 
-    auto table_expression = typeid_cast<const ASTTableExpression *>(ast.table_expression.get());
+    const auto * table_expression = typeid_cast<const ASTTableExpression *>(ast.table_expression.get());
 
     if (table_expression->subquery)
     {

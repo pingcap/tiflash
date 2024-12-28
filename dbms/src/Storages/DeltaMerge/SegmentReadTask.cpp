@@ -790,7 +790,7 @@ GlobalSegmentID SegmentReadTask::getGlobalSegmentID() const
 void SegmentReadTask::finishPagesPacketStream(
     std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream_resp)
 {
-    if unlikely (stream_resp == nullptr)
+    if (unlikely(stream_resp == nullptr))
         return;
 
     auto status = stream_resp->Finish();
