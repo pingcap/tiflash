@@ -312,8 +312,9 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
         lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
     }
 
-    if (lock_info) return lock_info;
-    
+    if (lock_info)
+        return lock_info;
+
     /// If there is no lock, leave scope of region scanner and raise LockException.
     /// Read raw KVs from region cache.
     RegionDataReadInfoList data_list_read;
