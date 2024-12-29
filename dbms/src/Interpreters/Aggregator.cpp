@@ -748,8 +748,8 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
 
 template <typename Method>
 ALWAYS_INLINE inline std::pair<typename Method::State::Derived::KeyHolderType, size_t> getCurrentHashAndDoPrefetch(
-    size_t cur_row_idx,
-    size_t start_row_idx,
+    size_t hashvals_idx,
+    size_t prefetch_row_idx,
     size_t end_row_idx,
     Method & method,
     typename Method::State & state,
@@ -759,9 +759,6 @@ ALWAYS_INLINE inline std::pair<typename Method::State::Derived::KeyHolderType, s
     std::vector<typename Method::State::Derived::KeyHolderType> & key_holders)
 {
     assert(hashvals.size() == agg_prefetch_step);
-
-    const auto hashvals_idx = (cur_row_idx - start_row_idx) % agg_prefetch_step;
-    const size_t prefetch_row_idx = cur_row_idx + agg_prefetch_step;
 
     const size_t cur_hashval = hashvals[hashvals_idx];
     auto cur_key_holder = std::move(key_holders[hashvals_idx]);
@@ -833,8 +830,8 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             if constexpr (enable_prefetch)
             {
                 auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
-                    i,
-                    agg_process_info.start_row,
+                    (i - agg_process_info.start_row) % 15,
+                    i + agg_prefetch_step,
                     end,
                     method,
                     state,
@@ -935,11 +932,12 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         for (size_t j = i; j < cur_batch_end; ++j)
         {
             AggregateDataPtr aggregate_data = nullptr;
+            const size_t relative_idx = j - agg_process_info.start_row;
             if constexpr (enable_prefetch)
             {
                 auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
-                    j,
-                    agg_process_info.start_row,
+                    relative_idx & 15,
+                    j + agg_prefetch_step,
                     end,
                     method,
                     state,
@@ -997,7 +995,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                         __builtin_prefetch(aggregate_data);
                 }
             }
-            places[j - agg_process_info.start_row] = aggregate_data;
+            places[relative_idx] = aggregate_data;
             processed_rows = j;
         }
 
