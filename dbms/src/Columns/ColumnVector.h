@@ -198,6 +198,16 @@ private:
         : data{il}
     {}
 
+    template <bool has_null>
+    void batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+
+    template <bool has_null>
+    void batchSerializeForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets) const;
+
 public:
     bool isNumeric() const override { return is_arithmetic_v<T>; }
 
@@ -317,31 +327,63 @@ public:
         return pos + sizeof(T);
     }
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const override
+    {
+        countSerializeByteSizeFast(byte_size);
+    }
+    void countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const override;
+
     void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &) const override
+    {
+        countSerializeByteSizeForColumnArrayFast(byte_size, array_offsets);
+    }
+    void countSerializeByteSizeForColumnArrayFast(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
-    template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+    void batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr &, String *) const override
+    {
+        batchSerializeFast(pos, start, length, has_null);
+    }
+    void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
-    void serializeToPosForColumnArray(
+    void batchSerializeForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override
+    {
+        batchSerializeForColumnArray(pos, start, length, has_null, array_offsets);
+    }
+    void batchSerializeForColumnArrayFast(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
-    template <bool has_null>
-    void serializeToPosForColumnArrayImpl(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        const IColumn::Offsets & array_offsets) const;
 
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
-    void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<char *> & pos,
+    void batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr &) override
+    {
+        batchDeserializeFast(pos, use_nt_align_buffer);
+    }
+    void batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
+
+    void batchDeserializeForColumnArray(
+        PaddedPODArray<const char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer,
+        const TiDB::TiDBCollatorPtr &) override
+    {
+        batchDeserializeForColumnArrayFast(pos, array_offsets, use_nt_align_buffer);
+    }
+    void batchDeserializeForColumnArrayFast(
+        PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;
 

@@ -56,6 +56,52 @@ int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) c
     return decimalLess<T>(b, a, other.scale, scale) ? 1 : (decimalLess<T>(a, b, scale, other.scale) ? -1 : 0);
 }
 
+ALWAYS_INLINE inline size_t getDecimal256BytesSize(const Decimal256 & val)
+{
+    return sizeof(bool) + sizeof(size_t) + val.value.backend().size() * sizeof(boost::multiprecision::limb_type);
+}
+
+ALWAYS_INLINE inline void serializeDecimal256Helper(char * & dst, const Decimal256 & data)
+{
+   const auto & val = data.value.backend();
+
+    const bool s = val.sign();
+    tiflash_compiler_builtin_memcpy(dst, &s, sizeof(bool));
+    dst += sizeof(bool);
+
+    const size_t limb_count = val.size();
+    tiflash_compiler_builtin_memcpy(dst, &limb_count, sizeof(size_t));
+    dst += sizeof(size_t);
+
+    const size_t limb_size = limb_count * sizeof(boost::multiprecision::limb_type);
+    // TODO or memcpy?
+    inline_memcpy(dst, val.limbs(), limb_size);
+    dst += limb_size;
+}
+
+ALWAYS_INLINE inline std::pair<Decimal256, const char *> deserializeDecimal256Helper(const char * ptr)
+{
+    /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
+    /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
+    Decimal256 value;
+    auto & val = value.value.backend();
+
+    size_t offset = 0;
+    bool s = unalignedLoad<bool>(ptr + offset);
+    offset += sizeof(bool);
+    auto limb_count = unalignedLoad<size_t>(ptr + offset);
+    offset += sizeof(size_t);
+
+    val.resize(limb_count, limb_count);
+    memcpy(val.limbs(), ptr + offset, limb_count * sizeof(boost::multiprecision::limb_type));
+    if (s != val.sign())
+        val.negate();
+    val.normalize();
+
+    return std::make_pair(value,
+        ptr + offset + limb_count * sizeof(boost::multiprecision::limb_type));
+}
+
 template <typename T>
 StringRef ColumnDecimal<T>::serializeValueIntoArena(
     size_t n,
@@ -66,24 +112,9 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(
 {
     if constexpr (is_Decimal256)
     {
-        /// serialize Decimal256 in `Non-trivial, Binary` way, the serialization logical is
-        /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L149
-        const typename T::NativeType::backend_type & val = data[n].value.backend();
-        bool s = val.sign();
-        size_t limb_count = val.size();
-
-        size_t mem_size = sizeof(bool) + sizeof(size_t) + limb_count * sizeof(boost::multiprecision::limb_type);
-
+        size_t mem_size = getDecimal256BytesSize(data[n]);
         auto * pos = arena.allocContinue(mem_size, begin);
-        auto * current_pos = pos;
-        memcpy(current_pos, &s, sizeof(bool));
-        current_pos += sizeof(bool);
-
-        memcpy(current_pos, &limb_count, sizeof(std::size_t));
-        current_pos += sizeof(size_t);
-
-        memcpy(current_pos, val.limbs(), limb_count * sizeof(boost::multiprecision::limb_type));
-
+        serializeDecimal256Helper(pos, data[n]);
         return StringRef(pos, mem_size);
     }
     else
@@ -99,25 +130,9 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 {
     if constexpr (is_Decimal256)
     {
-        /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
-        /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
-        T value;
-        auto & val = value.value.backend();
-
-        size_t offset = 0;
-        bool s = unalignedLoad<bool>(pos + offset);
-        offset += sizeof(bool);
-        auto limb_count = unalignedLoad<size_t>(pos + offset);
-        offset += sizeof(size_t);
-
-        val.resize(limb_count, limb_count);
-        memcpy(val.limbs(), pos + offset, limb_count * sizeof(boost::multiprecision::limb_type));
-        if (s != val.sign())
-            val.negate();
-        val.normalize();
-        data.push_back(value);
-
-        return pos + offset + limb_count * sizeof(boost::multiprecision::limb_type);
+        auto [val, ptr] = deserializeDecimal256Helper(pos);
+        data.push_back(std::move(val));
+        return ptr;
     }
     else
     {
@@ -127,17 +142,29 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
-void ColumnDecimal<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+template <bool fast_version>
+void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
-    for (size_t i = 0; i < size; ++i)
-        byte_size[i] += sizeof(T);
+    if constexpr (!fast_version && is_Decimal256)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            byte_size[i] += getDecimal256BytesSize(data[i]);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < size; ++i)
+            byte_size[i] += sizeof(T);
+    }
 }
 
 template <typename T>
-void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
+template <bool fast_version>
+void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
@@ -147,27 +174,30 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
         byte_size.size(),
         array_offsets.size());
 
-    size_t size = array_offsets.size();
-    for (size_t i = 0; i < size; ++i)
-        byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
-}
-
-template <typename T>
-void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
-{
-    if (has_null)
+    if constexpr (!fast_version && is_Decimal256)
     {
-        serializeToPosImpl<true>(pos, start, length);
+        size_t size = array_offsets.size();
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t cur_size = 0;
+            for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+            {
+                cur_size += getDecimal256BytesSize(data[j]);
+            }
+            byte_size[i] += cur_size;
+        }
     }
     else
     {
-        serializeToPosImpl<false>(pos, start, length);
+        size_t size = array_offsets.size();
+        for (size_t i = 0; i < size; ++i)
+            byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
     }
 }
 
 template <typename T>
-template <bool has_null>
-void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+template <bool has_null, bool fast_version>
+void ColumnDecimal<T>::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
@@ -179,32 +209,22 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
             if (pos[i] == nullptr)
                 continue;
         }
-        tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
-        pos[i] += sizeof(T);
+
+        if constexpr (!fast_version && is_Decimal256)
+        {
+            serializeDecimal256Helper(data[i], pos[i]);
+        }
+        else
+        {
+            tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
+            pos[i] += sizeof(T);
+        }
     }
 }
 
 template <typename T>
-void ColumnDecimal<T>::serializeToPosForColumnArray(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    const IColumn::Offsets & array_offsets) const
-{
-    if (has_null)
-    {
-        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
-    }
-    else
-    {
-        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
-    }
-}
-
-template <typename T>
-template <bool has_null>
-void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
+template <bool has_null, bool fast_version>
+void ColumnDecimal<T>::batchSerializeForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -230,27 +250,40 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
+
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        if (len <= 4)
+        if constexpr (!fast_version && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
-                tiflash_compiler_builtin_memcpy(
-                    pos[i] + j * sizeof(T),
-                    &data[array_offsets[start + i - 1] + j],
-                    sizeof(T));
+            {
+                serializeDecimal256Helper(pos[i], data[j]);
+            }
         }
         else
         {
-            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+            if (len <= 4)
+            {
+                for (size_t j = 0; j < len; ++j)
+                    tiflash_compiler_builtin_memcpy(
+                        pos[i] + j * sizeof(T),
+                        &data[array_offsets[start + i - 1] + j],
+                        sizeof(T));
+            }
+            else
+            {
+                inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+            }
+            pos[i] += len * sizeof(T);
         }
-        pos[i] += len * sizeof(T);
     }
 }
 
 template <typename T>
-void ColumnDecimal<T>::deserializeAndInsertFromPos(
-    PaddedPODArray<char *> & pos,
-    bool use_nt_align_buffer [[maybe_unused]])
+template <bool fast_version>
+void ColumnDecimal<T>::batchDeserializeImpl(
+    PaddedPODArray<const char *> & pos,
+    bool use_nt_align_buffer [[maybe_unused]],
+    const TiDB::TiDBCollatorPtr &)
 {
     size_t prev_size = data.size();
     size_t size = pos.size();
@@ -258,6 +291,8 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (use_nt_align_buffer)
     {
+        // TODO
+        RUNTIME_CHECK(!fast_version);
         if constexpr (FULL_VECTOR_SIZE_AVX2 % sizeof(T) == 0)
         {
             bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
@@ -334,19 +369,34 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
         use_nt_align_buffer);
 #endif
 
-    data.resize(prev_size + size);
-    for (size_t i = 0; i < size; ++i)
+    if constexpr (!fast_version && is_Decimal256)
     {
-        tiflash_compiler_builtin_memcpy(&data[prev_size + i], pos[i], sizeof(T));
-        pos[i] += sizeof(T);
+        data.reserve(prev_size + size);
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto [val, ptr] = deserializeDecimal256Helper(pos[i]);
+            pos[i] = ptr;
+            data.push_back(std::move(val));
+        }
+    }
+    else
+    {
+        data.resize(prev_size + size);
+        for (size_t i = 0; i < size; ++i)
+        {
+            tiflash_compiler_builtin_memcpy(&data[prev_size + i], pos[i], sizeof(T));
+            pos[i] += sizeof(T);
+        }
     }
 }
 
 template <typename T>
-void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
-    PaddedPODArray<char *> & pos,
+template <bool fast_version>
+void ColumnDecimal<T>::batchDeserializeForColumnArrayImpl(
+    PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
-    bool use_nt_align_buffer [[maybe_unused]])
+    bool use_nt_align_buffer [[maybe_unused]],
+    const TiDB::TiDBCollatorPtr &)
 {
     if unlikely (pos.empty())
         return;
@@ -369,19 +419,31 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        if (len <= 4)
+        if constexpr (!fast_version && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
-                tiflash_compiler_builtin_memcpy(
-                    &data[array_offsets[start_point + i - 1] + j],
-                    pos[i] + j * sizeof(T),
-                    sizeof(T));
+            {
+                auto [val, ptr] = deserializeDecimal256Helper(pos[i]);
+                data[array_offsets[start_point + i - 1]] = std::move(val);
+                pos[i] = ptr;
+            }
         }
         else
         {
-            inline_memcpy(&data[array_offsets[start_point + i - 1]], pos[i], len * sizeof(T));
+            if (len <= 4)
+            {
+                for (size_t j = 0; j < len; ++j)
+                    tiflash_compiler_builtin_memcpy(
+                        &data[array_offsets[start_point + i - 1] + j],
+                        pos[i] + j * sizeof(T),
+                        sizeof(T));
+            }
+            else
+            {
+                inline_memcpy(&data[array_offsets[start_point + i - 1]], pos[i], len * sizeof(T));
+            }
+            pos[i] += len * sizeof(T);
         }
-        pos[i] += len * sizeof(T);
     }
 }
 

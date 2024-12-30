@@ -59,7 +59,7 @@ StringRef ColumnVector<T>::serializeValueIntoArena(
 }
 
 template <typename T>
-void ColumnVector<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+void ColumnVector<T>::countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -69,7 +69,7 @@ void ColumnVector<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size)
 }
 
 template <typename T>
-void ColumnVector<T>::countSerializeByteSizeForColumnArray(
+void ColumnVector<T>::countSerializeByteSizeForColumnArrayFast(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
@@ -85,17 +85,17 @@ void ColumnVector<T>::countSerializeByteSizeForColumnArray(
 }
 
 template <typename T>
-void ColumnVector<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnVector<T>::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, length);
+        batchSerializeImpl<true>(pos, start, length);
     else
-        serializeToPosImpl<false>(pos, start, length);
+        batchSerializeImpl<false>(pos, start, length);
 }
 
 template <typename T>
 template <bool has_null>
-void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+void ColumnVector<T>::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
@@ -113,7 +113,7 @@ void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t st
 }
 
 template <typename T>
-void ColumnVector<T>::serializeToPosForColumnArray(
+void ColumnVector<T>::batchSerializeForColumnArrayFast(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -121,14 +121,14 @@ void ColumnVector<T>::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
+        batchSerializeForColumnArrayImpl<true>(pos, start, length, array_offsets);
     else
-        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
+        batchSerializeForColumnArrayImpl<false>(pos, start, length, array_offsets);
 }
 
 template <typename T>
 template <bool has_null>
-void ColumnVector<T>::serializeToPosForColumnArrayImpl(
+void ColumnVector<T>::batchSerializeForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -172,8 +172,8 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
 }
 
 template <typename T>
-void ColumnVector<T>::deserializeAndInsertFromPos(
-    PaddedPODArray<char *> & pos,
+void ColumnVector<T>::batchDeserializeFast(
+    PaddedPODArray<const char *> & pos,
     bool use_nt_align_buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
@@ -267,8 +267,8 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
 }
 
 template <typename T>
-void ColumnVector<T>::deserializeAndInsertFromPosForColumnArray(
-    PaddedPODArray<char *> & pos,
+void ColumnVector<T>::batchDeserializeForColumnArrayFast(
+    PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer [[maybe_unused]])
 {

@@ -54,6 +54,17 @@ private:
         , chars(src.chars.begin(), src.chars.end())
         , n(src.n){};
 
+
+    template <bool has_null>
+    void batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+
+    template <bool has_null>
+    void batchSerializeForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets) const;
+
 public:
     std::string getName() const override { return "FixedString(" + std::to_string(n) + ")"; }
     const char * getFamilyName() const override { return "FixedString"; }
@@ -104,31 +115,62 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const override;
+    void countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const override;
+
     void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr & collator) const override;
+    void countSerializeByteSizeForColumnArrayFast(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
-    template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+    void batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr & collator, String *) const override
+    {
+        // collator->sortKey() will change the string length, which may exceeds n. 
+        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchSerialize when collator is not null", getName());
+        batchSerializeFast(pos, start, length, has_null);
+    }
+    void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
-    void serializeToPosForColumnArray(
+    void batchSerializeForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr & collator,
+        String *) const override
+    {
+        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchSerializeForColumnArray when collator is not null", getName());
+        batchSerializeForColumnArrayFast(pos, start, length, has_null, array_offsets);
+    }
+    void batchSerializeForColumnArrayFast(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
-    template <bool has_null>
-    void serializeToPosForColumnArrayImpl(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        const IColumn::Offsets & array_offsets) const;
 
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
-    void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<char *> & pos,
+    void batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr & collator) override
+    {
+        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchDeserialize when collator is not null", getName());
+        batchDeserializeFast(pos, use_nt_align_buffer);
+    }
+    void batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
+
+    void batchDeserializeForColumnArray(
+        PaddedPODArray<const char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer,
+        const TiDB::TiDBCollatorPtr & collator) override
+    {
+        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchDeserializeForColumnArray when collator is not null", getName());
+        batchDeserializeForColumnArrayFast(pos, array_offsets, use_nt_align_buffer);
+    }
+    void batchDeserializeForColumnArrayFast(
+        PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;
 

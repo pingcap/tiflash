@@ -204,6 +204,11 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
 
+    size_t maxBytesForOneChar() const override
+    {
+        // BinCollator only trim right space.
+        return 1;
+    }
 private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
 
@@ -288,8 +293,9 @@ public:
         else
             v = std::string_view(s, length);
 
-        if (length * sizeof(WeightType) > container.size())
-            container.resize(length * sizeof(WeightType));
+        const auto max_bytes_one_char = maxBytesForOneChar();
+        if (length * max_bytes_one_char > container.size())
+            container.resize(length * max_bytes_one_char);
         size_t offset = 0;
         size_t total_size = 0;
         size_t v_length = v.length();
@@ -316,6 +322,11 @@ public:
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
+
+    size_t maxBytesForOneChar() const override
+    {
+        return sizeof(WeightType);
+    }
 
 private:
     const std::string name = "GeneralCI";
@@ -494,9 +505,9 @@ public:
         else
             v = std::string_view(s, length);
 
-        // every char have 8 uint16 at most.
-        if (8 * length * sizeof(uint16_t) > container.size())
-            container.resize(8 * length * sizeof(uint16_t));
+        const auto max_bytes_one_char = maxBytesForOneChar();
+        if (length * max_bytes_one_char > container.size())
+            container.resize(length * max_bytes_one_char);
         size_t offset = 0;
         size_t total_size = 0;
         size_t v_length = v.length();
@@ -531,6 +542,12 @@ public:
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<UCACICollator>>(); }
+
+    size_t maxBytesForOneChar() const override
+    {
+        // Every char have 8 uint16 at most.
+        return 8 * sizeof(uint16_t);
+    }
 
 private:
     const std::string name = "UnicodeCI";
