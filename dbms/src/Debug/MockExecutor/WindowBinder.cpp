@@ -19,6 +19,8 @@
 #include <Parsers/ASTFunction.h>
 #include <tipb/expression.pb.h>
 
+#include "TiDB/Schema/TiDBTypes.h"
+
 
 namespace DB::mock
 {
@@ -105,6 +107,11 @@ void setFieldTypeForAggFunc(
         ft->set_tp(expr->children(0).field_type().tp());
         ft->set_decimal(expr->children(0).field_type().decimal());
         ft->set_collate(collator_id);
+    }
+    else if (agg_sig == tipb::ExprType::Avg)
+    {
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(TiDB::TypeDouble);
     }
     else
     {
@@ -229,7 +236,8 @@ void setColumnInfoForAggInWindow(
         ci.tp = TiDB::TypeLongLong;
         ci.flag = TiDB::ColumnFlagUnsigned;
     }
-    else if (func->name == "max" || func->name == "min" || func->name == "sum")
+    else if (
+        func->name == "max_for_window" || func->name == "min_for_window" || func->name == "sum" || func->name == "avg")
     {
         ci = children_ci[0];
         ci.flag &= ~TiDB::ColumnFlagNotNull;

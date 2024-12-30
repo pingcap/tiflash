@@ -39,6 +39,7 @@ bool isAggFunctionExpr(const tipb::Expr & expr);
 bool isWindowFunctionExpr(const tipb::Expr & expr);
 const String & getFunctionName(const tipb::Expr & expr);
 const String & getAggFunctionName(const tipb::Expr & expr);
+const String & getAggFunctionNameForWindow(const tipb::Expr & expr);
 const String & getWindowFunctionName(const tipb::Expr & expr);
 String getExchangeTypeName(const tipb::ExchangeType & tp);
 String getJoinTypeName(const tipb::JoinType & tp);

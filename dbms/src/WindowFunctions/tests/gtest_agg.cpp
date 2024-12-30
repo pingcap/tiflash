@@ -26,30 +26,36 @@ namespace DB::tests
 struct TestCase
 {
     TestCase(
-        const String & agg_func_name_,
+        const ASTPtr & ast_func_,
         const std::vector<Int64> & start_offsets_,
         const std::vector<Int64> & end_offsets_,
         const std::vector<std::vector<std::optional<Int64>>> & results_,
+        const std::vector<std::vector<std::optional<Float64>>> & float_results_,
         bool is_range_frame_,
-        bool is_input_value_nullable_)
-        : agg_func_name(agg_func_name_)
+        bool is_input_value_nullable_,
+        bool is_return_type_int_ = true)
+        : ast_func(ast_func_)
         , start_offsets(start_offsets_)
         , end_offsets(end_offsets_)
         , results(results_)
+        , float_results(float_results_)
         , is_range_frame(is_range_frame_)
         , is_input_value_nullable(is_input_value_nullable_)
+        , is_return_type_int(is_return_type_int_)
         , test_case_num(start_offsets.size())
     {
         assert(test_case_num == end_offsets.size());
-        assert(test_case_num == results.size());
+        assert((test_case_num == results.size()) || (test_case_num == float_results.size()));
     }
 
-    String agg_func_name;
+    ASTPtr ast_func;
     std::vector<Int64> start_offsets;
     std::vector<Int64> end_offsets;
     std::vector<std::vector<std::optional<Int64>>> results;
+    std::vector<std::vector<std::optional<Float64>>> float_results;
     bool is_range_frame;
     bool is_input_value_nullable;
+    bool is_return_type_int;
     size_t test_case_num;
 };
 
@@ -86,6 +92,7 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
 
     for (size_t i = 0; i < test.test_case_num; i++)
     {
+        std::cout << fmt::format("--------test case idx: {}\n", i);
         if (test.is_range_frame)
         {
             frame.start = buildRangeFrameBound<Int64>(
@@ -113,9 +120,15 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
         else
             value_col_with_type_and_name = toVec<Int64>(int_value);
 
+        ColumnWithTypeAndName res;
+        if (test.is_return_type_int)
+            res = toNullableVec<Int64>(test.results[i]);
+        else
+            res = toNullableVec<Float64>(test.float_results[i]);
+
         executeFunctionAndAssert(
-            toNullableVec<Int64>(test.results[i]),
-            Sum(value_col),
+            res,
+            test.ast_func,
             {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
             frame);
     }
@@ -139,12 +152,10 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
 TEST_F(WindowAggFuncTest, Sum)
 try
 {
-    std::vector<Int64> start_offset;
-    std::vector<Int64> end_offset;
+    std::vector<Int64> start_offset{0, 1, 3, 10, 0, 0, 0, 3};
+    std::vector<Int64> end_offset{0, 0, 0, 0, 1, 3, 10, 3};
     std::vector<std::vector<std::optional<Int64>>> res;
 
-    start_offset = {0, 1, 3, 10, 0, 0, 0, 3};
-    end_offset = {0, 0, 0, 0, 1, 3, 10, 3};
     res
         = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
            {0, -1, -1, 4, 10, 2, 2, -4, -6, -1, 7, 4, 6, 0, -12, -1, 3, 4, -5, 2, 7, 5},
@@ -155,10 +166,8 @@ try
            {0, 9, 10, 10, 6, -3, -5, -5, -1, 1, 4, -3, 0, -9, 0, 3, 1, 4, -5, 7, 5, 0},
            {0, 9, 9, 9, 9, -4, -3, -3, -3, -5, 4, 1, 3, 4, -3, 0, -9, 4, -5, 7, 7, 7}};
 
-    executeTest(TestCase("sum", start_offset, end_offset, res, false, false));
+    executeTest(TestCase(Sum(value_col), start_offset, end_offset, res, {}, false, false));
 
-    start_offset = {0, 1, 3, 10, 0, 0, 0, 3};
-    end_offset = {0, 0, 0, 0, 1, 3, 10, 3};
     res
         = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
            {0, -1, -1, 4, 6, 2, 2, -4, -2, -1, 7, -3, 9, -9, -3, 2, 3, 4, -5, 2, 5, 0},
@@ -168,10 +177,8 @@ try
            {0, 3, 4, 10, 6, 2, -4, -6, -1, 1, 7, 6, 9, -9, -3, 3, 1, 4, -5, 2, 5, 0},
            {0, 9, 10, 10, 6, -3, -5, -5, -1, 1, 4, -3, 0, -12, -3, 3, 1, 4, -5, 7, 5, 0},
            {0, 3, 3, 9, 10, 2, -2, -6, -5, -1, 7, 6, 6, -9, -3, 3, 3, 4, -5, 2, 5, 0}};
-    executeTest(TestCase("sum", start_offset, end_offset, res, true, false));
+    executeTest(TestCase(Sum(value_col), start_offset, end_offset, res, {}, true, false));
 
-    start_offset = {0, 1, 3, 10, 0, 0, 0, 3};
-    end_offset = {0, 0, 0, 0, 1, 3, 10, 3};
     res
         = {{0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
            {0, -1, -1, {}, 6, 2, 2, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
@@ -181,28 +188,110 @@ try
            {0, -1, {}, 6, 6, 2, -4, -4, {}, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
            {0, 5, 6, 6, 6, -2, -4, -4, {}, {}, 16, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
            {0, -1, -1, 5, 6, 2, -2, -4, -4, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0}};
-    executeTest(TestCase("sum", start_offset, end_offset, res, true, true));
+    executeTest(TestCase(Sum(value_col), start_offset, end_offset, res, {}, true, true));
 }
 CATCH
 
 TEST_F(WindowAggFuncTest, Count)
 try
 {
-    // TODO add tests
+    std::vector<Int64> start_offset{0, 1, 3, 10, 0, 0, 0, 3};
+    std::vector<Int64> end_offset{0, 0, 0, 0, 1, 3, 10, 3};
+    std::vector<std::vector<std::optional<Int64>>> res;
+
+    res
+        = {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+           {1, 1, 2, 2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2},
+           {1, 1, 2, 3, 4, 1, 2, 3, 4, 4, 1, 2, 3, 4, 4, 4, 4, 1, 1, 1, 2, 3},
+           {1, 1, 2, 3, 4, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6, 7, 1, 1, 1, 2, 3},
+           {1, 2, 2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 1},
+           {1, 4, 3, 2, 1, 4, 4, 3, 2, 1, 4, 4, 4, 4, 3, 2, 1, 1, 1, 3, 2, 1},
+           {1, 4, 3, 2, 1, 5, 4, 3, 2, 1, 7, 6, 5, 4, 3, 2, 1, 1, 1, 3, 2, 1},
+           {1, 4, 4, 4, 4, 4, 5, 5, 5, 4, 4, 5, 6, 7, 6, 5, 4, 1, 1, 3, 3, 3}};
+
+    executeTest(TestCase(Count(value_col), start_offset, end_offset, res, {}, false, false));
+
+    res
+        = {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+           {1, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1},
+           {1, 1, 2, 3, 2, 1, 2, 2, 2, 2, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 1, 1},
+           {1, 1, 2, 3, 4, 1, 2, 3, 4, 5, 1, 2, 3, 4, 2, 1, 2, 1, 1, 1, 2, 1},
+           {1, 2, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1},
+           {1, 3, 2, 2, 1, 2, 2, 2, 2, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1},
+           {1, 4, 3, 2, 1, 5, 4, 3, 2, 1, 4, 3, 2, 2, 1, 2, 1, 1, 1, 2, 1, 1},
+           {1, 3, 3, 4, 2, 2, 3, 3, 3, 2, 1, 2, 2, 1, 1, 2, 2, 1, 1, 1, 1, 1}};
+    executeTest(TestCase(Count(value_col), start_offset, end_offset, res, {}, true, false));
+
+    res
+        = {{1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+           {1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+           {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+           {1, 1, 1, 1, 2, 1, 1, 2, 2, 2, 1, 1, 2, 2, 0, 0, 0, 1, 0, 1, 1, 1},
+           {1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+           {1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+           {1, 2, 1, 1, 1, 2, 1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+           {1, 1, 1, 2, 1, 1, 2, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1}};
+    executeTest(TestCase(Count(value_col), start_offset, end_offset, res, {}, true, true));
 }
 CATCH
 
 TEST_F(WindowAggFuncTest, Avg)
 try
 {
-    // TODO add tests
+    std::vector<Int64> start_offset;
+    std::vector<Int64> end_offset;
+    std::vector<std::vector<std::optional<Float64>>> res;
+
+    start_offset = {0, 1, 0};
+    end_offset = {0, 0, 1};
+    res
+        = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
+           {0, -1, -0.5, 2, 5, 2, 1, -2, -3, -0.5, 7, 2, 3, 0, -6, -0.5, 1.5, 4, -5, 2, 3.5, 2.5},
+           {0, -0.5, 2, 5, 6, 1, -2, -3, -0.5, 1, 2, 3, 0, -6, -0.5, 1.5, 1, 4, -5, 3.5, 2.5, 0}};
+
+    executeTest(TestCase(Avg(value_col), start_offset, end_offset, {}, res, false, false, false));
 }
 CATCH
 
 TEST_F(WindowAggFuncTest, Min)
 try
 {
-    // TODO add tests
+    std::vector<Int64> start_offset{0, 1, 3, 10, 0, 0, 0, 3};
+    std::vector<Int64> end_offset{0, 0, 0, 0, 1, 3, 10, 3};
+    std::vector<std::vector<std::optional<Int64>>> res;
+
+    res
+        = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
+           {0, -1, -1, 0, 4, 2, 0, -4, -4, -2, 7, -3, -3, -9, -9, -3, 1, 4, -5, 2, 2, 0},
+           {0, -1, -1, -1, -1, 2, 0, -4, -4, -4, 7, -3, -3, -9, -9, -9, -9, 4, -5, 2, 2, 0},
+           {0, -1, -1, -1, -1, 2, 0, -4, -4, -4, 7, -3, -3, -9, -9, -9, -9, 4, -5, 2, 2, 0},
+           {0, -1, 0, 4, 6, 0, -4, -4, -2, 1, -3, -3, -9, -9, -3, 1, 1, 4, -5, 2, 0, 0},
+           {0, -1, 0, 4, 6, -4, -4, -4, -2, 1, -9, -9, -9, -9, -3, 1, 1, 4, -5, 0, 0, 0},
+           {0, -1, 0, 4, 6, -4, -4, -4, -2, 1, -9, -9, -9, -9, -3, 1, 1, 4, -5, 0, 0, 0},
+           {0, -1, -1, -1, -1, -4, -4, -4, -4, -4, -9, -9, -9, -9, -9, -9, -9, 4, -5, 0, 0, 0}};
+    executeTest(TestCase(MinForWindow(value_col), start_offset, end_offset, res, {}, false, false));
+
+    res
+        = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
+           {0, -1, -1, 4, 6, 2, 0, -4, -2, -2, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
+           {0, -1, -1, -1, 4, 2, 0, -4, -4, -2, 7, -3, -3, -9, -3, 2, 1, 4, -5, 2, 5, 0},
+           {0, -1, -1, -1, -1, 2, 0, -4, -4, -4, 7, -3, -3, -9, -9, 2, 1, 4, -5, 2, 2, 0},
+           {0, -1, 0, 4, 6, 0, 0, -4, -2, 1, 7, -3, 9, -9, -3, 1, 1, 4, -5, 2, 5, 0},
+           {0, -1, 0, 4, 6, 0, -4, -4, -2, 1, 7, -3, 9, -9, -3, 1, 1, 4, -5, 2, 5, 0},
+           {0, -1, 0, 4, 6, -4, -4, -4, -2, 1, -9, -9, -9, -9, -3, 1, 1, 4, -5, 2, 5, 0},
+           {0, -1, -1, -1, 4, 0, -4, -4, -4, -2, 7, -3, -3, -9, -3, 1, 1, 4, -5, 2, 5, 0}};
+    executeTest(TestCase(MinForWindow(value_col), start_offset, end_offset, res, {}, true, false));
+
+    // res
+    //     = {{0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
+    //        {0, -1, -1, {}, 6, 2, 2, -4, -4, {}, 7, 7, 9, 9, {}, {}, {}, 4, {}, 2, 2, 0}, // TODO wrong, bug in range frame
+    //        {0, -1, -1, -1, -1, 2, 2, -4, -4, -4, 7, 7, 7, 7, 9, 9, {}, 4, {}, 2, 2, 0},
+    //        {0, -1, -1, -1, -1, 2, 2, -4, -4, -4, 7, 7, 7, 7, 7, 7, 7, 4, {}, 2, 2, 0},
+    //        {0, -1, {}, 6, 6, 2, -4, -4, {}, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 2, 0, 0},
+    //        {0, -1, 6, 6, 6, -4, -4, -4, {}, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 0, 0, 0},
+    //        {0, -1, 6, 6, 6, -4, -4, -4, {}, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 0, 0, 0},
+    //        {0, -1, -1, -1, -1, -4, -4, -4, -4, -4, 7, 7, 7, 7, 9, 9, {}, 4, {}, 0, 0, 0}};
+    // executeTest(TestCase(MinForWindow(value_col), start_offset, end_offset, res, {}, true, true));
 }
 CATCH
 

@@ -943,7 +943,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(
             buildWindowOrAggFuncImpl(
                 expr,
                 actions,
-                getAggFunctionName(expr),
+                getAggFunctionNameForWindow(expr),
                 window_description,
                 source_columns,
                 window_columns,

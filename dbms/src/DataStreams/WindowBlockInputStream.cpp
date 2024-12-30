@@ -325,6 +325,7 @@ void WindowTransformAction::initialAggregateFunction(
 
     workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
     aggregate_function->create(workspace.aggregate_function_state.data());
+    aggregate_function->prepareWindow(workspace.aggregate_function_state.data());
 }
 
 bool WindowBlockInputStream::returnIfCancelledOrKilled()

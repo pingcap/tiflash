@@ -49,6 +49,14 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::LastValue, "last_value"},
 });
 
+const std::unordered_map<tipb::ExprType, String> agg_func_map_for_window({
+    {tipb::ExprType::Count, "count"},
+    {tipb::ExprType::Sum, "sum"},
+    {tipb::ExprType::Avg, "avg"},
+    {tipb::ExprType::Min, "min_for_window"},
+    {tipb::ExprType::Max, "max_for_window"},
+});
+
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
@@ -775,6 +783,24 @@ const String & getAggFunctionName(const tipb::Expr & expr)
     {
         auto it = agg_func_map.find(expr.tp());
         if (it != agg_func_map.end())
+            return it->second;
+    }
+
+    throw TiFlashException(
+        Errors::Coprocessor::Unimplemented,
+        "{}(distinct={}) is not supported.",
+        tipb::ExprType_Name(expr.tp()),
+        expr.has_distinct());
+}
+
+const String & getAggFunctionNameForWindow(const tipb::Expr & expr)
+{
+    if (expr.has_distinct())
+        throw Exception("Aggregation function in window does not support distinct");
+    else
+    {
+        auto it = agg_func_map_for_window.find(expr.tp());
+        if (it != agg_func_map_for_window.end())
             return it->second;
     }
 
