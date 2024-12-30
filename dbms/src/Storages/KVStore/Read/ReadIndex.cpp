@@ -183,10 +183,11 @@ void WaitCheckRegionReadyImpl(
                     need_retry = false;
                 LOG_DEBUG(
                     log,
-                    "neglect error, region_id={} not_found={} epoch_not_match={}",
+                    "neglect error, region_id={} not_found={} epoch_not_match={} region_error={}",
                     region_id,
                     region_error.has_region_not_found(),
-                    region_error.has_epoch_not_match());
+                    region_error.has_epoch_not_match(),
+                    region_error.DebugString());
             }
             if (!need_retry)
             {

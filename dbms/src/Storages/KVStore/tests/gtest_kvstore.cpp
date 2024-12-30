@@ -643,7 +643,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         region->insert(
             "lock",
             RecordKVFormat::genKey(table_id, 3),
-            RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
+            RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20, nullptr, 5));
         region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         region->insert(
             "write",
@@ -656,8 +656,26 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
             auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_NE(lock, nullptr);
-            auto k = lock->intoLockInfo();
-            ASSERT_EQ(k->lock_version(), 3);
+            ASSERT_EQ(lock->lock_version(), 3);
+        }
+        {
+            // There is a lock, and could be bypassed.
+            std::unordered_set<UInt64> bypass = {3};
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({100, &bypass});
+            ASSERT_EQ(lock, nullptr);
+        }
+        {
+            // There is no lock.
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({2, nullptr});
+            ASSERT_EQ(lock, nullptr);
+        }
+        {
+            // The read ts is smaller than min_commit_ts, so this txn is not visible.
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({4, nullptr});
+            ASSERT_EQ(lock, nullptr);
         }
         {
             // The record is committed since there is a write record.
@@ -669,6 +687,30 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         ASSERT_EQ(0, region->writeCFCount());
         {
             region->remove("lock", RecordKVFormat::genKey(table_id, 3));
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({100, nullptr});
+            ASSERT_EQ(lock, nullptr);
+        }
+        region->clearAllData();
+    }
+    {
+        region->insert(
+            "lock",
+            RecordKVFormat::genKey(table_id, 3),
+            RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Lock, "PK", 3, 20, nullptr, 5));
+        {
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({100, nullptr});
+            ASSERT_EQ(lock, nullptr);
+        }
+        region->clearAllData();
+    }
+    {
+        region->insert(
+            "lock",
+            RecordKVFormat::genKey(table_id, 3),
+            RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Pessimistic, "PK", 3, 20, nullptr, 5));
+        {
             auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_EQ(lock, nullptr);

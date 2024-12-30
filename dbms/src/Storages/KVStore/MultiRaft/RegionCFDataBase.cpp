@@ -43,8 +43,8 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
-    auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto kv_pair = Trait::genKVPair(std::move(key), std::move(raw_key), std::move(value));
     if (!kv_pair)
         return 0;
 
@@ -63,18 +63,19 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
         auto iter = data.find(kv_pair.first);
         if (iter != data.end())
         {
+            // Could be a perssimistic lock is overwritten, or a old generation large txn lock is overwritten.
             added_size -= calcTiKVKeyValueSize(iter->second);
             data.erase(iter);
+
+            // In most cases, an optimistic lock replace a pessimistic lock.
+            GET_METRIC(tiflash_raft_process_keys, type_lock_replaced).Increment(1);
         }
-        else
+        if unlikely (is_large_txn)
         {
-            if unlikely (is_large_txn)
-            {
-                GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_put).Increment(1);
-            }
+            GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_put).Increment(1);
         }
     }
-    // according to the process of pessimistic lock, just overwrite.
+    // According to the process of pessimistic lock, just overwrite.
     data.emplace(std::move(kv_pair.first), std::move(kv_pair.second));
     return added_size;
 }
