@@ -150,7 +150,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         {
             for (const auto & c : all_cols)
             {
-                if (c.id == DB::TiDBPkColumnID || c.id == DB::VersionColumnID || c.id == DB::DelMarkColumnID)
+                if (c.id == DB::MutSup::extra_handle_id || c.id == DB::MutSup::version_col_id
+                    || c.id == DB::MutSup::delmark_col_id)
                     cols_to_dump.emplace_back(c);
             }
         }

@@ -485,7 +485,7 @@ try
     // does not have index at all.
     {
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(EXTRA_HANDLE_COLUMN_ID);
+        ann_query_info->set_column_id(MutSup::extra_handle_id);
         ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
@@ -1159,7 +1159,7 @@ public:
     {
         auto options = SegmentTestBasic::SegmentTestOptions{};
         if (enable_column_cache_long_term)
-            options.pk_col_id = EXTRA_HANDLE_COLUMN_ID;
+            options.pk_col_id = MutSup::extra_handle_id;
         SegmentTestBasic::SetUp(options);
     }
 

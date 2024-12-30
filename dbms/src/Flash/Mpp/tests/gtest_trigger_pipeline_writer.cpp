@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Coprocessor/WaitResult.h>

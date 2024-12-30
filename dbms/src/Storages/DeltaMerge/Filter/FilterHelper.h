@@ -24,9 +24,10 @@ namespace DB::DM
 inline RSOperatorPtr toFilter(RowKeyRange & rowkey_range)
 {
     Attr handle_attr = {
-        EXTRA_HANDLE_COLUMN_NAME,
-        EXTRA_HANDLE_COLUMN_ID,
-        rowkey_range.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE,
+        MutSup::extra_handle_column_name,
+        MutSup::extra_handle_id,
+        rowkey_range.is_common_handle ? MutSup::getExtraHandleColumnStringType()
+                                      : MutSup::getExtraHandleColumnIntType(),
     };
     if (rowkey_range.is_common_handle)
     {

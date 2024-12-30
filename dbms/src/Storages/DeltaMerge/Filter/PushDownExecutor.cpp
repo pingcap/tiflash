@@ -87,9 +87,11 @@ PushDownExecutorPtr PushDownExecutor::build(
             source_columns_of_analyzer.emplace_back(col_name, data_type);
             continue;
         }
-        if (cid == EXTRA_TABLE_ID_COLUMN_ID)
+        if (cid == MutSup::extra_table_id_col_id)
         {
-            source_columns_of_analyzer.emplace_back(EXTRA_TABLE_ID_COLUMN_NAME, EXTRA_TABLE_ID_COLUMN_TYPE);
+            source_columns_of_analyzer.emplace_back(
+                MutSup::extra_table_id_column_name,
+                MutSup::getExtraTableIdColumnType());
             continue;
         }
         RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
@@ -146,7 +148,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         for (size_t i = 0; i < table_scan_column_info.size(); ++i)
         {
             if (table_scan_column_info[i].hasGeneratedColumnFlag()
-                || table_scan_column_info[i].id == EXTRA_TABLE_ID_COLUMN_ID)
+                || table_scan_column_info[i].id == MutSup::extra_table_id_col_id)
                 continue;
             auto col = columns_to_read_map.at(table_scan_column_info[i].id);
             RUNTIME_CHECK_MSG(
