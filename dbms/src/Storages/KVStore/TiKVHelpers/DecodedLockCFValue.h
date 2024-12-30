@@ -17,31 +17,48 @@
 #include <Common/Exception.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Read/RegionLockInfo.h>
 
 namespace DB::RecordKVFormat
 {
 
 struct DecodedLockCFValue : boost::noncopyable
 {
+    struct Inner
+    {
+        std::string_view secondaries;
+        std::string_view primary_lock;
+        UInt64 lock_version{0};
+        UInt64 lock_ttl{0};
+        UInt64 txn_size{0};
+        UInt64 lock_for_update_ts{0};
+        UInt64 min_commit_ts{0};
+        UInt64 generation{0}; // For large txn, generation is not zero.
+        kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
+        bool use_async_commit{false};
+        bool is_txn_file{false};
+        /// Set `res` if the `query` could be blocked by this lock. Otherwise `set` res to nullptr.
+        void getLockInfoPtr(
+            const RegionLockReadQuery & query,
+            const std::shared_ptr<const TiKVKey> & key,
+            LockInfoPtr & res) const;
+        void intoLockInfo(const std::shared_ptr<const TiKVKey> & key, kvrpcpb::LockInfo &) const;
+    };
     DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_);
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
     void intoLockInfo(kvrpcpb::LockInfo &) const;
     bool isLargeTxn() const;
+    void withInner(std::function<void(const Inner &)> && f) const;
+    /// Return LockInfoPtr if the `query` could be blocked by this lock. Otherwise return nullptr.
+    LockInfoPtr getLockInfoPtr(const RegionLockReadQuery & query) const;
 
     std::shared_ptr<const TiKVKey> key;
     std::shared_ptr<const TiKVValue> val;
-    UInt64 lock_version{0};
-    UInt64 lock_ttl{0};
-    UInt64 txn_size{0};
-    UInt64 lock_for_update_ts{0};
-    kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
-    bool use_async_commit{0};
-    UInt64 min_commit_ts{0};
-    std::string_view secondaries;
-    std::string_view primary_lock;
-    bool is_txn_file{0};
-    // For large txn, generation is not zero.
-    UInt64 generation{0};
+
+private:
+    static std::unique_ptr<DecodedLockCFValue::Inner> decodeLockCfValue(const DecodedLockCFValue & decoded);
+    // Avoid using shared_ptr to reduce space.
+    std::unique_ptr<Inner> inner{nullptr};
 };
 
 } // namespace DB::RecordKVFormat

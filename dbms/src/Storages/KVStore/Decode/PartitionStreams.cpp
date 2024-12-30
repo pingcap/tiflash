@@ -273,68 +273,62 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     bool resolve_locks,
     bool need_data_value)
 {
-    RegionDataReadInfoList data_list_read;
-    DecodedLockCFValuePtr lock_value;
+    LockInfoPtr lock_info;
+
+    auto scanner = region->createCommittedScanner(true, need_data_value);
+
+    /// Some sanity checks for region meta.
     {
-        auto scanner = region->createCommittedScanner(true, need_data_value);
+        /**
+         * special check: when source region is merging, read_index can not guarantee the behavior about target region.
+         * Reject all read request for safety.
+         * Only when region is Normal can continue read process.
+         */
+        if (region->peerState() != raft_serverpb::PeerState::Normal)
+            return RegionException::RegionReadStatus::NOT_FOUND;
 
-        /// Some sanity checks for region meta.
-        {
-            /**
-             * special check: when source region is merging, read_index can not guarantee the behavior about target region.
-             * Reject all read request for safety.
-             * Only when region is Normal can continue read process.
-             */
-            if (region->peerState() != raft_serverpb::PeerState::Normal)
-                return RegionException::RegionReadStatus::NOT_FOUND;
+        const auto & meta_snap = region->dumpRegionMetaSnapshot();
+        // No need to check conf_version if its peer state is normal
+        std::ignore = conf_version;
+        if (meta_snap.ver != region_version)
+            return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
 
-            const auto & meta_snap = region->dumpRegionMetaSnapshot();
-            // No need to check conf_version if its peer state is normal
-            std::ignore = conf_version;
-            if (meta_snap.ver != region_version)
-                return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
-
-            // todo check table id
-            TableID mapped_table_id;
-            if (!computeMappedTableID(*meta_snap.range->rawKeys().first, mapped_table_id)
-                || mapped_table_id != table_id)
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "Should not happen, region not belong to table, table_id={} expect_table_id={}",
-                    mapped_table_id,
-                    table_id);
-        }
-
-        /// Deal with locks.
-        if (resolve_locks)
-        {
-            /// Check if there are any lock should be resolved, if so, throw LockException.
-            lock_value
-                = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
-        }
-
-        /// If there is no lock, leave scope of region scanner and raise LockException.
-        /// Read raw KVs from region cache.
-        if (!lock_value)
-        {
-            // Shortcut for empty region.
-            if (!scanner.hasNext())
-                return data_list_read;
-
-            // If worked with raftstore v2, the final size may not equal to here.
-            data_list_read.reserve(scanner.writeMapSize());
-
-            // Tiny optimization for queries that need only handle, tso, delmark.
-            do
-            {
-                data_list_read.emplace_back(scanner.next());
-            } while (scanner.hasNext());
-        }
+        // todo check table id
+        TableID mapped_table_id;
+        if (!computeMappedTableID(*meta_snap.range->rawKeys().first, mapped_table_id) || mapped_table_id != table_id)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Should not happen, region not belong to table, table_id={} expect_table_id={}",
+                mapped_table_id,
+                table_id);
     }
 
-    if (lock_value)
-        return lock_value->intoLockInfo();
+    /// Deal with locks.
+    if (resolve_locks)
+    {
+        /// Check if there are any lock should be resolved, if so, throw LockException.
+        /// It will iterate all locks with in the time range.
+        lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
+    }
 
+    if (lock_info)
+        return lock_info;
+
+    /// If there is no lock, leave scope of region scanner and raise LockException.
+    /// Read raw KVs from region cache.
+    RegionDataReadInfoList data_list_read;
+    // Shortcut for empty region.
+    if (!scanner.hasNext())
+        return data_list_read;
+
+    // If worked with raftstore v2, the final size may not equal to here.
+    data_list_read.reserve(scanner.writeMapSize());
+
+    // Tiny optimization for queries that need only handle, tso, delmark.
+    do
+    {
+        data_list_read.emplace_back(scanner.next());
+    } while (scanner.hasNext());
     return data_list_read;
 }
 
@@ -388,12 +382,16 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 {
     /// Remove data in region.
     auto remover = region->createCommittedRemover(lock_region);
+    size_t remove_committed_count = 0;
     for (const auto & [handle, write_type, commit_ts, value] : data_list_read)
     {
         std::ignore = write_type;
         std::ignore = value;
-        remover.remove({handle, commit_ts});
+        // Effectively calls `RegionData::removeDataByWriteIt`.
+        if (remover.remove({handle, commit_ts}))
+            remove_committed_count++;
     }
+    GET_METRIC(tiflash_raft_process_keys, type_write_remove).Increment(remove_committed_count);
 }
 
 // ParseTS parses the ts to (physical,logical).
