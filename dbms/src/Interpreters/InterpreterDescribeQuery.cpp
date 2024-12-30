@@ -71,7 +71,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     ColumnDefaults column_defaults;
     StoragePtr table;
 
-    auto table_expression = typeid_cast<const ASTTableExpression *>(ast.table_expression.get());
+    const auto * table_expression = typeid_cast<const ASTTableExpression *>(ast.table_expression.get());
 
     if (table_expression->subquery)
     {
@@ -82,7 +82,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     {
         if (table_expression->table_function)
         {
-            auto table_function = typeid_cast<const ASTFunction *>(table_expression->table_function.get());
+            const auto * table_function = typeid_cast<const ASTFunction *>(table_expression->table_function.get());
             /// Get the table function
             TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(table_function->name, context);
             /// Run it and remember the result
@@ -123,7 +123,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     Block sample_block = getSampleBlock();
     MutableColumns res_columns = sample_block.cloneEmptyColumns();
 
-    const OrderedNameSet filtered_names = MutableSupport::instance().hiddenColumns(table->getName());
+    const OrderedNameSet filtered_names = MutSup::instance().hiddenColumns(table->getName());
 
     for (const auto & column : columns)
     {

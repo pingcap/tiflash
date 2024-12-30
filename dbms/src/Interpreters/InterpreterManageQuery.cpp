@@ -28,7 +28,7 @@ BlockIO InterpreterManageQuery::execute()
 
     StoragePtr table = context.getTable(ast.database, ast.table);
     StorageDeltaMerge * manageable_storage;
-    if (table->getName() == MutableSupport::delta_tree_storage_name)
+    if (table->getName() == MutSup::delta_tree_storage_name)
     {
         manageable_storage = &dynamic_cast<StorageDeltaMerge &>(*table);
     }

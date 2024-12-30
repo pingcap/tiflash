@@ -62,7 +62,7 @@ DMFileWriter::DMFileWriter(
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
-        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
+        bool do_index = cd.id == MutSup::extra_handle_id || type->isInteger() || type->isDateOrDateTime();
 
         addStreams(cd.id, cd.type, do_index);
         dmfile->meta->getColumnStats().emplace(
@@ -142,7 +142,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     stat.not_clean = block_property.not_clean_rows;
     stat.bytes = block.bytes(); // This is bytes of pack data in memory.
 
-    auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
+    auto del_mark_column = tryGetByColumnId(block, MutSup::delmark_col_id).column;
 
     const ColumnVector<UInt8> * del_mark
         = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
@@ -152,9 +152,9 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
         const auto & col = getByColumnId(block, cd.id).column;
         writeColumn(cd.id, *cd.type, *col, del_mark);
 
-        if (cd.id == VERSION_COLUMN_ID)
+        if (cd.id == MutSup::version_col_id)
             stat.first_version = col->get64(0);
-        else if (cd.id == TAG_COLUMN_ID)
+        else if (cd.id == MutSup::delmark_col_id)
             stat.first_tag = static_cast<UInt8>(col->get64(0));
     }
 
@@ -204,12 +204,12 @@ void DMFileWriter::writeColumn(
             auto & stream = column_streams.at(name);
             if (stream->minmaxes)
             {
-                // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
+                // For MutSup::extra_handle_id, we ignore del_mark when add minmax index.
                 // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
                 // For TAG Column, we also ignore del_mark when add minmax index.
                 stream->minmaxes->addPack(
                     column,
-                    (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
+                    (col_id == MutSup::extra_handle_id || col_id == MutSup::delmark_col_id) ? nullptr : del_mark);
             }
 
             /// There could already be enough data to compress into the new block.
