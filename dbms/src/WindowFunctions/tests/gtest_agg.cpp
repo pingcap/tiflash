@@ -23,12 +23,44 @@
 
 namespace DB::tests
 {
+struct TestCase
+{
+    TestCase(
+        const String & agg_func_name_,
+        const std::vector<Int64> & start_offsets_,
+        const std::vector<Int64> & end_offsets_,
+        const std::vector<std::vector<std::optional<Int64>>> & results_,
+        bool is_range_frame_,
+        bool is_input_value_nullable_)
+        : agg_func_name(agg_func_name_)
+        , start_offsets(start_offsets_)
+        , end_offsets(end_offsets_)
+        , results(results_)
+        , is_range_frame(is_range_frame_)
+        , is_input_value_nullable(is_input_value_nullable_)
+        , test_case_num(start_offsets.size())
+    {
+        assert(test_case_num == end_offsets.size());
+        assert(test_case_num == results.size());
+    }
+
+    String agg_func_name;
+    std::vector<Int64> start_offsets;
+    std::vector<Int64> end_offsets;
+    std::vector<std::vector<std::optional<Int64>>> results;
+    bool is_range_frame;
+    bool is_input_value_nullable;
+    size_t test_case_num;
+};
+
 class WindowAggFuncTest : public DB::tests::WindowTest
 {
 public:
     const ASTPtr value_col = col(VALUE_COL_NAME);
 
     void initializeContext() override { ExecutorTest::initializeContext(); }
+
+    void executeTest(const TestCase & test);
 
 protected:
     static std::vector<Int64> partition;
@@ -43,6 +75,51 @@ std::vector<Int64> WindowAggFuncTest::int_value
     = {0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0};
 std::vector<std::optional<Int64>> WindowAggFuncTest::int_nullable_value
     = {0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0};
+
+void WindowAggFuncTest::executeTest(const TestCase & test)
+{
+    MockWindowFrame frame;
+    if (test.is_range_frame)
+        frame.type = tipb::WindowFrameType::Ranges;
+    else
+        frame.type = tipb::WindowFrameType::Rows;
+
+    for (size_t i = 0; i < test.test_case_num; i++)
+    {
+        if (test.is_range_frame)
+        {
+            frame.start = buildRangeFrameBound<Int64>(
+                tipb::WindowBoundType::Preceding,
+                tipb::RangeCmpDataType::Int,
+                ORDER_COL_NAME,
+                false,
+                test.start_offsets[i]);
+            frame.end = buildRangeFrameBound<Int64>(
+                tipb::WindowBoundType::Following,
+                tipb::RangeCmpDataType::Int,
+                ORDER_COL_NAME,
+                true,
+                test.end_offsets[i]);
+        }
+        else
+        {
+            frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, test.start_offsets[i]);
+            frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, test.end_offsets[i]);
+        }
+
+        ColumnWithTypeAndName value_col_with_type_and_name;
+        if (test.is_input_value_nullable)
+            value_col_with_type_and_name = toNullableVec<Int64>(int_nullable_value);
+        else
+            value_col_with_type_and_name = toVec<Int64>(int_value);
+
+        executeFunctionAndAssert(
+            toNullableVec<Int64>(test.results[i]),
+            Sum(value_col),
+            {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
+            frame);
+    }
+}
 
 // TODO test frame position list:
 // 1. prev_start = frame_start, prev_end = frame_end
@@ -62,190 +139,49 @@ std::vector<std::optional<Int64>> WindowAggFuncTest::int_nullable_value
 TEST_F(WindowAggFuncTest, Sum)
 try
 {
-    {
-        // rows frame
-        MockWindowFrame frame;
-        frame.type = tipb::WindowFrameType::Rows;
-        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
-        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
-        std::vector<Int64> frame_end_offset{1, 3, 10};
+    std::vector<Int64> start_offset;
+    std::vector<Int64> end_offset;
+    std::vector<std::vector<std::optional<Int64>>> res;
 
-        std::vector<std::vector<std::optional<Int64>>> res{
-            {0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
-            {0, -1, -1, 4, 10, 2, 2, -4, -6, -1, 7, 4, 6, 0, -12, -1, 3, 4, -5, 2, 7, 5},
-            {0, -1, -1, 3, 9, 2, 2, -2, -4, -5, 7, 4, 13, 4, -6, -1, -9, 4, -5, 2, 7, 7},
-            {0, -1, -1, 3, 9, 2, 2, -2, -4, -3, 7, 4, 13, 4, 1, 3, 4, 4, -5, 2, 7, 7}};
+    start_offset = {0, 1, 3, 10, 0, 0, 0, 3};
+    end_offset = {0, 0, 0, 0, 1, 3, 10, 3};
+    res
+        = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
+           {0, -1, -1, 4, 10, 2, 2, -4, -6, -1, 7, 4, 6, 0, -12, -1, 3, 4, -5, 2, 7, 5},
+           {0, -1, -1, 3, 9, 2, 2, -2, -4, -5, 7, 4, 13, 4, -6, -1, -9, 4, -5, 2, 7, 7},
+           {0, -1, -1, 3, 9, 2, 2, -2, -4, -3, 7, 4, 13, 4, 1, 3, 4, 4, -5, 2, 7, 7},
+           {0, -1, 4, 10, 6, 2, -4, -6, -1, 1, 4, 6, 0, -12, -1, 3, 1, 4, -5, 7, 5, 0},
+           {0, 9, 10, 10, 6, -4, -5, -5, -1, 1, 4, -6, -1, -9, 0, 3, 1, 4, -5, 7, 5, 0},
+           {0, 9, 10, 10, 6, -3, -5, -5, -1, 1, 4, -3, 0, -9, 0, 3, 1, 4, -5, 7, 5, 0},
+           {0, 9, 9, 9, 9, -4, -3, -3, -3, -5, 4, 1, 3, 4, -3, 0, -9, 4, -5, 7, 7, 7}};
 
-        for (size_t i = 0; i < frame_start_offset.size(); ++i)
-        {
-            frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
+    executeTest(TestCase("sum", start_offset, end_offset, res, false, false));
 
-            executeFunctionAndAssert(
-                toNullableVec<Int64>(res[i]),
-                Sum(value_col),
-                {toVec<Int64>(partition), toVec<Int64>(order), toVec<Int64>(int_value)},
-                frame);
-        }
+    start_offset = {0, 1, 3, 10, 0, 0, 0, 3};
+    end_offset = {0, 0, 0, 0, 1, 3, 10, 3};
+    res
+        = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
+           {0, -1, -1, 4, 6, 2, 2, -4, -2, -1, 7, -3, 9, -9, -3, 2, 3, 4, -5, 2, 5, 0},
+           {0, -1, -1, 3, 10, 2, 2, -4, -6, -1, 7, -3, 6, -9, -3, 2, 3, 4, -5, 2, 5, 0},
+           {0, -1, -1, 3, 9, 2, 2, -2, -4, -3, 7, 4, 13, 4, -12, 2, 3, 4, -5, 2, 7, 0},
+           {0, -1, 0, 4, 6, 2, 0, -4, -1, 1, 7, -3, 9, -9, -3, 3, 1, 4, -5, 2, 5, 0},
+           {0, 3, 4, 10, 6, 2, -4, -6, -1, 1, 7, 6, 9, -9, -3, 3, 1, 4, -5, 2, 5, 0},
+           {0, 9, 10, 10, 6, -3, -5, -5, -1, 1, 4, -3, 0, -12, -3, 3, 1, 4, -5, 7, 5, 0},
+           {0, 3, 3, 9, 10, 2, -2, -6, -5, -1, 7, 6, 6, -9, -3, 3, 3, 4, -5, 2, 5, 0}};
+    executeTest(TestCase("sum", start_offset, end_offset, res, true, false));
 
-        res
-            = {{0, -1, 4, 10, 6, 2, -4, -6, -1, 1, 4, 6, 0, -12, -1, 3, 1, 4, -5, 7, 5, 0},
-               {0, 9, 10, 10, 6, -4, -5, -5, -1, 1, 4, -6, -1, -9, 0, 3, 1, 4, -5, 7, 5, 0},
-               {0, 9, 10, 10, 6, -3, -5, -5, -1, 1, 4, -3, 0, -9, 0, 3, 1, 4, -5, 7, 5, 0}};
-
-        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
-        for (size_t i = 0; i < frame_end_offset.size(); ++i)
-        {
-            frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, frame_end_offset[i]);
-
-            executeFunctionAndAssert(
-                toNullableVec<Int64>(res[i]),
-                Sum(value_col),
-                {toVec<Int64>(partition), toVec<Int64>(order), toVec<Int64>(int_value)},
-                frame);
-        }
-    }
-
-    {
-        // range frame without null
-        MockWindowFrame frame;
-        frame.type = tipb::WindowFrameType::Ranges;
-        frame.start = buildRangeFrameBound<Int64>(
-            tipb::WindowBoundType::Preceding,
-            tipb::RangeCmpDataType::Int,
-            ORDER_COL_NAME,
-            false,
-            0);
-        frame.end = buildRangeFrameBound<Int64>(
-            tipb::WindowBoundType::Following,
-            tipb::RangeCmpDataType::Int,
-            ORDER_COL_NAME,
-            true,
-            0);
-
-        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
-        std::vector<Int64> frame_end_offset{1, 3, 10};
-
-        std::vector<std::vector<std::optional<Int64>>> res{
-            {0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
-            {0, -1, -1, 4, 6, 2, 2, -4, -2, -1, 7, -3, 9, -9, -3, 2, 3, 4, -5, 2, 5, 0},
-            {0, -1, -1, 3, 10, 2, 2, -4, -6, -1, 7, -3, 6, -9, -3, 2, 3, 4, -5, 2, 5, 0},
-            {0, -1, -1, 3, 9, 2, 2, -2, -4, -3, 7, 4, 13, 4, -12, 2, 3, 4, -5, 2, 7, 0}};
-
-        for (size_t i = 0; i < frame_start_offset.size(); i++)
-        {
-            frame.start = buildRangeFrameBound<Int64>(
-                tipb::WindowBoundType::Preceding,
-                tipb::RangeCmpDataType::Int,
-                ORDER_COL_NAME,
-                false,
-                frame_start_offset[i]);
-
-            executeFunctionAndAssert(
-                toNullableVec<Int64>(res[i]),
-                Sum(value_col),
-                {toVec<Int64>(partition), toVec<Int64>(order), toVec<Int64>(int_value)},
-                frame);
-        }
-
-        res
-            = {{0, -1, 0, 4, 6, 2, 0, -4, -1, 1, 7, -3, 9, -9, -3, 3, 1, 4, -5, 2, 5, 0},
-               {0, 3, 4, 10, 6, 2, -4, -6, -1, 1, 7, 6, 9, -9, -3, 3, 1, 4, -5, 2, 5, 0},
-               {0, 9, 10, 10, 6, -3, -5, -5, -1, 1, 4, -3, 0, -12, -3, 3, 1, 4, -5, 7, 5, 0}};
-
-        frame.start = buildRangeFrameBound<Int64>(
-            tipb::WindowBoundType::Preceding,
-            tipb::RangeCmpDataType::Int,
-            ORDER_COL_NAME,
-            false,
-            0);
-
-        for (size_t i = 0; i < frame_end_offset.size(); i++)
-        {
-            frame.end = buildRangeFrameBound<Int64>(
-                tipb::WindowBoundType::Following,
-                tipb::RangeCmpDataType::Int,
-                ORDER_COL_NAME,
-                true,
-                frame_end_offset[i]);
-
-            executeFunctionAndAssert(
-                toNullableVec<Int64>(res[i]),
-                Sum(value_col),
-                {toVec<Int64>(partition), toVec<Int64>(order), toVec<Int64>(int_value)},
-                frame);
-        }
-    }
-
-    {
-        // range frame with null
-        MockWindowFrame frame;
-        frame.type = tipb::WindowFrameType::Ranges;
-        frame.start = buildRangeFrameBound<Int64>(
-            tipb::WindowBoundType::Preceding,
-            tipb::RangeCmpDataType::Int,
-            ORDER_COL_NAME,
-            false,
-            0);
-        frame.end = buildRangeFrameBound<Int64>(
-            tipb::WindowBoundType::Following,
-            tipb::RangeCmpDataType::Int,
-            ORDER_COL_NAME,
-            true,
-            0);
-
-        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
-        std::vector<Int64> frame_end_offset{1, 3, 10};
-
-        std::vector<std::vector<std::optional<Int64>>> res{
-            {0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
-            {0, -1, -1, {}, 6, 2, 2, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
-            {0, -1, -1, -1, 6, 2, 2, -4, -4, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
-            {0, -1, -1, -1, 5, 2, 2, -2, -2, -2, 7, 7, 16, 16, {}, {}, {}, 4, {}, 2, 2, 0}};
-
-        for (size_t i = 0; i < frame_start_offset.size(); i++)
-        {
-            frame.start = buildRangeFrameBound<Int64>(
-                tipb::WindowBoundType::Preceding,
-                tipb::RangeCmpDataType::Int,
-                ORDER_COL_NAME,
-                false,
-                frame_start_offset[i]);
-
-            executeFunctionAndAssert(
-                toNullableVec<Int64>(res[i]),
-                Sum(value_col),
-                {toVec<Int64>(partition), toVec<Int64>(order), toNullableVec<Int64>(int_nullable_value)},
-                frame);
-        }
-
-        res
-            = {{0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
-               {0, -1, {}, 6, 6, 2, -4, -4, {}, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
-               {0, 5, 6, 6, 6, -2, -4, -4, {}, {}, 16, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0}};
-
-        frame.start = buildRangeFrameBound<Int64>(
-            tipb::WindowBoundType::Preceding,
-            tipb::RangeCmpDataType::Int,
-            ORDER_COL_NAME,
-            false,
-            0);
-
-        for (size_t i = 0; i < frame_end_offset.size(); i++)
-        {
-            frame.end = buildRangeFrameBound<Int64>(
-                tipb::WindowBoundType::Following,
-                tipb::RangeCmpDataType::Int,
-                ORDER_COL_NAME,
-                true,
-                frame_end_offset[i]);
-
-            executeFunctionAndAssert(
-                toNullableVec<Int64>(res[i]),
-                Sum(value_col),
-                {toVec<Int64>(partition), toVec<Int64>(order), toNullableVec<Int64>(int_nullable_value)},
-                frame);
-        }
-    }
+    start_offset = {0, 1, 3, 10, 0, 0, 0, 3};
+    end_offset = {0, 0, 0, 0, 1, 3, 10, 3};
+    res
+        = {{0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
+           {0, -1, -1, {}, 6, 2, 2, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
+           {0, -1, -1, -1, 6, 2, 2, -4, -4, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
+           {0, -1, -1, -1, 5, 2, 2, -2, -2, -2, 7, 7, 16, 16, {}, {}, {}, 4, {}, 2, 2, 0},
+           {0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
+           {0, -1, {}, 6, 6, 2, -4, -4, {}, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
+           {0, 5, 6, 6, 6, -2, -4, -4, {}, {}, 16, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
+           {0, -1, -1, 5, 6, 2, -2, -4, -4, {}, 7, 9, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0}};
+    executeTest(TestCase("sum", start_offset, end_offset, res, true, true));
 }
 CATCH
 
