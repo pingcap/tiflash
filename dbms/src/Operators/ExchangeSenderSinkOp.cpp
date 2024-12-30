@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Operators/ExchangeSenderSinkOp.h>
+#include "Common/Exception.h"
 
 namespace DB
 {
@@ -69,7 +70,7 @@ OperatorStatus ExchangeSenderSinkOp::prepareImpl()
     if (need_flush)
     {
         // the writer must has data to flush
-        assert(writer->hasDataToFlush());
+        RUNTIME_CHECK(writer->hasDataToFlush());
         auto res = writer->flush();
         if (res == WriteResult::Done)
         {

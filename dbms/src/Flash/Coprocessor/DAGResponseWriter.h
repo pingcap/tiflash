@@ -48,7 +48,7 @@ public:
 
     /// flush cached blocks for batch writer
     virtual WriteResult flush() = 0;
-    // used in tests
+
     virtual bool hasDataToFlush() = 0;
 
     virtual ~DAGResponseWriter() = default;
