@@ -56,7 +56,7 @@ struct DecodedLockCFValue : boost::noncopyable
     std::shared_ptr<const TiKVValue> val;
 
 private:
-    std::unique_ptr<DecodedLockCFValue::Inner> decodeLockCfValue(const DecodedLockCFValue & res) const;
+    static std::unique_ptr<DecodedLockCFValue::Inner> decodeLockCfValue(const DecodedLockCFValue & decoded);
     // Avoid using shared_ptr to reduce space.
     std::unique_ptr<Inner> inner{nullptr};
 };

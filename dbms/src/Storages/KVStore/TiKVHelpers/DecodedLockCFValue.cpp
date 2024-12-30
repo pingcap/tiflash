@@ -24,7 +24,7 @@ namespace RecordKVFormat
 
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
 [[nodiscard]] std::unique_ptr<DecodedLockCFValue::Inner> DecodedLockCFValue::decodeLockCfValue(
-    const DecodedLockCFValue & decoded) const
+    const DecodedLockCFValue & decoded)
 {
     auto inner = std::make_unique<DecodedLockCFValue::Inner>();
     auto & res = *inner;
