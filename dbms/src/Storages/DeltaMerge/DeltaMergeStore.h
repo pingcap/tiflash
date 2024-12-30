@@ -435,7 +435,7 @@ public:
         size_t num_streams,
         bool keep_order,
         const SegmentIdSet & read_segments = {},
-        size_t extra_table_id_index = InvalidColumnID);
+        size_t extra_table_id_index = MutSup::invalid_col_id);
 
     /// Read all rows without MVCC filtering
     void readRaw(
@@ -447,7 +447,7 @@ public:
         size_t num_streams,
         bool keep_order,
         const SegmentIdSet & read_segments = {},
-        size_t extra_table_id_index = InvalidColumnID);
+        size_t extra_table_id_index = MutSup::invalid_col_id);
 
     /// Read rows in two modes:
     ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.
@@ -468,7 +468,7 @@ public:
         bool is_fast_scan = false,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
-        size_t extra_table_id_index = InvalidColumnID,
+        size_t extra_table_id_index = MutSup::invalid_col_id,
         ScanContextPtr scan_context = nullptr);
 
 
@@ -493,7 +493,7 @@ public:
         bool is_fast_scan = false,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
-        size_t extra_table_id_index = InvalidColumnID,
+        size_t extra_table_id_index = MutSup::invalid_col_id,
         ScanContextPtr scan_context = nullptr);
 
     Remote::DisaggPhysicalTableReadSnapshotPtr writeNodeBuildRemoteReadSnapshot(
@@ -618,7 +618,7 @@ private:
         const String & tracing_id = "",
         ScanContextPtr scan_context = nullptr);
 
-    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != MutSup::extra_handle_id; }
 
     /// Try to stall the writing. It will suspend the current thread if flow control is necessary.
     /// There are roughly two flow control mechanisms:

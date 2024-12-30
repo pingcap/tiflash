@@ -176,8 +176,8 @@ private:
         {
             // Sort by handle & version in ascending order.
             static SortDescription sort{
-                SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
-                SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
+                SortColumnDescription{MutSup::extra_handle_column_name, 1, 0},
+                SortColumnDescription{MutSup::version_column_name, 1, 0}};
             if (block.rows() > 1 && !isAlreadySorted(block, sort))
                 stableSortBlock(block, sort);
         }

@@ -100,8 +100,8 @@ protected:
                 .disagg_ctx = dm_context->global_context.getSharedContextDisagg(),
             });
             auto & column_stats = new_dm_file->meta->getColumnStats();
-            RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
-            column_stats[::DB::TiDBPkColumnID].additional_data_for_test = pk_additiona_data;
+            RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
+            column_stats[MutSup::extra_handle_id].additional_data_for_test = pk_additiona_data;
 
             new_dm_file->meta->bumpMetaVersion({});
             iw->finalize();
@@ -156,9 +156,9 @@ protected:
 
         auto file = files[0];
         auto column_stats = file->meta->getColumnStats();
-        RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
+        RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
 
-        auto meta_value = column_stats[::DB::TiDBPkColumnID].additional_data_for_test;
+        auto meta_value = column_stats[MutSup::extra_handle_id].additional_data_for_test;
 
         // Read again using a fresh DMFile restore, to ensure that this value is
         // indeed persisted.
@@ -172,8 +172,8 @@ protected:
         RUNTIME_CHECK(file2 != nullptr);
 
         column_stats = file2->meta->getColumnStats();
-        RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
-        RUNTIME_CHECK(column_stats[::DB::TiDBPkColumnID].additional_data_for_test == meta_value);
+        RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
+        RUNTIME_CHECK(column_stats[MutSup::extra_handle_id].additional_data_for_test == meta_value);
 
         return meta_value;
     }
@@ -570,8 +570,8 @@ try
             .disagg_ctx = wn_dm_context->global_context.getSharedContextDisagg(),
         });
         auto & column_stats = new_dm_file->meta->getColumnStats();
-        RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
-        column_stats[::DB::TiDBPkColumnID].additional_data_for_test = "tiflash_foo";
+        RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
+        column_stats[MutSup::extra_handle_id].additional_data_for_test = "tiflash_foo";
 
         new_dm_file->meta->bumpMetaVersion({});
         iw->finalize();
@@ -588,7 +588,7 @@ try
         auto cn_files = snapshot->stable->getDMFiles();
         ASSERT_EQ(1, cn_files.size());
         ASSERT_EQ(0, cn_files[0]->metaVersion());
-        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
     }
 
     // Read meta v1 in CN
@@ -600,7 +600,7 @@ try
         ASSERT_EQ(1, cn_files[0]->metaVersion());
         ASSERT_STREQ(
             "tiflash_foo",
-            cn_files[0]->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+            cn_files[0]->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
     }
 
     // Read meta v0 again in CN
@@ -610,7 +610,7 @@ try
         auto cn_files = snapshot->stable->getDMFiles();
         ASSERT_EQ(1, cn_files.size());
         ASSERT_EQ(0, cn_files[0]->metaVersion());
-        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
     }
 }
 CATCH

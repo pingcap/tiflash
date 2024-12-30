@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/EventRecorder.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
@@ -1009,9 +1010,9 @@ bool Segment::useCleanRead(const SegmentSnapshotPtr & segment_snap, const Column
 {
     return segment_snap->delta->getRows() == 0 //
         && segment_snap->delta->getDeletes() == 0 //
-        && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID) //
-        && !hasColumn(columns_to_read, VERSION_COLUMN_ID) //
-        && !hasColumn(columns_to_read, TAG_COLUMN_ID);
+        && !hasColumn(columns_to_read, MutSup::extra_handle_id) //
+        && !hasColumn(columns_to_read, MutSup::version_col_id) //
+        && !hasColumn(columns_to_read, MutSup::delmark_col_id);
 }
 
 BlockInputStreamPtr Segment::getInputStreamModeNormal(
@@ -1148,7 +1149,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(
     {
         data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(
             data_stream,
-            EXTRA_HANDLE_COLUMN_ID,
+            MutSup::extra_handle_id,
             is_common_handle);
     }
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
@@ -1204,11 +1205,11 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
 
     for (const auto & c : columns_to_read)
     {
-        if (c.id == EXTRA_HANDLE_COLUMN_ID)
+        if (c.id == MutSup::extra_handle_id)
         {
             enable_handle_clean_read = false;
         }
-        else if (c.id == TAG_COLUMN_ID)
+        else if (c.id == MutSup::delmark_col_id)
         {
             enable_del_clean_read = false;
         }
@@ -1280,7 +1281,7 @@ BlockInputStreamPtr Segment::getInputStreamModeRaw(
 
     for (const auto & c : columns_to_read)
     {
-        if (c.id != EXTRA_HANDLE_COLUMN_ID)
+        if (c.id != MutSup::extra_handle_id)
             new_columns_to_read->push_back(c);
     }
 
@@ -2130,7 +2131,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
 
         my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_ranges, 0);
         my_data
-            = std::make_shared<PKSquashingBlockInputStream<false>>(my_data, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
+            = std::make_shared<PKSquashingBlockInputStream<false>>(my_data, MutSup::extra_handle_id, is_common_handle);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
             my_data,
             *read_info.read_columns,
@@ -2161,7 +2162,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
         other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_ranges, 0);
         other_data = std::make_shared<PKSquashingBlockInputStream<false>>(
             other_data,
-            EXTRA_HANDLE_COLUMN_ID,
+            MutSup::extra_handle_id,
             is_common_handle);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
             other_data,
@@ -2362,7 +2363,7 @@ StableValueSpacePtr Segment::prepareMerge(
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, rowkey_ranges, 0);
         stream = std::make_shared<PKSquashingBlockInputStream<false>>(
             stream,
-            EXTRA_HANDLE_COLUMN_ID,
+            MutSup::extra_handle_id,
             dm_context.is_common_handle);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
             stream,
@@ -2703,7 +2704,7 @@ ColumnDefinesPtr Segment::arrangeReadColumns(const ColumnDefine & handle, const 
 
     for (const auto & c : columns_to_read)
     {
-        if (c.id != handle.id && c.id != VERSION_COLUMN_ID && c.id != TAG_COLUMN_ID)
+        if (c.id != handle.id && c.id != MutSup::version_col_id && c.id != MutSup::delmark_col_id)
             new_columns_to_read.push_back(c);
     }
 
@@ -3310,9 +3311,9 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
 {
     static constexpr bool NeedRowID = false;
     // set `is_fast_scan` to true to try to enable clean read
-    auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, MutSup::extra_handle_id);
     constexpr auto is_fast_scan = true;
-    auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
+    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::version_col_id);
 
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -3366,9 +3367,9 @@ std::tuple<SkippableBlockInputStreamPtr, bool> Segment::getConcatVectorIndexBloc
 {
     static constexpr bool NeedRowID = false;
     // set `is_fast_scan` to true to try to enable clean read
-    auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, MutSup::extra_handle_id);
     constexpr auto is_fast_scan = true;
-    auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
+    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::delmark_col_id);
 
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->tryGetInputStreamWithVectorIndex(
         dm_context,

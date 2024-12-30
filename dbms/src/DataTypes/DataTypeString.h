@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #pragma once
-
 #include <DataTypes/IDataType.h>
+
+#include <span>
 
 namespace DB
 {
@@ -97,6 +98,8 @@ public:
     // Both getDefaultName and getNullableDefaultName are unit-tests helpers.
     static String getDefaultName();
     static String getNullableDefaultName();
+
+    static std::span<const std::pair<String, DataTypePtr>> getTiDBPkColumnStringNameAndTypes();
 
     explicit DataTypeString(SerdesFormat serdes_fmt_ = SerdesFormat::None);
 

@@ -62,9 +62,9 @@ public:
 
         auto input_header = input->getHeader();
 
-        handle_col_pos = input_header.getPositionByName(EXTRA_HANDLE_COLUMN_NAME);
-        version_col_pos = input_header.getPositionByName(VERSION_COLUMN_NAME);
-        delete_col_pos = input_header.getPositionByName(TAG_COLUMN_NAME);
+        handle_col_pos = input_header.getPositionByName(MutSup::extra_handle_column_name);
+        version_col_pos = input_header.getPositionByName(MutSup::version_column_name);
+        delete_col_pos = input_header.getPositionByName(MutSup::delmark_column_name);
     }
 
     ~DMVersionFilterBlockInputStream() override
