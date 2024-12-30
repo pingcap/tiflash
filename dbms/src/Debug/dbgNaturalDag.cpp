@@ -232,7 +232,7 @@ void NaturalDag::buildTables(Context & context)
             auto raft_index = RAFT_INIT_LOG_INDEX;
             region_meta.setApplied(raft_index, RAFT_INIT_LOG_TERM);
             RegionPtr region_ptr = RegionBench::makeRegion(std::move(region_meta));
-            tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region_ptr, nullptr, 0, tmt);
+            tmt.getKVStore()->onSnapshot<RegionPtrWithSnapshotFiles>(region_ptr, nullptr, 0, tmt);
 
             auto & pairs = region.pairs;
             for (auto & pair : pairs)

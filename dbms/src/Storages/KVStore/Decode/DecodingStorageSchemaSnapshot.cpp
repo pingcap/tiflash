@@ -108,15 +108,15 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
 
 TMTPKType getTMTPKType(const IDataType & rhs)
 {
-    static const DataTypeInt64 & dataTypeInt64 = {}; // NOLINT
-    static const DataTypeUInt64 & dataTypeUInt64 = {}; // NOLINT
-    static const DataTypeString & dataTypeString = {}; // NOLINT
+    static const DataTypeInt64 data_type_int64;
+    static const DataTypeUInt64 data_type_uint64;
+    static const DataTypeString data_type_string;
 
-    if (rhs.equals(dataTypeInt64))
+    if (rhs.equals(data_type_int64))
         return TMTPKType::INT64;
-    else if (rhs.equals(dataTypeUInt64))
+    else if (rhs.equals(data_type_uint64))
         return TMTPKType::UINT64;
-    else if (rhs.equals(dataTypeString))
+    else if (rhs.equals(data_type_string))
         return TMTPKType::STRING;
     return TMTPKType::UNSPECIFIED;
 }

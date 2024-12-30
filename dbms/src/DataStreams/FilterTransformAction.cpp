@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterTransformAction.h>
 

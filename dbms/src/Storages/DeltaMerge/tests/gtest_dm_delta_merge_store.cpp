@@ -65,7 +65,7 @@ extern const char proactive_flush_force_set_type[];
 
 namespace DB::tests
 {
-DM::PushDownFilterPtr generatePushDownFilter(
+DM::PushDownExecutorPtr generatePushDownExecutor(
     Context & ctx,
     const String & table_info_json,
     const String & query,
@@ -582,7 +582,7 @@ try
         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
         /* num_streams= */ 1,
         /* start_ts= */ std::numeric_limits<UInt64>::max(),
-        std::make_shared<PushDownFilter>(filter),
+        std::make_shared<PushDownExecutor>(filter),
         std::vector<RuntimeFilterPtr>{},
         0,
         TRACING_NAME,
@@ -2334,7 +2334,7 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnString)
 try
 {
     const String col_name_to_add = "string";
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("String");
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get(DataTypeString::getDefaultName());
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -2757,6 +2757,152 @@ try
         const auto & cols = store->getTableColumns();
         // version & tag column added
         ASSERT_EQ(cols.size(), 3UL);
+    }
+}
+CATCH
+
+namespace
+{
+const ColumnDefine legacy_str_cd(2, "col2", DataTypeFactory::instance().get(DataTypeString::LegacyName));
+const ColumnDefine str_cd(2, "col2", DataTypeFactory::instance().get(DataTypeString::NameV2));
+
+Block createBlock(const ColumnDefine & cd, size_t begin, size_t end)
+{
+    auto block = DMTestEnv::prepareSimpleWriteBlock(begin, end, false);
+    auto col = cd.type->createColumn();
+    for (size_t i = begin; i < end; ++i)
+        col->insert(makeField(std::to_string(i)));
+    block.insert(ColumnWithTypeAndName{std::move(col), cd.type, cd.name, cd.id});
+    return block;
+}
+
+} // namespace
+
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringDataCFTiny)
+try
+{
+    // Write legacy string data to CFTiny.
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(legacy_str_cd);
+        dropDataOnDisk(getTemporaryPath());
+        store = reload(table_column_defines);
+        auto block = createBlock(legacy_str_cd, 0, 128);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        auto flush_res = store->flushCache(
+            *db_context,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())});
+        ASSERT_TRUE(flush_res);
+        ASSERT_EQ(store->segments.size(), 1);
+        auto seg = store->segments.begin()->second;
+        ASSERT_EQ(seg->delta->getMemTableSet()->getColumnFileCount(), 0);
+        ASSERT_EQ(seg->delta->getPersistedFileSet()->getColumnFileCount(), 1);
+        const auto * cf_tiny = seg->delta->getPersistedFileSet()->getFiles()[0]->tryToTinyFile();
+        ASSERT_NE(cf_tiny, nullptr);
+        const auto & schema = cf_tiny->getSchema()->getSchema();
+        auto col_type_name = schema.getByName(legacy_str_cd.name);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::LegacyName);
+    }
+
+    {
+        // Mock that after restart, the data type has been changed to new serialize. But still can read old
+        // serialized format data.
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(str_cd);
+        store = reload(table_column_defines);
+    }
+
+    {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            {str_cd},
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            "",
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+        auto block = in->read();
+        ASSERT_EQ(block.rows(), 128);
+
+        auto col_type_name = block.getByName(str_cd.name);
+        ASSERT_EQ(col_type_name.name, str_cd.name);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::NameV2);
+
+        for (size_t i = 0; i < block.rows(); i++)
+        {
+            auto s = col_type_name.column->getDataAt(i).toStringView();
+            ASSERT_EQ(s, std::to_string(i));
+        }
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringDataDMFile)
+try
+{
+    // Write legacy string data to DMFile.
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(legacy_str_cd);
+        dropDataOnDisk(getTemporaryPath());
+        store = reload(table_column_defines);
+        auto block = createBlock(legacy_str_cd, 0, 128);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+
+        ASSERT_TRUE(store->mergeDeltaAll(*db_context));
+
+        ASSERT_EQ(store->segments.size(), 1);
+        auto seg = store->segments.begin()->second;
+        const auto & dmfiles = seg->stable->getDMFiles();
+        ASSERT_EQ(dmfiles.size(), 1);
+        const auto & column_stats = dmfiles.front()->getColumnStats();
+        auto itr = column_stats.find(legacy_str_cd.id);
+        ASSERT_NE(itr, column_stats.end());
+        const auto & column_stat = itr->second;
+        ASSERT_EQ(column_stat.type->getName(), DataTypeString::LegacyName);
+    }
+
+    {
+        // Mock that after restart, the data type has been changed to new serialize. But still can read old
+        // serialized format data.
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(str_cd);
+        store = reload(table_column_defines);
+    }
+
+    {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            {str_cd},
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            "",
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+        auto block = in->read();
+        ASSERT_EQ(block.rows(), 128);
+
+        auto col_type_name = block.getByName(str_cd.name);
+        ASSERT_EQ(col_type_name.name, str_cd.name);
+        ASSERT_EQ(col_type_name.type->getName(), DataTypeString::NameV2);
+
+        for (size_t i = 0; i < block.rows(); i++)
+        {
+            auto s = col_type_name.column->getDataAt(i).toStringView();
+            ASSERT_EQ(s, std::to_string(i));
+        }
     }
 }
 CATCH
@@ -3962,7 +4108,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4007,7 +4153,7 @@ try
 })json";
 
     auto create_filter = [&](Int64 value) {
-        auto filter = generatePushDownFilter(
+        auto filter = generatePushDownExecutor(
             *db_context,
             table_info_json,
             fmt::format("select * from default.t_111 where col_time >= {}", value));
@@ -4026,7 +4172,14 @@ try
         return filter;
     };
 
-    DB::registerFunctions();
+    try
+    {
+        DB::registerFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
 
     constexpr Int64 num_rows = 128;
     auto filter_all = create_filter(0);
@@ -4084,7 +4237,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4130,7 +4283,7 @@ try
 })json";
 
     auto create_filter = [&](Int64 value) {
-        auto filter = generatePushDownFilter(
+        auto filter = generatePushDownExecutor(
             *db_context,
             table_info_json,
             fmt::format("select * from default.t_111 where col_time >= {}", value));
@@ -4149,7 +4302,14 @@ try
         return filter;
     };
 
-    DB::registerFunctions();
+    try
+    {
+        DB::registerFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
 
     constexpr Int64 num_rows = 128;
     auto filter_all = create_filter(0);

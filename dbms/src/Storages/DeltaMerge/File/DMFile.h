@@ -210,6 +210,8 @@ public:
 
     UInt32 metaVersion() const { return meta->metaVersion(); }
 
+    bool isColIndexExist(const ColId & col_id) const;
+
 private:
     DMFile(
         UInt64 file_id_,
@@ -267,14 +269,15 @@ private:
     {
         return Poco::File(colDataPath(file_name_base)).getSize();
     }
-    size_t colIndexSize(ColId id);
+    size_t colIndexSize(ColId id) const;
     enum class ColDataType
     {
         Elements,
         NullMap,
         ArraySizes,
+        StringSizes,
     };
-    size_t colDataSize(ColId id, ColDataType type);
+    size_t colDataSize(ColId id, ColDataType type) const;
 
     String colDataPath(const FileNameBase & file_name_base) const
     {
@@ -291,8 +294,6 @@ private:
 
     String colIndexCacheKey(const FileNameBase & file_name_base) const;
     String colMarkCacheKey(const FileNameBase & file_name_base) const;
-
-    bool isColIndexExist(const ColId & col_id) const;
 
     String encryptionBasePath() const;
     EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;

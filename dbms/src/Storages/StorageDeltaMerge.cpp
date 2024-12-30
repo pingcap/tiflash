@@ -41,7 +41,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
@@ -834,7 +834,8 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter
+        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -917,7 +918,8 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter
+        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -1292,7 +1294,6 @@ inline OptionTableInfoConstRef getTableInfoForCreateStatement(
 
     /// If TableInfo from TiDB is empty, for example, create DM table for test,
     /// we refine TableInfo from store's table column, so that we can restore column id next time
-    table_info_from_store.schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     for (const auto & column_define : store_table_columns)
     {
         if (hidden_columns.has(column_define.name))

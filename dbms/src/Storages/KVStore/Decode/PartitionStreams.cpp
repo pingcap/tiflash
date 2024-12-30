@@ -106,7 +106,7 @@ static void inline writeCommittedBlockDataIntoStorage(
 template <typename ReadList>
 static inline bool atomicReadWrite(
     AtomicReadWriteCtx & rw_ctx,
-    const RegionPtrWithBlock & region,
+    const RegionPtr & region,
     ReadList & data_list_read,
     bool force_decode)
 {
@@ -147,9 +147,7 @@ static inline bool atomicReadWrite(
         should_handle_version_col = false;
     }
 
-    // Currently, RegionPtrWithBlock with a not-null CachePtr is only used in debug functions
-    // to apply a pre-decoded snapshot. So it will not take place here.
-    // In short, we always decode here because there is no pre-decode cache.
+    // Decode `data_list_read` according to the schema snapshot into `Block`
     {
         LOG_TRACE(
             rw_ctx.log,
@@ -169,6 +167,7 @@ static inline bool atomicReadWrite(
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode)
             .Observe(rw_ctx.region_decode_cost / 1000.0);
     }
+
     if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
     {
         RUNTIME_CHECK(block_ptr != nullptr);
@@ -198,12 +197,12 @@ static inline bool atomicReadWrite(
 
 template DM::WriteResult writeRegionDataToStorage<RegionUncommittedDataList>(
     Context & context,
-    const RegionPtrWithBlock & region,
+    const RegionPtr & region,
     RegionUncommittedDataList & data_list_read,
     const LoggerPtr & log);
 template DM::WriteResult writeRegionDataToStorage<RegionDataReadInfoList>(
     Context & context,
-    const RegionPtrWithBlock & region,
+    const RegionPtr & region,
     RegionDataReadInfoList & data_list_read,
     const LoggerPtr & log);
 
@@ -212,7 +211,7 @@ template DM::WriteResult writeRegionDataToStorage<RegionDataReadInfoList>(
 template <typename ReadList>
 DM::WriteResult writeRegionDataToStorage(
     Context & context,
-    const RegionPtrWithBlock & region,
+    const RegionPtr & region,
     ReadList & data_list_read,
     const LoggerPtr & log)
 {
@@ -429,21 +428,12 @@ static inline void reportUpstreamLatency(const RegionDataReadInfoList & data_lis
 
 DM::WriteResult RegionTable::writeCommittedByRegion(
     Context & context,
-    const RegionPtrWithBlock & region,
+    const RegionPtr & region,
     RegionDataReadInfoList & data_list_to_remove,
     const LoggerPtr & log,
     bool lock_region)
 {
-    std::optional<RegionDataReadInfoList> maybe_data_list_read = std::nullopt;
-    if (region.pre_decode_cache)
-    {
-        // If schema version changed, use the kv data to rebuild block cache
-        maybe_data_list_read = std::move(region.pre_decode_cache->data_list_read);
-    }
-    else
-    {
-        maybe_data_list_read = ReadRegionCommitCache(region, lock_region);
-    }
+    std::optional<RegionDataReadInfoList> maybe_data_list_read = ReadRegionCommitCache(region, lock_region);
 
     if (!maybe_data_list_read.has_value())
         return std::nullopt;

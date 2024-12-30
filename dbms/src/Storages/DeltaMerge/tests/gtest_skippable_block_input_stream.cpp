@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/Logger.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
@@ -99,12 +99,11 @@ protected:
         const RowKeyRanges & read_ranges)
     {
         return segment->getConcatSkippableBlockInputStream(
-            nullptr,
             snapshot,
             *dm_context,
             columns_to_read,
             read_ranges,
-            EMPTY_RS_OPERATOR,
+            {},
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             ReadTag::Internal);

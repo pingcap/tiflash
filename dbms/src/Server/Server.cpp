@@ -983,17 +983,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (storage_config.format_version != 0)
     {
-        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier
-            && storage_config.format_version != STORAGE_FORMAT_V101.identifier
-            && storage_config.format_version != STORAGE_FORMAT_V102.identifier)
+        if (storage_config.s3_config.isS3Enabled() && !isStorageFormatForDisagg(storage_config.format_version))
         {
-            LOG_WARNING(log, "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
-            throw Exception(
-                ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
+            auto message = fmt::format(
+                "'storage.format_version' must be set to {} when S3 is enabled!",
+                getStorageFormatsForDisagg());
+            LOG_ERROR(log, message);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
         setStorageFormat(storage_config.format_version);
-        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", STORAGE_FORMAT_CURRENT.identifier);
     }
     else
     {
@@ -1001,8 +1000,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // If the user does not explicitly set format_version in the config file but
             // enables S3, then we set up a proper format version to support S3.
-            setStorageFormat(STORAGE_FORMAT_V102.identifier);
-            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V102.identifier);
+            setStorageFormat(DEFAULT_STORAGE_FORMAT_FOR_DISAGG.identifier);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_CURRENT.identifier);
         }
         else
         {
@@ -1016,14 +1015,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         if (auto disaggregated_mode = getDisaggregatedMode(config()); disaggregated_mode == DisaggregatedMode::None)
         {
-            LOG_WARNING(log, "'flash.disaggregated_mode' must be set when S3 is enabled!");
-            throw Exception(
-                ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'flash.disaggregated_mode' must be set when S3 is enabled!");
+            const String message = "'flash.disaggregated_mode' must be set when S3 is enabled!";
+            LOG_ERROR(log, message);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
     }
-
-    LOG_INFO(log, "Using api_version={}", storage_config.api_version);
 
     // Set whether to use safe point v2.
     PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);

@@ -98,7 +98,7 @@ public:
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
-    void read(const RowKeyRange & range, const PushDownFilterPtr & filter, const ColumnWithTypeAndName & out)
+    void read(const RowKeyRange & range, const PushDownExecutorPtr & filter, const ColumnWithTypeAndName & out)
     {
         auto in = store->read(
             *db_context,
@@ -253,7 +253,7 @@ try
         ann_query_info->set_top_k(2);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 
@@ -262,7 +262,7 @@ try
         ann_query_info->set_top_k(2);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
 }
@@ -303,7 +303,7 @@ try
         ann_query_info->set_top_k(2);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
 
@@ -312,7 +312,7 @@ try
         ann_query_info->set_top_k(2);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 }
@@ -360,7 +360,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
     }
@@ -370,7 +370,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
     }
@@ -419,7 +419,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
     }
@@ -429,7 +429,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
     }
@@ -502,7 +502,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -512,7 +512,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
@@ -535,7 +535,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -545,7 +545,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
@@ -630,7 +630,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -640,7 +640,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
@@ -663,7 +663,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -673,7 +673,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
@@ -753,7 +753,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -763,7 +763,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -841,7 +841,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -851,7 +851,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
@@ -928,7 +928,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -938,7 +938,7 @@ try
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
 
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }

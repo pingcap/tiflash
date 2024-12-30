@@ -47,13 +47,7 @@ public:
 
     Block readWithFilter(const IColumn::Filter & filter) override;
 
-    Block read() override
-    {
-        FilterPtr filter = nullptr;
-        return read(filter, false);
-    }
-
-    Block read(FilterPtr & res_filter, bool return_filter) override;
+    Block read() override;
 
 private:
     friend class ConcatVectorIndexBlockInputStream;
@@ -71,16 +65,21 @@ private:
 class ConcatVectorIndexBlockInputStream : public SkippableBlockInputStream
 {
 public:
+    // Only return the rows that match `bitmap_filter_`
     ConcatVectorIndexBlockInputStream(
+        const BitmapFilterPtr & bitmap_filter_,
         std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
         std::vector<VectorIndexBlockInputStream *> && index_streams,
         UInt32 topk_)
         : stream(std::move(stream))
         , index_streams(std::move(index_streams))
         , topk(topk_)
+        , bitmap_filter(bitmap_filter_)
     {}
 
-    static SkippableBlockInputStreamPtr build(
+    // Returns <InputStream, is_vector_stream>
+    static std::tuple<SkippableBlockInputStreamPtr, bool> build(
+        const BitmapFilterPtr & bitmap_filter,
         std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
         const ANNQueryInfoPtr & ann_query_info);
 
@@ -97,17 +96,7 @@ public:
         throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    Block read() override
-    {
-        FilterPtr filter = nullptr;
-        return read(filter, false);
-    }
-
-    Block read(FilterPtr & res_filter, bool return_filter) override
-    {
-        load();
-        return stream->read(res_filter, return_filter);
-    }
+    Block read() override;
 
 private:
     void load();
@@ -117,6 +106,9 @@ private:
     std::vector<VectorIndexBlockInputStream *> index_streams;
     UInt32 topk = 0;
     bool loaded = false;
+
+    BitmapFilterPtr bitmap_filter;
+    IColumn::Filter filter; // reuse the memory allocated among all `read`
 };
 
 } // namespace DB::DM

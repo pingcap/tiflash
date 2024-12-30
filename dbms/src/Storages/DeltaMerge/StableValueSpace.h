@@ -14,12 +14,16 @@
 
 #pragma once
 
+#include <IO/FileProvider/FileProvider_fwd.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage_fwd.h>
@@ -42,8 +46,8 @@ public:
         , log(Logger::get())
     {}
 
-    static StableValueSpacePtr restore(DMContext & context, PageIdU64 id);
-    static StableValueSpacePtr restore(DMContext & context, ReadBuffer & buf, PageIdU64 id);
+    static StableValueSpacePtr restore(DMContext & dm_context, PageIdU64 id);
+    static StableValueSpacePtr restore(DMContext & dm_context, ReadBuffer & buf, PageIdU64 id);
 
     static StableValueSpacePtr createFromCheckpoint( //
         const LoggerPtr & parent_log,
@@ -108,7 +112,7 @@ public:
      */
     size_t getDMFilesBytes() const;
 
-    void enableDMFilesGC(DMContext & context);
+    void enableDMFilesGC(DMContext & dm_context);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
@@ -135,7 +139,7 @@ public:
 
     const StableProperty & getStableProperty() const { return property; }
 
-    void calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
+    void calculateStableProperty(const DMContext & dm_context, const RowKeyRange & rowkey_range, bool is_common_handle);
 
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -221,21 +225,36 @@ public:
         }
 
         SkippableBlockInputStreamPtr getInputStream(
-            const DMContext & context, //
+            const DMContext & dm_context, //
             const ColumnDefines & read_columns,
             const RowKeyRanges & rowkey_ranges,
-            const RSOperatorPtr & filter,
             UInt64 max_data_version,
             size_t expected_block_size,
             bool enable_handle_clean_read,
             ReadTag read_tag,
+            const DMFilePackFilterResults & pack_filter_results = {},
+            bool is_fast_scan = false,
+            bool enable_del_clean_read = false,
+            const std::vector<IdSetPtr> & read_packs = {},
+            bool need_row_id = false);
+
+        SkippableBlockInputStreamPtr tryGetInputStreamWithVectorIndex(
+            const DMContext & dm_context,
+            const ColumnDefines & read_columns,
+            const RowKeyRanges & rowkey_ranges,
+            const ANNQueryInfoPtr & ann_query_info,
+            UInt64 max_data_version,
+            size_t expected_block_size,
+            bool enable_handle_clean_read,
+            ReadTag read_tag,
+            const DMFilePackFilterResults & pack_filter_results,
             bool is_fast_scan = false,
             bool enable_del_clean_read = false,
             const std::vector<IdSetPtr> & read_packs = {},
             bool need_row_id = false,
             BitmapFilterPtr bitmap_filter = nullptr);
 
-        RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
+        RowsAndBytes getApproxRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
 
         struct AtLeastRowsAndBytesResult
         {
@@ -249,7 +268,7 @@ public:
          * Get the rows and bytes calculated from packs that is **fully contained** by the given range.
          * If the pack is partially intersected, then it is not counted.
          */
-        AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
+        AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
 
     private:
         LoggerPtr log;
