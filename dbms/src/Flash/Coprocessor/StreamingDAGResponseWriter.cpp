@@ -63,6 +63,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 template <class StreamWriterPtr>
 WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 {
+    has_pending_flush = false;
     if (rows_in_blocks > 0)
     {
         auto wait_res = waitForWritable();
@@ -71,6 +72,8 @@ WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::flush()
             encodeThenWriteBlocks();
             return WriteResult::Done;
         }
+        // set has_pending_flush to true since current flush is not done
+        has_pending_flush = true;
         return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling
                                                       : WriteResult::NeedWaitForNotify;
     }
@@ -86,6 +89,7 @@ WaitResult StreamingDAGResponseWriter<StreamWriterPtr>::waitForWritable() const
 template <class StreamWriterPtr>
 WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
+    assert(has_pending_flush == false);
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");

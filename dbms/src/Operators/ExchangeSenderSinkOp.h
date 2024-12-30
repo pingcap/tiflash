@@ -49,7 +49,6 @@ private:
     OperatorStatus waitForWriter() const;
 
 private:
-    bool need_flush = false;
     std::unique_ptr<DAGResponseWriter> writer;
     size_t total_rows = 0;
 };

@@ -38,24 +38,21 @@ public:
     virtual void prepare(const Block &){};
     virtual WriteResult write(const Block & block) = 0;
 
-    // For async writer, `waitForWritable` need to be called before calling `write`.
-    // ```
-    // auto res = waitForWritable();
-    // switch (res) case...
-    // write(block);
-    // ```
     virtual WaitResult waitForWritable() const { return WaitResult::Ready; }
 
     /// flush cached blocks for batch writer
     virtual WriteResult flush() = 0;
 
-    virtual bool hasDataToFlush() = 0;
+    /// if hasPendingFlush is true, need to flush before write
+    // hasPendingFlush can be true only in pipeline mode
+    bool hasPendingFlush() const { return has_pending_flush; }
 
     virtual ~DAGResponseWriter() = default;
 
 protected:
     Int64 records_per_chunk;
     DAGContext & dag_context;
+    bool has_pending_flush = false;
 };
 
 } // namespace DB

@@ -68,6 +68,7 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 template <class ExchangeWriterPtr>
 WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
+    has_pending_flush = false;
     if (rows_in_blocks > 0)
     {
         auto wait_res = waitForWritable();
@@ -76,6 +77,8 @@ WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
             writeBlocks();
             return WriteResult::Done;
         }
+        // set has_pending_flush to true since current flush is not done
+        has_pending_flush = true;
         return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling
                                                       : WriteResult::NeedWaitForNotify;
     }
@@ -91,6 +94,7 @@ WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() co
 template <class ExchangeWriterPtr>
 WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
+    assert(has_pending_flush == false);
     RUNTIME_CHECK(!block.info.selective);
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),

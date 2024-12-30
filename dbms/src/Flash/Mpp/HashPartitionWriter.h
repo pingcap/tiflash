@@ -40,7 +40,6 @@ public:
     WaitResult waitForWritable() const override;
     WriteResult write(const Block & block) override;
     WriteResult flush() override;
-    bool hasDataToFlush() override { return rows_in_blocks > 0; }
 
 private:
     void partitionAndWriteBlocks();

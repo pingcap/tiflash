@@ -76,6 +76,7 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
 template <class ExchangeWriterPtr>
 WriteResult HashPartitionWriter<ExchangeWriterPtr>::flush()
 {
+    has_pending_flush = false;
     if (0 == rows_in_blocks)
         return WriteResult::Done;
 
@@ -98,6 +99,8 @@ WriteResult HashPartitionWriter<ExchangeWriterPtr>::flush()
         }
         return WriteResult::Done;
     }
+    // set has_pending_flush to true since current flush is not done
+    has_pending_flush = true;
     return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling : WriteResult::NeedWaitForNotify;
 }
 
@@ -110,6 +113,7 @@ WaitResult HashPartitionWriter<ExchangeWriterPtr>::waitForWritable() const
 template <class ExchangeWriterPtr>
 WriteResult HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 {
+    assert(has_pending_flush == false);
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");

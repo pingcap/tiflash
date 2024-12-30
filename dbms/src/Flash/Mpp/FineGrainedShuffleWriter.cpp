@@ -92,6 +92,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
 template <class ExchangeWriterPtr>
 WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 {
+    has_pending_flush = false;
     if (rows_in_blocks > 0)
     {
         auto wait_res = waitForWritable();
@@ -100,6 +101,8 @@ WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
             batchWriteFineGrainedShuffle();
             return WriteResult::Done;
         }
+        // set has_pending_flush to true since current flush is not done
+        has_pending_flush = true;
         return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling
                                                       : WriteResult::NeedWaitForNotify;
     }
@@ -115,6 +118,7 @@ WaitResult FineGrainedShuffleWriter<ExchangeWriterPtr>::waitForWritable() const
 template <class ExchangeWriterPtr>
 WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
 {
+    assert(has_pending_flush == false);
     RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),

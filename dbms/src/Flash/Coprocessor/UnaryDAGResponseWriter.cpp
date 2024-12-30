@@ -91,6 +91,7 @@ WriteResult UnaryDAGResponseWriter::flush()
 
 WriteResult UnaryDAGResponseWriter::write(const Block & block)
 {
+    assert(has_pending_flush == false);
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     if (records_per_chunk == -1)

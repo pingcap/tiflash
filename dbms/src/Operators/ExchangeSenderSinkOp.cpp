@@ -29,7 +29,7 @@ void ExchangeSenderSinkOp::operateSuffixImpl()
 
 OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
-    assert(!need_flush);
+    assert(!writer->hasPendingFlush());
     WriteResult write_res;
     OperatorStatus ret = block ? OperatorStatus::NEED_INPUT : OperatorStatus::FINISHED;
     if (block)
@@ -43,7 +43,7 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
     }
     if (write_res != WriteResult::Done)
     {
-        need_flush = true;
+        assert(writer->hasPendingFlush());
         ret = write_res == WriteResult::NeedWaitForPolling ? OperatorStatus::WAITING : OperatorStatus::WAIT_FOR_NOTIFY;
     }
     return ret;
@@ -65,19 +65,18 @@ OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
 
 OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
-    // if there is cached data, flush it
-    if (need_flush)
+    if (writer->hasPendingFlush())
     {
-        // the writer must has data to flush
-        RUNTIME_CHECK(writer->hasDataToFlush());
+        // if there is pending flush, flush it
         auto res = writer->flush();
         if (res == WriteResult::Done)
         {
-            need_flush = false;
+            assert(!writer->hasPendingFlush());
             return OperatorStatus::NEED_INPUT;
         }
         else
         {
+            assert(writer->hasPendingFlush());
             return res == WriteResult::NeedWaitForPolling ? OperatorStatus::WAITING : OperatorStatus::WAIT_FOR_NOTIFY;
         }
     }
@@ -86,7 +85,8 @@ OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 
 OperatorStatus ExchangeSenderSinkOp::awaitImpl()
 {
-    assert(need_flush);
+    // awaitImpl should only be called if there is pending flush
+    RUNTIME_CHECK(writer->hasPendingFlush());
     return waitForWriter();
 }
 
