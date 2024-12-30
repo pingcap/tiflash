@@ -168,7 +168,7 @@ DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std:
     }
 }
 
-void DecodedLockCFValue::withInner(std::function<void(const DecodedLockCFValue::Inner &)> f) const
+void DecodedLockCFValue::withInner(std::function<void(const DecodedLockCFValue::Inner &)> && f) const
 {
     if likely (inner != nullptr)
     {
