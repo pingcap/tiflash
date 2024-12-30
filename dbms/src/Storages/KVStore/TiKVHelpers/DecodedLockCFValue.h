@@ -48,7 +48,7 @@ struct DecodedLockCFValue : boost::noncopyable
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
     void intoLockInfo(kvrpcpb::LockInfo &) const;
     bool isLargeTxn() const;
-    void withInner(std::function<void(const Inner &)> f) const;
+    void withInner(std::function<void(const Inner &)> && f) const;
     /// Return LockInfoPtr if the `query` could be blocked by this lock. Otherwise return nullptr.
     LockInfoPtr getLockInfoPtr(const RegionLockReadQuery & query) const;
 
