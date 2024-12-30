@@ -14,7 +14,6 @@
 
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Operators/ExchangeSenderSinkOp.h>
-#include "Common/Exception.h"
 
 namespace DB
 {
