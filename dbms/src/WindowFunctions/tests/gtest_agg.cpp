@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Ltd.
+// Copyright 2025 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,18 +133,6 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
     }
 }
 
-// TODO test frame position list:
-// 1. prev_start = frame_start, prev_end = frame_end
-// 2. prev_start < frame_start, prev_end = frame_end
-// 3. prev_start < frame_start, prev_end < frame_end
-// 4. prev_end <= frame_start
-
-// TODO decrease and add test list:
-// 1. decrease = 0
-// 2. decrease < add
-// 3. decrease = add
-// 4. decrease > add
-// 5. add = 0
 
 // TODO decide if we need decrease at compile time
 // TODO test duplicate order by values in range frame in ft

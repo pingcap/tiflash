@@ -222,6 +222,8 @@ public:
 
         return SingleValueDataString::changeIfGreater(to, arena);
     }
+
+    static bool allocatesMemoryInArena() { return true; }
 };
 
 struct SingleValueDataGenericForWindow : public SingleValueDataGeneric

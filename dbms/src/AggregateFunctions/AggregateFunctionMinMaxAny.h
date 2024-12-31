@@ -35,6 +35,7 @@ struct CommonImpl
     static void decrease() { throw Exception("Not implemented yet"); }
     static void reset() { throw Exception("Not implemented yet"); }
     static void prepareWindow() { throw Exception("Not implemented yet"); }
+    static bool allocatesMemoryInArena() { return false; }
 };
 
 /// For numeric values.
@@ -796,6 +797,8 @@ public:
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
+
+    bool allocatesMemoryInArena() const override { return Data::allocatesMemoryInArena(); }
 };
 
 } // namespace DB
