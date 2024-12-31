@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/EventRecorder.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
@@ -199,7 +200,8 @@ ColumnDefinesPtr generateStoreColumns(const ColumnDefines & table_columns, bool 
     // Add other columns
     for (const auto & col : table_columns)
     {
-        if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
+        if (col.name != MutSup::extra_handle_column_name && col.name != MutSup::version_column_name
+            && col.name != MutSup::delmark_column_name)
             columns->emplace_back(col);
     }
     return columns;
@@ -265,7 +267,8 @@ DeltaMergeStore::DeltaMergeStore(
     original_table_columns.emplace_back(getTagColumnDefine());
     for (const auto & col : columns)
     {
-        if (col.id != original_table_handle_define.id && col.id != VERSION_COLUMN_ID && col.id != TAG_COLUMN_ID)
+        if (col.id != original_table_handle_define.id && col.id != MutSup::version_col_id
+            && col.id != MutSup::delmark_col_id)
             original_table_columns.emplace_back(col);
     }
 
@@ -559,15 +562,15 @@ Block DeltaMergeStore::addExtraColumnIfNeed(
 {
     if (pkIsHandle(handle_define))
     {
-        if (!EXTRA_HANDLE_COLUMN_INT_TYPE->equals(*handle_define.type))
+        if (!MutSup::getExtraHandleColumnIntType()->equals(*handle_define.type))
         {
             auto handle_pos = getPosByColumnId(block, handle_define.id);
             addColumnToBlock(
                 block, //
-                EXTRA_HANDLE_COLUMN_ID,
-                EXTRA_HANDLE_COLUMN_NAME,
-                EXTRA_HANDLE_COLUMN_INT_TYPE,
-                EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
+                MutSup::extra_handle_id,
+                MutSup::extra_handle_column_name,
+                MutSup::getExtraHandleColumnIntType(),
+                MutSup::getExtraHandleColumnIntType()->createColumn());
             // Fill the new handle column with data in column[handle_pos] by applying cast.
             DefaultExecutable(FunctionToInt64::create(db_context)).execute(block, {handle_pos}, block.columns() - 1);
         }
@@ -580,9 +583,9 @@ Block DeltaMergeStore::addExtraColumnIfNeed(
             ColumnPtr handle_column = pk_column->cloneResized(pk_column->size());
             addColumnToBlock(
                 block, //
-                EXTRA_HANDLE_COLUMN_ID,
-                EXTRA_HANDLE_COLUMN_NAME,
-                EXTRA_HANDLE_COLUMN_INT_TYPE,
+                MutSup::extra_handle_id,
+                MutSup::extra_handle_column_name,
+                MutSup::getExtraHandleColumnIntType(),
                 handle_column);
         }
     }
@@ -607,7 +610,7 @@ DM::WriteResult DeltaMergeStore::write(
 
     if (db_context.getSettingsRef().dt_log_record_version)
     {
-        const auto & ver_col = block.getByName(VERSION_COLUMN_NAME).column;
+        const auto & ver_col = block.getByName(MutSup::version_column_name).column;
         const auto * ver = toColumnVectorDataPtr<UInt64>(ver_col);
         std::unordered_set<UInt64> dedup_ver;
         for (auto v : *ver)
@@ -616,7 +619,7 @@ DM::WriteResult DeltaMergeStore::write(
         }
 
         std::unordered_set<Int64> dedup_handles;
-        auto extra_handle_col = tryGetByColumnId(block, EXTRA_HANDLE_COLUMN_ID);
+        auto extra_handle_col = tryGetByColumnId(block, MutSup::extra_handle_id);
         if (extra_handle_col.column)
         {
             if (extra_handle_col.type->getTypeId() == TypeIndex::Int64)
@@ -643,8 +646,8 @@ DM::WriteResult DeltaMergeStore::write(
     {
         // Sort the block by handle & version in ascending order.
         SortDescription sort;
-        sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
-        sort.emplace_back(VERSION_COLUMN_NAME, 1, 0);
+        sort.emplace_back(MutSup::extra_handle_column_name, 1, 0);
+        sort.emplace_back(MutSup::version_column_name, 1, 0);
 
         if (rows > 1 && !isAlreadySorted(block, sort))
             stableSortBlock(block, sort);
@@ -654,7 +657,7 @@ DM::WriteResult DeltaMergeStore::write(
 
     size_t offset = 0;
     size_t limit;
-    const auto handle_column = block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+    const auto handle_column = block.getByName(MutSup::extra_handle_column_name).column;
     auto rowkey_column = RowKeyColumnContainer(handle_column, is_common_handle);
 
     // Write block by segments
@@ -1986,7 +1989,8 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
     while (iter != new_original_table_columns.end())
     {
         // remove the extra columns
-        if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID)
+        if (iter->id == MutSup::extra_handle_id || iter->id == MutSup::version_col_id
+            || iter->id == MutSup::delmark_col_id)
         {
             iter++;
             continue;

@@ -106,7 +106,7 @@ void InterpreterAlterQuery::parseAlter(
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
-    OrderedNameSet filtered_names = MutableSupport::instance().hiddenColumns(table->getName());
+    OrderedNameSet filtered_names = MutSup::instance().hiddenColumns(table->getName());
 
     for (const auto & params : params_container)
     {
@@ -117,8 +117,7 @@ void InterpreterAlterQuery::parseAlter(
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
 
-            if (ast_col_decl.name == MutableSupport::version_column_name
-                || ast_col_decl.name == MutableSupport::delmark_column_name)
+            if (ast_col_decl.name == MutSup::version_column_name || ast_col_decl.name == MutSup::delmark_column_name)
                 throw Exception(
                     "Internal column name can not be used: " + ast_col_decl.name,
                     ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -150,8 +149,7 @@ void InterpreterAlterQuery::parseAlter(
 
                 const Field & column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
-                if (column_name == MutableSupport::version_column_name
-                    || column_name == MutableSupport::delmark_column_name)
+                if (column_name == MutSup::version_column_name || column_name == MutSup::delmark_column_name)
                 {
                     FieldVisitorToString to_string;
                     auto err_msg = "Internal column name can not be dropped: " + applyVisitor(to_string, column_name);
@@ -170,8 +168,8 @@ void InterpreterAlterQuery::parseAlter(
                 command.type = AlterCommand::DROP_COLUMN;
                 command.column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
-                if (command.column_name == MutableSupport::version_column_name
-                    || command.column_name == MutableSupport::delmark_column_name)
+                if (command.column_name == MutSup::version_column_name
+                    || command.column_name == MutSup::delmark_column_name)
                     throw Exception(
                         "Internal column name can not be dropped: " + command.column_name,
                         ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -186,8 +184,7 @@ void InterpreterAlterQuery::parseAlter(
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
 
-            if (ast_col_decl.name == MutableSupport::version_column_name
-                || ast_col_decl.name == MutableSupport::delmark_column_name)
+            if (ast_col_decl.name == MutSup::version_column_name || ast_col_decl.name == MutSup::delmark_column_name)
                 throw Exception(
                     "Internal column name can not be modified: " + ast_col_decl.name,
                     ErrorCodes::ARGUMENT_OUT_OF_BOUND);

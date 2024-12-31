@@ -46,9 +46,9 @@ public:
         const FileProviderPtr & file_provider,
         const ScanContextPtr & scan_context) const
     {
-        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            tryLoadIndex(dmfile, EXTRA_HANDLE_COLUMN_ID, file_provider, scan_context);
-        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
+        if (!param.indexes.count(MutSup::extra_handle_id))
+            tryLoadIndex(dmfile, MutSup::extra_handle_id, file_provider, scan_context);
+        auto & minmax_index = param.indexes.find(MutSup::extra_handle_id)->second.minmax;
         return minmax_index->getIntMinMax(pack_id).first;
     }
 
@@ -58,9 +58,9 @@ public:
         const FileProviderPtr & file_provider,
         const ScanContextPtr & scan_context) const
     {
-        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            tryLoadIndex(dmfile, EXTRA_HANDLE_COLUMN_ID, file_provider, scan_context);
-        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
+        if (!param.indexes.count(MutSup::extra_handle_id))
+            tryLoadIndex(dmfile, MutSup::extra_handle_id, file_provider, scan_context);
+        auto & minmax_index = param.indexes.find(MutSup::extra_handle_id)->second.minmax;
         return minmax_index->getStringMinMax(pack_id).first;
     }
 
@@ -70,9 +70,9 @@ public:
         const FileProviderPtr & file_provider,
         const ScanContextPtr & scan_context) const
     {
-        if (!param.indexes.count(VERSION_COLUMN_ID))
-            tryLoadIndex(dmfile, VERSION_COLUMN_ID, file_provider, scan_context);
-        auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
+        if (!param.indexes.count(MutSup::version_col_id))
+            tryLoadIndex(dmfile, MutSup::version_col_id, file_provider, scan_context);
+        auto & minmax_index = param.indexes.find(MutSup::version_col_id)->second.minmax;
         return minmax_index->getUInt64MinMax(pack_id).second;
     }
 

@@ -74,7 +74,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream);
 
 // Similar to `InputStreamVSBlockUnrestrictlyCompareColumns` but assume inputstream's blocks are unordered.
 // It is only used for normal mode. (The blocks of fast mode have overlap.)
-// This function read all blocks first and sort them by handle column or column at position 0 if EXTRA_HANDLE_COLUMN_NAME not exist.
+// This function read all blocks first and sort them by handle column or column at position 0 if MutSup::extra_handle_column_name not exist.
 ::testing::AssertionResult UnorderedInputStreamVSBlockUnrestrictlyCompareColumns(
     const char * stream_expr,
     const char * colnames_expr,
