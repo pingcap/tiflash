@@ -80,7 +80,11 @@ namespace DB::DM
     const ssize_t start_row_id,
     std::vector<UInt8> & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
+    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(
+        dm_context.global_context,
+        dm_context.scan_context,
+        dm_context.tracing_id,
+        dmfile, segment_range);
     if (valid_handle_res.empty())
         return 0;
 

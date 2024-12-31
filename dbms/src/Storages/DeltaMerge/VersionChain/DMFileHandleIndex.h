@@ -218,7 +218,6 @@ private:
         if (!rowkey_range)
             return PackRange{.start_pack_id = 0, .end_pack_id = static_cast<UInt32>(dmfile->getPacks())};
 
-
         const auto handle_res = getRSResultsByRanges(
             global_context,
             std::make_shared<ScanContext>(),
@@ -240,7 +239,7 @@ private:
     const Context & global_context;
     DMFilePtr dmfile;
     const RowID start_row_id;
-    const std::optional<const RowKeyRange> rowkey_range;
+    const std::optional<const RowKeyRange> rowkey_range;  // Range of ColumnFileBig
     const PackRange pack_range;
 
     // These vector are clipped by pack_range.

@@ -93,7 +93,9 @@ RSResults getRSResultsByRanges(
     const RowKeyRanges & ranges);
 
 std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
-    const DMContext & dm_context,
+    const Context & global_context,
+    const ScanContextPtr & scan_context,
+    const String & tracing_id,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range);
 

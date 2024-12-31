@@ -72,7 +72,9 @@ std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
 } // namespace
 
 std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
-    const DMContext & dm_context,
+    const Context & global_context,
+    const ScanContextPtr & scan_context,
+    const String & tracing_id,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range)
 {
@@ -80,9 +82,9 @@ std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
         return std::make_pair(RSResults(dmfile->getPacks(), RSResult::All), 0);
 
     const auto handle_res = getRSResultsByRanges(
-        dm_context.global_context,
-        dm_context.scan_context,
-        dm_context.tracing_id,
+        global_context,
+        scan_context,
+        tracing_id,
         dmfile,
         {*segment_range});
 
