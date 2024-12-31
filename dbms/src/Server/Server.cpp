@@ -517,7 +517,8 @@ struct RaftStoreProxyRunner : boost::noncopyable
         pthread_attr_init(&attribute);
         pthread_attr_setstacksize(&attribute, parms.stack_size);
         LOG_INFO(log, "start raft store proxy");
-        for(const auto & arg: parms.conf.args) {
+        for (const auto & arg : parms.conf.args)
+        {
             LOG_INFO(log, "Proxy arg: {}", arg);
         }
         pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
@@ -1064,14 +1065,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
             using T = std::decay_t<decltype(arg)>;
             if constexpr (std::is_same_v<T, UInt64>)
             {
-                if (arg != 0) {
+                if (arg != 0)
+                {
                     LOG_INFO(log, "Limit proxy's memory, size={}", arg);
                     proxy_conf.addExtraArgs("memory-limit-size", std::to_string(arg));
                 }
             }
             else if constexpr (std::is_same_v<T, double>)
             {
-                if (arg > 0 && arg <= 1.0) {
+                if (arg > 0 && arg <= 1.0)
+                {
                     LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
                     proxy_conf.addExtraArgs("memory-limit-ratio", std::to_string(arg));
                 }
