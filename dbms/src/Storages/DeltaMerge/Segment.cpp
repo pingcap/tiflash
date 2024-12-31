@@ -948,6 +948,7 @@ BlockInputStreamPtr Segment::getInputStream(
         expected_block_size,
         columns_to_read,
         segment_snap->stable->stable);
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
 
     // load DMilePackFilterResult for each DMFile
     DMFilePackFilterResults pack_filter_results;
@@ -958,7 +959,7 @@ BlockInputStreamPtr Segment::getInputStream(
             dm_context,
             dmfile,
             /*set_cache_if_miss*/ true,
-            read_ranges,
+            real_ranges,
             executor ? executor->rs_operator : EMPTY_RS_OPERATOR,
             /*read_pack*/ {});
         pack_filter_results.push_back(result);
@@ -971,7 +972,7 @@ BlockInputStreamPtr Segment::getInputStream(
             dm_context,
             columns_to_read,
             segment_snap,
-            read_ranges,
+            real_ranges,
             pack_filter_results,
             start_ts,
             clipped_block_rows);
@@ -980,7 +981,7 @@ BlockInputStreamPtr Segment::getInputStream(
             dm_context,
             columns_to_read,
             segment_snap,
-            read_ranges,
+            real_ranges,
             pack_filter_results,
             clipped_block_rows);
     case ReadMode::Raw:
@@ -988,14 +989,14 @@ BlockInputStreamPtr Segment::getInputStream(
             dm_context,
             columns_to_read,
             segment_snap,
-            read_ranges,
+            real_ranges,
             clipped_block_rows);
     case ReadMode::Bitmap:
         return getBitmapFilterInputStream(
             dm_context,
             columns_to_read,
             segment_snap,
-            read_ranges,
+            real_ranges,
             executor,
             pack_filter_results,
             start_ts,
@@ -3544,16 +3545,13 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     size_t build_bitmap_filter_block_rows,
     size_t read_data_block_rows)
 {
-    auto real_ranges = shrinkRowKeyRanges(read_ranges);
-    if (real_ranges.empty())
-    {
+    if (read_ranges.empty())
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
-    }
 
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
-        real_ranges,
+        read_ranges,
         pack_filter_results,
         start_ts,
         build_bitmap_filter_block_rows);
@@ -3572,7 +3570,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             dm_context,
             columns_to_read,
             segment_snap,
-            real_ranges,
+            read_ranges,
             executor,
             pack_filter_results,
             start_ts,
@@ -3589,7 +3587,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             segment_snap,
             dm_context,
             columns_to_read,
-            real_ranges,
+            read_ranges,
             executor->ann_query_info,
             pack_filter_results,
             start_ts,
@@ -3613,7 +3611,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             segment_snap,
             dm_context,
             columns_to_read,
-            real_ranges,
+            read_ranges,
             pack_filter_results,
             start_ts,
             read_data_block_rows,

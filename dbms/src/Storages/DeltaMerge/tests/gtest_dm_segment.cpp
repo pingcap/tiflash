@@ -1071,6 +1071,8 @@ try
         ingest_wbs.rollbackWrittenLogAndData();
     };
 
+    const auto read_range = RowKeyRange::fromHandleRange(HandleRange(0, 100));
+
     {
         // let segment's rowkey_range be [30, 70)
         HandleRange range(30, 70);
@@ -1081,8 +1083,7 @@ try
     {
         // test built bitmap filter
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto read_ranges = {RowKeyRange::newAll(false, 1)};
-        auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+        auto real_ranges = segment->shrinkRowKeyRanges({read_range});
         auto bitmap_filter = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
@@ -1105,7 +1106,7 @@ try
             dmContext(),
             cols_to_read,
             segment_snap,
-            {RowKeyRange::newAll(false, 1)},
+            {read_range},
             EMPTY_FILTER,
             {},
             std::numeric_limits<UInt64>::max(),
@@ -1147,7 +1148,7 @@ try
             dmContext(),
             cols_to_read,
             segment_snap,
-            {RowKeyRange::newAll(false, 1)},
+            {read_range},
             EMPTY_FILTER,
             {},
             std::numeric_limits<UInt64>::max(),
