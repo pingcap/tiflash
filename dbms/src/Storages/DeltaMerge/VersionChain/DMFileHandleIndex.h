@@ -39,7 +39,7 @@ public:
         , rowkey_range(std::move(rowkey_range_))
         , clipped_pack_range(getPackRange())
         , clipped_pack_index(loadPackIndex())
-        , clipped_pack_entries(loadPackEntries())
+        , clipped_pack_offsets(loadPackOffsets())
         , clipped_handle_packs(clipped_pack_range.count())
         , clipped_need_read_packs(std::vector<UInt8>(clipped_pack_range.count(), 1)) // read all packs by default
     {
@@ -48,8 +48,8 @@ public:
             clipped_pack_index.size(),
             clipped_pack_range.count());
         RUNTIME_CHECK(
-            clipped_pack_entries.size() == clipped_pack_range.count(),
-            clipped_pack_entries.size(),
+            clipped_pack_offsets.size() == clipped_pack_range.count(),
+            clipped_pack_offsets.size(),
             clipped_pack_range.count());
     }
 
@@ -116,7 +116,7 @@ private:
     std::optional<RowID> getBaseVersion(HandleView h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded();
-        const auto offset = clipped_pack_entries[clipped_pack_id].offset;
+        const auto offset = clipped_pack_offsets[clipped_pack_id];
         const auto & handle_col = clipped_handle_packs[clipped_pack_id];
         const auto * handles = toColumnVectorDataPtr<Int64>(handle_col);
         RUNTIME_CHECK_MSG(handles != nullptr, "TODO: support common handle");
@@ -136,19 +136,16 @@ private:
             max_values.begin() + clipped_pack_range.end_pack_id);
     }
 
-    std::vector<PackEntry> loadPackEntries()
+    std::vector<UInt32> loadPackOffsets()
     {
         const auto & pack_stats = dmfile->getPackStats();
-        std::vector<PackEntry> pack_entries;
-        pack_entries.reserve(clipped_pack_range.count());
-        UInt32 offset = 0;
-        for (UInt32 pack_id = clipped_pack_range.start_pack_id; pack_id < clipped_pack_range.end_pack_id; ++pack_id)
+        std::vector<UInt32> pack_offsets(clipped_pack_range.count(), 0);
+        for (UInt32 clipped_pack_id = 1; clipped_pack_id < pack_offsets.size(); ++clipped_pack_id)
         {
-            const auto & stat = pack_stats[pack_id];
-            pack_entries.push_back(PackEntry{.offset = offset, .rows = stat.rows});
-            offset += stat.rows;
+            UInt32 real_pack_id = clipped_pack_id + clipped_pack_range.start_pack_id;
+            pack_offsets[clipped_pack_id] = pack_offsets[clipped_pack_id - 1] + pack_stats[real_pack_id - 1].rows;
         }
-        return pack_entries;
+        return pack_offsets;
     }
 
     static bool isCommonHandle() { return std::is_same_v<Handle, String>; }
@@ -245,8 +242,8 @@ private:
     // Clipped by rowkey_range
     const PackRange clipped_pack_range;
     const std::vector<Handle> clipped_pack_index; // max value of each pack
-    const std::vector<PackEntry> clipped_pack_entries;
-    std::vector<ColumnPtr> clipped_handle_packs;
+    const std::vector<UInt32> clipped_pack_offsets; // offset of each pack
+    std::vector<ColumnPtr> clipped_handle_packs; // handle column of each pack
     std::optional<std::vector<UInt8>> clipped_need_read_packs;
 };
 
