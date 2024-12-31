@@ -25,6 +25,13 @@ namespace DB
 {
 namespace tests
 {
+PaddedPODArray<const char *> posToConst(const PaddedPODArray<char *> & pos)
+{
+    PaddedPODArray<const char *> const_pos(pos.size());
+    for (size_t i = 0; i < pos.size(); ++i)
+        const_pos[i] = pos[i];
+    return const_pos;
+}
 class TestColumnSerializeDeserialize : public ::testing::Test
 {
 public:
@@ -36,7 +43,7 @@ public:
         byte_size.resize_fill_zero(column_ptr->size());
         for (size_t i = 0; i < column_ptr->size(); ++i)
             byte_size[i] = i;
-        column_ptr->countSerializeByteSize(byte_size);
+        column_ptr->countSerializeByteSizeFast(byte_size);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
@@ -52,7 +59,7 @@ public:
         byte_size.resize_fill_zero(column_array->size());
         for (size_t i = 0; i < column_array->size(); ++i)
             byte_size[i] = i;
-        column_array->countSerializeByteSize(byte_size);
+        column_array->countSerializeByteSizeFast(byte_size);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], sizeof(UInt32) + i + result_byte_size[i]);
@@ -70,10 +77,10 @@ public:
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        column_ptr->countSerializeByteSize(byte_size);
+        column_ptr->countSerializeByteSizeFast(byte_size);
         size_t total_size = 0;
-        for (size_t i = 0; i < byte_size.size(); ++i)
-            total_size += byte_size[i];
+        for (const auto size : byte_size)
+            total_size += size;
         PaddedPODArray<char> memory(total_size);
         PaddedPODArray<char *> pos;
         size_t current_size = 0;
@@ -82,14 +89,15 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
+        column_ptr->batchSerializeFast(pos, 0, byte_size.size() / 2, false);
         for (size_t i = 0; i < byte_size.size() / 2; ++i)
             pos[i] -= byte_size[i];
 
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        auto const_pos = posToConst(pos);
+        new_col_ptr->batchDeserializeFast(const_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -99,12 +107,13 @@ public:
             current_size += byte_size[i];
         }
         pos.push_back(nullptr);
-        column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
+        column_ptr->batchSerializeFast(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
         for (size_t i = byte_size.size() / 2; i < byte_size.size() - 1; ++i)
             pos[i - byte_size.size() / 2] -= byte_size[i];
         pos.resize(pos.size() - 1);
 
-        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        const_pos = posToConst(pos);
+        new_col_ptr->batchDeserializeFast(const_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -113,11 +122,12 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
+        column_ptr->batchSerializeFast(pos, 0, byte_size.size(), true);
         for (size_t i = 0; i < byte_size.size(); ++i)
             pos[i] -= byte_size[i];
 
-        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        const_pos = posToConst(pos);
+        new_col_ptr->batchDeserializeFast(const_pos, use_nt_align_buffer);
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 
@@ -135,10 +145,10 @@ public:
             return;
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        column_ptr->countSerializeByteSize(byte_size);
+        column_ptr->countSerializeByteSizeFast(byte_size);
         size_t total_size = 0;
-        for (size_t i = 0; i < byte_size.size(); ++i)
-            total_size += byte_size[i];
+        for (const auto size : byte_size)
+            total_size += size;
         PaddedPODArray<char> memory(total_size);
         PaddedPODArray<char *> pos;
         size_t current_size = 0;
@@ -148,7 +158,7 @@ public:
             current_size += byte_size[i];
         }
         pos.push_back(nullptr);
-        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true);
+        column_ptr->batchSerializeFast(pos, 0, byte_size.size() / 2, true);
         for (size_t i = 0; i < byte_size.size() / 2 - 1; ++i)
             pos[i] -= byte_size[i];
         pos.resize(pos.size() - 1);
@@ -156,7 +166,8 @@ public:
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        auto const_pos = posToConst(pos);
+        new_col_ptr->batchDeserializeFast(const_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -165,24 +176,26 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
+        column_ptr->batchSerializeFast(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
         for (size_t i = byte_size.size() / 2 - 1; i < byte_size.size(); ++i)
             pos[i - byte_size.size() / 2 + 1] -= byte_size[i];
 
-        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        const_pos = posToConst(pos);
+        new_col_ptr->batchDeserializeFast(const_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
-        for (size_t i = 0; i < byte_size.size(); ++i)
+        for (const auto size : byte_size)
         {
             pos.push_back(memory.data() + current_size);
-            current_size += byte_size[i];
+            current_size += size;
         }
-        column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
+        column_ptr->batchSerializeFast(pos, 0, byte_size.size(), true);
         for (size_t i = 0; i < byte_size.size(); ++i)
             pos[i] -= byte_size[i];
 
-        new_col_ptr->deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+        const_pos = posToConst(pos);
+        new_col_ptr->batchDeserializeFast(const_pos, use_nt_align_buffer);
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 

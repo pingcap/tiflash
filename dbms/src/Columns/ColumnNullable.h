@@ -89,7 +89,7 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr & collator, String * srot_key_container) const override;
+    void batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr & collator, String * sort_key_container) const override;
     void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
     void batchSerializeForColumnArray(

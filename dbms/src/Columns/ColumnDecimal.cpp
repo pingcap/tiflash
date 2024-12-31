@@ -212,7 +212,7 @@ void ColumnDecimal<T>::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t s
 
         if constexpr (!fast_version && is_Decimal256)
         {
-            serializeDecimal256Helper(data[i], pos[i]);
+            serializeDecimal256Helper(pos[i], data[i]);
         }
         else
         {

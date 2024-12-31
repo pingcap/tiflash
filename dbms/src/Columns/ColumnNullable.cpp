@@ -326,7 +326,7 @@ void ColumnNullable::batchSerializeForColumnArray(
     size_t length,
     bool has_null,
     const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collaotr,
+    const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
     getNullMapColumn().batchSerializeForColumnArray(pos, start, length, has_null, array_offsets, collator, sort_key_container);
@@ -343,19 +343,19 @@ void ColumnNullable::batchSerializeForColumnArrayFast(
     getNestedColumn().batchSerializeForColumnArrayFast(pos, start, length, has_null, array_offsets);
 }
 
-void ColumnNullable::batchDeserialize(PaddedPODArray<char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr & collator)
+void ColumnNullable::batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr & collator)
 {
     getNullMapColumn().batchDeserialize(pos, use_nt_align_buffer, collator);
     getNestedColumn().batchDeserialize(pos, use_nt_align_buffer, collator);
 }
-void ColumnNullable::batchDeserializeFast(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
+void ColumnNullable::batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
 {
     getNullMapColumn().batchDeserializeFast(pos, use_nt_align_buffer);
     getNestedColumn().batchDeserializeFast(pos, use_nt_align_buffer);
 }
 
 void ColumnNullable::batchDeserializeForColumnArray(
-    PaddedPODArray<char *> & pos,
+    PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
@@ -364,7 +364,7 @@ void ColumnNullable::batchDeserializeForColumnArray(
     getNestedColumn().batchDeserializeForColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
 }
 void ColumnNullable::batchDeserializeForColumnArrayFast(
-    PaddedPODArray<char *> & pos,
+    PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {

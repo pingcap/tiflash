@@ -359,7 +359,7 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String *) const override
     {
-        batchSerializeForColumnArray(pos, start, length, has_null, array_offsets);
+        batchSerializeForColumnArrayFast(pos, start, length, has_null, array_offsets);
     }
     void batchSerializeForColumnArrayFast(
         PaddedPODArray<char *> & pos,

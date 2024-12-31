@@ -101,7 +101,7 @@ private:
     {}
 
     template <bool fast_version>
-    void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
+    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
     template <bool fast_version>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
@@ -204,7 +204,7 @@ public:
             size_t length,
             bool has_null,
             const TiDB::TiDBCollatorPtr &,
-            String &) const override
+            String *) const override
     {
         if (has_null)
         {
