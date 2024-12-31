@@ -31,7 +31,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
         dmfile_or_delete_range_list->push_back(
-            DMFileHandleIndex<Handle>{dm_context, dmfiles[0], /*start_row_id*/ 0, std::nullopt});
+            DMFileHandleIndex<Handle>{dm_context.global_context, dmfiles[0], /*start_row_id*/ 0, std::nullopt});
     }
 
     const auto & stable = *(snapshot.stable);
@@ -130,8 +130,7 @@ UInt32 VersionChain<Handle>::replayBlock(
     const auto * handle_col = toColumnVectorDataPtr<Int64>(block.begin()->column);
     RUNTIME_CHECK_MSG(handle_col != nullptr, "TODO: support common handle");
     RUNTIME_CHECK(handle_col->size() > offset, handle_col->size(), offset);
-    const std::span<const Handle> handles{
-        handle_col->data() + offset, handle_col->size() - offset};
+    const std::span<const Handle> handles{handle_col->data() + offset, handle_col->size() - offset};
 
     if (calculate_read_packs)
         calculateReadPacks(handles);
@@ -167,7 +166,7 @@ UInt32 VersionChain<Handle>::replayColumnFileBig(
     base_versions->insert(base_versions->end(), rows, NotExistRowID);
 
     dmfile_or_delete_range_list->push_back(
-        DMFileHandleIndex<Handle>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
+        DMFileHandleIndex<Handle>{dm_context.global_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
     return rows;
 }
 

@@ -83,8 +83,7 @@ UInt32 buildRowKeyFilterDMFile(
     const UInt32 start_row_id,
     std::vector<UInt8> & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id]
-        = getDMFilePackFilterResultBySegmentRange(dm_context, dmfile, segment_range);
+    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
     if (valid_handle_res.empty())
         return 0;
 
@@ -100,13 +99,23 @@ UInt32 buildRowKeyFilterDMFile(
                 valid_handle_res[i] = RSResult::None;
     }
 
-    const auto read_ranges_handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, read_ranges);
+    const auto read_ranges_handle_res = getRSResultsByRanges(
+        dm_context.global_context,
+        dm_context.scan_context,
+        dm_context.tracing_id,
+        dmfile,
+        read_ranges);
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
         valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
 
     if (!delete_ranges.empty())
     {
-        const auto delete_ranges_handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, delete_ranges);
+        const auto delete_ranges_handle_res = getRSResultsByRanges(
+            dm_context.global_context,
+            dm_context.scan_context,
+            dm_context.tracing_id,
+            dmfile,
+            delete_ranges);
         for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
             valid_handle_res[i] = valid_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
     }

@@ -19,8 +19,10 @@
 
 namespace DB::DM
 {
-RSResults getDMFilePackFilterResultByRanges(
-    const DMContext & dm_context,
+RSResults getRSResultsByRanges(
+    const Context & global_context,
+    const ScanContextPtr & scan_context,
+    const String & tracing_id,
     const DMFilePtr & dmfile,
     const RowKeyRanges & ranges)
 {
@@ -29,36 +31,18 @@ RSResults getDMFilePackFilterResultByRanges(
 
     auto pack_filter = DMFilePackFilter::loadFrom(
         dmfile,
-        dm_context.global_context.getMinMaxIndexCache(),
+        global_context.getMinMaxIndexCache(),
         true,
         ranges,
         EMPTY_RS_OPERATOR,
         {},
-        dm_context.global_context.getFileProvider(),
-        dm_context.getReadLimiter(),
-        dm_context.scan_context,
-        dm_context.tracing_id,
+        global_context.getFileProvider(),
+        global_context.getReadLimiter(),
+        scan_context,
+        tracing_id,
         ReadTag::MVCC);
 
     return pack_filter.getHandleRes();
-}
-
-std::pair<RSResults, UInt32> getDMFilePackFilterResultBySegmentRange(
-    const DMContext & dm_context,
-    const DMFilePtr & dmfile,
-    const std::optional<RowKeyRange> & segment_range)
-{
-    if (!segment_range)
-        return std::make_pair(RSResults(dmfile->getPacks(), RSResult::All), 0);
-
-    const auto handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, {*segment_range});
-    const auto valid_start_itr
-        = std::find_if(handle_res.begin(), handle_res.end(), [](RSResult r) { return r.isUse(); });
-    if (valid_start_itr == handle_res.end())
-        return {};
-    const auto valid_end_itr = std::find_if(valid_start_itr, handle_res.end(), [](RSResult r) { return !r.isUse(); });
-    const auto valid_start_pack_id = valid_start_itr - handle_res.begin();
-    return std::make_pair(RSResults(valid_start_itr, valid_end_itr), valid_start_pack_id);
 }
 
 namespace
@@ -75,7 +59,35 @@ T getMaxValue(const MinMaxIndex & minmax_index, size_t i)
     else
         static_assert(false, "Not support type");
 }
+
+std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
+{
+    const auto start = std::find_if(rs_results.begin(), rs_results.end(), [](RSResult r) { return r.isUse(); });
+    if (start == rs_results.end())
+        return {};
+    const auto end = std::find_if(start, rs_results.end(), [](RSResult r) { return !r.isUse(); });
+    const auto start_pack_id = start - rs_results.begin();
+    return std::make_pair(RSResults(start, end), start_pack_id);
+}
 } // namespace
+
+std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
+    const DMContext & dm_context,
+    const DMFilePtr & dmfile,
+    const std::optional<RowKeyRange> & segment_range)
+{
+    if (!segment_range)
+        return std::make_pair(RSResults(dmfile->getPacks(), RSResult::All), 0);
+
+    const auto handle_res = getRSResultsByRanges(
+        dm_context.global_context,
+        dm_context.scan_context,
+        dm_context.tracing_id,
+        dmfile,
+        {*segment_range});
+
+    return clipRSResults(handle_res);
+}
 
 template <typename T>
 std::vector<T> loadPackMaxValue(const Context & global_context, const DMFile & dmfile, const ColId col_id)

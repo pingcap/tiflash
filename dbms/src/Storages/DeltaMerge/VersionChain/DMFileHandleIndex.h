@@ -29,15 +29,15 @@ class DMFileHandleIndex
 {
 public:
     DMFileHandleIndex(
-        const DMContext & dm_context_,
+        const Context & global_context_,
         const DMFilePtr & dmfile_,
         const RowID start_row_id_,
         std::optional<RowKeyRange> rowkey_range_)
-        : global_context(dm_context_.global_context)
+        : global_context(global_context_)
         , dmfile(dmfile_)
         , start_row_id(start_row_id_)
         , rowkey_range(std::move(rowkey_range_))
-        , pack_range(getPackRange(dm_context_))
+        , pack_range(getPackRange())
         , pack_index(loadPackIndex())
         , pack_entries(loadPackEntries())
         , handle_packs(pack_range.count())
@@ -213,12 +213,18 @@ private:
         UInt32 count() const { return end_pack_id - start_pack_id; }
     };
 
-    PackRange getPackRange(const DMContext & dm_context)
+    PackRange getPackRange()
     {
         if (!rowkey_range)
             return PackRange{.start_pack_id = 0, .end_pack_id = static_cast<UInt32>(dmfile->getPacks())};
 
-        const auto handle_res = getDMFilePackFilterResultByRanges(dm_context, dmfile, {*rowkey_range});
+
+        const auto handle_res = getRSResultsByRanges(
+            global_context,
+            std::make_shared<ScanContext>(),
+            "DMFileHandleIndex",
+            dmfile,
+            {*rowkey_range});
         const auto valid_start_itr
             = std::find_if(handle_res.begin(), handle_res.end(), [](RSResult r) { return r.isUse(); });
         if (valid_start_itr == handle_res.end())

@@ -85,12 +85,14 @@ std::pair<Handle, Handle> convertRowKeyRange(const RowKeyRange & range)
         static_assert(false, "TODO: support common handle");
 }
 
-RSResults getDMFilePackFilterResultByRanges(
-    const DMContext & dm_context,
+RSResults getRSResultsByRanges(
+    const Context & global_context,
+    const ScanContextPtr & scan_context,
+    const String & tracing_id,
     const DMFilePtr & dmfile,
     const RowKeyRanges & ranges);
 
-std::pair<RSResults, UInt32> getDMFilePackFilterResultBySegmentRange(
+std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range);
