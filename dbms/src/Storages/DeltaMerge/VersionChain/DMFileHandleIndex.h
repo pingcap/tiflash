@@ -37,14 +37,20 @@ public:
         , dmfile(dmfile_)
         , start_row_id(start_row_id_)
         , rowkey_range(std::move(rowkey_range_))
-        , pack_range(getPackRange())
-        , pack_index(loadPackIndex())
-        , pack_entries(loadPackEntries())
-        , handle_packs(pack_range.count())
-        , need_read_packs(std::vector<UInt8>(pack_range.count(), 1)) // read all packs by default
+        , clipped_pack_range(getPackRange())
+        , clipped_pack_index(loadPackIndex())
+        , clipped_pack_entries(loadPackEntries())
+        , clipped_handle_packs(clipped_pack_range.count())
+        , clipped_need_read_packs(std::vector<UInt8>(clipped_pack_range.count(), 1)) // read all packs by default
     {
-        RUNTIME_CHECK(pack_index.size() == pack_range.count(), pack_index.size(), pack_range.count());
-        RUNTIME_CHECK(pack_entries.size() == pack_range.count(), pack_entries.size(), pack_range.count());
+        RUNTIME_CHECK(
+            clipped_pack_index.size() == clipped_pack_range.count(),
+            clipped_pack_index.size(),
+            clipped_pack_range.count());
+        RUNTIME_CHECK(
+            clipped_pack_entries.size() == clipped_pack_range.count(),
+            clipped_pack_entries.size(),
+            clipped_pack_range.count());
     }
 
     template <Int64OrStringView HandleView>
@@ -61,9 +67,9 @@ public:
 
     void calculateReadPacks(const std::span<const Handle> handles)
     {
-        std::vector<UInt8> calc_read_packs(pack_range.count(), 0);
+        std::vector<UInt8> calc_read_packs(clipped_pack_range.count(), 0);
         UInt32 calc_read_count = 0;
-        for (Handle h : handles)
+        for (const Handle & h : handles)
         {
             auto pa = getPackEntry(h);
             if (!pa || calc_read_packs[pa->first])
@@ -73,17 +79,17 @@ public:
             ++calc_read_count;
 
             // Read too many packs, read all by default
-            if (calc_read_count * 4 >= pack_range.count())
+            if (calc_read_count * 4 >= clipped_pack_range.count())
                 return;
         }
-        need_read_packs->swap(calc_read_packs);
+        clipped_need_read_packs->swap(calc_read_packs);
     }
 
     void cleanHandleColumn()
     {
         // Reset handle column data to save memory.
-        std::fill(handle_packs.begin(), handle_packs.end(), nullptr);
-        need_read_packs.emplace(pack_range.count(), 1);
+        std::fill(clipped_handle_packs.begin(), clipped_handle_packs.end(), nullptr);
+        clipped_need_read_packs.emplace(clipped_pack_range.count(), 1);
     }
 
 private:
@@ -99,17 +105,17 @@ private:
         if unlikely (rowkey_range && !inRowKeyRange(*rowkey_range, h))
             return {};
 
-        auto itr = std::lower_bound(pack_index.begin(), pack_index.end(), h);
-        if (itr == pack_index.end())
+        auto itr = std::lower_bound(clipped_pack_index.begin(), clipped_pack_index.end(), h);
+        if (itr == clipped_pack_index.end())
             return {};
-        return std::make_pair(itr - pack_index.begin(), pack_entries[itr - pack_index.begin()]);
+        return std::make_pair(itr - clipped_pack_index.begin(), clipped_pack_entries[itr - clipped_pack_index.begin()]);
     }
 
     template <Int64OrStringView HandleView>
     std::optional<RowID> getBaseVersion(HandleView h, UInt32 pack_id, UInt32 offset)
     {
         loadHandleIfNotLoaded();
-        const auto & handle_col = handle_packs[pack_id];
+        const auto & handle_col = clipped_handle_packs[pack_id];
         const auto * handles = toColumnVectorDataPtr<Int64>(handle_col);
         RUNTIME_CHECK_MSG(handles != nullptr, "TODO: support common handle");
         auto itr = std::lower_bound(handles->begin(), handles->end(), h);
@@ -124,17 +130,17 @@ private:
     {
         auto max_values = loadPackMaxValue<Handle>(global_context, *dmfile, EXTRA_HANDLE_COLUMN_ID);
         return std::vector<Handle>(
-            max_values.begin() + pack_range.start_pack_id,
-            max_values.begin() + pack_range.end_pack_id);
+            max_values.begin() + clipped_pack_range.start_pack_id,
+            max_values.begin() + clipped_pack_range.end_pack_id);
     }
 
     std::vector<PackEntry> loadPackEntries()
     {
         const auto & pack_stats = dmfile->getPackStats();
         std::vector<PackEntry> pack_entries;
-        pack_entries.reserve(pack_range.count());
+        pack_entries.reserve(clipped_pack_range.count());
         UInt32 offset = 0;
-        for (UInt32 pack_id = pack_range.start_pack_id; pack_id < pack_range.end_pack_id; ++pack_id)
+        for (UInt32 pack_id = clipped_pack_range.start_pack_id; pack_id < clipped_pack_range.end_pack_id; ++pack_id)
         {
             const auto & stat = pack_stats[pack_id];
             pack_entries.push_back(PackEntry{.offset = offset, .rows = stat.rows});
@@ -147,15 +153,15 @@ private:
 
     void loadHandleIfNotLoaded()
     {
-        if (likely(!need_read_packs))
+        if (likely(!clipped_need_read_packs))
             return;
 
         auto read_pack_ids = std::make_shared<IdSet>();
-        const auto & packs = *need_read_packs;
+        const auto & packs = *clipped_need_read_packs;
         for (UInt32 i = 0; i < packs.size(); ++i)
         {
             if (packs[i])
-                read_pack_ids->insert(i + pack_range.start_pack_id);
+                read_pack_ids->insert(i + clipped_pack_range.start_pack_id);
         }
 
         auto scan_context = std::make_shared<ScanContext>(); // TODO: use dm_context.scan_context
@@ -199,9 +205,9 @@ private:
         for (UInt32 pack_id : *read_pack_ids)
         {
             auto block = reader.read();
-            handle_packs[pack_id - pack_range.start_pack_id] = block.begin()->column;
+            clipped_handle_packs[pack_id - clipped_pack_range.start_pack_id] = block.begin()->column;
         }
-        need_read_packs.reset();
+        clipped_need_read_packs.reset();
     }
 
     struct PackRange
@@ -232,15 +238,14 @@ private:
     const Context & global_context;
     const DMFilePtr dmfile;
     const RowID start_row_id;
-    const std::optional<const RowKeyRange> rowkey_range; // Range of ColumnFileBig
-    const PackRange pack_range; // Packs filtered by rowkey_range
+    const std::optional<const RowKeyRange> rowkey_range; // Range of ColumnFileBig or nullopt for Stable DMFile
 
-    // These vectors are clipped by pack_range.
-    // Their size is equal to pack_range.count().
-    const std::vector<Handle> pack_index; // max value of each pack
-    const std::vector<PackEntry> pack_entries;
-    std::vector<ColumnPtr> handle_packs;
-    std::optional<std::vector<UInt8>> need_read_packs;
+    // Clipped by rowkey_range
+    const PackRange clipped_pack_range;
+    const std::vector<Handle> clipped_pack_index; // max value of each pack
+    const std::vector<PackEntry> clipped_pack_entries;
+    std::vector<ColumnPtr> clipped_handle_packs;
+    std::optional<std::vector<UInt8>> clipped_need_read_packs;
 };
 
 } // namespace DB::DM
