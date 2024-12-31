@@ -218,33 +218,27 @@ private:
         if (!rowkey_range)
             return PackRange{.start_pack_id = 0, .end_pack_id = static_cast<UInt32>(dmfile->getPacks())};
 
-        const auto handle_res = getRSResultsByRanges(
+        const auto [handle_res, start_pack_id] = getClippedRSResultsByRanges(
             global_context,
             std::make_shared<ScanContext>(),
             "DMFileHandleIndex",
             dmfile,
-            {*rowkey_range});
-        const auto valid_start_itr
-            = std::find_if(handle_res.begin(), handle_res.end(), [](RSResult r) { return r.isUse(); });
-        if (valid_start_itr == handle_res.end())
-            return PackRange{.start_pack_id = 0, .end_pack_id = 0};
-
-        const auto valid_end_itr
-            = std::find_if(valid_start_itr, handle_res.end(), [](RSResult r) { return !r.isUse(); });
+            rowkey_range);
         return PackRange{
-            .start_pack_id = static_cast<UInt32>(valid_start_itr - handle_res.begin()),
-            .end_pack_id = static_cast<UInt32>(valid_end_itr - handle_res.begin())};
+            .start_pack_id = start_pack_id,
+            .end_pack_id = start_pack_id + static_cast<UInt32>(handle_res.size())};
     }
 
     const Context & global_context;
-    DMFilePtr dmfile;
+    const DMFilePtr dmfile;
     const RowID start_row_id;
-    const std::optional<const RowKeyRange> rowkey_range;  // Range of ColumnFileBig
-    const PackRange pack_range;
+    const std::optional<const RowKeyRange> rowkey_range; // Range of ColumnFileBig
+    const PackRange pack_range; // Packs filtered by rowkey_range
 
-    // These vector are clipped by pack_range.
-    std::vector<Handle> pack_index; // max value of each pack
-    std::vector<PackEntry> pack_entries;
+    // These vectors are clipped by pack_range.
+    // Their size is equal to pack_range.count().
+    const std::vector<Handle> pack_index; // max value of each pack
+    const std::vector<PackEntry> pack_entries;
     std::vector<ColumnPtr> handle_packs;
     std::optional<std::vector<UInt8>> need_read_packs;
 };
