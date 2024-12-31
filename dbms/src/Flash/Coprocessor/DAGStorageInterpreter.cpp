@@ -751,7 +751,6 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
             }
         }
     }
-    LOG_DEBUG(log, "KVStore Zone Label {}", store_zone_label);
     auto coprocessor_reader = std::make_shared<CoprocessorReader>(
         schema,
         cluster,

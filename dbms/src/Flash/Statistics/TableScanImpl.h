@@ -18,19 +18,27 @@
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
 
+#include "common/types.h"
+
 namespace DB
 {
-struct TableScanDetail
+struct TableScanTimeDetail
 {
-    const bool is_local;
-    ConnectionProfileInfo conn_profile_info;
     double min_stream_cost_ns = -1.0;
     double max_stream_cost_ns = -1.0;
-
-    explicit TableScanDetail(bool is_local_)
-        : is_local(is_local_)
-    {}
-
+    String toJson() const;
+};
+struct LocalTableScanDetail
+{
+    Int64 bytes = 0;
+    TableScanTimeDetail time_detail;
+    String toJson() const;
+};
+struct RemoteTableScanDetail
+{
+    ConnectionProfileInfo inner_zone_conn_profile_info{ConnectionProfileInfo::InnerZoneRemote};
+    ConnectionProfileInfo inter_zone_conn_profile_info{ConnectionProfileInfo::InterZoneRemote};
+    TableScanTimeDetail time_detail;
     String toJson() const;
 };
 
@@ -55,8 +63,8 @@ public:
     TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
 private:
-    TableScanDetail local_table_scan_detail{true};
-    TableScanDetail remote_table_scan_detail{false};
+    LocalTableScanDetail local_table_scan_detail;
+    RemoteTableScanDetail remote_table_scan_detail;
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;
