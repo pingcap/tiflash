@@ -319,6 +319,22 @@ void ColumnArray::batchDeserialize(
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
+    batchDeserializeImpl<false>(pos, use_nt_align_buffer, collator);
+}
+
+void ColumnArray::batchDeserializeFast(
+    PaddedPODArray<const char *> & pos,
+    bool use_nt_align_buffer)
+{
+    batchDeserializeImpl<true>(pos, use_nt_align_buffer, nullptr);
+}
+
+template <bool is_fast>
+void ColumnArray::batchDeserializeImpl(
+    PaddedPODArray<const char *> & pos,
+    bool use_nt_align_buffer,
+    const TiDB::TiDBCollatorPtr & collator)
+{
     auto & offsets = getOffsets();
     size_t prev_size = offsets.size();
     size_t size = pos.size();
@@ -332,7 +348,10 @@ void ColumnArray::batchDeserialize(
         pos[i] += sizeof(UInt32);
     }
 
-    getData().batchDeserializeForColumnArray(pos, offsets, use_nt_align_buffer, collator);
+    if constexpr (is_fast)
+        getData().batchDeserializeForColumnArrayFast(pos, offsets, use_nt_align_buffer);
+    else
+        getData().batchDeserializeForColumnArray(pos, offsets, use_nt_align_buffer, collator);
 }
 
 void ColumnArray::flushNTAlignBuffer()

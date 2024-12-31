@@ -824,9 +824,6 @@ void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (use_nt_align_buffer)
     {
-        // TODO
-        RUNTIME_CHECK(!add_terminating_zero);
-
         bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
         bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
         if likely (is_offset_aligned && is_char_aligned)
@@ -885,6 +882,13 @@ void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool
                     str_size -= remain;
                 }
                 pos[i] = p;
+
+                if constexpr (add_terminating_zero)
+                {
+                    chars.resize(char_size + 1);
+                    chars[char_size] = 0;
+                    ++char_size;
+                }
 
                 size_t offset = char_size + char_buffer_size;
                 tiflash_compiler_builtin_memcpy(&offset_buffer.data[offset_buffer_size], &offset, sizeof(size_t));

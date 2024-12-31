@@ -55,6 +55,12 @@ private:
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const;
 
+    template <bool is_fast>
+    void batchDeserializeImpl(
+        PaddedPODArray<const char *> & pos,
+        bool use_nt_align_buffer,
+        const TiDB::TiDBCollatorPtr & collator);
+
 public:
     /** Create immutable column using immutable arguments. This arguments may be shared with other columns.
       * Use IColumn::mutate in order to make mutable column and mutate shared nested columns.

@@ -100,29 +100,29 @@ private:
         , scale(src.scale)
     {}
 
-    template <bool fast_version>
+    template <bool is_fast>
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
-    template <bool fast_version>
+    template <bool is_fast>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const;
 
-    template <bool has_null, bool fast_version>
+    template <bool has_null, bool is_fast>
     void batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
-    template <bool has_null, bool fast_version>
+    template <bool has_null, bool is_fast>
     void batchSerializeForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         const IColumn::Offsets & array_offsets) const;
 
-    template <bool fast_version>
+    template <bool is_fast>
     void batchDeserializeImpl(
         PaddedPODArray<const char *> & pos,
         bool use_nt_align_buffer [[maybe_unused]],
         const TiDB::TiDBCollatorPtr &);
 
-    template <bool fast_version>
+    template <bool is_fast>
     void batchDeserializeForColumnArrayImpl(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
@@ -209,22 +209,22 @@ public:
     {
         if (has_null)
         {
-            batchSerializeImpl</*has_null*/ true, /*fast_version*/ false>(pos, start, length);
+            batchSerializeImpl</*has_null*/ true, /*is_fast*/ false>(pos, start, length);
         }
         else
         {
-            batchSerializeImpl</*has_null*/ false, /*fast_version*/ false>(pos, start, length);
+            batchSerializeImpl</*has_null*/ false, /*is_fast*/ false>(pos, start, length);
         }
     }
     void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
     {
         if (has_null)
         {
-            batchSerializeImpl</*has_null*/ true, /*fast_version*/ true>(pos, start, length);
+            batchSerializeImpl</*has_null*/ true, /*is_fast*/ true>(pos, start, length);
         }
         else
         {
-            batchSerializeImpl</*has_null*/ false, /*fast_version*/ true>(pos, start, length);
+            batchSerializeImpl</*has_null*/ false, /*is_fast*/ true>(pos, start, length);
         }
     }
 
@@ -239,7 +239,7 @@ public:
     {
         if (has_null)
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ true, /*fast_version*/ false>(
+            batchSerializeForColumnArrayImpl</*has_null*/ true, /*is_fast*/ false>(
                 pos,
                 start,
                 length,
@@ -247,7 +247,7 @@ public:
         }
         else
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ false, /*fast_version*/ false>(
+            batchSerializeForColumnArrayImpl</*has_null*/ false, /*is_fast*/ false>(
                 pos,
                 start,
                 length,
@@ -263,7 +263,7 @@ public:
     {
         if (has_null)
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ true, /*fast_version*/ true>(
+            batchSerializeForColumnArrayImpl</*has_null*/ true, /*is_fast*/ true>(
                 pos,
                 start,
                 length,
@@ -271,7 +271,7 @@ public:
         }
         else
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ false, /*fast_version*/ true>(
+            batchSerializeForColumnArrayImpl</*has_null*/ false, /*is_fast*/ true>(
                 pos,
                 start,
                 length,

@@ -141,13 +141,13 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
-template <bool fast_version>
+template <bool is_fast>
 void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
-    if constexpr (!fast_version && is_Decimal256)
+    if constexpr (!is_fast && is_Decimal256)
     {
         for (size_t i = 0; i < size; ++i)
         {
@@ -162,7 +162,7 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
 }
 
 template <typename T>
-template <bool fast_version>
+template <bool is_fast>
 void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
@@ -173,7 +173,7 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
         byte_size.size(),
         array_offsets.size());
 
-    if constexpr (!fast_version && is_Decimal256)
+    if constexpr (!is_fast && is_Decimal256)
     {
         size_t size = array_offsets.size();
         for (size_t i = 0; i < size; ++i)
@@ -195,7 +195,7 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
 }
 
 template <typename T>
-template <bool has_null, bool fast_version>
+template <bool has_null, bool is_fast>
 void ColumnDecimal<T>::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
@@ -209,7 +209,7 @@ void ColumnDecimal<T>::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t s
                 continue;
         }
 
-        if constexpr (!fast_version && is_Decimal256)
+        if constexpr (!is_fast && is_Decimal256)
         {
             serializeDecimal256Helper(pos[i], data[i]);
         }
@@ -222,7 +222,7 @@ void ColumnDecimal<T>::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t s
 }
 
 template <typename T>
-template <bool has_null, bool fast_version>
+template <bool has_null, bool is_fast>
 void ColumnDecimal<T>::batchSerializeForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -251,7 +251,7 @@ void ColumnDecimal<T>::batchSerializeForColumnArrayImpl(
         }
 
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        if constexpr (!fast_version && is_Decimal256)
+        if constexpr (!is_fast && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
             {
@@ -278,7 +278,7 @@ void ColumnDecimal<T>::batchSerializeForColumnArrayImpl(
 }
 
 template <typename T>
-template <bool fast_version>
+template <bool is_fast>
 void ColumnDecimal<T>::batchDeserializeImpl(
     PaddedPODArray<const char *> & pos,
     bool use_nt_align_buffer [[maybe_unused]],
@@ -287,12 +287,14 @@ void ColumnDecimal<T>::batchDeserializeImpl(
     size_t prev_size = data.size();
     size_t size = pos.size();
 
+    // is_complex_decimal256 is true means Decimal256 is serialized by [bool, limb_count, n * limb].
+    // nt optimization is not used because serialized data is not aligned by 64B.
+    static const bool is_complex_decimal256 = (!is_fast && is_Decimal256);
+
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (use_nt_align_buffer)
     {
-        // TODO
-        RUNTIME_CHECK(!fast_version);
-        if constexpr (FULL_VECTOR_SIZE_AVX2 % sizeof(T) == 0)
+        if constexpr ((FULL_VECTOR_SIZE_AVX2 % sizeof(T) == 0) && !is_complex_decimal256)
         {
             bool is_aligned = reinterpret_cast<std::uintptr_t>(&data[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
             if likely (is_aligned)
@@ -368,7 +370,7 @@ void ColumnDecimal<T>::batchDeserializeImpl(
         use_nt_align_buffer);
 #endif
 
-    if constexpr (!fast_version && is_Decimal256)
+    if constexpr (is_complex_decimal256)
     {
         data.reserve(prev_size + size);
         for (size_t i = 0; i < size; ++i)
@@ -390,7 +392,7 @@ void ColumnDecimal<T>::batchDeserializeImpl(
 }
 
 template <typename T>
-template <bool fast_version>
+template <bool is_fast>
 void ColumnDecimal<T>::batchDeserializeForColumnArrayImpl(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
@@ -418,7 +420,7 @@ void ColumnDecimal<T>::batchDeserializeForColumnArrayImpl(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        if constexpr (!fast_version && is_Decimal256)
+        if constexpr (!is_fast && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
             {
