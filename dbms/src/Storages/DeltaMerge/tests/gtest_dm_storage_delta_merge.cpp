@@ -698,7 +698,7 @@ try
         runtime_filter_ids,
         0,
         ctx->getTimezoneInfo());
-    Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
+    Names read_columns = {"col1", MutSup::extra_table_id_column_name, "col2"};
     BlockInputStreams ins = storage->read(read_columns, query_info, *ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
     BlockInputStreamPtr in = ins[0];
@@ -706,7 +706,7 @@ try
         in,
         Block({
             createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), "col1"),
-            createConstColumn<Nullable<Int64>>(num_rows_write, table_id, EXTRA_TABLE_ID_COLUMN_NAME),
+            createConstColumn<Nullable<Int64>>(num_rows_write, table_id, MutSup::extra_table_id_column_name),
             createColumn<String>(Strings(num_rows_write, "a"), "col2"),
         }));
 
@@ -818,7 +818,7 @@ try
             runtime_filter_ids,
             0,
             ctx->getTimezoneInfo());
-        Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
+        Names read_columns = {"col1", MutSup::extra_table_id_column_name, "col2"};
         BlockInputStreams ins = storage->read(read_columns, query_info, *ctx, stage2, 8192, 1);
         return getInputStreamNRows(ins[0]);
     };

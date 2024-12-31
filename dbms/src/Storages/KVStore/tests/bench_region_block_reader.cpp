@@ -74,7 +74,7 @@ protected:
         WriteBufferFromOwnString pk_buf;
         if (table_info.is_common_handle)
         {
-            auto & primary_index_info = table_info.getPrimaryIndexInfo();
+            const auto & primary_index_info = table_info.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
                 auto idx = column_name_columns_index_map[primary_index_info.idx_cols[i].name];
@@ -135,7 +135,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandle)
     auto [table_info, fields] = getNormalTableInfoFields({2, 3, 4}, true);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
+    for (auto _ : state) // NOLINT
     {
         decodeColumns(decoding_schema, true);
     }
@@ -146,10 +146,10 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandle)
 (benchmark::State & state)
 {
     size_t num_rows = state.range(0);
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
+    for (auto _ : state) // NOLINT
     {
         decodeColumns(decoding_schema, true);
     }
@@ -162,7 +162,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandle)
     auto [table_info, fields] = getNormalTableInfoFields({2}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
+    for (auto _ : state) // NOLINT
     {
         decodeColumns(decoding_schema, true);
     }

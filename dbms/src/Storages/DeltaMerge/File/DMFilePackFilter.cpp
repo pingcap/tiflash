@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
@@ -20,7 +21,6 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-
 
 namespace DB::DM
 {
@@ -56,7 +56,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load()
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {
-        tryLoadIndex(result.param, EXTRA_HANDLE_COLUMN_ID);
+        tryLoadIndex(result.param, MutSup::extra_handle_id);
         std::vector<RSOperatorPtr> handle_filters;
         for (auto & rowkey_range : rowkey_ranges)
             handle_filters.emplace_back(toFilter(rowkey_range));
@@ -65,7 +65,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load()
         if (!rowkey_ranges.empty())
         {
             bool is_common_handle = rowkey_ranges.begin()->is_common_handle;
-            auto handle_col_type = dmfile->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type;
+            auto handle_col_type = dmfile->getColumnStat(MutSup::extra_handle_id).type;
             if (is_common_handle)
                 RUNTIME_CHECK_MSG(
                     handle_col_type->getTypeId() == TypeIndex::String,

@@ -18,6 +18,7 @@
 #include <Storages/KVStore/FFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
+#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 
 namespace DB
 {
@@ -213,7 +214,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     return RegionDataReadInfo{pk, decoded_val.write_type, ts, decoded_val.short_value};
 }
 
-DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
+LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
 {
     for (const auto & [pk, value] : lock_cf.getData())
     {
@@ -222,22 +223,12 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
         const auto & [tikv_key, tikv_val, lock_info_ptr] = value;
         std::ignore = tikv_key;
         std::ignore = tikv_val;
-        const auto & lock_info = *lock_info_ptr;
+        const auto & lock_info_raw = *lock_info_ptr;
 
-        if (lock_info.lock_version > query.read_tso || lock_info.lock_type == kvrpcpb::Op::Lock
-            || lock_info.lock_type == kvrpcpb::Op::PessimisticLock)
-            continue;
-        if (lock_info.min_commit_ts > query.read_tso)
-            continue;
-        if (query.bypass_lock_ts)
+        if (auto t = lock_info_raw.getLockInfoPtr(query); t != nullptr)
         {
-            if (query.bypass_lock_ts->count(lock_info.lock_version))
-            {
-                GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
-                continue;
-            }
+            return t;
         }
-        return lock_info_ptr;
     }
 
     return nullptr;
@@ -365,6 +356,11 @@ RegionData & RegionData::operator=(RegionData && rhs)
     reportDelta(cf_data_size, rhs.cf_data_size.load());
     cf_data_size = rhs.cf_data_size.load();
     return *this;
+}
+
+String RegionData::summary() const
+{
+    return fmt::format("write:{},lock:{},default:{}", write_cf.getSize(), lock_cf.getSize(), default_cf.getSize());
 }
 
 } // namespace DB

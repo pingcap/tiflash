@@ -227,7 +227,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
 bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
 {
-    return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
+    return cd.id == MutSup::extra_handle_id || cd.id == MutSup::version_col_id;
 }
 
 Block DMFileReader::read()
@@ -257,7 +257,7 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
     /// 2. Find packs can do clean read.
 
     const bool need_read_extra_columns = std::any_of(read_columns.cbegin(), read_columns.cend(), [](const auto & cd) {
-        return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == TAG_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
+        return cd.id == MutSup::extra_handle_id || cd.id == MutSup::delmark_col_id || cd.id == MutSup::version_col_id;
     });
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_properties = dmfile->getPackProperties();
@@ -334,13 +334,13 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
             // For handle, tag and version column, we can try to do clean read.
             switch (cd.id)
             {
-            case EXTRA_HANDLE_COLUMN_ID:
+            case MutSup::extra_handle_id:
                 col = readExtraColumn(cd, start_pack_id, pack_count, read_rows, handle_column_clean_read_packs);
                 break;
-            case TAG_COLUMN_ID:
+            case MutSup::delmark_col_id:
                 col = readExtraColumn(cd, start_pack_id, pack_count, read_rows, del_column_clean_read_packs);
                 break;
-            case VERSION_COLUMN_ID:
+            case MutSup::version_col_id:
                 col = readExtraColumn(cd, start_pack_id, pack_count, read_rows, version_column_clean_read_packs);
                 break;
             default:
@@ -371,7 +371,7 @@ ColumnPtr DMFileReader::cleanRead(
 {
     switch (cd.id)
     {
-    case EXTRA_HANDLE_COLUMN_ID:
+    case MutSup::extra_handle_id:
     {
         if (is_common_handle)
         {
@@ -384,11 +384,11 @@ ColumnPtr DMFileReader::cleanRead(
             return cd.type->createColumnConst(rows_count, Field(min_handle));
         }
     }
-    case TAG_COLUMN_ID:
+    case MutSup::delmark_col_id:
     {
         return cd.type->createColumnConst(rows_count, Field(static_cast<UInt64>(pack_stats[range.first].first_tag)));
     }
-    case VERSION_COLUMN_ID:
+    case MutSup::version_col_id:
     {
         return cd.type->createColumnConst(
             rows_count,
@@ -412,11 +412,11 @@ ColumnPtr DMFileReader::readExtraColumn(
     size_t read_rows,
     const std::vector<size_t> & clean_read_packs)
 {
-    assert(cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == TAG_COLUMN_ID || cd.id == VERSION_COLUMN_ID);
+    assert(cd.id == MutSup::extra_handle_id || cd.id == MutSup::delmark_col_id || cd.id == MutSup::version_col_id);
 
     const auto & pack_stats = dmfile->getPackStats();
     auto read_strategy = ColumnCache::getCleanReadStrategy(start_pack_id, pack_count, clean_read_packs);
-    if (read_strategy.size() != 1 && cd.id == EXTRA_HANDLE_COLUMN_ID)
+    if (read_strategy.size() != 1 && cd.id == MutSup::extra_handle_id)
     {
         // If size of read_strategy is not 1, handle can not do clean read.
         read_strategy.clear();
