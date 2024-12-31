@@ -238,7 +238,10 @@ public:
 
     /// Count the serialize byte size and added to the byte_size.
     /// The byte_size.size() must be equal to the column size.
-    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */, const TiDB::TiDBCollatorPtr & /* collator */) const = 0;
+    virtual void countSerializeByteSize(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const TiDB::TiDBCollatorPtr & /* collator */) const
+        = 0;
     virtual void countSerializeByteSizeFast(PaddedPODArray<size_t> & /* byte_size */) const = 0;
 
     /// Count the serialize byte size and added to the byte_size called by ColumnArray.
@@ -247,10 +250,12 @@ public:
     virtual void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */,
-        const TiDB::TiDBCollatorPtr & /* collator */) const = 0;
+        const TiDB::TiDBCollatorPtr & /* collator */) const
+        = 0;
     virtual void countSerializeByteSizeForColumnArrayFast(
         PaddedPODArray<size_t> & /* byte_size */,
-        const Offsets & /* array_offsets */) const = 0;
+        const Offsets & /* array_offsets */) const
+        = 0;
 
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
     /// serialized data.
@@ -263,12 +268,14 @@ public:
         size_t /* length */,
         bool /* has_null */,
         const TiDB::TiDBCollatorPtr & /* collator */,
-        String * /* sort_key_container */) const = 0;
+        String * /* sort_key_container */) const
+        = 0;
     virtual void batchSerializeFast(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */) const = 0;
+        bool /* has_null */) const
+        = 0;
 
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
     /// serialized data.
@@ -280,13 +287,15 @@ public:
         bool /* has_null */,
         const Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */,
-        String * /* sort_key_container */) const = 0;
+        String * /* sort_key_container */) const
+        = 0;
     virtual void batchSerializeForColumnArrayFast(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
-        const Offsets & /* array_offsets */) const = 0;
+        const Offsets & /* array_offsets */) const
+        = 0;
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// Note:
@@ -306,7 +315,11 @@ public:
     ///     }
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->flushNTAlignBuffer();
-    virtual void batchDeserialize(PaddedPODArray<const char *> & /* pos */, bool /* use_nt_align_buffer */, const TiDB::TiDBCollatorPtr & /* collator */) = 0;
+    virtual void batchDeserialize(
+        PaddedPODArray<const char *> & /* pos */,
+        bool /* use_nt_align_buffer */,
+        const TiDB::TiDBCollatorPtr & /* collator */)
+        = 0;
     virtual void batchDeserializeFast(PaddedPODArray<const char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.

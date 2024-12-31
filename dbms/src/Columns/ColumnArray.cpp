@@ -218,7 +218,8 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
     return pos;
 }
 
-void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const
+void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    const
 {
     countSerializeByteSizeImpl<false>(byte_size, collator);
 }
@@ -229,7 +230,8 @@ void ColumnArray::countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size)
 }
 
 template <bool is_fast>
-void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const
+void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -254,7 +256,13 @@ void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size,
         getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets(), collator);
 }
 
-void ColumnArray::batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr & collator, String * sort_key_container) const
+void ColumnArray::batchSerialize(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
 {
     if (has_null)
         batchSerializeImpl<true, false>(pos, start, length, collator, sort_key_container);
@@ -271,7 +279,12 @@ void ColumnArray::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start,
 }
 
 template <bool has_null, bool is_fast>
-void ColumnArray::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const TiDB::TiDBCollatorPtr & collator, String * sort_key_container) const
+void ColumnArray::batchSerializeImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
@@ -296,11 +309,15 @@ void ColumnArray::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start,
     else
     {
         RUNTIME_CHECK(sort_key_container);
-        getData().batchSerializeForColumnArray(pos, start, length, has_null, getOffsets(), collator, sort_key_container);
+        getData()
+            .batchSerializeForColumnArray(pos, start, length, has_null, getOffsets(), collator, sort_key_container);
     }
 }
 
-void ColumnArray::batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr & collator)
+void ColumnArray::batchDeserialize(
+    PaddedPODArray<const char *> & pos,
+    bool use_nt_align_buffer,
+    const TiDB::TiDBCollatorPtr & collator)
 {
     auto & offsets = getOffsets();
     size_t prev_size = offsets.size();

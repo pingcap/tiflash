@@ -209,6 +209,7 @@ public:
         // BinCollator only trim right space.
         return 1;
     }
+
 private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
 
@@ -323,10 +324,7 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
 
-    size_t maxBytesForOneChar() const override
-    {
-        return sizeof(WeightType);
-    }
+    size_t maxBytesForOneChar() const override { return sizeof(WeightType); }
 
 private:
     const std::string name = "GeneralCI";

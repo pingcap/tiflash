@@ -128,6 +128,7 @@ private:
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer [[maybe_unused]],
         const TiDB::TiDBCollatorPtr &);
+
 public:
     const char * getFamilyName() const override { return TypeName<T>::get(); }
 
@@ -199,35 +200,31 @@ public:
     }
 
     void batchSerialize(
-            PaddedPODArray<char *> & pos,
-            size_t start,
-            size_t length,
-            bool has_null,
-            const TiDB::TiDBCollatorPtr &,
-            String *) const override
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override
     {
         if (has_null)
         {
-            batchSerializeImpl</*has_null*/true, /*fast_version*/false>(pos, start, length);
+            batchSerializeImpl</*has_null*/ true, /*fast_version*/ false>(pos, start, length);
         }
         else
         {
-            batchSerializeImpl</*has_null*/false, /*fast_version*/false>(pos, start, length);
+            batchSerializeImpl</*has_null*/ false, /*fast_version*/ false>(pos, start, length);
         }
     }
-    void batchSerializeFast(
-            PaddedPODArray<char *> & pos,
-            size_t start,
-            size_t length,
-            bool has_null) const override
+    void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
     {
         if (has_null)
         {
-            batchSerializeImpl</*has_null*/true, /*fast_version*/true>(pos, start, length);
+            batchSerializeImpl</*has_null*/ true, /*fast_version*/ true>(pos, start, length);
         }
         else
         {
-            batchSerializeImpl</*has_null*/false, /*fast_version*/true>(pos, start, length);
+            batchSerializeImpl</*has_null*/ false, /*fast_version*/ true>(pos, start, length);
         }
     }
 
@@ -242,11 +239,19 @@ public:
     {
         if (has_null)
         {
-            batchSerializeForColumnArrayImpl</*has_null*/true, /*fast_version*/false>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ true, /*fast_version*/ false>(
+                pos,
+                start,
+                length,
+                array_offsets);
         }
         else
         {
-            batchSerializeForColumnArrayImpl</*has_null*/false, /*fast_version*/false>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ false, /*fast_version*/ false>(
+                pos,
+                start,
+                length,
+                array_offsets);
         }
     }
     void batchSerializeForColumnArrayFast(
@@ -258,15 +263,24 @@ public:
     {
         if (has_null)
         {
-            batchSerializeForColumnArrayImpl</*has_null*/true, /*fast_version*/true>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ true, /*fast_version*/ true>(
+                pos,
+                start,
+                length,
+                array_offsets);
         }
         else
         {
-            batchSerializeForColumnArrayImpl</*has_null*/false, /*fast_version*/true>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ false, /*fast_version*/ true>(
+                pos,
+                start,
+                length,
+                array_offsets);
         }
     }
 
-    void batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr &) override
+    void batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr &)
+        override
     {
         batchDeserializeImpl<false>(pos, use_nt_align_buffer, nullptr);
     }

@@ -116,7 +116,12 @@ private:
         const TiDB::TiDBCollatorPtr & collator) const;
 
     template <bool has_null, bool has_collator>
-    void batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const TiDB::TiDBCollatorPtr & collator, String * sort_key_container) const;
+    void batchSerializeImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const TiDB::TiDBCollatorPtr & collator,
+        String * sort_key_container) const;
     template <bool has_null, bool has_collator>
     void batchSerializeForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
@@ -278,7 +283,8 @@ public:
         return pos + string_size;
     }
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const override;
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+        const override;
     void countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const override;
 
     void countSerializeByteSizeForColumnArray(
@@ -289,7 +295,13 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr & collator, String * sort_key_container) const override;
+    void batchSerialize(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const TiDB::TiDBCollatorPtr & collator,
+        String * sort_key_container) const override;
     void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
     void batchSerializeForColumnArray(
@@ -307,7 +319,10 @@ public:
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr & collator) override;
+    void batchDeserialize(
+        PaddedPODArray<const char *> & pos,
+        bool use_nt_align_buffer,
+        const TiDB::TiDBCollatorPtr & collator) override;
     void batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
 
     void batchDeserializeForColumnArray(

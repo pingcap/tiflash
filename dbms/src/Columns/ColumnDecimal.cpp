@@ -61,9 +61,9 @@ ALWAYS_INLINE inline size_t getDecimal256BytesSize(const Decimal256 & val)
     return sizeof(bool) + sizeof(size_t) + val.value.backend().size() * sizeof(boost::multiprecision::limb_type);
 }
 
-ALWAYS_INLINE inline void serializeDecimal256Helper(char * & dst, const Decimal256 & data)
+ALWAYS_INLINE inline void serializeDecimal256Helper(char *& dst, const Decimal256 & data)
 {
-   const auto & val = data.value.backend();
+    const auto & val = data.value.backend();
 
     const bool s = val.sign();
     tiflash_compiler_builtin_memcpy(dst, &s, sizeof(bool));
@@ -98,8 +98,7 @@ ALWAYS_INLINE inline std::pair<Decimal256, const char *> deserializeDecimal256He
         val.negate();
     val.normalize();
 
-    return std::make_pair(value,
-        ptr + offset + limb_count * sizeof(boost::multiprecision::limb_type));
+    return std::make_pair(value, ptr + offset + limb_count * sizeof(boost::multiprecision::limb_type));
 }
 
 template <typename T>

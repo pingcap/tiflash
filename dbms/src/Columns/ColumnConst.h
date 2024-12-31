@@ -112,13 +112,16 @@ public:
         return res;
     }
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */, const TiDB::TiDBCollatorPtr & /* collator */) const override
+    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */, const TiDB::TiDBCollatorPtr & /* collator */)
+        const override
     {
         throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
     void countSerializeByteSizeFast(PaddedPODArray<size_t> & /* byte_size */) const override
     {
-        throw Exception("Method countSerializeByteSizeFast is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method countSerializeByteSizeFast is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void countSerializeByteSizeForColumnArray(
@@ -183,17 +186,16 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void batchDeserialize(PaddedPODArray<const char *> & /* pos */, bool /* use_nt_align_buffer */, const TiDB::TiDBCollatorPtr & /* collator */) override
+    void batchDeserialize(
+        PaddedPODArray<const char *> & /* pos */,
+        bool /* use_nt_align_buffer */,
+        const TiDB::TiDBCollatorPtr & /* collator */) override
     {
-        throw Exception(
-            "Method batchDeserialize is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Method batchDeserialize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
     void batchDeserializeFast(PaddedPODArray<const char *> & /* pos */, bool /* use_nt_align_buffer */) override
     {
-        throw Exception(
-            "Method batchDeserializeFast is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Method batchDeserializeFast is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void batchDeserializeForColumnArray(

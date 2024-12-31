@@ -481,7 +481,8 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const
+void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    const
 {
     if likely (collator != nullptr)
         countSerializeByteSizeImpl<true>(byte_size, collator);
@@ -495,7 +496,9 @@ void ColumnString::countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size
 }
 
 template <bool has_collator>
-void ColumnString::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const
+void ColumnString::countSerializeByteSizeImpl(
+    PaddedPODArray<size_t> & byte_size,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -543,7 +546,6 @@ void ColumnString::countSerializeByteSizeForColumnArrayFast(
     const IColumn::Offsets & array_offsets) const
 {
     countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
-
 }
 
 template <bool has_collator>
@@ -581,8 +583,8 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         size_t size = array_offsets.size();
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
-            byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1]) + 
-                max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]));
+            byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1])
+                + max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]));
     }
     else
     {
@@ -593,34 +595,55 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     }
 }
 
-void ColumnString::batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr & collator, String * sort_key_container) const
+void ColumnString::batchSerialize(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
 {
     if (has_null)
     {
         if likely (collator != nullptr)
-            batchSerializeImpl</*has_null*/true, /*has_collator*/true>(pos, start, length, collator, sort_key_container);
+            batchSerializeImpl</*has_null*/ true, /*has_collator*/ true>(
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container);
         else
-            batchSerializeImpl</*has_null*/true, /*has_collator*/false>(pos, start, length, nullptr, nullptr);
+            batchSerializeImpl</*has_null*/ true, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
     }
     else
     {
         if likely (collator != nullptr)
-            batchSerializeImpl</*has_null*/false, /*has_collator*/true>(pos, start, length, collator, sort_key_container);
+            batchSerializeImpl</*has_null*/ false, /*has_collator*/ true>(
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container);
         else
-            batchSerializeImpl</*has_null*/false, /*has_collator*/false>(pos, start, length, nullptr, nullptr);
+            batchSerializeImpl</*has_null*/ false, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
     }
 }
 
 void ColumnString::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        batchSerializeImpl</*has_null*/true, /*has_collator*/false>(pos, start, length, nullptr, nullptr);
+        batchSerializeImpl</*has_null*/ true, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
     else
-        batchSerializeImpl</*has_null*/false, /*has_collator*/false>(pos, start, length, nullptr, nullptr);
+        batchSerializeImpl</*has_null*/ false, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
 }
 
 template <bool has_null, bool has_collator>
-void ColumnString::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const TiDB::TiDBCollatorPtr & collator, String * sort_key_container) const
+void ColumnString::batchSerializeImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
@@ -655,25 +678,37 @@ void ColumnString::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start
 }
 
 void ColumnString::batchSerializeForColumnArray(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        bool has_null,
-        const IColumn::Offsets & array_offsets,
-        const TiDB::TiDBCollatorPtr & collator,
-        String * sort_key_container) const
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
 {
     if (has_null)
     {
         if likely (collator != nullptr)
-            batchSerializeForColumnArrayImpl<true, true>(pos, start, length, array_offsets, collator, sort_key_container);
+            batchSerializeForColumnArrayImpl<true, true>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                collator,
+                sort_key_container);
         else
             batchSerializeForColumnArrayImpl<true, false>(pos, start, length, array_offsets, nullptr, nullptr);
     }
     else
     {
         if likely (collator != nullptr)
-            batchSerializeForColumnArrayImpl<false, true>(pos, start, length, array_offsets, collator, sort_key_container);
+            batchSerializeForColumnArrayImpl<false, true>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                collator,
+                sort_key_container);
         else
             batchSerializeForColumnArrayImpl<false, true>(pos, start, length, array_offsets, nullptr, nullptr);
     }
@@ -729,7 +764,8 @@ void ColumnString::batchSerializeForColumnArrayImpl(
             {
                 UInt32 str_size = sizeAt(j);
                 const void * src = &chars[offsetAt(j)];
-                auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
+                auto sort_key
+                    = collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
                 str_size = sort_key.size;
                 src = sort_key.data;
 
@@ -762,7 +798,10 @@ void ColumnString::batchSerializeForColumnArrayImpl(
     }
 }
 
-void ColumnString::batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr & collator)
+void ColumnString::batchDeserialize(
+    PaddedPODArray<const char *> & pos,
+    bool use_nt_align_buffer,
+    const TiDB::TiDBCollatorPtr & collator)
 {
     if likely (collator != nullptr)
         batchDeserializeImpl<true>(pos, use_nt_align_buffer);
@@ -900,10 +939,10 @@ void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool
 }
 
 void ColumnString::batchDeserializeForColumnArray(
-        PaddedPODArray<const char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr & collator)
+    PaddedPODArray<const char *> & pos,
+    const IColumn::Offsets & array_offsets,
+    bool use_nt_align_buffer,
+    const TiDB::TiDBCollatorPtr & collator)
 {
     if likely (collator != nullptr)
         batchDeserializeForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
@@ -912,9 +951,9 @@ void ColumnString::batchDeserializeForColumnArray(
 }
 
 void ColumnString::batchDeserializeForColumnArrayFast(
-        PaddedPODArray<const char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer)
+    PaddedPODArray<const char *> & pos,
+    const IColumn::Offsets & array_offsets,
+    bool use_nt_align_buffer)
 {
     batchDeserializeForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
 }

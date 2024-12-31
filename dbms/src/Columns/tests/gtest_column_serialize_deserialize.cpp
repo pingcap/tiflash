@@ -176,7 +176,8 @@ public:
             pos.push_back(memory.data() + current_size);
             current_size += byte_size[i];
         }
-        column_ptr->batchSerializeFast(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
+        column_ptr
+            ->batchSerializeFast(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
         for (size_t i = byte_size.size() / 2 - 1; i < byte_size.size(); ++i)
             pos[i - byte_size.size() / 2 + 1] -= byte_size[i];
 

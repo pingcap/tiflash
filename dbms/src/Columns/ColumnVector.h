@@ -344,7 +344,13 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void batchSerialize(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null, const TiDB::TiDBCollatorPtr &, String *) const override
+    void batchSerialize(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override
     {
         batchSerializeFast(pos, start, length, has_null);
     }
@@ -368,7 +374,8 @@ public:
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr &) override
+    void batchDeserialize(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer, const TiDB::TiDBCollatorPtr &)
+        override
     {
         batchDeserializeFast(pos, use_nt_align_buffer);
     }

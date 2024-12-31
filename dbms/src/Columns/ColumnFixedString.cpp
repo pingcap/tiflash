@@ -157,7 +157,8 @@ void ColumnFixedString::countSerializeByteSizeForColumnArrayFast(
         byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
 }
 
-void ColumnFixedString::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnFixedString::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null)
+    const
 {
     if (has_null)
         batchSerializeImpl<true>(pos, start, length);
