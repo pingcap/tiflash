@@ -56,7 +56,7 @@ public:
     template <Int64OrStringView HandleView>
     std::optional<RowID> getBaseVersion(HandleView h)
     {
-        auto clipped_pack_id = getPackEntry(h);
+        auto clipped_pack_id = getClippedPackId(h);
         if (!clipped_pack_id)
             return {};
         auto row_id = getBaseVersion(h, *clipped_pack_id);
@@ -71,7 +71,7 @@ public:
         UInt32 calc_read_count = 0;
         for (const Handle & h : handles)
         {
-            auto clipped_pack_id = getPackEntry(h);
+            auto clipped_pack_id = getClippedPackId(h);
             if (!clipped_pack_id || calc_read_packs[*clipped_pack_id])
                 continue;
 
@@ -93,17 +93,10 @@ public:
     }
 
 private:
-    struct PackEntry
-    {
-        UInt32 offset;
-        UInt32 rows;
-    };
-
-    // Returns clipped_pack_id of PackEntry
     template <Int64OrStringView HandleView>
-    std::optional<UInt32> getPackEntry(HandleView h)
+    std::optional<UInt32> getClippedPackId(HandleView h)
     {
-        if unlikely (rowkey_range && !inRowKeyRange(*rowkey_range, h))
+        if (unlikely(rowkey_range && !inRowKeyRange(*rowkey_range, h)))
             return {};
 
         auto itr = std::lower_bound(clipped_pack_index.begin(), clipped_pack_index.end(), h);
@@ -116,14 +109,13 @@ private:
     std::optional<RowID> getBaseVersion(HandleView h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded();
-        const auto offset = clipped_pack_offsets[clipped_pack_id];
         const auto & handle_col = clipped_handle_packs[clipped_pack_id];
         const auto * handles = toColumnVectorDataPtr<Int64>(handle_col);
         RUNTIME_CHECK_MSG(handles != nullptr, "TODO: support common handle");
         auto itr = std::lower_bound(handles->begin(), handles->end(), h);
         if (itr != handles->end() && *itr == h)
         {
-            return itr - handles->begin() + offset;
+            return itr - handles->begin() + clipped_pack_offsets[clipped_pack_id];
         }
         return {};
     }
@@ -163,8 +155,7 @@ private:
                 read_pack_ids->insert(i + clipped_pack_range.start_pack_id);
         }
 
-        auto scan_context = std::make_shared<ScanContext>(); // TODO: use dm_context.scan_context
-        // TODO: load by segment range.
+        auto scan_context = std::make_shared<ScanContext>();
         auto pack_filter = DMFilePackFilter::loadFrom(
             dmfile,
             global_context.getMinMaxIndexCache(),
@@ -174,7 +165,7 @@ private:
             read_pack_ids,
             global_context.getFileProvider(),
             global_context.getReadLimiter(),
-            scan_context, // TODO:
+            scan_context,
             __FILE__,
             ReadTag::MVCC);
 
