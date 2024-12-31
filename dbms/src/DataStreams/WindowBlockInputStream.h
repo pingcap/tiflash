@@ -215,12 +215,10 @@ private:
             {
                 if constexpr (is_add)
                 {
-                    std::cout << "-------- add" << std::endl; // TODO delete it
                     agg_func->add(buf, columns, row, arena_ptr);
                 }
                 else
                 {
-                    std::cout << "-------- decrease" << std::endl; // TODO delete it
                     agg_func->decrease(buf, columns, row, arena_ptr);
                 }
             }

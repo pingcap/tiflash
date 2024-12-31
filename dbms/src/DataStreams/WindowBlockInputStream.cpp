@@ -1406,7 +1406,6 @@ void WindowTransformAction::updateAggregationState()
         if (ws.window_function)
             continue;
 
-        std::cout << "------ update" << std::endl; // TODO delete it
         RowNumber start = frame_start;
         if (checkIfNeedDecrease())
         {
@@ -1461,28 +1460,24 @@ void WindowTransformAction::tryCalculate()
             RowNumber tmp = frame_start;
             // Advance the frame start.
             advanceFrameStart();
-            std::cout << "frame start: " << tmp.toString() << " -> " << frame_start.toString() << std::endl;
 
             if (!frame_started)
             {
                 // Wait for more input data to find the start of frame.
                 assert(!input_is_finished);
                 assert(!partition_ended);
-                std::cout << "frame start return" << std::endl;
                 return;
             }
 
             // Advance the frame end.
             tmp = frame_end;
             advanceFrameEnd();
-            std::cout << "frame end: " << tmp.toString() << " -> " << frame_end.toString() << std::endl;
 
             if (!frame_ended)
             {
                 // Wait for more input data to find the end of frame.
                 assert(!input_is_finished);
                 assert(!partition_ended);
-                std::cout << "frame end return" << std::endl;
                 return;
             }
 
