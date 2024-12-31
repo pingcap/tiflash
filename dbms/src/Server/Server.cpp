@@ -516,10 +516,7 @@ struct RaftStoreProxyRunner : boost::noncopyable
         pthread_attr_t attribute;
         pthread_attr_init(&attribute);
         pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_INFO(log, "start raft store proxy");
-        for(const auto & arg: parms.conf.args) {
-            LOG_INFO(log, "Proxy arg: {}", arg);
-        }
+        LOG_INFO(log, "Start raft store proxy. Args: {}", parms.conf.args);
         pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
         pthread_attr_destroy(&attribute);
     }
