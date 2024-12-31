@@ -56,10 +56,10 @@ public:
     template <Int64OrStringView HandleView>
     std::optional<RowID> getBaseVersion(HandleView h)
     {
-        auto pa = getPackEntry(h);
-        if (!pa)
+        auto clipped_pack_id = getPackEntry(h);
+        if (!clipped_pack_id)
             return {};
-        auto row_id = getBaseVersion(h, pa->first, pa->second.offset);
+        auto row_id = getBaseVersion(h, *clipped_pack_id);
         if (!row_id)
             return {};
         return start_row_id + *row_id;
@@ -71,11 +71,11 @@ public:
         UInt32 calc_read_count = 0;
         for (const Handle & h : handles)
         {
-            auto pa = getPackEntry(h);
-            if (!pa || calc_read_packs[pa->first])
+            auto clipped_pack_id = getPackEntry(h);
+            if (!clipped_pack_id || calc_read_packs[*clipped_pack_id])
                 continue;
 
-            calc_read_packs[pa->first] = 1;
+            calc_read_packs[*clipped_pack_id] = 1;
             ++calc_read_count;
 
             // Read too many packs, read all by default
@@ -99,8 +99,9 @@ private:
         UInt32 rows;
     };
 
+    // Returns clipped_pack_id of PackEntry
     template <Int64OrStringView HandleView>
-    std::optional<std::pair<UInt32, PackEntry>> getPackEntry(HandleView h)
+    std::optional<UInt32> getPackEntry(HandleView h)
     {
         if unlikely (rowkey_range && !inRowKeyRange(*rowkey_range, h))
             return {};
@@ -108,14 +109,15 @@ private:
         auto itr = std::lower_bound(clipped_pack_index.begin(), clipped_pack_index.end(), h);
         if (itr == clipped_pack_index.end())
             return {};
-        return std::make_pair(itr - clipped_pack_index.begin(), clipped_pack_entries[itr - clipped_pack_index.begin()]);
+        return itr - clipped_pack_index.begin();
     }
 
     template <Int64OrStringView HandleView>
-    std::optional<RowID> getBaseVersion(HandleView h, UInt32 pack_id, UInt32 offset)
+    std::optional<RowID> getBaseVersion(HandleView h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded();
-        const auto & handle_col = clipped_handle_packs[pack_id];
+        const auto offset = clipped_pack_entries[clipped_pack_id].offset;
+        const auto & handle_col = clipped_handle_packs[clipped_pack_id];
         const auto * handles = toColumnVectorDataPtr<Int64>(handle_col);
         RUNTIME_CHECK_MSG(handles != nullptr, "TODO: support common handle");
         auto itr = std::lower_bound(handles->begin(), handles->end(), h);
