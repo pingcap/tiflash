@@ -61,7 +61,7 @@ ALWAYS_INLINE inline size_t getDecimal256BytesSize(const Decimal256 & val)
     return sizeof(bool) + sizeof(size_t) + val.value.backend().size() * sizeof(boost::multiprecision::limb_type);
 }
 
-ALWAYS_INLINE inline void serializeDecimal256Helper(char *& dst, const Decimal256 & data)
+ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal256 & data)
 {
     const auto & val = data.value.backend();
 
@@ -77,6 +77,7 @@ ALWAYS_INLINE inline void serializeDecimal256Helper(char *& dst, const Decimal25
     // TODO or memcpy?
     inline_memcpy(dst, val.limbs(), limb_size);
     dst += limb_size;
+    return dst;
 }
 
 ALWAYS_INLINE inline std::pair<Decimal256, const char *> deserializeDecimal256Helper(const char * ptr)
@@ -97,8 +98,9 @@ ALWAYS_INLINE inline std::pair<Decimal256, const char *> deserializeDecimal256He
     if (s != val.sign())
         val.negate();
     val.normalize();
+    offset += limb_count * sizeof(boost::multiprecision::limb_type);
 
-    return std::make_pair(value, ptr + offset + limb_count * sizeof(boost::multiprecision::limb_type));
+    return std::make_pair(value, ptr + offset);
 }
 
 template <typename T>
@@ -113,7 +115,7 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(
     {
         size_t mem_size = getDecimal256BytesSize(data[n]);
         auto * pos = arena.allocContinue(mem_size, begin);
-        serializeDecimal256Helper(pos, data[n]);
+        pos = serializeDecimal256Helper(pos, data[n]);
         return StringRef(pos, mem_size);
     }
     else
@@ -211,7 +213,7 @@ void ColumnDecimal<T>::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t s
 
         if constexpr (!is_fast && is_Decimal256)
         {
-            serializeDecimal256Helper(pos[i], data[i]);
+            pos[i] = serializeDecimal256Helper(pos[i], data[start + i]);
         }
         else
         {
@@ -255,7 +257,7 @@ void ColumnDecimal<T>::batchSerializeForColumnArrayImpl(
         {
             for (size_t j = 0; j < len; ++j)
             {
-                serializeDecimal256Helper(pos[i], data[j]);
+                pos[i] = serializeDecimal256Helper(pos[i], data[array_offsets[start + i - 1] + j]);
             }
         }
         else
@@ -425,7 +427,7 @@ void ColumnDecimal<T>::batchDeserializeForColumnArrayImpl(
             for (size_t j = 0; j < len; ++j)
             {
                 auto [val, ptr] = deserializeDecimal256Helper(pos[i]);
-                data[array_offsets[start_point + i - 1]] = std::move(val);
+                data[array_offsets[start_point + i - 1] + j] = std::move(val);
                 pos[i] = ptr;
             }
         }

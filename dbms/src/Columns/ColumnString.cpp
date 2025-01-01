@@ -520,7 +520,11 @@ void ColumnString::countSerializeByteSizeImpl(
         const size_t size = byte_size.size();
         const size_t max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
-            byte_size[i] += sizeof(UInt32) + sizeAt(i) * max_bytes_one_char;
+        {
+            assert(sizeAt(i) >= 1);
+            // Minus 1 because of terminating zero.
+            byte_size[i] += sizeof(UInt32) + (sizeAt(i) - 1) * max_bytes_one_char;
+        }
     }
     else
     {
@@ -583,8 +587,14 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         size_t size = array_offsets.size();
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
-            byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1])
-                + max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]));
+        {
+            assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= 1);
+            // How many sub elements in this array.
+            const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
+            byte_size[i] += sizeof(UInt32) * (ele_count)
+                // For each sub element, minus 1 because of terminating zero.
+                + max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) - ele_count);
+        }
     }
     else
     {
@@ -648,10 +658,7 @@ void ColumnString::batchSerializeImpl(
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
     if constexpr (has_collator)
-    {
-        RUNTIME_CHECK(collator);
-        RUNTIME_CHECK(sort_key_container);
-    }
+        RUNTIME_CHECK(collator && sort_key_container);
 
     /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
@@ -822,96 +829,92 @@ void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool
     size_t size = pos.size();
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    if (use_nt_align_buffer)
+    if constexpr (!add_terminating_zero)
     {
-        bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
-        bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
-        if likely (is_offset_aligned && is_char_aligned)
+        if (use_nt_align_buffer)
         {
-            if unlikely (align_buffer_ptrs == nullptr)
-                align_buffer_ptrs = std::make_unique<ColumnNTAlignBufferAVX2[]>(2);
-
-            NTAlignBufferAVX2 & saved_char_buffer = align_buffer_ptrs[0].getBuffer();
-            UInt8 char_buffer_size = align_buffer_ptrs[0].getSize();
-            NTAlignBufferAVX2 & offset_buffer = align_buffer_ptrs[1].getBuffer();
-            UInt8 offset_buffer_size = align_buffer_ptrs[1].getSize();
-
-            /// Add 15 bytes padding in order to use memcpyMax64BAllowReadWriteOverflow15
-            struct PaddedNTAlignBuffer
+            bool is_offset_aligned = reinterpret_cast<std::uintptr_t>(&offsets[prev_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
+            bool is_char_aligned = reinterpret_cast<std::uintptr_t>(&chars[char_size]) % FULL_VECTOR_SIZE_AVX2 == 0;
+            if likely (is_offset_aligned && is_char_aligned)
             {
-                NTAlignBufferAVX2 buffer;
-                char padding[15]{};
-            } padded_align_buf;
+                if unlikely (align_buffer_ptrs == nullptr)
+                    align_buffer_ptrs = std::make_unique<ColumnNTAlignBufferAVX2[]>(2);
 
-            NTAlignBufferAVX2 & char_buffer = padded_align_buf.buffer;
+                NTAlignBufferAVX2 & saved_char_buffer = align_buffer_ptrs[0].getBuffer();
+                UInt8 char_buffer_size = align_buffer_ptrs[0].getSize();
+                NTAlignBufferAVX2 & offset_buffer = align_buffer_ptrs[1].getBuffer();
+                UInt8 offset_buffer_size = align_buffer_ptrs[1].getSize();
 
-            tiflash_compiler_builtin_memcpy(&char_buffer, &saved_char_buffer, sizeof(NTAlignBufferAVX2));
-            SCOPE_EXIT({
-                tiflash_compiler_builtin_memcpy(&saved_char_buffer, &char_buffer, sizeof(NTAlignBufferAVX2));
-                align_buffer_ptrs[0].setSize(char_buffer_size);
-                align_buffer_ptrs[1].setSize(offset_buffer_size);
-            });
-
-            offsets.reserve(offsets.size() + size + offset_buffer_size / sizeof(size_t));
-            for (size_t i = 0; i < size; ++i)
-            {
-                UInt32 str_size;
-                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-                pos[i] += sizeof(UInt32);
-
-                const auto * p = pos[i];
-                while (true)
+                /// Add 15 bytes padding in order to use memcpyMax64BAllowReadWriteOverflow15
+                struct PaddedNTAlignBuffer
                 {
-                    UInt8 remain = FULL_VECTOR_SIZE_AVX2 - char_buffer_size;
-                    if (remain > str_size)
+                    NTAlignBufferAVX2 buffer;
+                    char padding[15]{};
+                } padded_align_buf;
+
+                NTAlignBufferAVX2 & char_buffer = padded_align_buf.buffer;
+
+                tiflash_compiler_builtin_memcpy(&char_buffer, &saved_char_buffer, sizeof(NTAlignBufferAVX2));
+                SCOPE_EXIT({
+                    tiflash_compiler_builtin_memcpy(&saved_char_buffer, &char_buffer, sizeof(NTAlignBufferAVX2));
+                    align_buffer_ptrs[0].setSize(char_buffer_size);
+                    align_buffer_ptrs[1].setSize(offset_buffer_size);
+                });
+
+                offsets.reserve(offsets.size() + size + offset_buffer_size / sizeof(size_t));
+                for (size_t i = 0; i < size; ++i)
+                {
+                    UInt32 str_size;
+                    tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+                    pos[i] += sizeof(UInt32);
+
+                    const auto * p = pos[i];
+                    while (true)
                     {
-                        memcpyMax64BAllowReadWriteOverflow15(&char_buffer.data[char_buffer_size], p, str_size);
-                        p += str_size;
-                        char_buffer_size += str_size;
-                        break;
+                        UInt8 remain = FULL_VECTOR_SIZE_AVX2 - char_buffer_size;
+                        if (remain > str_size)
+                        {
+                            memcpyMax64BAllowReadWriteOverflow15(&char_buffer.data[char_buffer_size], p, str_size);
+                            p += str_size;
+                            char_buffer_size += str_size;
+                            break;
+                        }
+
+                        memcpyMax64BAllowReadWriteOverflow15(&char_buffer.data[char_buffer_size], p, remain);
+                        p += remain;
+                        chars.resize(char_size + FULL_VECTOR_SIZE_AVX2, FULL_VECTOR_SIZE_AVX2);
+                        nonTemporalStore64B(&chars[char_size], char_buffer);
+                        char_size += FULL_VECTOR_SIZE_AVX2;
+                        char_buffer_size = 0;
+                        if (remain == str_size)
+                            break;
+                        str_size -= remain;
                     }
+                    pos[i] = p;
 
-                    memcpyMax64BAllowReadWriteOverflow15(&char_buffer.data[char_buffer_size], p, remain);
-                    p += remain;
-                    chars.resize(char_size + FULL_VECTOR_SIZE_AVX2, FULL_VECTOR_SIZE_AVX2);
-                    nonTemporalStore64B(&chars[char_size], char_buffer);
-                    char_size += FULL_VECTOR_SIZE_AVX2;
-                    char_buffer_size = 0;
-                    if (remain == str_size)
-                        break;
-                    str_size -= remain;
-                }
-                pos[i] = p;
-
-                if constexpr (add_terminating_zero)
-                {
-                    chars.resize(char_size + 1);
-                    chars[char_size] = 0;
-                    ++char_size;
+                    size_t offset = char_size + char_buffer_size;
+                    tiflash_compiler_builtin_memcpy(&offset_buffer.data[offset_buffer_size], &offset, sizeof(size_t));
+                    offset_buffer_size += sizeof(size_t);
+                    static_assert(FULL_VECTOR_SIZE_AVX2 % sizeof(size_t) == 0);
+                    if unlikely (offset_buffer_size == FULL_VECTOR_SIZE_AVX2)
+                    {
+                        offsets.resize(prev_size + FULL_VECTOR_SIZE_AVX2 / sizeof(size_t), FULL_VECTOR_SIZE_AVX2);
+                        nonTemporalStore64B(&offsets[prev_size], offset_buffer);
+                        prev_size += FULL_VECTOR_SIZE_AVX2 / sizeof(size_t);
+                        offset_buffer_size = 0;
+                    }
                 }
 
-                size_t offset = char_size + char_buffer_size;
-                tiflash_compiler_builtin_memcpy(&offset_buffer.data[offset_buffer_size], &offset, sizeof(size_t));
-                offset_buffer_size += sizeof(size_t);
-                static_assert(FULL_VECTOR_SIZE_AVX2 % sizeof(size_t) == 0);
-                if unlikely (offset_buffer_size == FULL_VECTOR_SIZE_AVX2)
-                {
-                    offsets.resize(prev_size + FULL_VECTOR_SIZE_AVX2 / sizeof(size_t), FULL_VECTOR_SIZE_AVX2);
-                    nonTemporalStore64B(&offsets[prev_size], offset_buffer);
-                    prev_size += FULL_VECTOR_SIZE_AVX2 / sizeof(size_t);
-                    offset_buffer_size = 0;
-                }
+                _mm_sfence();
+                return;
             }
-
-            _mm_sfence();
-            return;
         }
-    }
 
-    RUNTIME_CHECK_MSG(
-        align_buffer_ptrs == nullptr,
-        "align_buffer_ptrs is not nullptr but use_nt_align_buffer({}) is false or data is unaligned",
-        use_nt_align_buffer);
+        RUNTIME_CHECK_MSG(
+            align_buffer_ptrs == nullptr,
+            "align_buffer_ptrs is not nullptr but use_nt_align_buffer({}) is false or data is unaligned",
+            use_nt_align_buffer);
+    }
 #endif
 
     offsets.resize(prev_size + size);
@@ -927,17 +930,17 @@ void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool
             chars.resize(char_size + str_size);
 
         memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
+        char_size += str_size;
 
         if constexpr (add_terminating_zero)
         {
-            char_size += str_size + 1;
             chars[char_size] = 0;
+            offsets[prev_size + i] = char_size + 1;
         }
         else
         {
-            char_size += str_size;
+            offsets[prev_size + i] = char_size;
         }
-        offsets[prev_size + i] = char_size;
         pos[i] += str_size;
     }
 }
@@ -1000,9 +1003,9 @@ void ColumnString::batchDeserializeForColumnArrayImpl(
                 chars.resize(char_size + str_size + 1);
                 memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
 
-                char_size += str_size + 1;
+                char_size += str_size;
                 chars[char_size] = 0;
-                offsets[j] = char_size;
+                offsets[j] = char_size + 1;
 
                 pos[i] += str_size;
             }

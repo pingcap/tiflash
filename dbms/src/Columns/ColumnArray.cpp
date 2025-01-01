@@ -303,15 +303,10 @@ void ColumnArray::batchSerializeImpl(
     }
 
     if constexpr (is_fast)
-    {
         getData().batchSerializeForColumnArrayFast(pos, start, length, has_null, getOffsets());
-    }
     else
-    {
-        RUNTIME_CHECK(sort_key_container);
         getData()
             .batchSerializeForColumnArray(pos, start, length, has_null, getOffsets(), collator, sort_key_container);
-    }
 }
 
 void ColumnArray::batchDeserialize(
@@ -322,9 +317,7 @@ void ColumnArray::batchDeserialize(
     batchDeserializeImpl<false>(pos, use_nt_align_buffer, collator);
 }
 
-void ColumnArray::batchDeserializeFast(
-    PaddedPODArray<const char *> & pos,
-    bool use_nt_align_buffer)
+void ColumnArray::batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
 {
     batchDeserializeImpl<true>(pos, use_nt_align_buffer, nullptr);
 }

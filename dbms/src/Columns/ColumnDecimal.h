@@ -239,19 +239,11 @@ public:
     {
         if (has_null)
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ true, /*is_fast*/ false>(
-                pos,
-                start,
-                length,
-                array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ true, /*is_fast*/ false>(pos, start, length, array_offsets);
         }
         else
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ false, /*is_fast*/ false>(
-                pos,
-                start,
-                length,
-                array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ false, /*is_fast*/ false>(pos, start, length, array_offsets);
         }
     }
     void batchSerializeForColumnArrayFast(
@@ -263,19 +255,11 @@ public:
     {
         if (has_null)
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ true, /*is_fast*/ true>(
-                pos,
-                start,
-                length,
-                array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ true, /*is_fast*/ true>(pos, start, length, array_offsets);
         }
         else
         {
-            batchSerializeForColumnArrayImpl</*has_null*/ false, /*is_fast*/ true>(
-                pos,
-                start,
-                length,
-                array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null*/ false, /*is_fast*/ true>(pos, start, length, array_offsets);
         }
     }
 
