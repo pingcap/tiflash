@@ -25,13 +25,6 @@ namespace DB
 {
 namespace tests
 {
-PaddedPODArray<const char *> remoteConstForPos(const PaddedPODArray<char *> & pos)
-{
-    PaddedPODArray<const char *> const_pos(pos.size());
-    for (size_t i = 0; i < pos.size(); ++i)
-        const_pos[i] = pos[i];
-    return const_pos;
-}
 class TestColumnSerializeDeserialize : public ::testing::Test
 {
 public:
