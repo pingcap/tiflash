@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataTypes/DataTypeString.h>
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Poco/String.h>
@@ -50,6 +49,7 @@ void trimStackTrace(String & message)
     }
 }
 
+// Latest mpp-version supported by TiFlash
 static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
 static MppVersion MinMppVersion = MppVersion::MppVersionV0;
 
