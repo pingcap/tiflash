@@ -24,7 +24,6 @@
 #include <memory>
 #include <mutex>
 
-
 namespace DB
 {
 constexpr Int32 batch_packet_count_v1 = 16;

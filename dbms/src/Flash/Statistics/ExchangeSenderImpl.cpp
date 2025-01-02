@@ -16,9 +16,8 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
-
-#include "Flash/Statistics/ConnectionProfileInfo.h"
 
 namespace DB
 {

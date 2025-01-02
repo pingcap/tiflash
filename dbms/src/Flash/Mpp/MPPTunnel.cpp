@@ -19,11 +19,10 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
-
-#include "Flash/Statistics/ConnectionProfileInfo.h"
 
 namespace DB
 {

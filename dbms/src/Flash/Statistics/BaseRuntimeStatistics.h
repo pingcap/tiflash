@@ -15,9 +15,8 @@
 #pragma once
 
 #include <Common/FmtUtils.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/types.h>
-
-#include "Flash/Statistics/ConnectionProfileInfo.h"
 
 namespace DB
 {

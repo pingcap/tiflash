@@ -13,10 +13,9 @@
 // limitations under the License.
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Operators/CoprocessorReaderSourceOp.h>
-
-#include "Flash/Coprocessor/CoprocessorReader.h"
 
 namespace DB
 {

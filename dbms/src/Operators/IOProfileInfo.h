@@ -14,11 +14,10 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
-
-#include "Common/Exception.h"
 
 namespace DB
 {

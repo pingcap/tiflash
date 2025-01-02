@@ -13,11 +13,10 @@
 // limitations under the License.
 
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-
-#include "Flash/Statistics/ConnectionProfileInfo.h"
 
 namespace DB
 {
