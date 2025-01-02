@@ -19,6 +19,7 @@
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
@@ -441,6 +442,24 @@ void deserializeBinaryBulkV2(IColumn & column, ReadBuffer & offsets_stream, Read
     deserializeCharsBinary(chars, chars_stream, bytes);
 }
 
+bool isLegacyStorageFormat(StorageFormatVersion current)
+{
+    return current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103);
+}
+
+bool isLegacyMppVersion(MppVersion version)
+{
+    return version < MppVersion::MppVersionV3;
+}
+
+DataTypeString::SerdesFormat getDefaultSerdesFormat()
+{
+    if (isLegacyStorageFormat(STORAGE_FORMAT_CURRENT) || isLegacyMppVersion(getMaxMppVersionFromTiDB()))
+    {
+        return DataTypeString::SerdesFormat::SizePrefix;
+    }
+    return DataTypeString::SerdesFormat::SeparateSizeAndChars;
+}
 } // namespace
 
 void DataTypeString::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
@@ -491,27 +510,13 @@ void DataTypeString::deserializeBinaryBulkWithMultipleStreams(
     }
 }
 
-static DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
-{
-    if (current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103))
-    {
-        return DataTypeString::SerdesFormat::SizePrefix;
-    }
-    return DataTypeString::SerdesFormat::SeparateSizeAndChars;
-}
-
 DataTypeString::DataTypeString(SerdesFormat serdes_fmt_)
-    : serdes_fmt((serdes_fmt_ != SerdesFormat::None) ? serdes_fmt_ : getDefaultByStorageFormat(STORAGE_FORMAT_CURRENT))
+    : serdes_fmt((serdes_fmt_ != SerdesFormat::None) ? serdes_fmt_ : getDefaultSerdesFormat())
 {}
 
 String DataTypeString::getDefaultName()
 {
-    if (STORAGE_FORMAT_CURRENT.identifier < 8
-        || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
-    {
-        return LegacyName;
-    }
-    return NameV2;
+    return getDefaultSerdesFormat() == SerdesFormat::SizePrefix ? LegacyName : NameV2;
 }
 
 String DataTypeString::getNullableDefaultName()
