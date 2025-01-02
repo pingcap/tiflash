@@ -936,6 +936,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
 // The `read_ranges` must be included by `segment_rowkey_range`. Usually this step is
 // done in `Segment::getInputStream`. Apply the check only under debug mode.
 ALWAYS_INLINE void sanitizeCheckReadRanges(
+    [[maybe_unused]] const std::string_view whom,
     [[maybe_unused]] const RowKeyRanges & read_ranges,
     [[maybe_unused]] const RowKeyRange & segment_rowkey_range,
     [[maybe_unused]] const LoggerPtr & log)
@@ -946,8 +947,9 @@ ALWAYS_INLINE void sanitizeCheckReadRanges(
     {
         RUNTIME_CHECK_MSG(
             segment_rowkey_range.checkRangeIncluded(range),
-            "getBitmapFilterInputStream read_ranges contains range of out the segment_rowkey_range, "
+            "{} read_ranges contains range of out the segment_rowkey_range, "
             "segment_rowkey_range={} read_range={} ident={}",
+            whom,
             segment_rowkey_range.toString(),
             range.toString(),
             log->identifier());
@@ -1053,7 +1055,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     size_t expected_block_size,
     bool need_row_id)
 {
-    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
     LOG_TRACE(segment_snap->log, "Begin segment create input stream");
 
@@ -1201,7 +1203,7 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     const DMFilePackFilterResults & pack_filter_results,
     size_t expected_block_size)
 {
-    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
@@ -1299,7 +1301,7 @@ BlockInputStreamPtr Segment::getInputStreamModeRaw(
     const RowKeyRanges & data_ranges,
     size_t expected_block_size)
 {
-    sanitizeCheckReadRanges(data_ranges, rowkey_range, log);
+    sanitizeCheckReadRanges(__FUNCTION__, data_ranges, rowkey_range, log);
 
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
@@ -3079,7 +3081,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
-    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
@@ -3571,7 +3573,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     size_t build_bitmap_filter_block_rows,
     size_t read_data_block_rows)
 {
-    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
