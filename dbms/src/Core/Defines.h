@@ -40,9 +40,6 @@
 
 #define DEFAULT_MAX_READ_TSO 0xFFFFFFFFFFFFFFFF
 #define DEFAULT_UNSPECIFIED_SCHEMA_VERSION (-1)
-#define DEFAULT_MPP_TASK_TIMEOUT 10
-#define DEFAULT_MPP_TASK_RUNNING_TIMEOUT (DEFAULT_MPP_TASK_TIMEOUT + 30)
-#define DEFAULT_MPP_TASK_WAITING_TIMEOUT 36000
 
 // Timeout for building one disagg task in the TiFlash write node.
 // Including read index / wait index / generate segments snapshots.
