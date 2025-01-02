@@ -1126,6 +1126,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     return stream;
 }
 
+// TODO: Remove this helper function for simplify testing
 BlockInputStreamPtr Segment::getInputStreamModeNormal(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
@@ -3078,6 +3079,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
+    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
