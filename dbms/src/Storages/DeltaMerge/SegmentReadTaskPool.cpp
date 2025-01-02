@@ -117,7 +117,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
 SegmentReadTaskPool::SegmentReadTaskPool(
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
-    const PushDownFilterPtr & filter_,
+    const PushDownExecutorPtr & filter_,
     uint64_t start_ts_,
     size_t expected_block_size_,
     ReadMode read_mode_,

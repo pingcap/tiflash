@@ -1087,7 +1087,7 @@ try
             dmContext(),
             segment_snap,
             real_ranges,
-            EMPTY_RS_OPERATOR,
+            {},
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
@@ -1107,6 +1107,7 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
+            {},
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
@@ -1128,8 +1129,8 @@ try
             false,
             3,
             "_tidb_rowid",
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_INT_TYPE,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnIntType(),
             false,
             1,
             true,
@@ -1148,17 +1149,14 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
+            {},
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
         // Only the rows in [30, 50) and [80, 90) valid
         auto vec = createNumbers<Int64>(30, 50);
         vec.append_range(createNumbers<Int64>(80, 90));
-        ASSERT_INPUTSTREAM_BLOCK_UR(
-            in,
-            Block({
-                createColumn<Int64>(vec),
-            }));
+        ASSERT_INPUTSTREAM_BLOCK_UR(in, Block({createColumn<Int64>(vec)}));
     }
 }
 CATCH

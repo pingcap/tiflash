@@ -148,7 +148,7 @@ try
     auto dm_file = prepareDMFile(/* file_id= */ 1);
     ASSERT_EQ(0, dm_file->metaVersion());
     ASSERT_EQ(4, dm_file->meta->getColumnStats().size());
-    ASSERT_STREQ("", dm_file->getColumnStat(::DB::TiDBPkColumnID).additional_data_for_test.c_str());
+    ASSERT_STREQ("", dm_file->getColumnStat(MutSup::extra_handle_id).additional_data_for_test.c_str());
 
     // Write new metadata
     auto iw = DMFileV3IncrementWriter::create(DMFileV3IncrementWriter::Options{
@@ -158,7 +158,7 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test";
+    dm_file->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test";
     ASSERT_EQ(1, dm_file->meta->bumpMetaVersion({}));
     iw->finalize();
 
@@ -173,7 +173,7 @@ try
 
     ASSERT_EQ(0, dm_file->metaVersion());
     ASSERT_EQ(4, dm_file->meta->getColumnStats().size());
-    ASSERT_STREQ("", dm_file->getColumnStat(::DB::TiDBPkColumnID).additional_data_for_test.c_str());
+    ASSERT_STREQ("", dm_file->getColumnStat(MutSup::extra_handle_id).additional_data_for_test.c_str());
 
     // Read out meta version = 1
     dm_file = DMFile::restore(
@@ -186,7 +186,7 @@ try
 
     ASSERT_EQ(1, dm_file->metaVersion());
     ASSERT_EQ(4, dm_file->meta->getColumnStats().size());
-    ASSERT_STREQ("test", dm_file->getColumnStat(::DB::TiDBPkColumnID).additional_data_for_test.c_str());
+    ASSERT_STREQ("test", dm_file->getColumnStat(MutSup::extra_handle_id).additional_data_for_test.c_str());
 }
 CATCH
 
@@ -202,7 +202,7 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file_for_write->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test";
+    dm_file_for_write->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test";
     ASSERT_EQ(1, dm_file_for_write->meta->bumpMetaVersion({}));
     iw->finalize();
 
@@ -215,7 +215,7 @@ try
         /* meta_version= */ 1);
     ASSERT_STREQ(
         "test",
-        dm_file_for_read_v1->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        dm_file_for_read_v1->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 
     // Write a new meta with a new version = 2
     iw = DMFileV3IncrementWriter::create(DMFileV3IncrementWriter::Options{
@@ -225,14 +225,14 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file_for_write->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test2";
+    dm_file_for_write->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test2";
     ASSERT_EQ(2, dm_file_for_write->meta->bumpMetaVersion({}));
     iw->finalize();
 
     // Current DMFile instance does not affect
     ASSERT_STREQ(
         "test",
-        dm_file_for_read_v1->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        dm_file_for_read_v1->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 
     // Read out meta version = 2
     auto dm_file_for_read_v2 = DMFile::restore(
@@ -244,7 +244,7 @@ try
         /* meta_version= */ 2);
     ASSERT_STREQ(
         "test2",
-        dm_file_for_read_v2->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        dm_file_for_read_v2->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 }
 CATCH
 
@@ -261,7 +261,7 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test";
+    dm_file->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test";
     ASSERT_EQ(1, dm_file->meta->bumpMetaVersion({}));
     iw->finalize();
 
@@ -281,7 +281,7 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file_2->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test_overwrite";
+    dm_file_2->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test_overwrite";
     ASSERT_EQ(1, dm_file_2->meta->bumpMetaVersion({}));
     ASSERT_NO_THROW({
         iw->finalize();
@@ -297,7 +297,7 @@ try
         /* meta_version= */ 1);
     ASSERT_STREQ(
         "test_overwrite",
-        dm_file_for_read->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        dm_file_for_read->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 }
 CATCH
 
@@ -307,7 +307,7 @@ try
     auto dm_file = prepareDMFile(/* file_id= */ 1);
     ASSERT_EQ(0, dm_file->metaVersion());
     ASSERT_EQ(4, dm_file->meta->getColumnStats().size());
-    ASSERT_STREQ("", dm_file->getColumnStat(::DB::TiDBPkColumnID).additional_data_for_test.c_str());
+    ASSERT_STREQ("", dm_file->getColumnStat(MutSup::extra_handle_id).additional_data_for_test.c_str());
 
     // Write new metadata
     auto iw = DMFileV3IncrementWriter::create(DMFileV3IncrementWriter::Options{
@@ -317,7 +317,7 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test";
+    dm_file->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test";
     dm_file->meta->bumpMetaVersion({});
     iw->finalize();
 
@@ -432,7 +432,7 @@ try
 
     ASSERT_EQ(0, dm_file->metaVersion());
     ASSERT_EQ(4, dm_file->meta->getColumnStats().size());
-    ASSERT_STREQ("", dm_file->getColumnStat(::DB::TiDBPkColumnID).additional_data_for_test.c_str());
+    ASSERT_STREQ("", dm_file->getColumnStat(MutSup::extra_handle_id).additional_data_for_test.c_str());
 
     // Write new metadata
     auto iw = DMFileV3IncrementWriter::create(DMFileV3IncrementWriter::Options{
@@ -442,7 +442,7 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test";
+    dm_file->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test";
     ASSERT_EQ(1, dm_file->meta->bumpMetaVersion({}));
     iw->finalize();
 
@@ -457,12 +457,12 @@ try
         /* page_id= */ 0);
     auto cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 0);
     ASSERT_EQ(0, cn_dmf->metaVersion());
-    ASSERT_STREQ("", cn_dmf->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+    ASSERT_STREQ("", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 
     // Read out meta version = 1
     cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 1);
     ASSERT_EQ(1, cn_dmf->metaVersion());
-    ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+    ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 }
 CATCH
 
@@ -480,7 +480,7 @@ try
 
     ASSERT_EQ(0, dm_file->metaVersion());
     ASSERT_EQ(4, dm_file->meta->getColumnStats().size());
-    ASSERT_STREQ("", dm_file->getColumnStat(::DB::TiDBPkColumnID).additional_data_for_test.c_str());
+    ASSERT_STREQ("", dm_file->getColumnStat(MutSup::extra_handle_id).additional_data_for_test.c_str());
 
     // Write new metadata
     auto iw = DMFileV3IncrementWriter::create(DMFileV3IncrementWriter::Options{
@@ -490,7 +490,7 @@ try
         .path_pool = path_pool,
         .disagg_ctx = db_context->getSharedContextDisagg(),
     });
-    dm_file->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test = "test";
+    dm_file->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test = "test";
     ASSERT_EQ(1, dm_file->meta->bumpMetaVersion({}));
     iw->finalize();
 
@@ -510,7 +510,7 @@ try
         /* page_id= */ 0);
     auto cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 0);
     ASSERT_EQ(0, cn_dmf->metaVersion());
-    ASSERT_STREQ("", cn_dmf->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+    ASSERT_STREQ("", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 
     {
         auto * file_cache = FileCache::instance();
@@ -520,7 +520,7 @@ try
     // Read out meta version = 1
     cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 1);
     ASSERT_EQ(1, cn_dmf->metaVersion());
-    ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+    ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 
     SCOPE_EXIT({ FileCache::shutdown(); });
 }

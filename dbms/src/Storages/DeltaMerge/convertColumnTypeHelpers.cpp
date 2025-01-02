@@ -18,6 +18,7 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
@@ -25,7 +26,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <common/types.h>
-
 namespace DB
 {
 namespace ErrorCodes

@@ -400,7 +400,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_failed_other, {{"type", "failed_other"}}),                                                                             \
       F(type_failed_cancel, {{"type", "failed_cancel"}}),                                                                           \
       F(type_failed_no_suitable, {{"type", "failed_no_suitable"}}),                                                                 \
-      F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
+      F(type_failed_no_candidate, {{"type", "failed_no_candidate"}}),                                                               \
       F(type_failed_baddata, {{"type", "failed_baddata"}}),                                                                         \
       F(type_failed_repeated, {{"type", "failed_repeated"}}),                                                                       \
       F(type_failed_build_chkpt, {{"type", "failed_build_chkpt"}}),                                                                 \
@@ -459,10 +459,13 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Total number of keys processed in some types of Raft commands",                                                              \
       Counter,                                                                                                                      \
       F(type_write_put, {"type", "write_put"}),                                                                                     \
+      F(type_write_remove, {"type", "write_remove"}),                                                                               \
       F(type_lock_put, {"type", "lock_put"}),                                                                                       \
       F(type_default_put, {"type", "default_put"}),                                                                                 \
       F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_lock_del, {"type", "lock_del"}),                                                                                       \
+      F(type_pessimistic_lock_put, {"type", "pessimistic_lock_put"}),                                                               \
+      F(type_lock_replaced, {"type", "lock_replaced"}),                                                                             \
       F(type_default_del, {"type", "default_del"}),                                                                                 \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
       F(type_apply_snapshot_default, {"type", "apply_snapshot_default"}),                                                           \

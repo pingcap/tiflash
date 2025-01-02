@@ -170,9 +170,15 @@ public:
         ASSERT_EQ(n, s.size());
     }
 
-    static RSResults & getReaderPackRes(DMFileBlockInputStreamPtr & stream)
+    static void skipFirstPack(DMFileBlockInputStreamPtr & stream)
     {
-        return stream->reader.pack_filter.getPackRes();
+        const auto & pack_stats = stream->reader.dmfile->getPackStats();
+        auto [pack_id, pack_count, res, rows] = stream->reader.read_block_infos.front();
+        stream->reader.read_block_infos.pop_front();
+        stream->reader.read_block_infos
+            .emplace_front(pack_id + 1, pack_count - 1, res, rows - pack_stats[pack_id].rows);
+        stream->reader.read_block_infos.emplace_front(pack_id, 1, res, pack_stats[pack_id].rows);
+        ASSERT_EQ(stream->skipNextBlock(), pack_stats[pack_id].rows);
     }
 
 protected:
@@ -910,10 +916,7 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & pack_res = getReaderPackRes(stream);
-        pack_res[1] = RSResult::None;
-        stream->skipNextBlock();
-        pack_res[1] = RSResult::Some;
+        skipFirstPack(stream);
         std::vector<Array> partial_expect_arr_values;
         partial_expect_arr_values.insert(
             partial_expect_arr_values.cend(),
@@ -1125,10 +1128,7 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & pack_res = getReaderPackRes(stream);
-        pack_res[1] = RSResult::None;
-        ASSERT_EQ(stream->skipNextBlock(), num_rows_write / 3);
-        pack_res[1] = RSResult::Some;
+        skipFirstPack(stream);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),
@@ -1575,12 +1575,13 @@ try
     auto test_read_filter = [&](const HandleRange & range) {
         // Filtered by rough set filter
         auto filter = toRSFilter(i64_cd, range);
+        const auto read_ranges = RowKeyRanges{RowKeyRange::newAll(false, 1)};
+        auto pack_result = DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {});
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .setRSOperator(filter) // Filtered by rough set filter
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        auto stream = builder.setColumnCache(column_cache)
+                          .setDMFilePackFilterResult(pack_result)
+                          .build(dm_file, *cols, read_ranges, std::make_shared<ScanContext>());
 
         Int64 expect_first_pk = static_cast<int>(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
         Int64 expect_last_pk = std::min(
@@ -1656,12 +1657,13 @@ try
     // (first range) Or (Unsupported) -> should NOT filter any chunk
     filters.emplace_back(createOr({one_part_filter, createUnsupported("test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
+        const auto read_ranges = RowKeyRanges{RowKeyRange::newAll(false, 1)};
+        auto pack_result = DMFilePackFilter::loadFrom(dmContext(), dm_file, false, read_ranges, filter, {});
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .setRSOperator(filter) // Filtered by rough set filter
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        auto stream = builder.setColumnCache(column_cache)
+                          .setDMFilePackFilterResult(pack_result)
+                          .build(dm_file, *cols, read_ranges, std::make_shared<ScanContext>());
 
         Int64 expect_first_pk = 0;
         Int64 expect_last_pk = num_rows_should_read;
@@ -2023,9 +2025,9 @@ try
             num_rows_write / 2,
             false,
             2,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             is_common_handle,
             rowkey_column_size);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(
@@ -2033,9 +2035,9 @@ try
             num_rows_write,
             false,
             2,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             is_common_handle,
             rowkey_column_size);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
@@ -2102,9 +2104,9 @@ try
                 pk_end,
                 false,
                 2,
-                EXTRA_HANDLE_COLUMN_NAME,
-                EXTRA_HANDLE_COLUMN_ID,
-                EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                MutSup::extra_handle_column_name,
+                MutSup::extra_handle_id,
+                MutSup::getExtraHandleColumnStringType(),
                 is_common_handle,
                 rowkey_column_size);
             stream->write(block, block_property);
