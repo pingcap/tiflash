@@ -977,6 +977,7 @@ BlockInputStreamPtr Segment::getInputStream(
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
 
     // load DMilePackFilterResult for each DMFile
+    // Note that the ranges must be shrunk by the segment key-range
     DMFilePackFilterResults pack_filter_results;
     pack_filter_results.reserve(segment_snap->stable->getDMFiles().size());
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
