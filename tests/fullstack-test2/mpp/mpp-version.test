@@ -34,7 +34,7 @@ mysql> use test; set tidb_enforce_mpp=on; set tidb_isolation_read_engines='tifla
 
 mysql> use test; set tidb_enforce_mpp=on; set tidb_isolation_read_engines='tiflash'; select count(1) as c from t group by b;
 
-ERROR 1105 (HY000) at line 1: rpc error: code = Canceled desc = Failed to handling mpp dispatch request, reason=`Invalid mpp version -1, TiFlash expects version: min 0, max 2, should upgrade TiDB/planner`
+ERROR 1105 (HY000) at line 1: rpc error: code = Canceled desc = Failed to handling mpp dispatch request, reason=`Invalid mpp version -1, TiFlash expects version: min 0, max 3, should upgrade TiDB/planner`
 
 => DBGInvoke __disable_fail_point(invalid_mpp_version)
 
