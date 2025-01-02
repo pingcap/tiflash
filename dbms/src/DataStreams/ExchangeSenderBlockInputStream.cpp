@@ -23,10 +23,12 @@ Block ExchangeSenderBlockInputStream::readImpl()
     {
         total_rows += block.rows();
         writer->write(block);
+        assert(!writer->hasPendingFlush());
     }
     else
     {
         writer->flush();
+        assert(!writer->hasPendingFlush());
     }
     return block;
 }

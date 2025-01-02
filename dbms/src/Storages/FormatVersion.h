@@ -203,9 +203,9 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V103 = StorageFormatVers
 };
 
 // Default storage format for non-disaggregated mode
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V7;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V8;
 // Default storage format for disaggregated mode
-inline static const StorageFormatVersion DEFAULT_STORAGE_FORMAT_FOR_DISAGG = STORAGE_FORMAT_V102;
+inline static const StorageFormatVersion DEFAULT_STORAGE_FORMAT_FOR_DISAGG = STORAGE_FORMAT_V103;
 
 bool isStorageFormatForDisagg(UInt64 version);
 std::span<const size_t> getStorageFormatsForDisagg();
