@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
@@ -22,6 +23,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -40,6 +42,7 @@
 
 #include <ctime>
 #include <future>
+#include <limits>
 #include <memory>
 
 
@@ -132,6 +135,30 @@ protected:
 
     DMContext & dmContext() { return *dm_context; }
 
+    BlockInputStreamPtr getDefaultInputStreamModeNormal(
+        const SegmentPtr & seg,
+        const ColumnDefines & columns_to_read,
+        const RowKeyRanges & read_ranges)
+    {
+        auto segment_snap = seg->createSnapshot(dmContext(), /*for_update=*/false, CurrentMetrics::DT_SnapshotOfRead);
+        RUNTIME_CHECK(segment_snap != nullptr);
+        return seg->getInputStream(
+            ReadMode::Normal,
+            dmContext(),
+            columns_to_read,
+            segment_snap,
+            read_ranges,
+            {},
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+    }
+
+    size_t getNRows(const SegmentPtr & seg, const RowKeyRanges & read_ranges)
+    {
+        auto in = getDefaultInputStreamModeNormal(seg, *tableColumns(), read_ranges);
+        return getInputStreamNRows(in);
+    }
+
 protected:
     /// all these var lives as ref in dm_context
     GlobalPageIdAllocatorPtr page_id_allocator;
@@ -170,7 +197,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
 
@@ -181,7 +208,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
     }
@@ -197,7 +224,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
 
@@ -208,7 +235,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
     }
@@ -304,7 +331,7 @@ try
     }
 
     {
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         // only write two visible pks
         ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
@@ -332,15 +359,16 @@ try
         segment->check(dmContext(), "test");
     }
 
-    RowKeyRanges read_ranges;
-    read_ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(0, 10)));
-    read_ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(20, 30)));
-    read_ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(110, 130)));
+    RowKeyRanges read_ranges{
+        RowKeyRange::fromHandleRange(HandleRange(0, 10)),
+        RowKeyRange::fromHandleRange(HandleRange(20, 30)),
+        RowKeyRange::fromHandleRange(HandleRange(110, 130)),
+    };
     const size_t expect_read_rows = 20;
     { // Round 1
         {
             // read written data (only in delta)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
 
@@ -353,7 +381,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
     }
@@ -371,7 +399,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
 
@@ -383,7 +411,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
     }
@@ -415,14 +443,14 @@ try
     // Thread A
     write_rows(100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
     auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     // Thread B
     write_rows(100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         200);
 
     // Thread A
@@ -452,7 +480,7 @@ try
     // Thread A
     write_rows(0, 100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
     auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
@@ -464,7 +492,7 @@ try
     // Thread B
     write_rows(0, 100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
 
     // Thread A
@@ -495,7 +523,7 @@ try
     write_rows(0, 100);
     write_rows(100, 100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         200);
     // check segment
     segment->check(dmContext(), "test");
@@ -506,7 +534,7 @@ try
     segment->write(dmContext(), range);
     LOG_INFO(Logger::get(), "Thread B read");
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         150);
 
     {
@@ -547,7 +575,7 @@ try
     // Thread A write [0, 100)
     write_rows(0, 100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
     // check segment
     segment->check(dmContext(), "test");
@@ -559,7 +587,7 @@ try
     segment->write(dmContext(), range);
     LOG_INFO(Logger::get(), "Thread B read");
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         150);
 
     // Thread A
@@ -594,7 +622,7 @@ try
     write_rows(100, false);
     write_rows(100, false);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         200);
     auto snap_c = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
     segment->check(dmContext(), "test");
@@ -603,7 +631,7 @@ try
     write_rows(100, true);
     write_rows(100, false);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         400);
     auto snap_a = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
     segment->check(dmContext(), "test");
@@ -612,7 +640,7 @@ try
     write_rows(100, false);
     LOG_INFO(Logger::get(), "Thread B read");
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         500);
     segment->check(dmContext(), "test");
 
@@ -667,13 +695,8 @@ try
         segment->write(dmContext(), std::move(block));
     }
 
-    auto get_rows = [&](const RowKeyRange & range) {
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {range});
-        return getInputStreamNRows(in);
-    };
-
     // First place the block packs, so that we can only place DeleteRange below.
-    get_rows(RowKeyRange::fromHandleRange(HandleRange::newAll()));
+    getNRows(segment, {RowKeyRange::fromHandleRange(HandleRange::newAll())});
 
     {
         HandleRange remove(100, 200);
@@ -683,7 +706,7 @@ try
     // The first call of get_rows below will place the DeleteRange into delta index.
     // If relevant place is enabled, the placed deletes in delta-tree-index is not
     // pushed forward since we do not fully apply the delete range [100, 200).
-    auto rows1 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 150)));
+    auto rows1 = getNRows(segment, {RowKeyRange::fromHandleRange(HandleRange(0, 150))});
     {
         auto delta = segment->getDelta();
         auto placed_rows = delta->getPlacedDeltaRows();
@@ -691,7 +714,7 @@ try
         ASSERT_EQ(placed_rows, num_rows_write);
         EXPECT_EQ(placed_deletes, enable_relevant_place ? 0 : 1);
     }
-    auto rows2 = get_rows(RowKeyRange::fromHandleRange(HandleRange(150, 300)));
+    auto rows2 = getNRows(segment, {RowKeyRange::fromHandleRange(HandleRange(150, 300))});
     {
         auto delta = segment->getDelta();
         auto placed_rows = delta->getPlacedDeltaRows();
@@ -701,7 +724,7 @@ try
     }
     // Query with range [0, 300) will push the placed deletes forward no matter
     // relevant place is enable or not.
-    auto rows3 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 300)));
+    auto rows3 = getNRows(segment, {RowKeyRange::fromHandleRange(HandleRange(0, 300))});
     {
         auto delta = segment->getDelta();
         auto placed_rows = delta->getPlacedDeltaRows();
@@ -738,7 +761,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -759,7 +782,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>({0, 99})}));
     }
 
@@ -788,7 +811,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -817,7 +840,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>({0, 99})}));
     }
 
@@ -855,7 +878,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -876,7 +899,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>({0, 99})}));
     }
 
@@ -928,7 +951,7 @@ try
     {
         // Read after deletion
         // The deleted range has no overlap with current data, so there should be no change
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -947,7 +970,7 @@ try
     {
         // Read after deletion
         // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -965,7 +988,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
 
         std::vector<Int64> pk_coldata{0};
         auto tmp = createNumbers<Int64>(32, 63);
@@ -984,7 +1007,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         std::vector<Int64> pk_coldata{0};
         auto tmp = createNumbers<Int64>(32, 63);
         pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
@@ -1002,7 +1025,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         std::vector<Int64> pk_coldata = createNumbers<Int64>(32, 63);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
     }
@@ -1017,7 +1040,7 @@ try
 
     {
         // Read after new write
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         std::vector<Int64> pk_coldata = createNumbers<Int64>(9, 16);
         auto tmp = createNumbers<Int64>(32, 63);
         pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
@@ -1087,6 +1110,7 @@ try
         auto bitmap_filter = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
+            // {read_range},
             real_ranges,
             {},
             std::numeric_limits<UInt64>::max(),
@@ -1102,15 +1126,14 @@ try
     {
         // test read data
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto in = segment->getBitmapFilterInputStream(
+        auto in = segment->getInputStream(
+            ReadMode::Bitmap,
             dmContext(),
             cols_to_read,
             segment_snap,
             {read_range},
-            EMPTY_FILTER,
             {},
             std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
         ASSERT_INPUTSTREAM_BLOCK_UR(
             in,
@@ -1144,15 +1167,14 @@ try
     {
         // test read data with delete-range and new writes
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto in = segment->getBitmapFilterInputStream(
+        auto in = segment->getInputStream(
+            ReadMode::Bitmap,
             dmContext(),
             cols_to_read,
             segment_snap,
             {read_range},
-            EMPTY_FILTER,
             {},
             std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
         // Only the rows in [30, 50) and [80, 90) valid
         auto vec = createNumbers<Int64>(30, 50);
@@ -1180,7 +1202,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -1199,10 +1221,8 @@ try
     EXPECT_EQ(*s2_range.end.value, *old_range.end.value);
     // TODO check segment epoch is increase
 
-    size_t num_rows_seg1 = getInputStreamNRows(
-        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {segment->getRowKeyRange()}));
-    size_t num_rows_seg2 = getInputStreamNRows(
-        new_segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()}));
+    size_t num_rows_seg1 = getNRows(segment, {segment->getRowKeyRange()});
+    size_t num_rows_seg2 = getNRows(new_segment, {new_segment->getRowKeyRange()});
     ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
 
     // delete rows in the right segment
@@ -1222,7 +1242,7 @@ try
             // TODO check segment epoch is increase
         }
         {
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_seg1);
         }
     }
@@ -1256,8 +1276,8 @@ try
     // If they are equal, result will be true, otherwise it will be false.
     auto compare = [&](const SegmentPtr & seg1, const SegmentPtr & seg2, bool & result) {
         result = false;
-        auto in1 = seg1->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        auto in2 = seg2->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in1 = getDefaultInputStreamModeNormal(seg1, *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in2 = getDefaultInputStreamModeNormal(seg2, *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in1->readPrefix();
         in2->readPrefix();
         for (;;)
@@ -1392,7 +1412,7 @@ try
 
         {
             // Read after writing
-            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = getDefaultInputStreamModeNormal(segment, *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(temp)}))
                 << fmt::format("num_batches_written={} num_rows_per_write={}", num_batches_written, num_rows_per_write);
         }
@@ -1521,11 +1541,6 @@ try
         }
     };
 
-    auto read_rows = [&](const SegmentPtr & segment) {
-        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        return getInputStreamNRows(in);
-    };
-
     write_100_rows(segment);
 
     // Test split
@@ -1553,8 +1568,8 @@ try
     {
         SegmentPtr new_segment_1 = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
         SegmentPtr new_segment_2 = Segment::restoreSegment(Logger::get(), dmContext(), other_segment->segmentId());
-        auto rows1 = read_rows(new_segment_1);
-        auto rows2 = read_rows(new_segment_2);
+        auto rows1 = getNRows(new_segment_1, {RowKeyRange::newAll(false, 1)});
+        auto rows2 = getNRows(new_segment_2, {RowKeyRange::newAll(false, 1)});
         ASSERT_EQ(rows1 + rows2, (size_t)200);
     }
 
@@ -1595,7 +1610,7 @@ try
 
     {
         SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
-        auto rows = read_rows(new_segment);
+        auto rows = getNRows(new_segment, {RowKeyRange::newAll(false, 1)});
         ASSERT_EQ(rows, (size_t)300);
     }
 }
@@ -1682,7 +1697,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *columns_to_read, {RowKeyRange::newAll(false, 1)});
         // check that we can read correct values
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1714,7 +1729,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         // [0, 50) is the old signed values, [50, 100) is replaced by newer written values
@@ -1740,7 +1755,7 @@ try
 
     {
         // check the stable data with new schema
-        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         std::vector<Int64> i32_columndata = createSignedNumbers(0, num_rows_write / 2);
@@ -1805,7 +1820,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1840,7 +1855,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         // First 50 values are default value
@@ -1867,7 +1882,7 @@ try
 
     {
         // read written data after delta-merge
-        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+        auto in = getDefaultInputStreamModeNormal(segment, *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         // First 50 values are default value

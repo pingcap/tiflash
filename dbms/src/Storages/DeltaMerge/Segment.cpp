@@ -47,6 +47,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -63,6 +64,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Filename.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
@@ -931,6 +933,28 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
         Logger::get(dm_context.tracing_id));
 }
 
+// The `read_ranges` must be included by `segment_rowkey_range`. Usually this step is
+// done in `Segment::getInputStream`. Apply the check only under debug mode.
+ALWAYS_INLINE void sanitizeCheckReadRanges(
+    [[maybe_unused]] const RowKeyRanges & read_ranges,
+    [[maybe_unused]] const RowKeyRange & segment_rowkey_range,
+    [[maybe_unused]] const LoggerPtr & log)
+{
+#ifndef NDEBUG
+    RUNTIME_CHECK_MSG(!read_ranges.empty(), "read_ranges should not be empty");
+    for (const auto & range : read_ranges)
+    {
+        RUNTIME_CHECK_MSG(
+            segment_rowkey_range.checkRangeIncluded(range),
+            "getBitmapFilterInputStream read_ranges contains range of out the segment_rowkey_range, "
+            "segment_rowkey_range={} read_range={} ident={}",
+            segment_rowkey_range.toString(),
+            range.toString(),
+            log->identifier());
+    }
+#endif
+}
+
 BlockInputStreamPtr Segment::getInputStream(
     const ReadMode & read_mode,
     const DMContext & dm_context,
@@ -949,6 +973,8 @@ BlockInputStreamPtr Segment::getInputStream(
         columns_to_read,
         segment_snap->stable->stable);
     auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    if (read_ranges.empty())
+        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
 
     // load DMilePackFilterResult for each DMFile
     DMFilePackFilterResults pack_filter_results;
@@ -1026,13 +1052,12 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     size_t expected_block_size,
     bool need_row_id)
 {
+    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
+
     LOG_TRACE(segment_snap->log, "Begin segment create input stream");
 
     auto read_tag = need_row_id ? ReadTag::MVCC : ReadTag::Query;
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
-
-    if (read_ranges.empty())
-        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
 
     BlockInputStreamPtr stream;
     if (dm_context.read_delta_only)
@@ -1111,11 +1136,12 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
     if (!segment_snap)
         return {};
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
     return getInputStreamModeNormal(
         dm_context,
         columns_to_read,
         segment_snap,
-        read_ranges,
+        real_ranges,
         pack_filter_results,
         start_ts,
         expected_block_size);
@@ -1173,8 +1199,7 @@ BlockInputStreamPtr Segment::getInputStreamModeFast(
     const DMFilePackFilterResults & pack_filter_results,
     size_t expected_block_size)
 {
-    if (read_ranges.empty())
-        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
+    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
 
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
@@ -1272,6 +1297,8 @@ BlockInputStreamPtr Segment::getInputStreamModeRaw(
     const RowKeyRanges & data_ranges,
     size_t expected_block_size)
 {
+    sanitizeCheckReadRanges(data_ranges, rowkey_range, log);
+
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
     new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
@@ -3541,8 +3568,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     size_t build_bitmap_filter_block_rows,
     size_t read_data_block_rows)
 {
-    if (read_ranges.empty())
-        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
+    sanitizeCheckReadRanges(read_ranges, rowkey_range, log);
 
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
