@@ -363,8 +363,8 @@ Block SegmentTestBasic::prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bo
         false,
         version,
         DMTestEnv::pk_name,
-        EXTRA_HANDLE_COLUMN_ID,
-        options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE,
+        MutSup::extra_handle_id,
+        options.is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType(),
         options.is_common_handle,
         1,
         true,
@@ -381,8 +381,8 @@ Block sortvstackBlocks(std::vector<Block> && blocks)
     auto accumulated_block = vstackBlocks(std::move(blocks));
 
     SortDescription sort;
-    sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
-    sort.emplace_back(VERSION_COLUMN_NAME, 1, 0);
+    sort.emplace_back(MutSup::extra_handle_column_name, 1, 0);
+    sort.emplace_back(MutSup::version_column_name, 1, 0);
     stableSortBlock(accumulated_block, sort);
 
     return accumulated_block;
@@ -1025,7 +1025,7 @@ std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need
         columns_to_read,
         snapshot,
         ranges.empty() ? RowKeyRanges{segment->getRowKeyRange()} : ranges,
-        nullptr,
+        {},
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
         need_row_id);
@@ -1048,7 +1048,7 @@ ColumnPtr SegmentTestBasic::getSegmentRowId(PageIdU64 segment_id, const RowKeyRa
     else
     {
         auto block = mergeSegmentRowIds(std::move(blks));
-        RUNTIME_CHECK(!block.has(EXTRA_HANDLE_COLUMN_NAME));
+        RUNTIME_CHECK(!block.has(MutSup::extra_handle_column_name));
         RUNTIME_CHECK(block.segmentRowIdCol() != nullptr);
         return block.segmentRowIdCol();
     }
@@ -1065,9 +1065,9 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageIdU64 segment_id, const RowKeyR
     else
     {
         auto block = vstackBlocks(std::move(blks));
-        RUNTIME_CHECK(block.has(EXTRA_HANDLE_COLUMN_NAME));
+        RUNTIME_CHECK(block.has(MutSup::extra_handle_column_name));
         RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
-        return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+        return block.getByName(MutSup::extra_handle_column_name).column;
     }
 }
 
@@ -1105,47 +1105,51 @@ try
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 10);
         ASSERT_COLUMN_EQ(
-            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            block.getByName(MutSup::extra_handle_column_name),
             createColumn<Int64>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}));
-        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(MutSup::version_column_name),
+            createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
     }
     {
         // write_rows > segment_rows, start_key not specified
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 13);
         ASSERT_COLUMN_EQ(
-            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            block.getByName(MutSup::extra_handle_column_name),
             createColumn<Int64>({10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19}));
         ASSERT_COLUMN_EQ(
-            block.getByName(VERSION_COLUMN_NAME),
+            block.getByName(MutSup::version_column_name),
             createColumn<UInt64>({1, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1}));
     }
     {
         // start_key specified, end_key - start_key < write_rows
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 2, /* at */ 16);
-        ASSERT_COLUMN_EQ(block.getByName(EXTRA_HANDLE_COLUMN_NAME), createColumn<Int64>({16, 17}));
-        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 1}));
+        ASSERT_COLUMN_EQ(block.getByName(MutSup::extra_handle_column_name), createColumn<Int64>({16, 17}));
+        ASSERT_COLUMN_EQ(block.getByName(MutSup::version_column_name), createColumn<UInt64>({1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 4, /* at */ 16);
-        ASSERT_COLUMN_EQ(block.getByName(EXTRA_HANDLE_COLUMN_NAME), createColumn<Int64>({16, 17, 18, 19}));
-        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 1, 1, 1}));
+        ASSERT_COLUMN_EQ(block.getByName(MutSup::extra_handle_column_name), createColumn<Int64>({16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(block.getByName(MutSup::version_column_name), createColumn<UInt64>({1, 1, 1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 5, /* at */ 16);
-        ASSERT_COLUMN_EQ(block.getByName(EXTRA_HANDLE_COLUMN_NAME), createColumn<Int64>({16, 16, 17, 18, 19}));
-        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 2, 1, 1, 1}));
+        ASSERT_COLUMN_EQ(block.getByName(MutSup::extra_handle_column_name), createColumn<Int64>({16, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(block.getByName(MutSup::version_column_name), createColumn<UInt64>({1, 2, 1, 1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 10, /* at */ 16);
         ASSERT_COLUMN_EQ(
-            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
+            block.getByName(MutSup::extra_handle_column_name),
             createColumn<Int64>({16, 16, 16, 17, 17, 17, 18, 18, 19, 19}));
-        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}));
+        ASSERT_COLUMN_EQ(
+            block.getByName(MutSup::version_column_name),
+            createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}));
     }
     {
         // write rows < segment rows, start key not specified, should choose a random start.
@@ -1158,7 +1162,7 @@ try
         for (size_t i = 0; i < 100; i++)
         {
             auto block = prepareWriteBlockInSegmentRange(*s1_id, 3);
-            if (block.getByName(EXTRA_HANDLE_COLUMN_NAME).column->getInt(0) == 12)
+            if (block.getByName(MutSup::extra_handle_column_name).column->getInt(0) == 12)
                 start_from_12++;
         }
         ASSERT_TRUE(start_from_12 > 0); // We should hit at least 1 times in 100 iters.

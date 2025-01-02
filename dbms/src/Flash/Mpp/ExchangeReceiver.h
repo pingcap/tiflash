@@ -20,10 +20,8 @@
 #include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
-#include <future>
 #include <memory>
 #include <mutex>
-#include <thread>
 
 namespace DB
 {
@@ -36,8 +34,8 @@ struct ExchangeReceiverResult
     size_t call_index;
     String req_info;
     bool meet_error;
-    String error_msg;
     bool eof;
+    String error_msg;
     DecodeDetail decode_detail;
 
     ExchangeReceiverResult()
@@ -74,8 +72,8 @@ private:
         , call_index(call_index_)
         , req_info(req_info_)
         , meet_error(meet_error_)
-        , error_msg(error_msg_)
         , eof(eof_)
+        , error_msg(error_msg_)
     {}
 };
 

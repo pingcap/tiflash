@@ -24,6 +24,8 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 
+#include <magic_enum.hpp>
+
 #if __SSE2__
 #include <emmintrin.h>
 #endif
@@ -517,4 +519,14 @@ String DataTypeString::getNullableDefaultName()
     return fmt::format("Nullable({})", getDefaultName());
 }
 
+std::span<const std::pair<String, DataTypePtr>> DataTypeString::getTiDBPkColumnStringNameAndTypes()
+{
+    static const auto name_and_types = std::array{
+        std::make_pair(NameV2, DataTypeFactory::instance().getOrSet(NameV2)),
+        std::make_pair(LegacyName, DataTypeFactory::instance().getOrSet(LegacyName)),
+    };
+    // Minus one for ignoring SerdesFormat::None.
+    static_assert(magic_enum::enum_count<SerdesFormat>() - 1 == name_and_types.size());
+    return name_and_types;
+}
 } // namespace DB

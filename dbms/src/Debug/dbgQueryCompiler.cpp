@@ -125,7 +125,7 @@ std::pair<ExecutorBinderPtr, bool> compileQueryBlock(
             {
                 if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
                 {
-                    if (identifier->getColumnName() == MutableSupport::tidb_pk_column_name)
+                    if (identifier->getColumnName() == MutSup::extra_handle_column_name)
                     {
                         append_pk_column = true;
                     }
@@ -179,7 +179,7 @@ std::pair<ExecutorBinderPtr, bool> compileQueryBlock(
             if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
             {
                 auto [db_name, table_name, column_name] = splitQualifiedName(identifier->getColumnName());
-                if (column_name == MutableSupport::tidb_pk_column_name)
+                if (column_name == MutSup::extra_handle_column_name)
                 {
                     if (table_name.empty())
                     {

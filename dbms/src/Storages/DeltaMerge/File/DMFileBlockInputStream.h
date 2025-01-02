@@ -138,9 +138,9 @@ public:
         return *this;
     }
 
-    DMFileBlockInputStreamBuilder & setRSOperator(const RSOperatorPtr & filter_)
+    DMFileBlockInputStreamBuilder & setAnnQureyInfo(const ANNQueryInfoPtr & ann_query_info_)
     {
-        rs_filter = filter_;
+        ann_query_info = ann_query_info_;
         return *this;
     }
 
@@ -162,6 +162,7 @@ public:
         read_one_pack_every_time = true;
         return *this;
     }
+
     DMFileBlockInputStreamBuilder & setRowsThreshold(size_t rows_threshold_per_read_)
     {
         rows_threshold_per_read = rows_threshold_per_read_;
@@ -177,6 +178,12 @@ public:
     DMFileBlockInputStreamBuilder & setReadTag(ReadTag read_tag_)
     {
         read_tag = read_tag_;
+        return *this;
+    }
+
+    DMFileBlockInputStreamBuilder & setDMFilePackFilterResult(const DMFilePackFilterResultPtr & pack_filter_)
+    {
+        pack_filter = pack_filter_;
         return *this;
     }
 
@@ -217,8 +224,6 @@ private:
     bool is_fast_scan = false;
     bool enable_del_clean_read = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
-    // Rough set filter
-    RSOperatorPtr rs_filter;
     // packs filter (filter by pack index)
     IdSetPtr read_packs;
     MarkCachePtr mark_cache;
@@ -233,6 +238,10 @@ private:
     size_t max_sharing_column_bytes_for_all = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
+
+    DMFilePackFilterResultPtr pack_filter;
+
+    ANNQueryInfoPtr ann_query_info = nullptr;
 
     VectorIndexCachePtr vector_index_cache;
     // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig

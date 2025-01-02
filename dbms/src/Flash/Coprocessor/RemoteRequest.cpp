@@ -44,7 +44,7 @@ RemoteRequest RemoteRequest::build(
         auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
         table_scan.constructTableScanForRemoteRead(mutable_table_scan, table_info.id);
 
-        String handle_column_name = MutableSupport::tidb_pk_column_name;
+        String handle_column_name = MutSup::extra_handle_column_name;
         if (auto pk_handle_col = table_info.getPKHandleColumn())
             handle_column_name = pk_handle_col->get().name;
 
@@ -53,7 +53,7 @@ RemoteRequest RemoteRequest::build(
             const auto & col = table_scan.getColumns()[i];
             auto col_id = col.id;
 
-            if (col_id == DB::TiDBPkColumnID)
+            if (col_id == MutSup::extra_handle_id)
             {
                 TiDB::ColumnInfo ci;
                 ci.tp = TiDB::TypeLongLong;
@@ -61,11 +61,11 @@ RemoteRequest RemoteRequest::build(
                 ci.setNotNullFlag();
                 schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
             }
-            else if (col_id == ExtraTableIDColumnID)
+            else if (col_id == MutSup::extra_table_id_col_id)
             {
                 TiDB::ColumnInfo ci;
                 ci.tp = TiDB::TypeLongLong;
-                schema.emplace_back(std::make_pair(MutableSupport::extra_table_id_column_name, std::move(ci)));
+                schema.emplace_back(std::make_pair(MutSup::extra_table_id_column_name, std::move(ci)));
             }
             else
             {
