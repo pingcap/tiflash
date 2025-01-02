@@ -17,10 +17,10 @@
 namespace DB::DM
 {
 template <>
-class HandleColumn<Int64>
+class HandleColumnView<Int64>
 {
 public:
-    HandleColumn(const IColumn & col)
+    HandleColumnView(const IColumn & col)
         : data(toColumnVectorData<Int64>(col))
     {}
 
@@ -33,10 +33,10 @@ private:
 };
 
 template <>
-class HandleColumn<String>
+class HandleColumnView<String>
 {
 public:
-    HandleColumn(const IColumn & col)
+    HandleColumnView(const IColumn & col)
         : offsets(typeid_cast<const ColumnString &>(col).getOffsets())
         , chars(typeid_cast<const ColumnString &>(col).getChars())
     {}
