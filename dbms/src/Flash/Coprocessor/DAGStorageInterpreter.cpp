@@ -748,6 +748,7 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
             if (kv_store->getStoreMeta().labels().at(i).key() == "zone")
             {
                 store_zone_label = kv_store->getStoreMeta().labels().at(i).value();
+                break;
             }
         }
     }
