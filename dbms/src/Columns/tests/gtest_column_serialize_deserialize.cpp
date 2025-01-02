@@ -68,6 +68,100 @@ public:
             ASSERT_EQ(byte_size[i], sizeof(UInt32) + i + result_byte_size[i]);
     }
 
+    static void checkForColumnWithCollator(
+        const ColumnPtr & result_col_ptr,
+        const ColumnPtr & new_col_ptr,
+        const TiDB::TiDBCollatorPtr & collator)
+    {
+        ASSERT_TRUE(collator);
+        String sort_key_container;
+        ASSERT_EQ(result_col_ptr->size(), new_col_ptr->size());
+        // Special handling for ColumnTuple and ColumnArray.
+        if (result_col_ptr->getFamilyName() == String("Array"))
+        {
+            size_t null_row_idx = 0;
+            for (size_t i = 0; i < result_col_ptr->size(); ++i)
+            {
+                const auto & expected_inner_col = checkAndGetColumn<ColumnArray>(result_col_ptr.get())->getData();
+                const auto & actual_inner_col = checkAndGetColumn<ColumnArray>(new_col_ptr.get())->getData();
+
+                Field expected_arr_field;
+                result_col_ptr->get(i, expected_arr_field);
+                auto expected_arr = expected_arr_field.get<Array>();
+
+                Field actual_arr_field;
+                new_col_ptr->get(i, actual_arr_field);
+                auto actual_arr = actual_arr_field.get<Array>();
+
+                ASSERT_EQ(expected_arr.size(), actual_arr.size());
+
+                for (size_t j = 0; j < expected_arr.size(); ++j, null_row_idx++)
+                {
+                    ASSERT_EQ(expected_inner_col.isNullAt(null_row_idx), actual_inner_col.isNullAt(null_row_idx));
+                    if (expected_inner_col.isNullAt(null_row_idx))
+                        continue;
+
+                    auto expected_str = expected_arr[j].get<String>();
+                    auto sort_key = collator->sortKey(expected_str.data(), expected_str.size(), sort_key_container);
+
+                    const auto & actual_str = actual_arr[j].get<String>();
+                    ASSERT_TRUE(sort_key == actual_str);
+                }
+            }
+        }
+        else if (result_col_ptr->getFamilyName() == String("Tuple"))
+        {
+            // getDataAt() not impl for ColumnTuple
+            ASSERT_EQ(result_col_ptr->size(), new_col_ptr->size());
+            for (size_t i = 0; i < result_col_ptr->size(); ++i)
+            {
+                const auto & expected_inner_col = checkAndGetColumn<ColumnTuple>(result_col_ptr.get())->getColumns()[0];
+                const auto & actual_inner_col = checkAndGetColumn<ColumnTuple>(new_col_ptr.get())->getColumns()[0];
+
+                ASSERT_EQ(expected_inner_col->isNullAt(i), actual_inner_col->isNullAt(i));
+                if (expected_inner_col->isNullAt(i))
+                    continue;
+
+                auto expected_tuple_field = (*result_col_ptr)[i];
+                const auto & expected_tuple = expected_tuple_field.get<Tuple>().toUnderType();
+
+                auto actual_tuple_field = (*new_col_ptr)[i];
+                const auto & actual_tuple = actual_tuple_field.get<Tuple>().toUnderType();
+
+                ASSERT_EQ(expected_tuple.size(), actual_tuple.size());
+
+                for (size_t j = 0; j < expected_tuple.size(); ++j)
+                {
+                    if (checkAndGetColumn<ColumnTuple>(result_col_ptr.get())->getColumns()[j]->getFamilyName()
+                        == String("String"))
+                    {
+                        auto res = expected_tuple[j].get<String>();
+                        auto sort_key = collator->sortKey(res.data(), res.size(), sort_key_container);
+
+                        const auto & actual_str = actual_tuple[j].get<String>();
+                        ASSERT_TRUE(sort_key == actual_str);
+                    }
+                    else
+                    {
+                        ASSERT_TRUE(expected_tuple[j] == actual_tuple[j]);
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < result_col_ptr->size(); ++i)
+            {
+                ASSERT_EQ(result_col_ptr->isNullAt(i), new_col_ptr->isNullAt(i));
+                if (result_col_ptr->isNullAt(i))
+                    continue;
+                auto res = result_col_ptr->getDataAt(i);
+                auto sort_key = collator->sortKey(res.data, res.size, sort_key_container);
+                ASSERT_TRUE(sort_key == new_col_ptr->getDataAt(i));
+            }
+        }
+    }
+
     static void testSerializeAndDeserialize(
         const ColumnPtr & column_ptr,
         bool is_fast = true,
@@ -177,7 +271,7 @@ public:
             result_col_ptr->insertFrom(*column_ptr, i);
 
         if (collator != nullptr)
-            DB::tests::columnEqual(std::move(result_col_ptr), std::move(new_col_ptr), collator);
+            checkForColumnWithCollator(std::move(result_col_ptr), std::move(new_col_ptr), collator);
         else
             ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
@@ -280,7 +374,7 @@ public:
             result_col_ptr->insertFrom(*column_ptr, i);
 
         if (collator != nullptr)
-            DB::tests::columnEqual(std::move(result_col_ptr), std::move(new_col_ptr), collator);
+            checkForColumnWithCollator(std::move(result_col_ptr), std::move(new_col_ptr), collator);
         else
             ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
@@ -694,7 +788,7 @@ try
 }
 CATCH
 
-TEST_F(TestColumnSerializeDeserialize, TestColumnNumberNonFast)
+TEST_F(TestColumnSerializeDeserialize, TestLargeColumnDecimal)
 try
 {
     std::vector<String> decimal_vals = {
@@ -705,6 +799,7 @@ try
         "12345678900123456789",
     };
     auto col_dec256 = createColumn<Decimal256>(std::make_tuple(40, 6), decimal_vals).column;
+    testSerializeAndDeserialize(col_dec256);
     testSerializeAndDeserialize(col_dec256, false, nullptr, nullptr);
 }
 CATCH

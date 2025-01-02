@@ -119,7 +119,7 @@ public:
         const override
     {
         // collator->sortKey() will change the string length, which may exceeds n.
-        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchSerialize when collator is not null", getName());
+        RUNTIME_CHECK_MSG(!collator, "{} doesn't support countSerializeByteSize when collator is not null", getName());
         countSerializeByteSizeFast(byte_size);
     }
     void countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const override;
@@ -129,7 +129,10 @@ public:
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator) const override
     {
-        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchSerialize when collator is not null", getName());
+        RUNTIME_CHECK_MSG(
+            !collator,
+            "{} doesn't support countSerializeByteSizeForColumnArray when collator is not null",
+            getName());
         countSerializeByteSizeForColumnArrayFast(byte_size, array_offsets);
     }
     void countSerializeByteSizeForColumnArrayFast(

@@ -589,7 +589,6 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         for (size_t i = 0; i < size; ++i)
         {
             assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= 1);
-            // How many sub elements in this array.
             const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
             byte_size[i] += sizeof(UInt32) * (ele_count)
                 // For each sub element, minus 1 because of terminating zero.
@@ -616,35 +615,35 @@ void ColumnString::batchSerialize(
     if (has_null)
     {
         if likely (collator != nullptr)
-            batchSerializeImpl</*has_null*/ true, /*has_collator*/ true>(
+            batchSerializeImpl</*has_null=*/true, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
                 collator,
                 sort_key_container);
         else
-            batchSerializeImpl</*has_null*/ true, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
+            batchSerializeImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     }
     else
     {
         if likely (collator != nullptr)
-            batchSerializeImpl</*has_null*/ false, /*has_collator*/ true>(
+            batchSerializeImpl</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
                 collator,
                 sort_key_container);
         else
-            batchSerializeImpl</*has_null*/ false, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
+            batchSerializeImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     }
 }
 
 void ColumnString::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        batchSerializeImpl</*has_null*/ true, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
+        batchSerializeImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     else
-        batchSerializeImpl</*has_null*/ false, /*has_collator*/ false>(pos, start, length, nullptr, nullptr);
+        batchSerializeImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
 }
 
 template <bool has_null, bool has_collator>
@@ -696,7 +695,7 @@ void ColumnString::batchSerializeForColumnArray(
     if (has_null)
     {
         if likely (collator != nullptr)
-            batchSerializeForColumnArrayImpl<true, true>(
+            batchSerializeForColumnArrayImpl</*has_null=*/true, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -704,12 +703,18 @@ void ColumnString::batchSerializeForColumnArray(
                 collator,
                 sort_key_container);
         else
-            batchSerializeForColumnArrayImpl<true, false>(pos, start, length, array_offsets, nullptr, nullptr);
+            batchSerializeForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr,
+                nullptr);
     }
     else
     {
         if likely (collator != nullptr)
-            batchSerializeForColumnArrayImpl<false, true>(
+            batchSerializeForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -717,7 +722,13 @@ void ColumnString::batchSerializeForColumnArray(
                 collator,
                 sort_key_container);
         else
-            batchSerializeForColumnArrayImpl<false, true>(pos, start, length, array_offsets, nullptr, nullptr);
+            batchSerializeForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr,
+                nullptr);
     }
 }
 
@@ -729,9 +740,21 @@ void ColumnString::batchSerializeForColumnArrayFast(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        batchSerializeForColumnArrayImpl<true, false>(pos, start, length, array_offsets, nullptr, nullptr);
+        batchSerializeForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
+            pos,
+            start,
+            length,
+            array_offsets,
+            nullptr,
+            nullptr);
     else
-        batchSerializeForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr, nullptr);
+        batchSerializeForColumnArrayImpl</*has_null=*/false, /*has_collator=*/false>(
+            pos,
+            start,
+            length,
+            array_offsets,
+            nullptr,
+            nullptr);
 }
 
 template <bool has_null, bool has_collator>
@@ -932,15 +955,13 @@ void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool
         memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
         char_size += str_size;
 
+        // todo add unit test
         if constexpr (add_terminating_zero)
         {
             chars[char_size] = 0;
-            offsets[prev_size + i] = char_size + 1;
+            char_size++;
         }
-        else
-        {
-            offsets[prev_size + i] = char_size;
-        }
+        offsets[prev_size + i] = char_size;
         pos[i] += str_size;
     }
 }
@@ -994,6 +1015,7 @@ void ColumnString::batchDeserializeForColumnArrayImpl(
     {
         for (size_t i = 0; i < size; ++i)
         {
+            // TODO add unit test
             for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
             {
                 UInt32 str_size;
@@ -1005,7 +1027,8 @@ void ColumnString::batchDeserializeForColumnArrayImpl(
 
                 char_size += str_size;
                 chars[char_size] = 0;
-                offsets[j] = char_size + 1;
+                char_size++;
+                offsets[j] = char_size;
 
                 pos[i] += str_size;
             }

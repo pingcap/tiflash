@@ -158,7 +158,7 @@ public:
         size_t /* length */,
         bool /* has_null */) const override
     {
-        throw Exception("Method batchSerialize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Method batchSerializeFast is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void batchSerializeForColumnArray(

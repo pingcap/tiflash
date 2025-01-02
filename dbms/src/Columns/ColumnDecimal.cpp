@@ -74,17 +74,15 @@ ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal2
     dst += sizeof(size_t);
 
     const size_t limb_size = limb_count * sizeof(boost::multiprecision::limb_type);
-    // TODO or memcpy?
     inline_memcpy(dst, val.limbs(), limb_size);
     dst += limb_size;
     return dst;
 }
 
-ALWAYS_INLINE inline std::pair<Decimal256, const char *> deserializeDecimal256Helper(const char * ptr)
+ALWAYS_INLINE inline const char * deserializeDecimal256Helper(Decimal256 & value, const char * ptr)
 {
     /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
     /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
-    Decimal256 value;
     auto & val = value.value.backend();
 
     size_t offset = 0;
@@ -100,7 +98,7 @@ ALWAYS_INLINE inline std::pair<Decimal256, const char *> deserializeDecimal256He
     val.normalize();
     offset += limb_count * sizeof(boost::multiprecision::limb_type);
 
-    return std::make_pair(value, ptr + offset);
+    return ptr + offset;
 }
 
 template <typename T>
@@ -131,9 +129,8 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 {
     if constexpr (is_Decimal256)
     {
-        auto [val, ptr] = deserializeDecimal256Helper(pos);
-        data.push_back(std::move(val));
-        return ptr;
+        data.resize(data.size() + 1);
+        return deserializeDecimal256Helper(data.back(), pos);
     }
     else
     {
@@ -163,6 +160,7 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
     }
 }
 
+// TODO add unit test
 template <typename T>
 template <bool is_fast>
 void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
@@ -182,9 +180,8 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
         {
             size_t cur_size = 0;
             for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
-            {
                 cur_size += getDecimal256BytesSize(data[j]);
-            }
+
             byte_size[i] += cur_size;
         }
     }
@@ -256,9 +253,7 @@ void ColumnDecimal<T>::batchSerializeForColumnArrayImpl(
         if constexpr (!is_fast && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
-            {
                 pos[i] = serializeDecimal256Helper(pos[i], data[array_offsets[start + i - 1] + j]);
-            }
         }
         else
         {
@@ -283,8 +278,7 @@ template <typename T>
 template <bool is_fast>
 void ColumnDecimal<T>::batchDeserializeImpl(
     PaddedPODArray<const char *> & pos,
-    bool use_nt_align_buffer [[maybe_unused]],
-    const TiDB::TiDBCollatorPtr &)
+    bool use_nt_align_buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
     size_t size = pos.size();
@@ -372,19 +366,14 @@ void ColumnDecimal<T>::batchDeserializeImpl(
         use_nt_align_buffer);
 #endif
 
+    data.resize(prev_size + size);
     if constexpr (is_complex_decimal256)
     {
-        data.reserve(prev_size + size);
         for (size_t i = 0; i < size; ++i)
-        {
-            auto [val, ptr] = deserializeDecimal256Helper(pos[i]);
-            pos[i] = ptr;
-            data.push_back(std::move(val));
-        }
+            pos[i] = deserializeDecimal256Helper(data[prev_size + i], pos[i]);
     }
     else
     {
-        data.resize(prev_size + size);
         for (size_t i = 0; i < size; ++i)
         {
             tiflash_compiler_builtin_memcpy(&data[prev_size + i], pos[i], sizeof(T));
@@ -398,8 +387,7 @@ template <bool is_fast>
 void ColumnDecimal<T>::batchDeserializeForColumnArrayImpl(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
-    bool use_nt_align_buffer [[maybe_unused]],
-    const TiDB::TiDBCollatorPtr &)
+    bool use_nt_align_buffer [[maybe_unused]])
 {
     if unlikely (pos.empty())
         return;
@@ -425,11 +413,7 @@ void ColumnDecimal<T>::batchDeserializeForColumnArrayImpl(
         if constexpr (!is_fast && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
-            {
-                auto [val, ptr] = deserializeDecimal256Helper(pos[i]);
-                data[array_offsets[start_point + i - 1] + j] = std::move(val);
-                pos[i] = ptr;
-            }
+                pos[i] = deserializeDecimal256Helper(data[array_offsets[start_point + i - 1] + j], pos[i]);
         }
         else
         {

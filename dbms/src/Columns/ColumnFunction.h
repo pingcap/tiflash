@@ -120,7 +120,8 @@ public:
         throw Exception("Cannot deserialize to " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */, const TiDB::TiDBCollatorPtr &) const override
+    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */, const TiDB::TiDBCollatorPtr & /* collator */)
+        const override
     {
         throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
