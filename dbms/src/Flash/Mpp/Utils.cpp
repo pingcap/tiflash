@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeString.h>
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Poco/String.h>
@@ -60,7 +61,14 @@ static std::atomic<MppVersion> MaxMppVersionFromTiDB = MinMppVersion;
 void updateMaxMppVersionFromTiDB(MppVersion version)
 {
     if (unlikely(version > MaxMppVersionFromTiDB.load(std::memory_order_relaxed)))
+    {
         MaxMppVersionFromTiDB.store(version, std::memory_order_relaxed);
+        LOG_INFO(
+            Logger::get(),
+            "Update max mpp version from TiDB to {}. Default name of DataTypeString is {}.",
+            version,
+            DataTypeString::getDefaultName());
+    }
 }
 } // namespace
 
