@@ -55,7 +55,7 @@ void ExchangeSenderStatistics::collectExtraRuntimeDetail()
     for (UInt16 i = 0; i < partition_num; ++i)
     {
         const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
-        mpp_tunnel_details[i].conn_profile_info.packets = connection_profile_info.packets;
+        mpp_tunnel_details[i].conn_profile_info.packets += connection_profile_info.packets;
         mpp_tunnel_details[i].conn_profile_info.bytes += connection_profile_info.bytes;
         base.updateSendConnectionInfo(connection_profile_info);
     }
