@@ -90,20 +90,23 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
 }
 
 template <class ExchangeWriterPtr>
-bool FineGrainedShuffleWriter<ExchangeWriterPtr>::doFlush()
+WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 {
+    has_pending_flush = false;
     if (rows_in_blocks > 0)
     {
-        batchWriteFineGrainedShuffle();
-        return true;
+        auto wait_res = waitForWritable();
+        if (wait_res == WaitResult::Ready)
+        {
+            batchWriteFineGrainedShuffle();
+            return WriteResult::Done;
+        }
+        // set has_pending_flush to true since current flush is not done
+        has_pending_flush = true;
+        return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling
+                                                      : WriteResult::NeedWaitForNotify;
     }
-    return false;
-}
-
-template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
-{
-    writer->notifyNextPipelineWriter();
+    return WriteResult::Done;
 }
 
 template <class ExchangeWriterPtr>
@@ -113,8 +116,9 @@ WaitResult FineGrainedShuffleWriter<ExchangeWriterPtr>::waitForWritable() const
 }
 
 template <class ExchangeWriterPtr>
-bool FineGrainedShuffleWriter<ExchangeWriterPtr>::doWrite(const Block & block)
+WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
 {
+    assert(has_pending_flush == false);
     RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -135,10 +139,9 @@ bool FineGrainedShuffleWriter<ExchangeWriterPtr>::doWrite(const Block & block)
     if (blocks.size() == fine_grained_shuffle_stream_count
         || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
     {
-        batchWriteFineGrainedShuffle();
-        return true;
+        return flush();
     }
-    return false;
+    return WriteResult::Done;
 }
 
 template <class ExchangeWriterPtr>
