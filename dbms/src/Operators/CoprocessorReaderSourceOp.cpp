@@ -94,16 +94,13 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
             }
 
             const auto & decode_detail = result.decode_detail;
-            if (result.same_zone_flag)
+            auto conn_profile_info_index = CoprocessorReader::inner_zone_index;
+            if (!result.same_zone_flag)
             {
-                io_profile_info->connection_profile_infos[0].packets += decode_detail.packets;
-                io_profile_info->connection_profile_infos[0].bytes += decode_detail.packet_bytes;
+                conn_profile_info_index = CoprocessorReader::inter_zone_index;
             }
-            else
-            {
-                io_profile_info->connection_profile_infos[1].packets += decode_detail.packets;
-                io_profile_info->connection_profile_infos[1].bytes += decode_detail.packet_bytes;
-            }
+            io_profile_info->connection_profile_infos[conn_profile_info_index].packets += decode_detail.packets;
+            io_profile_info->connection_profile_infos[conn_profile_info_index].bytes += decode_detail.packet_bytes;
 
             total_rows += decode_detail.rows;
             LOG_TRACE(

@@ -57,7 +57,7 @@ void ExchangeSenderStatistics::collectExtraRuntimeDetail()
         const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
         mpp_tunnel_details[i].conn_profile_info.packets = connection_profile_info.packets;
         mpp_tunnel_details[i].conn_profile_info.bytes += connection_profile_info.bytes;
-        base.updateConnectionInfo(connection_profile_info);
+        base.updateSendConnectionInfo(connection_profile_info);
     }
 }
 

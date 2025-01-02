@@ -165,6 +165,8 @@ public:
     static const inline ConnectionProfileInfo::ConnTypeVec conn_type_vec{
         ConnectionProfileInfo::InnerZoneRemote,
         ConnectionProfileInfo::InterZoneRemote};
+    static const Int32 inner_zone_index = 0;
+    static const Int32 inter_zone_index = 1;
 
 private:
     const DAGSchema schema;

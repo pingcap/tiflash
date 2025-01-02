@@ -18,8 +18,6 @@
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
 
-#include "common/types.h"
-
 namespace DB
 {
 struct TableScanTimeDetail

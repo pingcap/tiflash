@@ -50,7 +50,7 @@ void ExchangeReceiverStatistics::updateExchangeReceiveDetail(
         exchange_receive_details[i].conn_profile_info.type = connection_profile_infos[i].type;
         exchange_receive_details[i].conn_profile_info.packets += connection_profile_infos[i].packets;
         exchange_receive_details[i].conn_profile_info.bytes += connection_profile_infos[i].bytes;
-        base.updateConnectionInfo(connection_profile_infos[i]);
+        base.updateReceiveConnectionInfo(connection_profile_infos[i]);
     }
 }
 

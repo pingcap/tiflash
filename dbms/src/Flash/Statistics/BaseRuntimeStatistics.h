@@ -40,6 +40,7 @@ struct BaseRuntimeStatistics
 
     void append(const BlockStreamProfileInfo &);
     void append(const OperatorProfileInfo &);
-    void updateConnectionInfo(const ConnectionProfileInfo & conn_profile_info);
+    void updateSendConnectionInfo(const ConnectionProfileInfo & conn_profile_info);
+    void updateReceiveConnectionInfo(const ConnectionProfileInfo & conn_profile_info);
 };
 } // namespace DB

@@ -43,7 +43,7 @@ void BaseRuntimeStatistics::append(const OperatorProfileInfo & profile_info)
     ++concurrency;
 }
 
-void BaseRuntimeStatistics::updateConnectionInfo(const ConnectionProfileInfo & conn_profile_info)
+void BaseRuntimeStatistics::updateReceiveConnectionInfo(const ConnectionProfileInfo & conn_profile_info)
 {
     switch (conn_profile_info.type)
     {
@@ -52,6 +52,21 @@ void BaseRuntimeStatistics::updateConnectionInfo(const ConnectionProfileInfo & c
         break;
     case DB::ConnectionProfileInfo::InterZoneRemote:
         inter_zone_receive_bytes += bytes;
+        break;
+    default:
+        break;
+    }
+}
+
+void BaseRuntimeStatistics::updateSendConnectionInfo(const ConnectionProfileInfo & conn_profile_info)
+{
+    switch (conn_profile_info.type)
+    {
+    case ConnectionProfileInfo::InnerZoneRemote:
+        inner_zone_send_bytes += bytes;
+        break;
+    case DB::ConnectionProfileInfo::InterZoneRemote:
+        inter_zone_send_bytes += bytes;
         break;
     default:
         break;
