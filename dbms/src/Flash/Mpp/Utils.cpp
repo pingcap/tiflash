@@ -94,7 +94,7 @@ bool ReportExecutionSummaryToCoordinator(int64_t mpp_version, bool report_execut
 bool CheckMppVersion(int64_t mpp_version)
 {
     fiu_do_on(FailPoints::invalid_mpp_version, { mpp_version = -1; });
-    if (likely(mpp_version >= MinMppVersion && mpp_version <= NewestMppVersion))
+    if (likely(mpp_version >= MinMppVersion && mpp_version <= NewestMppVersion))  // NOLINT
     {
         updateMaxMppVersionFromTiDB(static_cast<MppVersion>(mpp_version));
         return true;
