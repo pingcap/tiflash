@@ -702,6 +702,8 @@ struct RowKeyRange
     /// Check whether the key is included in this range.
     inline bool check(const RowKeyValueRef & value) const { return checkStart(value) && checkEnd(value); }
 
+    /// `RowKeyRange` denoted as [StartRowKey, EndRowKey). So if rhs.end == this->end, we
+    /// consider `rhs` is included by `this`.
     inline bool checkRangeIncluded(const RowKeyRange & rhs) const
     {
         return checkStart(rhs.getStart()) && (getEnd() == rhs.getEnd() || checkEnd(rhs.getEnd()));
