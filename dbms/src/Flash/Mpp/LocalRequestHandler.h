@@ -42,7 +42,6 @@ struct LocalRequestHandler
     }
 
     bool isWritable() const { return msg_queue->isWritable(); }
-    void notifyNextPipelineWriter() const { return msg_queue->notifyNextPipelineWriter(); }
 
     void registerPipeWriteTask(TaskPtr && task, NotifyType type) const
     {

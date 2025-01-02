@@ -132,7 +132,6 @@ public:
     }
 
     bool isWritable() const { return grpc_recv_queue.isWritable(); }
-    void notifyNextPipelineWriter() { grpc_recv_queue.notifyNextPipelineWriter(); }
 
     void registerPipeWriteTask(TaskPtr && task, NotifyType type)
     {
