@@ -53,7 +53,7 @@ void trimStackTrace(String & message)
 namespace
 {
 // Latest mpp-version supported by TiFlash
-constexpr auto NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
+constexpr auto NewestMppVersion = MppVersion::MppVersionMAX - 1;
 constexpr auto MinMppVersion = MppVersion::MppVersionV0;
 
 std::atomic<MppVersion> MaxMppVersionFromTiDB = MinMppVersion;
