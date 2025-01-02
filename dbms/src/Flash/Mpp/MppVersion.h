@@ -54,6 +54,5 @@ bool ReportExecutionSummaryToCoordinator(int64_t mpp_version, bool report_execut
 bool CheckMppVersion(int64_t mpp_version);
 std::string GenMppVersionErrorMessage(int64_t mpp_version);
 int64_t GetMppVersion();
-MppVersion getMaxMppVersionFromTiDB();
 
 } // namespace DB

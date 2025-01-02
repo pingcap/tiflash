@@ -50,33 +50,8 @@ void trimStackTrace(String & message)
     }
 }
 
-namespace
-{
-// Latest mpp-version supported by TiFlash
-constexpr auto NewestMppVersion = MppVersion::MppVersionMAX - 1;
-constexpr auto MinMppVersion = MppVersion::MppVersionV0;
-
-std::atomic<MppVersion> MaxMppVersionFromTiDB = MinMppVersion;
-
-void updateMaxMppVersionFromTiDB(MppVersion version)
-{
-    if (unlikely(version > MaxMppVersionFromTiDB.load(std::memory_order_relaxed)))
-    {
-        MaxMppVersionFromTiDB.store(version, std::memory_order_relaxed);
-        LOG_INFO(
-            Logger::get(),
-            "Update max mpp version from TiDB to {}. Default name of DataTypeString is {}.",
-            version,
-            DataTypeString::getDefaultName());
-    }
-}
-} // namespace
-
-MppVersion getMaxMppVersionFromTiDB()
-{
-    return MaxMppVersionFromTiDB.load(std::memory_order_relaxed);
-}
-
+static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
+static MppVersion MinMppVersion = MppVersion::MppVersionV0;
 
 // Use ReportStatus interface to report status
 bool ReportStatusToCoordinator(int64_t mpp_version, const std::string & coordinator_address)
@@ -94,12 +69,7 @@ bool ReportExecutionSummaryToCoordinator(int64_t mpp_version, bool report_execut
 bool CheckMppVersion(int64_t mpp_version)
 {
     fiu_do_on(FailPoints::invalid_mpp_version, { mpp_version = -1; });
-    if (likely(mpp_version >= MinMppVersion && mpp_version <= NewestMppVersion)) // NOLINT
-    {
-        updateMaxMppVersionFromTiDB(static_cast<MppVersion>(mpp_version));
-        return true;
-    }
-    return false;
+    return mpp_version >= MinMppVersion && mpp_version <= NewestMppVersion;
 }
 
 std::string GenMppVersionErrorMessage(int64_t mpp_version)

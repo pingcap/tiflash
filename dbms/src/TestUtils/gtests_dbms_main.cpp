@@ -113,8 +113,6 @@ int main(int argc, char ** argv)
     ::testing::InitGoogleTest(&argc, argv);
     ::testing::UnitTest::GetInstance()->listeners().Append(new ThrowListener);
 
-    DB::CheckMppVersion(DB::GetMppVersion()); // Use newest mpp-version by default
-
     auto ret = RUN_ALL_TESTS();
 
     // `SegmentReader` threads may hold a segment and its delta-index for read.

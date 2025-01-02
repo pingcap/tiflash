@@ -93,6 +93,7 @@ public:
     };
 
     inline static const String LegacyName{"String"}; // For compatibility of size-prefix format.
+    inline static const String NullableLegacyName{"Nullable(String)"};
     inline static const String NameV2{"StringV2"}; // The separate size and chars format.
 
     // Both getDefaultName and getNullableDefaultName are unit-tests helpers.

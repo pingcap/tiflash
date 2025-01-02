@@ -447,14 +447,9 @@ bool isLegacyStorageFormat(StorageFormatVersion current)
     return current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103);
 }
 
-bool isLegacyMppVersion(MppVersion version)
-{
-    return version < MppVersion::MppVersionV3;
-}
-
 DataTypeString::SerdesFormat getDefaultSerdesFormat()
 {
-    if (isLegacyStorageFormat(STORAGE_FORMAT_CURRENT) || isLegacyMppVersion(getMaxMppVersionFromTiDB()))
+    if (isLegacyStorageFormat(STORAGE_FORMAT_CURRENT))
     {
         return DataTypeString::SerdesFormat::SizePrefix;
     }
