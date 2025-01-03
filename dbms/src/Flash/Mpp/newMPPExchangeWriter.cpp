@@ -118,8 +118,11 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     RUNTIME_CHECK_MSG(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, "exchange writer only run in MPP");
     if (is_async)
     {
-        auto writer
-            = std::make_shared<AsyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
+        auto writer = std::make_shared<AsyncMPPTunnelSetWriter>(
+            dag_context.tunnel_set,
+            dag_context.result_field_types,
+            req_id,
+            static_cast<MppVersion>(dag_context.getMPPTaskMeta().mpp_version()));
         return buildMPPExchangeWriter(
             writer,
             partition_col_ids,
@@ -136,8 +139,11 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     }
     else
     {
-        auto writer
-            = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
+        auto writer = std::make_shared<SyncMPPTunnelSetWriter>(
+            dag_context.tunnel_set,
+            dag_context.result_field_types,
+            req_id,
+            static_cast<MppVersion>(dag_context.getMPPTaskMeta().mpp_version()));
         return buildMPPExchangeWriter(
             writer,
             partition_col_ids,

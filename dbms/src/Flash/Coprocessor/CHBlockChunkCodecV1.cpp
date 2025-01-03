@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
+#include <Flash/Mpp/Utils.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
@@ -305,9 +306,9 @@ struct CHBlockChunkCodecV1Impl
         writeVarUInt(rows, *ostr_ptr);
 
         // Encode columns data
-        for (size_t col_index = 0; col_index < inner.header.columns(); ++col_index)
+        for (size_t col_index = 0; col_index < inner.serialized_header.columns(); ++col_index)
         {
-            auto && col_type_name = inner.header.getByPosition(col_index);
+            auto && col_type_name = inner.serialized_header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
             WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0);
         }
@@ -413,7 +414,7 @@ struct CHBlockChunkCodecV1Impl
         }
 
         // Encode header
-        EncodeHeader(*ostr_ptr, inner.header, rows);
+        EncodeHeader(*ostr_ptr, inner.serialized_header, rows);
         // Encode column data
         encodeColumn(std::forward<VecColumns>(batch_columns), ostr_ptr);
 
@@ -433,9 +434,10 @@ struct CHBlockChunkCodecV1Impl
     }
 };
 
-CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_)
-    : header(header_)
-    , header_size(ApproxBlockHeaderBytes(header))
+CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_, MppVersion mpp_version_)
+    : initial_header(header_)
+    , serialized_header(getHeaderByMppVersion(initial_header, mpp_version_))
+    , header_size(ApproxBlockHeaderBytes(serialized_header))
 {}
 
 static void checkSchema(const Block & header, const Block & block)
@@ -459,7 +461,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(
 {
     if (check_schema)
     {
-        checkSchema(header, block);
+        checkSchema(initial_header, block);
     }
     return CHBlockChunkCodecV1Impl{*this}.encode(block, compression_method);
 }
@@ -516,7 +518,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(
     {
         for (auto && block : blocks)
         {
-            checkSchema(header, block);
+            checkSchema(initial_header, block);
         }
     }
 
@@ -532,7 +534,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(
     {
         for (auto && block : blocks)
         {
-            checkSchema(header, block);
+            checkSchema(initial_header, block);
         }
     }
 

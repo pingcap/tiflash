@@ -30,9 +30,7 @@ TrackedMppDataPacketPtr ToPacket(
 {
     assert(version > MPPDataPacketV0);
 
-    auto && codec = CHBlockChunkCodecV1{
-        header,
-    };
+    auto && codec = CHBlockChunkCodecV1{header, mpp_version};
 
     auto && res = codec.encode(std::move(part_columns), method);
 
@@ -57,7 +55,7 @@ TrackedMppDataPacketPtr ToPacket(
     if (blocks.empty())
         return nullptr;
     const Block & header = blocks.front().cloneEmpty();
-    auto && codec = CHBlockChunkCodecV1{header};
+    auto && codec = CHBlockChunkCodecV1{header, mpp_version};
     auto && res = codec.encode(std::move(blocks), method, false);
     if unlikely (res.empty())
         return nullptr;
@@ -68,7 +66,10 @@ TrackedMppDataPacketPtr ToPacket(
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types, MppVersion mpp_version)
+TrackedMppDataPacketPtr ToPacketV0(
+    Blocks & blocks,
+    const std::vector<tipb::FieldType> & field_types,
+    [[maybe_unused]] MppVersion mpp_version)
 {
     CHBlockChunkCodec codec;
     auto codec_stream = codec.newCodecStream(field_types);
@@ -96,9 +97,7 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
 {
     assert(version > MPPDataPacketV0);
 
-    auto && codec = CHBlockChunkCodecV1{
-        header,
-    };
+    auto && codec = CHBlockChunkCodecV1{header, mpp_version};
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
 
     for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
@@ -134,7 +133,7 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
     const std::vector<tipb::FieldType> & field_types,
-    MppVersion mpp_version)
+    [[maybe_unused]] MppVersion mpp_version)
 {
     CHBlockChunkCodec codec;
     auto codec_stream = codec.newCodecStream(field_types);
@@ -170,8 +169,7 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
 TrackedMppDataPacketPtr ToCompressedPacket(
     const TrackedMppDataPacketPtr & uncompressed_source,
     MPPDataPacketVersion version,
-    CompressionMethod method,
-    MppVersion mpp_version)
+    CompressionMethod method)
 {
     assert(uncompressed_source);
     for ([[maybe_unused]] const auto & chunk : uncompressed_source->getPacket().chunks())

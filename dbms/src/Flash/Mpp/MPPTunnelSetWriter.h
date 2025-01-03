@@ -89,8 +89,9 @@ public:
     SyncMPPTunnelSetWriter(
         const MPPTunnelSetPtr & mpp_tunnel_set_,
         const std::vector<tipb::FieldType> & result_field_types_,
-        const String & req_id)
-        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
+        const String & req_id,
+        MppVersion mpp_version)
+        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id, mpp_version)
     {}
 
     // For sync writer, `waitForWritable` will not be called, so an exception is thrown here.
@@ -108,8 +109,9 @@ public:
     AsyncMPPTunnelSetWriter(
         const MPPTunnelSetPtr & mpp_tunnel_set_,
         const std::vector<tipb::FieldType> & result_field_types_,
-        const String & req_id)
-        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
+        const String & req_id,
+        MppVersion mpp_version)
+        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id, mpp_version)
     {}
 
     WaitResult waitForWritable() const override { return mpp_tunnel_set->waitForWritable(); }

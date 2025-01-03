@@ -25,6 +25,6 @@ namespace DB
 {
 mpp::MPPDataPacket getPacketWithError(String reason);
 void trimStackTrace(String & message);
-Block getHeaderByMppVersion(Block && header, MppVersion mpp_version);
+Block getHeaderByMppVersion(const Block & header, MppVersion mpp_version);
 
 } // namespace DB

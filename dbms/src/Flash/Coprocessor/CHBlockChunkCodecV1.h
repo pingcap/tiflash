@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/Compression/CompressionMethod.h>
@@ -40,7 +41,8 @@ struct CHBlockChunkCodecV1 : boost::noncopyable
     using Self = CHBlockChunkCodecV1;
     using EncodeRes = std::string;
 
-    const Block & header;
+    const Block & initial_header;
+    const Block serialized_header;
     const size_t header_size;
 
     size_t encoded_rows{};
@@ -48,7 +50,7 @@ struct CHBlockChunkCodecV1 : boost::noncopyable
     size_t compressed_size{};
 
     void clear();
-    explicit CHBlockChunkCodecV1(const Block & header_);
+    explicit CHBlockChunkCodecV1(const Block & header_, MppVersion mpp_version_);
     //
     EncodeRes encode(const MutableColumns & columns, CompressionMethod compression_method);
     EncodeRes encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method);
