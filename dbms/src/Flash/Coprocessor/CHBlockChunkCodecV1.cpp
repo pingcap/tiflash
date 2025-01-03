@@ -16,8 +16,8 @@
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
-#include <Flash/Mpp/Utils.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressionCodecFactory.h>
 #include <IO/Compression/CompressionInfo.h>
@@ -62,7 +62,7 @@ const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion
         return type;
 
     // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
-    static const std::array<DataTypePtr> legacy_string_types = {
+    static const auto legacy_string_types = std::array{
         DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName),
         DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName),
     };
@@ -344,7 +344,7 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            WriteColumnData(convertDataTypeNameByMppVersion(*col_type_name.type, inner.mpp_version), column_ptr, *ostr_ptr, 0, 0);
+            WriteColumnData(convertDataTypeByMppVersion(*col_type_name.type, inner.mpp_version), column_ptr, *ostr_ptr, 0, 0);
         }
 
         inner.encoded_rows += rows;

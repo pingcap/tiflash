@@ -20,7 +20,6 @@
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue_fwd.h>
-#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 
 #include <atomic>

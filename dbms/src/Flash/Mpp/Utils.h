@@ -24,4 +24,5 @@ namespace DB
 {
 mpp::MPPDataPacket getPacketWithError(String reason);
 void trimStackTrace(String & message);
+
 } // namespace DB

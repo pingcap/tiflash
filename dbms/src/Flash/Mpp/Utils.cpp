@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeString.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Poco/String.h>
 #include <common/defines.h>
@@ -23,6 +21,7 @@
 
 #include <array>
 #include <memory>
+
 namespace DB
 {
 namespace FailPoints

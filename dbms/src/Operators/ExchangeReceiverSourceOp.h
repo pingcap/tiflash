@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
-#include <Flash/Mpp/Utils.h>
 #include <Operators/Operator.h>
+
 namespace DB
 {
 class ExchangeReceiverSourceOp : public SourceOp
