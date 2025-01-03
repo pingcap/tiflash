@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/MyTime.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Core/Defines.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -61,6 +62,8 @@ extern const char segment_merge_after_ingest_packs[];
 extern const char force_set_segment_physical_split[];
 extern const char force_set_page_file_write_errno[];
 extern const char proactive_flush_force_set_type[];
+extern const char force_ingest_via_delta[];
+extern const char force_ingest_via_replace[];
 } // namespace DB::FailPoints
 
 namespace DB::tests
@@ -453,11 +456,6 @@ try
     }
 
     {
-        // TODO read data from more than one block
-        // TODO read data from mutli streams
-        // TODO read partial columns from store
-        // TODO read data of max_version
-
         // read all columns from store
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
@@ -496,6 +494,99 @@ try
                 createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
                 createColumn<String>(createNumberStrings(0, num_rows_write)),
                 createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+            }));
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, ReadAfterLogicalSplit)
+try
+{
+    if (mode != TestMode::Current_DiskOnly)
+        return;
+
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+
+    const size_t num_rows_write = 3 * 8192;
+    {
+        // write to store
+        Blocks blocks{
+            DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 3, false),
+            DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 3, num_rows_write * 2 / 3, false),
+            DMTestEnv::prepareSimpleWriteBlock(num_rows_write * 2 / 3, num_rows_write, false),
+        };
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFileByBlocks(*dm_context, blocks);
+        FailPointHelper::enableFailPoint(FailPoints::force_ingest_via_delta);
+        store->ingestFiles(dm_context, range, file_ids, false);
+        store->mergeDeltaAll(*db_context);
+    }
+
+    {
+        LOG_INFO(Logger::get(), "read columns from store");
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ DEFAULT_BLOCK_SIZE)[0];
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({
+                DMTestEnv::pk_name,
+            }),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+            }));
+    }
+
+    {
+        LOG_INFO(Logger::get(), "logical split on store");
+        SegmentPtr seg;
+        std::tie(std::ignore, seg) = *store->segments.begin();
+        auto [left, right] = store->segmentSplit(
+            *dm_context,
+            seg,
+            DeltaMergeStore::SegmentSplitReason::ForegroundWrite,
+            std::nullopt,
+            DeltaMergeStore::SegmentSplitMode::Logical);
+        ASSERT_NE(left, nullptr);
+        ASSERT_NE(right, nullptr);
+        LOG_INFO(Logger::get(), "read columns from store after logical split");
+    }
+    {
+        // Read after logical split. Note that use unordered read to test
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 102400)[0];
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({
+                DMTestEnv::pk_name,
+            }),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
             }));
     }
 }
