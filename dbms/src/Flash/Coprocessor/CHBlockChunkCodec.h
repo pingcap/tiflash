@@ -24,7 +24,9 @@ class CHBlockChunkDecodeAndSquash;
 class CHBlockChunkCodec final : public ChunkCodec
 {
 public:
-    CHBlockChunkCodec() = default;
+    CHBlockChunkCodec(MppVersion mpp_version_) 
+        : mpp_version(mpp_version_) {}
+
     explicit CHBlockChunkCodec(const Block & header_);
     explicit CHBlockChunkCodec(const DAGSchema & schema);
 
@@ -41,6 +43,7 @@ private:
     /// 'reserve_size' used for Squash usage, and takes effect when 'reserve_size' > 0
     Block decodeImpl(ReadBuffer & istr, size_t reserve_size = 0);
 
+    const MppVersion mpp_version;
     Block header;
     std::vector<CodecUtils::DataTypeWithTypeName> header_datatypes;
     std::vector<String> output_names;

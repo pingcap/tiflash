@@ -27,7 +27,7 @@
 
 namespace DB
 {
-size_t ApproxBlockHeaderBytes(const Block & block)
+static size_t ApproxBlockHeaderBytes(const Block & block)
 {
     size_t size = 8 + 8; /// to hold some length of structures, such as column number, row number...
     size_t columns = block.columns();
@@ -56,7 +56,7 @@ const String & convertDataTypeNameByMppVersion(const String & name, MppVersion m
         return name;
 }
 
-const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion mpp_version)
+const DataTypePtr & convertDataTypeByMppVersion(const DataTypePtr & type, MppVersion mpp_version)
 {
     if (mpp_version > MppVersion::MppVersionV2)
         return type;
@@ -67,11 +67,11 @@ const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion
         DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName),
     };
 
-    auto name = type.getName();
+    auto name = type->getName();
     if (name == DataTypeString::NameV2)
-        return *legacy_string_types[0];
+        return legacy_string_types[0];
     else if (name == DataTypeString::NullableNameV2)
-        return *legacy_string_types[1];
+        return legacy_string_types[1];
     else
         return type;
 }
@@ -90,7 +90,7 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MppVers
     }
 }
 
-Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
+Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows, MppVersion mpp_version)
 {
     Block res;
 
@@ -118,9 +118,9 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
                 CodecUtils::checkDataTypeName(
                     "CHBlockChunkCodecV1",
                     i,
-                    header.getByPosition(i).type->getName(),
+                    convertDataTypeNameByMppVersion(header.getByPosition(i).type->getName(), mpp_version),
                     type_name);
-                column.type = header.getByPosition(i).type;
+                column.type = convertDataTypeByMppVersion(header.getByPosition(i).type, mpp_version);
             }
             else
             {
@@ -344,7 +344,7 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            WriteColumnData(convertDataTypeByMppVersion(*col_type_name.type, inner.mpp_version), column_ptr, *ostr_ptr, 0, 0);
+            WriteColumnData(*convertDataTypeByMppVersion(col_type_name.type, inner.mpp_version), column_ptr, *ostr_ptr, 0, 0);
         }
 
         inner.encoded_rows += rows;

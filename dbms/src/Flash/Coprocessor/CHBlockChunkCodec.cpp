@@ -27,8 +27,9 @@ namespace DB
 class CHBlockChunkCodecStream : public ChunkCodecStream
 {
 public:
-    explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
+    explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types, MppVersion mpp_version_)
         : ChunkCodecStream(field_types)
+        , mpp_version(mpp_version_)
     {
         for (const auto & field_type : field_types)
         {
@@ -49,6 +50,7 @@ public:
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
+    const MppVersion mpp_version;
 };
 
 CHBlockChunkCodec::CHBlockChunkCodec(const Block & header_)

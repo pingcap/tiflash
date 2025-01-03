@@ -44,7 +44,7 @@ UnaryDAGResponseWriter::UnaryDAGResponseWriter(
     }
     else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
-        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>(dag_context.getMPPTaskMeta().mpp_version())->newCodecStream(dag_context.result_field_types);
     }
     dag_response->set_encode_type(dag_context.encode_type);
     current_records_num = 0;

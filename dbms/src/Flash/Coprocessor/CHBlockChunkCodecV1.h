@@ -22,11 +22,10 @@
 
 namespace DB
 {
-size_t ApproxBlockHeaderBytes(const Block & block);
 using CompressedCHBlockChunkReadBuffer = CompressedReadBuffer<false>;
 using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;
-void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
-Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
+void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size);
+Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows, MppVersion mpp_version = MppVersion::MppVersionV0);
 CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode);
 extern void WriteColumnData(
     const IDataType & type,
