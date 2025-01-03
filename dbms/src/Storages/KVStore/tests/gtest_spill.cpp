@@ -52,7 +52,7 @@ public:
 
 protected:
     StorageDeltaMergePtr storage;
-    TableID table_id;
+    TableID table_id{0};
 };
 
 TEST_F(KVStoreSpillTest, CreateBlock)
@@ -67,8 +67,8 @@ try
     {
         auto [schema_snapshot, block] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
         UNUSED(schema_snapshot);
-        EXPECT_NO_THROW(block->getPositionByName(MutableSupport::delmark_column_name));
-        EXPECT_THROW(block->getPositionByName(MutableSupport::version_column_name), Exception);
+        EXPECT_NO_THROW(block->getPositionByName(MutSup::delmark_column_name));
+        EXPECT_THROW(block->getPositionByName(MutSup::version_column_name), Exception);
         ASSERT_EQ(block->columns(), 3);
     }
     {
@@ -134,7 +134,7 @@ try
         KVStore & kvs = getKVS();
         proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
         auto region = kvs.getRegion(1);
-        RegionPtrWithBlock region_with_cache = RegionPtrWithBlock(region);
+        RegionPtrWithSnapshotFiles region_with_cache = RegionPtrWithSnapshotFiles(region);
         // TODO(Spill) spill logic
         EXPECT_THROW(writeRegionDataToStorage(ctx, region_with_cache, data_list_read, log), Exception);
     }

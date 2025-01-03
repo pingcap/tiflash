@@ -61,7 +61,7 @@ TableID TableScanBinder::getTableId() const
 void TableScanBinder::setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
 {
     auto names = splitQualifiedName(dag_column_info.first);
-    if (names.column_name == MutableSupport::tidb_pk_column_name)
+    if (names.column_name == MutSup::extra_handle_column_name)
         ci->set_column_id(-1);
     else
         ci->set_column_id(table_info.getColumnID(names.column_name));
@@ -142,10 +142,10 @@ ExecutorBinderPtr compileTableScan(
     {
         TiDB::ColumnInfo ci;
         ci.tp = TiDB::TypeLongLong;
-        ci.id = TiDBPkColumnID;
+        ci.id = MutSup::extra_handle_id;
         ci.setPriKeyFlag();
         ci.setNotNullFlag();
-        ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
+        ts_output.emplace_back(std::make_pair(MutSup::extra_handle_column_name, std::move(ci)));
     }
 
     return std::make_shared<mock::TableScanBinder>(executor_index, ts_output, table_info, keep_order);

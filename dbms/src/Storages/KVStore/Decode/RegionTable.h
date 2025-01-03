@@ -27,17 +27,10 @@
 #include <Storages/KVStore/Region.h>
 #include <common/logger_useful.h>
 
-#include <condition_variable>
 #include <functional>
 #include <mutex>
-#include <optional>
 #include <variant>
 #include <vector>
-
-namespace TiDB
-{
-struct TableInfo;
-};
 
 namespace DB
 {
@@ -53,7 +46,6 @@ class Block;
 struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
-struct RegionPtrWithBlock;
 struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
@@ -120,7 +112,7 @@ public:
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
-    RegionDataReadInfoList tryWriteBlockByRegion(const RegionPtrWithBlock & region);
+    RegionDataReadInfoList tryWriteBlockByRegion(const RegionPtr & region);
 
     void handleInternalRegionsByTable(
         KeyspaceID keyspace_id,
@@ -136,7 +128,7 @@ public:
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
     static DM::WriteResult writeCommittedByRegion(
         Context & context,
-        const RegionPtrWithBlock & region,
+        const RegionPtr & region,
         RegionDataReadInfoList & data_list_to_remove,
         const LoggerPtr & log,
         bool lock_region = true);
@@ -205,60 +197,6 @@ private:
     mutable std::shared_mutex rw_lock;
 
     LoggerPtr log;
-};
-
-
-// Block cache of region data with schema version.
-struct RegionPreDecodeBlockData
-{
-    Block block;
-    Int64 schema_version;
-    RegionDataReadInfoList data_list_read; // if schema version changed, use kv data to rebuild block cache
-
-    RegionPreDecodeBlockData(Block && block_, Int64 schema_version_, RegionDataReadInfoList && data_list_read_)
-        : block(std::move(block_))
-        , schema_version(schema_version_)
-        , data_list_read(std::move(data_list_read_))
-    {}
-    DISALLOW_COPY(RegionPreDecodeBlockData);
-    void toString(std::stringstream & ss) const
-    {
-        ss << " {";
-        ss << " schema_version: " << schema_version;
-        ss << ", data_list size: " << data_list_read.size();
-        ss << ", block row: " << block.rows() << " col: " << block.columns() << " bytes: " << block.bytes();
-        ss << " }";
-    }
-};
-
-// A wrap of RegionPtr, could try to use its block cache while writing region data to storage.
-struct RegionPtrWithBlock
-{
-    using Base = RegionPtr;
-    using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
-
-    RegionPtrWithBlock(const Base & base_)
-        : base(base_)
-        , pre_decode_cache(nullptr)
-    {}
-
-    /// to be compatible with usage as RegionPtr.
-    Base::element_type * operator->() const { return base.operator->(); }
-    const Base::element_type & operator*() const { return base.operator*(); }
-
-    /// make it could be cast into RegionPtr implicitly.
-    operator const Base &() const { return base; }
-
-    const Base & base;
-    CachePtr pre_decode_cache;
-
-private:
-    friend struct MockRaftCommand;
-    /// Can accept const ref of RegionPtr without cache
-    RegionPtrWithBlock(const Base & base_, CachePtr cache)
-        : base(base_)
-        , pre_decode_cache(std::move(cache))
-    {}
 };
 
 

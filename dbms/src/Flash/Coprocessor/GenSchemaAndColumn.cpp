@@ -26,13 +26,13 @@ namespace
 DataTypePtr getPkType(const TiDB::ColumnInfo & column_info)
 {
     const auto & pk_data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
-    /// primary key type must be tidb_pk_column_int_type or tidb_pk_column_string_type.
+    /// primary key type must be getTiDBPkColumnIntType or getTiDBPkColumnStringType.
     RUNTIME_CHECK(
-        pk_data_type->equals(*MutableSupport::tidb_pk_column_int_type)
-            || pk_data_type->equals(*MutableSupport::tidb_pk_column_string_type),
+        pk_data_type->equals(*MutSup::getExtraHandleColumnIntType())
+            || pk_data_type->equals(*MutSup::getExtraHandleColumnStringType()),
         pk_data_type->getName(),
-        MutableSupport::tidb_pk_column_int_type->getName(),
-        MutableSupport::tidb_pk_column_string_type->getName());
+        MutSup::getExtraHandleColumnIntType()->getName(),
+        MutSup::getExtraHandleColumnStringType()->getName());
     return pk_data_type;
 }
 } // namespace
@@ -70,13 +70,11 @@ NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const Str
         const auto & column_info = column_infos[i];
         switch (column_info.id)
         {
-        case TiDBPkColumnID:
-            names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getPkType(column_info));
+        case MutSup::extra_handle_id:
+            names_and_types.emplace_back(MutSup::extra_handle_column_name, getPkType(column_info));
             break;
-        case ExtraTableIDColumnID:
-            names_and_types.emplace_back(
-                MutableSupport::extra_table_id_column_name,
-                MutableSupport::extra_table_id_column_type);
+        case MutSup::extra_table_id_col_id:
+            names_and_types.emplace_back(MutSup::extra_table_id_column_name, MutSup::getExtraTableIdColumnType());
             break;
         default:
             names_and_types.emplace_back(
@@ -94,7 +92,7 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
 std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
 {
     auto column_defines = std::make_shared<DM::ColumnDefines>();
-    int extra_table_id_index = InvalidColumnID;
+    int extra_table_id_index = MutSup::invalid_col_id;
     column_defines->reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
@@ -106,18 +104,18 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
         const auto output_name = genNameForExchangeReceiver(i);
         switch (column_info.id)
         {
-        case TiDBPkColumnID:
+        case MutSup::extra_handle_id:
             column_defines->emplace_back(DM::ColumnDefine{
-                TiDBPkColumnID,
-                output_name, // MutableSupport::tidb_pk_column_name
+                MutSup::extra_handle_id,
+                output_name, // MutSup::extra_handle_column_name
                 getPkType(column_info)});
             break;
-        case ExtraTableIDColumnID:
+        case MutSup::extra_table_id_col_id:
         {
             column_defines->emplace_back(DM::ColumnDefine{
-                ExtraTableIDColumnID,
-                output_name, // MutableSupport::extra_table_id_column_name
-                MutableSupport::extra_table_id_column_type});
+                MutSup::extra_table_id_col_id,
+                output_name, // MutSup::extra_table_id_column_name
+                MutSup::getExtraTableIdColumnType()});
             extra_table_id_index = i;
             break;
         }

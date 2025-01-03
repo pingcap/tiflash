@@ -46,9 +46,6 @@ private:
     static ValueResult logicalAnd(ValueResult v0, ValueResult v1) noexcept;
     static ValueResult logicalOr(ValueResult v0, ValueResult v1) noexcept;
 
-    // Deleting or privating constructors, so that cannot create invalid objects.
-    // Use the static member variables below.
-    RSResult() = delete;
     RSResult(ValueResult v_, bool has_null_)
         : v(v_)
         , has_null(has_null_)
@@ -60,6 +57,10 @@ private:
     bool has_null;
 
 public:
+    // Deleting constructors, so that cannot create invalid objects.
+    // Use the static member variables below.
+    RSResult() = delete;
+
     bool isUse() const noexcept { return v != ValueResult::None; }
 
     bool allMatch() const noexcept { return *this == RSResult::All; }

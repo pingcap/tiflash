@@ -103,7 +103,7 @@ public:
     void initInputStream(
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
-        const PushDownFilterPtr & push_down_filter,
+        const PushDownExecutorPtr & push_down_executor,
         ReadMode read_mode,
         size_t expected_block_size,
         bool enable_delta_index_error_fallback);
@@ -140,7 +140,7 @@ private:
     bool doInitInputStreamWithErrorFallback(
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
-        const PushDownFilterPtr & push_down_filter,
+        const PushDownExecutorPtr & push_down_executor,
         ReadMode read_mode,
         size_t expected_block_size,
         bool enable_delta_index_error_fallback);
@@ -148,7 +148,7 @@ private:
     void doInitInputStream(
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
-        const PushDownFilterPtr & push_down_filter,
+        const PushDownExecutorPtr & push_down_executor,
         ReadMode read_mode,
         size_t expected_block_size);
 

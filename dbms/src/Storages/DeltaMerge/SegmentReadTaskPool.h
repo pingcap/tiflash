@@ -17,7 +17,7 @@
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
@@ -111,7 +111,7 @@ public:
     SegmentReadTaskPool(
         int extra_table_id_index_,
         const ColumnDefines & columns_to_read_,
-        const PushDownFilterPtr & filter_,
+        const PushDownExecutorPtr & filter_,
         uint64_t start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -214,7 +214,7 @@ private:
 
     const int extra_table_id_index;
     ColumnDefines columns_to_read;
-    PushDownFilterPtr filter;
+    PushDownExecutorPtr filter;
     const uint64_t start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;

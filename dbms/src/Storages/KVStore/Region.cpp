@@ -51,7 +51,7 @@ std::optional<RegionDataReadInfo> Region::readDataByWriteIt(
     }
 }
 
-DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const
+LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const
 {
     return data.getLockInfo(query);
 }
