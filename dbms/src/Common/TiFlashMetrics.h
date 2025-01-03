@@ -580,7 +580,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Raft classes counter",                                                                                                       \
       Gauge,                                                                                                                        \
       F(type_region, {{"type", "region"}}),                                                                                         \
-      F(type_decoded_lockcf, {{"type", "decoded_lockcf"}}))                                                                         \
+      F(type_fully_decoded_lockcf, {{"type", "fully_decoded_lockcf"}}))                                                             \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
