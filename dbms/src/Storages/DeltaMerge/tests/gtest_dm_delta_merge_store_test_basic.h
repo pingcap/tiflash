@@ -30,6 +30,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
 #include <ranges>
 
 namespace DB::DM
