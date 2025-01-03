@@ -140,8 +140,6 @@ public:
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
 
-    MppVersion getMppVersion() const;
-
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 

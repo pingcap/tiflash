@@ -13,15 +13,12 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DAGResponseWriter.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Mpp/Utils.h>
 #include <Operators/ExchangeSenderSinkOp.h>
 
 namespace DB
 {
 void ExchangeSenderSinkOp::operatePrefixImpl()
 {
-    setHeader(getHeaderByMppVersion(getHeader(), exec_context.getMppVersion()));
     writer->prepare(getHeader());
 }
 

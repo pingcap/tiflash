@@ -92,11 +92,8 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             compression_mode,
             context.getSettingsRef().batch_send_min_limit_compression,
             log->identifier());
-        stream = std::make_shared<ExchangeSenderBlockInputStream>(
-            stream,
-            std::move(response_writer),
-            static_cast<MppVersion>(dag_context.getMPPTaskMeta().mpp_version()),
-            log->identifier());
+        stream
+            = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
     });
 }

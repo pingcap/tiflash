@@ -253,9 +253,4 @@ void PipelineExecutorContext::cancelResultQueueIfNeed()
     assert(tmp);
     tmp->cancel();
 }
-
-MppVersion PipelineExecutorContext::getMppVersion() const
-{
-    return static_cast<MppVersion>(dag_context->getMPPTaskMeta().mpp_version());
-}
 } // namespace DB

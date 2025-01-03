@@ -35,9 +35,7 @@ public:
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, exchange_receiver->getSourceNum()))
     {
         exchange_receiver->verifyStreamId(stream_id);
-        setHeader(getHeaderByMppVersion(
-            Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))),
-            exec_context.getMppVersion()));
+        setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
     }
 

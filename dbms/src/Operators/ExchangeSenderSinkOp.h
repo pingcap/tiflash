@@ -16,7 +16,6 @@
 
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
-#include <Flash/Mpp/MppVersion.h>
 #include <Operators/Operator.h>
 
 namespace DB
