@@ -131,8 +131,11 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
             context.getSettingsRef().batch_send_min_limit_compression,
             log->identifier(),
             /*is_async=*/true);
-        builder.setSinkOp(
-            std::make_unique<ExchangeSenderSinkOp>(exec_context, log->identifier(), std::move(response_writer)));
+        builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(
+            exec_context,
+            log->identifier(),
+            std::move(response_writer),
+            static_cast<MppVersion>(context.getDAGContext()->getMPPTaskMeta().mpp_version())));
     });
 }
 
