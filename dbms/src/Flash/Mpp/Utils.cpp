@@ -90,27 +90,4 @@ int64_t GetMppVersion()
 {
     return (NewestMppVersion);
 }
-
-Block getHeaderByMppVersion(const Block & header, MppVersion mpp_version)
-{
-    Block new_header = header.cloneEmpty();
-    if (mpp_version > MppVersion::MppVersionV2)
-    {
-        return new_header;
-    }
-
-    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
-    for (auto & column : new_header)
-    {
-        if (removeNullable(column.type)->getTypeId() != TypeIndex::String)
-            continue;
-
-        if (column.type->isNullable())
-            column.type
-                = DataTypeFactory::instance().DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
-        else
-            column.type = DataTypeFactory::instance().DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
-    }
-    return new_header;
-}
 } // namespace DB

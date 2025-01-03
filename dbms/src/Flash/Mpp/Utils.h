@@ -19,12 +19,9 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
 #pragma GCC diagnostic pop
-#include <Core/Block.h>
-#include <Flash/Mpp/MppVersion.h>
+
 namespace DB
 {
 mpp::MPPDataPacket getPacketWithError(String reason);
 void trimStackTrace(String & message);
-Block getHeaderByMppVersion(const Block & header, MppVersion mpp_version);
-
 } // namespace DB

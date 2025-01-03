@@ -42,7 +42,41 @@ size_t ApproxBlockHeaderBytes(const Block & block)
     return size;
 }
 
-void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
+const String & convertDataTypeNameByMppVersion(const String & name, MppVersion mpp_version)
+{
+    if (mpp_version > MppVersion::MppVersionV2)
+        return name;
+
+    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
+    if (name == DataTypeString::NameV2)
+        return DataTypeString::LegacyName;
+    else if (name == DataTypeString::NullableNameV2)
+        return DataTypeString::NullableLegacyName;
+    else
+        return name;
+}
+
+const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion mpp_version)
+{
+    if (mpp_version > MppVersion::MppVersionV2)
+        return type;
+
+    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
+    static const std::array<DataTypePtr> legacy_string_types = {
+        DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName),
+        DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName),
+    };
+
+    auto name = type.getName();
+    if (name == DataTypeString::NameV2)
+        return *legacy_string_types[0];
+    else if (name == DataTypeString::NullableNameV2)
+        return *legacy_string_types[1];
+    else
+        return type;
+}
+
+void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MppVersion mpp_version)
 {
     size_t columns = header.columns();
     writeVarUInt(columns, ostr);
@@ -52,7 +86,7 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
     {
         const ColumnWithTypeAndName & column = header.safeGetByPosition(i);
         writeStringBinary(column.name, ostr);
-        writeStringBinary(column.type->getName(), ostr);
+        writeStringBinary(convertDataTypeNameByMppVersion(column.type->getName(), mpp_version), ostr);
     }
 }
 
@@ -306,11 +340,11 @@ struct CHBlockChunkCodecV1Impl
         writeVarUInt(rows, *ostr_ptr);
 
         // Encode columns data
-        for (size_t col_index = 0; col_index < inner.serialized_header.columns(); ++col_index)
+        for (size_t col_index = 0; col_index < inner.header.columns(); ++col_index)
         {
-            auto && col_type_name = inner.serialized_header.getByPosition(col_index);
+            auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0);
+            WriteColumnData(convertDataTypeNameByMppVersion(*col_type_name.type, inner.mpp_version), column_ptr, *ostr_ptr, 0, 0);
         }
 
         inner.encoded_rows += rows;
@@ -414,7 +448,7 @@ struct CHBlockChunkCodecV1Impl
         }
 
         // Encode header
-        EncodeHeader(*ostr_ptr, inner.serialized_header, rows);
+        EncodeHeader(*ostr_ptr, inner.header, rows, inner.mpp_version);
         // Encode column data
         encodeColumn(std::forward<VecColumns>(batch_columns), ostr_ptr);
 
@@ -435,9 +469,9 @@ struct CHBlockChunkCodecV1Impl
 };
 
 CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_, MppVersion mpp_version_)
-    : initial_header(header_)
-    , serialized_header(getHeaderByMppVersion(initial_header, mpp_version_))
-    , header_size(ApproxBlockHeaderBytes(serialized_header))
+    : header(header_)
+    , header_size(ApproxBlockHeaderBytes(header))
+    , mpp_version(mpp_version_)
 {}
 
 static void checkSchema(const Block & header, const Block & block)
@@ -461,7 +495,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(
 {
     if (check_schema)
     {
-        checkSchema(initial_header, block);
+        checkSchema(header, block);
     }
     return CHBlockChunkCodecV1Impl{*this}.encode(block, compression_method);
 }
@@ -518,7 +552,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(
     {
         for (auto && block : blocks)
         {
-            checkSchema(initial_header, block);
+            checkSchema(header, block);
         }
     }
 
@@ -534,7 +568,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(
     {
         for (auto && block : blocks)
         {
-            checkSchema(initial_header, block);
+            checkSchema(header, block);
         }
     }
 
