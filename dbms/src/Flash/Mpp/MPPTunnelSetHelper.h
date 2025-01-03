@@ -25,7 +25,7 @@ enum class CompressionMethod;
 
 namespace DB::MPPTunnelSetHelper
 {
-TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
+TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types, MppVersion mpp_version);
 
 TrackedMppDataPacketPtr ToCompressedPacket(
     const TrackedMppDataPacketPtr & uncompressed_source,
@@ -36,14 +36,16 @@ TrackedMppDataPacketPtr ToPacket(
     Blocks && blocks,
     MPPDataPacketVersion version,
     CompressionMethod method,
-    size_t & original_size);
+    size_t & original_size,
+    MppVersion mpp_version);
 
 TrackedMppDataPacketPtr ToPacket(
     const Block & header,
     std::vector<MutableColumns> && part_columns,
     MPPDataPacketVersion version,
     CompressionMethod compression_method,
-    size_t & original_size);
+    size_t & original_size,
+    MppVersion mpp_version);
 
 TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     const Block & header,
@@ -51,7 +53,8 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
-    const std::vector<tipb::FieldType> & field_types);
+    const std::vector<tipb::FieldType> & field_types,
+    MppVersion mpp_version);
 
 TrackedMppDataPacketPtr ToFineGrainedPacket(
     const Block & header,
@@ -61,6 +64,7 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
     size_t num_columns,
     MPPDataPacketVersion version,
     CompressionMethod compression_method,
-    size_t & original_size);
+    size_t & original_size,
+    MppVersion mpp_version);
 
 } // namespace DB::MPPTunnelSetHelper

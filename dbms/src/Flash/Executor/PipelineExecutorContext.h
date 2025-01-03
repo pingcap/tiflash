@@ -20,6 +20,7 @@
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue_fwd.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 
 #include <atomic>
@@ -138,6 +139,8 @@ public:
     void addSharedQueue(const SharedQueuePtr & shared_queue);
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
+
+    MppVersion getMppVersion() const;
 
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);

@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/Utils.h>
 #include <Operators/Operator.h>
-
 namespace DB
 {
 class ExchangeReceiverSourceOp : public SourceOp
@@ -35,7 +35,9 @@ public:
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, exchange_receiver->getSourceNum()))
     {
         exchange_receiver->verifyStreamId(stream_id);
-        setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
+        setHeader(getHeaderByMppVersion(
+            Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))),
+            exec_context.getMppVersion()));
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
     }
 

@@ -25,7 +25,8 @@ TrackedMppDataPacketPtr ToPacket(
     std::vector<MutableColumns> && part_columns,
     MPPDataPacketVersion version,
     CompressionMethod method,
-    size_t & original_size)
+    size_t & original_size,
+    MppVersion mpp_version)
 {
     assert(version > MPPDataPacketV0);
 
@@ -48,7 +49,8 @@ TrackedMppDataPacketPtr ToPacket(
     Blocks && blocks,
     MPPDataPacketVersion version,
     CompressionMethod method,
-    size_t & original_size)
+    size_t & original_size,
+    MppVersion mpp_version)
 {
     assert(version > MPPDataPacketV0);
 
@@ -66,7 +68,7 @@ TrackedMppDataPacketPtr ToPacket(
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types)
+TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types, MppVersion mpp_version)
 {
     CHBlockChunkCodec codec;
     auto codec_stream = codec.newCodecStream(field_types);
@@ -89,7 +91,8 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
     size_t num_columns,
     MPPDataPacketVersion version,
     CompressionMethod method,
-    size_t & original_size)
+    size_t & original_size,
+    MppVersion mpp_version)
 {
     assert(version > MPPDataPacketV0);
 
@@ -130,7 +133,8 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
-    const std::vector<tipb::FieldType> & field_types)
+    const std::vector<tipb::FieldType> & field_types,
+    MppVersion mpp_version)
 {
     CHBlockChunkCodec codec;
     auto codec_stream = codec.newCodecStream(field_types);
@@ -166,7 +170,8 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
 TrackedMppDataPacketPtr ToCompressedPacket(
     const TrackedMppDataPacketPtr & uncompressed_source,
     MPPDataPacketVersion version,
-    CompressionMethod method)
+    CompressionMethod method,
+    MppVersion mpp_version)
 {
     assert(uncompressed_source);
     for ([[maybe_unused]] const auto & chunk : uncompressed_source->getPacket().chunks())

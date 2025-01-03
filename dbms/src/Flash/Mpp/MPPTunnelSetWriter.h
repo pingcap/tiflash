@@ -25,7 +25,8 @@ public:
     MPPTunnelSetWriterBase(
         const MPPTunnelSetPtr & mpp_tunnel_set_,
         const std::vector<tipb::FieldType> & result_field_types_,
-        const String & req_id);
+        const String & req_id,
+        MppVersion mpp_version_);
 
     virtual ~MPPTunnelSetWriterBase() = default;
 
@@ -79,6 +80,7 @@ protected:
     MPPTunnelSetPtr mpp_tunnel_set;
     std::vector<tipb::FieldType> result_field_types;
     const LoggerPtr log;
+    const MppVersion mpp_version;
 };
 
 class SyncMPPTunnelSetWriter : public MPPTunnelSetWriterBase

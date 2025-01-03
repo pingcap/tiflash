@@ -209,9 +209,10 @@ static void broadcastOrPassThroughWriteV0(
     Blocks & blocks,
     const std::vector<tipb::FieldType> & result_field_types,
     FuncIsLocalTunnel && isLocalTunnel,
-    FuncWriteToTunnel && writeToTunnel)
+    FuncWriteToTunnel && writeToTunnel,
+    MppVersion mpp_version)
 {
-    auto && ori_tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
+    auto && ori_tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, mpp_version);
     if (!ori_tracked_packet)
         return;
     size_t tracked_packet_bytes = ori_tracked_packet->getPacket().ByteSizeLong();
@@ -238,10 +239,12 @@ static void broadcastOrPassThroughWriteV0(
 MPPTunnelSetWriterBase::MPPTunnelSetWriterBase(
     const MPPTunnelSetPtr & mpp_tunnel_set_,
     const std::vector<tipb::FieldType> & result_field_types_,
-    const String & req_id)
+    const String & req_id,
+    MppVersion mpp_version_)
     : mpp_tunnel_set(mpp_tunnel_set_)
     , result_field_types(result_field_types_)
     , log(Logger::get(req_id))
+    , mpp_version(mpp_version_)
 {
     RUNTIME_CHECK(mpp_tunnel_set->getPartitionNum() > 0);
 }
@@ -261,7 +264,8 @@ void MPPTunnelSetWriterBase::broadcastWrite(Blocks & blocks)
         blocks,
         result_field_types,
         [&](size_t i) { return mpp_tunnel_set->isLocal(i); },
-        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); });
+        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); },
+        mpp_version);
 }
 
 void MPPTunnelSetWriterBase::passThroughWrite(Blocks & blocks)
@@ -272,7 +276,8 @@ void MPPTunnelSetWriterBase::passThroughWrite(Blocks & blocks)
         blocks,
         result_field_types,
         [&](size_t i) { return mpp_tunnel_set->isLocal(i); },
-        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); });
+        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); },
+        mpp_version);
 }
 
 template <bool is_broadcast, typename FuncIsLocalTunnel, typename FuncWriteToTunnel>
@@ -283,14 +288,15 @@ static void broadcastOrPassThroughWrite(
     MPPDataPacketVersion version,
     CompressionMethod compression_method,
     FuncIsLocalTunnel && isLocalTunnel,
-    FuncWriteToTunnel && writeToTunnel)
+    FuncWriteToTunnel && writeToTunnel,
+    MppVersion mpp_version)
 {
     assert(version > MPPDataPacketV0);
 
     size_t original_size = 0;
     // encode by method NONE
     auto && ori_tracked_packet
-        = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, CompressionMethod::NONE, original_size);
+        = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, CompressionMethod::NONE, original_size, mpp_version);
     if (!ori_tracked_packet)
         return;
 
@@ -342,7 +348,8 @@ void MPPTunnelSetWriterBase::broadcastWrite(
         version,
         compression_method,
         [&](size_t i) { return mpp_tunnel_set->isLocal(i); },
-        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); });
+        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); },
+        mpp_version);
 }
 
 void MPPTunnelSetWriterBase::passThroughWrite(
@@ -359,12 +366,13 @@ void MPPTunnelSetWriterBase::passThroughWrite(
         version,
         compression_method,
         [&](size_t i) { return mpp_tunnel_set->isLocal(i); },
-        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); });
+        [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); },
+        mpp_version);
 }
 
 void MPPTunnelSetWriterBase::partitionWrite(Blocks & blocks, int16_t partition_id)
 {
-    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
+    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, mpp_version);
     assert(tracked_packet);
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
@@ -390,7 +398,7 @@ void MPPTunnelSetWriterBase::partitionWrite(
 
     size_t original_size = 0;
     auto tracked_packet
-        = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, compression_method, original_size);
+        = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, compression_method, original_size, mpp_version);
     assert(tracked_packet);
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
@@ -430,7 +438,8 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
         num_columns,
         version,
         compression_method,
-        original_size);
+        original_size,
+        mpp_version);
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
@@ -452,7 +461,8 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
         bucket_idx,
         fine_grained_shuffle_stream_count,
         num_columns,
-        result_field_types);
+        result_field_types,
+        mpp_version);
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);

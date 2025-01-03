@@ -27,11 +27,9 @@ public:
     ExchangeSenderSinkOp(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        std::unique_ptr<DAGResponseWriter> && writer_,
-        MppVersion mpp_version_)
+        std::unique_ptr<DAGResponseWriter> && writer_)
         : SinkOp(exec_context_, req_id)
         , writer(std::move(writer_))
-        , mpp_version(mpp_version_)
     {}
 
     String getName() const override { return "ExchangeSenderSinkOp"; }
@@ -54,7 +52,6 @@ private:
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
-    const MppVersion mpp_version;
     size_t total_rows = 0;
     bool input_done = false;
 };
