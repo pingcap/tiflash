@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -1071,6 +1072,8 @@ try
         ingest_wbs.rollbackWrittenLogAndData();
     };
 
+    const auto read_range = RowKeyRange::fromHandleRange(HandleRange(0, 100));
+
     {
         // let segment's rowkey_range be [30, 70)
         HandleRange range(30, 70);
@@ -1081,8 +1084,7 @@ try
     {
         // test built bitmap filter
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto read_ranges = {RowKeyRange::newAll(false, 1)};
-        auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+        auto real_ranges = segment->shrinkRowKeyRanges({read_range});
         auto bitmap_filter = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
@@ -1101,15 +1103,14 @@ try
     {
         // test read data
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto in = segment->getBitmapFilterInputStream(
+        auto in = segment->getInputStream(
+            ReadMode::Bitmap,
             dmContext(),
             cols_to_read,
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
-            EMPTY_FILTER,
             {},
             std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
         ASSERT_INPUTSTREAM_BLOCK_UR(
             in,
@@ -1143,15 +1144,14 @@ try
     {
         // test read data with delete-range and new writes
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
-        auto in = segment->getBitmapFilterInputStream(
+        auto in = segment->getInputStream(
+            ReadMode::Bitmap,
             dmContext(),
             cols_to_read,
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
-            EMPTY_FILTER,
             {},
             std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
         // Only the rows in [30, 50) and [80, 90) valid
         auto vec = createNumbers<Int64>(30, 50);
