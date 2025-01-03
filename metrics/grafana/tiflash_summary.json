@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1728897014230,
+  "iteration": 1735826311826,
   "links": [],
   "panels": [
     {
@@ -8736,7 +8736,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.17",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -9513,7 +9513,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.17",
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -9612,7 +9612,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.17",
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -14992,6 +14992,106 @@
             },
             {
               "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 156
+          },
+          "hiddenSeries": false,
+          "id": 296,
+          "legend": {
+            "alignAsTable": false,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_proxy_tikv_server_raft_append_rejects{}[1m])) by (instance)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Log Replication Rejected",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
               "label": null,
               "logBase": 1,
               "max": null,

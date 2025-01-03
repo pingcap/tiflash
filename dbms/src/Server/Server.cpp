@@ -60,6 +60,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Poco/Util/HelpFormatter.h>
+#include <Poco/Util/LayeredConfiguration.h>
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
@@ -282,31 +283,33 @@ struct TiFlashProxyConfig
         args.push_back(iter->second.data());
     }
 
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, bool has_s3_config)
+    // Try to parse start args from `config`.
+    // Return true if proxy need to be started, and `val_map` will be filled with the
+    // proxy start params.
+    // Return false if proxy is not need.
+    bool tryParseFromConfig(const Poco::Util::LayeredConfiguration & config, bool has_s3_config, const LoggerPtr & log)
     {
-        auto disaggregated_mode = getDisaggregatedMode(config);
-
         // tiflash_compute doesn't need proxy.
+        auto disaggregated_mode = getDisaggregatedMode(config);
         if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
         {
-            LOG_INFO(
-                Logger::get(),
-                "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
-            return;
+            LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+            return false;
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys("flash.proxy", keys);
         if (!config.has("raft.pd_addr"))
         {
-            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
+            LOG_WARNING(log, "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
             if (!keys.empty())
-                LOG_WARNING(Logger::get(), "`flash.proxy.*` is ignored because TiFlash Proxy will not start.");
+                LOG_WARNING(log, "`flash.proxy.*` is ignored because TiFlash Proxy will not start.");
 
-            return;
+            return false;
         }
 
         {
+            // config items start from `flash.proxy.`
             std::unordered_map<std::string, std::string> args_map;
             for (const auto & key : keys)
                 args_map[key] = config.getString("flash.proxy." + key);
@@ -325,6 +328,17 @@ struct TiFlashProxyConfig
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
         }
+        return true;
+    }
+
+    TiFlashProxyConfig(
+        Poco::Util::LayeredConfiguration & config,
+        bool has_s3_config,
+        const StorageFormatVersion & format_version,
+        const Settings & settings,
+        const LoggerPtr & log)
+    {
+        is_proxy_runnable = tryParseFromConfig(config, has_s3_config, log);
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -332,7 +346,36 @@ struct TiFlashProxyConfig
             args.push_back(v.first.data());
             args.push_back(v.second.data());
         }
-        is_proxy_runnable = true;
+
+        // Enable unips according to `format_version`
+        if (format_version.page == PageFormat::V4)
+        {
+            LOG_INFO(log, "Using UniPS for proxy");
+            addExtraArgs("unips-enabled", "1");
+        }
+
+        // Set the proxy's memory by size or ratio
+        std::visit(
+            [&](auto && arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, UInt64>)
+                {
+                    if (arg != 0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
+                        addExtraArgs("memory-limit-size", std::to_string(arg));
+                    }
+                }
+                else if constexpr (std::is_same_v<T, double>)
+                {
+                    if (arg > 0 && arg <= 1.0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
+                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
+                    }
+                }
+            },
+            settings.max_memory_usage_for_all_queries.get());
     }
 };
 
@@ -516,7 +559,7 @@ struct RaftStoreProxyRunner : boost::noncopyable
         pthread_attr_t attribute;
         pthread_attr_init(&attribute);
         pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_INFO(log, "start raft store proxy");
+        LOG_INFO(log, "Start raft store proxy. Args: {}", parms.conf.args);
         pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
         pthread_attr_destroy(&attribute);
     }
@@ -1028,26 +1071,39 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Set whether to use safe point v2.
     PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
 
+    /** Context contains all that query execution is dependent:
+      *  settings, available functions, data types, aggregate functions, databases...
+      */
+    global_context = Context::createGlobal();
+    /// Initialize users config reloader.
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
+
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    // TODO: Parse the settings from config file at the program beginning
+    global_context->setDefaultProfiles(config());
+    LOG_INFO(
+        log,
+        "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
+        global_context->getSettingsRef().toString());
+    Settings & settings = global_context->getSettingsRef();
+
     // Init Proxy's config
-    TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
+    TiFlashProxyConfig proxy_conf( //
+        config(),
+        storage_config.s3_config.isS3Enabled(),
+        STORAGE_FORMAT_CURRENT,
+        settings,
+        log);
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(&tiflash_instance_wrap);
-
-    if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
-    {
-        LOG_INFO(log, "Using UniPS for proxy");
-        proxy_conf.addExtraArgs("unips-enabled", "1");
-    }
-    else
-    {
-        LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
-    }
 
 #ifdef USE_JEMALLOC
     LOG_INFO(log, "Using Jemalloc for TiFlash");
 #else
     LOG_INFO(log, "Not using Jemalloc for TiFlash");
 #endif
+
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
@@ -1092,10 +1148,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
-    /** Context contains all that query execution is dependent:
-      *  settings, available functions, data types, aggregate functions, databases...
-      */
-    global_context = Context::createGlobal();
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
             return;
@@ -1296,24 +1348,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Initialize users config reloader.
-    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
-
-    /// Load global settings from default_profile and system_profile.
-    /// It internally depends on UserConfig::parseSettings.
-    // TODO: Parse the settings from config file at the program beginning
-    global_context->setDefaultProfiles(config());
-    LOG_INFO(
-        log,
-        "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
-        global_context->getSettingsRef().toString());
-
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
     ///
 
     /// Initialize the background & blockable background thread pool.
-    Settings & settings = global_context->getSettingsRef();
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
