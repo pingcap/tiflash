@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Mpp/MppVersion.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <Flash/Mpp/Utils.h>
 #include <Poco/String.h>
 #include <common/defines.h>
@@ -21,7 +23,6 @@
 
 #include <array>
 #include <memory>
-
 namespace DB
 {
 namespace FailPoints
@@ -90,4 +91,25 @@ int64_t GetMppVersion()
     return (NewestMppVersion);
 }
 
+Block getHeaderByMppVersion(Block && header, MppVersion mpp_version)
+{
+    if (mpp_version > MppVersion::MppVersionV2)
+    {
+        return std::move(header);
+    }
+
+    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
+    for (auto & column : header)
+    {
+        if (removeNullable(column.type)->getTypeId() != TypeIndex::String)
+            continue;
+
+        if (column.type->isNullable())
+            column.type
+                = DataTypeFactory::instance().DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
+        else
+            column.type = DataTypeFactory::instance().DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
+    }
+    return header;
+}
 } // namespace DB

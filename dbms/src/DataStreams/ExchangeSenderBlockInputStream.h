@@ -16,11 +16,9 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeString.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/MppVersion.h>
+#include <Flash/Mpp/Utils.h>
 
 namespace DB
 {
@@ -52,29 +50,6 @@ protected:
     void readSuffixImpl() override { LOG_DEBUG(log, "finish write with {} rows", total_rows); }
 
 private:
-    Block getHeaderByMppVersion(Block && header, MppVersion mpp_version) const
-    {
-        if (mpp_version > MppVersion::MppVersionV2)
-        {
-            return std::move(header);
-        }
-
-        for (auto & column : header)
-        {
-            if (removeNullable(column.type)->getTypeId() != TypeIndex::String)
-                continue;
-
-            if (column.type->isNullable())
-                column.type = DataTypeFactory::instance().DataTypeFactory::instance().getOrSet(
-                    DataTypeString::NullableLegacyName);
-            else
-                column.type
-                    = DataTypeFactory::instance().DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
-        }
-        return header;
-    }
-
-
     std::unique_ptr<DAGResponseWriter> writer;
     Block header;
     const LoggerPtr log;
