@@ -56,7 +56,7 @@ int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) c
     return decimalLess<T>(b, a, other.scale, scale) ? 1 : (decimalLess<T>(a, b, scale, other.scale) ? -1 : 0);
 }
 
-ALWAYS_INLINE inline size_t getDecimal256BytesSize(const Decimal256 & val)
+ALWAYS_INLINE inline size_t getDecimal256BytesSize(const Decimal256 &)
 {
     // return sizeof(bool) + sizeof(size_t) + val.value.backend().size() * sizeof(boost::multiprecision::limb_type);
     return sizeof(Decimal256);
@@ -84,7 +84,7 @@ ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal2
     const auto & val = data.value.backend();
     auto & tmp_val = tmp_data.value.backend();
     tmp_val.assign(val);
-    memcpy(dst, &tmp_data, sizeof(Decimal256));
+    memcpy(dst, &tmp_data, sizeof(Decimal256)); // NOLINT
     return dst + sizeof(Decimal256);
 }
 
@@ -108,7 +108,7 @@ ALWAYS_INLINE inline const char * deserializeDecimal256Helper(Decimal256 & value
     // offset += limb_count * sizeof(boost::multiprecision::limb_type);
 
     // return ptr + offset;
-    memcpy(&value, ptr, sizeof(Decimal256));
+    memcpy(&value, ptr, sizeof(Decimal256)); // NOLINT
     return ptr + sizeof(Decimal256);
 }
 
