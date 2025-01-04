@@ -60,6 +60,9 @@ public:
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
 
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = true;
+
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
     /// NOTE Bad for hash tables with more than 2^32 cells.
@@ -112,9 +115,9 @@ public:
 
     /// Copy the data from another (normal) hash table. It should have the same hash function.
     template <typename Source>
-    explicit TwoLevelHashTable(const Source & src)
+    explicit TwoLevelHashTable(Source & src)
     {
-        typename Source::const_iterator it = src.begin();
+        typename Source::iterator it = src.begin();
 
         /// It is assumed that the zero key (stored separately) is first in iteration order.
         if (it != src.end() && it.getPtr()->isZero(src))
@@ -125,10 +128,21 @@ public:
 
         for (; it != src.end(); ++it)
         {
-            const Cell * cell = it.getPtr();
-            size_t hash_value = cell->getHash(src);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].insertUniqueNonZero(cell, hash_value);
+            if constexpr (std::is_same_v<typename Source::Hash, Hash>)
+            {
+                const Cell * cell = it.getPtr();
+                size_t hash_value = cell->getHash(src);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].insertUniqueNonZero(cell, hash_value);
+            }
+            else
+            {
+                auto * cell = it.getPtr();
+                size_t hash_value = Hash::operator()(cell->getKey());
+                cell->setHash(hash_value);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].insertUniqueNonZero(cell, hash_value);
+            }
         }
     }
 
@@ -285,6 +299,12 @@ public:
         impls[buck].emplace(key_holder, it, inserted, hash_value);
     }
 
+    void ALWAYS_INLINE prefetch(size_t hashval) const
+    {
+        size_t buck = getBucketFromHash(hashval);
+        impls[buck].prefetch(hashval);
+    }
+
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
     {
         size_t buck = getBucketFromHash(hash_value);
@@ -352,6 +372,13 @@ public:
         return true;
     }
 
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (const auto & impl : impls)
+            res += impl.getBufferSizeInCells();
+        return res;
+    }
     size_t getBufferSizeInBytes() const
     {
         size_t res = 0;

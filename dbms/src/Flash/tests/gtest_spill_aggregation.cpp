@@ -23,6 +23,7 @@ namespace FailPoints
 {
 extern const char force_agg_on_partial_block[];
 extern const char force_thread_0_no_agg_spill[];
+extern const char force_agg_prefetch[];
 } // namespace FailPoints
 
 namespace tests
@@ -37,16 +38,22 @@ public:
     }
 };
 
-#define WRAP_FOR_AGG_PARTIAL_BLOCK_START                                              \
-    std::vector<bool> partial_blocks{true, false};                                    \
-    for (auto partial_block : partial_blocks)                                         \
-    {                                                                                 \
-        if (partial_block)                                                            \
-            FailPointHelper::enableFailPoint(FailPoints::force_agg_on_partial_block); \
-        else                                                                          \
-            FailPointHelper::disableFailPoint(FailPoints::force_agg_on_partial_block);
+#define WRAP_FOR_AGG_FAILPOINTS_START                                                  \
+    std::vector<bool> enables{true, false};                                            \
+    for (auto enable : enables)                                                        \
+    {                                                                                  \
+        if (enable)                                                                    \
+        {                                                                              \
+            FailPointHelper::enableFailPoint(FailPoints::force_agg_on_partial_block);  \
+            FailPointHelper::enableFailPoint(FailPoints::force_agg_prefetch);          \
+        }                                                                              \
+        else                                                                           \
+        {                                                                              \
+            FailPointHelper::disableFailPoint(FailPoints::force_agg_on_partial_block); \
+            FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);         \
+        }
 
-#define WRAP_FOR_AGG_PARTIAL_BLOCK_END }
+#define WRAP_FOR_AGG_FAILPOINTS_END }
 
 #define WRAP_FOR_AGG_THREAD_0_NO_SPILL_START                                           \
     for (auto thread_0_no_spill : {true, false})                                       \
@@ -114,13 +121,13 @@ try
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
     /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// test single thread aggregation
-    WRAP_FOR_AGG_PARTIAL_BLOCK_START
+    WRAP_FOR_AGG_FAILPOINTS_START
     WRAP_FOR_AGG_THREAD_0_NO_SPILL_START
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
     /// test parallel aggregation
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
     WRAP_FOR_AGG_THREAD_0_NO_SPILL_END
-    WRAP_FOR_AGG_PARTIAL_BLOCK_END
+    WRAP_FOR_AGG_FAILPOINTS_END
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 200)));
     /// test single thread aggregation
@@ -262,7 +269,7 @@ try
                         Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
-                    WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                    WRAP_FOR_AGG_FAILPOINTS_START
                     WRAP_FOR_AGG_THREAD_0_NO_SPILL_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
@@ -289,7 +296,7 @@ try
                             false));
                     }
                     WRAP_FOR_AGG_THREAD_0_NO_SPILL_END
-                    WRAP_FOR_AGG_PARTIAL_BLOCK_END
+                    WRAP_FOR_AGG_FAILPOINTS_END
                     WRAP_FOR_SPILL_TEST_END
                 }
             }
@@ -369,6 +376,7 @@ try
         {
             for (const auto & agg_func : agg_funcs)
             {
+                FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
                 context.setCollation(collator_id);
                 const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
                 ASSERT_TRUE(current_collator != nullptr);
@@ -417,7 +425,7 @@ try
                         Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
-                    WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                    WRAP_FOR_AGG_FAILPOINTS_START
                     WRAP_FOR_AGG_THREAD_0_NO_SPILL_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
@@ -444,7 +452,7 @@ try
                             false));
                     }
                     WRAP_FOR_AGG_THREAD_0_NO_SPILL_END
-                    WRAP_FOR_AGG_PARTIAL_BLOCK_END
+                    WRAP_FOR_AGG_FAILPOINTS_END
                     WRAP_FOR_SPILL_TEST_END
                 }
             }
@@ -518,9 +526,9 @@ try
         /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
         auto request = gen_request(exchange_concurrency);
         WRAP_FOR_SPILL_TEST_BEGIN
-        WRAP_FOR_AGG_PARTIAL_BLOCK_START
+        WRAP_FOR_AGG_FAILPOINTS_START
         ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
-        WRAP_FOR_AGG_PARTIAL_BLOCK_END
+        WRAP_FOR_AGG_FAILPOINTS_END
         WRAP_FOR_SPILL_TEST_END
     }
 }
@@ -528,8 +536,8 @@ CATCH
 
 #undef WRAP_FOR_SPILL_TEST_BEGIN
 #undef WRAP_FOR_SPILL_TEST_END
-#undef WRAP_FOR_AGG_PARTIAL_BLOCK_START
-#undef WRAP_FOR_AGG_PARTIAL_BLOCK_END
+#undef WRAP_FOR_AGG_FAILPOINTS_START
+#undef WRAP_FOR_AGG_FAILPOINTS_END
 
 } // namespace tests
 } // namespace DB

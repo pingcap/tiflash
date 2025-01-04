@@ -19,9 +19,9 @@
 #include <Common/HashTable/StringHashTable.h>
 
 template <typename Key, typename TMapped>
-struct StringHashMapCell : public HashMapCell<Key, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell : public HashMapCell<Key, TMapped, HashTableNoState>
 {
-    using Base = HashMapCell<Key, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCell<Key, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
@@ -32,10 +32,9 @@ struct StringHashMapCell : public HashMapCell<Key, TMapped, StringHashTableHash,
 };
 
 template <typename TMapped>
-struct StringHashMapCell<StringKey16, TMapped>
-    : public HashMapCell<StringKey16, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell<StringKey16, TMapped> : public HashMapCell<StringKey16, TMapped, HashTableNoState>
 {
-    using Base = HashMapCell<StringKey16, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCell<StringKey16, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
@@ -53,10 +52,9 @@ struct StringHashMapCell<StringKey16, TMapped>
 };
 
 template <typename TMapped>
-struct StringHashMapCell<StringKey24, TMapped>
-    : public HashMapCell<StringKey24, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell<StringKey24, TMapped> : public HashMapCell<StringKey24, TMapped, HashTableNoState>
 {
-    using Base = HashMapCell<StringKey24, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCell<StringKey24, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
@@ -74,10 +72,9 @@ struct StringHashMapCell<StringKey24, TMapped>
 };
 
 template <typename TMapped>
-struct StringHashMapCell<StringRef, TMapped>
-    : public HashMapCellWithSavedHash<StringRef, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell<StringRef, TMapped> : public HashMapCellWithSavedHash<StringRef, TMapped, HashTableNoState>
 {
-    using Base = HashMapCellWithSavedHash<StringRef, TMapped, StringHashTableHash, HashTableNoState>;
+    using Base = HashMapCellWithSavedHash<StringRef, TMapped, HashTableNoState>;
     using value_type = typename Base::value_type;
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
@@ -87,42 +84,42 @@ struct StringHashMapCell<StringRef, TMapped>
     static const StringRef & getKey(const value_type & value_) { return value_.first; }
 };
 
-template <typename TMapped, typename Allocator>
+template <typename TMapped, typename HashSelector, typename Allocator>
 struct StringHashMapSubMaps
 {
     using T0 = StringHashTableEmpty<StringHashMapCell<StringRef, TMapped>>;
     using T1 = HashMapTable<
         StringKey8,
         StringHashMapCell<StringKey8, TMapped>,
-        StringHashTableHash,
+        typename HashSelector::StringKey8Hash,
         StringHashTableGrower<>,
         Allocator>;
     using T2 = HashMapTable<
         StringKey16,
         StringHashMapCell<StringKey16, TMapped>,
-        StringHashTableHash,
+        typename HashSelector::StringKey16Hash,
         StringHashTableGrower<>,
         Allocator>;
     using T3 = HashMapTable<
         StringKey24,
         StringHashMapCell<StringKey24, TMapped>,
-        StringHashTableHash,
+        typename HashSelector::StringKey24Hash,
         StringHashTableGrower<>,
         Allocator>;
     using Ts = HashMapTable<
         StringRef,
         StringHashMapCell<StringRef, TMapped>,
-        StringHashTableHash,
+        typename HashSelector::StringStrHash,
         StringHashTableGrower<>,
         Allocator>;
 };
 
-template <typename TMapped, typename Allocator = HashTableAllocator>
-class StringHashMap : public StringHashTable<StringHashMapSubMaps<TMapped, Allocator>>
+template <typename TMapped, typename HashSelector, typename Allocator = HashTableAllocator>
+class StringHashMap : public StringHashTable<StringHashMapSubMaps<TMapped, HashSelector, Allocator>>
 {
 public:
     using Key = StringRef;
-    using Base = StringHashTable<StringHashMapSubMaps<TMapped, Allocator>>;
+    using Base = StringHashTable<StringHashMapSubMaps<TMapped, HashSelector, Allocator>>;
     using Self = StringHashMap;
     using LookupResult = typename Base::LookupResult;
 

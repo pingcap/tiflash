@@ -80,7 +80,7 @@ using AggregatedDataWithUInt16Key = FixedImplicitZeroHashMap<UInt16, AggregateDa
 using AggregatedDataWithUInt32Key = HashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64Key = HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
 
-using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr>;
+using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr, StringHashTableHashSelector<false>>;
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
@@ -88,16 +88,17 @@ using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
 
-using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
-using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
+using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashWithMixSeed<UInt32>>;
+using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashWithMixSeed<UInt64>>;
 
-using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
+using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashWithMixSeed<Int256>>;
 
-using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr>;
+using AggregatedDataWithShortStringKeyTwoLevel
+    = TwoLevelStringHashMap<AggregateDataPtr, StringHashTableHashSelector<true>>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
-using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
-using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
+using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashWithMixSeed<UInt128>>;
+using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, HashWithMixSeed<UInt256>>;
 
 /** Variants with better hash function, using more than 32 bits for hash.
   * Using for merging phase of external aggregation, where number of keys may be far greater than 4 billion,
@@ -125,7 +126,7 @@ struct AggregationMethodOneNumber
     AggregationMethodOneNumber() = default;
 
     template <typename Other>
-    explicit AggregationMethodOneNumber(const Other & other)
+    explicit AggregationMethodOneNumber(Other & other)
         : data(other.data)
     {}
 
@@ -179,7 +180,7 @@ struct AggregationMethodString
     AggregationMethodString() = default;
 
     template <typename Other>
-    explicit AggregationMethodString(const Other & other)
+    explicit AggregationMethodString(Other & other)
         : data(other.data)
     {}
 
@@ -227,12 +228,11 @@ struct AggregationMethodStringNoCache
     AggregationMethodStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodStringNoCache(const Other & other)
+    explicit AggregationMethodStringNoCache(Other & other)
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::
-        HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*use_cache=*/false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -276,7 +276,7 @@ struct AggregationMethodOneKeyStringNoCache
     AggregationMethodOneKeyStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodOneKeyStringNoCache(const Other & other)
+    explicit AggregationMethodOneKeyStringNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -326,7 +326,7 @@ struct AggregationMethodMultiStringNoCache
     AggregationMethodMultiStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodMultiStringNoCache(const Other & other)
+    explicit AggregationMethodMultiStringNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -356,7 +356,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
     AggregationMethodFastPathTwoKeysNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodFastPathTwoKeysNoCache(const Other & other)
+    explicit AggregationMethodFastPathTwoKeysNoCache(Other & other)
         : data(other.data)
     {}
 
@@ -476,7 +476,7 @@ struct AggregationMethodFixedString
     AggregationMethodFixedString() = default;
 
     template <typename Other>
-    explicit AggregationMethodFixedString(const Other & other)
+    explicit AggregationMethodFixedString(Other & other)
         : data(other.data)
     {}
 
@@ -524,11 +524,11 @@ struct AggregationMethodFixedStringNoCache
     AggregationMethodFixedStringNoCache() = default;
 
     template <typename Other>
-    explicit AggregationMethodFixedStringNoCache(const Other & other)
+    explicit AggregationMethodFixedStringNoCache(Other & other)
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -573,7 +573,7 @@ struct AggregationMethodKeysFixed
     AggregationMethodKeysFixed() = default;
 
     template <typename Other>
-    explicit AggregationMethodKeysFixed(const Other & other)
+    explicit AggregationMethodKeysFixed(Other & other)
         : data(other.data)
     {}
 
@@ -680,7 +680,7 @@ struct AggregationMethodSerialized
     AggregationMethodSerialized() = default;
 
     template <typename Other>
-    explicit AggregationMethodSerialized(const Other & other)
+    explicit AggregationMethodSerialized(Other & other)
         : data(other.data)
     {}
 
@@ -1319,11 +1319,32 @@ public:
         size_t hit_row_cnt = 0;
         std::vector<UInt64> not_found_rows;
 
+        // For StringHashTable, when resize exception happens, the process will be interrupted.
+        // So we need these infos to continue.
+        std::vector<size_t> submap_m0_infos{};
+        std::vector<size_t> submap_m1_infos{};
+        std::vector<size_t> submap_m2_infos{};
+        std::vector<size_t> submap_m3_infos{};
+        std::vector<size_t> submap_m4_infos{};
+        std::vector<StringKey0> submap_m0_datas{};
+        std::vector<StringKey8> submap_m1_datas{};
+        std::vector<StringKey16> submap_m2_datas{};
+        std::vector<StringKey24> submap_m3_datas{};
+        std::vector<ArenaKeyHolder> submap_m4_datas{};
+        std::unique_ptr<Arena> sort_key_pool;
+
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
             assert(start_row <= end_row);
-            return start_row == end_row || aggregator->isCancelled();
+            // submap_mx_infos.size() and submap_mx_datas.size() are always equal.
+            // So only need to check submap_mx_infos is enough.
+            return (start_row == end_row && stringHashTableRecoveryInfoEmpty()) || aggregator->isCancelled();
+        }
+        bool stringHashTableRecoveryInfoEmpty() const
+        {
+            return submap_m0_infos.empty() && submap_m1_infos.empty() && submap_m3_infos.empty()
+                && submap_m4_infos.empty();
         }
         void resetBlock(const Block & block_)
         {
@@ -1337,6 +1358,8 @@ public:
             hit_row_cnt = 0;
             not_found_rows.clear();
             not_found_rows.reserve(block_.rows() / 2);
+
+            sort_key_pool.reset();
         }
     };
 
@@ -1454,8 +1477,15 @@ protected:
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <bool collect_hit_rate, bool only_loopup, typename Method>
-    void executeImplBatch(
+    template <bool collect_hit_rate, bool only_loopup, bool enable_prefetch, typename Method>
+    void executeImplByRow(
+        Method & method,
+        typename Method::State & state,
+        Arena * aggregates_pool,
+        AggProcessInfo & agg_process_info) const;
+
+    template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
+    void executeImplStringHashMapByCol(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
@@ -1467,7 +1497,34 @@ protected:
         typename Method::State & state,
         size_t index,
         Arena & aggregates_pool,
+        std::vector<std::string> & sort_key_containers,
+        const std::vector<size_t> & hashvals) const;
+
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
+        Method & method,
+        typename Method::State & state,
+        size_t index,
+        Arena & aggregates_pool,
         std::vector<std::string> & sort_key_containers) const;
+
+    template <
+        size_t SubMapIndex,
+        bool collect_hit_rate,
+        bool only_lookup,
+        bool enable_prefetch,
+        bool zero_agg_func_size,
+        typename Data,
+        typename State,
+        typename StringKeyType>
+    size_t emplaceOrFindStringKey(
+        Data & data,
+        State & state,
+        const std::vector<size_t> & key_infos,
+        std::vector<StringKeyType> & key_datas,
+        Arena & aggregates_pool,
+        std::vector<AggregateDataPtr> & places,
+        AggProcessInfo & agg_process_info) const;
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena);

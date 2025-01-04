@@ -85,6 +85,9 @@ public:
     using value_type = typename Cell::value_type;
     using cell_type = Cell;
 
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = false;
+
     class Reader final : private Cell::State
     {
     public:
@@ -296,6 +299,7 @@ public:
     iterator ALWAYS_INLINE find(Key x) { return iteratorTo(findCell(x)); }
     const_iterator ALWAYS_INLINE find(Key x) const { return iteratorTo(findCell(x)); }
 
+    void ALWAYS_INLINE prefetch(size_t) {}
 
     void write(DB::WriteBuffer & wb) const
     {
