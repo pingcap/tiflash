@@ -48,15 +48,20 @@ struct HashMethodOneNumber
     using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 
+    static constexpr bool is_serialized_key = false;
+
     const FieldType * vec;
+    const size_t total_rows;
 
     /// If the keys of a fixed length then key_sizes contains their lengths, empty otherwise.
     HashMethodOneNumber(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
+        : total_rows(key_columns[0]->size())
     {
         vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
     }
 
     explicit HashMethodOneNumber(const IColumn * column)
+        : total_rows(column->size())
     {
         vec = &static_cast<const ColumnVector<FieldType> *>(column)->getData()[0];
     }
@@ -86,36 +91,35 @@ struct HashMethodOneNumber
 
 
 /// For the case when there is one string key.
-template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true>
+template <typename Value, typename Mapped, bool use_cache = true>
 struct HashMethodString
-    : public columns_hashing_impl::
-          HashMethodBase<HashMethodString<Value, Mapped, place_string_to_arena, use_cache>, Value, Mapped, use_cache>
+    : public columns_hashing_impl::HashMethodBase<HashMethodString<Value, Mapped, use_cache>, Value, Mapped, use_cache>
 {
-    using Self = HashMethodString<Value, Mapped, place_string_to_arena, use_cache>;
+    using Self = HashMethodString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+
+    static constexpr bool is_serialized_key = false;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
     TiDB::TiDBCollatorPtr collator = nullptr;
+    const size_t total_rows;
 
     HashMethodString(
         const ColumnRawPtrs & key_columns,
         const Sizes & /*key_sizes*/,
         const TiDB::TiDBCollators & collators)
+        : total_rows(key_columns[0]->size())
     {
         const IColumn & column = *key_columns[0];
         const auto & column_string = assert_cast<const ColumnString &>(column);
         offsets = column_string.getOffsets().data();
         chars = column_string.getChars().data();
         if (!collators.empty())
-        {
-            if constexpr (!place_string_to_arena)
-                throw Exception("String with collator must be placed on arena.", ErrorCodes::LOGICAL_ERROR);
             collator = collators[0];
-        }
     }
 
-    ALWAYS_INLINE inline auto getKeyHolder(
+    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(
         ssize_t row,
         [[maybe_unused]] Arena * pool,
         std::vector<String> & sort_key_containers) const
@@ -123,17 +127,10 @@ struct HashMethodString
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
         // Remove last zero byte.
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
+        if (likely(collator))
+            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
 
-        if constexpr (place_string_to_arena)
-        {
-            if (likely(collator))
-                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-            return ArenaKeyHolder{key, *pool};
-        }
-        else
-        {
-            return key;
-        }
+        return ArenaKeyHolder{key, *pool};
     }
 
 protected:
@@ -147,10 +144,14 @@ struct HashMethodStringBin
     using Self = HashMethodStringBin<Value, Mapped, padding>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
 
+    static constexpr bool is_serialized_key = false;
+
     const IColumn::Offset * offsets;
     const UInt8 * chars;
+    const size_t total_rows;
 
     HashMethodStringBin(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
+        : total_rows(key_columns[0]->size())
     {
         const IColumn & column = *key_columns[0];
         const auto & column_string = assert_cast<const ColumnString &>(column);
@@ -344,12 +345,16 @@ struct HashMethodFastPathTwoKeysSerialized
     using Self = HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
 
+    static constexpr bool is_serialized_key = true;
+
     Key1Desc key_1_desc;
     Key2Desc key_2_desc;
+    const size_t total_rows;
 
     HashMethodFastPathTwoKeysSerialized(const ColumnRawPtrs & key_columns, const Sizes &, const TiDB::TiDBCollators &)
         : key_1_desc(key_columns[0])
         , key_2_desc(key_columns[1])
+        , total_rows(key_columns[0]->size())
     {}
 
     ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, Arena * pool, std::vector<String> &) const
@@ -370,25 +375,26 @@ protected:
 
 
 /// For the case when there is one fixed-length string key.
-template <typename Value, typename Mapped, bool place_string_to_arena = true, bool use_cache = true>
+template <typename Value, typename Mapped, bool use_cache = true>
 struct HashMethodFixedString
-    : public columns_hashing_impl::HashMethodBase<
-          HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache>,
-          Value,
-          Mapped,
-          use_cache>
+    : public columns_hashing_impl::
+          HashMethodBase<HashMethodFixedString<Value, Mapped, use_cache>, Value, Mapped, use_cache>
 {
-    using Self = HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache>;
+    using Self = HashMethodFixedString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+
+    static constexpr bool is_serialized_key = false;
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
     TiDB::TiDBCollatorPtr collator = nullptr;
+    const size_t total_rows;
 
     HashMethodFixedString(
         const ColumnRawPtrs & key_columns,
         const Sizes & /*key_sizes*/,
         const TiDB::TiDBCollators & collators)
+        : total_rows(key_columns[0]->size())
     {
         const IColumn & column = *key_columns[0];
         const auto & column_string = assert_cast<const ColumnFixedString &>(column);
@@ -398,26 +404,16 @@ struct HashMethodFixedString
             collator = collators[0];
     }
 
-    ALWAYS_INLINE inline auto getKeyHolder(
+    ALWAYS_INLINE inline ArenaKeyHolder getKeyHolder(
         size_t row,
-        [[maybe_unused]] Arena * pool,
+        Arena * pool,
         std::vector<String> & sort_key_containers) const
     {
         StringRef key(&(*chars)[row * n], n);
-
         if (collator)
-        {
             key = collator->sortKeyFastPath(key.data, key.size, sort_key_containers[0]);
-        }
 
-        if constexpr (place_string_to_arena)
-        {
-            return ArenaKeyHolder{key, *pool};
-        }
-        else
-        {
-            return key;
-        }
+        return ArenaKeyHolder{key, *pool};
     }
 
 protected:
@@ -438,10 +434,12 @@ struct HashMethodKeysFixed
     using BaseHashed = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::BaseStateKeysFixed<Key, has_nullable_keys_>;
 
+    static constexpr bool is_serialized_key = false;
     static constexpr bool has_nullable_keys = has_nullable_keys_;
 
     Sizes key_sizes;
     size_t keys_size;
+    const size_t total_rows;
 
     /// SSSE3 shuffle method can be used. Shuffle masks will be calculated and stored here.
 #if defined(__SSSE3__) && !defined(MEMORY_SANITIZER)
@@ -467,6 +465,7 @@ struct HashMethodKeysFixed
         : Base(key_columns)
         , key_sizes(std::move(key_sizes_))
         , keys_size(key_columns.size())
+        , total_rows(key_columns[0]->size())
     {
         if (usePreparedKeys(key_sizes))
         {
@@ -593,9 +592,12 @@ struct HashMethodSerialized
     using Self = HashMethodSerialized<Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
 
+    static constexpr bool is_serialized_key = true;
+
     ColumnRawPtrs key_columns;
     size_t keys_size;
     TiDB::TiDBCollators collators;
+    const size_t total_rows;
 
     HashMethodSerialized(
         const ColumnRawPtrs & key_columns_,
@@ -604,6 +606,7 @@ struct HashMethodSerialized
         : key_columns(key_columns_)
         , keys_size(key_columns_.size())
         , collators(collators_)
+        , total_rows(key_columns_[0]->size())
     {}
 
     ALWAYS_INLINE inline SerializedKeyHolder getKeyHolder(
@@ -629,12 +632,16 @@ struct HashMethodHashed
     using Self = HashMethodHashed<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 
+    static constexpr bool is_serialized_key = false;
+
     ColumnRawPtrs key_columns;
     TiDB::TiDBCollators collators;
+    const size_t total_rows;
 
     HashMethodHashed(ColumnRawPtrs key_columns_, const Sizes &, const TiDB::TiDBCollators & collators_)
         : key_columns(std::move(key_columns_))
         , collators(collators_)
+        , total_rows(key_columns[0]->size())
     {}
 
     ALWAYS_INLINE inline Key getKeyHolder(size_t row, Arena *, std::vector<String> & sort_key_containers) const

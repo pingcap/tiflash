@@ -231,8 +231,7 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::
-        HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*use_cache=*/false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -528,7 +527,7 @@ struct AggregationMethodFixedStringNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -1319,6 +1318,8 @@ public:
         size_t hit_row_cnt = 0;
         std::vector<UInt64> not_found_rows;
 
+        std::vector<size_t> hashvals{};
+
         void prepareForAgg();
         bool allBlockDataHandled() const
         {
@@ -1337,6 +1338,8 @@ public:
             hit_row_cnt = 0;
             not_found_rows.clear();
             not_found_rows.reserve(block_.rows() / 2);
+
+            hashvals.clear();
         }
     };
 
@@ -1454,12 +1457,30 @@ protected:
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <bool collect_hit_rate, bool only_loopup, typename Method>
-    void executeImplBatch(
+    template <bool collect_hit_rate, bool only_loopup, bool enable_prefetch, typename Method>
+    void executeImplByRow(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
+
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
+        Method & method,
+        typename Method::State & state,
+        size_t index,
+        Arena & aggregates_pool,
+        std::vector<std::string> & sort_key_containers,
+        const std::vector<size_t> & hashvals) const;
+
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
+        Method & method,
+        typename Method::State & state,
+        size_t index,
+        Arena & aggregates_pool,
+        std::vector<std::string> & sort_key_containers,
+        size_t hashval) const;
 
     template <bool only_lookup, typename Method>
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
