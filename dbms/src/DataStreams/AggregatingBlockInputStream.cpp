@@ -78,7 +78,8 @@ Block AggregatingBlockInputStream::readImpl()
                 final,
                 1,
                 1,
-                log->identifier());
+                log->identifier(),
+                enable_phmap);
         }
     }
 

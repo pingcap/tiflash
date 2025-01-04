@@ -32,7 +32,8 @@ LocalAggregateTransform::LocalAggregateTransform(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
     const Aggregator::Params & params_,
-    const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context)
+    const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context,
+    bool enable_phmap)
     : TransformOp(exec_context_, req_id)
     , params(params_)
     , agg_context(req_id)
@@ -46,7 +47,8 @@ LocalAggregateTransform::LocalAggregateTransform(
                 fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
             else if (exec_context.getRegisterOperatorSpillContext() != nullptr)
                 exec_context.getRegisterOperatorSpillContext()(operator_spill_context);
-        });
+        },
+        enable_phmap);
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)

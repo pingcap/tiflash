@@ -29,7 +29,8 @@ public:
         PipelineExecutorContext & exec_context_,
         const Aggregator::Params & params_,
         const String & req_id_,
-        UInt64 row_limit_unit)
+        UInt64 row_limit_unit,
+        bool enable_phmap)
         : TransformOp(exec_context_, req_id_)
         , status(Status::building_hash_map)
     {
@@ -38,6 +39,7 @@ public:
             params_,
             [&]() { return exec_context.isCancelled(); },
             req_id_,
+            enable_phmap,
             row_limit_unit);
     }
 

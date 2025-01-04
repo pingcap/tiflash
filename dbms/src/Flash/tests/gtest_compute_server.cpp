@@ -396,6 +396,7 @@ public:
                 *params,
                 [&]() { return false; },
                 req_id,
+                /*emable_phmap=*/true,
                 context.context->getSettings().max_block_size);
         }
 

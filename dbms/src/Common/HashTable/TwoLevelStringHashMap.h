@@ -20,14 +20,15 @@
 template <
     typename TMapped,
     typename Allocator = HashTableAllocator,
-    template <typename...> typename ImplTable = StringHashMap>
+    template <typename, typename, template <typename, typename> typename> typename ImplTable = StringHashMap,
+    template <typename, typename> typename SubMaps = StringHashMapSubMaps>
 class TwoLevelStringHashMap
-    : public TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator>>
+    : public TwoLevelStringHashTable<SubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator, SubMaps>>
 {
 public:
     using Key = StringRef;
     using Self = TwoLevelStringHashMap;
-    using Base = TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, StringHashMap<TMapped, Allocator>>;
+    using Base = TwoLevelStringHashTable<SubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator, SubMaps>>;
     using LookupResult = typename Base::LookupResult;
 
     using Base::Base;

@@ -43,8 +43,7 @@ template <
     typename Allocator,
     typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>,
     size_t BITS_FOR_BUCKET = 8>
-class TwoLevelHashTable : private boost::noncopyable
-    ,
+class TwoLevelHashTable : private boost::noncopyable,
                           protected Hash /// empty base optimization
 {
 protected:
@@ -56,6 +55,8 @@ protected:
 
 public:
     using Impl = ImplTable;
+    static constexpr bool isPhMap = ImplTable::isPhMap;
+    static constexpr bool isNestedMap = true;
 
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
@@ -114,21 +115,39 @@ public:
     template <typename Source>
     explicit TwoLevelHashTable(const Source & src)
     {
-        typename Source::const_iterator it = src.begin();
-
-        /// It is assumed that the zero key (stored separately) is first in iteration order.
-        if (it != src.end() && it.getPtr()->isZero(src))
+        if constexpr (Source::isPhMap)
         {
-            insert(it->getValue());
-            ++it;
+            for (typename Source::const_iterator it = src.begin(); it != src.end(); ++it)
+            {
+                const auto hashval = it.getPtr()->getHash(src);
+                const size_t bucket = getBucketFromHash(hashval);
+                bool inserted = false;
+                LookupResult lookup_it = nullptr;
+                impls[bucket].emplace(it->first, lookup_it, inserted, hashval);
+                if (inserted)
+                    lookup_it->getMapped() = it->second;
+            }
         }
-
-        for (; it != src.end(); ++it)
+        else
         {
-            const Cell * cell = it.getPtr();
-            size_t hash_value = cell->getHash(src);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].insertUniqueNonZero(cell, hash_value);
+            typename Source::const_iterator it = src.begin();
+
+            /// It is assumed that the zero key (stored separately) is first in iteration order.
+            if (it != src.end() && it.getPtr()->isZero(src))
+            {
+                insert(it->getValue());
+                ++it;
+            }
+
+            for (; it != src.end(); ++it)
+            {
+                // getPtr() return const HashMapCel<K, V>* for HashTable,
+                // it returns std::pair<K, V> for PhHashTable.
+                const auto * cell = it.getPtr();
+                size_t hash_value = cell->getHash(src);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].insertUniqueNonZero(cell, hash_value);
+            }
         }
     }
 
@@ -300,7 +319,6 @@ public:
 
     ConstLookupResult ALWAYS_INLINE find(Key x) const { return find(x, hash(x)); }
 
-
     void write(DB::WriteBuffer & wb) const
     {
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
@@ -357,6 +375,15 @@ public:
         size_t res = 0;
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
             res += impls[i].getBufferSizeInBytes();
+
+        return res;
+    }
+
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (size_t i = 0; i < NUM_BUCKETS; ++i)
+            res += impls[i].getBufferSizeInCells();
 
         return res;
     }

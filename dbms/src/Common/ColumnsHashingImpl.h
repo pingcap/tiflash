@@ -125,8 +125,10 @@ class HashMethodBase
 public:
     using EmplaceResult = EmplaceResultImpl<Mapped>;
     using FindResult = FindResultImpl<Mapped>;
-    static constexpr bool has_mapped = !std::is_same<Mapped, VoidMapped>::value;
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
+
+    static constexpr bool has_mapped = !std::is_same<Mapped, VoidMapped>::value;
+    static constexpr size_t prefetch_step = 16;
 
     template <typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
@@ -136,7 +138,24 @@ public:
         std::vector<String> & sort_key_containers)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
-        return emplaceImpl(key_holder, data);
+        return emplaceImpl<false>(key_holder, data, 0);
+    }
+
+    template <typename Data>
+    ALWAYS_INLINE inline EmplaceResult emplaceKey(
+        Data & data,
+        size_t row,
+        const std::vector<size_t> & hashvals,
+        Arena & pool,
+        std::vector<String> & sort_key_containers)
+    {
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+
+        const size_t prefetch_idx = row + prefetch_step;
+        if likely (prefetch_idx < hashvals.size())
+            data.prefetch_hash(hashvals[prefetch_idx]);
+
+        return emplaceImpl<true>(key_holder, data, hashvals[row]);
     }
 
     template <typename Data>
@@ -155,9 +174,10 @@ public:
         const Data & data,
         size_t row,
         Arena & pool,
-        std::vector<String> & sort_key_containers)
+        std::vector<String> & sort_key_containers) const
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        auto key_holder = static_cast<const Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        // TODO enable prefetch
         return data.hash(keyHolderGetKey(key_holder));
     }
 
@@ -179,8 +199,8 @@ protected:
         }
     }
 
-    template <typename Data, typename KeyHolder>
-    ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data)
+    template <bool enable_prefetch, typename Data, typename KeyHolder>
+    ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval [[maybe_unused]])
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
@@ -195,7 +215,11 @@ protected:
 
         typename Data::LookupResult it;
         bool inserted = false;
-        data.emplace(key_holder, it, inserted);
+
+        if constexpr (enable_prefetch)
+            data.emplace(key_holder, it, inserted, hashval);
+        else
+            data.emplace(key_holder, it, inserted);
 
         [[maybe_unused]] Mapped * cached = nullptr;
         if constexpr (has_mapped)

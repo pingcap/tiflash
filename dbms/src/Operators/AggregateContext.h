@@ -45,7 +45,8 @@ public:
         const Aggregator::Params & params,
         size_t max_threads_,
         CancellationHook && hook,
-        const RegisterOperatorSpillContext & register_operator_spill_context);
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        bool enable_phmap);
 
     size_t getBuildConcurrency() const { return max_threads; }
 

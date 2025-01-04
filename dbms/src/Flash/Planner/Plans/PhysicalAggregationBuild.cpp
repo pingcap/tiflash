@@ -71,7 +71,8 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         *params,
         concurrency,
         /*hook=*/[&]() { return exec_context.isCancelled(); },
-        exec_context.getRegisterOperatorSpillContext());
+        exec_context.getRegisterOperatorSpillContext(),
+        context.getSettingsRef().enable_aggregation_phmap);
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {

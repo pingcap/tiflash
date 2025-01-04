@@ -90,6 +90,9 @@ struct StringHashMapCell<StringRef, TMapped>
 template <typename TMapped, typename Allocator>
 struct StringHashMapSubMaps
 {
+    static constexpr bool isPhMap = false;
+    static constexpr bool isNestedMap = false;
+
     using T0 = StringHashTableEmpty<StringHashMapCell<StringRef, TMapped>>;
     using T1 = HashMapTable<
         StringKey8,
@@ -117,16 +120,17 @@ struct StringHashMapSubMaps
         Allocator>;
 };
 
-template <typename TMapped, typename Allocator = HashTableAllocator>
-class StringHashMap : public StringHashTable<StringHashMapSubMaps<TMapped, Allocator>>
+template <
+    typename TMapped,
+    typename Allocator = HashTableAllocator,
+    template <typename, typename> typename TSubMaps = StringHashMapSubMaps>
+class StringHashMap : public StringHashTable<TSubMaps<TMapped, Allocator>>
 {
 public:
     using Key = StringRef;
     using Base = StringHashTable<StringHashMapSubMaps<TMapped, Allocator>>;
     using Self = StringHashMap;
     using LookupResult = typename Base::LookupResult;
-
-    using Base::Base;
 
     /// Merge every cell's value of current map into the destination map.
     ///  Func should have signature void(Mapped & dst, Mapped & src, bool emplaced).
@@ -187,24 +191,45 @@ public:
             func(StringRef{}, this->m0.zeroValue()->getMapped());
         }
 
-        for (auto & v : this->m1)
+        if constexpr (TSubMaps<TMapped, Allocator>::isPhMap)
         {
-            func(v.getKey(), v.getMapped());
-        }
+#define M(MAP_NAME)                                                         \
+    for (auto it = (MAP_NAME).begin(); it != (MAP_NAME).end(); ++it)        \
+    {                                                                       \
+        func(toStringRef(it.getPtr()->getKey()), it.getPtr()->getMapped()); \
+    }
 
-        for (auto & v : this->m2)
-        {
-            func(v.getKey(), v.getMapped());
-        }
+            M(this->m1);
+            M(this->m2);
+            M(this->m3);
+#undef M
 
-        for (auto & v : this->m3)
-        {
-            func(v.getKey(), v.getMapped());
+            for (auto it = this->ms.begin(); it != this->ms.end(); ++it)
+            {
+                func(it.getPtr()->getKey(), it.getPtr()->getMapped());
+            }
         }
-
-        for (auto & v : this->ms)
+        else
         {
-            func(v.getKey(), v.getMapped());
+            for (auto & v : this->m1)
+            {
+                func(v.getKey(), v.getMapped());
+            }
+
+            for (auto & v : this->m2)
+            {
+                func(v.getKey(), v.getMapped());
+            }
+
+            for (auto & v : this->m3)
+            {
+                func(v.getKey(), v.getMapped());
+            }
+
+            for (auto & v : this->ms)
+            {
+                func(v.getKey(), v.getMapped());
+            }
         }
     }
 
@@ -213,13 +238,32 @@ public:
     {
         if (this->m0.size())
             func(this->m0.zeroValue()->getMapped());
-        for (auto & v : this->m1)
-            func(v.getMapped());
-        for (auto & v : this->m2)
-            func(v.getMapped());
-        for (auto & v : this->m3)
-            func(v.getMapped());
-        for (auto & v : this->ms)
-            func(v.getMapped());
+
+        if constexpr (TSubMaps<TMapped, Allocator>::isPhMap)
+        {
+#define M(MAP_NAME)                                                  \
+    for (auto it = (MAP_NAME).begin(); it != (MAP_NAME).end(); ++it) \
+    {                                                                \
+        func(it.getPtr()->getMapped());                              \
+    }
+
+            M(this->m1);
+            M(this->m2);
+            M(this->m3);
+            M(this->ms);
+#undef M
+        }
+        else
+        {
+            // TODO macro
+            for (auto & v : this->m1)
+                func(v.getMapped());
+            for (auto & v : this->m2)
+                func(v.getMapped());
+            for (auto & v : this->m3)
+                func(v.getMapped());
+            for (auto & v : this->ms)
+                func(v.getMapped());
+        }
     }
 };

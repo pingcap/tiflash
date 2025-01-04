@@ -157,6 +157,7 @@ public:
     size_t size() const { return hasZero() ? 1 : 0; }
     bool empty() const { return !hasZero(); }
     size_t getBufferSizeInBytes() const { return sizeof(Cell); }
+    size_t getBufferSizeInCells() const { return 1; }
     void setResizeCallback(const ResizeCallback &) {}
     size_t getCollisions() const { return 0; }
 };
@@ -195,6 +196,7 @@ class StringHashTable : private boost::noncopyable
 {
 protected:
     static constexpr size_t NUM_MAPS = 5;
+
     // Map for storing empty string
     using T0 = typename SubMaps::T0;
 
@@ -223,8 +225,11 @@ public:
     using value_type = typename Ts::value_type;
     using cell_type = typename Ts::cell_type;
 
-    using LookupResult = StringHashTableLookupResult<typename cell_type::mapped_type>;
-    using ConstLookupResult = StringHashTableLookupResult<const typename cell_type::mapped_type>;
+    using LookupResult = StringHashTableLookupResult<typename Self::mapped_type>;
+    using ConstLookupResult = StringHashTableLookupResult<const typename Self::mapped_type>;
+
+    static constexpr bool isPhMap = SubMaps::isPhMap;
+    static constexpr bool isNestedMap = true;
 
     StringHashTable() = default;
 
@@ -440,6 +445,12 @@ public:
             + m3.getBufferSizeInBytes() + ms.getBufferSizeInBytes();
     }
 
+    size_t getBufferSizeInCells() const
+    {
+        return m0.getBufferSizeInCells() + m1.getBufferSizeInCells() + m2.getBufferSizeInCells()
+            + m3.getBufferSizeInCells() + ms.getBufferSizeInCells();
+    }
+
     void setResizeCallback(const ResizeCallback & resize_callback)
     {
         m0.setResizeCallback(resize_callback);
@@ -451,8 +462,9 @@ public:
 
     void clearAndShrink()
     {
-        m1.clearHasZero();
-        m1.clearAndShrink();
+        if constexpr (!T1::isPhMap)
+            m1.clearHasZero();
+
         m2.clearAndShrink();
         m3.clearAndShrink();
         ms.clearAndShrink();

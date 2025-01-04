@@ -28,7 +28,8 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const Aggregator::Params & params_,
-        const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context);
+        const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context,
+        bool enable_phmap_);
 
     String getName() const override { return "LocalAggregateTransform"; }
 

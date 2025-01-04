@@ -16,6 +16,7 @@
 
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashTable.h>
+// #include <Common/HashTable/PhHashTable.h>
 #include <Common/HashTable/HashTableAllocator.h>
 
 
@@ -345,6 +346,9 @@ template <
     typename Allocator = HashTableAllocator>
 using HashMap = HashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 
+// TODO
+// template <typename Key, typename Mapped>
+// using PhHashMap = PhHashTable<Key, Mapped, PhHash<Key, PhHashSeed1>>;
 
 template <
     typename Key,

@@ -38,11 +38,13 @@ public:
         const Aggregator::Params & params_,
         bool final_,
         const String & req_id,
-        const RegisterOperatorSpillContext & register_operator_spill_context)
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        bool enable_phmap_)
         : log(Logger::get(req_id))
         , params(params_)
-        , aggregator(params, req_id, 1, register_operator_spill_context)
+        , aggregator(params, req_id, 1, register_operator_spill_context, enable_phmap_)
         , final(final_)
+        , enable_phmap(enable_phmap_)
     {
         children.push_back(input);
     }
@@ -64,6 +66,8 @@ protected:
 
     /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;
+
+    bool enable_phmap = false;
 };
 
 } // namespace DB

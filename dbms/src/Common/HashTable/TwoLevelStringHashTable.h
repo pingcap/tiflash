@@ -26,6 +26,8 @@ protected:
 public:
     using Key = StringRef;
     using Impl = ImplTable;
+    static constexpr bool isPhMap = ImplTable::isPhMap;
+    static constexpr bool isNestedMap = true;
 
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
@@ -67,29 +69,52 @@ public:
         if (src.m0.hasZero())
             impls[0].m0.setHasZero(*src.m0.zeroValue());
 
-        for (auto & v : src.m1)
+        if constexpr (Source::isPhMap)
         {
-            size_t hash_value = v.getHash(src.m1);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m1.insertUniqueNonZero(&v, hash_value);
+#define M(MAP_NAME, MAP_TYPE)                                                    \
+    for (auto it = src.MAP_NAME.begin(); it != src.MAP_NAME.end(); ++it)         \
+    {                                                                            \
+        const auto hashval = it.getPtr() -> getHash(src.MAP_NAME);               \
+        const size_t bucket = getBucketFromHash(hashval);                        \
+        bool inserted = false;                                                   \
+        typename SubMaps::MAP_TYPE::LookupResult lookup_it = nullptr;            \
+        impls[bucket].MAP_NAME.emplace(it->first, lookup_it, inserted, hashval); \
+        if (inserted)                                                            \
+            lookup_it->getMapped() = it->second;                                 \
+    }
+
+            M(m1, T1)
+            M(m2, T2)
+            M(m3, T3)
+            M(ms, Ts)
+#undef M
         }
-        for (auto & v : src.m2)
+        else
         {
-            size_t hash_value = v.getHash(src.m2);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m2.insertUniqueNonZero(&v, hash_value);
-        }
-        for (auto & v : src.m3)
-        {
-            size_t hash_value = v.getHash(src.m3);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].m3.insertUniqueNonZero(&v, hash_value);
-        }
-        for (auto & v : src.ms)
-        {
-            size_t hash_value = v.getHash(src.ms);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].ms.insertUniqueNonZero(&v, hash_value);
+            for (auto & v : src.m1)
+            {
+                size_t hash_value = v.getHash(src.m1);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].m1.insertUniqueNonZero(&v, hash_value);
+            }
+            for (auto & v : src.m2)
+            {
+                size_t hash_value = v.getHash(src.m2);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].m2.insertUniqueNonZero(&v, hash_value);
+            }
+            for (auto & v : src.m3)
+            {
+                size_t hash_value = v.getHash(src.m3);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].m3.insertUniqueNonZero(&v, hash_value);
+            }
+            for (auto & v : src.ms)
+            {
+                size_t hash_value = v.getHash(src.ms);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].ms.insertUniqueNonZero(&v, hash_value);
+            }
         }
     }
 
@@ -264,6 +289,15 @@ public:
         size_t res = 0;
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
             res += impls[i].getBufferSizeInBytes();
+
+        return res;
+    }
+
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (size_t i = 0; i < NUM_BUCKETS; ++i)
+            res += impls[i].getBufferSizeInCells();
 
         return res;
     }
