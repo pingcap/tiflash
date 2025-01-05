@@ -28,7 +28,6 @@ class CHBlockChunkCodec final : public ChunkCodec
 {
 public:
     CHBlockChunkCodec() = default;
-
     explicit CHBlockChunkCodec(const Block & header_);
     explicit CHBlockChunkCodec(const DAGSchema & schema);
 
