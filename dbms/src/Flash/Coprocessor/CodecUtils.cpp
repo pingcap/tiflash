@@ -14,11 +14,10 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeString.h>
 #include <Flash/Coprocessor/CodecUtils.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFactory.h>
 
 namespace DB::ErrorCodes
 {
@@ -63,7 +62,8 @@ const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion
 
     // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
     static const auto legacy_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
-    static const auto legacy_nullable_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
+    static const auto legacy_nullable_string_type
+        = DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
 
     auto name = type.getName();
     if (name == DataTypeString::NameV2)

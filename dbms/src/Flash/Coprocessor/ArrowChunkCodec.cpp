@@ -89,7 +89,9 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
     return Block(columns);
 }
 
-std::unique_ptr<ChunkCodecStream> ArrowChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types, MppVersion)
+std::unique_ptr<ChunkCodecStream> ArrowChunkCodec::newCodecStream(
+    const std::vector<tipb::FieldType> & field_types,
+    MppVersion)
 {
     return std::make_unique<ArrowChunkCodecStream>(field_types);
 }

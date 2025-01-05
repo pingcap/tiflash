@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <TiDB/Schema/TiDB.h>
 #include <tipb/select.pb.h>
-#include <Flash/Mpp/MppVersion.h>
 namespace DB
 {
 using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
@@ -44,7 +44,9 @@ public:
     ChunkCodec() = default;
     virtual Block decode(const String & str, const DAGSchema & schema) = 0;
 
-    virtual std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & result_field_types, MppVersion mpp_version)
+    virtual std::unique_ptr<ChunkCodecStream> newCodecStream(
+        const std::vector<tipb::FieldType> & result_field_types,
+        MppVersion mpp_version)
         = 0;
 
     virtual ~ChunkCodec() = default;

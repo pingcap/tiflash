@@ -45,13 +45,16 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     switch (dag_context.encode_type)
     {
     case tipb::EncodeType::TypeDefault:
-        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
+        chunk_codec_stream
+            = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
         break;
     case tipb::EncodeType::TypeChunk:
-        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
+        chunk_codec_stream
+            = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
         break;
     case tipb::EncodeType::TypeCHBlock:
-        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
+        chunk_codec_stream
+            = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
         break;
     default:
         throw TiFlashException("Unsupported EncodeType", Errors::Coprocessor::Internal);

@@ -85,7 +85,13 @@ size_t getExtraInfoSize(const Block & block)
     return size;
 }
 
-void CHBlockChunkCodec::WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit, MppVersion mpp_version)
+void CHBlockChunkCodec::WriteColumnData(
+    const IDataType & type,
+    const ColumnPtr & column,
+    WriteBuffer & ostr,
+    size_t offset,
+    size_t limit,
+    MppVersion mpp_version)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)
@@ -162,7 +168,9 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     }
 }
 
-std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types, MppVersion mpp_version)
+std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(
+    const std::vector<tipb::FieldType> & field_types,
+    MppVersion mpp_version)
 {
     return std::make_unique<CHBlockChunkCodecStream>(field_types, mpp_version);
 }

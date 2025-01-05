@@ -24,7 +24,8 @@ public:
     DefaultChunkCodec() = default;
 
     Block decode(const String &, const DAGSchema &) override;
-    std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types, MppVersion) override;
+    std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types, MppVersion)
+        override;
 };
 
 } // namespace DB

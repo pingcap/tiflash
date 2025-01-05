@@ -397,8 +397,13 @@ void MPPTunnelSetWriterBase::partitionWrite(
     compression_method = is_local ? CompressionMethod::NONE : compression_method;
 
     size_t original_size = 0;
-    auto tracked_packet
-        = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, compression_method, original_size, mpp_version);
+    auto tracked_packet = MPPTunnelSetHelper::ToPacket(
+        header,
+        std::move(part_columns),
+        version,
+        compression_method,
+        original_size,
+        mpp_version);
     assert(tracked_packet);
 
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
