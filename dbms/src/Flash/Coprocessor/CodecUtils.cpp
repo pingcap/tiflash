@@ -17,6 +17,9 @@
 #include <Flash/Coprocessor/CodecUtils.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeFactory.h>
+
 namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -37,14 +40,20 @@ void checkColumnSize(const String & identifier, size_t expected, size_t actual)
 
 void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual)
 {
-    if (unlikely(expected != actual))
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "{} schema mismatch at column {}, expected {}, actual {}",
-            identifier,
-            column_index,
-            expected,
-            actual);
+    if (likely(expected == actual))
+        return;
+    if (expected == DataTypeString::NameV2 && actual == DataTypeString::LegacyName)
+        return;
+    if (expected == DataTypeString::NullableNameV2 && actual == DataTypeString::NullableLegacyName)
+        return;
+
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
+        "{} schema mismatch at column {}, expected {}, actual {}",
+        identifier,
+        column_index,
+        expected,
+        actual);
 }
 
 const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion mpp_version)
@@ -53,7 +62,7 @@ const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion
         return type;
 
     // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
-    static const auto legacy_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName),
+    static const auto legacy_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
     static const auto legacy_nullable_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
 
     auto name = type.getName();

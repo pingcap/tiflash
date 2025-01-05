@@ -25,7 +25,7 @@ namespace DB
 using CompressedCHBlockChunkReadBuffer = CompressedReadBuffer<false>;
 using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;
 void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size);
-Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows, MppVersion mpp_version = MppVersion::MppVersionV0);
+Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode);
 
 struct CHBlockChunkCodecV1 : boost::noncopyable
@@ -55,6 +55,7 @@ struct CHBlockChunkCodecV1 : boost::noncopyable
     EncodeRes encode(std::vector<Block> && blocks, CompressionMethod compression_method, bool check_schema = true);
     //
     static EncodeRes encode(std::string_view str, CompressionMethod compression_method);
+    // `decode` is only used for test
     static Block decode(const Block & header, std::string_view str);
 };
 

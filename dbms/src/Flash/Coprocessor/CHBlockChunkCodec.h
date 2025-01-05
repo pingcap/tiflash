@@ -21,32 +21,33 @@
 namespace DB
 {
 class CHBlockChunkDecodeAndSquash;
+struct CHBlockChunkCodecV1Impl;
+class CHBlockChunkCodecStream;
 
 class CHBlockChunkCodec final : public ChunkCodec
 {
 public:
-    CHBlockChunkCodec(MppVersion mpp_version_) 
-        : mpp_version(mpp_version_) {}
+    CHBlockChunkCodec() = default;
 
-    explicit CHBlockChunkCodec(const Block & header_, MppVersion mpp_version_);
-    explicit CHBlockChunkCodec(const DAGSchema & schema, MppVersion mpp_version_);
+    explicit CHBlockChunkCodec(const Block & header_);
+    explicit CHBlockChunkCodec(const DAGSchema & schema);
 
     Block decode(const String &, const DAGSchema & schema) override;
-    static Block decode(const String &, const Block & header, MppVersion mpp_version);  // Use in CoproccessorReader
+    static Block decode(const String &, const Block & header);  // Use in CoproccessorReader
     Block decode(const String &);
-    std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types) override;
+    std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types, MppVersion mpp_version) override;
 
 private:
     friend class CHBlockChunkDecodeAndSquash;
-    friend class CHBlockChunkCodecV1;
+    friend struct CHBlockChunkCodecV1Impl;
+    friend class CHBlockChunkCodecStream;
     void readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTypeAndName & column);
     void readBlockMeta(ReadBuffer & istr, size_t & columns, size_t & rows) const;
-    static void readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows, MppVersion mpp_version);
+    static void readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows);
     static void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit, MppVersion mpp_version);
     /// 'reserve_size' used for Squash usage, and takes effect when 'reserve_size' > 0
     Block decodeImpl(ReadBuffer & istr, size_t reserve_size = 0);
 
-    const MppVersion mpp_version;
     Block header;
     std::vector<CodecUtils::DataTypeWithTypeName> header_datatypes;
     std::vector<String> output_names;

@@ -52,11 +52,11 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MppVers
     {
         const ColumnWithTypeAndName & column = header.safeGetByPosition(i);
         writeStringBinary(column.name, ostr);
-        writeStringBinary(convertDataTypeNameByMppVersion(column.type->getName(), mpp_version), ostr);
+        writeStringBinary(CodecUtils::convertDataTypeNameByMppVersion(column.type->getName(), mpp_version), ostr);
     }
 }
 
-Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows, MppVersion mpp_version)
+Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
 {
     Block res;
 
@@ -80,19 +80,12 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows,
             String type_name;
             readBinary(type_name, istr);
             if (header)
-            {
                 CodecUtils::checkDataTypeName(
                     "CHBlockChunkCodecV1",
                     i,
-                    convertDataTypeNameByMppVersion(header.getByPosition(i).type->getName(), mpp_version),
+                    header.getByPosition(i).type->getName(),
                     type_name);
-                column.type = header.getByPosition(i).type;
-            }
-            else
-            {
-                const auto & data_type_factory = DataTypeFactory::instance();
-                column.type = data_type_factory.get(type_name);
-            }
+            column.type = DataTypeFactory::instance().get(type_name);
         }
         res.insert(std::move(column));
     }
@@ -132,8 +125,7 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
         for (size_t i = 0; i < res.columns(); ++i)
         {
             /// Data
-            const auto & ser_type = convertDataTypeByMppVersion(*res.getByPosition(i).type, mpp_version);
-            ser_type.deserializeBinaryBulkWithMultipleStreams(
+            res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
                 *mutable_columns[i],
                 [&](const IDataType::SubstreamPath &) { return &istr; },
                 sz,
@@ -311,7 +303,7 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            CHBlockChunkCodec::WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0, mpp_version);
+            CHBlockChunkCodec::WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0, inner.mpp_version);
         }
 
         inner.encoded_rows += rows;
