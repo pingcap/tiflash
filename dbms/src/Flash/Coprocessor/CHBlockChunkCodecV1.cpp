@@ -42,40 +42,6 @@ static size_t ApproxBlockHeaderBytes(const Block & block)
     return size;
 }
 
-const String & convertDataTypeNameByMppVersion(const String & name, MppVersion mpp_version)
-{
-    if (mpp_version > MppVersion::MppVersionV2)
-        return name;
-
-    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
-    if (name == DataTypeString::NameV2)
-        return DataTypeString::LegacyName;
-    else if (name == DataTypeString::NullableNameV2)
-        return DataTypeString::NullableLegacyName;
-    else
-        return name;
-}
-
-const DataTypePtr & convertDataTypeByMppVersion(const DataTypePtr & type, MppVersion mpp_version)
-{
-    if (mpp_version > MppVersion::MppVersionV2)
-        return type;
-
-    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
-    static const auto legacy_string_types = std::array{
-        DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName),
-        DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName),
-    };
-
-    auto name = type->getName();
-    if (name == DataTypeString::NameV2)
-        return legacy_string_types[0];
-    else if (name == DataTypeString::NullableNameV2)
-        return legacy_string_types[1];
-    else
-        return type;
-}
-
 void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MppVersion mpp_version)
 {
     size_t columns = header.columns();
@@ -120,7 +86,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows,
                     i,
                     convertDataTypeNameByMppVersion(header.getByPosition(i).type->getName(), mpp_version),
                     type_name);
-                column.type = convertDataTypeByMppVersion(header.getByPosition(i).type, mpp_version);
+                column.type = header.getByPosition(i).type;
             }
             else
             {
@@ -166,7 +132,8 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
         for (size_t i = 0; i < res.columns(); ++i)
         {
             /// Data
-            res.getByPosition(i).type->deserializeBinaryBulkWithMultipleStreams(
+            const auto & ser_type = convertDataTypeByMppVersion(*res.getByPosition(i).type, mpp_version);
+            ser_type.deserializeBinaryBulkWithMultipleStreams(
                 *mutable_columns[i],
                 [&](const IDataType::SubstreamPath &) { return &istr; },
                 sz,
@@ -344,7 +311,7 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            WriteColumnData(*convertDataTypeByMppVersion(col_type_name.type, inner.mpp_version), column_ptr, *ostr_ptr, 0, 0);
+            CHBlockChunkCodec::WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0, mpp_version);
         }
 
         inner.encoded_rows += rows;

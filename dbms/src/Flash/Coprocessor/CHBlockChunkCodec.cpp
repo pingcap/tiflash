@@ -53,14 +53,16 @@ public:
     const MppVersion mpp_version;
 };
 
-CHBlockChunkCodec::CHBlockChunkCodec(const Block & header_)
+CHBlockChunkCodec::CHBlockChunkCodec(const Block & header_, MppVersion mpp_version_)
     : header(header_)
+    , mpp_version(mpp_version_)
 {
     for (const auto & column : header)
         header_datatypes.emplace_back(column.type, column.type->getName());
 }
 
-CHBlockChunkCodec::CHBlockChunkCodec(const DAGSchema & schema)
+CHBlockChunkCodec::CHBlockChunkCodec(const DAGSchema & schema, MppVersion mpp_version_)
+    : mpp_version(mpp_version_)
 {
     for (const auto & c : schema)
         output_names.push_back(c.first);
@@ -85,7 +87,7 @@ size_t getExtraInfoSize(const Block & block)
     return size;
 }
 
-void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
+void CHBlockChunkCodec::WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit, MppVersion mpp_version)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)
@@ -100,7 +102,8 @@ void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuff
     IDataType::OutputStreamGetter output_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &ostr;
     };
-    type.serializeBinaryBulkWithMultipleStreams(
+    const auto & ser_type = convertDataTypeByMppVersion(type, mpp_version);
+    ser_type.serializeBinaryBulkWithMultipleStreams(
         *full_column,
         output_stream_getter,
         offset,
@@ -109,12 +112,14 @@ void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuff
         {});
 }
 
-void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
+void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows, MppVersion mpp_version)
 {
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
     };
-    type.deserializeBinaryBulkWithMultipleStreams(
+
+    const auto & ser_type = convertDataTypeByMppVersion(type, mpp_version);
+    ser_type.deserializeBinaryBulkWithMultipleStreams(
         column,
         input_stream_getter,
         rows,
@@ -153,16 +158,17 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
 
         writeStringBinary(column.name, *output);
-        writeStringBinary(column.type->getName(), *output);
+        const auto & ser_type = convertDataTypeByMppVersion(column.type, mpp_version);
+        writeStringBinary(ser_type->getName(), *output);
 
         if (rows)
-            WriteColumnData(*column.type, column.column, *output, 0, 0);
+            WriteColumnData(*ser_type, column.column, *output, 0, 0);
     }
 }
 
 std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
 {
-    return std::make_unique<CHBlockChunkCodecStream>(field_types);
+    return std::make_unique<CHBlockChunkCodecStream>(field_types, mpp_version);
 }
 
 Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
@@ -194,11 +200,14 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
         }
 
         if (rows) /// If no rows, nothing to read.
-            readData(*column.type, *read_column, istr, rows);
-
+        {
+            const auto & ser_type = convertDataTypeByMppVersion(column.type, mpp_version);
+            readData(*ser_type, *read_column, istr, rows);
+        }
         column.column = std::move(read_column);
         res.insert(std::move(column));
     }
+    // TODO: convert String to StringV2 if ....
     return res;
 }
 
@@ -228,7 +237,8 @@ void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTy
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
     if (header)
     {
-        CodecUtils::checkDataTypeName("CHBlockChunkCodec", i, header_datatypes[i].name, type_name);
+        const auto & ser_type_name = convertDataTypeNameByMppVersion(header_datatypes[i].name, mpp_version);
+        CodecUtils::checkDataTypeName("CHBlockChunkCodec", i, ser_type_name, type_name);
         column.type = header_datatypes[i].type;
     }
     else
@@ -240,13 +250,13 @@ void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTy
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 {
     ReadBufferFromString read_buffer(str);
-    return CHBlockChunkCodec(schema).decodeImpl(read_buffer);
+    return CHBlockChunkCodec(schema, mpp_version).decodeImpl(read_buffer);
 }
 
-Block CHBlockChunkCodec::decode(const String & str, const Block & header)
+Block CHBlockChunkCodec::decode(const String & str, const Block & header, MppVersion mpp_version)
 {
     ReadBufferFromString read_buffer(str);
-    return CHBlockChunkCodec(header).decodeImpl(read_buffer);
+    return CHBlockChunkCodec(header, mpp_version).decodeImpl(read_buffer);
 }
 
 Block CHBlockChunkCodec::decode(const String & str)

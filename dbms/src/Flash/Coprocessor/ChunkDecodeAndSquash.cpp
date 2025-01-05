@@ -19,9 +19,10 @@
 
 namespace DB
 {
-CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_)
-    : codec(header)
+CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_, MppVersion mpp_version_)
+    : codec(header, mpp_version)
     , rows_limit(rows_limit_)
+    , mpp_version(mpp_version_)
 {}
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
@@ -53,18 +54,18 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuff
     if (!accumulated_block)
     {
         size_t rows{};
-        Block block = DecodeHeader(istr, codec.header, rows);
+        Block block = DecodeHeader(istr, codec.header, rows, mpp_version);
         if (rows)
         {
-            DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
+            DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5, mpp_version));
             accumulated_block.emplace(std::move(block));
         }
     }
     else
     {
         size_t rows{};
-        DecodeHeader(istr, codec.header, rows);
-        DecodeColumns(istr, *accumulated_block, rows, 0);
+        DecodeHeader(istr, codec.header, rows, mpp_version);
+        DecodeColumns(istr, *accumulated_block, rows, 0, mpp_version);
     }
 
     if (accumulated_block && accumulated_block->rows() >= rows_limit)
@@ -109,7 +110,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
             {
                 ColumnWithTypeAndName column;
                 codec.readColumnMeta(i, istr, column);
-                CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows);
+                CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows, mpp_version);
             }
             accumulated_block->setColumns(std::move(mutable_columns));
         }

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataTypes/IDataType.h>
+#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
@@ -33,5 +34,7 @@ struct DataTypeWithTypeName
 
 void checkColumnSize(const String & identifier, size_t expected, size_t actual);
 void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual);
+const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion mpp_version);
+const String & convertDataTypeNameByMppVersion(const String & name, MppVersion mpp_version);
 } // namespace CodecUtils
 } // namespace DB
