@@ -108,7 +108,12 @@ struct MockWriter
             return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
-        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size, GetMppVersion());
+        auto && packet = MPPTunnelSetHelper::ToPacket(
+            std::move(blocks),
+            version,
+            compression_method,
+            original_size,
+            GetMppVersion());
         ++total_packets;
         if (!packet)
             return;
