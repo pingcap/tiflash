@@ -212,7 +212,12 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
     }
     catch (LockException & e)
     {
-        LOG_WARNING(log, "LockException: region_id={}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(
+            log,
+            "LockException: region_id={}, message: {}, is_txn_file={}",
+            cop_request->context().region_id(),
+            e.message(),
+            e.locks[0].second->is_txn_file());
         GET_METRIC(tiflash_coprocessor_request_error, reason_meet_lock).Increment();
         if constexpr (is_stream)
         {
