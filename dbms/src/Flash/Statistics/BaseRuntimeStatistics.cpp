@@ -15,6 +15,8 @@
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
 #include <Operators/OperatorProfileInfo.h>
+#include "Common/TiFlashException.h"
+#include "Flash/Statistics/ConnectionProfileInfo.h"
 
 namespace DB
 {
@@ -47,6 +49,8 @@ void BaseRuntimeStatistics::updateReceiveConnectionInfo(const ConnectionProfileI
 {
     switch (conn_profile_info.type)
     {
+    case DB::ConnectionProfileInfo::Local:
+        break;
     case ConnectionProfileInfo::InnerZoneRemote:
         inner_zone_receive_bytes += bytes;
         break;
@@ -54,7 +58,9 @@ void BaseRuntimeStatistics::updateReceiveConnectionInfo(const ConnectionProfileI
         inter_zone_receive_bytes += bytes;
         break;
     default:
-        break;
+        throw TiFlashException(
+            fmt::format("{} connection profile type is unexpected", fmt::underlying(conn_profile_info.type)),
+            Errors::Planner::Internal);
     }
 }
 
@@ -62,6 +68,8 @@ void BaseRuntimeStatistics::updateSendConnectionInfo(const ConnectionProfileInfo
 {
     switch (conn_profile_info.type)
     {
+    case DB::ConnectionProfileInfo::Local:
+        break;
     case ConnectionProfileInfo::InnerZoneRemote:
         inner_zone_send_bytes += bytes;
         break;
@@ -69,7 +77,9 @@ void BaseRuntimeStatistics::updateSendConnectionInfo(const ConnectionProfileInfo
         inter_zone_send_bytes += bytes;
         break;
     default:
-        break;
+        throw TiFlashException(
+            fmt::format("{} connection profile type is unexpected", fmt::underlying(conn_profile_info.type)),
+            Errors::Planner::Internal);
     }
 }
 } // namespace DB
