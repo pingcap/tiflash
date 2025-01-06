@@ -58,58 +58,47 @@ int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) c
 
 ALWAYS_INLINE inline size_t getDecimal256BytesSize(const Decimal256 & val)
 {
-    // return sizeof(bool) + sizeof(size_t) + val.value.backend().size() * sizeof(boost::multiprecision::limb_type);
-    return sizeof(Decimal256);
+    return sizeof(bool) + sizeof(size_t) + val.value.backend().size() * sizeof(boost::multiprecision::limb_type);
 }
 
 ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal256 & data)
 {
-    // const auto & val = data.value.backend();
-
-    // const bool s = val.sign();
-    // tiflash_compiler_builtin_memcpy(dst, &s, sizeof(bool));
-    // dst += sizeof(bool);
-
-    // const size_t limb_count = val.size();
-    // tiflash_compiler_builtin_memcpy(dst, &limb_count, sizeof(size_t));
-    // dst += sizeof(size_t);
-
-    // const size_t limb_size = limb_count * sizeof(boost::multiprecision::limb_type);
-    // inline_memcpy(dst, val.limbs(), limb_size);
-    // dst += limb_size;
-    // return dst;
-
-    Decimal256 tmp_data{};
-    memset(static_cast<void *>(&tmp_data), 0, sizeof(tmp_data));
     const auto & val = data.value.backend();
-    auto & tmp_val = tmp_data.value.backend();
-    tmp_val.assign(val);
-    memcpy(dst, &tmp_data, sizeof(Decimal256));
-    return dst + sizeof(Decimal256);
+
+    const bool s = val.sign();
+    tiflash_compiler_builtin_memcpy(dst, &s, sizeof(bool));
+    dst += sizeof(bool);
+
+    const size_t limb_count = val.size();
+    tiflash_compiler_builtin_memcpy(dst, &limb_count, sizeof(size_t));
+    dst += sizeof(size_t);
+
+    const size_t limb_size = limb_count * sizeof(boost::multiprecision::limb_type);
+    inline_memcpy(dst, val.limbs(), limb_size);
+    dst += limb_size;
+    return dst;
 }
 
 ALWAYS_INLINE inline const char * deserializeDecimal256Helper(Decimal256 & value, const char * ptr)
 {
-    // /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
-    // /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
-    // auto & val = value.value.backend();
+    /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
+    /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
+    auto & val = value.value.backend();
 
-    // size_t offset = 0;
-    // bool s = unalignedLoad<bool>(ptr + offset);
-    // offset += sizeof(bool);
-    // auto limb_count = unalignedLoad<size_t>(ptr + offset);
-    // offset += sizeof(size_t);
+    size_t offset = 0;
+    bool s = unalignedLoad<bool>(ptr + offset);
+    offset += sizeof(bool);
+    auto limb_count = unalignedLoad<size_t>(ptr + offset);
+    offset += sizeof(size_t);
 
-    // val.resize(limb_count, limb_count);
-    // memcpy(val.limbs(), ptr + offset, limb_count * sizeof(boost::multiprecision::limb_type));
-    // if (s != val.sign())
-    //     val.negate();
-    // val.normalize();
-    // offset += limb_count * sizeof(boost::multiprecision::limb_type);
+    val.resize(limb_count, limb_count);
+    memcpy(val.limbs(), ptr + offset, limb_count * sizeof(boost::multiprecision::limb_type));
+    if (s != val.sign())
+        val.negate();
+    val.normalize();
+    offset += limb_count * sizeof(boost::multiprecision::limb_type);
 
-    // return ptr + offset;
-    memcpy(&value, ptr, sizeof(Decimal256));
-    return ptr + sizeof(Decimal256);
+    return ptr + offset;
 }
 
 template <typename T>
