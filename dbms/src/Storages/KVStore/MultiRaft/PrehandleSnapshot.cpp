@@ -314,7 +314,13 @@ size_t KVStore::getMaxParallelPrehandleSize() const
         auto cpu_num = std::thread::hardware_concurrency();
         total_concurrency = static_cast<size_t>(std::clamp(cpu_num * 0.7, 2.0, 16.0));
     }
+#if SERVERLESS_PROXY == 0
     return total_concurrency;
+#else
+    // In serverless mode, IO takes more part in decoding stage, so we can increase parallel limit.
+    // In real test, the prehandling speed decreases if we use higher concurrency.
+    return std::min(4, total_concurrency);
+#endif
 }
 
 // If size is 0, do not parallel prehandle for this snapshot, which is regular.
