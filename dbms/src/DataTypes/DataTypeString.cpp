@@ -441,19 +441,6 @@ void deserializeBinaryBulkV2(IColumn & column, ReadBuffer & offsets_stream, Read
     deserializeCharsBinary(chars, chars_stream, bytes);
 }
 
-bool isLegacyStorageFormat(StorageFormatVersion current)
-{
-    return current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103);
-}
-
-DataTypeString::SerdesFormat getDefaultSerdesFormat()
-{
-    if (isLegacyStorageFormat(STORAGE_FORMAT_CURRENT))
-    {
-        return DataTypeString::SerdesFormat::SizePrefix;
-    }
-    return DataTypeString::SerdesFormat::SeparateSizeAndChars;
-}
 } // namespace
 
 void DataTypeString::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
@@ -504,13 +491,27 @@ void DataTypeString::deserializeBinaryBulkWithMultipleStreams(
     }
 }
 
+static DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
+{
+    if (current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103))
+    {
+        return DataTypeString::SerdesFormat::SizePrefix;
+    }
+    return DataTypeString::SerdesFormat::SeparateSizeAndChars;
+}
+
 DataTypeString::DataTypeString(SerdesFormat serdes_fmt_)
-    : serdes_fmt((serdes_fmt_ != SerdesFormat::None) ? serdes_fmt_ : getDefaultSerdesFormat())
+    : serdes_fmt((serdes_fmt_ != SerdesFormat::None) ? serdes_fmt_ : getDefaultByStorageFormat(STORAGE_FORMAT_CURRENT))
 {}
 
 String DataTypeString::getDefaultName()
 {
-    return getDefaultSerdesFormat() == SerdesFormat::SizePrefix ? LegacyName : NameV2;
+    if (STORAGE_FORMAT_CURRENT.identifier < 8
+        || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
+    {
+        return LegacyName;
+    }
+    return NameV2;
 }
 
 String DataTypeString::getNullableDefaultName()
