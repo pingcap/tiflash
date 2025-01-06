@@ -1009,11 +1009,7 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
         if (!value)
         {
             // key not exist
-            LOG_WARNING(
-                Logger::get(),
-                "Failed to get lock by key {}, region_id={}",
-                tikv_key.toDebugString(),
-                region_id);
+            LOG_DEBUG(Logger::get(), "Failed to get lock by key {}, region_id={}", tikv_key.toDebugString(), region_id);
             return BaseBuffView{};
         }
 
