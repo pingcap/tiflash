@@ -118,6 +118,9 @@ public:
         KeyspaceID keyspace_id,
         TableID table_id,
         std::function<void(const InternalRegions &)> && callback) const;
+    void handleInternalRegionsByKeyspace(
+        KeyspaceID keyspace_id,
+        std::function<void(const TableID table_id, const InternalRegions &)> && callback) const;
 
     std::vector<RegionID> getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
@@ -182,6 +185,8 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
+    void addTableToIndex(KeyspaceID keyspace_id, TableID table_id);
+    void removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id);
 
 private:
     using TableMap = std::unordered_map<KeyspaceTableID, Table, boost::hash<KeyspaceTableID>>;
@@ -189,6 +194,10 @@ private:
 
     using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
     RegionInfoMap regions;
+
+    using KeyspaceIndex = std::unordered_map<KeyspaceID, std::unordered_set<TableID>, boost::hash<KeyspaceID>>;
+    KeyspaceIndex keyspace_index;
+
     SafeTsMap safe_ts_map;
 
     Context * const context;
