@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
-#include "Common/TiFlashException.h"
-#include "Flash/Statistics/ConnectionProfileInfo.h"
 
 namespace DB
 {
