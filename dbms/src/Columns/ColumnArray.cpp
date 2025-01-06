@@ -222,12 +222,12 @@ void ColumnArray::countSerializeByteSizeUnique(
     PaddedPODArray<size_t> & byte_size,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    countSerializeByteSizeImpl<false>(byte_size, collator);
+    countSerializeByteSizeImpl<true>(byte_size, collator);
 }
 
 void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl<true>(byte_size, nullptr);
+    countSerializeByteSizeImpl<false>(byte_size, nullptr);
 }
 
 template <bool ensure_unique>
@@ -266,17 +266,17 @@ void ColumnArray::serializeToPosUnique(
     String * sort_key_container) const
 {
     if (has_null)
-        serializeToPosImpl<true, false>(pos, start, length, collator, sort_key_container);
+        serializeToPosImpl<true, true>(pos, start, length, collator, sort_key_container);
     else
-        serializeToPosImpl<false, false>(pos, start, length, collator, sort_key_container);
+        serializeToPosImpl<false, true>(pos, start, length, collator, sort_key_container);
 }
 
 void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true, true>(pos, start, length, nullptr, nullptr);
+        serializeToPosImpl<true, false>(pos, start, length, nullptr, nullptr);
     else
-        serializeToPosImpl<false, true>(pos, start, length, nullptr, nullptr);
+        serializeToPosImpl<false, false>(pos, start, length, nullptr, nullptr);
 }
 
 template <bool has_null, bool ensure_unique>
@@ -321,12 +321,12 @@ void ColumnArray::deserializeAndInsertFromPosUnique(
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
-    deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer, collator);
+    deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer, collator);
 }
 
 void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
 {
-    deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer, nullptr);
+    deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer, nullptr);
 }
 
 template <bool ensure_unique>

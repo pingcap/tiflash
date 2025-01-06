@@ -174,11 +174,11 @@ public:
 
     void countSerializeByteSizeUnique(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const override
     {
-        countSerializeByteSizeImpl<false>(byte_size);
+        countSerializeByteSizeImpl<true>(byte_size);
     }
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
     {
-        countSerializeByteSizeImpl<true>(byte_size);
+        countSerializeByteSizeImpl<false>(byte_size);
     }
 
     void countSerializeByteSizeUniqueForColumnArray(
@@ -186,13 +186,13 @@ public:
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr &) const override
     {
-        countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
+        countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
     }
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override
     {
-        countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
+        countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
     }
 
     void serializeToPosUnique(
@@ -264,11 +264,11 @@ public:
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr &) override
     {
-        deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
+        deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
     }
     void deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override
     {
-        deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
+        deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
     }
 
     void deserializeAndInsertFromPosUniqueForColumnArray(
@@ -277,14 +277,14 @@ public:
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr &) override
     {
-        deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
+        deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
     }
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override
     {
-        deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
+        deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
     }
 
     void flushNTAlignBuffer() override;
