@@ -50,8 +50,8 @@ void trimStackTrace(String & message)
 }
 
 // Latest mpp-version supported by TiFlash
-static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
-static MppVersion MinMppVersion = MppVersion::MppVersionV0;
+static constexpr MppVersion NewestMppVersion = MppVersion::MppVersionMAX - 1;
+static constexpr MppVersion MinMppVersion = MppVersion::MppVersionV0;
 
 // Use ReportStatus interface to report status
 bool ReportStatusToCoordinator(int64_t mpp_version, const std::string & coordinator_address)
