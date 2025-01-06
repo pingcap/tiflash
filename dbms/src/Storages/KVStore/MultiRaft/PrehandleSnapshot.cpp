@@ -303,6 +303,18 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
 
 size_t KVStore::getMaxParallelPrehandleSize() const
 {
+#if SERVERLESS_PROXY == 0
+    return getMaxPrehandleSubtaskSize();
+#else
+    auto max_subtask_size = getMaxPrehandleSubtaskSize();
+    // In serverless mode, IO takes more part in decoding stage, so we can increase parallel limit.
+    // In real test, the prehandling speed decreases if we use higher concurrency.
+    return std::min(4, total_concurrency);
+#endif
+}
+
+size_t KVStore::getMaxPrehandleSubtaskSize() const
+{
     const auto & proxy_config = getProxyConfigSummay();
     size_t total_concurrency = 0;
     if (proxy_config.valid)
@@ -314,13 +326,7 @@ size_t KVStore::getMaxParallelPrehandleSize() const
         auto cpu_num = std::thread::hardware_concurrency();
         total_concurrency = static_cast<size_t>(std::clamp(cpu_num * 0.7, 2.0, 16.0));
     }
-#if SERVERLESS_PROXY == 0
     return total_concurrency;
-#else
-    // In serverless mode, IO takes more part in decoding stage, so we can increase parallel limit.
-    // In real test, the prehandling speed decreases if we use higher concurrency.
-    return std::min(4, total_concurrency);
-#endif
 }
 
 // If size is 0, do not parallel prehandle for this snapshot, which is regular.
@@ -362,6 +368,11 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     // so we must add 1 here.
     auto ongoing_count = kvstore->getOngoingPrehandleSubtaskCount() + 1;
     uint64_t want_split_parts = 0;
+    // If total_concurrency is 4, and prehandle-pool is sized 8,
+    // and if there are 4 ongoing snapshots, then we will not parallel prehandling any new snapshot.
+    // This is because in serverless, too much parallelism causes performance reduction.
+    // So, if there is already enough parallelism that is used to prehandle,
+    // it is not necessary to manually split a snapshot.
     auto total_concurrency = kvstore->getMaxParallelPrehandleSize();
     if (total_concurrency + 1 > ongoing_count)
     {
@@ -724,7 +735,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
 
             // `split_keys` do not begin with 'z'.
             auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
-            prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1, getMaxParallelPrehandleSize());
+            prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1, getMaxPrehandleSubtaskSize());
             ReadFromStreamResult result;
             if (split_keys.empty())
             {
