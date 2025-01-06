@@ -89,4 +89,5 @@ int64_t GetMppVersion()
 {
     return (NewestMppVersion);
 }
+
 } // namespace DB
