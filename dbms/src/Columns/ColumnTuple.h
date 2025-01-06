@@ -95,35 +95,35 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    void countSerializeByteSizeUnique(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
         const override
     {
         for (const auto & column : columns)
-            column->countSerializeByteSize(byte_size, collator);
+            column->countSerializeByteSizeUnique(byte_size, collator);
     }
-    void countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const override
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
     {
         for (const auto & column : columns)
-            column->countSerializeByteSizeFast(byte_size);
+            column->countSerializeByteSize(byte_size);
     }
 
-    void countSerializeByteSizeForColumnArray(
+    void countSerializeByteSizeUniqueForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator) const override
     {
         for (const auto & column : columns)
-            column->countSerializeByteSizeForColumnArray(byte_size, array_offsets, collator);
+            column->countSerializeByteSizeUniqueForColumnArray(byte_size, array_offsets, collator);
     }
-    void countSerializeByteSizeForColumnArrayFast(
+    void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override
     {
         for (const auto & column : columns)
-            column->countSerializeByteSizeForColumnArrayFast(byte_size, array_offsets);
+            column->countSerializeByteSizeForColumnArray(byte_size, array_offsets);
     }
 
-    void batchSerialize(
+    void serializeToPosUnique(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -132,15 +132,15 @@ public:
         String * sort_key_container) const override
     {
         for (const auto & column : columns)
-            column->batchSerialize(pos, start, length, has_null, collator, sort_key_container);
+            column->serializeToPosUnique(pos, start, length, has_null, collator, sort_key_container);
     }
-    void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
     {
         for (const auto & column : columns)
-            column->batchSerializeFast(pos, start, length, has_null);
+            column->serializeToPos(pos, start, length, has_null);
     }
 
-    void batchSerializeForColumnArray(
+    void serializeToPosUniqueForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -150,7 +150,7 @@ public:
         String * sort_key_container) const override
     {
         for (const auto & column : columns)
-            column->batchSerializeForColumnArray(
+            column->serializeToPosUniqueForColumnArray(
                 pos,
                 start,
                 length,
@@ -159,7 +159,7 @@ public:
                 collator,
                 sort_key_container);
     }
-    void batchSerializeForColumnArrayFast(
+    void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -167,24 +167,24 @@ public:
         const IColumn::Offsets & array_offsets) const override
     {
         for (const auto & column : columns)
-            column->batchSerializeForColumnArrayFast(pos, start, length, has_null, array_offsets);
+            column->serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
     }
 
-    void batchDeserialize(
+    void deserializeAndInsertFromPosUnique(
         PaddedPODArray<const char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override
     {
         for (auto & column : columns)
-            column->assumeMutableRef().batchDeserialize(pos, use_nt_align_buffer, collator);
+            column->assumeMutableRef().deserializeAndInsertFromPosUnique(pos, use_nt_align_buffer, collator);
     }
-    void batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override
+    void deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override
     {
         for (auto & column : columns)
-            column->assumeMutableRef().batchDeserializeFast(pos, use_nt_align_buffer);
+            column->assumeMutableRef().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     }
 
-    void batchDeserializeForColumnArray(
+    void deserializeAndInsertFromPosUniqueForColumnArray(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer,
@@ -192,15 +192,18 @@ public:
     {
         for (auto & column : columns)
             column->assumeMutableRef()
-                .batchDeserializeForColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
+                .deserializeAndInsertFromPosUniqueForColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
     }
-    void batchDeserializeForColumnArrayFast(
+    void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override
     {
         for (auto & column : columns)
-            column->assumeMutableRef().batchDeserializeForColumnArrayFast(pos, array_offsets, use_nt_align_buffer);
+            column->assumeMutableRef().deserializeAndInsertFromPosForColumnArray(
+                pos,
+                array_offsets,
+                use_nt_align_buffer);
     }
 
     void flushNTAlignBuffer() override

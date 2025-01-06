@@ -56,7 +56,7 @@ private:
 
 
     template <bool has_null>
-    void batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
     template <bool has_null>
     void batchSerializeForColumnArrayImpl(
@@ -115,31 +115,34 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    void countSerializeByteSizeUnique(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
         const override
     {
         // collator->sortKey() will change the string length, which may exceeds n.
-        RUNTIME_CHECK_MSG(!collator, "{} doesn't support countSerializeByteSize when collator is not null", getName());
-        countSerializeByteSizeFast(byte_size);
+        RUNTIME_CHECK_MSG(
+            !collator,
+            "{} doesn't support countSerializeByteSizeUnique when collator is not null",
+            getName());
+        countSerializeByteSize(byte_size);
     }
-    void countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
-    void countSerializeByteSizeForColumnArray(
+    void countSerializeByteSizeUniqueForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator) const override
     {
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support countSerializeByteSizeForColumnArray when collator is not null",
+            "{} doesn't support countSerializeByteSizeUniqueForColumnArray when collator is not null",
             getName());
-        countSerializeByteSizeForColumnArrayFast(byte_size, array_offsets);
+        countSerializeByteSizeForColumnArray(byte_size, array_offsets);
     }
-    void countSerializeByteSizeForColumnArrayFast(
+    void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void batchSerialize(
+    void serializeToPosUnique(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -147,12 +150,12 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String *) const override
     {
-        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchSerialize when collator is not null", getName());
-        batchSerializeFast(pos, start, length, has_null);
+        RUNTIME_CHECK_MSG(!collator, "{} doesn't support serializeToPosUnique when collator is not null", getName());
+        serializeToPos(pos, start, length, has_null);
     }
-    void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
-    void batchSerializeForColumnArray(
+    void serializeToPosUniqueForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -163,28 +166,31 @@ public:
     {
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support batchSerializeForColumnArray when collator is not null",
+            "{} doesn't support serializeToPosUniqueForColumnArray when collator is not null",
             getName());
-        batchSerializeForColumnArrayFast(pos, start, length, has_null, array_offsets);
+        serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
     }
-    void batchSerializeForColumnArrayFast(
+    void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void batchDeserialize(
+    void deserializeAndInsertFromPosUnique(
         PaddedPODArray<const char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override
     {
-        RUNTIME_CHECK_MSG(!collator, "{} doesn't support batchDeserialize when collator is not null", getName());
-        batchDeserializeFast(pos, use_nt_align_buffer);
+        RUNTIME_CHECK_MSG(
+            !collator,
+            "{} doesn't support deserializeAndInsertFromPosUnique when collator is not null",
+            getName());
+        deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     }
-    void batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
 
-    void batchDeserializeForColumnArray(
+    void deserializeAndInsertFromPosUniqueForColumnArray(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer,
@@ -192,11 +198,11 @@ public:
     {
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support batchDeserializeForColumnArray when collator is not null",
+            "{} doesn't support deserializeAndInsertFromPosUniqueForColumnArray when collator is not null",
             getName());
-        batchDeserializeForColumnArrayFast(pos, array_offsets, use_nt_align_buffer);
+        deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
     }
-    void batchDeserializeForColumnArrayFast(
+    void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;

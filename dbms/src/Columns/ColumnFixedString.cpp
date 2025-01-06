@@ -133,7 +133,7 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
     return pos + n;
 }
 
-void ColumnFixedString::countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const
+void ColumnFixedString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -142,7 +142,7 @@ void ColumnFixedString::countSerializeByteSizeFast(PaddedPODArray<size_t> & byte
         byte_size[i] += n;
 }
 
-void ColumnFixedString::countSerializeByteSizeForColumnArrayFast(
+void ColumnFixedString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
@@ -157,17 +157,16 @@ void ColumnFixedString::countSerializeByteSizeForColumnArrayFast(
         byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
 }
 
-void ColumnFixedString::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null)
-    const
+void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        batchSerializeImpl<true>(pos, start, length);
+        serializeToPosImpl<true>(pos, start, length);
     else
-        batchSerializeImpl<false>(pos, start, length);
+        serializeToPosImpl<false>(pos, start, length);
 }
 
 template <bool has_null>
-void ColumnFixedString::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+void ColumnFixedString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
@@ -184,7 +183,7 @@ void ColumnFixedString::batchSerializeImpl(PaddedPODArray<char *> & pos, size_t 
     }
 }
 
-void ColumnFixedString::batchSerializeForColumnArrayFast(
+void ColumnFixedString::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -232,7 +231,7 @@ void ColumnFixedString::batchSerializeForColumnArrayImpl(
 }
 
 /// TODO: optimize by using align_buffer
-void ColumnFixedString::batchDeserializeFast(PaddedPODArray<const char *> & pos, bool /* use_nt_align_buffer */)
+void ColumnFixedString::deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool /* use_nt_align_buffer */)
 {
     size_t size = pos.size();
     size_t old_char_size = chars.size();
@@ -245,7 +244,7 @@ void ColumnFixedString::batchDeserializeFast(PaddedPODArray<const char *> & pos,
     }
 }
 
-void ColumnFixedString::batchDeserializeForColumnArrayFast(
+void ColumnFixedString::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool /* use_nt_align_buffer */)

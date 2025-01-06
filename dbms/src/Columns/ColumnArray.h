@@ -48,7 +48,7 @@ private:
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
 
     template <bool has_null, bool is_fast>
-    void batchSerializeImpl(
+    void serializeToPosImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -56,7 +56,7 @@ private:
         String * sort_key_container) const;
 
     template <bool is_fast>
-    void batchDeserializeImpl(
+    void deserializeAndInsertFromPosImpl(
         PaddedPODArray<const char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator);
@@ -99,38 +99,38 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    void countSerializeByteSizeUnique(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
         const override;
-    void countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
-    void countSerializeByteSizeForColumnArray(
+    void countSerializeByteSizeUniqueForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */) const override
     {
         throw Exception(
-            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
+            "Method countSerializeByteSizeUniqueForColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void countSerializeByteSizeForColumnArrayFast(
+    void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* array_offsets */) const override
     {
         throw Exception(
-            "Method countSerializeByteSizeForColumnArrayFast is not supported for " + getName(),
+            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void batchSerialize(
+    void serializeToPosUnique(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         bool has_null,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override;
-    void batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
-    void batchSerializeForColumnArray(
+    void serializeToPosUniqueForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
@@ -140,10 +140,10 @@ public:
         String * /* sort_key_container */) const override
     {
         throw Exception(
-            "Method batchSerializeForColumnArray is not supported for " + getName(),
+            "Method serializeToPosUniqueForColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void batchSerializeForColumnArrayFast(
+    void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
@@ -151,33 +151,33 @@ public:
         const IColumn::Offsets & /* array_offsets */) const override
     {
         throw Exception(
-            "Method batchSerializeForColumnArrayFast is not supported for " + getName(),
+            "Method serializeToPosForColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void batchDeserialize(
+    void deserializeAndInsertFromPosUnique(
         PaddedPODArray<const char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override;
-    void batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
 
-    void batchDeserializeForColumnArray(
+    void deserializeAndInsertFromPosUniqueForColumnArray(
         PaddedPODArray<const char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
         bool /* use_nt_align_buffer */,
         const TiDB::TiDBCollatorPtr & /* collator */) override
     {
         throw Exception(
-            "Method batchDeserializeForColumnArray is not supported for " + getName(),
+            "Method deserializeAndInsertFromPosUniqueForColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void batchDeserializeForColumnArrayFast(
+    void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<const char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
         bool /* use_nt_align_buffer */) override
     {
         throw Exception(
-            "Method batchDeserializeForColumnArrayFast is not supported for " + getName(),
+            "Method deserializeAndInsertFromPosForColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
 

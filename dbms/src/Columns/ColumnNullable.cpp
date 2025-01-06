@@ -282,35 +282,36 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
     return pos;
 }
 
-void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
-    const
+void ColumnNullable::countSerializeByteSizeUnique(
+    PaddedPODArray<size_t> & byte_size,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
-    getNullMapColumn().countSerializeByteSize(byte_size, collator);
-    getNestedColumn().countSerializeByteSize(byte_size, collator);
+    getNullMapColumn().countSerializeByteSizeUnique(byte_size, collator);
+    getNestedColumn().countSerializeByteSizeUnique(byte_size, collator);
 }
-void ColumnNullable::countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const
+void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    getNullMapColumn().countSerializeByteSizeFast(byte_size);
-    getNestedColumn().countSerializeByteSizeFast(byte_size);
+    getNullMapColumn().countSerializeByteSize(byte_size);
+    getNestedColumn().countSerializeByteSize(byte_size);
 }
 
-void ColumnNullable::countSerializeByteSizeForColumnArray(
+void ColumnNullable::countSerializeByteSizeUniqueForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    getNullMapColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets, collator);
-    getNestedColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets, collator);
+    getNullMapColumn().countSerializeByteSizeUniqueForColumnArray(byte_size, array_offsets, collator);
+    getNestedColumn().countSerializeByteSizeUniqueForColumnArray(byte_size, array_offsets, collator);
 }
-void ColumnNullable::countSerializeByteSizeForColumnArrayFast(
+void ColumnNullable::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    getNullMapColumn().countSerializeByteSizeForColumnArrayFast(byte_size, array_offsets);
-    getNestedColumn().countSerializeByteSizeForColumnArrayFast(byte_size, array_offsets);
+    getNullMapColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    getNestedColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
 }
 
-void ColumnNullable::batchSerialize(
+void ColumnNullable::serializeToPosUnique(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -318,16 +319,16 @@ void ColumnNullable::batchSerialize(
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    getNullMapColumn().batchSerialize(pos, start, length, has_null, collator, sort_key_container);
-    getNestedColumn().batchSerialize(pos, start, length, has_null, collator, sort_key_container);
+    getNullMapColumn().serializeToPosUnique(pos, start, length, has_null, collator, sort_key_container);
+    getNestedColumn().serializeToPosUnique(pos, start, length, has_null, collator, sort_key_container);
 }
-void ColumnNullable::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
-    getNullMapColumn().batchSerializeFast(pos, start, length, has_null);
-    getNestedColumn().batchSerializeFast(pos, start, length, has_null);
+    getNullMapColumn().serializeToPos(pos, start, length, has_null);
+    getNestedColumn().serializeToPos(pos, start, length, has_null);
 }
 
-void ColumnNullable::batchSerializeForColumnArray(
+void ColumnNullable::serializeToPosUniqueForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -337,51 +338,53 @@ void ColumnNullable::batchSerializeForColumnArray(
     String * sort_key_container) const
 {
     getNullMapColumn()
-        .batchSerializeForColumnArray(pos, start, length, has_null, array_offsets, collator, sort_key_container);
+        .serializeToPosUniqueForColumnArray(pos, start, length, has_null, array_offsets, collator, sort_key_container);
     getNestedColumn()
-        .batchSerializeForColumnArray(pos, start, length, has_null, array_offsets, collator, sort_key_container);
+        .serializeToPosUniqueForColumnArray(pos, start, length, has_null, array_offsets, collator, sort_key_container);
 }
-void ColumnNullable::batchSerializeForColumnArrayFast(
+void ColumnNullable::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
     bool has_null,
     const IColumn::Offsets & array_offsets) const
 {
-    getNullMapColumn().batchSerializeForColumnArrayFast(pos, start, length, has_null, array_offsets);
-    getNestedColumn().batchSerializeForColumnArrayFast(pos, start, length, has_null, array_offsets);
+    getNullMapColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
+    getNestedColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
 }
 
-void ColumnNullable::batchDeserialize(
+void ColumnNullable::deserializeAndInsertFromPosUnique(
     PaddedPODArray<const char *> & pos,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
-    getNullMapColumn().batchDeserialize(pos, use_nt_align_buffer, collator);
-    getNestedColumn().batchDeserialize(pos, use_nt_align_buffer, collator);
+    getNullMapColumn().deserializeAndInsertFromPosUnique(pos, use_nt_align_buffer, collator);
+    getNestedColumn().deserializeAndInsertFromPosUnique(pos, use_nt_align_buffer, collator);
 }
-void ColumnNullable::batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
+void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
 {
-    getNullMapColumn().batchDeserializeFast(pos, use_nt_align_buffer);
-    getNestedColumn().batchDeserializeFast(pos, use_nt_align_buffer);
+    getNullMapColumn().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+    getNestedColumn().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
 }
 
-void ColumnNullable::batchDeserializeForColumnArray(
+void ColumnNullable::deserializeAndInsertFromPosUniqueForColumnArray(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
-    getNullMapColumn().batchDeserializeForColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
-    getNestedColumn().batchDeserializeForColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
+    getNullMapColumn()
+        .deserializeAndInsertFromPosUniqueForColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
+    getNestedColumn()
+        .deserializeAndInsertFromPosUniqueForColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
 }
-void ColumnNullable::batchDeserializeForColumnArrayFast(
+void ColumnNullable::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {
-    getNullMapColumn().batchDeserializeForColumnArrayFast(pos, array_offsets, use_nt_align_buffer);
-    getNestedColumn().batchDeserializeForColumnArrayFast(pos, array_offsets, use_nt_align_buffer);
+    getNullMapColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
+    getNestedColumn().deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
 }
 
 void ColumnNullable::flushNTAlignBuffer()

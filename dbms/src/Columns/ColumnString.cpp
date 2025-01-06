@@ -481,8 +481,9 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
-    const
+void ColumnString::countSerializeByteSizeUnique(
+    PaddedPODArray<size_t> & byte_size,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     if likely (collator != nullptr)
         countSerializeByteSizeImpl<true>(byte_size, collator);
@@ -490,7 +491,7 @@ void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size, co
         countSerializeByteSizeImpl<false>(byte_size, nullptr);
 }
 
-void ColumnString::countSerializeByteSizeFast(PaddedPODArray<size_t> & byte_size) const
+void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
     countSerializeByteSizeImpl<false>(byte_size, nullptr);
 }
@@ -534,7 +535,7 @@ void ColumnString::countSerializeByteSizeImpl(
     }
 }
 
-void ColumnString::countSerializeByteSizeForColumnArray(
+void ColumnString::countSerializeByteSizeUniqueForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr & collator) const
@@ -545,7 +546,7 @@ void ColumnString::countSerializeByteSizeForColumnArray(
         countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
 }
 
-void ColumnString::countSerializeByteSizeForColumnArrayFast(
+void ColumnString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
@@ -604,7 +605,7 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     }
 }
 
-void ColumnString::batchSerialize(
+void ColumnString::serializeToPosUnique(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -615,39 +616,39 @@ void ColumnString::batchSerialize(
     if (has_null)
     {
         if likely (collator != nullptr)
-            batchSerializeImpl</*has_null=*/true, /*has_collator=*/true>(
+            serializeToPosImpl</*has_null=*/true, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
                 collator,
                 sort_key_container);
         else
-            batchSerializeImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+            serializeToPosImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     }
     else
     {
         if likely (collator != nullptr)
-            batchSerializeImpl</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosImpl</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
                 collator,
                 sort_key_container);
         else
-            batchSerializeImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+            serializeToPosImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     }
 }
 
-void ColumnString::batchSerializeFast(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        batchSerializeImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     else
-        batchSerializeImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
 }
 
 template <bool has_null, bool has_collator>
-void ColumnString::batchSerializeImpl(
+void ColumnString::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -659,7 +660,7 @@ void ColumnString::batchSerializeImpl(
     if constexpr (has_collator)
         RUNTIME_CHECK(collator && sort_key_container);
 
-    /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
+    /// countSerializeByteSizeUnique has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -683,7 +684,7 @@ void ColumnString::batchSerializeImpl(
     }
 }
 
-void ColumnString::batchSerializeForColumnArray(
+void ColumnString::serializeToPosUniqueForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -732,7 +733,7 @@ void ColumnString::batchSerializeForColumnArray(
     }
 }
 
-void ColumnString::batchSerializeForColumnArrayFast(
+void ColumnString::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -779,7 +780,7 @@ void ColumnString::batchSerializeForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    /// countSerializeByteSizeForColumnArray has already checked that the size of one element is not greater than UINT32_MAX
+    /// countSerializeByteSizeUniqueForColumnArray has already checked that the size of one element is not greater than UINT32_MAX
     if constexpr (has_collator)
     {
         RUNTIME_CHECK(collator && sort_key_container);
@@ -828,24 +829,26 @@ void ColumnString::batchSerializeForColumnArrayImpl(
     }
 }
 
-void ColumnString::batchDeserialize(
+void ColumnString::deserializeAndInsertFromPosUnique(
     PaddedPODArray<const char *> & pos,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
     if likely (collator != nullptr)
-        batchDeserializeImpl<true>(pos, use_nt_align_buffer);
+        deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
     else
-        batchDeserializeImpl<false>(pos, use_nt_align_buffer);
+        deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
 }
 
-void ColumnString::batchDeserializeFast(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
+void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
 {
-    batchDeserializeImpl<false>(pos, use_nt_align_buffer);
+    deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
 }
 
 template <bool add_terminating_zero>
-void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer [[maybe_unused]])
+void ColumnString::deserializeAndInsertFromPosImpl(
+    PaddedPODArray<const char *> & pos,
+    bool use_nt_align_buffer [[maybe_unused]])
 {
     size_t prev_size = offsets.size();
     size_t char_size = chars.size();
@@ -966,7 +969,7 @@ void ColumnString::batchDeserializeImpl(PaddedPODArray<const char *> & pos, bool
     }
 }
 
-void ColumnString::batchDeserializeForColumnArray(
+void ColumnString::deserializeAndInsertFromPosUniqueForColumnArray(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer,
@@ -978,7 +981,7 @@ void ColumnString::batchDeserializeForColumnArray(
         batchDeserializeForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
 }
 
-void ColumnString::batchDeserializeForColumnArrayFast(
+void ColumnString::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)

@@ -39,9 +39,9 @@ public:
         for (size_t i = 0; i < column_ptr->size(); ++i)
             byte_size[i] = i;
         if (is_fast)
-            column_ptr->countSerializeByteSizeFast(byte_size);
+            column_ptr->countSerializeByteSize(byte_size);
         else
-            column_ptr->countSerializeByteSize(byte_size, collator);
+            column_ptr->countSerializeByteSizeUnique(byte_size, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
@@ -60,9 +60,9 @@ public:
         for (size_t i = 0; i < column_array->size(); ++i)
             byte_size[i] = i;
         if (is_fast)
-            column_array->countSerializeByteSizeFast(byte_size);
+            column_array->countSerializeByteSize(byte_size);
         else
-            column_array->countSerializeByteSize(byte_size, collator);
+            column_array->countSerializeByteSizeUnique(byte_size, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], sizeof(UInt32) + i + result_byte_size[i]);
@@ -184,9 +184,9 @@ public:
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
         if (is_fast)
-            column_ptr->countSerializeByteSizeFast(byte_size);
+            column_ptr->countSerializeByteSize(byte_size);
         else
-            column_ptr->countSerializeByteSize(byte_size, collator);
+            column_ptr->countSerializeByteSizeUnique(byte_size, collator);
         size_t total_size = 0;
         for (const auto size : byte_size)
             total_size += size;
@@ -202,17 +202,17 @@ public:
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
         if (is_fast)
-            column_ptr->batchSerializeFast(pos, 0, byte_size.size() / 2, false);
+            column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
         else
-            column_ptr->batchSerialize(pos, 0, byte_size.size() / 2, false, collator, sort_key_container);
+            column_ptr->serializeToPosUnique(pos, 0, byte_size.size() / 2, false, collator, sort_key_container);
 
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
         if (is_fast)
-            new_col_ptr->batchDeserializeFast(ori_pos, use_nt_align_buffer);
+            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->batchDeserialize(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
 
         current_size = 0;
         pos.clear();
@@ -226,9 +226,9 @@ public:
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
         if (is_fast)
-            column_ptr->batchSerializeFast(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
+            column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
         else
-            column_ptr->batchSerialize(
+            column_ptr->serializeToPosUnique(
                 pos,
                 byte_size.size() / 2,
                 byte_size.size() - byte_size.size() / 2,
@@ -239,9 +239,9 @@ public:
         ori_pos.resize(ori_pos.size() - 1);
 
         if (is_fast)
-            new_col_ptr->batchDeserializeFast(ori_pos, use_nt_align_buffer);
+            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->batchDeserialize(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
 
         current_size = 0;
         pos.clear();
@@ -254,14 +254,14 @@ public:
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
         if (is_fast)
-            column_ptr->batchSerializeFast(pos, 0, byte_size.size(), true);
+            column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         else
-            column_ptr->batchSerialize(pos, 0, byte_size.size(), true, collator, sort_key_container);
+            column_ptr->serializeToPosUnique(pos, 0, byte_size.size(), true, collator, sort_key_container);
 
         if (is_fast)
-            new_col_ptr->batchDeserializeFast(ori_pos, use_nt_align_buffer);
+            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->batchDeserialize(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 
@@ -288,9 +288,9 @@ public:
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
         if (is_fast)
-            column_ptr->countSerializeByteSizeFast(byte_size);
+            column_ptr->countSerializeByteSize(byte_size);
         else
-            column_ptr->countSerializeByteSize(byte_size, collator);
+            column_ptr->countSerializeByteSizeUnique(byte_size, collator);
         size_t total_size = 0;
         for (const auto size : byte_size)
             total_size += size;
@@ -307,9 +307,9 @@ public:
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
         if (is_fast)
-            column_ptr->batchSerializeFast(pos, 0, byte_size.size() / 2, true);
+            column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true);
         else
-            column_ptr->batchSerialize(pos, 0, byte_size.size() / 2, true, collator, sort_key_container);
+            column_ptr->serializeToPosUnique(pos, 0, byte_size.size() / 2, true, collator, sort_key_container);
         pos.resize(pos.size() - 1);
         ori_pos.resize(ori_pos.size() - 1);
 
@@ -317,9 +317,9 @@ public:
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
         if (is_fast)
-            new_col_ptr->batchDeserializeFast(ori_pos, use_nt_align_buffer);
+            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->batchDeserialize(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
 
         current_size = 0;
         pos.clear();
@@ -333,9 +333,9 @@ public:
             ori_pos.push_back(ptr);
         if (is_fast)
             column_ptr
-                ->batchSerializeFast(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
+                ->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
         else
-            column_ptr->batchSerialize(
+            column_ptr->serializeToPosUnique(
                 pos,
                 byte_size.size() / 2 - 1,
                 byte_size.size() - byte_size.size() / 2 + 1,
@@ -343,9 +343,9 @@ public:
                 collator,
                 sort_key_container);
         if (is_fast)
-            new_col_ptr->batchDeserializeFast(ori_pos, use_nt_align_buffer);
+            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->batchDeserialize(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
 
         current_size = 0;
         pos.clear();
@@ -358,14 +358,14 @@ public:
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
         if (is_fast)
-            column_ptr->batchSerializeFast(pos, 0, byte_size.size(), true);
+            column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         else
-            column_ptr->batchSerialize(pos, 0, byte_size.size(), true, collator, sort_key_container);
+            column_ptr->serializeToPosUnique(pos, 0, byte_size.size(), true, collator, sort_key_container);
 
         if (is_fast)
-            new_col_ptr->batchDeserializeFast(ori_pos, use_nt_align_buffer);
+            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->batchDeserialize(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 
