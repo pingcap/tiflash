@@ -32,7 +32,7 @@ public:
     explicit CHBlockChunkCodec(const DAGSchema & schema);
 
     Block decode(const String &, const DAGSchema & schema) override;
-    static Block decode(const String &, const Block & header); // Use in CoproccessorReader
+    static Block decode(const String &, const Block & header);
     Block decode(const String &);
     std::unique_ptr<ChunkCodecStream> newCodecStream(
         const std::vector<tipb::FieldType> & field_types,

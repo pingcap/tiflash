@@ -121,7 +121,6 @@ void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadB
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
     };
-
     type.deserializeBinaryBulkWithMultipleStreams(
         column,
         input_stream_getter,
@@ -205,6 +204,7 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
 
         if (rows) /// If no rows, nothing to read.
             readData(*column.type, *read_column, istr, rows);
+
         column.column = std::move(read_column);
         res.insert(std::move(column));
     }
@@ -236,7 +236,7 @@ void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTy
     readBinary(type_name, istr);
     if (header)
         CodecUtils::checkDataTypeName("CHBlockChunkCodec", i, header_datatypes[i].name, type_name);
-    column.type = DataTypeFactory::instance().getOrSet(type_name);
+    column.type = DataTypeFactory::instance().getOrSet(type_name); // Respect the type name from encoder
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)

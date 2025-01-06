@@ -85,7 +85,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
                     i,
                     header.getByPosition(i).type->getName(),
                     type_name);
-            column.type = DataTypeFactory::instance().get(type_name);
+            column.type = DataTypeFactory::instance().get(type_name); // Respect the type name from encoder
         }
         res.insert(std::move(column));
     }
