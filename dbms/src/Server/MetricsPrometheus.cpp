@@ -164,7 +164,13 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         key_path,
         cert_path,
         ca_path,
-        Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+#if SERVERLESS_PROXY == 0
+        Poco::Net::Context::VerificationMode::VERIFY_STRICT
+#else
+        // mtls: metrics server allows anonymous pullers @iosmanthus
+        Poco::Net::Context::VerificationMode::VERIFY_RELAXED
+#endif
+    );
 
     auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         return global_context.getSecurityConfig()->checkCommonName(cert);
