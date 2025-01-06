@@ -342,11 +342,7 @@ using DecodedWriteCFValue = std::optional<InnerDecodedWriteCFValue>;
 
 DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value);
 
-TiKVValue encodeWriteCfValue(
-    UInt8 write_type,
-    Timestamp ts,
-    std::string_view short_value = {},
-    bool gc_fence = false);
+TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, std::string_view short_value = {}, bool gc_fence = false);
 
 template <bool start>
 inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_key)

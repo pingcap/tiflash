@@ -183,6 +183,8 @@ struct ContextShared
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
 
+    std::unordered_set<KeyspaceID> keyspace_blocklist;
+    std::unordered_set<RegionID> region_blocklist;
     std::unordered_set<uint64_t> store_id_blocklist; /// Those store id are blocked from batch cop request.
 
     class SessionKeyHash
@@ -2173,6 +2175,37 @@ MockMPPServerInfo Context::mockMPPServerInfo() const
 void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
     mpp_server_info = info;
+}
+
+void Context::initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids)
+{
+    auto lock = getLock();
+    shared->keyspace_blocklist = keyspace_ids;
+}
+bool Context::isKeyspaceInBlocklist(const KeyspaceID keyspace_id)
+{
+    auto lock = getLock();
+    return shared->keyspace_blocklist.count(keyspace_id) > 0;
+}
+void Context::initRegionBlocklist(const std::unordered_set<RegionID> & region_ids)
+{
+    auto lock = getLock();
+    shared->region_blocklist = region_ids;
+}
+bool Context::isRegionInBlocklist(const RegionID region_id)
+{
+    auto lock = getLock();
+    return shared->region_blocklist.count(region_id) > 0;
+}
+bool Context::isRegionsContainsInBlocklist(const std::vector<RegionID> & regions)
+{
+    auto lock = getLock();
+    for (const auto region : regions)
+    {
+        if (isRegionInBlocklist(region))
+            return true;
+    }
+    return false;
 }
 
 const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const

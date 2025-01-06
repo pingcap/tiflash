@@ -21,7 +21,6 @@
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
-#include <gtest/gtest.h>
 
 using namespace DB;
 
