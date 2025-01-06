@@ -258,33 +258,13 @@ inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)
     return appendTs(key, ts);
 }
 
-inline TiKVValue encodeLockCfValue(
+TiKVValue encodeLockCfValue(
     UInt8 lock_type,
     const String & primary,
     Timestamp ts,
     UInt64 ttl,
     const String * short_value = nullptr,
-    Timestamp min_commit_ts = 0)
-{
-    WriteBufferFromOwnString res;
-    res.write(lock_type);
-    TiKV::writeVarInt(static_cast<Int64>(primary.size()), res);
-    res.write(primary.data(), primary.size());
-    TiKV::writeVarUInt(ts, res);
-    TiKV::writeVarUInt(ttl, res);
-    if (short_value)
-    {
-        res.write(SHORT_VALUE_PREFIX);
-        res.write(static_cast<char>(short_value->size()));
-        res.write(short_value->data(), short_value->size());
-    }
-    if (min_commit_ts)
-    {
-        res.write(MIN_COMMIT_TS_PREFIX);
-        encodeUInt64(min_commit_ts, res);
-    }
-    return TiKVValue(res.releaseStr());
-}
+    Timestamp min_commit_ts = 0);
 
 template <typename R = Int64>
 inline R readVarInt(const char *& data, size_t & len)
@@ -360,93 +340,13 @@ struct InnerDecodedWriteCFValue
 
 using DecodedWriteCFValue = std::optional<InnerDecodedWriteCFValue>;
 
-inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
-{
-    const char * data = value.data();
-    size_t len = value.dataSize();
+DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value);
 
-    auto write_type = RecordKVFormat::readUInt8(data, len); //write type
-
-    bool can_ignore = write_type != CFModifyFlag::DelFlag && write_type != CFModifyFlag::PutFlag;
-    if (can_ignore)
-        return std::nullopt;
-
-    Timestamp prewrite_ts = RecordKVFormat::readVarUInt(data, len); // ts
-
-    std::string_view short_value;
-    while (len)
-    {
-        auto flag = RecordKVFormat::readUInt8(data, len);
-        switch (flag)
-        {
-        case RecordKVFormat::SHORT_VALUE_PREFIX:
-        {
-            size_t slen = RecordKVFormat::readUInt8(data, len);
-            if (slen > len)
-                throw Exception("content len not equal to short value len", ErrorCodes::LOGICAL_ERROR);
-            short_value = RecordKVFormat::readRawString<std::string_view>(data, len, slen);
-            break;
-        }
-        case RecordKVFormat::FLAG_OVERLAPPED_ROLLBACK:
-            // ignore
-            break;
-        case RecordKVFormat::GC_FENCE_PREFIX:
-            /**
-                 * according to https://github.com/tikv/tikv/pull/9207, when meet `GC fence` flag, it is definitely a
-                 * rewriting record and there must be a complete row written to tikv, just ignore it in tiflash.
-                 */
-            return std::nullopt;
-        case RecordKVFormat::LAST_CHANGE_PREFIX:
-        {
-            // Used to accelerate TiKV MVCC scan, useless for TiFlash.
-            UInt64 last_change_ts = readUInt64(data, len);
-            UInt64 versions_to_last_change = readVarUInt(data, len);
-            UNUSED(last_change_ts);
-            UNUSED(versions_to_last_change);
-            break;
-        }
-        case RecordKVFormat::TXN_SOURCE_PREFIX_FOR_WRITE:
-        {
-            // Used for CDC, useless for TiFlash.
-            UInt64 txn_source_prefic = readVarUInt(data, len);
-            UNUSED(txn_source_prefic);
-            break;
-        }
-        default:
-            throw Exception("invalid flag " + std::to_string(flag) + " in write cf", ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-
-    return InnerDecodedWriteCFValue{
-        write_type,
-        prewrite_ts,
-        short_value.empty() ? nullptr : std::make_shared<const TiKVValue>(short_value.data(), short_value.length())};
-}
-
-inline TiKVValue encodeWriteCfValue(
+TiKVValue encodeWriteCfValue(
     UInt8 write_type,
     Timestamp ts,
     std::string_view short_value = {},
-    bool gc_fence = false)
-{
-    WriteBufferFromOwnString res;
-    res.write(write_type);
-    TiKV::writeVarUInt(ts, res);
-    if (!short_value.empty())
-    {
-        res.write(SHORT_VALUE_PREFIX);
-        res.write(static_cast<char>(short_value.size()));
-        res.write(short_value.data(), short_value.size());
-    }
-    // just for test
-    res.write(FLAG_OVERLAPPED_ROLLBACK);
-    if (gc_fence)
-    {
-        res.write(GC_FENCE_PREFIX);
-        encodeUInt64(8888, res);
-    }
-    return TiKVValue(res.releaseStr());
-}
+    bool gc_fence = false);
 
 template <bool start>
 inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_key)
