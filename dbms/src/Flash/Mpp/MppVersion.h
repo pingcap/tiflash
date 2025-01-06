@@ -53,6 +53,6 @@ bool ReportStatusToCoordinator(int64_t mpp_version, const std::string & coordina
 bool ReportExecutionSummaryToCoordinator(int64_t mpp_version, bool report_execution_summary);
 bool CheckMppVersion(int64_t mpp_version);
 std::string GenMppVersionErrorMessage(int64_t mpp_version);
-int64_t GetMppVersion();
+MppVersion GetMppVersion();
 
 } // namespace DB

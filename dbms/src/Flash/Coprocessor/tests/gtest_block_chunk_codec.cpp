@@ -86,9 +86,7 @@ void test_enocde_release_data(VecCol && batch_columns, const Block & header, con
     // encode and release columns
     const auto mode = CompressionMethod::LZ4;
 
-    auto codec = CHBlockChunkCodecV1{
-        header,
-    };
+    auto codec = CHBlockChunkCodecV1{header, GetMppVersion()};
     auto str = codec.encode(std::forward<VecCol>(batch_columns), mode);
     ASSERT_FALSE(str.empty());
     ASSERT_EQ(codec.encoded_rows, total_rows);
@@ -131,9 +129,7 @@ try
     {
         {
             // encode nothing if no rows
-            auto codec = CHBlockChunkCodecV1{
-                header,
-            };
+            auto codec = CHBlockChunkCodecV1{header, GetMppVersion()};
             auto str = codec.encode(header, mode);
             ASSERT_TRUE(str.empty());
             ASSERT_EQ(codec.encoded_rows, 0);
@@ -142,9 +138,7 @@ try
         }
         {
             // test encode one block
-            auto codec = CHBlockChunkCodecV1{
-                header,
-            };
+            auto codec = CHBlockChunkCodecV1{header, GetMppVersion()};
             auto str = codec.encode(blocks.front(), mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, blocks.front().rows());
@@ -153,9 +147,7 @@ try
         }
         {
             // test encode blocks
-            auto codec = CHBlockChunkCodecV1{
-                header,
-            };
+            auto codec = CHBlockChunkCodecV1{header, GetMppVersion()};
             auto str = codec.encode(blocks, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, total_rows);
@@ -185,9 +177,7 @@ try
                 }
             }
             // test encode moved blocks
-            auto codec = CHBlockChunkCodecV1{
-                header,
-            };
+            auto codec = CHBlockChunkCodecV1{header, GetMppVersion()};
             auto str = codec.encode(std::move(blocks_to_move), mode);
             for (auto && block : blocks_to_move)
             {
@@ -208,9 +198,7 @@ try
         }
         {
             auto columns = prepareBlock(rows).getColumns();
-            auto codec = CHBlockChunkCodecV1{
-                header,
-            };
+            auto codec = CHBlockChunkCodecV1{header, GetMppVersion()};
             auto str = codec.encode(columns, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, rows);
@@ -219,9 +207,7 @@ try
         }
         {
             auto columns = prepareBlock(rows).mutateColumns();
-            auto codec = CHBlockChunkCodecV1{
-                header,
-            };
+            auto codec = CHBlockChunkCodecV1{header, GetMppVersion()};
             auto str = codec.encode(columns, mode);
             ASSERT_FALSE(str.empty());
             ASSERT_EQ(codec.encoded_rows, rows);
@@ -260,14 +246,14 @@ try
         test_enocde_release_data(std::move(batch_columns), header, total_rows);
     }
     {
-        auto source_str = CHBlockChunkCodecV1{header}.encode(blocks.front(), CompressionMethod::NONE);
+        auto source_str = CHBlockChunkCodecV1{header, GetMppVersion()}.encode(blocks.front(), CompressionMethod::NONE);
         ASSERT_FALSE(source_str.empty());
         ASSERT_EQ(static_cast<CompressionMethodByte>(source_str[0]), CompressionMethodByte::NONE);
 
         for (const auto method : {CompressionMethod::LZ4, CompressionMethod::ZSTD})
         {
             auto compressed_str_a = CHBlockChunkCodecV1::encode({&source_str[1], source_str.size() - 1}, method);
-            auto compressed_str_b = CHBlockChunkCodecV1{header}.encode(blocks.front(), method);
+            auto compressed_str_b = CHBlockChunkCodecV1{header, GetMppVersion()}.encode(blocks.front(), method);
 
             ASSERT_EQ(compressed_str_a, compressed_str_b);
         }
@@ -286,7 +272,7 @@ try
     };
     size_t num_rows = 0;
 
-    CHBlockChunkCodecV1 codec(header);
+    CHBlockChunkCodecV1 codec(header, GetMppVersion());
     CHBlockChunkDecodeAndSquash decoder(header, 13);
     size_t num_rows_decoded = 0;
     Blocks blocks_decoded;
@@ -333,7 +319,7 @@ try
 
     LOG_DEBUG(Logger::get(), "generate blocks, num_blocks={} num_rows={}", num_blocks, num_rows);
 
-    CHBlockChunkCodecV1 codec(header);
+    CHBlockChunkCodecV1 codec(header, GetMppVersion());
     CHBlockChunkDecodeAndSquash decoder(header, 1024);
     size_t num_rows_decoded = 0;
     size_t num_bytes = 0;

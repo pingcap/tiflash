@@ -73,7 +73,7 @@ struct MockExchangeWriter
         method = isLocal(part_id) ? CompressionMethod::NONE : method;
         size_t original_size = 0;
         auto tracked_packet
-            = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, method, original_size);
+            = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, method, original_size, GetMppVersion());
         checker(tracked_packet, part_id);
     }
     void fineGrainedShuffleWrite(
@@ -104,13 +104,14 @@ struct MockExchangeWriter
             num_columns,
             version,
             method,
-            original_size);
+            original_size,
+            GetMppVersion());
         checker(tracked_packet, part_id);
     }
 
     void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
-        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), 0);
+        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMppVersion()), 0);
     }
 
     void broadcastWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
@@ -124,7 +125,7 @@ struct MockExchangeWriter
             return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
-        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size, GetMppVersion());
         if (!packet)
             return;
 
@@ -141,7 +142,7 @@ struct MockExchangeWriter
 
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
-        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), part_id);
+        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMppVersion()), part_id);
     }
     void fineGrainedShuffleWrite(
         const Block & header,
@@ -157,7 +158,8 @@ struct MockExchangeWriter
             bucket_idx,
             fine_grained_shuffle_stream_count,
             num_columns,
-            result_field_types);
+            result_field_types,
+            GetMppVersion());
         checker(tracked_packet, part_id);
     }
 

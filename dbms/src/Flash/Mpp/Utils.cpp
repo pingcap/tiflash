@@ -85,9 +85,9 @@ std::string GenMppVersionErrorMessage(int64_t mpp_version)
 }
 
 // Get latest mpp-version supported by TiFlash
-int64_t GetMppVersion()
+MppVersion GetMppVersion()
 {
-    return (NewestMppVersion);
+    return NewestMppVersion;
 }
 
 } // namespace DB
