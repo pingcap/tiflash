@@ -50,7 +50,7 @@ void trimStackTrace(String & message)
 }
 
 // Latest mpp-version supported by TiFlash
-static constexpr MppVersion NewestMppVersion = MppVersion::MppVersionMAX - 1;
+static constexpr MppVersion NewestMppVersion = static_cast<MppVersion>(MppVersion::MppVersionMAX - 1);
 static constexpr MppVersion MinMppVersion = MppVersion::MppVersionV0;
 
 // Use ReportStatus interface to report status
