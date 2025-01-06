@@ -202,7 +202,7 @@ private:
     void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
     template <bool has_null>
-    void batchSerializeForColumnArrayImpl(
+    void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,

@@ -121,14 +121,14 @@ void ColumnVector<T>::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        batchSerializeForColumnArrayImpl<true>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
     else
-        batchSerializeForColumnArrayImpl<false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
 }
 
 template <typename T>
 template <bool has_null>
-void ColumnVector<T>::batchSerializeForColumnArrayImpl(
+void ColumnVector<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,

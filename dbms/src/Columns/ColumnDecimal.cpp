@@ -222,7 +222,7 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
 
 template <typename T>
 template <bool has_null, bool ensure_unique>
-void ColumnDecimal<T>::batchSerializeForColumnArrayImpl(
+void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -384,7 +384,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
 
 template <typename T>
 template <bool ensure_unique>
-void ColumnDecimal<T>::batchDeserializeForColumnArrayImpl(
+void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArrayImpl(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer [[maybe_unused]])

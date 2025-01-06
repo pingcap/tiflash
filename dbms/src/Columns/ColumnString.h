@@ -123,7 +123,7 @@ private:
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const;
     template <bool has_null, bool has_collator>
-    void batchSerializeForColumnArrayImpl(
+    void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -135,7 +135,7 @@ private:
     void deserializeAndInsertFromPosImpl(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer);
 
     template <bool add_terminating_zero>
-    void batchDeserializeForColumnArrayImpl(
+    void deserializeAndInsertFromPosForColumnArrayImpl(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer);

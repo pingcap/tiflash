@@ -696,7 +696,7 @@ void ColumnString::serializeToPosUniqueForColumnArray(
     if (has_null)
     {
         if likely (collator != nullptr)
-            batchSerializeForColumnArrayImpl</*has_null=*/true, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -704,7 +704,7 @@ void ColumnString::serializeToPosUniqueForColumnArray(
                 collator,
                 sort_key_container);
         else
-            batchSerializeForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
                 pos,
                 start,
                 length,
@@ -715,7 +715,7 @@ void ColumnString::serializeToPosUniqueForColumnArray(
     else
     {
         if likely (collator != nullptr)
-            batchSerializeForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -723,7 +723,7 @@ void ColumnString::serializeToPosUniqueForColumnArray(
                 collator,
                 sort_key_container);
         else
-            batchSerializeForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -741,7 +741,7 @@ void ColumnString::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        batchSerializeForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
+        serializeToPosForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
             pos,
             start,
             length,
@@ -749,7 +749,7 @@ void ColumnString::serializeToPosForColumnArray(
             nullptr,
             nullptr);
     else
-        batchSerializeForColumnArrayImpl</*has_null=*/false, /*has_collator=*/false>(
+        serializeToPosForColumnArrayImpl</*has_null=*/false, /*has_collator=*/false>(
             pos,
             start,
             length,
@@ -759,7 +759,7 @@ void ColumnString::serializeToPosForColumnArray(
 }
 
 template <bool has_null, bool has_collator>
-void ColumnString::batchSerializeForColumnArrayImpl(
+void ColumnString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -976,9 +976,9 @@ void ColumnString::deserializeAndInsertFromPosUniqueForColumnArray(
     const TiDB::TiDBCollatorPtr & collator)
 {
     if likely (collator != nullptr)
-        batchDeserializeForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
+        deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
     else
-        batchDeserializeForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
+        deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
 }
 
 void ColumnString::deserializeAndInsertFromPosForColumnArray(
@@ -986,11 +986,11 @@ void ColumnString::deserializeAndInsertFromPosForColumnArray(
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {
-    batchDeserializeForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
+    deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
 }
 
 template <bool add_terminating_zero>
-void ColumnString::batchDeserializeForColumnArrayImpl(
+void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
     PaddedPODArray<const char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer [[maybe_unused]])

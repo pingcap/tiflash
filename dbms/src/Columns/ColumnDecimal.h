@@ -110,7 +110,7 @@ private:
     template <bool has_null, bool ensure_unique>
     void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
     template <bool has_null, bool ensure_unique>
-    void batchSerializeForColumnArrayImpl(
+    void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -120,7 +120,7 @@ private:
     void deserializeAndInsertFromPosImpl(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer [[maybe_unused]]);
 
     template <bool ensure_unique>
-    void batchDeserializeForColumnArrayImpl(
+    void deserializeAndInsertFromPosForColumnArrayImpl(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer [[maybe_unused]]);
@@ -226,9 +226,17 @@ public:
         String *) const override
     {
         if (has_null)
-            batchSerializeForColumnArrayImpl</*has_null=*/true, /*ensure_unique=*/true>(pos, start, length, array_offsets);
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*ensure_unique=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets);
         else
-            batchSerializeForColumnArrayImpl</*has_null=*/false, /*ensure_unique=*/true>(pos, start, length, array_offsets);
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*ensure_unique=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets);
     }
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
@@ -238,9 +246,17 @@ public:
         const IColumn::Offsets & array_offsets) const override
     {
         if (has_null)
-            batchSerializeForColumnArrayImpl</*has_null=*/true, /*ensure_unique=*/false>(pos, start, length, array_offsets);
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*ensure_unique=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets);
         else
-            batchSerializeForColumnArrayImpl</*has_null=*/false, /*ensure_unique=*/false>(pos, start, length, array_offsets);
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*ensure_unique=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets);
     }
 
     void deserializeAndInsertFromPosUnique(
@@ -261,14 +277,14 @@ public:
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr &) override
     {
-        batchDeserializeForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
+        deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
     }
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override
     {
-        batchDeserializeForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
+        deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
     }
 
     void flushNTAlignBuffer() override;

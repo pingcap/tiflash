@@ -191,13 +191,13 @@ void ColumnFixedString::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        batchSerializeForColumnArrayImpl<true>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
     else
-        batchSerializeForColumnArrayImpl<false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
 }
 
 template <bool has_null>
-void ColumnFixedString::batchSerializeForColumnArrayImpl(
+void ColumnFixedString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
