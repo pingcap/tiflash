@@ -100,26 +100,26 @@ private:
         , scale(src.scale)
     {}
 
-    template <bool is_fast>
+    template <bool ensure_unique>
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
-    template <bool is_fast>
+    template <bool ensure_unique>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const;
 
-    template <bool has_null, bool is_fast>
+    template <bool has_null, bool ensure_unique>
     void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
-    template <bool has_null, bool is_fast>
+    template <bool has_null, bool ensure_unique>
     void batchSerializeForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         const IColumn::Offsets & array_offsets) const;
 
-    template <bool is_fast>
+    template <bool ensure_unique>
     void deserializeAndInsertFromPosImpl(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer [[maybe_unused]]);
 
-    template <bool is_fast>
+    template <bool ensure_unique>
     void batchDeserializeForColumnArrayImpl(
         PaddedPODArray<const char *> & pos,
         const IColumn::Offsets & array_offsets,
@@ -204,16 +204,16 @@ public:
         String *) const override
     {
         if (has_null)
-            serializeToPosImpl</*has_null=*/true, /*is_fast=*/false>(pos, start, length);
+            serializeToPosImpl</*has_null=*/true, /*ensure_unique=*/true>(pos, start, length);
         else
-            serializeToPosImpl</*has_null=*/false, /*is_fast=*/false>(pos, start, length);
+            serializeToPosImpl</*has_null=*/false, /*ensure_unique=*/true>(pos, start, length);
     }
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
     {
         if (has_null)
-            serializeToPosImpl</*has_null=*/true, /*is_fast=*/true>(pos, start, length);
+            serializeToPosImpl</*has_null=*/true, /*ensure_unique=*/false>(pos, start, length);
         else
-            serializeToPosImpl</*has_null=*/false, /*is_fast=*/true>(pos, start, length);
+            serializeToPosImpl</*has_null=*/false, /*ensure_unique=*/false>(pos, start, length);
     }
 
     void serializeToPosUniqueForColumnArray(
@@ -226,9 +226,9 @@ public:
         String *) const override
     {
         if (has_null)
-            batchSerializeForColumnArrayImpl</*has_null=*/true, /*is_fast=*/false>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null=*/true, /*ensure_unique=*/true>(pos, start, length, array_offsets);
         else
-            batchSerializeForColumnArrayImpl</*has_null=*/false, /*is_fast=*/false>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null=*/false, /*ensure_unique=*/true>(pos, start, length, array_offsets);
     }
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
@@ -238,9 +238,9 @@ public:
         const IColumn::Offsets & array_offsets) const override
     {
         if (has_null)
-            batchSerializeForColumnArrayImpl</*has_null=*/true, /*is_fast=*/true>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null=*/true, /*ensure_unique=*/false>(pos, start, length, array_offsets);
         else
-            batchSerializeForColumnArrayImpl</*has_null=*/false, /*is_fast=*/true>(pos, start, length, array_offsets);
+            batchSerializeForColumnArrayImpl</*has_null=*/false, /*ensure_unique=*/false>(pos, start, length, array_offsets);
     }
 
     void deserializeAndInsertFromPosUnique(

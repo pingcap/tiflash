@@ -31,14 +31,14 @@ public:
     static void testCountSerializeByteSize(
         const ColumnPtr & column_ptr,
         const PaddedPODArray<size_t> & result_byte_size,
-        bool is_fast = true,
+        bool ensure_unique = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
         for (size_t i = 0; i < column_ptr->size(); ++i)
             byte_size[i] = i;
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->countSerializeByteSize(byte_size);
         else
             column_ptr->countSerializeByteSizeUnique(byte_size, collator);
@@ -51,7 +51,7 @@ public:
         const ColumnPtr & column_ptr,
         const ColumnPtr & offsets,
         const PaddedPODArray<size_t> & result_byte_size,
-        bool is_fast = true,
+        bool ensure_unique = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr)
     {
         auto column_array = ColumnArray::create(column_ptr->cloneFullColumn(), offsets->cloneFullColumn());
@@ -59,7 +59,7 @@ public:
         byte_size.resize_fill_zero(column_array->size());
         for (size_t i = 0; i < column_array->size(); ++i)
             byte_size[i] = i;
-        if (is_fast)
+        if (!ensure_unique)
             column_array->countSerializeByteSize(byte_size);
         else
             column_array->countSerializeByteSizeUnique(byte_size, collator);
@@ -164,26 +164,26 @@ public:
 
     static void testSerializeAndDeserialize(
         const ColumnPtr & column_ptr,
-        bool is_fast = true,
+        bool ensure_unique = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
         String * sort_key_container = nullptr)
     {
-        doTestSerializeAndDeserialize(column_ptr, false, is_fast, collator, sort_key_container);
-        doTestSerializeAndDeserialize2(column_ptr, false, is_fast, collator, sort_key_container);
-        doTestSerializeAndDeserialize(column_ptr, true, is_fast, collator, sort_key_container);
-        doTestSerializeAndDeserialize2(column_ptr, true, is_fast, collator, sort_key_container);
+        doTestSerializeAndDeserialize(column_ptr, false, ensure_unique, collator, sort_key_container);
+        doTestSerializeAndDeserialize2(column_ptr, false, ensure_unique, collator, sort_key_container);
+        doTestSerializeAndDeserialize(column_ptr, true, ensure_unique, collator, sort_key_container);
+        doTestSerializeAndDeserialize2(column_ptr, true, ensure_unique, collator, sort_key_container);
     }
 
     static void doTestSerializeAndDeserialize(
         const ColumnPtr & column_ptr,
         bool use_nt_align_buffer,
-        bool is_fast = true,
+        bool ensure_unique = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
         String * sort_key_container = nullptr)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->countSerializeByteSize(byte_size);
         else
             column_ptr->countSerializeByteSizeUnique(byte_size, collator);
@@ -201,7 +201,7 @@ public:
         PaddedPODArray<const char *> ori_pos;
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
         else
             column_ptr->serializeToPosUnique(pos, 0, byte_size.size() / 2, false, collator, sort_key_container);
@@ -209,7 +209,7 @@ public:
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        if (is_fast)
+        if (!ensure_unique)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
@@ -225,7 +225,7 @@ public:
         pos.push_back(nullptr);
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
         else
             column_ptr->serializeToPosUnique(
@@ -238,7 +238,7 @@ public:
         pos.resize(pos.size() - 1);
         ori_pos.resize(ori_pos.size() - 1);
 
-        if (is_fast)
+        if (!ensure_unique)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
@@ -253,12 +253,12 @@ public:
         }
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         else
             column_ptr->serializeToPosUnique(pos, 0, byte_size.size(), true, collator, sort_key_container);
 
-        if (is_fast)
+        if (!ensure_unique)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
@@ -279,7 +279,7 @@ public:
     static void doTestSerializeAndDeserialize2(
         const ColumnPtr & column_ptr,
         bool use_nt_align_buffer,
-        bool is_fast = true,
+        bool ensure_unique = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
         String * sort_key_container = nullptr)
     {
@@ -287,7 +287,7 @@ public:
             return;
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->countSerializeByteSize(byte_size);
         else
             column_ptr->countSerializeByteSizeUnique(byte_size, collator);
@@ -306,7 +306,7 @@ public:
         pos.push_back(nullptr);
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true);
         else
             column_ptr->serializeToPosUnique(pos, 0, byte_size.size() / 2, true, collator, sort_key_container);
@@ -316,7 +316,7 @@ public:
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        if (is_fast)
+        if (!ensure_unique)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
@@ -331,7 +331,7 @@ public:
         }
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr
                 ->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
         else
@@ -342,7 +342,7 @@ public:
                 false,
                 collator,
                 sort_key_container);
-        if (is_fast)
+        if (!ensure_unique)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);
@@ -357,12 +357,12 @@ public:
         }
         for (const auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (is_fast)
+        if (!ensure_unique)
             column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         else
             column_ptr->serializeToPosUnique(pos, 0, byte_size.size(), true, collator, sort_key_container);
 
-        if (is_fast)
+        if (!ensure_unique)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeAndInsertFromPosUnique(ori_pos, use_nt_align_buffer, collator);

@@ -44,10 +44,10 @@ private:
 
     ColumnArray(const ColumnArray &) = default;
 
-    template <bool is_fast>
+    template <bool ensure_unique>
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
 
-    template <bool has_null, bool is_fast>
+    template <bool has_null, bool ensure_unique>
     void serializeToPosImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -55,7 +55,7 @@ private:
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const;
 
-    template <bool is_fast>
+    template <bool ensure_unique>
     void deserializeAndInsertFromPosImpl(
         PaddedPODArray<const char *> & pos,
         bool use_nt_align_buffer,
