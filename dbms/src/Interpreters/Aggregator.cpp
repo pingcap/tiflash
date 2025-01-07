@@ -47,6 +47,7 @@ extern const char force_agg_prefetch[];
 } // namespace FailPoints
 
 static constexpr size_t agg_prefetch_step = 16;
+static constexpr size_t agg_mini_batch = 256;
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
 #define AggregationMethodNameTwoLevel(NAME) AggregatedDataVariants::AggregationMethod_##NAME##_two_level
@@ -684,24 +685,19 @@ void NO_INLINE Aggregator::executeImpl(
     // 2. For other group by key(key_int8/16/32/...), it's ok to use row-wise handling even prefetch is enabled.
     if constexpr (Method::State::is_serialized_key)
     {
-        // TODO: batch serialize method for Columns is still under development.
-        // if (!disable_prefetch)
-        //     executeImplSerializedKeyByCol();
-        // else
-        //     executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
-        executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        executeImplMiniBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
     else if constexpr (Method::Data::is_string_hash_map)
     {
         // StringHashMap doesn't support prefetch.
-        executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        executeImplMiniBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
     else
     {
         if (disable_prefetch)
-            executeImplByRow<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+            executeImplMiniBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
         else
-            executeImplByRow<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
+            executeImplMiniBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
     }
 }
 
@@ -797,7 +793,7 @@ ALWAYS_INLINE inline std::pair<typename Method::State::Derived::KeyHolderType, s
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
-ALWAYS_INLINE void Aggregator::executeImplByRow(
+ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
@@ -806,116 +802,19 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     // collect_hit_rate and only_lookup cannot be true at the same time.
     static_assert(!(collect_hit_rate && only_lookup));
 
-    std::vector<std::string> sort_key_containers;
-    sort_key_containers.resize(params.keys_size, "");
-    size_t rows = agg_process_info.end_row - agg_process_info.start_row;
-    fiu_do_on(FailPoints::force_agg_on_partial_block, {
-        if (rows > 0 && agg_process_info.start_row == 0)
-            rows = std::max(rows / 2, 1);
-    });
-
-    std::vector<size_t> hashvals;
-    std::vector<typename Method::State::KeyHolderType> key_holders;
-    // if constexpr (enable_prefetch)
-    // {
-    //     hashvals.resize(agg_prefetch_step);
-    //     key_holders.resize(agg_prefetch_step);
-    //     for (size_t i = 0; i < agg_prefetch_step && i + agg_process_info.start_row < agg_process_info.end_row; ++i)
-    //     {
-    //         auto key_holder = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
-    //             i + agg_process_info.start_row,
-    //             aggregates_pool,
-    //             sort_key_containers);
-    //         const size_t hashval = method.data.hash(keyHolderGetKey(key_holder));
-
-    //         key_holders[i] = std::move(key_holder);
-    //         hashvals[i] = hashval;
-    //     }
-    // }
-
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
-    {
-        /// For all rows.
-        AggregateDataPtr place = aggregates_pool->alloc(0);
-        std::optional<size_t> processed_rows;
-        std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplace_result_holder;
-        const auto end = agg_process_info.start_row + rows;
-
-        if constexpr (enable_prefetch)
-        {
-            hashvals.resize(agg_prefetch_step);
-            key_holders.resize(agg_prefetch_step);
-            for (size_t i = 0; i < agg_prefetch_step && i + agg_process_info.start_row < agg_process_info.end_row; ++i)
-            {
-                auto key_holder = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
-                    i + agg_process_info.start_row,
-                    aggregates_pool,
-                    sort_key_containers);
-                const size_t hashval = method.data.hash(keyHolderGetKey(key_holder));
-
-                key_holders[i] = std::move(key_holder);
-                hashvals[i] = hashval;
-            }
-        }
-
-        for (size_t i = agg_process_info.start_row; i < end; ++i)
-        {
-            if constexpr (enable_prefetch)
-            {
-                auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
-                    (i - agg_process_info.start_row) % agg_prefetch_step,
-                    i + agg_prefetch_step,
-                    end,
-                    method,
-                    state,
-                    aggregates_pool,
-                    sort_key_containers,
-                    hashvals,
-                    key_holders);
-
-                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
-            }
-            else
-            {
-                emplace_result_holder
-                    = emplaceOrFindKey<only_lookup>(method, state, i, *aggregates_pool, sort_key_containers);
-            }
-
-            if likely (emplace_result_holder.has_value())
-            {
-                if constexpr (collect_hit_rate)
-                {
-                    ++agg_process_info.hit_row_cnt;
-                }
-
-                if constexpr (only_lookup)
-                {
-                    if (!emplace_result_holder.value().isFound())
-                        agg_process_info.not_found_rows.push_back(i);
-                }
-                else
-                {
-                    emplace_result_holder.value().setMapped(place);
-                }
-                processed_rows = i;
-            }
-            else
-            {
-                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
-                break;
-            }
-        }
-
-        if likely (processed_rows)
-            agg_process_info.start_row = *processed_rows + 1;
-
-        return;
-    }
+        return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data*/false>(method, state, agg_process_info, aggregates_pool);
 
     /// Optimization for special case when aggregating by 8bit key.
     if constexpr (std::is_same_v<Method, AggregatedDataVariants::AggregationMethod_key8>)
     {
+        size_t rows = agg_process_info.end_row - agg_process_info.start_row;
+        fiu_do_on(FailPoints::force_agg_on_partial_block, {
+            if (rows > 0 && agg_process_info.start_row == 0)
+                rows = std::max(rows / 2, 1);
+        });
+
         for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
              ++inst)
         {
@@ -947,23 +846,42 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
     }
 
     /// Generic case.
-    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+    return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(method, state, agg_process_info, aggregates_pool);
+}
+
+template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
+void Aggregator::handleMiniBatchImpl(
+        Method & method,
+        typename Method::State & state,
+        AggProcessInfo & agg_process_info,
+        Arena * aggregates_pool) const
+{
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(params.keys_size, "");
+    size_t rows = agg_process_info.end_row - agg_process_info.start_row;
+    fiu_do_on(FailPoints::force_agg_on_partial_block, {
+        if (rows > 0 && agg_process_info.start_row == 0)
+            rows = std::max(rows / 2, 1);
+    });
+
     std::optional<size_t> processed_rows;
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplace_result_holder;
 
+    std::unique_ptr<AggregateDataPtr[]> places{};
+    auto * place = reinterpret_cast<AggregateDataPtr>(0x1);
+    if constexpr (compute_agg_data)
+        places = std::unique_ptr<AggregateDataPtr[]>(new AggregateDataPtr[rows]);
+
     size_t i = agg_process_info.start_row;
     const size_t end = agg_process_info.start_row + rows;
-    const size_t mini_batch = 256;
 
-    // std::vector<size_t> hashvals;
-    hashvals.resize(mini_batch);
-    // std::vector<typename Method::State::Derived::KeyHolderType> key_holders;
-    key_holders.resize(mini_batch);
+    std::vector<size_t> hashvals(agg_mini_batch);
+    std::vector<typename Method::State::KeyHolderType> key_holders(agg_mini_batch);
 
     // i is the begin row index of each mini batch.
     while (i < end)
     {
-        size_t batch_size = mini_batch;
+        size_t batch_size = agg_mini_batch;
         if unlikely (i + batch_size > end)
             batch_size = end - i;
 
@@ -971,7 +889,8 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             prepareBatch(i, end, hashvals, key_holders, aggregates_pool, sort_key_containers, method, state);
 
         const auto cur_batch_end = i + batch_size;
-        // j is the row index inside each mini batch.
+        // j is the row index of Column.
+        // k is the index of hashvals/key_holders.
         size_t k = 0;
         for (size_t j = i; j < cur_batch_end; ++j, ++k)
         {
@@ -979,19 +898,6 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             const size_t index_relative_to_start_row = j - agg_process_info.start_row;
             if constexpr (enable_prefetch)
             {
-                // auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
-                //     index_relative_to_start_row % agg_prefetch_step,
-                //     j + agg_prefetch_step,
-                //     end,
-                //     method,
-                //     state,
-                //     aggregates_pool,
-                //     sort_key_containers,
-                //     hashvals,
-                //     key_holders);
-
-                // emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holder), hashval);
-
                 if unlikely (k + agg_prefetch_step < hashvals.size())
                     method.data.prefetch(hashvals[k + agg_prefetch_step]);
 
@@ -1012,39 +918,55 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             auto emplace_result = emplace_result_holder.value();
             if constexpr (only_lookup)
             {
-                if (emplace_result.isFound())
+                if constexpr (compute_agg_data)
                 {
-                    aggregate_data = emplace_result.getMapped();
+                    if (emplace_result.isFound())
+                    {
+                        aggregate_data = emplace_result.getMapped();
+                    }
+                    else
+                    {
+                        agg_process_info.not_found_rows.push_back(j);
+                    }
                 }
                 else
                 {
-                    agg_process_info.not_found_rows.push_back(j);
+                    if (!emplace_result_holder.value().isFound())
+                        agg_process_info.not_found_rows.push_back(i);
                 }
             }
             else
             {
-                if (emplace_result.isInserted())
+                if constexpr (compute_agg_data)
                 {
-                    emplace_result.setMapped(nullptr);
+                    if (emplace_result.isInserted())
+                    {
+                        emplace_result.setMapped(nullptr);
 
-                    aggregate_data
-                        = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                    createAggregateStates(aggregate_data);
+                        aggregate_data
+                            = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                        createAggregateStates(aggregate_data);
 
-                    emplace_result.setMapped(aggregate_data);
+                        emplace_result.setMapped(aggregate_data);
+                    }
+                    else
+                    {
+                        aggregate_data = emplace_result.getMapped();
+
+                        if constexpr (collect_hit_rate)
+                            ++agg_process_info.hit_row_cnt;
+
+                        if constexpr (enable_prefetch)
+                            __builtin_prefetch(aggregate_data);
+                    }
                 }
                 else
                 {
-                    aggregate_data = emplace_result.getMapped();
-
-                    if constexpr (collect_hit_rate)
-                        ++agg_process_info.hit_row_cnt;
-
-                    if constexpr (enable_prefetch)
-                        __builtin_prefetch(aggregate_data);
+                    emplace_result_holder.value().setMapped(place);
                 }
             }
-            places[index_relative_to_start_row] = aggregate_data;
+            if constexpr (compute_agg_data)
+                places[index_relative_to_start_row] = aggregate_data;
             processed_rows = j;
         }
 
@@ -1052,16 +974,19 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             break;
 
         const size_t processed_size = *processed_rows - i + 1;
-        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
-             ++inst)
+        if constexpr (compute_agg_data)
         {
-            inst->batch_that->addBatch(
-                i,
-                processed_size,
-                places.get() + i - agg_process_info.start_row,
-                inst->state_offset,
-                inst->batch_arguments,
-                aggregates_pool);
+            for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+                 ++inst)
+            {
+                inst->batch_that->addBatch(
+                    i,
+                    processed_size,
+                    places.get() + i - agg_process_info.start_row,
+                    inst->state_offset,
+                    inst->batch_arguments,
+                    aggregates_pool);
+            }
         }
 
         if unlikely (processed_size != batch_size)
