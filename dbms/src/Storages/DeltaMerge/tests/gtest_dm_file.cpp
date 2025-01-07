@@ -170,8 +170,9 @@ public:
         ASSERT_EQ(n, s.size());
     }
 
-    static void skipFirstPack(DMFileBlockInputStreamPtr & stream)
+    static void skipFirstPack(SkippableBlockInputStreamPtr & stream_)
     {
+        const auto stream = std::dynamic_pointer_cast<DMFileBlockInputStream>(stream_);
         const auto & pack_stats = stream->reader.dmfile->getPackStats();
         auto [pack_id, pack_count, res, rows] = stream->reader.read_block_infos.front();
         stream->reader.read_block_infos.pop_front();

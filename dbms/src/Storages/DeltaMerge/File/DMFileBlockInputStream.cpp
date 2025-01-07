@@ -36,7 +36,7 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setFromSettings(context.getSettingsRef());
 }
 
-DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
+DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildNoLocalIndex(
     const DMFilePtr & dmfile,
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
@@ -105,7 +105,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0);
 }
 
-DMFileBlockInputStreamPtr createSimpleBlockInputStream(
+SkippableBlockInputStreamPtr createSimpleBlockInputStream(
     const DB::Context & context,
     const DMFilePtr & file,
     ColumnDefines cols)
@@ -131,14 +131,14 @@ DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(c
     return *this;
 }
 
-SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIndex(
+SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     const DMFilePtr & dmfile,
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
     const ScanContextPtr & scan_context)
 {
     auto fallback = [&]() {
-        return build(dmfile, read_columns, rowkey_ranges, scan_context);
+        return buildNoLocalIndex(dmfile, read_columns, rowkey_ranges, scan_context);
     };
 
     if (!ann_query_info)
