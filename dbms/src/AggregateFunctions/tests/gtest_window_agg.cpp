@@ -348,12 +348,14 @@ struct TestCase
         const std::vector<Int64> & input_int_vec_,
         const std::vector<String> & input_string_vec_,
         const String & agg_name_,
-        int scale_)
+        int scale_,
+        bool has_decrease_ = true)
         : type(type_)
         , input_int_vec(input_int_vec_)
         , input_string_vec(input_string_vec_)
         , agg_name(agg_name_)
         , mocker(scale_)
+        , has_decrease(has_decrease_)
     {}
 
     inline void addInMock(Int64 row_idx) noexcept
@@ -392,6 +394,7 @@ struct TestCase
     const std::vector<String> input_string_vec;
     const String agg_name;
     OpMocker mocker;
+    bool has_decrease;
 };
 
 class ExecutorWindowAgg : public DB::tests::AggregationTest
@@ -597,7 +600,8 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     AlignedBuffer agg_state;
     agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
     agg_func->create(agg_state.data());
-    agg_func->prepareWindow(agg_state.data());
+    if (test_case.has_decrease)
+        agg_func->prepareWindow(agg_state.data());
 
     const UInt32 col_row_num = test_case.getRowNum();
 
@@ -632,7 +636,10 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
             if likely (!added_row_idx_queue.empty())
             {
                 // Start to decrease
-                const UInt32 decrease_num = getDecreaseNum(added_row_idx_queue.size() - 1);
+                UInt32 decrease_num = 0;
+                if (test_case.has_decrease)
+                    decrease_num = getDecreaseNum(added_row_idx_queue.size() - 1);
+
                 for (UInt32 k = 0; k < decrease_num; k++)
                 {
                     const UInt32 row_idx = added_row_idx_queue.front();
@@ -741,92 +748,156 @@ CATCH
 TEST_F(ExecutorWindowAgg, Min)
 try
 {
-    TestCase<MinOrMaxMocker<false>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "min_for_window", 0);
-    TestCase<MinOrMaxMocker<false>>
-        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "min_for_window", SCALE);
-    TestCase<MinOrMaxMocker<false>>
-        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "min_for_window", SCALE);
-    TestCase<MinOrMaxMocker<false>>
-        string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "min_for_window", 0);
-    TestCase<MinOrMaxMocker<false>>
-        duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "min_for_window", 0);
+    const std::vector<int> decreases{true, false};
+    for (auto has_decrease : decreases)
+    {
+        TestCase<MinOrMaxMocker<false>>
+            int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "min_for_window", 0, has_decrease);
+        TestCase<MinOrMaxMocker<false>> decimal128_case(
+            ExecutorWindowAgg::type_decimal128,
+            input_decimal_vec,
+            {},
+            "min_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<false>> decimal256_case(
+            ExecutorWindowAgg::type_decimal256,
+            input_decimal_vec,
+            {},
+            "min_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<false>>
+            string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "min_for_window", 0, has_decrease);
+        TestCase<MinOrMaxMocker<false>>
+            duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "min_for_window", 0, has_decrease);
 
-    executeWindowAggTest<MinOrMaxMocker<false>, false>(int_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, false>(decimal128_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, false>(decimal256_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, false>(string_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, false>(duration_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, false>(int_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, false>(decimal128_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, false>(decimal256_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, false>(string_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, false>(duration_case);
 
-    TestCase<MinOrMaxMocker<false>>
-        int_nullable_case(ExecutorWindowAgg::type_nullable_int, input_int_vec, {}, "min_for_window", 0);
-    TestCase<MinOrMaxMocker<false>> decimal128_nullable_case(
-        ExecutorWindowAgg::type_nullable_decimal128,
-        input_decimal_vec,
-        {},
-        "min_for_window",
-        SCALE);
-    TestCase<MinOrMaxMocker<false>> decimal256_nullable_case(
-        ExecutorWindowAgg::type_nullable_decimal256,
-        input_decimal_vec,
-        {},
-        "min_for_window",
-        SCALE);
-    TestCase<MinOrMaxMocker<false>>
-        string_nullable_case(ExecutorWindowAgg::type_nullable_string, {}, input_string_vec, "min_for_window", 0);
-    TestCase<MinOrMaxMocker<false>>
-        duration_nullable_case(ExecutorWindowAgg::type_nullable_duration, input_duration_vec, {}, "min_for_window", 0);
+        TestCase<MinOrMaxMocker<false>> int_nullable_case(
+            ExecutorWindowAgg::type_nullable_int,
+            input_int_vec,
+            {},
+            "min_for_window",
+            0,
+            has_decrease);
+        TestCase<MinOrMaxMocker<false>> decimal128_nullable_case(
+            ExecutorWindowAgg::type_nullable_decimal128,
+            input_decimal_vec,
+            {},
+            "min_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<false>> decimal256_nullable_case(
+            ExecutorWindowAgg::type_nullable_decimal256,
+            input_decimal_vec,
+            {},
+            "min_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<false>> string_nullable_case(
+            ExecutorWindowAgg::type_nullable_string,
+            {},
+            input_string_vec,
+            "min_for_window",
+            0,
+            has_decrease);
+        TestCase<MinOrMaxMocker<false>> duration_nullable_case(
+            ExecutorWindowAgg::type_nullable_duration,
+            input_duration_vec,
+            {},
+            "min_for_window",
+            0,
+            has_decrease);
 
-    executeWindowAggTest<MinOrMaxMocker<false>, true>(int_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, true>(decimal128_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, true>(decimal256_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, true>(string_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<false>, true>(duration_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, true>(int_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, true>(decimal128_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, true>(decimal256_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, true>(string_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<false>, true>(duration_nullable_case);
+    }
 }
 CATCH
 
 TEST_F(ExecutorWindowAgg, Max)
 try
 {
-    TestCase<MinOrMaxMocker<true>> int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "max_for_window", 0);
-    TestCase<MinOrMaxMocker<true>>
-        decimal128_case(ExecutorWindowAgg::type_decimal128, input_decimal_vec, {}, "max_for_window", SCALE);
-    TestCase<MinOrMaxMocker<true>>
-        decimal256_case(ExecutorWindowAgg::type_decimal256, input_decimal_vec, {}, "max_for_window", SCALE);
-    TestCase<MinOrMaxMocker<true>>
-        string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "max_for_window", 0);
-    TestCase<MinOrMaxMocker<true>>
-        duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "max_for_window", 0);
+    const std::vector<int> decreases{true, false};
+    for (auto has_decrease : decreases)
+    {
+        TestCase<MinOrMaxMocker<true>>
+            int_case(ExecutorWindowAgg::type_int, input_int_vec, {}, "max_for_window", 0, has_decrease);
+        TestCase<MinOrMaxMocker<true>> decimal128_case(
+            ExecutorWindowAgg::type_decimal128,
+            input_decimal_vec,
+            {},
+            "max_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<true>> decimal256_case(
+            ExecutorWindowAgg::type_decimal256,
+            input_decimal_vec,
+            {},
+            "max_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<true>>
+            string_case(ExecutorWindowAgg::type_string, {}, input_string_vec, "max_for_window", 0, has_decrease);
+        TestCase<MinOrMaxMocker<true>>
+            duration_case(ExecutorWindowAgg::type_duration, input_duration_vec, {}, "max_for_window", 0, has_decrease);
 
-    executeWindowAggTest<MinOrMaxMocker<true>, false>(int_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, false>(decimal128_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, false>(decimal256_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, false>(string_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, false>(duration_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, false>(int_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, false>(decimal128_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, false>(decimal256_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, false>(string_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, false>(duration_case);
 
-    TestCase<MinOrMaxMocker<true>>
-        int_nullable_case(ExecutorWindowAgg::type_nullable_int, input_int_vec, {}, "max_for_window", 0);
-    TestCase<MinOrMaxMocker<true>> decimal128_nullable_case(
-        ExecutorWindowAgg::type_nullable_decimal128,
-        input_decimal_vec,
-        {},
-        "max_for_window",
-        SCALE);
-    TestCase<MinOrMaxMocker<true>> decimal256_nullable_case(
-        ExecutorWindowAgg::type_nullable_decimal256,
-        input_decimal_vec,
-        {},
-        "max_for_window",
-        SCALE);
-    TestCase<MinOrMaxMocker<true>>
-        string_nullable_case(ExecutorWindowAgg::type_nullable_string, {}, input_string_vec, "max_for_window", 0);
-    TestCase<MinOrMaxMocker<true>>
-        duration_nullable_case(ExecutorWindowAgg::type_nullable_duration, input_duration_vec, {}, "max_for_window", 0);
+        TestCase<MinOrMaxMocker<true>> int_nullable_case(
+            ExecutorWindowAgg::type_nullable_int,
+            input_int_vec,
+            {},
+            "max_for_window",
+            0,
+            has_decrease);
+        TestCase<MinOrMaxMocker<true>> decimal128_nullable_case(
+            ExecutorWindowAgg::type_nullable_decimal128,
+            input_decimal_vec,
+            {},
+            "max_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<true>> decimal256_nullable_case(
+            ExecutorWindowAgg::type_nullable_decimal256,
+            input_decimal_vec,
+            {},
+            "max_for_window",
+            SCALE,
+            has_decrease);
+        TestCase<MinOrMaxMocker<true>> string_nullable_case(
+            ExecutorWindowAgg::type_nullable_string,
+            {},
+            input_string_vec,
+            "max_for_window",
+            0,
+            has_decrease);
+        TestCase<MinOrMaxMocker<true>> duration_nullable_case(
+            ExecutorWindowAgg::type_nullable_duration,
+            input_duration_vec,
+            {},
+            "max_for_window",
+            0,
+            has_decrease);
 
-    executeWindowAggTest<MinOrMaxMocker<true>, true>(int_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, true>(decimal128_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, true>(decimal256_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, true>(string_nullable_case);
-    executeWindowAggTest<MinOrMaxMocker<true>, true>(duration_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, true>(int_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, true>(decimal128_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, true>(decimal256_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, true>(string_nullable_case);
+        executeWindowAggTest<MinOrMaxMocker<true>, true>(duration_nullable_case);
+    }
 }
 CATCH
 

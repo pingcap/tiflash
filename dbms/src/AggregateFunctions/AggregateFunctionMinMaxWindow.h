@@ -25,6 +25,8 @@
 #include <IO/WriteHelpers.h>
 #include <common/StringRef.h>
 
+#include <cassert>
+
 namespace DB
 {
 template <typename T>
@@ -50,28 +52,35 @@ public:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
-        if (this->has())
+        if (saved_values != nullptr)
         {
-            auto size = saved_values->size();
-            T tmp = (*saved_values)[0];
-            for (size_t i = 1; i < size; i++)
+            if (!saved_values->empty())
             {
-                if constexpr (is_min)
+                auto size = saved_values->size();
+                T tmp = (*saved_values)[0];
+                for (size_t i = 1; i < size; i++)
                 {
-                    if ((*saved_values)[i] < tmp)
-                        tmp = (*saved_values)[i];
+                    if constexpr (is_min)
+                    {
+                        if ((*saved_values)[i] < tmp)
+                            tmp = (*saved_values)[i];
+                    }
+                    else
+                    {
+                        if (tmp < (*saved_values)[i])
+                            tmp = (*saved_values)[i];
+                    }
                 }
-                else
-                {
-                    if (tmp < (*saved_values)[i])
-                        tmp = (*saved_values)[i];
-                }
+                static_cast<ColumnType &>(to).getData().push_back(tmp);
             }
-            static_cast<ColumnType &>(to).getData().push_back(tmp);
+            else
+            {
+                static_cast<ColumnType &>(to).insertDefault();
+            }
         }
         else
         {
-            static_cast<ColumnType &>(to).insertDefault();
+            SingleValueDataFixed<T>::insertResultInto(to);
         }
     }
 
@@ -80,48 +89,48 @@ public:
     void reset()
     {
         this->has_value = false;
-        saved_values->clear();
+        if (saved_values != nullptr)
+            saved_values->clear();
     }
 
     void decrease()
     {
+        assert(saved_values != nullptr);
         saved_values->pop_front();
-        if unlikely (saved_values->empty())
-            this->has_value = false;
     }
 
-    bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
         auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
         if (saved_values != nullptr)
             saved_values->push_back(to_value);
-
-        return SingleValueDataFixed<T>::changeIfLess(column, row_num, arena);
+        else
+            SingleValueDataFixed<T>::changeIfLess(column, row_num, arena);
     }
 
-    bool changeIfLess(const Self & to, Arena * arena)
+    void changeIfLess(const Self & to, Arena * arena)
     {
         if (saved_values != nullptr)
             saved_values->push_back(to.value);
-
-        return SingleValueDataFixed<T>::changeIfLess(to, arena);
+        else
+            SingleValueDataFixed<T>::changeIfLess(to, arena);
     }
 
-    bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
     {
         auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
         if (saved_values != nullptr)
             saved_values->push_back(to_value);
-
-        return SingleValueDataFixed<T>::changeIfGreater(column, row_num, arena);
+        else
+            SingleValueDataFixed<T>::changeIfGreater(column, row_num, arena);
     }
 
-    bool changeIfGreater(const Self & to, Arena * arena)
+    void changeIfGreater(const Self & to, Arena * arena)
     {
         if (saved_values != nullptr)
             saved_values->push_back(to.value);
-
-        return SingleValueDataFixed<T>::changeIfGreater(to, arena);
+        else
+            SingleValueDataFixed<T>::changeIfGreater(to, arena);
     }
 };
 
@@ -146,30 +155,37 @@ public:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
-        if (has())
+        if (saved_values != nullptr)
         {
-            auto elem_num = saved_values->size();
-            StringRef value((*saved_values)[0].c_str(), (*saved_values)[0].size());
-            for (size_t i = 1; i < elem_num; i++)
+            if (!saved_values->empty())
             {
-                String cmp_value((*saved_values)[i].c_str(), (*saved_values)[i].size());
-                if constexpr (is_min)
+                auto elem_num = saved_values->size();
+                StringRef value((*saved_values)[0].c_str(), (*saved_values)[0].size());
+                for (size_t i = 1; i < elem_num; i++)
                 {
-                    if (less(cmp_value, value))
-                        value = (*saved_values)[i];
+                    String cmp_value((*saved_values)[i].c_str(), (*saved_values)[i].size());
+                    if constexpr (is_min)
+                    {
+                        if (less(cmp_value, value))
+                            value = (*saved_values)[i];
+                    }
+                    else
+                    {
+                        if (less(value, cmp_value))
+                            value = (*saved_values)[i];
+                    }
                 }
-                else
-                {
-                    if (less(value, cmp_value))
-                        value = (*saved_values)[i];
-                }
-            }
 
-            static_cast<ColumnString &>(to).insertDataWithTerminatingZero(value.data, value.size);
+                static_cast<ColumnString &>(to).insertDataWithTerminatingZero(value.data, value.size);
+            }
+            else
+            {
+                static_cast<ColumnString &>(to).insertDefault();
+            }
         }
         else
         {
-            static_cast<ColumnString &>(to).insertDefault();
+            SingleValueDataString::insertResultInto(to);
         }
     }
 
@@ -178,49 +194,48 @@ public:
     void reset()
     {
         size = -1;
-        saved_values->clear();
+        if (saved_values != nullptr)
+            saved_values->clear();
     }
 
     void decrease()
     {
+        assert(saved_values != nullptr);
         saved_values->pop_front();
-        if unlikely (saved_values->empty())
-            size = -1;
     }
 
     void saveValue(StringRef value) { saved_values->push_back(value.toString()); }
 
-    bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
         if (saved_values != nullptr)
             saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
-
-        return SingleValueDataString::changeIfLess(column, row_num, arena);
+        else
+            SingleValueDataString::changeIfLess(column, row_num, arena);
     }
 
-    bool changeIfLess(const Self & to, Arena * arena)
+    void changeIfLess(const Self & to, Arena * arena)
     {
         if (saved_values != nullptr)
             saveValue(to.getStringRef());
-
-        return SingleValueDataString::changeIfLess(to, arena);
+        else
+            SingleValueDataString::changeIfLess(to, arena);
     }
 
-    bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
     {
         if (saved_values != nullptr)
             saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
-
-
-        return SingleValueDataString::changeIfGreater(column, row_num, arena);
+        else
+            SingleValueDataString::changeIfGreater(column, row_num, arena);
     }
 
-    bool changeIfGreater(const Self & to, Arena * arena)
+    void changeIfGreater(const Self & to, Arena * arena)
     {
         if (saved_values != nullptr)
             saveValue(to.getStringRef());
-
-        return SingleValueDataString::changeIfGreater(to, arena);
+        else
+            SingleValueDataString::changeIfGreater(to, arena);
     }
 
     static bool allocatesMemoryInArena() { return true; }
@@ -245,28 +260,35 @@ public:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
-        if (has())
+        if (saved_values != nullptr)
         {
-            auto size = saved_values->size();
-            Field tmp = (*saved_values)[0];
-            for (size_t i = 1; i < size; i++)
+            if (!saved_values->empty())
             {
-                if constexpr (is_min)
+                auto size = saved_values->size();
+                Field tmp = (*saved_values)[0];
+                for (size_t i = 1; i < size; i++)
                 {
-                    if ((*saved_values)[i] < tmp)
-                        tmp = (*saved_values)[i];
+                    if constexpr (is_min)
+                    {
+                        if ((*saved_values)[i] < tmp)
+                            tmp = (*saved_values)[i];
+                    }
+                    else
+                    {
+                        if (tmp < (*saved_values)[i])
+                            tmp = (*saved_values)[i];
+                    }
                 }
-                else
-                {
-                    if (tmp < (*saved_values)[i])
-                        tmp = (*saved_values)[i];
-                }
+                to.insert(tmp);
             }
-            to.insert(tmp);
+            else
+            {
+                to.insertDefault();
+            }
         }
         else
         {
-            to.insertDefault();
+            SingleValueDataGeneric::insertResultInto(to);
         }
     }
 
@@ -275,87 +297,58 @@ public:
     void reset()
     {
         value = Field();
-        saved_values->clear();
+        if (saved_values != nullptr)
+            saved_values->clear();
     }
 
-    // Only used for window aggregation
     void decrease()
     {
+        assert(saved_values != nullptr);
         saved_values->pop_front();
-        if unlikely (saved_values->empty())
-            value = Field();
     }
 
-    bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has())
-        {
-            change(column, row_num, arena);
-
-            if (saved_values != nullptr)
-                saved_values->push_back(value);
-            return true;
-        }
-        else
+        if (saved_values != nullptr)
         {
             Field new_value;
             column.get(row_num, new_value);
-
-            if (saved_values != nullptr)
-                saved_values->push_back(new_value);
-
-            if (new_value < value)
-            {
-                value = new_value;
-                return true;
-            }
-            else
-                return false;
-        }
-    }
-
-    bool changeIfLess(const Self & to, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saved_values->push_back(to.value);
-
-        return SingleValueDataGeneric::changeIfLess(to, arena);
-    }
-
-    bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
-    {
-        if (!has())
-        {
-            change(column, row_num, arena);
-
-            if (saved_values != nullptr)
-                saved_values->push_back(value);
-            return true;
+            saved_values->push_back(new_value);
         }
         else
         {
-            Field new_value;
-            column.get(row_num, new_value);
-
-            if (saved_values != nullptr)
-                saved_values->push_back(new_value);
-
-            if (new_value > value)
-            {
-                value = new_value;
-                return true;
-            }
-            else
-                return false;
+            SingleValueDataGeneric::changeIfLess(column, row_num, arena);
         }
     }
 
-    bool changeIfGreater(const Self & to, Arena * arena)
+    void changeIfLess(const Self & to, Arena * arena)
     {
         if (saved_values != nullptr)
             saved_values->push_back(to.value);
+        else
+            SingleValueDataGeneric::changeIfLess(to, arena);
+    }
 
-        return SingleValueDataGeneric::changeIfGreater(to, arena);
+    void changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
+    {
+        if (saved_values != nullptr)
+        {
+            Field new_value;
+            column.get(row_num, new_value);
+            saved_values->push_back(new_value);
+        }
+        else
+        {
+            SingleValueDataGeneric::changeIfGreater(column, row_num, arena);
+        }
+    }
+
+    void changeIfGreater(const Self & to, Arena * arena)
+    {
+        if (saved_values != nullptr)
+            saved_values->push_back(to.value);
+        else
+            SingleValueDataGeneric::changeIfGreater(to, arena);
     }
 };
 
@@ -364,11 +357,11 @@ struct AggregateFunctionMinDataForWindow : Data
 {
     using Self = AggregateFunctionMinDataForWindow<Data>;
 
-    bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
     {
         return this->changeIfLess(column, row_num, arena);
     }
-    bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfLess(to, arena); }
+    void changeIfBetter(const Self & to, Arena * arena) { return this->changeIfLess(to, arena); }
 
     void insertResultInto(IColumn & to) const { Data::insertMinResultInto(to); }
 
@@ -382,12 +375,12 @@ struct AggregateFunctionMaxDataForWindow : Data
 
     void insertResultInto(IColumn & to) const { Data::insertMaxResultInto(to); }
 
-    bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
     {
         return this->changeIfGreater(column, row_num, arena);
     }
 
-    bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfGreater(to, arena); }
+    void changeIfBetter(const Self & to, Arena * arena) { return this->changeIfGreater(to, arena); }
 
     static const char * name() { return "max_for_window"; }
 };
