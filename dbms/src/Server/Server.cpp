@@ -570,14 +570,12 @@ void loadBlockList(
     Context & global_context,
     [[maybe_unused]] const LoggerPtr & log)
 {
-#if SERVERLESS_PROXY == 1
-    global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
-#else
+#if SERVERLESS_PROXY != 1
     // We do not support blocking store by id in OP mode currently.
     global_context.initializeStoreIdBlockList("");
-#endif
+#else
+    global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
 
-#if SERVERLESS_PROXY == 1
     /// Load keyspace blacklist json file
     LOG_INFO(log, "Loading blacklist file.");
     auto blacklist_file_path = config.getString("blacklist_file", "");

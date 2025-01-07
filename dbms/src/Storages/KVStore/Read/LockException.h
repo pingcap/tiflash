@@ -34,7 +34,13 @@ public:
         : Exception("Key is locked", ErrorCodes::REGION_LOCKED)
         , locks(std::move(locks_))
     {
-#if SERVERLESS_PROXY != 0
+        std::set<RegionID> locked_regions;
+#if SERVERLESS_PROXY == 0
+        for (const auto & lock : locks)
+            locked_regions.insert(lock.first);
+
+        this->message(fmt::format("Key is locked ({} locks in regions {})", locks.size(), locked_regions));
+#else
         std::set<std::string> keys;
         std::set<std::string> primary_keys;
         for (const auto & lock : locks)
@@ -51,12 +57,6 @@ public:
             locked_regions,
             keys,
             primary_keys));
-#else
-        std::set<RegionID> locked_regions;
-        for (const auto & lock : locks)
-            locked_regions.insert(lock.first);
-
-        this->message(fmt::format("Key is locked ({} locks in regions {})", locks.size(), locked_regions));
 #endif
     }
 

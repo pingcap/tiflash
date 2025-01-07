@@ -309,7 +309,7 @@ size_t KVStore::getMaxParallelPrehandleSize() const
     auto max_subtask_size = getMaxPrehandleSubtaskSize();
     // In serverless mode, IO takes more part in decoding stage, so we can increase parallel limit.
     // In real test, the prehandling speed decreases if we use higher concurrency.
-    return std::min(4, total_concurrency);
+    return std::min(4, max_subtask_size);
 #endif
 }
 
