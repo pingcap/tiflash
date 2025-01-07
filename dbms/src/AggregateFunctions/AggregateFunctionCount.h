@@ -261,6 +261,7 @@ public:
                 return;
 
         --data(place).count;
+        assert(data(place).count >= 0);
     }
 
     void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
