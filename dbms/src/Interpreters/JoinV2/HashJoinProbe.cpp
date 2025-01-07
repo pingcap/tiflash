@@ -100,6 +100,9 @@ void JoinProbeContext::prepareForHashProbe(
 
 #define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
 
+/// The implemtation of prefetch in join probe process is inspired by a paper named
+/// `Asynchronous Memory Access Chaining` in vldb-15.
+/// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
 enum class ProbePrefetchStage : UInt8
 {
     None,

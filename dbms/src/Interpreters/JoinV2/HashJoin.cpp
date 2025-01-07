@@ -663,7 +663,7 @@ void HashJoin::finalize(const Names & parent_require)
         updated_require.push_back(non_equal_conditions.other_eq_cond_from_in_name);
     if (!non_equal_conditions.other_cond_name.empty())
         updated_require.push_back(non_equal_conditions.other_cond_name);
-    /// nullaware/semi join will reuse the input columns so need to let finalize keep the input columns
+    /// join will reuse the input columns so need to let finalize keep the input columns
     if (non_equal_conditions.null_aware_eq_cond_expr != nullptr)
     {
         non_equal_conditions.null_aware_eq_cond_expr->finalize(updated_require, true);

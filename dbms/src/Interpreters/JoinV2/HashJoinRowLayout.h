@@ -76,7 +76,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) MultipleRowContainer
 ///    <Next Pointer> <Hash Value> <Other Join Keys> <Raw Required Join Keys> <Other Required Columns>
 /// 2. Not-null join key row if not required hash value comparison:
 ///    <Next Pointer> <Other Join Keys> <Raw Required Join Keys> <Other Required Columns>
-/// 2. Null join key row(For right anti/outer join): <All Required Columns>
+/// 3. Null join key row(For right anti/outer join): <All Required Columns>
 struct HashJoinRowLayout
 {
     /// The raw join key are the same as the original data.

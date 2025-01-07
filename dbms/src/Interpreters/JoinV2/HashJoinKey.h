@@ -66,7 +66,7 @@ public:
 
     void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
-        RUNTIME_ASSERT(key_columns.size() == 1);
+        RUNTIME_CHECK(key_columns.size() == 1);
         vec = reinterpret_cast<const T *>(key_columns[0]->getRawData().data);
         if (raw_required_key_size == 0)
             required_key_offset = sizeof(T);
@@ -99,7 +99,7 @@ public:
 
 private:
     const T * vec = nullptr;
-    size_t required_key_offset;
+    size_t required_key_offset = 0;
 };
 
 template <typename T>
@@ -111,6 +111,7 @@ public:
 
     void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
+        RUNTIME_CHECK(!key_columns.empty());
         size_t sz = key_columns.size();
         vec.resize(sz);
         fixed_size.resize(sz);
@@ -122,7 +123,7 @@ public:
             fixed_size_sum += fixed_size[i];
         }
 
-        RUNTIME_ASSERT(fixed_size_sum <= sizeof(T));
+        RUNTIME_CHECK(fixed_size_sum <= sizeof(T));
 
         RUNTIME_CHECK(raw_required_key_size <= sz);
         required_key_offset = sizeof(T);
@@ -194,8 +195,8 @@ public:
 private:
     std::vector<const char *> vec;
     std::vector<size_t> fixed_size;
-    size_t fixed_size_sum;
-    size_t required_key_offset;
+    size_t fixed_size_sum = 0;
+    size_t required_key_offset = 0;
 };
 
 class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeysFixedOther
@@ -206,6 +207,7 @@ public:
 
     void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
+        RUNTIME_CHECK(!key_columns.empty());
         rows = key_columns[0]->size();
         size_t sz = key_columns.size();
         vec.resize(sz);
@@ -297,7 +299,7 @@ public:
     ALWAYS_INLINE size_t getRequiredKeyOffset(const KeyType &) { return required_key_offset; }
 
 private:
-    size_t rows;
+    size_t rows = 0;
     std::vector<const char *> vec;
     std::vector<size_t> fixed_size;
     size_t fixed_size_sum = 0;
@@ -305,7 +307,7 @@ private:
     String key_buffer;
     std::vector<char> keys_buffer;
 
-    size_t required_key_offset;
+    size_t required_key_offset = 0;
 
     bool buffer_initialized = false;
 };
@@ -319,13 +321,30 @@ public:
 
     void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
+        RUNTIME_CHECK(key_columns.size() == 1);
         column_string = assert_cast<const ColumnString *>(key_columns[0]);
-        required_key_size = raw_required_key_size;
+        required_key_size = raw_required_key_size > 0 ? 1 : 0;
+        if constexpr (padding)
+        {
+            RUNTIME_CHECK(required_key_size == 0);
+        }
     }
 
     ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
-        StringRef key = column_string->getDataAt(row);
+        StringRef key;
+        if (!padding && required_key_size)
+        {
+            /// If `required_key_size == 1`, the serialized data will be used in `ColumnString::deserializeAndInsertFromPos`,
+            /// which does not add a terminating zero (`\0`) at the end of the string. This behavior aligns with the
+            /// implementation of `ColumnString::serializeToPos`, where the serialized data is produced without removing
+            /// the terminating zero.
+            key = column_string->getDataAtWithTerminatingZero(row);
+        }
+        else
+        {
+            key = column_string->getDataAt(row);
+        }
         key = BinCollatorSortKey<padding>(key.data, key.size);
         return key;
     }
@@ -359,7 +378,7 @@ public:
 
 private:
     const ColumnString * column_string = nullptr;
-    size_t required_key_size;
+    size_t required_key_size = 0;
 };
 
 class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeyString
@@ -368,12 +387,13 @@ public:
     using KeyType = StringRef;
     explicit HashJoinKeyString(const TiDB::TiDBCollators & collators)
     {
-        RUNTIME_ASSERT(!collators.empty());
+        RUNTIME_CHECK(!collators.empty());
         collator = collators[0];
     }
 
     void reset(const ColumnRawPtrs & key_columns, size_t raw_required_key_size)
     {
+        RUNTIME_CHECK(key_columns.size() == 1);
         column_string = assert_cast<const ColumnString *>(key_columns[0]);
         buffer_initialized = false;
         RUNTIME_CHECK(raw_required_key_size == 0);
@@ -448,8 +468,8 @@ public:
     {
         key_columns = key_columns_;
         keys_size = key_columns.size();
-        RUNTIME_ASSERT(keys_size > 0);
-        RUNTIME_ASSERT(keys_size <= collators.size());
+        RUNTIME_CHECK(keys_size > 0);
+        RUNTIME_CHECK(keys_size <= collators.size());
         sort_key_containers.resize(keys_size);
 
         buffer_initialized = false;
