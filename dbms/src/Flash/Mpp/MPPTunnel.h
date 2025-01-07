@@ -474,6 +474,7 @@ public:
         const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
+        bool same_zone,
         const String & req_id);
 
     // For gtest usage
@@ -483,6 +484,7 @@ public:
         const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
+        bool same_zone,
         const String & req_id);
 
     ~MPPTunnel();
