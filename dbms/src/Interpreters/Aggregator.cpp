@@ -895,7 +895,7 @@ void Aggregator::handleMiniBatchImpl(
                 break;
             }
 
-            auto emplace_result = emplace_result_holder.value();
+            auto & emplace_result = emplace_result_holder.value();
             if constexpr (only_lookup)
             {
                 if constexpr (compute_agg_data)
@@ -911,7 +911,7 @@ void Aggregator::handleMiniBatchImpl(
                 }
                 else
                 {
-                    if (!emplace_result_holder.value().isFound())
+                    if (!emplace_result.isFound())
                         agg_process_info.not_found_rows.push_back(i);
                 }
             }
@@ -942,7 +942,7 @@ void Aggregator::handleMiniBatchImpl(
                 }
                 else
                 {
-                    emplace_result_holder.value().setMapped(place);
+                    emplace_result.setMapped(place);
                 }
             }
             if constexpr (compute_agg_data)
