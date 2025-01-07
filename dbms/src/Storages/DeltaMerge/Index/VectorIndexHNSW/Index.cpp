@@ -55,8 +55,8 @@ unum::usearch::metric_kind_t getUSearchMetricKind(tipb::VectorDistanceMetric d)
     }
 }
 
-VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(IndexID index_id_, const TiDB::VectorIndexDefinitionPtr & definition_)
-    : VectorIndexBuilder(index_id_, definition_)
+VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
+    : VectorIndexBuilder(definition_)
     , index(USearchImplType::make(unum::usearch::metric_punned_t( //
           definition_->dimension,
           getUSearchMetricKind(definition->distance_metric))))
@@ -165,10 +165,8 @@ tipb::VectorIndexKind VectorIndexHNSWBuilder::kind()
     return tipb::VectorIndexKind::HNSW;
 }
 
-VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProps & file_props, std::string_view path)
+VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::IndexFilePropsV2Vector & file_props, std::string_view path)
 {
-    RUNTIME_CHECK(file_props.index_kind() == tipb::VectorIndexKind_Name(kind()));
-
     tipb::VectorDistanceMetric metric;
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
     RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
@@ -206,10 +204,8 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProp
     return vi;
 }
 
-VectorIndexViewerPtr VectorIndexHNSWViewer::load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf)
+VectorIndexViewerPtr VectorIndexHNSWViewer::load(const dtpb::IndexFilePropsV2Vector & file_props, ReadBuffer & buf)
 {
-    RUNTIME_CHECK(file_props.index_kind() == tipb::VectorIndexKind_Name(kind()));
-
     tipb::VectorDistanceMetric metric;
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
     RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
@@ -339,7 +335,7 @@ void VectorIndexHNSWViewer::get(Key key, std::vector<Float32> & out) const
     index.get(key, out.data());
 }
 
-VectorIndexHNSWViewer::VectorIndexHNSWViewer(const dtpb::VectorIndexFileProps & props)
+VectorIndexHNSWViewer::VectorIndexHNSWViewer(const dtpb::IndexFilePropsV2Vector & props)
     : VectorIndexViewer(props)
 {
     GET_METRIC(tiflash_vector_index_active_instances, type_view).Increment();

@@ -28,6 +28,45 @@
 namespace DB::DM
 {
 
+namespace details
+{
+
+inline dtpb::ColumnFileIndexInfo migrateFromIndexInfoV1(const dtpb::ColumnFileIndexInfo & index_pb)
+{
+    RUNTIME_CHECK(index_pb.has_deprecated_vector_index());
+
+    auto idx_info = dtpb::ColumnFileIndexInfo{};
+    idx_info.set_index_page_id(index_pb.index_page_id());
+    auto * idx_props = idx_info.mutable_index_props();
+    idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
+    idx_props->set_index_id(index_pb.deprecated_vector_index().index_id());
+    idx_props->set_file_size(index_pb.deprecated_vector_index().index_bytes());
+    auto * vec_idx = idx_props->mutable_vector_index();
+    vec_idx->set_format_version(0);
+    vec_idx->set_dimensions(index_pb.deprecated_vector_index().dimensions());
+    vec_idx->set_distance_metric(index_pb.deprecated_vector_index().distance_metric());
+    return idx_info;
+}
+
+inline void integrityCheckIndexInfoV2(const dtpb::ColumnFileIndexInfo & index_info)
+{
+    RUNTIME_CHECK(index_info.has_index_page_id());
+    RUNTIME_CHECK(index_info.index_props().has_file_size());
+    RUNTIME_CHECK(index_info.index_props().has_index_id());
+    RUNTIME_CHECK(index_info.index_props().has_kind());
+    switch (index_info.index_props().kind())
+    {
+    case dtpb::IndexFileKind::VECTOR_INDEX:
+        RUNTIME_CHECK(index_info.index_props().has_vector_index());
+        break;
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.index_props().kind()));
+    }
+}
+
+} // namespace details
+
+
 ColumnFileReaderPtr ColumnFileTiny::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr & data_provider,
@@ -61,10 +100,12 @@ void ColumnFileTiny::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool s
 
     for (const auto & index_info : *index_infos)
     {
+        // Just some integrity checks to ensure we are writing correct data.
+        // These data may come from deserialization, or generated in runtime.
+        details::integrityCheckIndexInfoV2(index_info);
+
         auto * index_pb = tiny_pb->add_indexes();
-        index_pb->set_index_page_id(index_info.index_page_id);
-        if (index_info.vector_index.has_value())
-            index_pb->mutable_vector_index()->CopyFrom(*index_info.vector_index);
+        index_pb->CopyFrom(index_info);
     }
 }
 
@@ -121,10 +162,16 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
     index_infos->reserve(cf_pb.indexes().size());
     for (const auto & index_pb : cf_pb.indexes())
     {
-        if (index_pb.has_vector_index())
-            index_infos->emplace_back(index_pb.index_page_id(), index_pb.vector_index());
-        else
-            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+        // Old format compatibility
+        if unlikely (index_pb.has_deprecated_vector_index())
+        {
+            auto idx_info = details::migrateFromIndexInfoV1(index_pb);
+            index_infos->emplace_back(std::move(idx_info));
+            continue;
+        }
+
+        details::integrityCheckIndexInfoV2(index_pb);
+        index_infos->emplace_back(index_pb);
     }
 
     return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context, index_infos);
@@ -178,13 +225,13 @@ ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
 
     // Write index data page to local ps
     auto new_index_infos = std::make_shared<IndexInfos>();
-    for (const auto & index : *index_infos)
+    for (const auto & index_pb : *index_infos)
     {
-        auto new_index_page_id = put_remote_page(index.index_page_id);
-        if (index.vector_index)
-            new_index_infos->emplace_back(new_index_page_id, index.vector_index);
-        else
-            new_index_infos->emplace_back(new_index_page_id, std::nullopt);
+        details::integrityCheckIndexInfoV2(index_pb);
+        auto new_index_page_id = put_remote_page(index_pb.index_page_id());
+        auto new_index_pb = index_pb;
+        new_index_pb.set_index_page_id(new_index_page_id);
+        new_index_infos->emplace_back(std::move(index_pb));
     }
     return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context, new_index_infos);
 }
@@ -235,10 +282,15 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     index_infos->reserve(cf_pb.indexes().size());
     for (const auto & index_pb : cf_pb.indexes())
     {
-        if (index_pb.has_vector_index())
-            index_infos->emplace_back(index_pb.index_page_id(), index_pb.vector_index());
-        else
-            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+        // Old format compatibility
+        if unlikely (index_pb.has_deprecated_vector_index())
+        {
+            auto idx_info = details::migrateFromIndexInfoV1(index_pb);
+            index_infos->emplace_back(std::move(idx_info));
+            continue;
+        }
+
+        index_infos->emplace_back(index_pb);
     }
 
     return {
@@ -343,7 +395,7 @@ void ColumnFileTiny::removeData(WriteBatches & wbs) const
     if (index_infos)
     {
         for (const auto & index_info : *index_infos)
-            wbs.removed_log.delPage(index_info.index_page_id);
+            wbs.removed_log.delPage(index_info.index_page_id());
     }
 }
 

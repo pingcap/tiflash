@@ -25,6 +25,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 namespace DTTool::Migrate
@@ -165,7 +166,7 @@ public:
     // Return std::nullopt if
     // - the col_id is not exist in the dmfile
     // - the index has not been built
-    std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId col_id, IndexID index_id) const
+    std::optional<dtpb::DMFileIndexInfo> getLocalIndex(ColId col_id, IndexID index_id) const
     {
         return meta->getLocalIndex(col_id, index_id);
     }
@@ -305,8 +306,22 @@ private:
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
 
-    static String vectorIndexFileName(IndexID index_id) { return fmt::format("idx_{}.vector", index_id); }
-    String vectorIndexPath(IndexID index_id) const { return subFilePath(vectorIndexFileName(index_id)); }
+    static String localIndexFileName(IndexID index_id, TiDB::ColumnarIndexKind kind)
+    {
+        // Note: Keep sync with FileCache::getFileType()
+        switch (kind)
+        {
+        case TiDB::ColumnarIndexKind::Vector:
+            return fmt::format("idx_{}.vector", index_id);
+        default:
+            throw Exception(fmt::format("Unsupported index kind: {}", magic_enum::enum_name(kind)));
+        }
+    }
+
+    String localIndexPath(IndexID index_id, TiDB::ColumnarIndexKind kind) const
+    {
+        return subFilePath(localIndexFileName(index_id, kind));
+    }
 
     void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
@@ -332,7 +347,7 @@ public:
     friend class DMFileVectorIndexReader;
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
-    friend class DMFileVectorIndexWriter;
+    friend class DMFileLocalIndexWriter;
     friend class DMFileReader;
     friend class MarkLoader;
     friend class ColumnReadStream;

@@ -39,7 +39,7 @@ bool VectorIndexBuilder::isSupportedType(const IDataType & type)
     return checkDataTypeArray<DataTypeFloat32>(&type);
 }
 
-VectorIndexBuilderPtr VectorIndexBuilder::create(IndexID index_id, const TiDB::VectorIndexDefinitionPtr & definition)
+VectorIndexBuilderPtr VectorIndexBuilder::create(const TiDB::VectorIndexDefinitionPtr & definition)
 {
     RUNTIME_CHECK(definition->dimension > 0);
     RUNTIME_CHECK(definition->dimension <= TiDB::MAX_VECTOR_DIMENSION);
@@ -47,52 +47,28 @@ VectorIndexBuilderPtr VectorIndexBuilder::create(IndexID index_id, const TiDB::V
     switch (definition->kind)
     {
     case tipb::VectorIndexKind::HNSW:
-        return std::make_shared<VectorIndexHNSWBuilder>(index_id, definition);
+        return std::make_shared<VectorIndexHNSWBuilder>(definition);
     default:
         throw Exception( //
             ErrorCodes::INCORRECT_QUERY,
-            "Unsupported vector index, index_id={} def={}",
-            index_id,
+            "Unsupported vector index, def={}",
             tipb::VectorIndexKind_Name(definition->kind));
     }
 }
 
-VectorIndexViewerPtr VectorIndexViewer::view(const dtpb::VectorIndexFileProps & file_props, std::string_view path)
+VectorIndexViewerPtr VectorIndexViewer::view(const dtpb::IndexFilePropsV2Vector & file_props, std::string_view path)
 {
     RUNTIME_CHECK(file_props.dimensions() > 0);
     RUNTIME_CHECK(file_props.dimensions() <= TiDB::MAX_VECTOR_DIMENSION);
-
-    tipb::VectorIndexKind kind;
-    RUNTIME_CHECK(tipb::VectorIndexKind_Parse(file_props.index_kind(), &kind));
-
-    switch (kind)
-    {
-    case tipb::VectorIndexKind::HNSW:
-        return VectorIndexHNSWViewer::view(file_props, path);
-    default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported vector index {}", file_props.index_kind());
-    }
+    return VectorIndexHNSWViewer::view(file_props, path);
 }
 
 
-VectorIndexViewerPtr VectorIndexViewer::load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf)
+VectorIndexViewerPtr VectorIndexViewer::load(const dtpb::IndexFilePropsV2Vector & file_props, ReadBuffer & buf)
 {
     RUNTIME_CHECK(file_props.dimensions() > 0);
     RUNTIME_CHECK(file_props.dimensions() <= TiDB::MAX_VECTOR_DIMENSION);
-
-    tipb::VectorIndexKind kind;
-    RUNTIME_CHECK(tipb::VectorIndexKind_Parse(file_props.index_kind(), &kind));
-
-    switch (kind)
-    {
-    case tipb::VectorIndexKind::HNSW:
-        return VectorIndexHNSWViewer::load(file_props, buf);
-    default:
-        throw Exception( //
-            ErrorCodes::INCORRECT_QUERY,
-            "Unsupported vector index {}",
-            file_props.index_kind());
-    }
+    return VectorIndexHNSWViewer::load(file_props, buf);
 }
 
 } // namespace DB::DM

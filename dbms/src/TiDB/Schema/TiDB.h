@@ -240,6 +240,17 @@ struct IndexColumnInfo
     Int32 length = 0;
     Int32 offset = 0;
 };
+
+// Note: Columnar index and local index are usually referring the same thing
+// in this code base:
+// - From TiDB's perspective, it is a columnar index.
+// - From TiFlash's perspective, it is a local index.
+enum class ColumnarIndexKind
+{
+    // Leave 0 intentionally for InvalidValues
+    Vector = 1,
+};
+
 struct IndexInfo
 {
     IndexInfo() = default;
@@ -261,6 +272,16 @@ struct IndexInfo
     bool is_global = false;
 
     VectorIndexDefinitionPtr vector_index = nullptr;
+
+    ColumnarIndexKind columnarIndexKind() const
+    {
+        RUNTIME_CHECK(hasColumnarIndex());
+        if (vector_index)
+            return ColumnarIndexKind::Vector;
+        RUNTIME_CHECK(false);
+    }
+
+    bool hasColumnarIndex() const { return (vector_index != nullptr); }
 };
 
 struct TableInfo

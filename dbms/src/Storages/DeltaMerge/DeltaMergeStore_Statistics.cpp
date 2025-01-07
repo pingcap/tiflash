@@ -225,7 +225,7 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
         LocalIndexStats index_stats;
         index_stats.column_id = index_info.column_id;
         index_stats.index_id = index_info.index_id;
-        index_stats.index_kind = tipb::VectorIndexKind_Name(index_info.index_definition->kind);
+        index_stats.index_kind = magic_enum::enum_name(index_info.kind); // like Vector
 
         for (const auto & [handle, segment] : segments)
         {

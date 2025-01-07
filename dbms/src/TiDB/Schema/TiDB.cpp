@@ -1061,7 +1061,7 @@ try
                 // always put the primary_index at the front of all index_info
                 index_infos.insert(index_infos.begin(), std::move(index_info));
             }
-            else if (index_info.vector_index != nullptr)
+            else if (index_info.hasColumnarIndex())
             {
                 index_infos.emplace_back(std::move(index_info));
             }

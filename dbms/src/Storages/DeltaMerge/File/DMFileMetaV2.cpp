@@ -422,12 +422,13 @@ UInt32 DMFileMetaV2::bumpMetaVersion(DMFileMetaChangeset && changeset)
     for (auto & [col_id, col_stat] : column_stats)
     {
         auto changed_col_iter = changeset.new_indexes_on_cols.find(col_id);
-        if (changed_col_iter == changeset.new_indexes_on_cols.end())
-            continue;
-        col_stat.vector_index.insert(
-            col_stat.vector_index.end(),
-            changed_col_iter->second.begin(),
-            changed_col_iter->second.end());
+        if (changed_col_iter != changeset.new_indexes_on_cols.end())
+        {
+            col_stat.indexes.insert(
+                col_stat.indexes.end(),
+                changed_col_iter->second.begin(),
+                changed_col_iter->second.end());
+        }
     }
 
     // bump the version
@@ -445,16 +446,17 @@ std::tuple<DMFileMeta::LocalIndexState, size_t> DMFileMetaV2::getLocalIndexState
 
     const auto & col_stat = it->second;
     bool built = std::any_of( //
-        col_stat.vector_index.cbegin(),
-        col_stat.vector_index.cend(),
-        [index_id](const auto & idx) { return idx.index_id() == index_id; });
+        col_stat.indexes.cbegin(),
+        col_stat.indexes.cend(),
+        [index_id](const auto & idx) { return idx.index_props().index_id() == index_id; });
+
     if (built)
         return {LocalIndexState::IndexBuilt, 0};
     // index is pending for build, return the column data bytes
     return {LocalIndexState::IndexPending, col_stat.data_bytes};
 }
 
-std::optional<dtpb::VectorIndexFileProps> DMFileMetaV2::getLocalIndex(ColId col_id, IndexID index_id) const
+std::optional<dtpb::DMFileIndexInfo> DMFileMetaV2::getLocalIndex(ColId col_id, IndexID index_id) const
 {
     // acquire a lock on meta to ensure the atomically on col_stat.vector_index
     std::scoped_lock lock(mtx_bump);
@@ -463,11 +465,12 @@ std::optional<dtpb::VectorIndexFileProps> DMFileMetaV2::getLocalIndex(ColId col_
         return std::nullopt;
 
     const auto & col_stat = it->second;
-    for (const auto & vec_idx : col_stat.vector_index)
+    for (const auto & idx : col_stat.indexes)
     {
-        if (vec_idx.index_id() == index_id)
-            return vec_idx;
+        if (idx.index_props().index_id() == index_id)
+            return idx;
     }
     return std::nullopt;
 }
+
 } // namespace DB::DM

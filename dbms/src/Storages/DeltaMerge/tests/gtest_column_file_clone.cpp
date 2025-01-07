@@ -36,16 +36,21 @@ TEST_F(ColumnFileCloneTest, CloneColumnFileTinyWithVectorIndex)
     String mock_index_page_content = "mock_index_page_content";
     wbs.log.putPage(index_page_id, 0, std::string_view{mock_index_page_content.data(), mock_index_page_content.size()});
 
-    dtpb::VectorIndexFileProps index_props;
-    index_props.set_index_kind(tipb::VectorIndexKind_Name(tipb::VectorIndexKind::HNSW));
-    index_props.set_distance_metric(tipb::VectorDistanceMetric_Name(tipb::VectorDistanceMetric::L2));
-    index_props.set_dimensions(1);
-    index_props.set_index_id(1);
-    index_props.set_index_bytes(10);
     std::vector<ColumnFilePersistedPtr> persisted_files;
     {
         auto index_infos = std::make_shared<ColumnFileTiny::IndexInfos>();
-        index_infos->emplace_back(data_page_id, index_props);
+        auto index_info = dtpb::ColumnFileIndexInfo{};
+        index_info.set_index_page_id(index_page_id);
+        auto * index_props = index_info.mutable_index_props();
+        index_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
+        index_props->set_index_id(1);
+        index_props->set_file_size(10);
+        auto * vec_props = index_props->mutable_vector_index();
+        vec_props->set_format_version(0);
+        vec_props->set_dimensions(1);
+        vec_props->set_distance_metric(tipb::VectorDistanceMetric_Name(tipb::VectorDistanceMetric::L2));
+        index_infos->emplace_back(std::move(index_info));
+
         auto file = std::make_shared<ColumnFileTiny>(nullptr, 1, 10, data_page_id, *dm_context, index_infos);
         persisted_files.emplace_back(std::move(file));
     }
@@ -62,15 +67,16 @@ TEST_F(ColumnFileCloneTest, CloneColumnFileTinyWithVectorIndex)
     ASSERT_EQ(new_tiny_file->getIndexInfos()->size(), 1);
     auto new_index_info = new_tiny_file->getIndexInfos()->at(0);
     // Different index page id
-    ASSERT_NE(new_index_info.index_page_id, index_page_id);
+    ASSERT_NE(new_index_info.index_page_id(), index_page_id);
     // Same index properties
-    ASSERT_EQ(new_index_info.vector_index->index_bytes(), 10);
-    ASSERT_EQ(new_index_info.vector_index->index_id(), 1);
-    ASSERT_EQ(new_index_info.vector_index->index_kind(), tipb::VectorIndexKind_Name(tipb::VectorIndexKind::HNSW));
+    ASSERT_EQ(new_index_info.index_props().kind(), dtpb::IndexFileKind::VECTOR_INDEX);
+    ASSERT_EQ(new_index_info.index_props().index_id(), 1);
+    ASSERT_EQ(new_index_info.index_props().file_size(), 10);
+    ASSERT_EQ(new_index_info.index_props().vector_index().format_version(), 0);
     ASSERT_EQ(
-        new_index_info.vector_index->distance_metric(),
+        new_index_info.index_props().vector_index().distance_metric(),
         tipb::VectorDistanceMetric_Name(tipb::VectorDistanceMetric::L2));
-    ASSERT_EQ(new_index_info.vector_index->dimensions(), 1);
+    ASSERT_EQ(new_index_info.index_props().vector_index().dimensions(), 1);
 
     // Check the data page and index page content
     auto storage_snap = std::make_shared<StorageSnapshot>(

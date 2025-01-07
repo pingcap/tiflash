@@ -20,7 +20,6 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 #include <Storages/DeltaMerge/dtpb/column_file.pb.h>
-#include <Storages/DeltaMerge/dtpb/vector_index.pb.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB::DM
@@ -37,21 +36,11 @@ class ColumnFileTiny : public ColumnFilePersisted
 {
 public:
     friend class ColumnFileTinyReader;
-    friend class ColumnFileTinyVectorIndexWriter;
+    friend class ColumnFileTinyLocalIndexWriter;
     friend class ColumnFileTinyVectorIndexReader;
     friend struct Remote::Serializer;
 
-    struct IndexInfo
-    {
-        IndexInfo(PageIdU64 page_id, std::optional<dtpb::VectorIndexFileProps> vec_index)
-            : index_page_id(page_id)
-            , vector_index(vec_index)
-        {}
-
-        PageIdU64 index_page_id{};
-        std::optional<dtpb::VectorIndexFileProps> vector_index = std::nullopt;
-    };
-    using IndexInfos = std::vector<IndexInfo>;
+    using IndexInfos = std::vector<dtpb::ColumnFileIndexInfo>;
     using IndexInfosPtr = std::shared_ptr<IndexInfos>;
 
 private:
@@ -99,9 +88,7 @@ public:
         if (!index_infos)
             return false;
         return std::any_of(index_infos->cbegin(), index_infos->cend(), [index_id](const auto & info) {
-            if (!info.vector_index)
-                return false;
-            return info.vector_index->index_id() == index_id;
+            return info.index_props().index_id() == index_id;
         });
     }
 

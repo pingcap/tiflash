@@ -72,7 +72,7 @@ DMFileWriter::DMFileWriter(
                 .type = cd.type,
                 .avg_size = 0,
                 // ... here ignore some fields with default initializers
-                .vector_index = {},
+                .indexes = {},
 #ifndef NDEBUG
                 .additional_data_for_test = {},
 #endif

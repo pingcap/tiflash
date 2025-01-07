@@ -28,8 +28,8 @@ namespace DB::DM
 
 using ColumnFileTinys = std::vector<ColumnFileTinyPtr>;
 
-// ColumnFileTinyVectorIndexWriter write vector index store in PageStorage for ColumnFileTiny.
-class ColumnFileTinyVectorIndexWriter
+// ColumnFileTinyLocalIndexWriter write vector index store in PageStorage for ColumnFileTiny.
+class ColumnFileTinyLocalIndexWriter
 {
 public:
     struct LocalIndexBuildInfo
@@ -54,7 +54,7 @@ public:
         WriteBatches & wbs; // Write index and modify meta in the same batch.
     };
 
-    explicit ColumnFileTinyVectorIndexWriter(const Options & options)
+    explicit ColumnFileTinyLocalIndexWriter(const Options & options)
         : logger(Logger::get())
         , options(options)
     {}

@@ -105,7 +105,7 @@ public:
 public:
     std::tuple<LocalIndexState, size_t> getLocalIndexState(ColId col_id, IndexID index_id) const override;
 
-    std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId col_id, IndexID index_id) const override;
+    std::optional<dtpb::DMFileIndexInfo> getLocalIndex(ColId col_id, IndexID index_id) const override;
 
 public:
     UInt32 metaVersion() const override { return meta_version; }

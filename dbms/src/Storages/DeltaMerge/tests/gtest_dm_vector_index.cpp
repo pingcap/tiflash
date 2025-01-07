@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
+#include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
@@ -127,8 +127,8 @@ public:
 
     DMFilePtr buildIndex(TiDB::VectorIndexDefinition definition)
     {
-        auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(indexInfo(definition), {dm_file});
-        DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
+        auto build_info = DMFileLocalIndexWriter::getLocalIndexBuildInfo(indexInfo(definition), {dm_file});
+        DMFileLocalIndexWriter iw(DMFileLocalIndexWriter::Options{
             .path_pool = path_pool,
             .index_infos = build_info.indexes_to_build,
             .dm_files = {dm_file},
@@ -142,8 +142,8 @@ public:
     DMFilePtr buildMultiIndex(const LocalIndexInfosPtr & index_infos)
     {
         assert(index_infos != nullptr);
-        auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(index_infos, {dm_file});
-        DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
+        auto build_info = DMFileLocalIndexWriter::getLocalIndexBuildInfo(index_infos, {dm_file});
+        DMFileLocalIndexWriter iw(DMFileLocalIndexWriter::Options{
             .path_pool = path_pool,
             .index_infos = build_info.indexes_to_build,
             .dm_files = {dm_file},
@@ -536,10 +536,10 @@ try
     auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
         // index with index_id == 3
         LocalIndexInfo{
-            .type = IndexType::Vector,
+            .kind = TiDB::ColumnarIndexKind::Vector,
             .index_id = 3,
             .column_id = vec_column_id,
-            .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::L2,
@@ -547,10 +547,10 @@ try
         },
         // index with index_id == 4
         LocalIndexInfo{
-            .type = IndexType::Vector,
+            .kind = TiDB::ColumnarIndexKind::Vector,
             .index_id = 4,
             .column_id = vec_column_id,
-            .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::COSINE,
@@ -558,10 +558,10 @@ try
         },
         // index with index_id == EmptyIndexID, column_id = vec_column_id
         LocalIndexInfo{
-            .type = IndexType::Vector,
+            .kind = TiDB::ColumnarIndexKind::Vector,
             .index_id = EmptyIndexID,
             .column_id = vec_column_id,
-            .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::L2,
@@ -1876,10 +1876,10 @@ public:
         auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
             // index with index_id == 3
             LocalIndexInfo{
-                .type = IndexType::Vector,
+                .kind = TiDB::ColumnarIndexKind::Vector,
                 .index_id = 3,
                 .column_id = vec_column_id,
-                .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::L2,
@@ -1887,10 +1887,10 @@ public:
             },
             // index with index_id == 4
             LocalIndexInfo{
-                .type = IndexType::Vector,
+                .kind = TiDB::ColumnarIndexKind::Vector,
                 .index_id = 4,
                 .column_id = vec_column_id,
-                .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::COSINE,
@@ -1898,20 +1898,20 @@ public:
             },
             // index with index_id == EmptyIndexID, column_id = vec_column_id
             LocalIndexInfo{
-                .type = IndexType::Vector,
+                .kind = TiDB::ColumnarIndexKind::Vector,
                 .index_id = EmptyIndexID,
                 .column_id = vec_column_id,
-                .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::L2,
                 }),
             },
         });
-        auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(index_infos, dm_files);
+        auto build_info = DMFileLocalIndexWriter::getLocalIndexBuildInfo(index_infos, dm_files);
 
         // Build multiple index
-        DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
+        DMFileLocalIndexWriter iw(DMFileLocalIndexWriter::Options{
             .path_pool = storage_path_pool,
             .index_infos = build_info.indexes_to_build,
             .dm_files = dm_files,

@@ -18,10 +18,10 @@
 #include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyVectorIndexWriter.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
+#include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
@@ -542,7 +542,7 @@ bool DeltaMergeStore::segmentEnsureStableLocalIndexAsync(const SegmentPtr & segm
 
     // No lock is needed, stable meta is immutable.
     const auto build_info
-        = DMFileVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, segment->getStable()->getDMFiles());
+        = DMFileLocalIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, segment->getStable()->getDMFiles());
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty() || build_info.dm_files.empty())
         return false;
 
@@ -616,7 +616,7 @@ bool DeltaMergeStore::segmentWaitStableLocalIndexReady(const SegmentPtr & segmen
     // No lock is needed, stable meta is immutable.
     auto segment_id = segment->segmentId();
     auto build_info
-        = DMFileVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, segment->getStable()->getDMFiles());
+        = DMFileLocalIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, segment->getStable()->getDMFiles());
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
         return true;
 
@@ -737,7 +737,7 @@ void DeltaMergeStore::segmentEnsureStableLocalIndex(
         DMFile::info(index_build_info.dm_files));
 
     // 2. Build the index.
-    DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
+    DMFileLocalIndexWriter iw(DMFileLocalIndexWriter::Options{
         .path_pool = path_pool,
         .index_infos = index_build_info.indexes_to_build,
         .dm_files = index_build_info.dm_files,
@@ -864,7 +864,7 @@ bool DeltaMergeStore::segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segme
     if (!column_file_persisted_set)
         return false;
     auto build_info
-        = ColumnFileTinyVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, column_file_persisted_set);
+        = ColumnFileTinyLocalIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, column_file_persisted_set);
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
         return false;
     // Use weak_ptr to avoid blocking gc.
@@ -940,7 +940,7 @@ bool DeltaMergeStore::segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment
     if (!column_file_persisted_set)
         return false;
     auto build_info
-        = ColumnFileTinyVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos, column_file_persisted_set);
+        = ColumnFileTinyLocalIndexWriter::getLocalIndexBuildInfo(local_index_infos, column_file_persisted_set);
     // Use weak_ptr to avoid blocking gc.
     auto delta_weak_ptr = std::weak_ptr<DeltaValueSpace>(segment->getDelta());
     lock.unlock();
@@ -1029,7 +1029,7 @@ void DeltaMergeStore::segmentEnsureDeltaLocalIndex(
 
     // 2. Build the index.
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
-    ColumnFileTinyVectorIndexWriter iw(ColumnFileTinyVectorIndexWriter::Options{
+    ColumnFileTinyLocalIndexWriter iw(ColumnFileTinyLocalIndexWriter::Options{
         .storage_pool = storage_pool,
         .write_limiter = dm_context.getWriteLimiter(),
         .files = persisted_files,

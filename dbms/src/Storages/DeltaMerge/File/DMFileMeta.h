@@ -42,7 +42,7 @@ class DMFileV3IncrementWriter;
 
 struct DMFileMetaChangeset
 {
-    std::unordered_map<ColId, std::vector<dtpb::VectorIndexFileProps>> new_indexes_on_cols;
+    std::unordered_map<ColId, std::vector<dtpb::DMFileIndexInfo>> new_indexes_on_cols;
 };
 
 class DMFileMeta
@@ -216,9 +216,9 @@ public:
     // Return std::nullopt if
     // - the col_id is not exist in the dmfile
     // - the index has not been built
-    virtual std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId, IndexID) const
+    virtual std::optional<dtpb::DMFileIndexInfo> getLocalIndex(ColId, IndexID) const
     {
-        RUNTIME_CHECK_MSG(false, "MetaV1 does not support getLocalIndexState");
+        RUNTIME_CHECK_MSG(false, "MetaV1 does not support getLocalIndex");
     }
 
 protected:
