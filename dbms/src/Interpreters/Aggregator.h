@@ -1460,12 +1460,7 @@ protected:
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <
-        bool collect_hit_rate,
-        bool only_lookup,
-        bool enable_prefetch,
-        bool compute_agg_data,
-        typename Method>
+    template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
     void handleMiniBatchImpl(
         Method & method,
         typename Method::State & state,
