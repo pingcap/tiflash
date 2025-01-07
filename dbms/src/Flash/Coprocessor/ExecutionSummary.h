@@ -35,6 +35,10 @@ struct ExecutionSummary
     UInt64 num_produced_rows = 0;
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
+    UInt64 inner_zone_send_bytes = 0;
+    UInt64 inner_zone_receive_bytes = 0;
+    UInt64 inter_zone_send_bytes = 0;
+    UInt64 inter_zone_receive_bytes = 0;
     resource_manager::Consumption ru_consumption{};
 
     DM::ScanContextPtr scan_context;
