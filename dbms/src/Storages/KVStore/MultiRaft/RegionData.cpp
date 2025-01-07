@@ -310,7 +310,8 @@ void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
     total_size += RegionWriteCFData::deserialize(buf, region_data.write_cf);
     total_size += RegionLockCFData::deserialize(buf, region_data.lock_cf);
 
-    region_data.cf_data_size += total_size;
+    region_data.cf_data_size = total_size;
+    reportAlloc(total_size);
 }
 
 RegionWriteCFData & RegionData::writeCF()
@@ -347,6 +348,13 @@ RegionData::RegionData(RegionData && data)
     , lock_cf(std::move(data.lock_cf))
     , cf_data_size(data.cf_data_size.load())
 {}
+
+
+RegionData::~RegionData()
+{
+    reportDealloc(cf_data_size);
+    cf_data_size = 0;
+}
 
 RegionData & RegionData::operator=(RegionData && rhs)
 {
