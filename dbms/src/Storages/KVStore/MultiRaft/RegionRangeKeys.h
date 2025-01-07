@@ -88,4 +88,6 @@ private:
     KeyspaceID keyspace_id = NullspaceID;
 };
 
+bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id);
+
 } // namespace DB

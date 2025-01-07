@@ -379,9 +379,6 @@ private:
 
     mutable std::mutex task_mutex;
 
-    // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
-    std::unique_ptr<RaftCommandResult> raft_cmd_res;
-
     LoggerPtr log;
 
     std::atomic<UInt64> region_compact_log_min_rows;
