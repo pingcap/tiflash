@@ -80,6 +80,18 @@ static Block prepareBlockWithFixedVecF32(size_t rows)
     return block;
 }
 
+static Block prepareBlockWithString(size_t rows, const std::vector<String> & string_type_names)
+{
+    Block block;
+    for (size_t i = 0; i < string_type_names.size(); ++i)
+    {
+        block.insert(
+            ColumnGenerator::instance().generate({rows, string_type_names[i], RANDOM, fmt::format("col{}", i)}));
+    }
+
+    return block;
+}
+
 template <typename VecCol>
 void test_enocde_release_data(VecCol && batch_columns, const Block & header, const size_t total_rows)
 {
@@ -354,4 +366,86 @@ try
 }
 CATCH
 
+
+TEST(CHBlockChunkCodecTest, StringCompatibilityV1)
+try
+{
+    static constexpr auto compression_mode = CompressionMethod::LZ4;
+    static const auto legacy_string_type_names
+        = std::vector{DataTypeString::LegacyName, DataTypeString::NullableLegacyName};
+    static const auto new_string_type_names = std::vector{DataTypeString::NameV2, DataTypeString::NullableNameV2};
+
+    auto header = prepareBlockWithString(0, new_string_type_names);
+    auto block = prepareBlockWithString(100, new_string_type_names);
+    auto codec = CHBlockChunkCodecV1{header, MppVersion::MppVersionV2};
+    auto str = codec.encode(block, compression_mode);
+
+    auto legacy_header = prepareBlockWithString(0, legacy_string_type_names);
+    auto decoded_block = CHBlockChunkCodecV1::decode(legacy_header, str);
+
+    block.checkNumberOfRows();
+    decoded_block.checkNumberOfRows();
+    ASSERT_EQ(block.rows(), decoded_block.rows());
+    ASSERT_EQ(block.columns(), new_string_type_names.size());
+    ASSERT_EQ(decoded_block.columns(), new_string_type_names.size());
+
+    for (size_t i = 0; i < decoded_block.columns(); ++i)
+    {
+        const auto & column = block.getByPosition(i);
+        const auto & decoded_column = decoded_block.getByPosition(i);
+        ASSERT_EQ(column.name, decoded_column.name);
+        ASSERT_EQ(column.type->getName(), new_string_type_names[i]);
+        ASSERT_EQ(decoded_column.type->getName(), legacy_string_type_names[i]);
+        for (size_t j = 0; j < column.column->size(); ++j)
+        {
+            ASSERT_EQ((*column.column)[j], (*decoded_column.column)[j]);
+        }
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, StringCompatibility)
+try
+{
+    static const auto legacy_string_type_names
+        = std::vector{DataTypeString::LegacyName, DataTypeString::NullableLegacyName};
+    static const auto new_string_type_names = std::vector{DataTypeString::NameV2, DataTypeString::NullableNameV2};
+    static const auto string_field_types = []() {
+        std::vector<tipb::FieldType> fields(2);
+        fields[0].set_tp(TiDB::TypeString);
+        fields[0].set_flag(TiDB::ColumnFlagNotNull);
+
+        fields[1].set_tp(TiDB::TypeString); // Nullable by default.
+        return fields;
+    }();
+
+    auto header = prepareBlockWithString(0, new_string_type_names);
+    auto block = prepareBlockWithString(100, new_string_type_names);
+    auto codec_stream = CHBlockChunkCodec{}.newCodecStream(string_field_types, MppVersion::MppVersionV2);
+    codec_stream->encode(block, 0, block.rows());
+    auto str = codec_stream->getString();
+
+    auto legacy_header = prepareBlockWithString(0, legacy_string_type_names);
+    auto codec = CHBlockChunkCodec{legacy_header};
+    auto decoded_block = codec.decode(str);
+
+    block.checkNumberOfRows();
+    decoded_block.checkNumberOfRows();
+    ASSERT_EQ(block.rows(), decoded_block.rows());
+    ASSERT_EQ(block.columns(), new_string_type_names.size());
+    ASSERT_EQ(decoded_block.columns(), new_string_type_names.size());
+    for (size_t i = 0; i < decoded_block.columns(); ++i)
+    {
+        const auto & column = block.getByPosition(i);
+        const auto & decoded_column = decoded_block.getByPosition(i);
+        ASSERT_EQ(column.name, decoded_column.name);
+        ASSERT_EQ(column.type->getName(), new_string_type_names[i]);
+        ASSERT_EQ(decoded_column.type->getName(), legacy_string_type_names[i]);
+        for (size_t j = 0; j < column.column->size(); ++j)
+        {
+            ASSERT_EQ((*column.column)[j], (*decoded_column.column)[j]);
+        }
+    }
+}
+CATCH
 } // namespace DB::tests
