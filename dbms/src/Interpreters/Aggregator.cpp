@@ -830,7 +830,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
             if constexpr (enable_prefetch)
             {
                 auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
-                    (i - agg_process_info.start_row) % 15,
+                    (i - agg_process_info.start_row) % agg_prefetch_step,
                     i + agg_prefetch_step,
                     end,
                     method,
@@ -932,11 +932,11 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
         for (size_t j = i; j < cur_batch_end; ++j)
         {
             AggregateDataPtr aggregate_data = nullptr;
-            const size_t relative_idx = j - agg_process_info.start_row;
+            const size_t index_relative_to_start_row = j - agg_process_info.start_row;
             if constexpr (enable_prefetch)
             {
                 auto [key_holder, hashval] = getCurrentHashAndDoPrefetch(
-                    relative_idx & 15,
+                    index_relative_to_start_row % agg_prefetch_step,
                     j + agg_prefetch_step,
                     end,
                     method,
@@ -995,7 +995,7 @@ ALWAYS_INLINE void Aggregator::executeImplByRow(
                         __builtin_prefetch(aggregate_data);
                 }
             }
-            places[relative_idx] = aggregate_data;
+            places[index_relative_to_start_row] = aggregate_data;
             processed_rows = j;
         }
 
