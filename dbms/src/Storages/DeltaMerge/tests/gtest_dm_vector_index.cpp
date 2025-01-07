@@ -242,7 +242,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -267,7 +267,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -292,7 +292,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -320,7 +320,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -345,7 +345,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -370,7 +370,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -395,7 +395,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -430,7 +430,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -455,7 +455,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -493,7 +493,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -591,7 +591,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -617,7 +617,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -646,7 +646,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -676,7 +676,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -702,7 +702,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -731,7 +731,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -761,7 +761,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -786,7 +786,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -814,7 +814,7 @@ try
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setAnnQureyInfo(ann_query_info)
                               .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
-                              .tryBuildWithVectorIndex(
+                              .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -878,7 +878,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(5, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -946,7 +946,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -971,7 +971,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -996,7 +996,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -1024,7 +1024,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 6))
-                          .tryBuildWithVectorIndex(
+                          .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
@@ -1095,7 +1095,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
-                          .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
+                          .build(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             createColumnNames(),
@@ -1109,7 +1109,7 @@ try
         builder = DMFileBlockInputStreamBuilder(dbContext());
         stream = builder.setAnnQureyInfo(ann_query_info)
                      .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
-                     .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
+                     .build(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             createColumnNames(),
@@ -1138,7 +1138,7 @@ try
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setAnnQureyInfo(ann_query_info)
                           .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
-                          .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
+                          .build(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             createColumnNames(),
