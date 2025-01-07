@@ -190,7 +190,7 @@ try
         {-10, -20, 30, -40},
         {40, -30, 20, -10},
         {1234567890, -1234567890, 1234567890000, -1234567890},
-        {-1234567890, 1234567890, 1234567890000, 1234567890},
+        {-1234567890, 1234567890, 18446744073709551615ULL, 1234567890},
     };
     size_t n = vec_data.size();
     auto vec1 = ColumnVector<Int32>::create();
@@ -209,7 +209,7 @@ try
     ColumnRawPtrs key_columns{vec1.get(), vec2.get(), vec3.get(), vec4.get()};
     key_getter.reset(key_columns, 0);
     constexpr size_t total_size = sizeof(Int32) + sizeof(Int64) + sizeof(UInt64) + sizeof(Decimal128);
-    ASSERT_EQ(key_getter.getRequiredKeyOffset(key_getter.getJoinKey(0)), total_size);
+    ASSERT_EQ(key_getter.getRequiredKeyOffset(key_getter.getJoinKeyWithBuffer(0)), total_size);
     key_getter.reset(key_columns, 2);
     ASSERT_EQ(key_getter.getRequiredKeyOffset(key_getter.getJoinKey(0)), sizeof(Int32) + sizeof(Int64));
 
@@ -252,6 +252,89 @@ try
 {
     testOneKeyStringBin<false>();
     testOneKeyStringBin<true>();
+}
+CATCH
+
+TEST_F(HashJoinKeyTest, KeyString)
+try
+{
+    std::vector<std::string> data
+        = {"abcd", "ABCd", "1234 ", "a1b2c3d4", "", "dasfderw123489f8dayffdasdfcs32q234fd", "dafsd sdfa   "};
+    size_t n = data.size();
+    auto string_column = ColumnString::create();
+    for (auto & s : data)
+        string_column->insert(s);
+
+    TiDB::TiDBCollators collators;
+    collators.push_back(TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI));
+    HashJoinKeyString key_getter(collators);
+    ColumnRawPtrs key_columns{string_column.get()};
+    key_getter.reset(key_columns, 0);
+    ASSERT_EQ(key_getter.getJoinKeyWithBuffer(0), key_getter.getJoinKey(1));
+    key_getter.reset(key_columns, 0);
+
+    std::vector<char> buffer;
+    for (size_t i = 0; i < n; ++i)
+    {
+        auto join_key = key_getter.getJoinKeyWithBuffer(i);
+        ASSERT_EQ(key_getter.getJoinKey(i), join_key);
+        size_t sz = key_getter.getJoinKeyByteSize(join_key);
+        ASSERT_EQ(sz, sizeof(UInt32) + join_key.size);
+        buffer.resize(sz);
+        key_getter.serializeJoinKey(join_key, &buffer[0]);
+        ASSERT_EQ(key_getter.deserializeJoinKey(&buffer[0]), join_key);
+        ASSERT_EQ(key_getter.getRequiredKeyOffset(join_key), key_getter.getJoinKeyByteSize(join_key));
+    }
+}
+CATCH
+
+TEST_F(HashJoinKeyTest, KeySerialized)
+try
+{
+    std::vector<std::tuple<UInt64, Int32, Decimal256, std::string>> data = {
+        {10, 20, Int256(30), "abcd"},
+        {10, 20, Int256(30), "AbCd"},
+        {30, -40, Int256(50), "1234 "},
+        {18446744073709551615ULL, 60, Int256(18446744073709551615ULL), "a1b2c3d4"},
+        {18446744073709551615ULL, 2147483647, Int256(-18446744073709551615ULL), ""},
+        {999, -2147483648, Int256(99999), "dasfderw123489f8dayffdasdfcs32q234fd"},
+        {9999999999999, 123456789, Int256(-9999999999999), "dafsd sdfa   "},
+    };
+    size_t n = data.size();
+    auto vec_column1 = ColumnVector<UInt64>::create();
+    auto vec_column2 = ColumnVector<Int32>::create();
+    auto dec_vec_column = ColumnDecimal<Decimal256>::create(0, 6);
+    auto string_column = ColumnString::create();
+    for (auto & [d1, d2, d3, d4] : data)
+    {
+        vec_column1->insert(d1);
+        vec_column2->insert(d2);
+        dec_vec_column->insert(d3);
+        string_column->insert(d4);
+    }
+
+    TiDB::TiDBCollators collators;
+    collators.push_back(TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI));
+    collators.push_back(TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI));
+    collators.push_back(TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI));
+    collators.push_back(TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI));
+    HashJoinKeySerialized key_getter(collators);
+    ColumnRawPtrs key_columns{vec_column1.get(), vec_column2.get(), dec_vec_column.get(), string_column.get()};
+    key_getter.reset(key_columns, 0);
+    ASSERT_EQ(key_getter.getJoinKeyWithBuffer(0), key_getter.getJoinKey(1));
+    key_getter.reset(key_columns, 0);
+
+    std::vector<char> buffer;
+    for (size_t i = 0; i < n; ++i)
+    {
+        auto join_key = key_getter.getJoinKeyWithBuffer(i);
+        ASSERT_EQ(key_getter.getJoinKey(i), join_key);
+        size_t sz = key_getter.getJoinKeyByteSize(join_key);
+        buffer.resize(sz);
+        key_getter.serializeJoinKey(join_key, &buffer[0]);
+        ASSERT_EQ(key_getter.deserializeJoinKey(&buffer[0]), join_key);
+        ASSERT_EQ(key_getter.getRequiredKeyOffset(join_key), key_getter.getJoinKeyByteSize(join_key));
+    }
 }
 CATCH
 
