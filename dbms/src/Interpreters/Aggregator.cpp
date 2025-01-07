@@ -695,7 +695,11 @@ void NO_INLINE Aggregator::executeImpl(
     else
     {
         if (disable_prefetch)
-            executeImplMiniBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+            executeImplMiniBatch<collect_hit_rate, only_lookup, false>(
+                method,
+                state,
+                aggregates_pool,
+                agg_process_info);
         else
             executeImplMiniBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
     }
@@ -743,8 +747,15 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
 }
 
 template <typename Method>
-ALWAYS_INLINE inline void prepareBatch(size_t row_idx, size_t end_row, std::vector<size_t> & hashvals, std::vector<typename Method::State::Derived::KeyHolderType> & key_holders,
-        Arena * aggregates_pool, std::vector<String> & sort_key_containers, Method & method, typename Method::State & state)
+ALWAYS_INLINE inline void prepareBatch(
+    size_t row_idx,
+    size_t end_row,
+    std::vector<size_t> & hashvals,
+    std::vector<typename Method::State::Derived::KeyHolderType> & key_holders,
+    Arena * aggregates_pool,
+    std::vector<String> & sort_key_containers,
+    Method & method,
+    typename Method::State & state)
 {
     assert(hashvals.size() == key_holders.size());
 
@@ -804,7 +815,11 @@ ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
 
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
-        return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data*/false>(method, state, agg_process_info, aggregates_pool);
+        return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data*/ false>(
+            method,
+            state,
+            agg_process_info,
+            aggregates_pool);
 
     /// Optimization for special case when aggregating by 8bit key.
     if constexpr (std::is_same_v<Method, AggregatedDataVariants::AggregationMethod_key8>)
@@ -846,15 +861,19 @@ ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
     }
 
     /// Generic case.
-    return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(method, state, agg_process_info, aggregates_pool);
+    return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(
+        method,
+        state,
+        agg_process_info,
+        aggregates_pool);
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
 void Aggregator::handleMiniBatchImpl(
-        Method & method,
-        typename Method::State & state,
-        AggProcessInfo & agg_process_info,
-        Arena * aggregates_pool) const
+    Method & method,
+    typename Method::State & state,
+    AggProcessInfo & agg_process_info,
+    Arena * aggregates_pool) const
 {
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
@@ -901,7 +920,8 @@ void Aggregator::handleMiniBatchImpl(
                 if unlikely (k + agg_prefetch_step < hashvals.size())
                     method.data.prefetch(hashvals[k + agg_prefetch_step]);
 
-                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holders[k]), hashvals[k]);
+                emplace_result_holder
+                    = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holders[k]), hashvals[k]);
             }
             else
             {
@@ -976,7 +996,8 @@ void Aggregator::handleMiniBatchImpl(
         const size_t processed_size = *processed_rows - i + 1;
         if constexpr (compute_agg_data)
         {
-            for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+            for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data();
+                 inst->that;
                  ++inst)
             {
                 inst->batch_that->addBatch(

@@ -1460,12 +1460,17 @@ protected:
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool need_compute_agg_func, typename Method>
+    template <
+        bool collect_hit_rate,
+        bool only_lookup,
+        bool enable_prefetch,
+        bool need_compute_agg_func,
+        typename Method>
     void handleMiniBatchImpl(
-            Method & method,
-            typename Method::State & state,
-            AggProcessInfo & agg_process_info,
-            Arena * aggregates_pool) const;
+        Method & method,
+        typename Method::State & state,
+        AggProcessInfo & agg_process_info,
+        Arena * aggregates_pool) const;
 
     template <bool only_lookup, typename Method>
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
