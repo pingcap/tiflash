@@ -311,7 +311,7 @@ public:
     ///     while (xxx)
     ///     {
     ///         for (auto & column_ptr : mutable_columns)
-    ///             column_ptr->deserializeAndInsertFromPosUnique(pos, align_buffer, true);
+    ///             column_ptr->deserializeAndInsertFromPos(pos, align_buffer, true);
     ///     }
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->flushNTAlignBuffer();

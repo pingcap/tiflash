@@ -63,6 +63,8 @@ ALWAYS_INLINE inline size_t getDecimal256BytesSize(const Decimal256 & val)
 
 ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal256 & data)
 {
+    /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
+    /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
     const auto & val = data.value.backend();
 
     const bool s = val.sign();
@@ -81,8 +83,6 @@ ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal2
 
 ALWAYS_INLINE inline const char * deserializeDecimal256Helper(Decimal256 & value, const char * ptr)
 {
-    /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
-    /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
     auto & val = value.value.backend();
 
     size_t offset = 0;
@@ -284,7 +284,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
     size_t size = pos.size();
 
     // is_complex_decimal256 is true means Decimal256 is serialized by [bool, limb_count, n * limb].
-    // nt optimization is not used because serialized data is not aligned by 64B.
+    // NT optimization is not implemented for simplicity.
     static const bool is_complex_decimal256 = (ensure_unique && is_Decimal256);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT

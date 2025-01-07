@@ -958,7 +958,6 @@ void ColumnString::deserializeAndInsertFromPosImpl(
         memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
         char_size += str_size;
 
-        // todo add unit test
         if constexpr (add_terminating_zero)
         {
             chars[char_size] = 0;
@@ -1018,7 +1017,6 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
     {
         for (size_t i = 0; i < size; ++i)
         {
-            // TODO add unit test
             for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
             {
                 UInt32 str_size;
