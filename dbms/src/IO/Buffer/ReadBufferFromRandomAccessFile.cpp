@@ -98,6 +98,11 @@ std::string ReadBufferFromRandomAccessFile::getFileName() const
     return file->getFileName();
 }
 
+std::string ReadBufferFromRandomAccessFile::getInitialFileName() const
+{
+    return file->getInitialFileName();
+}
+
 int ReadBufferFromRandomAccessFile::getFD() const
 {
     return file->getFd();

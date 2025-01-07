@@ -1243,11 +1243,12 @@ try
                 e.message(),
                 fmt::format(
                     "try to apply with older index, region_id={} applied_index={} new_index={}: (while "
-                    "applyPreHandledSnapshot region_id={})",
+                    "applyPreHandledSnapshot region_id={} keyspace_id=4294967295 table_id={})",
                     region_id,
                     8,
                     6,
-                    region_id));
+                    region_id,
+                    table_id));
         }
     }
 

@@ -17,6 +17,7 @@
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
@@ -32,6 +33,7 @@
 #include <Storages/S3/S3WritableFile.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
@@ -105,6 +107,14 @@ public:
     }
 
     void TearDown() override { DB::tests::TiFlashTestEnv::disableS3Config(); }
+
+    static ReadBufferFromRandomAccessFilePtr getReadBuffFromDataSource(const V3::CPWriteDataSourcePtr & source)
+    {
+        auto * raw_ds_ptr = dynamic_cast<V3::CPWriteDataSourceBlobStore *>(source.get());
+        if (!raw_ds_ptr)
+            return nullptr;
+        return raw_ds_ptr->current_s3file_buf;
+    }
 
 protected:
     void deleteBucket() { ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client); }
@@ -796,6 +806,7 @@ try
     }
     uploadFile(manifest_file_path);
 
+    // Read the manifest from remote store(S3)
     auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
@@ -807,6 +818,8 @@ try
         auto r = edits_r->getRecords();
         ASSERT_EQ(2, r.size());
 
+        // Mock that some remote page and ref to remote page is
+        // ingest into page_storage.
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
         wb.putRemotePage(
@@ -819,6 +832,7 @@ try
         page_storage->write(std::move(wb));
     }
 
+    // Read the remote page "page_foo"
     {
         std::vector<UniversalPageStorage::PageReadFields> page_fields;
         std::vector<size_t> read_indices = {0, 2};
@@ -836,6 +850,7 @@ try
         ASSERT_EQ("riage rocked", String(fields3_buf.begin(), fields3_buf.size()));
     }
 
+    // Read the ref page "page_foo2", which ref to the remote page "page_foo"
     {
         std::vector<UniversalPageStorage::PageReadFields> page_fields;
         std::vector<size_t> read_indices = {0, 2};
@@ -851,6 +866,216 @@ try
         ASSERT_EQ("The ", String(fields0_buf.begin(), fields0_buf.size()));
         auto fields3_buf = page.getFieldData(2);
         ASSERT_EQ("riage rocked", String(fields3_buf.begin(), fields3_buf.size()));
+    }
+}
+CATCH
+
+struct FilenameWithData
+{
+    std::string_view filename;
+    std::vector<std::string_view> data;
+};
+
+/// The "CPWriteDataSourceBlobStore" should reuse the underlying
+/// read buffer as possible
+TEST_P(UniPageStorageRemoteReadTest, OptimizedRemoteRead)
+try
+{
+    std::vector<FilenameWithData> test_input{
+        FilenameWithData{
+            .filename = "raw_data0",
+            .data = {
+            "The flower carriage rocked",
+            "Nahida opened her eyes",
+            "Said she just dreamed a dream",
+            },
+        },
+        FilenameWithData{
+            .filename = "raw_data1",
+            .data = {
+                "Dreamed of the day that she was born",
+                "Dreamed of the day that the sages found her",
+            },
+        }
+    };
+
+    // Prepare a file on remote store with "data"
+    for (const auto & filename_with_data : test_input)
+    {
+        const auto filename = String(filename_with_data.filename);
+        const String full_path = fmt::format("{}/{}", getTemporaryPath(), filename);
+        PosixWritableFile wf(full_path, true, -1, 0600, nullptr);
+        for (const auto & d : filename_with_data.data)
+        {
+            wf.write(const_cast<char *>(d.data()), d.size());
+        }
+        wf.fsync();
+        wf.close();
+        uploadFile(full_path);
+    }
+
+    using namespace DB::PS::V3;
+    auto data_file0 = std::make_shared<const String>(test_input[0].filename);
+    auto data_file1 = std::make_shared<const String>(test_input[1].filename);
+    const PageEntriesV3 all_entries{
+        // test_input[0]
+        PageEntryV3{
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = data_file0,
+                    .offset_in_file = 0,
+                    .size_in_file = test_input[0].data[0].size(),
+                },
+                true,
+                true),
+        },
+        PageEntryV3{
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = data_file0,
+                    .offset_in_file = test_input[0].data[0].size(),
+                    .size_in_file = test_input[0].data[1].size(),
+                },
+                true,
+                true),
+        },
+        PageEntryV3{
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = data_file0,
+                    .offset_in_file = test_input[0].data[0].size() + test_input[0].data[1].size(),
+                    .size_in_file = test_input[0].data[2].size(),
+                },
+                true,
+                true),
+        },
+        // test_input[1]
+        PageEntryV3{
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = data_file1,
+                    .offset_in_file = 0,
+                    .size_in_file = test_input[1].data[0].size(),
+                },
+                true,
+                true),
+        },
+        PageEntryV3{
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = data_file1,
+                    .offset_in_file = test_input[1].data[0].size(),
+                    .size_in_file = test_input[1].data[1].size(),
+                },
+                true,
+                true),
+        },
+    };
+    auto gen_read_entries = [&all_entries](const std::vector<size_t> indexes) {
+        UniversalPageIdAndEntries to_read;
+        to_read.reserve(indexes.size());
+        for (const auto index : indexes)
+            to_read.emplace_back(std::make_pair(fmt::format("page_{}", index), all_entries[index]));
+        return to_read;
+    };
+
+    PageTypeAndConfig page_type_and_config{
+        {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = 0.5}},
+        {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = 0.1}},
+    };
+    auto blob_store = PS::V3::BlobStore<PS::V3::universal::BlobStoreTrait>(
+        getCurrentTestName(),
+        file_provider,
+        delegator,
+        PS::V3::BlobConfig{},
+        page_type_and_config);
+
+    /// Begin the read testing
+    {
+        // Read all the data in order, should reuse the underlying read buffer
+        UniversalPageIdAndEntries to_read = gen_read_entries({0, 1, 2, 3, 4});
+
+        auto data_source = PS::V3::CPWriteDataSourceBlobStore::create(
+            blob_store,
+            std::shared_ptr<FileProvider>(nullptr),
+            5 * 1024 * 1024);
+        ASSERT_EQ(nullptr, getReadBuffFromDataSource(data_source));
+
+        Page page = data_source->read(to_read[0]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[0].data[0]);
+        auto prev_read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_NE(nullptr, prev_read_buff_of_source);
+
+        page = data_source->read(to_read[1]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[0].data[1]);
+        // should reuse the read buffer
+        auto read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_EQ(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
+
+        page = data_source->read(to_read[2]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[0].data[2]);
+        // should reuse the read buffer
+        read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_EQ(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
+
+        page = data_source->read(to_read[3]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[1].data[0]);
+        // A new filename, should NOT reuse the read buffer
+        read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_NE(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
+
+        page = data_source->read(to_read[4]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[1].data[1]);
+        // should reuse the read buffer
+        read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_EQ(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
+    }
+    {
+        // Read page_0, page_2, page_4, page_3, page_1
+        UniversalPageIdAndEntries to_read = gen_read_entries({0, 2, 4, 3, 1});
+
+        auto data_source = PS::V3::CPWriteDataSourceBlobStore::create(
+            blob_store,
+            std::shared_ptr<FileProvider>(nullptr),
+            5 * 1024 * 1024);
+        ASSERT_EQ(nullptr, getReadBuffFromDataSource(data_source));
+
+        Page page = data_source->read(to_read[0]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[0].data[0]);
+        auto prev_read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_NE(nullptr, prev_read_buff_of_source);
+
+        page = data_source->read(to_read[1]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[0].data[2]);
+        // should reuse the read buffer
+        auto read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_EQ(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
+
+        page = data_source->read(to_read[2]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[1].data[1]);
+        // A new filename, should NOT reuse the read buffer
+        read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_NE(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
+
+        page = data_source->read(to_read[3]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[1].data[0]);
+        // Rewind back in the same file, should NOT reuse the read buffer
+        read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_NE(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
+
+        page = data_source->read(to_read[4]);
+        ASSERT_STRVIEW_EQ(page.data, test_input[0].data[1]);
+        // A new filename, should NOT reuse the read buffer
+        read_buff_of_source = getReadBuffFromDataSource(data_source);
+        ASSERT_NE(read_buff_of_source, prev_read_buff_of_source);
+        prev_read_buff_of_source = read_buff_of_source;
     }
 }
 CATCH

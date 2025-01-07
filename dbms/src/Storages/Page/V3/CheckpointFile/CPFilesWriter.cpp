@@ -103,6 +103,18 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         write_down_stats.num_records,
         sequence,
         manifest_file_id);
+
+    // TODO: Optimize the read performance by grouping the read of
+    //  - the same S3DataFile in remote store (S3)
+    //  - the same blob_file in local blob_store
+    // Espcially grouping the reading on the same S3DataFile. Because we can ONLY read
+    // sequentially through the S3 response.
+    //
+    // Now as a workaround, we utilize the assumption that for remote pages, "the page
+    // data with nearly page_id is more likely to be stored in the same S3DataFile".
+    // By enlarging and the ReadBuffer size and reusing the ReadBuffer in "DataSource"
+    // to make it more likely to hint the buffer.
+
     for (auto & rec_edit : records)
     {
         StorageType id_storage_type = StorageType::Unknown;

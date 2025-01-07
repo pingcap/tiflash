@@ -52,6 +52,7 @@ public:
     ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
     std::string getFileName() const override { return file_name; }
+    std::string getInitialFileName() const override { return file_name; }
 
     bool isClosed() const override { return fd == -1; }
 

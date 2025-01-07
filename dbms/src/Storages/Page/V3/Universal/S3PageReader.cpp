@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Core/Defines.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
@@ -19,39 +21,97 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 
+namespace ProfileEvents
+{
+extern const Event S3PageReaderReusedFile;
+extern const Event S3PageReaderNotReusedFile;
+extern const Event S3PageReaderNotReusedFileReadback;
+extern const Event S3PageReaderNotReusedFileChangeFile;
+} // namespace ProfileEvents
+
 namespace DB::PS::V3
 {
 Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
 {
+    return std::get<0>(readFromS3File(page_id_and_entry, nullptr, DBMS_DEFAULT_BUFFER_SIZE));
+}
+
+std::tuple<Page, ReadBufferFromRandomAccessFilePtr> S3PageReader::readFromS3File(
+    const UniversalPageIdAndEntry & page_id_and_entry,
+    ReadBufferFromRandomAccessFilePtr file_buf,
+    size_t prefetch_size)
+{
+    assert(prefetch_size != 0); // 0-size read buffer can not read any data, should not happen
+
     const auto & page_entry = page_id_and_entry.second;
     RUNTIME_CHECK(page_entry.checkpoint_info.has_value());
-    auto location = page_entry.checkpoint_info.data_location;
-    const auto & remote_name = *location.data_file_id;
-    auto remote_name_view = S3::S3FilenameView::fromKey(remote_name);
-    RandomAccessFilePtr remote_file;
+    const auto & location = page_entry.checkpoint_info.data_location;
+    const auto & data_file_id = *location.data_file_id;
+    const auto remote_fname_view = S3::S3FilenameView::fromKey(data_file_id);
+    const auto remote_fname
+        = remote_fname_view.isLockFile() ? remote_fname_view.asDataFile().toFullKey() : data_file_id;
+
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-#ifdef DBMS_PUBLIC_GTEST
-    if (remote_name_view.isLockFile())
+    ReadBufferFromRandomAccessFilePtr read_buff;
+    if (file_buf == nullptr || file_buf->getPositionInFile() < 0
+        || location.offset_in_file < static_cast<size_t>(file_buf->getPositionInFile())
+        // note that S3RandomAccessFile will prepand the bucket name as prefix, we should
+        // use "getInitialFileName" instead of "getFileName"
+        || remote_fname != file_buf->getInitialFileName())
     {
+        if (file_buf != nullptr)
+        {
+            if (location.offset_in_file < static_cast<size_t>(file_buf->getPositionInFile()))
+                ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFileReadback, 1);
+            else if (remote_fname != file_buf->getInitialFileName())
+                ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFileChangeFile, 1);
+        }
+        S3::S3RandomAccessFilePtr s3_remote_file;
+        ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFile, 1);
+        if (remote_fname_view.isLockFile())
+        {
+            s3_remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_fname);
+        }
+        else
+        {
+#ifndef DBMS_PUBLIC_GTEST
+            RUNTIME_CHECK_MSG(
+                false,
+                "Can not read from an invalid remote location, location={}",
+                location.toDebugString());
+#else
+            // In unit test, we directly read from `location.data_file_id` which want to just focus on read write logic
+            s3_remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_fname);
 #endif
-        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_name_view.asDataFile().toFullKey());
-#ifdef DBMS_PUBLIC_GTEST
+        }
+        read_buff = std::make_shared<ReadBufferFromRandomAccessFile>(s3_remote_file, prefetch_size);
     }
     else
     {
-        // Just used in unit test which want to just focus on read write logic
-        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, *location.data_file_id);
+        ProfileEvents::increment(ProfileEvents::S3PageReaderReusedFile, 1);
+        // Reuse the previous read buffer on the same file
+        read_buff = file_buf;
     }
-#endif
-    ReadBufferFromRandomAccessFile buf(remote_file);
 
-    buf.seek(location.offset_in_file, SEEK_SET);
-    auto buf_size = location.size_in_file;
+    const auto buf_size = location.size_in_file;
     RUNTIME_CHECK(buf_size != 0, page_id_and_entry);
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
-    // TODO: support checksum verification
-    buf.readStrict(data_buf, buf_size);
+    try
+    {
+        RUNTIME_CHECK(read_buff != nullptr);
+        read_buff->seek(location.offset_in_file, SEEK_SET);
+        // TODO: support checksum verification
+        read_buff->readStrict(data_buf, buf_size);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format(
+            "while reading from S3, page_id={} location={}",
+            page_id_and_entry.first,
+            location.toDebugString()));
+        e.rethrow();
+    }
     Page page{UniversalPageIdFormat::getU64ID(page_id_and_entry.first)};
     page.data = std::string_view(data_buf, buf_size);
     page.mem_holder = mem_holder;
@@ -61,8 +121,9 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
         const auto offset = page_entry.field_offsets[index].first;
         page.field_offsets.emplace(index, offset);
     }
-    return page;
+    return std::make_tuple(page, read_buff);
 }
+
 
 UniversalPageMap S3PageReader::read(const UniversalPageIdAndEntries & page_id_and_entries)
 {

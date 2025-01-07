@@ -38,6 +38,11 @@ extern const Event S3IOSeek;
 
 namespace DB::S3
 {
+String S3RandomAccessFile::summary() const
+{
+    return fmt::format("remote_fname={} cur_offset={} cur_retry={}", remote_fname, cur_offset, cur_retry);
+}
+
 S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_)
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
@@ -51,6 +56,11 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
 std::string S3RandomAccessFile::getFileName() const
 {
     return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
+}
+
+std::string S3RandomAccessFile::getInitialFileName() const
+{
+    return remote_fname;
 }
 
 namespace
@@ -187,7 +197,6 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     cur_offset = offset_;
     return cur_offset;
 }
-
 String S3RandomAccessFile::readRangeOfObject()
 {
     return fmt::format("bytes={}-", cur_offset);
