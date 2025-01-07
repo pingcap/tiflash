@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
@@ -41,6 +42,21 @@ struct IOProfileInfo
     {
         auto info = std::make_shared<IOProfileInfo>(profile_info, false);
         info->connection_profile_infos.resize(connections);
+        return info;
+    }
+
+    static IOProfileInfoPtr createForRemote(
+        const OperatorProfileInfoPtr & profile_info,
+        size_t connections,
+        const ConnectionProfileInfo::ConnTypeVec & conn_type_vec)
+    {
+        RUNTIME_CHECK(connections == conn_type_vec.size());
+        auto info = std::make_shared<IOProfileInfo>(profile_info, false);
+        info->connection_profile_infos.resize(connections);
+        for (size_t i = 0; i < connections; ++i)
+        {
+            info->connection_profile_infos[i].type = conn_type_vec[i];
+        }
         return info;
     }
 

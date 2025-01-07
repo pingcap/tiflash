@@ -164,8 +164,15 @@ DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std:
     if (parsed->generation == 0)
     {
         // It is not a large txn, we cache the parsed lock.
+        GET_METRIC(tiflash_raft_classes_count, type_fully_decoded_lockcf).Increment(1);
         inner = std::move(parsed);
     }
+}
+
+DecodedLockCFValue::~DecodedLockCFValue()
+{
+    if (inner != nullptr)
+        GET_METRIC(tiflash_raft_classes_count, type_fully_decoded_lockcf).Decrement(1);
 }
 
 void DecodedLockCFValue::withInner(std::function<void(const DecodedLockCFValue::Inner &)> && f) const

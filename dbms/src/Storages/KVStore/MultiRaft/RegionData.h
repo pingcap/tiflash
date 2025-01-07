@@ -81,6 +81,7 @@ public:
     const RegionLockCFData & lockCF() const;
 
     RegionData() = default;
+    ~RegionData();
 
     RegionData(RegionData && data);
     RegionData & operator=(RegionData &&);
