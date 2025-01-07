@@ -50,8 +50,7 @@ private:
         const ColumnPtr & column,
         WriteBuffer & ostr,
         size_t offset,
-        size_t limit,
-        MppVersion mpp_version);
+        size_t limit);
     /// 'reserve_size' used for Squash usage, and takes effect when 'reserve_size' > 0
     Block decodeImpl(ReadBuffer & istr, size_t reserve_size = 0);
 

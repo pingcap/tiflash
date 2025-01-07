@@ -74,18 +74,4 @@ const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion
         return type;
 }
 
-const String & convertDataTypeNameByMppVersion(const String & name, MppVersion mpp_version)
-{
-    if (mpp_version > MppVersion::MppVersionV2)
-        return name;
-
-    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
-    if (name == DataTypeString::NameV2)
-        return DataTypeString::LegacyName;
-    else if (name == DataTypeString::NullableNameV2)
-        return DataTypeString::NullableLegacyName;
-    else
-        return name;
-}
-
 } // namespace DB::CodecUtils

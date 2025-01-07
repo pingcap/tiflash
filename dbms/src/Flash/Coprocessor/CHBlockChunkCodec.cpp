@@ -90,8 +90,7 @@ void CHBlockChunkCodec::WriteColumnData(
     const ColumnPtr & column,
     WriteBuffer & ostr,
     size_t offset,
-    size_t limit,
-    MppVersion mpp_version)
+    size_t limit)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)
@@ -106,8 +105,7 @@ void CHBlockChunkCodec::WriteColumnData(
     IDataType::OutputStreamGetter output_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &ostr;
     };
-    const auto & ser_type = CodecUtils::convertDataTypeByMppVersion(type, mpp_version);
-    ser_type.serializeBinaryBulkWithMultipleStreams(
+    type.serializeBinaryBulkWithMultipleStreams(
         *full_column,
         output_stream_getter,
         offset,
@@ -160,10 +158,11 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
 
         writeStringBinary(column.name, *output);
-        writeStringBinary(CodecUtils::convertDataTypeNameByMppVersion(column.type->getName(), mpp_version), *output);
+        const auto & ser_type = CodecUtils::convertDataTypeByMppVersion(*column.type, mpp_version);
+        writeStringBinary(ser_type.getName(), *output);
 
         if (rows)
-            CHBlockChunkCodec::WriteColumnData(*column.type, column.column, *output, 0, 0, mpp_version);
+            CHBlockChunkCodec::WriteColumnData(ser_type, column.column, *output, 0, 0);
     }
 }
 

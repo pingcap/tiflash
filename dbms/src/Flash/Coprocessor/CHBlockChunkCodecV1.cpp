@@ -52,7 +52,8 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MppVers
     {
         const ColumnWithTypeAndName & column = header.safeGetByPosition(i);
         writeStringBinary(column.name, ostr);
-        writeStringBinary(CodecUtils::convertDataTypeNameByMppVersion(column.type->getName(), mpp_version), ostr);
+        const auto & ser_type = CodecUtils::convertDataTypeByMppVersion(*column.type, mpp_version);
+        writeStringBinary(ser_type.getName(), ostr);
     }
 }
 
@@ -303,7 +304,8 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            CHBlockChunkCodec::WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0, inner.mpp_version);
+            const auto & ser_type = CodecUtils::convertDataTypeByMppVersion(*col_type_name.type, inner.mpp_version);
+            CHBlockChunkCodec::WriteColumnData(ser_type, column_ptr, *ostr_ptr, 0, 0);
         }
 
         inner.encoded_rows += rows;
