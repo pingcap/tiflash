@@ -1464,7 +1464,7 @@ protected:
         bool collect_hit_rate,
         bool only_lookup,
         bool enable_prefetch,
-        bool need_compute_agg_func,
+        bool compute_agg_data,
         typename Method>
     void handleMiniBatchImpl(
         Method & method,

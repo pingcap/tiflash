@@ -678,11 +678,6 @@ void NO_INLINE Aggregator::executeImpl(
     const bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
 #endif
 
-    // key_serialized needs column-wise handling for prefetch.
-    // Because:
-    // 1. getKeyHolder of key_serialized have to copy real data into Arena.
-    //    It means we better getKeyHolder for all Columns once and then use it both for getHash() and emplaceKey().
-    // 2. For other group by key(key_int8/16/32/...), it's ok to use row-wise handling even prefetch is enabled.
     if constexpr (Method::State::is_serialized_key)
     {
         executeImplMiniBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
@@ -759,8 +754,7 @@ ALWAYS_INLINE inline void prepareBatch(
 {
     assert(hashvals.size() == key_holders.size());
 
-    size_t j = 0;
-    for (size_t i = row_idx; i < row_idx + hashvals.size() && i < end_row; ++i, ++j)
+    for (size_t i = row_idx, j = 0; i < row_idx + hashvals.size() && i < end_row; ++i, ++j)
     {
         key_holders[j] = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
             i,
@@ -768,39 +762,6 @@ ALWAYS_INLINE inline void prepareBatch(
             sort_key_containers);
         hashvals[j] = method.data.hash(keyHolderGetKey(key_holders[j]));
     }
-}
-
-template <typename Method>
-ALWAYS_INLINE inline std::pair<typename Method::State::Derived::KeyHolderType, size_t> getCurrentHashAndDoPrefetch(
-    size_t hashvals_idx,
-    size_t prefetch_row_idx,
-    size_t end_row_idx,
-    Method & method,
-    typename Method::State & state,
-    Arena * aggregates_pool,
-    std::vector<std::string> & sort_key_containers,
-    std::vector<size_t> & hashvals,
-    std::vector<typename Method::State::Derived::KeyHolderType> & key_holders)
-{
-    assert(hashvals.size() == agg_prefetch_step);
-
-    const size_t cur_hashval = hashvals[hashvals_idx];
-    auto cur_key_holder = std::move(key_holders[hashvals_idx]);
-
-    if likely (prefetch_row_idx < end_row_idx)
-    {
-        auto key_holder = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
-            prefetch_row_idx,
-            aggregates_pool,
-            sort_key_containers);
-        const size_t new_hashval = method.data.hash(keyHolderGetKey(key_holder));
-
-        key_holders[hashvals_idx] = std::move(key_holder);
-        hashvals[hashvals_idx] = new_hashval;
-
-        method.data.prefetch(new_hashval);
-    }
-    return {cur_key_holder, cur_hashval};
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
@@ -815,7 +776,7 @@ ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
 
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
-        return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data*/ false>(
+        return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/false>(
             method,
             state,
             agg_process_info,
@@ -910,8 +871,7 @@ void Aggregator::handleMiniBatchImpl(
         const auto cur_batch_end = i + batch_size;
         // j is the row index of Column.
         // k is the index of hashvals/key_holders.
-        size_t k = 0;
-        for (size_t j = i; j < cur_batch_end; ++j, ++k)
+        for (size_t j = i, k = 0; j < cur_batch_end; ++j, ++k)
         {
             AggregateDataPtr aggregate_data = nullptr;
             const size_t index_relative_to_start_row = j - agg_process_info.start_row;
@@ -1867,11 +1827,10 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
         ++data_index;
     });
 
-    size_t prefetch_idx = agg_prefetch_step;
-    for (size_t i = 0; i < rows; ++i)
+    for (size_t i = 0, prefetch_idx = agg_prefetch_step; i < rows; ++i, ++prefetch_idx)
     {
         if (prefetch_idx < rows)
-            __builtin_prefetch(places[prefetch_idx++]);
+            __builtin_prefetch(places[prefetch_idx]);
 
         size_t key_columns_vec_index = i / params.max_block_size;
         insertAggregatesIntoColumns(places[i], final_aggregate_columns_vec[key_columns_vec_index], arena);
