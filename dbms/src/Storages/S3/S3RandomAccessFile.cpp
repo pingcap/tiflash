@@ -58,16 +58,12 @@ std::string S3RandomAccessFile::getFileName() const
     return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
 }
 
-<<<<<<< HEAD
-namespace
-=======
 std::string S3RandomAccessFile::getInitialFileName() const
 {
     return remote_fname;
 }
 
-bool isRetryableError(int e)
->>>>>>> c089c9aa03 (Improve s3 random file by introducing cache (#9614))
+namespace
 {
 constexpr int S3UnknownError = -1;
 constexpr int S3StreamError = -2;
