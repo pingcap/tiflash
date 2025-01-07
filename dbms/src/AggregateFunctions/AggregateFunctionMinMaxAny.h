@@ -600,10 +600,6 @@ struct AggregateFunctionMinData : Data
     }
     bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfLess(to, arena); }
 
-    void prepareWindow() { throw Exception("Not implemented yet"); }
-
-    void insertResultInto(IColumn & to) const { Data::insertResultInto(to); }
-
     static const char * name() { return "min"; }
 };
 
@@ -611,8 +607,6 @@ template <typename Data>
 struct AggregateFunctionMaxData : Data
 {
     using Self = AggregateFunctionMaxData<Data>;
-
-    void insertResultInto(IColumn & to) const { Data::insertResultInto(to); }
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
     {

@@ -384,12 +384,15 @@ public:
 
     void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
     {
-        throw Exception("Not implemented yet");
+        throw Exception("decrease function is not implemented yet");
     }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override { throw Exception("Not implemented yet"); }
+    void prepareWindow(AggregateDataPtr __restrict) const override
+    {
+        throw Exception("prepareWindow function is not implemented yet");
+    }
 
-    void reset(AggregateDataPtr __restrict) const override { throw Exception("Not implemented yet"); }
+    void reset(AggregateDataPtr __restrict) const override { throw Exception("reset function is not implemented yet"); }
 };
 
 namespace _IAggregateFunctionImpl
