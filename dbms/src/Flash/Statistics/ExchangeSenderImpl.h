@@ -20,18 +20,25 @@
 
 namespace DB
 {
-struct MPPTunnelDetail : public ConnectionProfileInfo
+struct MPPTunnelDetail
 {
     String tunnel_id;
     Int64 sender_target_task_id;
     String sender_target_host;
     bool is_local;
+    ConnectionProfileInfo conn_profile_info;
 
-    MPPTunnelDetail(String tunnel_id_, Int64 sender_target_task_id_, String sender_target_host_, bool is_local_)
+    MPPTunnelDetail(
+        const ConnectionProfileInfo & conn_profile_info_,
+        String tunnel_id_,
+        Int64 sender_target_task_id_,
+        String sender_target_host_,
+        bool is_local_)
         : tunnel_id(std::move(tunnel_id_))
         , sender_target_task_id(sender_target_task_id_)
         , sender_target_host(std::move(sender_target_host_))
         , is_local(is_local_)
+        , conn_profile_info(conn_profile_info_)
     {}
 
     String toJson() const;

@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 
 namespace DB
@@ -41,5 +43,43 @@ void BaseRuntimeStatistics::append(const OperatorProfileInfo & profile_info)
         pipeline_breaker_wait_time_ns = profile_info.pipeline_breaker_wait_time;
     }
     ++concurrency;
+}
+
+void BaseRuntimeStatistics::updateReceiveConnectionInfo(const ConnectionProfileInfo & conn_profile_info)
+{
+    switch (conn_profile_info.type)
+    {
+    case DB::ConnectionProfileInfo::Local:
+        break;
+    case ConnectionProfileInfo::InnerZoneRemote:
+        inner_zone_receive_bytes += bytes;
+        break;
+    case DB::ConnectionProfileInfo::InterZoneRemote:
+        inter_zone_receive_bytes += bytes;
+        break;
+    default:
+        throw TiFlashException(
+            fmt::format("{} connection profile type is unexpected", fmt::underlying(conn_profile_info.type)),
+            Errors::Planner::Internal);
+    }
+}
+
+void BaseRuntimeStatistics::updateSendConnectionInfo(const ConnectionProfileInfo & conn_profile_info)
+{
+    switch (conn_profile_info.type)
+    {
+    case DB::ConnectionProfileInfo::Local:
+        break;
+    case ConnectionProfileInfo::InnerZoneRemote:
+        inner_zone_send_bytes += bytes;
+        break;
+    case DB::ConnectionProfileInfo::InterZoneRemote:
+        inter_zone_send_bytes += bytes;
+        break;
+    default:
+        throw TiFlashException(
+            fmt::format("{} connection profile type is unexpected", fmt::underlying(conn_profile_info.type)),
+            Errors::Planner::Internal);
+    }
 }
 } // namespace DB
