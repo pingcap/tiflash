@@ -28,7 +28,7 @@ String TableScanTimeDetail::toJson() const
 }
 String LocalTableScanDetail::toJson() const
 {
-    return fmt::format(R"({{"is_local":false,"bytes":{},{}}})", bytes, time_detail.toJson());
+    return fmt::format(R"({{"is_local":true,"bytes":{},{}}})", bytes, time_detail.toJson());
 }
 String RemoteTableScanDetail::toJson() const
 {
