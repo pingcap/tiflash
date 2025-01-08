@@ -67,6 +67,7 @@ void DMFileVectorIndexReader::loadVectorIndex()
     RUNTIME_CHECK(vector_index.has_value(), col_id, index_id);
     RUNTIME_CHECK(vector_index->index_props().kind() == dtpb::IndexFileKind::VECTOR_INDEX);
     RUNTIME_CHECK(vector_index->index_props().has_vector_index());
+    perf_stat.index_size = vector_index->index_props().file_size();
 
     // If local file is invalidated, cache is not valid anymore. So we
     // need to ensure file exists on local fs first.
