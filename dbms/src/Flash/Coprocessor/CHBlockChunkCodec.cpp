@@ -168,11 +168,10 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     }
 }
 
-std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(
-    const std::vector<tipb::FieldType> & field_types,
-    MPPDataPacketVersion packet_version)
+std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
 {
-    return std::make_unique<CHBlockChunkCodecStream>(field_types, packet_version);
+    RUNTIME_CHECK_MSG(packet_version.has_value(), "packet_version is required for encoding");
+    return std::make_unique<CHBlockChunkCodecStream>(field_types, *packet_version);
 }
 
 Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)

@@ -102,9 +102,8 @@ public:
         }
 
         // 2. encode all blocks
-        std::unique_ptr<ChunkCodecStream> codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(
-            makeFields(),
-            GetMPPDataPacketVersion(GetMppVersion()));
+        std::unique_ptr<ChunkCodecStream> codec_stream = std::make_unique<CHBlockChunkCodec>(GetMPPDataPacketVersion(MppVersion::MppVersionV2))->newCodecStream(
+            makeFields());
         std::vector<String> encode_str_vec(block_num);
         std::vector<int> encode_str_use_compression(block_num, true);
         size_t round_index = 0;

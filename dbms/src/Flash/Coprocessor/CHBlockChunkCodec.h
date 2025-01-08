@@ -27,16 +27,17 @@ class CHBlockChunkCodecStream;
 class CHBlockChunkCodec final : public ChunkCodec
 {
 public:
-    CHBlockChunkCodec() = default;
+    explicit CHBlockChunkCodec(MPPDataPacketVersion packet_version_)
+        : packet_version(packet_version_)
+    {}
+
     explicit CHBlockChunkCodec(const Block & header_);
     explicit CHBlockChunkCodec(const DAGSchema & schema);
 
     Block decode(const String &, const DAGSchema & schema) override;
     static Block decode(const String &, const Block & header);
     Block decode(const String &);
-    std::unique_ptr<ChunkCodecStream> newCodecStream(
-        const std::vector<tipb::FieldType> & field_types,
-        MPPDataPacketVersion packet_version) override;
+    std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types) override;
 
 private:
     friend class CHBlockChunkDecodeAndSquash;
@@ -57,6 +58,7 @@ private:
     Block header;
     std::vector<CodecUtils::DataTypeWithTypeName> header_datatypes;
     std::vector<String> output_names;
+    const std::optional<MPPDataPacketVersion> packet_version; // For encoding.
 };
 
 } // namespace DB
